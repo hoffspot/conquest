@@ -38,7 +38,7 @@ import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
-import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
+import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, formationsOfBody, holdOf, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
@@ -65,7 +65,7 @@ import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
-import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
+import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
@@ -690,7 +690,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 47;
+export const SNAPSHOT_VERSION = 48;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -827,6 +827,34 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 47: the world's rare encounters (core/rare.js Legends: none met, none to come yet), and each
     // player's, carried with their character (progress.legends: none)
     46: (snapshot) => ({ ...snapshot, version: 47, legends: null, players: snapshot.players.map((player) => ({ ...player, progress: { legends: { met: [], uniques: [] }, ...player.progress } })) }),
+    // 48: lines of battle held (docs/WAR.md *Battles*): no formation holding one nor seeking anyone
+    // in particular (battle.js `hold`, `seek`) but the bodies of a battle at it, theirs held
+    // (core/engagement.js FIELD charge `lap`), those of them who fight up close no further from
+    // their places than their roles hold (holdOf), looking as far as FIELD charge `sight`, and
+    // their archers, casters and healers keeping off a foe; an archer's or a caster's knife, in a
+    // line (battle.js armsIn); and a standard-bearer's shield put down for their standard
+    47: (snapshot) => {
+        const soldiers = new Map(snapshot.soldiers ?? []);
+        const engagements = [...(snapshot.invasions ?? []), ...(snapshot.fields ?? []), ...(snapshot.clashes ?? []).map(([, clash]) => clash), ...(snapshot.leaders ?? []).map(([, leader]) => leader)].map(({ engagement }) => engagement).filter((engagement) => engagement?.phase === "melee");
+        const bodies = engagements.flatMap(({ sides }) => sides.flatMap((side) => side.bodies.map(({ formation }) => formation)));
+        const held = new Set(bodies);
+        const holding = new Set(bodies.flatMap(formationsOfBody));
+        const shooters = ["archer", "caster", "healer"];
+        const holds = (actor) => {
+            if (!holding.has(actor.formation?.id)) {
+                return {};
+            }
+
+            const hold = holdOf(soldiers.get(actor.id));
+
+            return hold !== null ? { leash: hold, sight: FIELD.charge.sight } : shooters.includes(actor.formation.role) ? { keep: FIELD.archers.keep } : {};
+        };
+        const knife = (actor) => (["archer", "caster"].includes(actor.formation?.role) && actor.arms?.[0]?.id !== KNIFE.id ? { arms: [structuredClone(KNIFE), ...(actor.arms ?? [])] } : {});
+        const shield = (actor) => (soldiers.get(actor.id)?.banner ? { shield: null } : {});
+        const formations = Object.fromEntries(Object.entries(snapshot.battle.formations ?? {}).map(([id, formation]) => [id, { hold: held.has(id) ? FIELD.charge.lap : 0, seek: null, ...formation }]));
+
+        return { ...snapshot, version: 48, battle: { ...snapshot.battle, formations, actors: snapshot.battle.actors.map((actor) => ({ ...actor, ...holds(actor), ...knife(actor), ...shield(actor) })) } };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -5570,7 +5598,8 @@ export class Host {
         const captain = record?.chief ?? /-0$|escort-1$/.test(id);
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
-        this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", shield: shieldOf(weapon, captain ? "captain" : "soldier"), ...orders });
+        // (A standard-bearer's standard in the hand their shield would be in: none carried)
+        this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", shield: record?.banner ? null : shieldOf(weapon, captain ? "captain" : "soldier"), ...orders });
 
         // (A battle's commander, or a standard-bearer: core/engagement.js; their plates marked so)
         if (record?.commander || record?.banner) {
@@ -5696,7 +5725,7 @@ export class Host {
             field.ids = left.filter((id) => !going.includes(id));
 
             if (!field.ids.length) {
-                for (const formation of field.formations.flatMap((id) => [id, `${id}:probe`, `${id}:flank`])) {
+                for (const formation of field.formations.flatMap(formationsOfBody)) {
                     this.battle.formation(formation, null);
                 }
 
@@ -6124,7 +6153,9 @@ export class Host {
                 const chief = leads || Boolean(chiefsAt[part]?.has(k));
                 const each = (counts[role] = (counts[role] ?? -1) + 1);
                 const one = `${id}/raider-${ids.length}`;
-                const weapon = chief ? chiefArms : raiderArms(band, role, each);
+                const arms = raiderArms(band, role, each);
+                // (Its standard-bearer one of the shield line, a sword where theirs is held in both hands)
+                const weapon = chief ? chiefArms : bears && !SHIELD_ARMS.includes(arms) ? "sword" : arms;
                 const name = chief ? BANDS[band].names.chief : bears ? STANDARD : guard ? title.guard : raiderName(band, role, weapon);
 
                 // (Casting and healing as the town's soldiers in their roles do: soldierOf, the
@@ -6478,7 +6509,7 @@ export class Host {
     // bodies', and any sent out of them (core/engagement.js: a probe, flankers); the Behemoth's
     // town's line's
     #formationsOf(invasion, k) {
-        const formations = invasion.engagement ? invasion.engagement.sides[k].bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]) : [k ? invasion.formations.defenders : invasion.formations.invaders];
+        const formations = invasion.engagement ? invasion.engagement.sides[k].bodies.flatMap(({ formation }) => formationsOfBody(formation)) : [k ? invasion.formations.defenders : invasion.formations.invaders];
 
         return formations.filter((id) => this.battle.formations[id]);
     }
@@ -6598,16 +6629,21 @@ export class Host {
 
     // Whether one of an invasion's lines (`soldier`: its record, host.soldiers') charges with it,
     // its lines having charged (#charge): any who fight up close (INVASION.close, and the chiefs),
-    // going after an enemy as far as the charge's `leash` from their place in their line, and
-    // looking as far as its `sight`
+    // holding the line from then on (core/engagement.js holdOf: going after an enemy no further
+    // from their place in it than their role's FIELD charge `hold`, looking as far as its `sight`)
     #charging(invasion, soldier) {
         return (invasion.charged ?? null) !== null && (INVASION.close.includes(soldier?.role) || Boolean(soldier?.chief));
     }
 
     // How one of an invasion's lines come up to it (#reinforceInvasion) goes after an enemy: as
-    // its role does (`leash`), or, its lines having charged, as those charging do (#charging)
+    // its role does (`leash`), or, its lines having charged, as those charging do (#charging), its
+    // archers, casters and healers keeping off a foe come at them (core/engagement.js FIELD archers)
     #chargingWith(invasion, role, leash) {
-        return this.#charging(invasion, { role }) ? { leash: Math.max(leash, INVASION.charge.leash), sight: INVASION.charge.sight } : { leash };
+        if ((invasion.charged ?? null) === null) {
+            return { leash };
+        }
+
+        return this.#charging(invasion, { role }) ? { leash: holdOf({ role }), sight: FIELD.charge.sight } : { leash, keep: FIELD.archers.keep };
     }
 
     // A band's invasion's fallen made good (INVASION.reinforce): its raiders' back up to `raiders`
@@ -7053,8 +7089,10 @@ export class Host {
 
     // An army's general and their household (core/engagement.js), `members` in order (actors), the
     // first its general: each made so once (#household: harder to bring down and striking harder;
-    // the general named by COMMANDERS `army`, not `not`, the first of the rest its standard-bearer,
-    // the rest its household guards), kept as the army's (by its id: its met's `general`, `banner`)
+    // the general named by COMMANDERS `army`, not `not`, the first of the rest of the shield line
+    // its standard-bearer, their shield put down for it and drawn bearing it from now on: a
+    // "standard" event; the rest its household guards), kept as the army's (by its id: its met's
+    // `general`, `banner`)
     #promote(id, members, { not = null } = {}) {
         const met = this.armies.get(id);
         const people = this.war.force(id)?.realm ?? met.people;
@@ -7062,8 +7100,10 @@ export class Host {
         const adjective = ADJECTIVES[people] ?? people;
         const titled = (name) => `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`;
         let banner = members.some(({ id: each }) => each === met.banner) ? met.banner : null;
+        const [general = null, ...guards] = members;
+        const shielded = guards.filter((actor) => SHIELD_ARMS.includes(actor.weapon));
 
-        members.forEach((actor, k) => {
+        (general ? [general, ...shielded, ...guards.filter((actor) => !shielded.includes(actor))] : []).forEach((actor, k) => {
             const record = this.soldiers.get(actor.id);
 
             if (record.power) {
@@ -7086,8 +7126,10 @@ export class Host {
             } else if (bears) {
                 record.banner = true;
                 actor.rank = "standard";
+                actor.shield = null;
                 met.banner = actor.id;
                 banner = actor.id;
+                this.#event("standard", { id: actor.id, army: id });
             }
         });
     }
@@ -7128,15 +7170,15 @@ export class Host {
                     actor.formation = { id: met.formation, slot: places[n], role: actor.formation.role };
                     actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
                     actor.power.melee = this.soldiers.get(actor.id)?.power ?? 1;
-                    delete actor.formation.post;
                     delete actor.sight;
+                    delete actor.keep;
                 });
 
-                this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, speed: ARMY_NEAR.pace });
+                this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, hold: false, seek: null, speed: ARMY_NEAR.pace });
                 delete met.clash;
             }
 
-            for (const formation of side.bodies.flatMap((body) => [body.formation, `${body.formation}:probe`, `${body.formation}:flank`])) {
+            for (const formation of side.bodies.flatMap((body) => formationsOfBody(body.formation))) {
                 if (formation !== met?.formation && this.battle.formations[formation]) {
                     this.battle.formation(formation, null);
                 }

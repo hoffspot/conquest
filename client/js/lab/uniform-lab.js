@@ -1,5 +1,6 @@
 // The uniform lab (uniform-lab.html): each people's soldiers in their uniforms (a captain in their
-// cloak with the weapon their guards carry, a soldier with their patrols'), and their officials in
+// cloak with the weapon their guards carry, a soldier with their patrols', a commander's
+// standard-bearer with their people's standard), and their officials in
 // their livery (a reeve and their ruler), side by side, a row for each people
 // (characters/liveries.js); or their townsfolk in their everyday dress (characters/dress.js: a
 // shopper with their basket, a field hand with a hoe over the shoulder, a porter, merchants and a
@@ -96,8 +97,8 @@ function townsfolk(people, calling, sex, seed, carry = null) {
     return { ...look, equipment: [...look.equipment.filter((id) => !CARRIED.has(id)), ...(carry ? [theirs(people, carry)] : [])] };
 }
 
-// Who stands in each people's row: a captain and a soldier, a reeve and the ruler; or six of their
-// townsfolk
+// Who stands in each people's row: a captain, a soldier and a standard-bearer, a reeve and the
+// ruler; or six of their townsfolk
 function cast(people) {
     if (choice.show === "townsfolk") {
         return [
@@ -114,6 +115,7 @@ function cast(people) {
     const soldiers = [
         { label: "Captain", look: soldierLook({ people, weapon: guards, sex: "m", seed: 11, captain: true }) },
         { label: "Soldier", look: soldierLook({ people, weapon: patrols, sex: "f", seed: 12 }) },
+        { label: "Standard-bearer", look: soldierLook({ people, weapon: people === "orc" ? "cleaver" : "sword", sex: "m", seed: 15, banner: true }) },
     ];
     const officials = [
         { label: "Reeve", look: folkLook({ role: "reeve", sex: "m", seed: 13, people }) },

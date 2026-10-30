@@ -18,7 +18,7 @@ import { measureHead } from "./headwear.js";
 import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
 import { powerGrip } from "./grip.js";
-import { LIVERIES } from "./liveries.js";
+import { LIVERIES, STANDARDS } from "./liveries.js";
 
 /** The slots, in the order to show them. */
 export const SLOTS = Object.freeze([
@@ -211,6 +211,9 @@ export const ITEMS = Object.freeze({
         [`helm.${people}`, { label: "Helm", slot: "head", model: `helm.${people}`, socket: "head", hides: ["hair"], rim: "helm" }],
         [`shield.${people}`, { label: "Shield", slot: "offHand", model: `shield.${people}`, socket: ROUND_SHIELDS.has(people) ? "leftFist" : "leftForearm", hold: HOLDS.shield, grips: true, sling: SLUNG_SHIELDS.has(people) }],
     ])),
+    // Each people's or band's standard (liveries.js standardOf), carried upright in the off hand by
+    // a commander's standard-bearer, their weapon in the other (no shield); never put away
+    ...Object.fromEntries(STANDARDS.map((who) => [`standard.${who}`, { label: "Standard", slot: "offHand", model: `standard.${who}`, socket: "leftHand", turn: [0.1, 0, -0.35], grips: true, round: 0.018, hold: HOLDS.staff }])),
     backpack: { label: "Backpack", slot: "back", model: "backpack", socket: "back", garment: "straps" },
     quiver: { label: "Quiver", slot: "back", model: "quiver", socket: "back", turn: [0.25, 0, 0.35], offset: [-0.03, 0.02, -0.085] },
     musket: { label: "Musket (slung)", slot: "back", model: "musket", socket: "back", turn: [0, 0, 2.5], offset: [0, 0, -0.03] },

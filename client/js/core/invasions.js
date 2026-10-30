@@ -40,11 +40,10 @@
  *    run (`speed`, m/s: a soldier's chase is 2.3), on till their fronts are `gap` metres apart in
  *    the middle (a band that stands off, BANDS `advance` false, stands, and the town's line
  *    charges on to it); and from then on everyone of either side who fights up close (`close`,
- *    and the chiefs) goes after an enemy as far as `leash` metres from their place in their line,
- *    looking for one as far as `sight` (not a soldier's 12: battle.js SIGHT), so all of them close
- *    and fight, the shield lines' rear guards too and those who come up after, not a few at the
- *    front while the rest stand in their ranks; the archers and casters still shoot from their
- *    line, the healers still keep back;
+ *    and the chiefs) holds the line, as those who come up after do (core/engagement.js holdOf:
+ *    going after an enemy no further from their place in it than their role's FIELD charge
+ *    `hold`), the ranks behind stepping up as the front's fall; the archers and casters still
+ *    shoot from their line, the healers still keep back;
  *  - `rout`: the share of the raiders left standing when they break and run, as they do once
  *    none of those in the roles that fight up close (`close`: core/formation.js ROLES) or their
  *    chiefs are (a band's own, BANDS'; none for a band that fights to the last, down to its
@@ -75,7 +74,7 @@ export const INVASION = Object.freeze({
     inside: 6,
     meet: 14,
     march: 1.1,
-    charge: Object.freeze({ at: 30, speed: 2.2, gap: 2, leash: 30, sight: 30 }),
+    charge: Object.freeze({ at: 30, speed: 2.2, gap: 2 }),
     rout: 0.25,
     close: Object.freeze(["front", "heavy"]),
     run: 2.6,

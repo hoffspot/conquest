@@ -657,6 +657,16 @@ chosen to set off their skin or fur, with their emblem on surcoats, tunics, shie
   weapon they carry their people's shield (the humans' a kite, the dark elves' longer and
   sharper, the elves' leaf-shaped, the cat folk's a tall oval of hide, the lizard folk's and the
   orcs' round), with a bow a quiver; a captain wears their people's cloak, edged in the trim.
+- **A standard-bearer** (`soldierLook`'s `banner`: the first of a commander's household after
+  them, one of its shield line, docs/WAR.md *Battles*) bears their people's standard in the hand
+  their shield would be in (`standard.${who}`; `items.js` `standard`): a 2.5 m ash pole held a
+  third of the way up, a gilt point over a ball and a crossbar at its top, and from that a cloth
+  0.62 m wide and 0.92 m long in the people's colour, a strip of the trim along its head and the
+  emblem on both its faces, cut in two tails at its foot, folded a little as cloth hangs. A band
+  of raiders' standard (`liveries.js` `BAND_STANDARDS`, `standardOf`) is in its own colours: the
+  bandits' brown with red claws, the northmen's red with a pale serpent, the Ashen Cult's black
+  with an orange sun, the sellswords' grey with a gold crown, the corsairs' black with white
+  claws; the bandits', the cult's and the corsairs' torn ragged along the foot, not cut in tails.
 - **An official** (`liveryKit`) wears a tunic of livery with the emblem, smaller, and by their
   part: a chain of office in gold (a steward, reeve, councillor, envoy or ruler), trousers and a
   belt or a long robe (a woman's always a robe), a cloak (an envoy or ruler) and a crown (a ruler).
@@ -667,8 +677,8 @@ chosen to set off their skin or fur, with their emblem on surcoats, tunics, shie
   uniform's pieces are drawn as that people's (`dress`, `lookOf`).
 
 The uniform lab (`uniform-lab.html`: `?people=`, `show=` soldiers or officials, `facing=` front,
-side or back, `drawn=` merged or apart) shows a captain, a soldier, a reeve and a ruler of each
-people side by side, walking on the spot.
+side or back, `drawn=` merged or apart) shows a captain, a soldier, a standard-bearer, a reeve and
+a ruler of each people side by side, walking on the spot.
 
 ### Equipment
 

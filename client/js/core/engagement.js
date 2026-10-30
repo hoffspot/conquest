@@ -97,19 +97,33 @@ export const JOB = Object.freeze({ near: 80, within: 40, gold: 40, merit: 4, tha
  * own: `wedge`, its centre charging first in a wedge at the enemy's centre, its wings after
  * (FIELD `wedge`); `envelop`, its wings swinging wide round both the enemy's flanks as they charge;
  * `stand`, its line standing where it is and letting them come; `raid`, its wings hitting the ends
- * of the enemy's line, falling back and coming again (FIELD `raid`).
+ * of the enemy's line, falling back and coming again (FIELD `raid`). And how it goes through a
+ * break in the enemy's line (`breach`, FIELD breach): "pour", the bold bands', the two-handers and
+ * rear ranks of its body nearest it through at once; "commit", a steady line's, its reserve, then
+ * its household, the body beside the break holding (and wheeling on a bared flank, as `flank`);
+ * none, the cult's, standing.
  */
 export const TACTICS = Object.freeze({
-    line: Object.freeze({ volley: true, probe: true, flank: true, flankers: true, reserve: 1 }),
-    steady: Object.freeze({ volley: true, probe: true, flank: true, flankers: true, reserve: 1.6 }),
-    wedge: Object.freeze({ volley: true, probe: false, flank: true, flankers: false, reserve: 0.6, wedge: true }),
-    swarm: Object.freeze({ volley: false, probe: false, flank: true, flankers: false, reserve: 0, envelop: true }),
-    standoff: Object.freeze({ volley: false, probe: false, flank: false, flankers: false, reserve: 1, stand: true }),
-    skirmish: Object.freeze({ volley: true, probe: true, flank: true, flankers: false, reserve: 0.6, raid: true }),
+    line: Object.freeze({ volley: true, probe: true, flank: true, flankers: true, reserve: 1, breach: "commit" }),
+    steady: Object.freeze({ volley: true, probe: true, flank: true, flankers: true, reserve: 1.6, breach: "commit" }),
+    wedge: Object.freeze({ volley: true, probe: false, flank: true, flankers: false, reserve: 0.6, wedge: true, breach: "pour" }),
+    swarm: Object.freeze({ volley: false, probe: false, flank: true, flankers: false, reserve: 0, envelop: true, breach: "pour" }),
+    standoff: Object.freeze({ volley: false, probe: false, flank: false, flankers: false, reserve: 1, stand: true, breach: null }),
+    skirmish: Object.freeze({ volley: true, probe: true, flank: true, flankers: false, reserve: 0.6, raid: true, breach: "pour" }),
 });
 
 /** Each band's way of fighting (TACTICS); a town's and an army's, a line's. */
 export const BAND_TACTICS = Object.freeze({ bandits: "swarm", northmen: "wedge", cult: "standoff", sellswords: "steady", corsairs: "skirmish" });
+
+/**
+ * How far from their place in their body one who fights up close goes after an enemy once the
+ * lines have charged (FIELD charge `hold`), by the host's record of them (`role`, `chief`,
+ * `commander`): the shield line's, the two-handers', a chief's or one of a household's; null for
+ * one who doesn't fight up close (an archer, a caster, a healer: as their role has it).
+ */
+export function holdOf(record) {
+    return record?.chief || record?.commander ? FIELD.charge.hold.chief : (FIELD.charge.hold[record?.role] ?? null);
+}
 
 /** A band's (BANDS key), or anyone else's, way of fighting (TACTICS key). */
 export const tacticsOf = (band) => BAND_TACTICS[band] ?? "line";
@@ -117,8 +131,14 @@ export const tacticsOf = (band) => BAND_TACTICS[band] ?? "line";
 /**
  * How a fight goes (ms and metres): its state looked at every `every`; the lines halting `at`
  * apart, the archers out `ahead` of them, for `ms` (`volley`) before they charge (`charge`: at a
- * run, `speed`, on till they're `gap` apart, those who fight up close going after an enemy as far
- * as `leash` from their place and looking as far as `sight`); `probe`: `size` of a wing's shield
+ * run, `speed`, on till they're `gap` apart; then holding the line, those who fight up close
+ * going after an enemy no further from their place than their role's `hold` (the shield line
+ * just across the gap between the fronts, at the foes before it and its neighbours'; the
+ * two-handers behind its ends, the chiefs and the household a little further: holdOf), looking
+ * as far as `sight`, so a line fights as a line, none leaving it to chase a foe unless they're
+ * sent: flankers, a reserve, a breakthrough; one with no foe that near going to the help of one
+ * of its own fighting a foe within `lap` of its place, so the ends of the longer line lap round
+ * the shorter's, battle.js formation `hold`); `probe`: `size` of a wing's shield
  * line and two-handers sent at the enemy's weakest body, back after `ms` or once half of them
  * have fallen; `flank`: a body's two-handers sent round the end of the enemy's line `after` it's
  * been fighting a while, going `wide` of it, then in on it from `rear` behind; a body beset on its
@@ -126,16 +146,49 @@ export const tacticsOf = (band) => BAND_TACTICS[band] ?? "line";
  * northmen's `wedge`, its wings charging `lead` after its centre; the corsairs' `raid`, hitting for
  * `hit`, falling back `back`, resting `rest`; a reserve or vanguard sent in at `commit` speed, the
  * next of them no sooner than `wait` after.
+ *
+ * A break in the enemy's line (`breach`): a body of it broken and run, or a hole torn in it, the
+ * open ground between two of its bodies' fronts `hole` wider than it was formed (BODIES `gap`), as
+ * a body whose shield line has no rank behind it left to step up narrows about its middle with
+ * each it loses (battle.js #closeRanks); seen by a side with a body of its line within `near` of
+ * it, its way of fighting going through as TACTICS `breach` has it. Those sent through run at
+ * `speed`, out `beyond` past the enemy's front, then at the archers, casters and healers of theirs
+ * within `reach` (only at them on their way, battle.js formation `seek`, or at any who strike them)
+ * and, once there are none there (or after `ms`), round on the back of the nearest of their line,
+ * `rear` behind it; each going after an enemy as far as `leash` from their place, looking `sight`.
+ *
+ * A side's archers, casters and healers with an enemy among them (`archers`), one who fights up
+ * close within `near` of one of them: they give ground, back behind the nearest body of their own
+ * that isn't beset (its reserve or household first), `back` behind its rearmost rank, and shoot
+ * from there, back in their places once no such enemy's within `clear` of them; each keeping
+ * `keep` from a foe come at it while it can (battle.js #backOff), and fighting with its knife once
+ * it can't (weapons.js KNIFE). Their body's beset from behind meanwhile (MORALE `flanked`); told
+ * once in `told` at most.
+ *
+ * A body most of whose shield line and two-handers stand idle (`idle`: fewer than `share` of them
+ * fighting) for `ms`: with an enemy who fights up close within `close` of it, it closes up with
+ * them, so its whole front's at them, not one end of it; with none, the enemy massing elsewhere, a
+ * body of its line wheels on the flank of the nearest body of theirs (a way that wheels: TACTICS
+ * `flank`), or comes up beside the nearest of its own that's fighting (one that doesn't), so no
+ * stretch of a line stands idle while the battle's fought beside it; else (a reserve or household
+ * sent in, done with what it was sent to), it goes at the nearest body of theirs still standing.
+ * Its commander fallen, it only closes up or goes at them, and only after `leaderless` times as
+ * long: so no battle's left with two sides standing apart. Any body standing, not held back, faces
+ * the nearest body of the enemy's within `close` of its front, once it's an eighth of a turn off
+ * it.
  */
 export const FIELD = Object.freeze({
     every: 500,
     volley: Object.freeze({ at: 32, ahead: 17, ms: 6000 }),
-    charge: Object.freeze({ speed: 2.2, gap: 2, leash: 30, sight: 30 }),
+    charge: Object.freeze({ speed: 2.2, gap: 2, hold: Object.freeze({ front: 5, heavy: 7, chief: 7 }), lap: 10, sight: 12 }),
     probe: Object.freeze({ size: 5, ms: 7000 }),
     flank: Object.freeze({ after: 4000, wide: 10, rear: 6, near: 8 }),
     wedge: Object.freeze({ lead: 3000 }),
     raid: Object.freeze({ hit: 6000, back: 12, rest: 4000 }),
     commit: Object.freeze({ speed: 2.4, wait: 10000 }),
+    breach: Object.freeze({ hole: 3 * FORMATION.apart, near: 25, speed: 2.6, beyond: 6, reach: 30, ms: 15000, rear: 6, leash: 8, sight: 14 }),
+    archers: Object.freeze({ near: 6, back: 4, clear: 10, keep: 3, told: 20000 }),
+    idle: Object.freeze({ share: 0.5, ms: 3000, close: 12, leaderless: 3 }),
 });
 
 /**
@@ -335,16 +388,33 @@ export function engagementOf({ id, sides, now, phase = "march" }) {
     };
 }
 
-// The formations a body's soldiers can be in: its own, its probe's and its two-handers' sent wide
+// The formations a body's soldiers can be in: its own, its probe's, its two-handers' sent wide and
+// those it sent through a break in the enemy's line
 const probeOf = (body) => `${body.formation}:probe`;
 const flankOf = (body) => `${body.formation}:flank`;
+const throughOf = (body) => `${body.formation}:through`;
+
+// How far apart two ways are (radians, 0 to π)
+const across = (a, b) => Math.abs((((a - b) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+
+/** The formations a body's soldiers can be in, by its own (`formation`): its own, its probe's, its flankers' and those it sent through a break. */
+export const formationsOfBody = (formation) => [formation, `${formation}:probe`, `${formation}:flank`, `${formation}:through`];
+
+// Those who shoot from behind a line, or heal from it (core/formation.js ROLES)
+const SHOOTERS = Object.freeze(["archer", "caster", "healer"]);
+
+// Whether one of `close` (enemies who fight up close) is among a body's archers, casters and
+// healers: within FIELD archers `near` of `point` (one of them), and behind the first rank of their
+// body (`formation`): come through or round it, not fighting at its front
+const among = (formation, close, point) => close.some((them) => apart([them.x, them.y], point) <= FIELD.archers.near && relativeTo(formation, [them.x, them.y])[1] > FORMATION.rank);
 
 /**
  * An engagement stepped, every FIELD `every` of the battle's time (host.js #fight). `ctx`:
  * { battle, now (ms), hold (whether its bodies hold whatever: none breaking, MORALE `hold`),
  * record(id) (the host's record of a soldier: its `role`, `chief`, `commander`, `power`),
  * event(change, data) (told what happens: "volley", "probe", "charge", "flank", "flankers",
- * "commit", "waver", "break", "falter", "rally", "commanderFell", "bannerFell"), afflict(id, kind,
+ * "commit", "breach", "rear", "reinforce", "fallBack", "waver", "break", "falter", "rally",
+ * "commanderFell", "bannerFell"), afflict(id, kind,
  * ms) }. Returns the sides (their indexes) that have no body left that isn't broken, run or down
  * (and keeps them: `beaten`).
  */
@@ -363,7 +433,7 @@ export function stepEngagement(engagement, ctx) {
         }
     }
 
-    const membersOf = (body) => [...(byFormation.get(body.formation) ?? []), ...(byFormation.get(probeOf(body)) ?? []), ...(byFormation.get(flankOf(body)) ?? [])];
+    const membersOf = (body) => formationsOfBody(body.formation).flatMap((id) => byFormation.get(id) ?? []);
     const formationOf = (body) => battle.formations[body.formation] ?? null;
     const live = (body) => body.alive > 0 && body.state !== "broken" && body.state !== "gone";
     const line = (side) => side.bodies.filter((body) => LINE.includes(body.part) && live(body));
@@ -381,10 +451,14 @@ export function stepEngagement(engagement, ctx) {
             members.set(body, here);
 
             if (!here.length && body.state !== "gone") {
+                body.brokeAt ??= LINE.includes(body.part) && formationOf(body) ? [...formationOf(body).anchor] : null;
                 body.state = "gone";
             }
         }
     }
+
+    // Who of each side fights up close, standing (its bodies' and those sent out of them)
+    const close = engagement.sides.map((side) => side.bodies.flatMap((body) => members.get(body)).filter((actor) => actor.formation.role === "front" || actor.formation.role === "heavy" || holdOf(ctx.record(actor.id)) !== null));
 
     engagement.sides.forEach((side, k) => {
         const foe = engagement.sides[1 - k];
@@ -443,18 +517,31 @@ export function stepEngagement(engagement, ctx) {
             const before = pair && live(pair) ? pair : line(foe).sort((p, q) => apart(formationOf(p)?.anchor ?? [Infinity, 0], formation.anchor) - apart(formationOf(q)?.anchor ?? [Infinity, 0], formation.anchor))[0];
             const aura = Boolean(commander && !commander.dead && apart(formation.anchor, [commander.x, commander.y]) <= COMMANDER.aura + half);
 
-            // (Beset on its flank or from behind: a body of the enemy's fighting near its end, its
-            // own way not head on at it, as a body wheeled in on its flank or two-handers round
-            // behind it come; how far its way's turned from the way back at this one's, 0 behind it)
+            // (Beset on its flank or from behind: a body of the enemy's fighting near its end, off
+            // its front's end or behind it, facing it, its own way not head on at it, as a body
+            // wheeled in on its flank or two-handers round behind it come; not one this one's
+            // wheeled onto the flank of, facing away. How far its way's turned from the way back at
+            // this one's, 0 behind it; and from the way to this one, 0 straight at it)
             body.flanked = foe.bodies.some((theirs) =>
-                [theirs.formation, probeOf(theirs), flankOf(theirs)].some((id) => {
+                formationsOfBody(theirs.formation).some((id) => {
                     const them = battle.formations[id];
-                    const turned = them ? Math.abs((((them.facing - formation.facing) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) : 0;
+                    const [right, back] = them ? relativeTo(formation, them.anchor) : [0, 0];
 
-                    return Boolean(them) && !them.broken && now - them.engagedAt < 1500 && apart(them.anchor, formation.anchor) <= half + FIELD.flank.near && turned < (Math.PI * 3) / 4;
+                    return (
+                        Boolean(them) &&
+                        !them.broken &&
+                        now - them.engagedAt < 1500 &&
+                        apart(them.anchor, formation.anchor) <= half + FIELD.flank.near &&
+                        (Math.abs(right) > half || back > 0) &&
+                        across(them.facing, formation.facing) < (Math.PI * 3) / 4 &&
+                        across(them.facing, towards(them.anchor, formation.anchor)) < Math.PI / 3
+                    );
                 }),
             );
-            body.morale = moraleAfter(body.morale, { seconds, fallen: body.fallen / Math.max(1, body.size), fresh: body.fresh / Math.max(1, body.size), odds: before ? here.length / Math.max(1, before.alive) : 1, flanked: body.flanked, aura, winning: Boolean(pair && pair.fallen > body.fallen) });
+            // (Beset from behind, too: an enemy who fights up close among its archers, casters and
+            // healers, come through or round its front)
+            body.rear = here.some((one) => SHOOTERS.includes(one.formation.role) && among(formation, close[1 - k], [one.x, one.y]));
+            body.morale = moraleAfter(body.morale, { seconds, fallen: body.fallen / Math.max(1, body.size), fresh: body.fresh / Math.max(1, body.size), odds: before ? here.length / Math.max(1, before.alive) : 1, flanked: body.flanked || body.rear, aura, winning: Boolean(pair && pair.fallen > body.fallen) });
 
             if (ctx.hold) {
                 body.morale = Math.max(body.morale, MORALE.hold);
@@ -517,9 +604,11 @@ export function stepEngagement(engagement, ctx) {
         charge(engagement, ctx, { members, formationOf, line });
     }
 
-    // At it: each body as its side's tactics have it, breaking, faltering, wheeling, sent in
+    // At it: each body as its side's tactics have it, breaking, faltering, wheeling, sent in, going
+    // through a break; its archers giving ground from an enemy come among them
     if (engagement.phase === "melee") {
-        engagement.sides.forEach((side, k) => melee(side, engagement.sides[1 - k], { battle, now, ctx, members, formationOf, line }));
+        engagement.sides.forEach((side, k) => melee(side, engagement.sides[1 - k], { battle, now, ctx, members, formationOf, line, foes: close[1 - k] }));
+        engagement.sides.forEach((side, k) => fallBack(side, close[1 - k], { now, ctx, members, formationOf }));
     }
 
     // (The probes back to their bodies once their time's up or half of them are down)
@@ -609,9 +698,9 @@ function probe(side, foe, { battle, now, ctx, members, formationOf, line }) {
 // Both sides' lines charging: the archers back in their places, each body at the one facing it (a
 // side that stands, standing), on till they're FIELD charge `gap` apart; the northmen's centre
 // first, its wings after (FIELD wedge); the bandits' wings round the enemy's flanks; and everyone
-// who fights up close going after an enemy as far as the charge's `leash`
+// who fights up close holding the line from then on (holdOf)
 function charge(engagement, ctx, { members, formationOf, line }) {
-    const { now } = ctx;
+    const { battle, now } = ctx;
 
     engagement.phase = "melee";
     engagement.at = now;
@@ -621,14 +710,21 @@ function charge(engagement, ctx, { members, formationOf, line }) {
         const tactic = side.tactics ? TACTICS[side.tactic] : TACTICS.line;
 
         for (const body of side.bodies) {
+            // (Holding the line from now: none of it chasing one who shot it from afar, and those
+            // with no foe before them helping their own, battle.js formation `hold`; its archers,
+            // casters and healers keeping off a foe come at them)
+            battle.formation(body.formation, { hold: FIELD.charge.lap });
+
             for (const actor of members.get(body) ?? []) {
                 delete actor.formation.post;
 
-                const record = ctx.record(actor.id);
+                const hold = holdOf(ctx.record(actor.id));
 
-                if (record?.role === "front" || record?.role === "heavy" || record?.chief || record?.commander) {
-                    actor.leash = Math.max(actor.leash ?? 0, FIELD.charge.leash);
+                if (hold !== null) {
+                    actor.leash = hold;
                     actor.sight = FIELD.charge.sight;
+                } else if (SHOOTERS.includes(actor.formation.role)) {
+                    actor.keep = FIELD.archers.keep;
                 }
             }
         }
@@ -691,7 +787,7 @@ function charging(body, side, foe, { formationOf, envelop = false, raid = false,
 // enemy's broken wheeling in on the nearest flank there is; the wings' two-handers swinging wide
 // round the enemy's line to fall on it from behind; and its reserve, then its vanguard, sent in
 // where one of its bodies is giving way, or through a gap in the enemy's line
-function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
+function melee(side, foe, { battle, now, ctx, members, formationOf, line, foes = [] }) {
     const tactic = side.tactics ? TACTICS[side.tactic] : null;
     const live = (body) => body.alive > 0 && body.state !== "broken" && body.state !== "gone";
 
@@ -716,9 +812,10 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
                 ctx.event("falter", { side: side.key, part: body.part, at: [...formation.anchor] });
             } else {
                 body.state = "broken";
+                body.brokeAt = [...formation.anchor];
                 battle.formation(body.formation, { broken: true, to: side.exit ? [...side.exit] : placeAt(formation, [0, 60]), speed: side.run, advance: false, charge: false });
 
-                for (const sent of [probeOf(body), flankOf(body)]) {
+                for (const sent of [probeOf(body), flankOf(body), throughOf(body)]) {
                     if (battle.formations[sent]) {
                         battle.formation(sent, { broken: true, to: side.exit ? [...side.exit] : placeAt(formation, [0, 60]), speed: side.run, advance: false, charge: false });
                     }
@@ -778,6 +875,40 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
                 formation.advance = false;
             } else {
                 charging(body, side, foe, { formationOf, raid: true, now });
+            }
+        }
+
+        // (Standing, not held back: facing the nearest body of the enemy's within FIELD idle
+        // `close` of its front, as one turns that's wheeled onto a flank or come up beside its
+        // own, once it's there; not for less than an eighth of a turn)
+        if (!formation.to && body.state !== "held") {
+            const half = Math.max(FORMATION.apart * 3, ...(members.get(body) ?? []).filter(({ formation: { id } }) => id === body.formation).map(({ formation: { slot } }) => Math.abs(slot[0])));
+            const them = foe.bodies
+                .filter((one) => live(one) && formationOf(one) && !formationOf(one).broken)
+                .map(formationOf)
+                .filter(({ anchor }) => apart(anchor, formation.anchor) <= half + FIELD.idle.close)
+                .sort((p, q) => apart(p.anchor, formation.anchor) - apart(q.anchor, formation.anchor))[0];
+            const way = them ? towards(formation.anchor, them.anchor) : formation.facing;
+
+            if (across(way, formation.facing) > Math.PI / 4) {
+                formation.facing = way;
+            }
+        }
+
+        // (Most of it idle a while: closing up, wheeling on the enemy's flank, coming up beside its
+        // own or going at them, FIELD idle; leaderless, only closing up or going at them, later)
+        if (["line", "charging", "flanking", "closing", "reinforcing", "committed"].includes(body.state) && !formation.to) {
+            const own = (members.get(body) ?? []).filter(({ formation: { id, role } }) => id === body.formation && (role === "front" || role === "heavy"));
+
+            if (own.length && own.filter(({ target }) => target !== null).length < own.length * FIELD.idle.share) {
+                body.idleSince ??= now;
+
+                if (now - body.idleSince >= FIELD.idle.ms * (tactic ? 1 : FIELD.idle.leaderless)) {
+                    body.idleSince = now;
+                    idle(body, side, foe, { now, ctx, members, formationOf, line, foes, live, leaderless: !tactic });
+                }
+            } else {
+                body.idleSince = null;
             }
         }
 
@@ -852,34 +983,351 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
         }
     }
 
-    // Its reserve, then its vanguard, sent in: where one of its line is giving way, or through a
-    // gap where one of the enemy's has broken (none of it, its commander fallen)
+    // Those it's sent through a break in the enemy's line, on their way (whatever's become of its
+    // commander since)
+    for (const body of side.bodies.filter((one) => one.through)) {
+        goThrough(body, side, foe, { battle, now, ctx, members, formationOf, line });
+    }
+
+    // Its reserve, then its vanguard, sent in where one of its line is giving way; or through a
+    // break in the enemy's line, as its way of fighting goes (none of it, its commander fallen)
     if (!tactic) {
         return;
     }
 
     const held = side.bodies.filter((body) => (body.part === "reserve" || body.part === "vanguard") && body.state === "held" && live(body));
     const giving = line(side).filter((body) => body.morale < MORALE.waver && body.state !== "faltering" && formationOf(body) && now - formationOf(body).engagedAt < 1500);
-    const gap = foe.bodies.find((body) => LINE.includes(body.part) && (body.state === "broken" || body.state === "gone") && !body.exploited);
     const sent = held.find(({ part }) => part === "reserve") ?? held.find(({ part }) => part === "vanguard");
+    const ready = now - (side.committedAt ?? -Infinity) >= FIELD.commit.wait;
 
-    if (sent && (giving.length || gap) && now - (side.committedAt ?? -Infinity) >= FIELD.commit.wait) {
-        const formation = formationOf(sent);
-        const target = giving.length ? formationOf(giving.sort((p, q) => p.morale - q.morale)[0]) : null;
-        const centre = foe.bodies.find((one) => one.part === "centre" && live(one));
-        const them = !target && gap && centre ? formationOf(centre) : null;
+    if (sent && giving.length && ready && formationOf(sent)) {
+        const target = formationOf(giving.sort((p, q) => p.morale - q.morale)[0]);
+        const to = placeAt(target, [0, -2]);
 
-        if (formation && (target || them)) {
-            const to = target ? placeAt(target, [0, -2]) : placeAt(them, [(relativeTo(them, formation.anchor)[0] >= 0 ? 1 : -1) * FORMATION.apart * 8, 1]);
+        sent.state = "committed";
+        side.committedAt = now;
+        Object.assign(formationOf(sent), { to, speed: FIELD.commit.speed, charge: true, advance: true });
+        ctx.event("commit", { side: side.key, part: sent.part, to, at: giving[0].part, commander: sent.part === "vanguard" ? side.commander : null });
+    }
 
-            if (gap && !target) {
-                gap.exploited = true;
+    breakThrough(side, foe, { battle, now, ctx, members, formationOf, line, live, sent: ready && sent?.state === "held" ? sent : null });
+}
+
+// A body standing idle (FIELD idle): an enemy who fights up close (`foes`) within `close` of it,
+// closing up with them ("closing"); else, one of its line, its commander standing, wheeling on the
+// flank of the nearest body of the enemy's line (as when what was before it is gone: a way that
+// wheels, TACTICS `flank`), or up beside the nearest of its own line that's fighting
+// ("reinforcing"); else (or `leaderless`) going at the nearest body of theirs still standing
+function idle(body, side, foe, { now, ctx, members, formationOf, line, foes, live, leaderless = false }) {
+    const formation = formationOf(body);
+    const tactic = leaderless ? null : TACTICS[side.tactic];
+    const nearest = foes.reduce((best, one) => (!best || apart([one.x, one.y], formation.anchor) < apart([best.x, best.y], formation.anchor) ? one : best), null);
+    const half = (one) => Math.max(FORMATION.apart * 3, ...(members.get(one) ?? []).filter(({ formation: { id } }) => id === one.formation).map(({ formation: { slot } }) => Math.abs(slot[0])));
+
+    if (nearest && apart([nearest.x, nearest.y], formation.anchor) <= FIELD.idle.close) {
+        body.state = LINE.includes(body.part) ? "closing" : body.state;
+        Object.assign(formation, { to: placeAt({ anchor: [nearest.x, nearest.y], facing: towards(formation.anchor, [nearest.x, nearest.y]) }, [0, FIELD.charge.gap]), speed: FIELD.charge.speed, charge: true, advance: true });
+
+        return;
+    }
+
+    if (tactic && LINE.includes(body.part) && idleTurn(body, side, foe, { now, ctx, formationOf, line, live, tactic, half })) {
+        return;
+    }
+
+    // (Else at the nearest body of theirs still standing, wherever it is)
+    const them = foe.bodies
+        .filter((one) => live(one) && formationOf(one))
+        .sort((p, q) => apart(formationOf(p).anchor, formation.anchor) - apart(formationOf(q).anchor, formation.anchor))[0];
+
+    if (them) {
+        body.state = LINE.includes(body.part) ? "closing" : body.state;
+        Object.assign(formation, { to: placeAt(formationOf(them), [0, -FIELD.charge.gap]), speed: FIELD.charge.speed, charge: true, advance: true });
+    }
+}
+
+// One of a line standing idle, its commander standing (`idle`), the enemy massing elsewhere:
+// wheeling on the flank of the nearest body of the enemy's line (a way that wheels), or up beside
+// the nearest of its own line that's fighting. Whether it does
+function idleTurn(body, side, foe, { now, ctx, formationOf, line, live, tactic, half }) {
+    const formation = formationOf(body);
+
+    if (tactic.flank) {
+        const target = line(foe)
+            .filter((one) => formationOf(one))
+            .sort((p, q) => apart(formationOf(p).anchor, formation.anchor) - apart(formationOf(q).anchor, formation.anchor))[0];
+
+        if (target) {
+            const them = formationOf(target);
+            const anew = body.state !== "flanking" || body.pair !== target.part;
+
+            body.state = "flanking";
+            body.pair = target.part;
+            Object.assign(formation, { to: placeAt(them, [(relativeTo(them, formation.anchor)[0] >= 0 ? 1 : -1) * (half(target) + 3), 1]), speed: FIELD.charge.speed, charge: true, advance: true });
+
+            if (anew) {
+                ctx.event("flank", { side: side.key, part: body.part, at: target.part, to: [...formation.to] });
             }
 
-            sent.state = "committed";
-            side.committedAt = now;
-            Object.assign(formation, { to, speed: FIELD.commit.speed, charge: true, advance: true });
-            ctx.event("commit", { side: side.key, part: sent.part, to, at: target ? giving[0].part : "gap", commander: sent.part === "vanguard" ? side.commander : null });
+            return true;
         }
+
+        return false;
+    }
+
+    const beside = line(side)
+        .filter((one) => one !== body && live(one) && formationOf(one) && now - formationOf(one).engagedAt < 1500)
+        .sort((p, q) => apart(formationOf(p).anchor, formation.anchor) - apart(formationOf(q).anchor, formation.anchor))[0];
+
+    if (beside) {
+        const them = formationOf(beside);
+        const anew = body.state !== "reinforcing";
+
+        body.state = "reinforcing";
+        Object.assign(formation, { to: placeAt(them, [(relativeTo(them, formation.anchor)[0] >= 0 ? 1 : -1) * (half(beside) + BODIES.gap + half(body)), 0]), facing: them.facing, speed: FIELD.charge.speed, charge: true, advance: true });
+
+        if (anew) {
+            ctx.event("reinforce", { side: side.key, part: body.part, beside: beside.part, to: [...formation.to] });
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+// The breaks in a side's line (FIELD breach): each body of its line broken and run or gone, where
+// it stood; and each hole torn between two of its line's bodies standing side by side, the open
+// ground between their fronts FIELD breach `hole` wider than it was formed (BODIES gap). Each
+// { key (the body's part, or the two's: "left|centre"), kind ("broken" or "hole"), at ([x, y]: its
+// middle) }
+export function breachesOf(side, { members, formationOf }) {
+    const live = (body) => body.alive > 0 && body.state !== "broken" && body.state !== "gone";
+    const breaches = [];
+
+    for (const body of side.bodies) {
+        if (LINE.includes(body.part) && !live(body) && body.brokeAt) {
+            breaches.push({ key: body.part, kind: "broken", at: [...body.brokeAt] });
+        }
+    }
+
+    const standing = LINE.map((part) => side.bodies.find((body) => body.part === part)).filter((body) => body && live(body) && formationOf(body));
+
+    for (let k = 1; k < standing.length; k++) {
+        const [a, b] = [standing[k - 1], standing[k]];
+
+        // (Side by side: not the wings with the centre gone between them, a break of its own)
+        if (LINE.indexOf(b.part) - LINE.indexOf(a.part) !== 1) {
+            continue;
+        }
+
+        // (Each one's front's end nearer the other)
+        const [ea, eb] = [
+            [a, b],
+            [b, a],
+        ].map(([one, other]) => {
+            const formation = formationOf(one);
+            const own = (members.get(one) ?? []).filter(({ formation: { id } }) => id === one.formation);
+            const half = Math.max(FORMATION.apart / 2, ...own.map(({ formation: { slot } }) => Math.abs(slot[0]) + FORMATION.apart / 2));
+
+            return placeAt(formation, [(relativeTo(formation, formationOf(other).anchor)[0] >= 0 ? 1 : -1) * half, 0]);
+        });
+
+        if (apart(ea, eb) >= BODIES.gap + FIELD.breach.hole) {
+            breaches.push({ key: `${a.part}|${b.part}`, kind: "hole", at: [(ea[0] + eb[0]) / 2, (ea[1] + eb[1]) / 2] });
+        }
+    }
+
+    return breaches;
+}
+
+// A side going through a break in the enemy's line (FIELD breach), each break once, the first it's
+// near (its line's nearest body within FIELD breach `near`), as its way of fighting goes (TACTICS
+// `breach`): the two-handers and rear ranks of that body ("pour"); or its reserve, then its
+// household (`sent`, its next to send, if it's time: "commit")
+function breakThrough(side, foe, { battle, now, ctx, members, formationOf, line, live, sent }) {
+    const way = TACTICS[side.tactic]?.breach ?? null;
+
+    if (!way) {
+        return;
+    }
+
+    side.breached ??= {};
+
+    for (const breach of breachesOf(foe, { members, formationOf })) {
+        if (side.breached[breach.key] !== undefined) {
+            continue;
+        }
+
+        const nearest = line(side)
+            .filter((body) => formationOf(body) && body.state !== "faltering")
+            .sort((p, q) => apart(formationOf(p).anchor, breach.at) - apart(formationOf(q).anchor, breach.at))[0];
+
+        if (!nearest || apart(formationOf(nearest).anchor, breach.at) > FIELD.breach.near) {
+            continue;
+        }
+
+        const going = way === "pour" ? pour(nearest, breach, { battle, ctx, members, formationOf }) : sent && live(sent) && formationOf(sent) ? commitThrough(sent, side, breach, { members, formationOf, now }) : null;
+
+        if (going) {
+            side.breached[breach.key] = now;
+            going.body.through = { stage: "through", at: breach.key, since: now, formation: going.formation };
+            ctx.event("breach", { side: side.key, part: going.body.part, by: way, gap: breach.key, kind: breach.kind, at: [...breach.at], to: [...battle.formations[going.formation].to], commander: going.body.part === "vanguard" ? side.commander : null });
+        }
+
+        return;
+    }
+}
+
+// Where those sent through a break go first: out FIELD breach `beyond` past it, the way from `from`
+const beyond = (from, at) => placeAt({ anchor: at, facing: towards(from, at) }, [0, -FIELD.breach.beyond]);
+
+// A bold band's body's two-handers and rear ranks (not its chief) poured through a break, three
+// abreast, in a formation of their own (`throughOf`); none, with fewer than two of them, or some
+// of it through already. { body, formation }, or null
+function pour(body, breach, { battle, ctx, members, formationOf }) {
+    const formation = formationOf(body);
+    const sent = (body.through ? [] : (members.get(body) ?? [])).filter((actor) => {
+        const { id, role, slot } = actor.formation;
+        const record = ctx.record(actor.id);
+
+        return id === body.formation && (role === "heavy" || (role === "front" && slot[1] > 0)) && !record?.chief && !record?.commander;
+    });
+
+    if (sent.length < 2) {
+        return null;
+    }
+
+    battle.formation(throughOf(body), { anchor: [...formation.anchor], facing: towards(formation.anchor, breach.at), to: beyond(formation.anchor, breach.at), speed: FIELD.breach.speed, charge: true, advance: false, seek: SHOOTERS });
+    sent.forEach((actor, k) => {
+        actor.formation.id = throughOf(body);
+        actor.formation.slot = [((k % 3) - 1) * FORMATION.apart, Math.floor(k / 3) * FORMATION.rank];
+        Object.assign(actor, { leash: FIELD.breach.leash, sight: FIELD.breach.sight });
+    });
+
+    return { body, formation: throughOf(body) };
+}
+
+// A steady line's reserve or household (`sent`) through a break, as a body. { body, formation }
+function commitThrough(sent, side, breach, { members, formationOf, now }) {
+    const formation = formationOf(sent);
+
+    sent.state = "committed";
+    side.committedAt = now;
+    Object.assign(formation, { to: beyond(formation.anchor, breach.at), speed: FIELD.breach.speed, charge: true, advance: false, seek: SHOOTERS });
+
+    for (const actor of members.get(sent) ?? []) {
+        if (actor.formation.id === sent.formation && !SHOOTERS.includes(actor.formation.role)) {
+            Object.assign(actor, { leash: FIELD.breach.leash, sight: FIELD.breach.sight });
+        }
+    }
+
+    return { body: sent, formation: sent.formation };
+}
+
+// Those a body sent through a break, on their way (FIELD breach): through it, then at the archers,
+// casters and healers of the enemy's within `reach` (the nearest, wherever they give ground to),
+// then, with none there (or after `ms`), round on the back of the nearest body of the enemy's line,
+// at whoever's nearest. Gone, they're done
+function goThrough(body, side, foe, { battle, now, ctx, members, formationOf, line }) {
+    const { through } = body;
+    const formation = battle.formations[through.formation];
+    const going = (members.get(body) ?? []).filter(({ formation: { id } }) => id === through.formation);
+
+    if (!formation || !going.length) {
+        if (through.formation === throughOf(body) && formation) {
+            battle.formation(through.formation, null);
+        }
+
+        body.through = null;
+
+        return;
+    }
+
+    if (through.stage === "through" && !formation.to) {
+        through.stage = "archers";
+    }
+
+    if (through.stage !== "archers") {
+        return;
+    }
+
+    const shooters = foe.bodies.flatMap((one) => members.get(one) ?? []).filter((actor) => SHOOTERS.includes(actor.formation.role) && apart([actor.x, actor.y], formation.anchor) <= FIELD.breach.reach);
+    const nearest = shooters.sort((p, q) => apart([p.x, p.y], formation.anchor) - apart([q.x, q.y], formation.anchor))[0];
+
+    if (nearest && now - through.since < FIELD.breach.ms) {
+        Object.assign(formation, { to: [nearest.x, nearest.y], speed: FIELD.breach.speed, charge: true });
+
+        return;
+    }
+
+    // (Round on the back of the nearest of their line, whoever's nearest)
+    const them = line(foe)
+        .filter((one) => formationOf(one))
+        .sort((p, q) => apart(formationOf(p).anchor, formation.anchor) - apart(formationOf(q).anchor, formation.anchor))[0];
+
+    through.stage = "rear";
+    Object.assign(formation, { seek: null, advance: true });
+
+    if (them) {
+        const rear = Math.max(FORMATION.rank, ...(members.get(them) ?? []).filter(({ formation: { id } }) => id === them.formation).map(({ formation: { slot } }) => slot[1]));
+
+        Object.assign(formation, { to: placeAt(formationOf(them), [0, rear + FIELD.breach.rear]), charge: true });
+        ctx.event("rear", { side: side.key, part: body.part, on: them.part, to: [...formation.to] });
+    }
+}
+
+// A side's archers, casters and healers with an enemy who fights up close among them (`close`,
+// within FIELD archers `near`): giving ground, back behind the nearest body of their own that isn't
+// beset (its reserve or household, held, first; else its own), FIELD archers `back` behind its
+// rearmost rank (a `post`, their `refuge` that body's formation), shooting from there; back in
+// their places once no such enemy's within `clear` of them. Told once a body's first give ground
+// ("fallBack")
+function fallBack(side, close, { ctx, members, formationOf }) {
+    const live = (body) => body.alive > 0 && body.state !== "broken" && body.state !== "gone";
+    const near = (point, within) => close.some((them) => apart([them.x, them.y], point) <= within);
+    const bodies = side.bodies.filter((body) => live(body) && formationOf(body));
+
+    for (const body of bodies) {
+        const formation = formationOf(body);
+        const shooters = (members.get(body) ?? []).filter(({ formation: { id, role } }) => id === body.formation && SHOOTERS.includes(role));
+        let gave = false;
+
+        for (const actor of shooters) {
+            const beset = among(formation, close, [actor.x, actor.y]);
+
+            if (!beset && !actor.formation.refuge) {
+                continue;
+            }
+
+            if (!beset && !near(placeAt(formation, actor.formation.slot), FIELD.archers.clear) && !near([actor.x, actor.y], FIELD.archers.clear)) {
+                delete actor.formation.refuge;
+                delete actor.formation.post;
+                continue;
+            }
+
+            // (Behind the nearest of its own not beset, an enemy at it: a held reserve or household
+            // first; else its own)
+            const refuge =
+                bodies.find((one) => one.formation === actor.formation.refuge && one !== body && !near(formationOf(one).anchor, FIELD.archers.near)) ??
+                bodies
+                    .filter((one) => one !== body && !near(formationOf(one).anchor, FIELD.archers.near))
+                    .sort((p, q) => Number(q.state === "held") - Number(p.state === "held") || apart(formationOf(p).anchor, [actor.x, actor.y]) - apart(formationOf(q).anchor, [actor.x, actor.y]))[0] ??
+                body;
+            const own = (members.get(refuge) ?? []).filter(({ formation: { id } }) => id === refuge.formation);
+            const half = Math.max(FORMATION.apart, ...own.map(({ formation: { slot } }) => Math.abs(slot[0])));
+            const rear = Math.max(0, ...own.map(({ formation: { slot } }) => slot[1]));
+
+            actor.formation.refuge = refuge.formation;
+            actor.formation.post = placeAt(formationOf(refuge), [Math.max(-half, Math.min(half, actor.formation.slot[0])), rear + FIELD.archers.back]);
+            gave = true;
+        }
+
+        if (gave && !body.fellBack && ctx.now - (body.fellBackAt ?? -Infinity) >= FIELD.archers.told) {
+            body.fellBackAt = ctx.now;
+            ctx.event("fallBack", { side: side.key, part: body.part, at: [...formation.anchor] });
+        }
+
+        body.fellBack = gave;
     }
 }

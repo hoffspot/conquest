@@ -17,13 +17,22 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The browser tests' split (scripts/e2e-shard.js, .github/actions/e2e-share), the same in every
+# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (share
+# 9: about 13 minutes of its own first) and the unit tests' (share 10: about 20), so that every
+# job ends about together rather than two of them standing idle for half the run
+env:
+  E2E_SHARES: 10
+  E2E_AHEAD: "9:13,10:20"
+
 jobs:
-  # Lint and the unit tests: about 13½ minutes
+  # Lint and the unit tests (about 19½ minutes, four test files at a time on the runner's four
+  # threads), then its share of the browser tests (share 10: about 8 minutes)
   test:
     runs-on: ubuntu-latest
-    # (Thirty minutes is twice the longest it's taken, and a little more; a job hung longer is
+    # (Sixty minutes is twice the longest it should take, and a little more; a job hung longer is
     # ended rather than held to GitHub's six hours, as the e2e jobs are below)
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -39,16 +48,28 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      # (Four test files at a time, one a thread: Node's own choice is a thread fewer, and four
+      # took a little less time, 19 minutes against 19½ to 20)
+      - run: npm test -- --test-concurrency=4
+
+      # (Whether or not the unit tests passed: the browser tests' run is whole either way)
+      - name: Its share of the browser tests
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/e2e-share
+        with:
+          share: 10
+          shares: ${{ env.E2E_SHARES }}
+          ahead: ${{ env.E2E_AHEAD }}
 
   # The motion check (scripts/motion-check.js): every motion on each people's bodies at the ends
   # of their builds, failing on anything worse than the baseline kept with it
-  # (test/motion-baseline.json). About 10 minutes on a runner's 4 threads; its report is kept
-  # with the run, for the contact sheet (motion-sheet.html, "Report")
+  # (test/motion-baseline.json). About 8 to 13 minutes on a runner's 4 threads; its report is kept
+  # with the run, for the contact sheet (motion-sheet.html, "Report"). Then its share of the
+  # browser tests (share 9: about 15 minutes)
   motion:
     runs-on: ubuntu-latest
-    # (Twice the longest it's taken, 12 minutes, and a little more)
-    timeout-minutes: 25
+    # (Twice the longest it should take, and a little more)
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -56,6 +77,11 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      # The licensed models, for its share of the browser tests (docs/LICENSED_MODELS.md)
+      - uses: ./.github/actions/licensed-models
+        with:
+          key: ${{ secrets.MODELS_DEPLOY_KEY }}
 
       - run: npm ci
       - run: npm run check:motion
@@ -68,12 +94,22 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # (Whether or not the motion check passed: the browser tests' run is whole either way)
+      - name: Its share of the browser tests
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/e2e-share
+        with:
+          share: 9
+          shares: ${{ env.E2E_SHARES }}
+          ahead: ${{ env.E2E_AHEAD }}
+
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
-  # others' (scripts/e2e-shard.js: by how long each test took, e2e/durations.json). Eight jobs
-  # take about 32 minutes each by e2e/durations.json (and another 40 s or so getting ready), but
-  # from 21 to 40 as runners are quicker or slower: more would be quicker, down to the longest
-  # test's 4¾ minutes, but a run is then 10 jobs (with the unit tests and the motion check), and
-  # two runs at once (a merge's and the next pull request's) stay within GitHub's 20 at a time
+  # others' (scripts/e2e-shard.js: by how long each test took on CI, e2e/durations.json; the
+  # unit tests' and the motion check's jobs take shares too, after their own work: env above).
+  # Eight jobs take about 28 minutes each (and another 30 s or so getting ready): more would be
+  # quicker, down to the longest test's 4¾ minutes, but a run is 10 jobs (with the unit tests
+  # and the motion check), and two runs at once (a merge's and the next pull request's) stay
+  # within GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
     # (Eighty minutes is twice the longest a job's taken, 40; a job hung longer is ended rather
@@ -99,13 +135,9 @@ jobs:
           key: ${{ secrets.MODELS_DEPLOY_KEY }}
 
       - run: npm ci
-
-      # (Without --with-deps: the runner already has the system libraries Chromium needs, as it
-      # carries Google Chrome, and installing them with apt-get now and then hung for good on
-      # Ubuntu's mirror. Chromium's own download is given 5 minutes a try, where it takes under
-      # a minute, and it's tried three times)
-      - name: Install Chromium for the end-to-end tests
-        run: for try in 1 2 3; do timeout 300 npx playwright install chromium && exit 0; done; exit 1
-      - name: Choose this job's share of the tests
-        run: node scripts/e2e-shard.js ${{ matrix.shard }} ${{ strategy.job-total }} > e2e-share.txt
-      - run: npx playwright test --test-list e2e-share.txt
+      - name: Its share of the browser tests
+        uses: ./.github/actions/e2e-share
+        with:
+          share: ${{ matrix.shard }}
+          shares: ${{ env.E2E_SHARES }}
+          ahead: ${{ env.E2E_AHEAD }}

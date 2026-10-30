@@ -189,6 +189,7 @@ import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
 import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
 import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, KNACKS, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
+import { formationsOfBody } from "../core/engagement.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -998,7 +999,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2562,6 +2563,28 @@ export class Game {
 
         this.#unthrong(id);
         avatar.character.setEquipment(this.#followerLook(id).equipment);
+    }
+
+    // One of an army made its standard-bearer (core/host.js "standard" events): drawn bearing it
+    // from now on. In full, given it in place of their shield, out of their crowd for now (its
+    // figure of them as they were theirs no longer); in their crowd, drawn afresh, to go to the
+    // bearers' own (#crowdKind)
+    #bearsStandard(id) {
+        const avatar = this.avatars.get(id);
+        const soldier = this.host.soldiers.get(id);
+
+        if (!avatar || !soldier) {
+            return;
+        }
+
+        if (avatar instanceof CrowdAvatar) {
+            this.#unenlist([id]);
+            this.#undress(id);
+            this.enlisting.push(id);
+        } else if (avatar instanceof Avatar && avatar.character?.equipment) {
+            this.#unthrong(id);
+            avatar.character.setEquipment(soldierLook(soldier).equipment);
+        }
     }
 
     // Someone gone from the battle, no longer drawn (their body kept, `keep`, for someone else)
@@ -4533,15 +4556,16 @@ export class Game {
         this.#marshal(MARSHAL.every);
     }
 
-    // A soldier's kind in the crowds: their people's, their sex's, carrying their weapon, and what
-    // its figure's made from (world/crowd.js makingTemplate)
+    // A soldier's kind in the crowds: their people's, their sex's, carrying their weapon (and a
+    // standard-bearer their standard), and what its figure's made from (world/crowd.js
+    // makingTemplate)
     #crowdKind(actor) {
-        const { people = "human", sex = "m", weapon = actor.weapon } = this.host.soldiers.get(actor.id) ?? {};
-        const key = `${people}:${sex}:${weapon}`;
+        const { people = "human", sex = "m", weapon = actor.weapon, banner = false } = this.host.soldiers.get(actor.id) ?? {};
+        const key = `${people}:${sex}:${weapon}${banner ? ":standard" : ""}`;
 
         return {
             key,
-            spec: { look: soldierLook({ people, weapon, sex, seed: 1 }), guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null },
+            spec: { look: soldierLook({ people, weapon, sex, seed: 1, banner }), guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null },
         };
     }
 
@@ -5762,7 +5786,7 @@ export class Game {
 
         for (const { sides } of me ? (this.host?.engagements?.() ?? []) : []) {
             for (const side of sides) {
-                const ids = side.bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]);
+                const ids = side.bodies.flatMap(({ formation }) => formationsOfBody(formation));
                 const commander = side.commander === null ? null : this.battle.actor(side.commander);
                 const one = commander && !commander.dead ? commander : this.battle.actors.find((actor) => !actor.dead && ids.includes(actor.formation?.id));
 
@@ -8443,8 +8467,8 @@ export class Game {
                 break;
         }
 
-        // (Near the player, out in the world: where it came)
-        const where = event.at ?? event.to ?? event.anchors?.find(Boolean) ?? null;
+        // (Near the player, out in the world: where it came, the first of its places there is)
+        const where = [event.at, event.to, ...(event.anchors ?? [])].find(Array.isArray) ?? null;
 
         if (!me || !where || me.map !== "town" || Math.hypot(me.x - where[0], me.y - where[1]) > BATTLE_TOLD.near) {
             return;
@@ -8495,6 +8519,20 @@ export class Game {
                 break;
             case "flank":
                 told(`${Whose} ${part} wheels onto their flank!`);
+                break;
+            case "breach":
+                this.#invasionHorn(horn, event.to);
+                this.#invasionHorn(horn, event.to, HORNS.again);
+                told(event.by === "pour" ? `${Whose} ${part} pours through the gap in their line!` : event.part === "vanguard" && event.commander ? `${this.battle.actor(event.commander)?.name ?? Whose} leads their household through the gap!` : `${Whose} reserve goes through the gap!`);
+                break;
+            case "rear":
+                told(`${Whose} ${part} falls on their ${BATTLE_TOLD.parts[event.on] ?? event.on} from behind!`);
+                break;
+            case "reinforce":
+                told(`${Whose} ${part} comes up beside the ${BATTLE_TOLD.parts[event.beside] ?? event.beside}!`);
+                break;
+            case "fallBack":
+                told(`${Whose} archers fall back!`);
                 break;
             case "falter":
                 told(`${Whose} ${part} falls back!`);
@@ -14050,6 +14088,9 @@ export class Game {
                     this.#undress(id);
                 }
 
+                break;
+            case "standard":
+                this.#bearsStandard(event.id);
                 break;
             case "follower":
                 if (event.change === "outfitted" && event.slot === "body") {

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { split, testName, testsIn } from "../scripts/e2e-shard.js";
+import { aheadOf, split, testName, testsIn } from "../scripts/e2e-shard.js";
 
 describe("the end-to-end tests split between CI's jobs (scripts/e2e-shard.js)", () => {
     it("gives every test to one job, each job's as long as the others' as it can, the same every time", () => {
@@ -24,6 +24,29 @@ describe("the end-to-end tests split between CI's jobs (scripts/e2e-shard.js)", 
         for (const share of shares) {
             assert.deepEqual(share.names, names.filter((name) => share.names.includes(name)));
         }
+    });
+
+    it("gives a job with other work to do first that much less, so they all end about together", () => {
+        // (Twenty-four tests of a minute each, between four jobs: the last with six minutes of
+        // unit tests first, the third with two; eight minutes each in all)
+        const names = Array.from({ length: 24 }, (_, k) => `c.spec.js › test ${String(k).padStart(2, "0")}`);
+        const durations = Object.fromEntries(names.map((name) => [name, 60]));
+        const shares = split(names, durations, 4, { ahead: aheadOf("4:6,3:2", 4) });
+
+        assert.deepEqual(
+            shares.map(({ names: each }) => each.length),
+            [8, 8, 6, 2],
+        );
+        assert.deepEqual(
+            shares.map(({ ahead }) => ahead),
+            [0, 0, 120, 360],
+        );
+        assert.deepEqual(new Set(shares.flatMap(({ names: each }) => each)), new Set(names));
+        assert.ok(Math.max(...shares.map(({ seconds, ahead }) => seconds + ahead)) - Math.min(...shares.map(({ seconds, ahead }) => seconds + ahead)) <= 60, "ending together, to a test");
+
+        // (None ahead, as before)
+        assert.deepEqual(aheadOf("", 3), [0, 0, 0]);
+        assert.throws(() => aheadOf("5:10", 4), /a job from 1 to 4/);
     });
 
     it("counts a test not timed yet as the median", () => {

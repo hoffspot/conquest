@@ -225,11 +225,12 @@ test("dresses each people's townsfolk in their everyday dress: their own cut and
     expect(cat.flatMap(({ worn }) => worn).filter((id) => /boots/i.test(id))).toEqual([]);
 });
 
-test("dresses each people's soldiers and officials, their garments drawn all at once as in the game", async ({ page }) => {
+test("dresses each people's soldiers and officials, their garments drawn all at once as in the game; their standard-bearer bearing their standard", async ({ page }) => {
     const figures = async () =>
         page.evaluate(() =>
             window.lab.figures.map(({ label, character }) => ({
                 label,
+                held: Object.fromEntries(character.equipment),
                 garments: character.garments.map((mesh) => mesh.name),
                 merged: character.garments.find((mesh) => mesh.name === "garments")?.userData.merged ?? [],
                 material: character.garments.find((mesh) => mesh.name === "garments")?.material.uuid ?? null,
@@ -239,14 +240,17 @@ test("dresses each people's soldiers and officials, their garments drawn all at 
     await openLab(page, "/uniform-lab.html?people=orc");
 
     const merged = await figures();
-    const [captain, soldier, reeve] = merged;
+    const [captain, soldier, bearer, reeve] = merged;
 
     // (One mesh for a soldier's garments, but for their cloak and a robe: drapes, hanging free)
-    expect(merged.map(({ label }) => label)).toEqual(["Captain", "Soldier", "Reeve", "Ruler"]);
+    expect(merged.map(({ label }) => label)).toEqual(["Captain", "Soldier", "Standard-bearer", "Reeve", "Ruler"]);
     expect(soldier.garments).toEqual(["garments"]);
     expect(soldier.merged).toEqual(expect.arrayContaining(["breastplate.orc", "trousers.orc", "sabatons.orc", "belt.orc"]));
     expect(captain.garments).toEqual(["garments", "cloak.orc"]);
     expect(reeve.merged).toEqual(expect.arrayContaining(["livery.orc", "chain"]));
+
+    // (Their standard in the hand their shield would be in, their cleaver in the other)
+    expect(bearer.held).toEqual(expect.objectContaining({ offHand: "standard.orc", mainHand: "cleaver" }));
 
     // (Everyone in the same outfit drawn with one picture of it)
     if (captain.merged.join() === soldier.merged.join()) {
