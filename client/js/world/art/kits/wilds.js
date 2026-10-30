@@ -1197,7 +1197,7 @@ function stump(mesher, random, land = "meadow", { roots: many = true, fungus = t
 // floor of the break, which sinks in the middle (never a peak), its fibres running the way it fell,
 // and shards of splintered wood standing up from it on the side that held longest
 function brokenTop(mesher, random, shape, { rim, lip, pith, bark, fibre, tint, shards = true }) {
-    const { N, angles, breakAt, high, age } = shape;
+    const { N, high, age } = shape;
     const up = [0, 1, 0];
     const wood = FRESH_TORN[age];
     const torn = lip.map((p, j) => [p[0], rim[j][1] - (shape.spikes[j] > 0 ? 0.015 : 0.004), p[2]]);
