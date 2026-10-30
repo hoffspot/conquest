@@ -1,0 +1,53 @@
+name: A share of the browser tests
+description: >-
+  One job's share of the Playwright browser tests (scripts/e2e-shard.js, split by how long each
+  took on CI: e2e/durations.json): Chromium installed, the share chosen, run, and its JSON report
+  kept with the run as e2e-report-<share>, for npm run e2e:durations to time the tests by.
+
+inputs:
+  share:
+    description: Which share this job runs (from 1)
+    required: true
+  shares:
+    description: How many shares the tests are split into, between every job that runs one
+    required: true
+  ahead:
+    description: The work some jobs do first, as scripts/e2e-shard.js --ahead takes it (<share>:<minutes>,...)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # (Without --with-deps: the runner already has the system libraries Chromium needs, as it
+    # carries Google Chrome, and installing them with apt-get now and then hung for good on
+    # Ubuntu's mirror. Chromium's own download is given 5 minutes a try, where it takes under
+    # a minute, and it's tried three times)
+    - name: Install Chromium for the browser tests
+      shell: bash
+      run: for try in 1 2 3; do timeout 300 npx playwright install chromium && exit 0; done; exit 1
+
+    - name: Choose this job's share of the browser tests
+      shell: bash
+      run: node scripts/e2e-shard.js ${{ inputs.share }} ${{ inputs.shares }} --ahead "${{ inputs.ahead }}" > e2e-share.txt
+
+    - name: Its share of the browser tests
+      shell: bash
+      env:
+        PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
+      run: |
+        if [ ! -s e2e-share.txt ]; then
+          echo "::notice::No browser tests in share ${{ inputs.share }} of ${{ inputs.shares }}"
+          exit 0
+        fi
+        npx playwright test --test-list e2e-share.txt --reporter=github,json
+
+    # (How long each test took on CI, failed or not: contribution.md, section 2, The browser tests)
+    - name: Keep its report
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-report-${{ inputs.share }}
+        path: e2e-report.json
+        retention-days: 14
+        if-no-files-found: ignore
