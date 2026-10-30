@@ -495,6 +495,39 @@ materials (`.mat`) say which texture is which (`_MainTex` the colour, `_BumpMap`
 own files (`.mb`) don't open in Blender: the FBX is what's needed. And give it `profiles`: `full`
 to keep it as bought, and one for play.
 
+**From Unreal.** An asset on Fab for Unreal Engine comes as an Unreal project's content, not as
+files: add it to a project in Unreal Engine 5 (the Epic Games Launcher's Fab Library, *Add to
+Project*; any project, a blank one will do), then export it with `unreal/export_assets.py`, run in
+the Unreal Editor:
+- **Pasted.** Open *Window → Output Log*, set the box at its foot to *Python* (its drop-down, on
+  the left, says *Cmd* to start with), paste the whole script into it, and press Enter. `ROOT` and
+  `OUT`, near its top, say what's exported (`/Game`: everything; `/Game/Monster4`: that folder)
+  and where to: change them before copying it, if need be.
+- **Or from its file.** With that box set to *Cmd*: `py "C:/path/to/export_assets.py"`, a folder
+  after it to export only that (`/Game/Monster4`) and another to export into (`D:/Out`); or
+  *Tools → Execute Python Script…*.
+
+(If there's no *Python* in that drop-down, turn on the *Python Editor Script Plugin* in *Edit →
+Plugins* and restart.) A progress bar shows as it goes; the Output Log says what it exported, and
+what it couldn't. Into `<the project>/PellagosExport`, each asset where it is in the Content
+Browser, it exports:
+- every skeletal and static mesh as FBX: its full detail only (`lods` makes the lower ones), no
+  collision, with its morph targets and vertex colours;
+- every animation sequence as FBX of its own, without the mesh (for `actions`); montages, blend
+  spaces, blueprints and levels aren't exported, as they're Unreal's own;
+- every texture as TGA (PNG or EXR where TGA can't take one);
+- and `notes.json`, what the FBX doesn't carry:
+  - each mesh's skeleton and its material slots, and each animation's skeleton and length (a pack
+    with several skeletons: which clips go with which mesh);
+  - each material's textures by parameter, and its numbers and colours: which texture is the
+    colour, the normals, the packed masks (*Materials from textures*);
+  - each texture's colour space and compression: `"normal": true` for a normal map, Unreal's
+    DirectX kind (`"flipGreen": true`); `TC_MASKS` for packed masks (an ORM's occlusion, roughness
+    and metal in red, green and blue);
+  - and what couldn't be exported.
+
+Zip the folder for the session, with the asset's Fab page and its licence.
+
 ```text
 private/
   dreadthorn/                  the asset as bought (unzipped)
@@ -585,6 +618,8 @@ npm run test:browser   # every GLB in dist/ loaded and played in Three.js r186, 
   atlas. Set `CHROMIUM_PATH` to use a Chromium you have (`/opt/pw-browsers/chromium` in Claude's
   cloud sessions).
 - `python3 blender/test_atlas.py`: the atlas packer on its own (`npm test` runs it too).
+- `python3 unreal/test_export_assets.py`: the export out of Unreal (*From Unreal*), on a stand-in
+  for the Unreal Editor's Python module, since Unreal can't run here (`npm test` runs it too).
 
 These aren't part of the game's CI (Blender is a large download). Run them when you change
 anything here. The game's `npm run lint` does lint this folder's JavaScript.

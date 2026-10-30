@@ -269,3 +269,13 @@ describe("the atlas packer (blender/atlas.py)", () => {
         assert.match(run.stderr, /OK/);
     });
 });
+
+describe("the export out of Unreal (unreal/export_assets.py)", () => {
+    it("passes its own tests, on a stand-in for the Unreal Editor's Python", () => {
+        const python = process.platform === "win32" ? "python" : "python3";
+        const run = spawnSync(python, [path.join(HERE, "unreal", "test_export_assets.py")], { encoding: "utf8" });
+
+        assert.equal(run.status, 0, run.stderr || run.error?.message);
+        assert.match(run.stderr, /OK/);
+    });
+});
