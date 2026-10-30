@@ -416,6 +416,34 @@ in this repository, but in the private one the game's builds fetch it from
 
 Don't copy it out of this game or use it in anything else.
 
+## golem.bin, golem.ember.bin, golem.moss.bin, golem.frost.bin
+
+**Armored Stone Golem - Dark Fantasy Boss**, by **Alexander Lenski** (its Unreal Engine files: its
+skeletal mesh, its hammer and shield, its textures and its 25 animations, exported from Unreal
+Engine by this repository's owner), bought on **Fab** by this repository's owner under **Fab's
+Standard License**: the Stone Golem.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/golem.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its armoured mesh, with its hammer and shield on the bones they're held by
+(`weapon_r`, `weapon_l`), 45,704 triangles with two lower details packed in (20,562 and 9,140); its
+three materials (body, armour, weapons), each its textures (colour, normal at 512 pixels, and
+occlusion, roughness and metal; its body's glow) as KTX2; and all 25 of its own clips: five
+attacks, three flinches, three deaths, a dodge, four idles, walking and jogging four ways, and a
+turn. Its other three skins, ember, moss and frost, are their colour textures and its body's glow
+alone (`golem.ember.bin`, `golem.moss.bin`, `golem.frost.bin`). Its pack's own copies of Unreal's
+mannequins, their animations and its level prototyping (`Demo`, and the clips retargeted from them,
+`MM_*`) aren't in it: they're Epic's, licensed for Unreal Engine only.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). It isn't in the game yet: it's kept for a card, and the model viewer
+shows it (*Coming to the wilds*).
+
+Don't copy it out of this game or use it in anything else.
+
 ## kaiju.bin
 
 **Kaiju**, by **HuyKhoi2407** (its Blender files, rigged and animated, `Kaiju_Animation-baked.blend`

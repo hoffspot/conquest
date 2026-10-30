@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "36d8b627b8",
+    release: "63e37109b3",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2343,6 +2343,40 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/infernal.dark.bin",
                     "hash": "b581b0088b",
                     "bytes": 583128
+                }
+            ]
+        },
+        "beast-golem": {
+            "tier": "demand",
+            "label": "The Stone Golem (Alexander Lenski's \"Armored Stone Golem - Dark Fantasy Boss\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/golem.bin",
+                    "hash": "9476898d76",
+                    "bytes": 4421184
+                }
+            ]
+        },
+        "beast-golem-skins": {
+            "tier": "demand",
+            "label": "The Stone Golem's other skins: ember, moss and frost (Alexander Lenski's \"Armored Stone Golem - Dark Fantasy Boss\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/golem.ember.bin",
+                    "hash": "fcb741aaf1",
+                    "bytes": 520180
+                },
+                {
+                    "path": "models/beasts/golem.moss.bin",
+                    "hash": "ba756739e4",
+                    "bytes": 534492
+                },
+                {
+                    "path": "models/beasts/golem.frost.bin",
+                    "hash": "03f9fcadfa",
+                    "bytes": 522892
                 }
             ]
         },
