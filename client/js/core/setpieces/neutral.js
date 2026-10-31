@@ -11,7 +11,7 @@
 // its north-west corner; sites.js turns it to face its road. Pure, and the same in every browser:
 // the seeded random numbers (random.js) and exact maths (exact.js) only.
 
-import { cos, PI, sin } from "../exact.js";
+import { cos, hypot, PI, sin } from "../exact.js";
 import { createRandom } from "../random.js";
 import { layoutCastle } from "./castle.js";
 import { pieceCatalog, PLOT } from "./pieces.js";
@@ -20,11 +20,13 @@ import { layoutWorks, WORKS_SIZE } from "./works.js";
 /**
  * Each neutral site's size (plots across and deep), as it's built: a circle of stones 24 m across,
  * a shrine 12 m, a cave's crag 20 by 16, a ruined hall 24 by 20, a ruined castle as big as the
- * humans' own, the dragon's crag 40 by 36, a broken watchtower, and a walled graveyard 24 by 20.
- * The peoples' works are laid out the same way (works.js WORKS_SIZE).
+ * humans' own, the dragon's crag 40 by 36, a broken watchtower, a walled graveyard 24 by 20, and
+ * the ruins of Harrowstone quarry, as big as a people's quarry. The peoples' works are laid out
+ * the same way (works.js WORKS_SIZE).
  */
 export const NEUTRAL = Object.freeze({
     ...WORKS_SIZE,
+    "ruined quarry": WORKS_SIZE.quarry,
     "standing stones": [6, 6],
     shrine: [3, 3],
     cave: [5, 4],
@@ -834,6 +836,64 @@ const LAYOUTS = {
     // The Tower of Sar Mordal (RIFT_TOWER_LAID): the wizard Sinclair's, a tall tower, its top fallen
     // in, gone into by the dark doorway at its foot on its south side; to its east the rift he
     // tore in the air, green; the bones of what came too near it about it
+    // The ruins of Harrowstone quarry (worldplan/settle.js RUINED_QUARRY: the Stone Golem's), as its
+    // golem left them twenty years ago: laid out as a people's quarry is (works.js), ruined, its
+    // faces and the stone on its floor weathered and grown over (`ruined`: art/kits/works.js), its
+    // crane thrown down across the floor (`fallenCrane`), its masons' lodge a heap of rubble and
+    // timbers, the cart it was loading left on one wheel; the bones of its cutters and its guards
+    // about it, and boulders the golem tore out and threw. In the middle of its floor what's left
+    // of the Lantern Company (`crushed`), four of them, flattened where they stood (`who`: their
+    // shield, their bow, their mace, their staff), a boulder on one: its heart there
+    "ruined quarry"(random, width, depth) {
+        const quarry = layoutWorks("quarry", random, width, depth, null);
+        const parts = [];
+        const solid = [...quarry.solid];
+        const [hx, hy] = quarry.heart;
+
+        for (const part of quarry.parts) {
+            if (part.part === "derrick") {
+                parts.push({ part: "fallenCrane", x: part.x, y: part.y + 2.4, turn: random.range(-0.5, 0.5), seed: part.seed });
+                solid.push(box(part.x, part.y + 2.4, 5.2, 1.4));
+            } else if (part.part === "lodge") {
+                const [lx, ly] = [(part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2];
+
+                parts.push({ part: "rubble", x: lx - 1, y: ly, r: 1.5, seed: part.seed });
+                parts.push({ part: "timbers", x: lx + 2.2, y: ly + 0.6, r: 1.3, seed: random.seed() });
+            } else if (part.part === "sledge") {
+                parts.push({ part: "cart", x: part.x, y: part.y, turn: part.turn + 1.3 });
+            } else {
+                parts.push({ ...part, ruined: true });
+            }
+        }
+
+        // (The Lantern Company, where the golem caught them, before its back face)
+        for (const [k, who] of ["shield", "bow", "mace", "staff"].entries()) {
+            const angle = (k / 4) * TAU + random.range(-0.4, 0.4);
+            const out = random.range(1.6, 3.2);
+
+            parts.push({ part: "crushed", x: hx + cos(angle) * out, y: hy - 1.5 + sin(angle) * out * 0.8, turn: random.range(0, TAU), who, boulder: k === 2, seed: random.seed() });
+        }
+
+        // (Two of its cutters or its guards, where they fell, out in the yard; and boulders it threw)
+        for (const side of [-1, 1]) {
+            parts.push({ part: "bones", x: hx + side * random.range(8, 11), y: random.range(depth - 6, depth - 3), turn: random.range(0, TAU), big: false });
+        }
+
+        // (Clear of its heart, where the Company lies, by HEART_CLEAR metres)
+        for (let k = random.int(2, 3); k > 0; k--) {
+            const angle = random.range(0, TAU);
+            const out = random.range(HEART_CLEAR, HEART_CLEAR + 4);
+            const [x, y] = [Math.min(width - 9, Math.max(9, hx + cos(angle) * out)), Math.min(depth - 6, Math.max(10, hy + sin(angle) * out))];
+
+            if (hypot(x - hx, y - hy) >= HEART_CLEAR) {
+                parts.push({ part: "boulder", x, y, r: random.range(0.6, 0.9), ruined: true, seed: random.seed() });
+                solid.push(box(x, y, 1.6, 1.6));
+            }
+        }
+
+        return { parts, solid, heart: [hx, hy] };
+    },
+
     "rift tower"(random, width, depth) {
         const { tower, high, rift, bones } = RIFT_TOWER_LAID;
         const [tx, ty] = [width / 2 + tower.off[0], depth / 2 + tower.off[1]];
@@ -875,6 +935,10 @@ const LAYOUTS = {
 // A rectangle w by d round (x, y): [x0, y0, x1, y1]
 const box = (x, y, w, d) => [x - w / 2, y - d / 2, x + w / 2, y + d / 2];
 
+// How far the boulders the Stone Golem threw lie from the ruins of Harrowstone quarry's heart, at
+// the least, clear of the Lantern Company there (metres)
+const HEART_CLEAR = 5;
+
 /**
  * How the Tower of Sar Mordal's laid out (metres): its tower (`tower`: its radius, and how far its
  * middle is off the site's, west and north) and how high it still stands (`high`: from and to), the
@@ -913,7 +977,7 @@ function tombAt(random, x, y, along, turnOf, kind) {
 // How far each kind of part reaches each way from its middle (metres, across and deep: so it's a
 // piece of its own, stood on the ground where it is), for those laid out at a point (a hell's
 // portal its pillars and its step before it; a hovel or a cage as far as it reaches turned any way)
-const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4], hellgate: [4.2, 1.8], hovel: [6, 6], cage: [2.4, 2.4], riftTear: [3, 1.2] });
+const REACH = Object.freeze({ crushed: [3, 3], fallenCrane: [8.4, 8.4], pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4], hellgate: [4.2, 1.8], hovel: [6, 6], cage: [2.4, 2.4], riftTear: [3, 1.2] });
 
 /**
  * A part's middle and size, laid out ([x, y, w, d] metres, from its site's north-west corner):

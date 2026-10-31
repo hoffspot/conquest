@@ -313,7 +313,10 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // (A hell's way in a dungeon's site, but a cult's camp, not a mouth in the rock: its pentagram,
         // candles, portal, stakes, hovels and cage, and the altar, braziers, cart and stores other
         // sites have too, as much as a graveyard)
-        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, "werewolf's den": 3000, graveyard: 6000, hell: 6000 };
+        // (The ruins of Harrowstone quarry: a people's quarry's faces and stone, ruined, its crane
+        // thrown down, its lodge rubble and timbers, a cart, bones and boulders, and the Lantern
+        // Company's remains, their gear strewn: as much as a graveyard)
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, "werewolf's den": 3000, graveyard: 6000, hell: 6000, "ruined quarry": 6000 };
         const most = new Map();
 
         for (const site of sites) {

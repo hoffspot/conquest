@@ -902,6 +902,11 @@ export class BeastAvatar {
         return this.character.rig.bone(`${side}Hand`).getWorldPosition(target);
     }
 
+    /** Where what it carries in its hand is in the world (the Stone Golem's boulder: beasts/model.js `carry`), while it's held; else null. */
+    carried(target = new THREE.Vector3()) {
+        return this.plan.carried?.(target) ?? null;
+    }
+
     /**
      * Let go of what it's made of (its materials), and of its hold on its look's body and pieces,
      * shared by its kind (let go of a while after none of its look is drawn: sculpt.js forget).

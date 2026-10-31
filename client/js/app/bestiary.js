@@ -56,6 +56,7 @@ const PLACES = Object.freeze({
     riftling: "at the Tower of Sar Mordal",
     riftStalker: "at the Tower of Sar Mordal",
     kaiju: "out of the Rift, against a town by night",
+    stoneGolem: "in the hills by the ruins of Harrowstone quarry, once a world",
 });
 
 // The ants' nests' own, and the hells' (met nowhere else)

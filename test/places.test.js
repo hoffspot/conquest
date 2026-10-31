@@ -100,7 +100,7 @@ describe("places worth finding (places.js)", () => {
         assert.ok(Object.values(PLACE_RIMS).length === HOLDERS.length + 1);
     });
 
-    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the great lairs and the dens by their beasts, holy stones by no one", () => {
+    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the great lairs and the dens by their beasts, holy stones and Harrowstone's ruins by no one", () => {
         for (const plan of plans) {
             for (const place of placesOf(plan)) {
                 const held = heldAtStart(plan, place);
@@ -115,7 +115,7 @@ describe("places worth finding (places.js)", () => {
                     assert.equal(held, "bandits");
                 } else if (place.kind === "dragon's lair" || place.kind === "dreadthorn's lair" || place.kind === "werewolf's den") {
                     assert.equal(held, "beast");
-                } else if (place.kind === "shrine" || place.kind === "standing stones" || place.kind === "camp") {
+                } else if (place.kind === "shrine" || place.kind === "standing stones" || place.kind === "camp" || place.kind === "ruined quarry") {
                     assert.equal(held, null);
                 } else {
                     assert.ok(place.holds.includes(held), `${place.kind}: ${held}`);

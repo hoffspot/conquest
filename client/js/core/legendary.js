@@ -1,5 +1,8 @@
 // A legendary weapon's own effect (docs/GAME.md *Legendary weapons*): one of five, rolled on it as
-// it's made (gear.js rollGear), apart from its bonuses. Every blow struck with it fills its charge
+// it's made (gear.js rollGear), apart from its bonuses. A unique (core/rare.js UNIQUES) may have an
+// effect of its own too, whatever it is, worn or held (gear.js effectOf): one of those five, let
+// loose by the blows of whoever wears it, or one let loose on them by the blows they take (`ward`:
+// Stoneheart's stone skin). Every blow struck with it fills its charge
 // (CHARGE: as many blows as it strikes in eight seconds of steady fighting), and the blow that
 // lands once it's full lets the effect loose on whoever it struck (battle.js #unleash), for all to
 // see: a foe frozen solid, a ring of fire, stone spears from the ground, lightning leaping from foe
@@ -30,7 +33,10 @@ import { WEAPONS } from "./weapons.js";
  *  - stormlash: lightning leaping from the foe to as many more as `leaps` within `reach` metres of
  *    the last, `falls` as strong each leap, each stunned `stun` ms;
  *  - ruinblast: a blast at the foe (battle.js #blast), `radius` metres round, everyone in it hurt
- *    (the nearer, the worse) and thrown back `toss` (as Explosion throws: 3 metres a toss).
+ *    (the nearer, the worse) and thrown back `toss` (as Explosion throws: 3 metres a toss);
+ *  - stoneheart (a ward, `ward`): every blow on whoever wears it `guard` the lighter, always; and,
+ *    its charge full, their skin stone for `skin` ms, every blow on them `harden` the lighter again
+ *    and none throwing them down (battle.js #steel).
  */
 export const EFFECTS = Object.freeze({
     frostbind: {
@@ -74,7 +80,27 @@ export const EFFECTS = Object.freeze({
         radius: [1.5, 3.5],
         toss: [0.5, 1.5],
     },
+    // (A ward: let loose on whoever wears it by the blows they take, not by those they strike
+    // (WARD_CHARGE), and never rolled on a legendary weapon: the Heart of Harrowstone's, rare.js)
+    stoneheart: {
+        label: "Stoneheart",
+        ward: true,
+        element: "earth",
+        about: "Every blow lands a little lighter on whoever wears it; and every so many blows they take, their skin turns to stone a while, every blow on them blunted and none able to throw them down.",
+        guard: [0.04, 0.1],
+        skin: [3000, 6000],
+        harden: [0.35, 0.55],
+    },
 });
+
+/** The effects let loose by blows struck (EFFECTS but the wards): those rolled on a legendary weapon. */
+export const BLOW_EFFECTS = Object.freeze(Object.keys(EFFECTS).filter((id) => !EFFECTS[id].ward));
+
+/**
+ * A ward's charge (EFFECTS `ward`): full after `blows` blows taken (a blow that does harm, not one
+ * slipped or caught whole on a shield), lost after CHARGE.idle without fighting, as a weapon's is.
+ */
+export const WARD_CHARGE = Object.freeze({ blows: 6 });
 
 /**
  * A weapon's charge: full after as many blows as it strikes in `every` ms of steady fighting (its
@@ -98,9 +124,9 @@ const shareOf = (level) => (Math.max(1, Math.min(100, Number.isFinite(level) ? M
 export const effectStrength = (level) => Math.max(1, Math.min(100, Number.isFinite(level) ? Math.round(level) : 1)) / 100;
 
 /**
- * An effect's numbers at a weapon's level (EFFECTS, each between its first level's and its
- * highest's): { damage: [least, most] (before the wielder's power), freeze, radius, near,
- * knockdown, leaps, reach, falls, stun, toss }, those it has.
+ * An effect's numbers at a weapon's level (or a piece's, EFFECTS, each between its first level's
+ * and its highest's): { damage: [least, most] (before the wielder's power), freeze, radius, near,
+ * knockdown, leaps, reach, falls, stun, toss, guard, skin, harden }, those it has.
  */
 export function effectAt(id, level = 1) {
     const def = EFFECTS[id];
@@ -112,13 +138,13 @@ export function effectAt(id, level = 1) {
     const share = shareOf(level);
     const strength = effectStrength(level);
     const between = ([first, highest]) => first + (highest - first) * share;
-    const numbers = { damage: def.damage.map((value) => Math.round(value * strength * 100) / 100) };
+    const numbers = def.damage ? { damage: def.damage.map((value) => Math.round(value * strength * 100) / 100) } : {};
 
-    for (const key of ["freeze", "radius", "knockdown", "leaps", "stun", "toss"]) {
+    for (const key of ["freeze", "radius", "knockdown", "leaps", "stun", "toss", "guard", "skin", "harden"]) {
         if (def[key]) {
             const value = between(def[key]);
 
-            numbers[key] = key === "leaps" ? Math.round(value) : key === "radius" || key === "toss" ? Math.round(value * 100) / 100 : Math.round(value);
+            numbers[key] = key === "leaps" ? Math.round(value) : key === "radius" || key === "toss" || key === "guard" || key === "harden" ? Math.round(value * 100) / 100 : Math.round(value);
         }
     }
 
@@ -136,7 +162,7 @@ export function effectAt(id, level = 1) {
  * by what it is (its kind, name, bonuses), so it's the same wherever it's asked, every game alike.
  */
 export function effectFor(item) {
-    const ids = Object.keys(EFFECTS);
+    const ids = BLOW_EFFECTS;
     const text = `${item?.id ?? ""}|${item?.name ?? ""}|${JSON.stringify(item?.affixes ?? [])}|${JSON.stringify(Object.entries(item?.bonuses ?? {}).sort())}`;
     let hash = 2166136261;
 

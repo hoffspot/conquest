@@ -22,8 +22,8 @@ import { AFFLICTIONS } from "./afflictions.js";
 import { KINDS } from "./battle.js";
 import { RESEARCH } from "./bestiary.js";
 import { exp, log, pow, sqrt } from "./exact.js";
-import { effectOf, levelOf } from "./gear.js";
-import { chargeOf, effectAt } from "./legendary.js";
+import { effectOf, levelOf, SLOT_IDS } from "./gear.js";
+import { chargeOf, EFFECTS, effectAt, WARD_CHARGE } from "./legendary.js";
 import { ABILITIES, ARMOR_CAP, weaponOf } from "./progress.js";
 import { SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { spellHarm, toughness, weaponHarm } from "./strength.js";
@@ -52,22 +52,27 @@ export const valueAt = (step) => MIGHT.least * exp(step / STEPS);
  * healing they'd do in a fight `seconds` long (as hit points more: their healing spells as if
  * cast `healing` of the time, the rest of it spent fighting), and a foe stunned (by Hexes, as long
  * as `stun` of what a stun's spell holds them for between casts, at most `stunned` of the fight)
- * as harm not done to them.
+ * as harm not done to them; and, a ward worn (core/legendary.js EFFECTS `ward`), the blows they'd
+ * take, one every `struck` ms, filling its charge.
  */
-export const FIGHT = Object.freeze({ seconds: 30, healing: 0.2, stun: 0.25, stunned: 0.3 });
+export const FIGHT = Object.freeze({ seconds: 30, healing: 0.2, stun: 0.25, stunned: 0.3, struck: 1500 });
 
 /**
  * A hero as their lasting gear and skills make them (core/progress.js; `bonus`: what they give,
  * with any boon's on top for the battle's own: host.js #outfit): their weapon, whether they kick,
  * their power for blows, shots, healing, stuns and spells, armour, dodging, shield, hit points, how
  * much sooner their blows come (`haste`), the harm they get back (`leech`), how likely a blow is to
- * leave its foe bleeding (`bleed`), and a legendary weapon's effect ({ effect, level, charge }, or
- * null: core/legendary.js).
+ * leave its foe bleeding (`bleed`), the effect their blows let loose (`legendary`: a legendary
+ * weapon's, or a unique's worn anywhere: { effect, level, charge }, or null: core/legendary.js),
+ * and the ward the blows they take let loose (`ward`: a unique's, { effect, level, charge }, or
+ * null). One of each at most: the weapon's first, then each piece's as they're worn (gear.js
+ * SLOT_IDS), at its own level.
  */
 export function fighterOf(progress, bonus = progress.bonuses()) {
     const weapon = weaponOf(progress);
-    const held = progress.gear.mainHand;
-    const effect = effectOf(held);
+    const pieces = ["mainHand", ...SLOT_IDS.filter((slot) => slot !== "mainHand")].map((slot) => progress.gear[slot]).filter(Boolean);
+    const blows = pieces.find((item) => effectOf(item) && !EFFECTS[effectOf(item)].ward) ?? null;
+    const warding = pieces.find((item) => effectOf(item) && EFFECTS[effectOf(item)].ward) ?? null;
 
     return {
         weapon,
@@ -80,7 +85,8 @@ export function fighterOf(progress, bonus = progress.bonuses()) {
         haste: bonus.haste,
         leech: bonus.leech,
         bleed: bonus.bleed,
-        legendary: effect && WEAPONS_HELD(weapon) ? { effect, level: levelOf(held.level), charge: chargeOf(weapon) } : null,
+        legendary: blows && WEAPONS_HELD(weapon) ? { effect: effectOf(blows), level: levelOf(blows.level), charge: chargeOf(weapon) } : null,
+        ward: warding ? { effect: effectOf(warding), level: levelOf(warding.level), charge: WARD_CHARGE.blows } : null,
     };
 }
 
@@ -156,9 +162,27 @@ export function heroValue(progress) {
     const { rate, used } = spellHarm(spells, actor.power.spell);
     const harm = rate + blows * (1 - used);
     const hp = actor.maxHp + healed(actor, known, (spell) => progress.levelOf(spell), blows * (1 - used));
-    const lasting = toughness({ ...actor, maxHp: hp }) / (1 - stunning(actor, known));
+    const lasting = toughness({ ...actor, maxHp: hp }) / (1 - stunning(actor, known)) / (1 - warded(actor));
 
     return harm > 0 ? sqrt(lasting * harm) : 0;
+}
+
+/**
+ * How much of the harm done a hero a ward they wear keeps off them on average (0 to 1: none
+ * worn, 0): every blow its `guard` the lighter, and, its stone skin up (as long as it lasts, of
+ * that and the time it takes to fill its charge again: FIGHT `struck`), its `harden` the lighter
+ * again.
+ */
+function warded(actor) {
+    const numbers = actor.ward ? effectAt(actor.ward.effect, actor.ward.level) : null;
+
+    if (!numbers?.guard) {
+        return 0;
+    }
+
+    const up = (numbers.skin ?? 0) / ((numbers.skin ?? 0) + actor.ward.charge * FIGHT.struck);
+
+    return 1 - (1 - numbers.guard) * (1 - (numbers.harden ?? 0) * up);
 }
 
 /** A hero's might (0 to 100): their lasting fighting value (heroValue) on the scale. */

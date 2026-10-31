@@ -19,6 +19,7 @@ import * as THREE from "three";
 import { SPELLS } from "../core/spells.js";
 import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 import { FLAT, lieOn } from "./effects.js";
+import { boulderGeometry, boulderMaterial } from "./boulder.js";
 import { fireFlames, flamesMesh } from "./fire.js";
 
 // --- What's drawn with ---
@@ -753,6 +754,11 @@ export const BOMB_LOOKS = Object.freeze({
     // (A town's catapult's pot of burning pitch: a clay pot as big as a man's chest, aflame as it's
     // flung, its fire streaming off it, bursting the moment it lands in a great blast of fire,
     // pitch left burning where it's spattered)
+    // (The Stone Golem's boulder, torn out of the ground: a lump of grey stone near a metre across,
+    // tumbling, nothing lit in it; its shadow on the ground where it'll land, darkening as it
+    // comes down, a ring round it as far as it'll reach (`shadow`); bursting as it lands, as the
+    // colossal's blows do: game.js COLOSSAL_BLASTS)
+    boulder: { shape: "boulder", radius: 0.46, shadow: true },
     firePot: {
         shape: "jar", scale: 2.6, colour: 0x5a3220, glow: 0xff5a10, shine: 0.7, rough: 0.9, metal: 0, drift: [0xffd070, 0xff4a00], rise: -2.2, spark: 0xffa040,
         burst: { flash: 0xfff0c8, heat: 0xff7a1a, sparks: [0xffe090, 0xff8a1a, 0xc02800], fire: true, smoke: [0x1a140e, 0x4a3a28], flames: true, more: 1.4 },
@@ -2158,6 +2164,20 @@ export class SpellFx {
     // one) and the spark at its end, or the glow in it (the bigger the Goblin King's)
     #bombBody(style, big) {
         const bomb = new THREE.Group();
+
+        // (A boulder: stone, nothing lit in it, no spark)
+        if (style.shape === "boulder") {
+            const stone = new THREE.Mesh(boulderGeometry(), boulderMaterial());
+            const spark = new THREE.Object3D();
+
+            stone.scale.setScalar(style.radius);
+            stone.castShadow = true;
+            bomb.add(stone, spark);
+            bomb.userData = { size: style.radius * 0.8, spark, stone: true };
+
+            return bomb;
+        }
+
         const shell = new THREE.MeshStandardMaterial({ color: style.colour, roughness: style.rough, metalness: style.metal, emissive: style.glow ?? 0x000000, emissiveIntensity: style.shine ?? 0 });
         const part = (geometry, material, [sx, sy, sz], y = 0) => {
             const mesh = new THREE.Mesh(this.geometries[geometry], material);
@@ -2269,10 +2289,24 @@ export class SpellFx {
         let next = 0;
 
         bomb.position.copy(start);
-        entry.light = this.glow(bomb.position, { colour: look ? 0xffb050 : style.spark, strength: 1.5, reach: 3, life: travel + fuse + 1, steady: 0.4, fade: () => 1 });
+        entry.light = bomb.userData.stone ? null : this.glow(bomb.position, { colour: look ? 0xffb050 : style.spark, strength: 1.5, reach: 3, life: travel + fuse + 1, steady: 0.4, fade: () => 1 });
+        // (What casts its shadow where it'll land as it flies: a boulder's, to be got out from under)
+        entry.shadow = style.shadow ? this.#shadow(end, radius, travel) : null;
         this.bombs.set(key, entry);
         this.#show(bomb, travel + fuse + 1, (t, dt, age = 0) => {
             if (!entry.alive) {
+                return;
+            }
+
+            // (A boulder: tumbling all the way down, and gone as it lands, bursting there)
+            if (bomb.userData.stone) {
+                const u = Math.min(1, age / travel);
+
+                bomb.position.lerpVectors(start, end, u);
+                bomb.position.y += Math.sin(Math.PI * u) * high;
+                bomb.rotation.x += spin.x * 0.25 * dt;
+                bomb.rotation.z += spin.z * 0.25 * dt;
+
                 return;
             }
 
@@ -2305,6 +2339,31 @@ export class SpellFx {
                 this.spray(p([0xfff4c0, 0xff8a1a], { count: 2, size: [0.02, 0.045], speed: [1, 2.5], life: [0.15, 0.3], gravity: 6, spread: 1.5 }), spark.getWorldPosition(new THREE.Vector3()));
             }
         });
+    }
+
+    // The shadow of what's coming down on a point (a boulder hurled: BOMB_LOOKS `shadow`), the
+    // `seconds` till it lands: dark on the ground, small and faint as it's let go, as wide as the
+    // blast and darkest as it comes down, a ring round it `radius` m warning how far it'll reach
+    #shadow(centre, radius, seconds) {
+        const group = new THREE.Group();
+        const shade = new THREE.Mesh(this.geometries.disc, new THREE.MeshBasicMaterial({ color: 0x000000, map: this.#texture("glow"), transparent: true, opacity: 0, depthWrite: false }));
+        const ring = new THREE.Mesh(this.geometries.ring, this.#additive(0xff5a1a, { opacity: 0 }));
+
+        ring.scale.set(radius, 1, radius);
+        shade.renderOrder = ORDER.glow;
+        ring.renderOrder = ORDER.ring;
+        group.add(shade, ring);
+        this.#lay(group, centre, radius, 0.05);
+        this.#show(group, seconds, (t) => {
+            const near = t * t;
+            const wide = radius * (0.35 + 0.75 * near);
+
+            shade.scale.set(wide, 1, wide);
+            shade.material.opacity = 0.35 + 0.55 * near;
+            ring.material.opacity = 0.4 + 0.5 * t;
+        });
+
+        return group;
     }
 
     // A ring on the ground `radius` m round a point, warning of a blast, `seconds`: pulsing,
@@ -2348,8 +2407,14 @@ export class SpellFx {
             entry.ring.visible = false;
         }
 
-        entry.light.age = entry.light.life;
-        entry.light.fade = 0;
+        if (entry.shadow) {
+            entry.shadow.visible = false;
+        }
+
+        if (entry.light) {
+            entry.light.age = entry.light.life;
+            entry.light.fade = 0;
+        }
         this.bombs.delete(key);
     }
 

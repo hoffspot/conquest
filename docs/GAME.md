@@ -845,7 +845,11 @@ The world's rare encounters, and what the player keeps of them:
 - **In the pack** (app/gearinfo.js `rarityOf`, styles.css `.rarity-unique`): a unique's its own
   make, *Unique*, sea-green in its card, its cell and its glow on the ground (world/drops3d.js),
   found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
-  asked first (gone for good, and never given again).
+  asked first (gone for good, and never given again). Its effect, if it has one, whatever it is
+  (*Legendary weapons*, above).
+- **A world's boss** (creatures.js `worldBoss`: the Stone Golem): its bar across the top of the
+  screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a title),
+  and its model wanted as soon as it's about, drawn from it at once, in view or not.
 
 ### Writings (core/writings.js, app/reader.js)
 
@@ -1248,6 +1252,25 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
   off it all the time (frost misting, embers, grit sifting, sparks, a gold glow), many more trailing
   a blow as it's struck; put away, nothing. Each let loose has its sound (audio/catalog.js,
   *Legendary weapons*).
+- **On any piece, a unique's** (core/rare.js `UNIQUES` `effect`; gear.js `effectOf`): a unique may
+  have an effect of its own whatever it is, held or worn (the user: "Update unique effects to be
+  possible on all items ... All wearable or wieldable items"): a helm, an amulet, a ring, a shield,
+  boots. Its card says what it does (app/gearinfo.js `effectWords`), at its own level. Random
+  legendaries are as they were: only a weapon rolls one, and only one of the five blows let loose
+  (`BLOW_EFFECTS`).
+  - *One of the five on a piece that isn't the weapon*: let loose by the blows of whoever wears it,
+    whatever they strike with, as a legendary weapon's is (its charge their weapon's).
+  - *A ward* (`ward`: `WARD_CHARGE`, battle.js `#steel`, `#wardThrough`), let loose on whoever wears
+    it by the blows they take: every blow that does them harm fills its charge a mark, full after 6
+    (lost after thirty seconds without being struck); full, it's let loose on them at once. The
+    only one so far, *Stoneheart* (earth), the Heart of Harrowstone's (docs/WILDS.md *The Stone
+    Golem*): every blow on them 4 to 10% lighter, always; full, their skin stone 3 to 6 seconds,
+    every blow on them 35 to 55% lighter again and none able to knock them down or throw them (a
+    shell the grey-gold of cut stone closes round them and holds while it lasts, shards and grit
+    thrown off, a ring of dust, a stone's grind heard; "Stoneheart: your skin turns to stone!").
+  - *One of each at most* (might.js `fighterOf`: `legendary`, `ward`): the weapon's first, then
+    each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
+    skin's share of a fight at one blow every 1.5 seconds).
 
 ## Drawing the world
 

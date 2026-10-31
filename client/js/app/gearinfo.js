@@ -11,7 +11,7 @@
 import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
-import { chargeOf, EFFECTS, effectAt } from "../core/legendary.js";
+import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, WARD_CHARGE } from "../core/legendary.js";
 import { mightOf } from "../core/might.js";
 import { BOOSTS, gradeOf, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { UNIQUES } from "../core/rare.js";
@@ -56,8 +56,9 @@ export function charmWords({ id, quality = "common", bonuses = null, level = 1 }
 }
 
 /**
- * A legendary weapon's effect (core/legendary.js), in words, at its level (`level`) on a weapon
- * (`weapon`, a WEAPONS key: how many blows fill its charge): "Frostbind: every 7 blows, ...", or
+ * A piece's effect (core/legendary.js: a legendary weapon's, or a unique's), in words, at its
+ * level (`level`), on a weapon (`weapon`, a WEAPONS key: how many blows fill its charge; none, a
+ * piece worn): "Frostbind: every 7 blows, ...", "Stoneheart: every blow on you 4% lighter...", or
  * null for none.
  */
 export function effectWords(effect, level = 1, weapon = null) {
@@ -68,10 +69,18 @@ export function effectWords(effect, level = 1, weapon = null) {
     }
 
     const numbers = effectAt(effect, level);
+    const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
+
+    // (A ward, let loose by the blows its wearer takes: Stoneheart's)
+    if (def.ward) {
+        const percent = (share) => `${Math.round(share * 100)}%`;
+
+        return `${def.label}: every blow on you ${percent(numbers.guard)} lighter; every ${WARD_CHARGE.blows} blows you take, your skin stone ${seconds(numbers.skin)}, blows on you ${percent(numbers.harden)} lighter again and none throwing you down`;
+    }
+
     const [least, most] = numbers.damage.map((value) => Math.max(1, Math.round(value)));
     const harm = least === most ? `${least}` : `${least}–${most}`;
     const blows = weapon ? `every ${chargeOf(weapon)} blows` : "every few blows";
-    const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
     const what = {
         frostbind: `the foe struck frozen solid ${seconds(numbers.freeze)}, then slowed`,
         cinderburst: `fire bursting ${numbers.radius} m round the foe struck, setting it burning`,
@@ -170,14 +179,18 @@ export function describe(item, progress, { index = null, label = item.id, haggle
             lines.push({ text, tone: "base" });
         }
 
-        // (A legendary weapon's effect, rolled on it as it's made: a ware's, one of them)
-        const effect = effectOf(item);
-
-        if (effect && !ware) {
-            lines.push({ text: effectWords(effect, item.level, item.id), tone: "effect" });
-        } else if (ware && quality === "legendary") {
-            lines.push({ text: `An effect of its own, one of ${Object.values(EFFECTS).map(({ label }) => label).join(", ")}: rolled as it's bought`, tone: "effect" });
+        // (A legendary weapon bought: an effect of its own, one of those rolled on them)
+        if (ware && quality === "legendary") {
+            lines.push({ text: `An effect of its own, one of ${BLOW_EFFECTS.map((id) => EFFECTS[id].label).join(", ")}: rolled as it's bought`, tone: "effect" });
         }
+    }
+
+    // (Its effect: a legendary weapon's, rolled on it as it's made; a unique's, whatever it is, held
+    // or worn: core/gear.js effectOf)
+    const effect = ware ? null : effectOf(item);
+
+    if (effect) {
+        lines.push({ text: effectWords(effect, item.level, def.slot === "mainHand" ? item.id : null), tone: "effect" });
     }
 
     if (def.magic && ware) {

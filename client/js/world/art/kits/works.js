@@ -867,16 +867,17 @@ export const WORK_PARTS = Object.freeze(Object.keys(BUILD));
 
 /**
  * Build a works' part (a piece of it: sites.js), in its people's stuff: its `random` (the part's
- * own), and the solid to build it in. Returns whether it was one.
+ * own), and the solid to build it in; in its own tone (`tone`: a ruined one's, weathered and grown
+ * over, the ruins of Harrowstone quarry's), or worked. Returns whether it was one.
  */
-export function buildWorksPart(solid, piece, random) {
+export function buildWorksPart(solid, piece, random, tone = null) {
     const build = BUILD[piece.part.part];
 
     if (!build) {
         return false;
     }
 
-    solid.tone = worked(random);
+    solid.tone = tone ?? worked(random);
     build(solid, piece, random, piece.part, stuffOf(piece.people));
 
     return true;

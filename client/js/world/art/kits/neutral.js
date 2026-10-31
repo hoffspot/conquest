@@ -712,6 +712,133 @@ const BUILD = {
         }
     },
 
+    // One of the Lantern Company, flattened where the Stone Golem caught them (core/setpieces/
+    // neutral.js "ruined quarry"): a dark stain pressed into the ground; their bones crushed flat,
+    // a ribcage's arcs splayed, a skull broken and long bones strewn; their cloak flat over them;
+    // and what they carried, by who they were (`who`): a round shield beaten flat and a helm
+    // crushed, a bow snapped and its arrows strewn, a mace and a holy book's loose pages, a staff
+    // broken in two and a satchel; a boulder on one of them (`boulder`)
+    crushed(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [ax, az] = [Math.cos(part.turn ?? 0), Math.sin(part.turn ?? 0)];
+        // (A point `u` metres along them, `v` across and `y` up, as world pixels)
+        const at = (u, y, v) => [cx + m(u) * ax - m(v) * az, m(y), cz + m(u) * az + m(v) * ax];
+        // (The same on the ground, [x, z], for what's stood up on it)
+        const ground = (u, v) => [cx + m(u) * ax - m(v) * az, cz + m(u) * az + m(v) * ax];
+        const up = [0, 1, 0];
+        const flat = (points, stuff) => solid.facing(points, up, material(stuff));
+        const blot = (u, v, r, y, stuff, corners = 11) =>
+            flat(
+                Array.from({ length: corners }, (_, k) => {
+                    const a = (k / corners) * Math.PI * 2;
+                    const out = r * random.range(0.7, 1.15);
+
+                    return at(u + Math.cos(a) * out * 1.25, y, v + Math.sin(a) * out);
+                }),
+                stuff,
+            );
+        const bone = material("bone");
+
+        // (The stain, and the cloak flat over the middle of them)
+        blot(0, 0, random.range(1, 1.3), 0.02, "mud-dark", 13);
+        blot(random.range(-0.2, 0.2), random.range(-0.15, 0.15), 0.55, 0.035, { shield: "wool-blue", bow: "wool-green", mace: "linen", staff: "cloth-violet" }[part.who] ?? "linen", 9);
+
+        // (The ribcage, its arcs pressed flat and splayed out)
+        for (let k = 0; k < 5; k++) {
+            const u = (k - 2) * 0.17 + 0.25;
+            const arc = Array.from({ length: 5 }, (_, i) => {
+                const t = (i / 4) * Math.PI;
+
+                return at(u + random.range(-0.03, 0.03), 0.06 + Math.sin(t) * 0.04, Math.cos(t) * random.range(0.32, 0.42));
+            });
+
+            solid.tube(arc, m(0.025), bone, { sides: 4 });
+        }
+
+        solid.tube([at(-0.35, 0.05, 0), at(0.75, 0.05, random.range(-0.06, 0.06))], m(0.035), bone, { sides: 5 });
+
+        // (The skull, broken and flattened; the long bones of the arms and legs strewn)
+        const [su, sv] = [0.95 + random.range(0, 0.15), random.range(-0.15, 0.15)];
+
+        solid.lathe(...ground(su, sv), [[m(0.14), 0], [m(0.17), m(0.05)], [m(0.12), m(0.1)], [0, m(0.11)]], bone, { segments: 7 });
+
+        for (let k = 0; k < 4; k++) {
+            const [u, v] = [random.range(-0.9, 0.2), (k % 2 ? 1 : -1) * random.range(0.25, 0.55)];
+            const a = random.range(-0.6, 0.6);
+
+            solid.tube([at(u, 0.04, v), at(u + Math.cos(a) * 0.42, 0.04, v + Math.sin(a) * 0.42)], m(0.03), bone, { sides: 4 });
+        }
+
+        // (What they carried)
+        if (part.who === "shield") {
+            const [u, v] = [-0.2, random.pick([-1, 1]) * 0.75];
+
+            solid.cylinder(...ground(u, v), 0, m(0.05), m(0.42), m(0.44), material("timber"), { segments: 12 });
+            solid.cylinder(...ground(u, v), m(0.05), m(0.09), m(0.12), m(0.08), material("iron"), { segments: 8 });
+            solid.tube([at(u - 0.38, 0.06, v - 0.1), at(u + 0.4, 0.06, v + 0.08)], m(0.015), material("shadow"), { sides: 3 });
+            solid.lathe(...ground(0.9, -0.55), [[m(0.2), 0], [m(0.19), m(0.06)], [m(0.13), m(0.1)], [0, m(0.12)]], material("iron"), { segments: 9 });
+        } else if (part.who === "bow") {
+            for (const side of [-1, 1]) {
+                solid.tube([at(0.1, 0.03, side * 0.6), at(0.5, 0.06, side * 0.75), at(0.85, 0.03, side * 0.7)], m(0.025), material("timber-light"), { sides: 4 });
+            }
+
+            for (let k = random.int(4, 7); k > 0; k--) {
+                const [u, v, a] = [random.range(-1.1, 1.1), random.range(-1, 1), random.range(0, Math.PI)];
+                const [tu, tv] = [u + Math.cos(a) * 0.55, v + Math.sin(a) * 0.55];
+
+                solid.beam(at(u, 0.02, v), at(tu, 0.02, tv), m(0.02), m(0.02), material("timber-light"));
+                solid.beam(at(tu, 0.02, tv), at(tu + Math.cos(a) * 0.06, 0.02, tv + Math.sin(a) * 0.06), m(0.04), m(0.03), material("iron"));
+            }
+
+            solid.turnedBox(...ground(-0.55, 0.45), m(0.1), m(0.32), 0, m(0.08), (part.turn ?? 0) + 0.4, material("leather"));
+        } else if (part.who === "mace") {
+            solid.beam(at(-0.5, 0.04, -0.6), at(0.05, 0.04, -0.75), m(0.04), m(0.04), material("timber"));
+            solid.turnedBox(...ground(0.1, -0.77), m(0.1), m(0.1), 0, m(0.14), part.turn ?? 0, material("iron"));
+
+            for (let k = random.int(5, 8); k > 0; k--) {
+                const [u, v] = [random.range(-1.2, 1.2), random.range(-1.1, 1.1)];
+                const a = random.range(0, Math.PI);
+                const [du, dv] = [Math.cos(a) * 0.11, Math.sin(a) * 0.11];
+
+                flat([at(u - du + dv * 0.7, 0.04, v - dv - du * 0.7), at(u + du + dv * 0.7, 0.04, v + dv - du * 0.7), at(u + du - dv * 0.7, 0.04, v + dv + du * 0.7), at(u - du - dv * 0.7, 0.04, v - dv + du * 0.7)], "parchment");
+            }
+        } else {
+            const snap = random.range(-0.3, 0.3);
+
+            solid.beam(at(-1.1, 0.04, 0.55), at(-0.1, 0.04, 0.62 + snap * 0.2), m(0.045), m(0.045), material("timber"));
+            solid.beam(at(0.05, 0.04, 0.7 + snap * 0.2), at(0.8, 0.04, 0.95 + snap), m(0.045), m(0.045), material("timber"));
+            solid.turnedBox(...ground(-0.6, -0.55), m(0.2), m(0.15), 0, m(0.12), (part.turn ?? 0) - 0.3, material("leather"));
+        }
+
+        // (A boulder the golem threw, come down on one of them)
+        if (part.boulder) {
+            tumbled(solid, random, at(random.range(-0.3, 0.3), 0.35, random.range(-0.2, 0.2)), m(random.range(1.1, 1.4)), material(STONE[piece.people] ?? STONE.human), { lean: 0.2 });
+        }
+    },
+
+    // A quarry's crane thrown down (core/setpieces/neutral.js "ruined quarry"): its two legs lying
+    // across the floor, one snapped, its windlass broken and its rope trailing, its pulley in the
+    // dirt, the block it was winding up fallen beside it
+    fallenCrane(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [ax, az] = [Math.cos(part.turn ?? 0), Math.sin(part.turn ?? 0)];
+        const at = (u, y, v) => [cx + m(u) * ax - m(v) * az, m(y), cz + m(u) * az + m(v) * ax];
+        const timber = material("timber-grey");
+        const snap = random.range(0.4, 0.9);
+
+        solid.beam(at(-3.6, 0.15, -0.4), at(3.2, 0.15, 0.3), m(0.24), m(0.24), timber);
+        solid.beam(at(-3.4, 0.15, 0.7), at(-0.2, 0.15, 0.6), m(0.24), m(0.24), timber);
+        solid.beam(at(0.1, 0.15, 0.75), at(2.6, 0.2 + snap * 0.4, 0.75 + snap), m(0.24), m(0.24), timber);
+        solid.beam(at(2.4, 0.12, -0.9), at(3.3, 0.12, -0.5), m(0.18), m(0.3), material("iron"));
+        solid.tube([at(-3.6, 0.06, -0.3), at(-2.4, 0.05, -1.3), at(-0.6, 0.05, -1.6), at(0.6, 0.05, -1)], m(0.04), material("rope"), { sides: 4 });
+
+        for (const side of [-1, 1]) {
+            solid.beam(at(-3.1, 0.1, side * 0.9 + 0.2), at(-2.6, 0.1, side * 1.2 + 0.2), m(0.16), m(0.16), timber);
+        }
+
+        tumbled(solid, random, at(random.range(-1, 1), 0.3, random.range(1.5, 2)), m(0.8), material("rock"), { lean: 0.15 });
+    },
+
     // Bones: a ribcage's arcs and a skull; a beast's, bigger
     bones(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
@@ -1813,8 +1940,9 @@ export function neutral(piece) {
     const random = createRandom(((part.seed ?? piece.seed ?? 1) ^ Math.round((part.x ?? part.x0 ?? 0) * 977 + (part.y ?? part.y0 ?? 0) * 131)) >>> 0);
     const solid = new Solid();
 
-    // (A people's works, worked rather than ruined: kits/works.js)
-    if (!buildWorksPart(solid, piece, random)) {
+    // (A people's works, worked rather than ruined: kits/works.js; or one ruined, `ruined`, as the
+    // rest are: weathered)
+    if (!buildWorksPart(solid, piece, random, part.ruined ? weathered(random.int(1, 1e6), { moss: 0.7 }) : null)) {
         solid.tone = weathered(random.int(1, 1e6), { moss: piece.people === "cat" ? 0.1 : 0.6 });
         BUILD[part.part]?.(solid, piece, random, part);
     }

@@ -143,6 +143,7 @@ const ABOUT = {
     dragon: ["Drake", "The drake's lair: for the mightiest"],
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
     kaiju: ["Behemoth of the Rift", "Out of the rift by the Tower of Sar Mordal, against a town by night: everyone's enemy"],
+    stoneGolem: ["Stone golem", "In the hills by the ruins of Harrowstone quarry, once a world: its rare card's foe, a world's boss"],
     riftling: ["Riftling", "In and round the Tower of Sar Mordal, come through its rift"],
     riftStalker: ["Rift stalker", "At the top of the Tower of Sar Mordal, in Sinclair's study, the riftlings' master"],
     moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
@@ -1403,7 +1404,7 @@ const groups = [
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
-    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "greaterDemon", "demonLord"]],
+    ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "greaterDemon", "demonLord"]],
 ];
 
 for (const [label, ids] of groups) {

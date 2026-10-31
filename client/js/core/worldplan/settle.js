@@ -142,6 +142,23 @@ export const HELLS = Object.freeze({ count: [2, 3], biomes: ["marsh", "jungle", 
  */
 export const RIFT_TOWER = Object.freeze({ name: "The Tower of Sar Mordal", biomes: ["heath", "badlands", "tundra", "mountain"], far: 1800, nearer: 0.85, clear: 9, sites: 8, camps: 5, apart: 30, tries: 12000, strict: 0.6 });
 
+/**
+ * The ruins of Harrowstone quarry (core/rare.js THREADS harrowstone: where Magister Aldric Venn's
+ * golem was made and went mad, the Stone Golem's), one a world, so named (`name`): up in the hills
+ * (the plan's height within `hills`: not down on the plain, nor up among the peaks' snows) on
+ * ground no steeper than `steep` (the plan's height between
+ * a cell and its neighbours) and dry; between `from` and `to` metres from the nearest people's
+ * start, and within `guild` metres of a settlement with a guild (a village or bigger: its rumour's
+ * told there); `clear` cells from the settlements, `sites` from the other sites, `camps` from the
+ * camps and `apart` from the great lairs, the dens, the hells' ways in and the Tower of Sar Mordal.
+ * `tries` darts at most each time, the first `strict` share of them only up in the hills; failing,
+ * each time its distances a `wider` share looser. None, if nowhere will do.
+ */
+export const RUINED_QUARRY = Object.freeze({ name: "Harrowstone", hills: Object.freeze([0.5, 0.78]), steep: 0.06, from: 2600, to: 4400, guild: 900, clear: 6, sites: 6, camps: 4, apart: 20, tries: 8000, strict: 0.7, wider: 1.25 });
+
+// The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
+const GUILDED = Object.freeze(["village", "town", "city", "capital"]);
+
 // The kinds of place a beast keeps (a great lair, a den), each far from the others
 const BEAST_LAIRS = Object.freeze([...LAIR_KINDS, "werewolf's den"]);
 
@@ -721,6 +738,10 @@ export function settleLand(land, seed) {
     // out before moves for it)
     sites.push(...riftTower(land, places, sites, camps, createRandom(seed * 67 + 41)));
 
+    // (And the ruins of Harrowstone quarry after it, the same way, from numbers of their own:
+    // nothing laid out before moves for them)
+    sites.push(...ruinedQuarry(land, places, sites, camps, createRandom(seed * 71 + 43)));
+
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
 
@@ -1139,6 +1160,46 @@ function riftTower(land, places, sites, camps, random) {
             }
 
             return [{ id: "rift-tower-1", kind: "rift tower", race: null, name, cell, at: spot, seed: random.seed() }];
+        }
+    }
+
+    return [];
+}
+
+// The ruins of Harrowstone quarry (RUINED_QUARRY): as the Tower of Sar Mordal is found, one, kept
+// up in the hills where it's dry and gentle, as far from the nearest start as it should be and
+// near a settlement with a guild, clear of the settlements, the sites and the camps, and far from
+// the great lairs, the dens, the hells and the tower; its people the land's, if anyone's. None, if
+// nowhere will do
+function ruinedQuarry(land, places, sites, camps, random) {
+    const { biome, water, territory, height } = land;
+    const { name, hills, steep, from, to, guild, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict, wider } = RUINED_QUARRY;
+    const starts = places.filter(({ start }) => start).map(({ at }) => at);
+    const towns = places.filter(({ kind }) => GUILDED.includes(kind));
+    const kept = sites.filter((site) => BEAST_LAIRS.includes(site.kind) || site.theme === "hell" || site.kind === "rift tower");
+    const steeply = ([x, y]) => NEIGHBOURS.some(([dx, dy]) => Math.abs(height[cellIndex(x + dx, y + dy)] - height[cellIndex(x, y)]) > steep);
+
+    for (let round = 0, loose = 1; round < 6; round++, loose *= wider) {
+        for (let k = 0; k < tries; k++) {
+            const cell = [random.int(5, CELLS - 6), random.int(5, CELLS - 6)];
+            const at = cellIndex(...cell);
+            const spot = centre(...cell);
+
+            if (water[at] || biome[at] === BIOME.beach || (k < tries * strict && (height[at] < hills[0] || height[at] > hills[1])) || steeply(cell) || !dry(land, ...cell, 1)) {
+                continue;
+            }
+
+            const home = starts.length ? Math.min(...starts.map(([x, y]) => hypot(x - spot[0], y - spot[1]))) : from;
+
+            if (home < from / loose || home > to * loose || !towns.some(({ at: [x, y] }) => hypot(x - spot[0], y - spot[1]) <= guild * loose)) {
+                continue;
+            }
+
+            if (!clearOf(places, cell, clear) || sites.some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps) || kept.some((one) => apart(one.cell, cell) < away)) {
+                continue;
+            }
+
+            return [{ id: "ruined-quarry-1", kind: "ruined quarry", race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed() }];
         }
     }
 

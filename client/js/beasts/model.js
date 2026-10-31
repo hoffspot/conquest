@@ -14,6 +14,7 @@ import { readGltf } from "../world/art/engine/models.js";
 import { candidatesAt, tierAt } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
+import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
 import { BEAMS, EnergyBreath } from "./beam.js";
 import { Breath } from "./breath.js";
 
@@ -103,7 +104,11 @@ const walker = (skins) => Object.freeze({
  * `react` and `dead`, its flinch and its fall, if it has them: fallOf), and its ways of
  * attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up in the
  * air, `aloft`'s in their place; each played through the whole of its clip, or through as much
- * of it as `spans` says, [from, to] seconds) and resting (`rests`), each a clip; when in a clip it breathes
+ * of it as `spans` says, [from, to] seconds; or a way that's a chain of its clips, `chains`, each
+ * link { clip, from, to } seconds of it, played one after another, each eased into the next) and
+ * resting (`rests`), each a clip; what it carries in a hand through a way of its own (`carry`, by
+ * that way: a boulder, { bone it's held by, from and to (how far through the way, 0 to 1, it's
+ * held), radius (metres, as it's made), at ([x, y, z] metres from the bone, as it's made) }); when in a clip it breathes
  * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
@@ -131,6 +136,35 @@ export const MODELS = Object.freeze({
         mouth: null,
         pace: 3.1,
         flinch: 1.3,
+    }),
+    // (The Stone Golem of Harrowstone (creatures.js): Alexander Lenski's Armored Stone Golem, made
+    // 1.85 metres tall and drawn 4, in its own stone (its ember, moss and frost skins kept for
+    // something rarer); its own clips: its hammer thrust down over its shoulder (its smash, Attack 3),
+    // swept round at its side (its sweep, Attack 1, to the end of its swing) and brought down on the
+    // ground as it crouches (its pound, the end of Attack 5); a boulder torn out of the ground and
+    // hurled (its heave: that crouch, its hammer driven into the ground and its other hand down,
+    // then its shield arm swung up and over, Attack 2's, the boulder held in that hand from the
+    // crouch to where it's let go); its flinch and its fall; standing about now and then (Idle 2 to
+    // 4). Walking at 2.27 m/s as it's drawn; no run, its walk played faster as it chases)
+    stoneGolem: Object.freeze({
+        asset: "beast-golem",
+        length: 1.94,
+        made: Object.freeze({ long: 0.9, tall: 1.85 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Hit 1", dead: "Death 1" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ smash: "Attack 3", sweep: "Attack 1", pound: "Attack 5" }),
+        spans: Object.freeze({ sweep: Object.freeze([0, 2.3]), pound: Object.freeze([1.85, 3.2]) }),
+        chains: Object.freeze({
+            heave: Object.freeze([Object.freeze({ clip: "Attack 5", from: 2, to: 2.6 }), Object.freeze({ clip: "Attack 2", from: 0.45, to: 1.6 })]),
+        }),
+        carry: Object.freeze({ heave: Object.freeze({ bone: "hand_l", from: 0.26, to: 0.75, radius: 0.22, at: Object.freeze([0, -0.06, 0.16]) }) }),
+        rests: Object.freeze({ look: "Idle 2", shift: "Idle 3", stretch: "Idle 4" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 2.27,
+        runPace: null,
+        flinch: 0.6,
     }),
     // (The rift's own small kind in the Tower of Sar Mordal, drawn from the Kaiju's model: a
     // riftling 4.2 metres long, a man's height; a rift stalker 7. Running as the Kaiju never does;
@@ -1164,10 +1198,18 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     }
 
     // Attacking: the clip for its way, through to its end (or as much of it as its `spans` says),
-    // eased in and out at either end
-    const way = attack && clipOf(model, attack.style, hovering);
+    // eased in and out at either end; a chain of clips (`chains`), each link played in its turn,
+    // eased into the next over CHAIN_EASE seconds about where they meet
+    const chain = attack && !hovering ? (model.chains?.[attack.style] ?? null) : null;
+    const way = attack && !chain && clipOf(model, attack.style, hovering);
 
-    if (way) {
+    if (chain) {
+        const u = Math.min(1, Math.max(0, attack.u));
+        const weight = smoothstep(Math.min(u / 0.06, (1 - u) / 0.06));
+        const links = chainAt(chain, u);
+
+        posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - weight) })).concat(links.map(({ clip, share, time }) => ({ clip, weight: weight * share, time: at(clip, time) })));
+    } else if (way) {
         const u = Math.min(1, Math.max(0, attack.u));
 
         over(way, smoothstep(Math.min(u / 0.06, (1 - u) / 0.06)), at(way, attackTime(model, attack.style, way, u, lengths)));
@@ -1181,6 +1223,66 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     }
 
     return posed.filter(({ weight }) => weight > 1e-4);
+}
+
+// How long (seconds) one link of a chain of clips (MODELS `chains`) is eased into the next, about
+// where they meet
+const CHAIN_EASE = 0.24;
+
+/**
+ * Where a chain of clips (MODELS `chains`: [{ clip, from, to }]) is, `u` of the way through it (0
+ * to 1): [{ clip, share, time }], the link it's in (and, within CHAIN_EASE / 2 of where it meets
+ * the next or the last, that one too, eased from one to the other), each its share of the pose
+ * and how far into its clip (seconds). A pure function.
+ */
+export function chainAt(chain, u) {
+    const total = chain.reduce((sum, { from, to }) => sum + (to - from), 0);
+    const s = Math.min(1, Math.max(0, u)) * total;
+    let start = 0;
+
+    for (let k = 0; k < chain.length; k++) {
+        const { clip, from, to } = chain[k];
+        const end = start + (to - from);
+
+        if (s <= end || k === chain.length - 1) {
+            const next = chain[k + 1];
+            const last = chain[k - 1];
+
+            if (next && s > end - CHAIN_EASE / 2) {
+                const share = smoothstep((s - (end - CHAIN_EASE / 2)) / CHAIN_EASE);
+
+                return [
+                    { clip, share: 1 - share, time: from + (s - start) },
+                    { clip: next.clip, share, time: next.from + (s - end) },
+                ];
+            }
+
+            if (last && s < start + CHAIN_EASE / 2) {
+                const share = smoothstep((s - (start - CHAIN_EASE / 2)) / CHAIN_EASE);
+
+                return [
+                    { clip: last.clip, share: 1 - share, time: last.to + (s - start) },
+                    { clip, share, time: from + (s - start) },
+                ];
+            }
+
+            return [{ clip, share: 1, time: from + (s - start) }];
+        }
+
+        start = end;
+    }
+
+    return [];
+}
+
+/**
+ * Whether what a model carries through a way of its own (MODELS `carry`) is in its hand at this
+ * moment of an attack (BeastAvatar's attack: { style, u }): its carry's, or null.
+ */
+export function carriedAt(model, attack) {
+    const carry = attack && model.carry?.[attack.style];
+
+    return carry && attack.u >= carry.from && attack.u <= carry.to ? carry : null;
 }
 
 // How far into its clip (seconds) an attack its way (`style`, its clip `clip`) is, `u` of the way
@@ -1393,6 +1495,26 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         object.add(beam.object);
     }
 
+    // (What it carries in a hand through a way of its own (`carry`: the Stone Golem's boulder), held
+    // by its bone, as big as it's made whatever the bone's own scale; shown only while it's held:
+    // carriedAt)
+    const carries = Object.values(model.carry ?? {});
+    const held = carries.length ? new THREE.Mesh(boulderGeometry(), boulderMaterial()) : null;
+
+    if (held) {
+        const { bone, radius, at } = carries[0];
+        const hand = scene.getObjectByName(bone) ?? scene;
+        const own = new THREE.Vector3();
+
+        scene.updateMatrixWorld(true);
+        hand.getWorldScale(own);
+        held.scale.setScalar((radius * size) / own.x);
+        held.position.set(...at.map((value) => (value * size) / own.x));
+        held.visible = false;
+        held.castShadow = true;
+        hand.add(held);
+    }
+
     return {
         object,
         height: model.made.tall * size,
@@ -1402,9 +1524,9 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         materials: { body, others },
         skin: worn.length ? skin : "",
         joints,
-        attacks: [...Object.keys(model.attacks), ...Object.keys(model.specials)],
+        attacks: [...Object.keys(model.attacks), ...Object.keys(model.specials), ...Object.keys(model.chains ?? {})],
         rests: Object.keys(model.rests),
-        look: { attacks: Object.keys(model.attacks), specials: Object.keys(model.specials), rests: Object.keys(model.rests) },
+        look: { attacks: Object.keys(model.attacks), specials: [...Object.keys(model.specials), ...Object.keys(model.chains ?? {})], rests: Object.keys(model.rests) },
         model: id,
         // (Hanging and dropping from its thread its own way, its lurk's clip: poseOf)
         lurks: Boolean(model.lurk),
@@ -1443,6 +1565,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
 
             mixer.update(0);
 
+            // (What it carries, in its hand while it's held)
+            if (held) {
+                held.visible = !inputs.dead && Boolean(carriedAt(model, inputs.attack));
+            }
+
             // (Its beam, breathing one: aimed, lit and drawn for where its breath's clip is, its
             // head and neck turned to aim it over what the clip has; none, else)
             if (beam) {
@@ -1478,6 +1605,12 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
             }
 
             breath?.step(inputs.seen === false && !fire ? 0 : inputs.dt, fire ? where : null);
+        },
+
+        // Where what it carries in its hand is in the world (a boulder: MODELS `carry`), while it's
+        // held; else null
+        carried(target = new THREE.Vector3()) {
+            return held?.visible ? held.getWorldPosition(target) : null;
         },
 
         // One of its clips (by name: `lengths`' keys) alone, `time` seconds into it, as it was

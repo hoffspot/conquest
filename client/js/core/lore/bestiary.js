@@ -416,4 +416,8 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "One of the great beasts of the other world, thirty-six metres long, come through the rift by the Tower of Sar Mordal. Now and then by night it comes against a town, everyone's enemy and too vast to be moved, slamming its jaws down, roaring men off their feet and raking the ground with a beam of blue-white fire.",
         sign: "footprints a man could lie in, and a glowing scorched furrow",
     }),
+    stoneGolem: Object.freeze({
+        lore: "Four metres of cut stone, raised by an idle mage to work Harrowstone quarry for him, its heart a crystal flawed by a vein of blight no one saw. One morning it turned on the quarry and broke it, and everyone in it, its maker too; it has wandered the hills by the ruins ever since, and folk go miles round. Its hammer knocks men off their feet, it pounds the ground till it heaves, and whoever keeps their distance it hurls boulders at: watch for the shadow, and get out from under it. No blast moves it, and earth harms it little.",
+        sign: "great round footprints sunk deep in the turf, and boulders torn out of the hillside",
+    }),
 });

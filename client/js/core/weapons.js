@@ -33,6 +33,9 @@
 //    bursting there a moment later (battle.js BOMBS: which), its damage at the blast's heart
 //  - drain (some): a share of the harm a hit does drawn back into whoever dealt it, healing it
 //    (battle.js #hit: a hell's Flayed Hierarch's curse)
+//  - quake (the Stone Golem's pound): instead of striking one, the blow lands `ahead` metres before
+//    whoever strikes it and the ground heaves `radius` metres round there, everyone of the other
+//    side in it hurt and thrown (`toss`, as a blast throws: battle.js #quake); its blast's `kind`
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
 
@@ -739,6 +742,30 @@ export const NATURAL = Object.freeze({
         attacks: [
             melee({ id: "smash", damage: [9, 15], hitAt: 500, duration: 1500, interval: 1800, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
             ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 900, duration: 1500, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
+    // (The Stone Golem of Harrowstone: creatures.js. Up close, one of its three blows at random, each
+    // landing where its model's clip has it: its hammer thrust down over its shoulder (the blow
+    // well over half way through, Attack 3), swept round at its side (two fifths of the way,
+    // Attack 1), knocking whoever it catches off their feet, or brought down on the ground before
+    // it as it crouches (a third of the way, the end of Attack 5), the ground heaving under
+    // everyone round where it lands (`quake`: battle.js #quake), throwing them. Further off, a
+    // boulder torn out of the ground and hurled (a chain of its clips: beasts/model.js `chains`),
+    // let go seven tenths of the way through, landing where its target stood as it let go
+    // (battle.js BOMBS boulder): out of the way of it, it misses)
+    stoneGolem: {
+        label: "Hammer and boulders",
+        attacks: [
+            {
+                kind: "melee",
+                reach: 2,
+                either: [
+                    melee({ id: "smash", reach: 2, damage: [12, 19], hitAt: 1140, duration: 2000, interval: 2400, stagger: 450, reaction: "crush", animation: "smash" }),
+                    melee({ id: "sweep", reach: 2, damage: [10, 16], hitAt: 1090, duration: 2600, interval: 2800, stagger: 500, knockdown: 1400, reaction: "crush", animation: "sweep" }),
+                    melee({ id: "pound", reach: 2, damage: [14, 22], hitAt: 860, duration: 2400, interval: 3200, stagger: 500, reaction: "crush", animation: "pound", quake: { ahead: 1.6, radius: 3.5, toss: 1.2, kind: "golemPound" } }),
+                ],
+            },
+            ranged({ id: "boulder", reach: 24, damage: [12, 20], hitAt: 1890, duration: 2600, interval: 7000, stagger: 400, reaction: "crush", animation: "heave", bomb: "boulder" }),
         ],
     },
     // (The River of Fire's master, the Greater Demon: the Lord of the Pit's fists and hellfire as

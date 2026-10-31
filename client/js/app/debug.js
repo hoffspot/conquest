@@ -379,6 +379,8 @@ export class Debug {
         // floor they're on: core/rare.js SAMPLE, SAMPLE_DEEP)
         const rare = element("button", { type: "button", onclick: () => this.game?.rare() }, "Deal");
         const inside = element("button", { type: "button", onclick: () => this.game?.rare({ inside: true }) }, "Inside");
+        // (The Stone Golem before the player, its thread brought to it: core/rare.js stoneGolem)
+        const golem = element("button", { type: "button", onclick: () => this.game?.golem() }, "Golem");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -396,7 +398,7 @@ export class Debug {
             element("label", { class: "field" }, "Invasion", bands, invade),
             element("label", { class: "field" }, "Behemoth of the Rift", rift),
             element("label", { class: "field" }, "Burnt houses", stages, burn),
-            element("label", { class: "field" }, "Rare encounter", rare, inside),
+            element("label", { class: "field" }, "Rare encounter", rare, inside, golem),
         );
     }
 }

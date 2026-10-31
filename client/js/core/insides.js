@@ -578,6 +578,12 @@ export function guildFolkOf(building, hall) {
         folk.push({ local: `adventurer${k + 3}`, title: "Adventurer", role: "patron", talk: "adventurer", look: callings[(k + 2) % callings.length], sex: sex(), map: hall.id, square: [x, y], facing, routine: { seated: true, act: "toast", every: [9000, 18000] } });
     });
 
+    // (A mage among them always, the last at the tables if none: one who hears what other mages
+    // hear, a rumour of the world's to tell, core/rare.js OPENERS)
+    if (!folk.some(({ look }) => look === "mage")) {
+        folk.at(-1).look = "mage";
+    }
+
     return folk;
 }
 

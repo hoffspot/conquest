@@ -14,6 +14,7 @@ const { landAt, planWorld, startFor } = await import("../client/js/core/worldpla
 const { ASSETS } = await import("../client/js/app/assets.js");
 const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.js");
 const { BEHEMOTH } = await import("../client/js/core/invasions.js");
+const { RARE_CARDS } = await import("../client/js/core/rare.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -48,10 +49,13 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             const inDungeons = Object.values(THEMES).some((theme) => modelsInside({ kind: "dungeon", theme: theme.id }).includes(id));
 
             // (Or it comes against a town: the Behemoth of the Rift, core/invasions.js BEHEMOTH; or
-            // it guards a lair whose master's drawn from its model, wanted with it: a riftling)
+            // it guards a lair whose master's drawn from its model, wanted with it: a riftling; or
+            // it's a rare card's foe, a world's boss, its model wanted as soon as it's about: the
+            // Stone Golem)
             const guarding = Object.values(LAIRS).some(({ master, guards = [] }) => MODELS[master[0]]?.asset === asset && guards.some(([kind]) => kind === id));
+            const carded = Object.values(RARE_CARDS).some(({ shape }) => shape?.creature === id) && CREATURES[id].worldBoss;
 
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, or comes against a town`);
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, or is a rare card's world boss`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
@@ -69,12 +73,12 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, lurk, fire, joints, mouth, borrows, detail = 3 } of Object.values(MODELS)) {
+        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, borrows, detail = 3 } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
 
-            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...(lurk ? [lurk.clip] : []), ...Object.keys(fire)].filter((each) => !borrows?.clips.includes(each))) {
+            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(chains).flatMap((links) => links.map((link) => link.clip)), ...Object.values(aloft ?? {}), ...Object.values(rests), ...(lurk ? [lurk.clip] : []), ...Object.keys(fire)].filter((each) => !borrows?.clips.includes(each))) {
                 assert.ok(named.has(clip), clip);
             }
 
@@ -91,7 +95,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
                 }
             }
 
-            for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {})]) {
+            for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {}), ...Object.values(carry).map((held) => held.bone)]) {
                 assert.ok(nodes.has(bone), bone);
             }
 
