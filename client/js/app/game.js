@@ -833,7 +833,17 @@ const UNLEASHED_MOTES = Object.freeze({
     dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
     sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
 });
-const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", stoneheart: "castEarthMid" });
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast" });
+
+// How a ward let loose on whoever wears it is drawn (core/legendary.js EFFECTS `ward`), by its
+// element: the shell closing round them and holding while it lasts, the shards thrown off it, the
+// ring of dust; heard as its element's casting (UNLEASHED_SOUNDS, if it's none of its own)
+const WARD_LOOKS = Object.freeze({
+    earth: { shell: 0xc8b48a, shards: 0x9a8c74, ring: 0xe8d4a0, sound: "castEarthMid" },
+    fire: { shell: 0xff9a4a, shards: 0xd0602a, ring: 0xffc880, sound: "castFireMid" },
+    water: { shell: 0x9ad8ff, shards: 0x6aa8d8, ring: 0xd0f0ff, sound: "castWaterMid" },
+    air: { shell: 0xd8e8ff, shards: 0xa8b8d8, ring: 0xf0f6ff, sound: "castAirMid" },
+});
 const ATOMIC_LEAD = 0.05;
 const BOSS_NEAR = 150;
 
@@ -6763,11 +6773,11 @@ export class Game {
     // the first time (within FRESH.seen of their prints): said, what made them and which way they
     // lead
     #spyFresh(me) {
-        // (A rare card's, sunk deep: core/rare.js threadTracks, the Stone Golem's)
+        // (A rare card's, as its step tells them: core/rare.js threadTracks, the Stone Golem's)
         for (const tracks of threadTracks(this.host.legends)) {
             if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
                 this.freshSeen.add(tracks.id);
-                this.hud.message(`Great footprints of stone, sunk deep in the ground: the ${CREATURES[tracks.creature]?.name?.toLowerCase() ?? "golem"}'s. They lead off to the ${compass(tracks.points[0], tracks.points.at(-1))}.`, 4.5);
+                this.hud.message(`${tracks.spoor ?? "Tracks"}: the ${CREATURES[tracks.creature]?.name?.toLowerCase() ?? "creature"}'s. They lead off to the ${compass(tracks.points[0], tracks.points.at(-1))}.`, 4.5);
             }
         }
 
@@ -15591,11 +15601,11 @@ export class Game {
         });
     }
 
-    /** The Stone Golem dealt before the player at once, its thread brought to it (the debug overlay's): host.js "rare", `golem`. */
-    golem() {
-        this.#command({ type: "rare", golem: true }, (result) => {
+    /** A card in play (core/rare.js RARE_CARDS: the Stone Golem's) dealt before the player at once by its id, its thread brought to it (the debug overlay's): host.js "rare", `card`. */
+    dealCard(card) {
+        this.#command({ type: "rare", card }, (result) => {
             if (!result.ok) {
-                this.hud.message(REFUSALS[result.reason] ?? "Only out in the world of the world you've opened, with no rare encounter out and the golem not slain", 2.5);
+                this.hud.message(REFUSALS[result.reason] ?? "Only out in the world of the world you've opened, with no rare encounter out and that card not done", 2.5);
             }
         });
     }
@@ -16636,13 +16646,15 @@ export class Game {
     // those it throws, as a blast's: #blast); heard, and, the player's own, their charge flaring
     // as it empties
     #unleashed(event) {
-        // (A ward's let loose on whoever wears it (Stoneheart's stone skin), not by a weapon's charge)
-        const ward = Boolean(EFFECTS[event.effect]?.ward);
+        // (A ward's let loose on whoever wears it (Stoneheart's stone skin), not by a weapon's charge:
+        // they're told what it does to them)
+        const def = EFFECTS[event.effect];
+        const ward = def?.ward ? (WARD_LOOKS[def.element] ?? WARD_LOOKS.earth) : null;
 
         if (event.id === this.me && !ward) {
             this.charge.flare();
         } else if (event.id === this.me) {
-            this.hud.message("Stoneheart: your skin turns to stone!", 1.6);
+            this.hud.message(`${def.label}: ${def.felt ?? "it's let loose on you!"}`, 1.6);
         }
 
         if (event.map !== this.mapId) {
@@ -16691,20 +16703,21 @@ export class Game {
         } else if (event.effect === "ruinblast") {
             fx.flash(point, { colour: 0xfff4c0, intensity: 60, distance: 14, life: 0.3, size: 4 });
             fx.ring(at, { colour: 0xffd060, from: 0.3, to: radius * 1.4, life: 0.55 });
-        } else if (event.effect === "stoneheart") {
-            // (Their skin turned to stone a while: a shell the grey-gold of cut stone closing round
-            // them and holding while it lasts, stone shards and grit thrown off, a ring of dust)
+        } else if (ward) {
+            // (A ward on whoever wears it a while (Stoneheart's skin of stone): a shell the colour of
+            // its element closing round them and holding while it lasts, shards thrown off, a ring
+            // of dust)
             const avatar = this.avatars.get(event.target);
 
-            fx.wardShell(() => this.avatars.get(event.target)?.object.position ?? null, { colour: 0xc8b48a, height: avatar?.character?.height ?? 1.8, life: Math.max(1, (event.until - this.battle.time) / 1000), rise: 0.08, opacity: 0.7 });
-            fx.shards(point, { count: 18, colour: 0x9a8c74, size: 0.07, speed: 2.5, up: 1.4, life: 0.7 });
-            fx.ring(at, { colour: 0xe8d4a0, from: 0.3, to: 1.6, life: 0.45 });
+            fx.wardShell(() => this.avatars.get(event.target)?.object.position ?? null, { colour: ward.shell, height: avatar?.character?.height ?? 1.8, life: Math.max(1, (event.until - this.battle.time) / 1000), rise: 0.08, opacity: 0.7 });
+            fx.shards(point, { count: 18, colour: ward.shards, size: 0.07, speed: 2.5, up: 1.4, life: 0.7 });
+            fx.ring(at, { colour: ward.ring, from: 0.3, to: 1.6, life: 0.45 });
             fx.scatter(UNLEASHED_MOTES.dust, at, 1.2, 2, { seconds: 0.2 });
         }
 
         // (A blast heard as a blast: #blast)
         if (event.effect !== "ruinblast") {
-            this.sound?.play(UNLEASHED_SOUNDS[event.effect], { at, far: BLAST_HEARD.far });
+            this.sound?.play(UNLEASHED_SOUNDS[event.effect] ?? ward?.sound, { at, far: BLAST_HEARD.far });
         }
     }
 

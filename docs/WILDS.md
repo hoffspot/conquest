@@ -931,13 +931,16 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
   to 170 m for the golem's) from where the thread was last, the highest of a couple of dozen spots
   where a cache could be (`#threadHaunt`), not marked on the maps, its foe's prints leading there
   from where it was last (`threadTracks`: wandering 9 m either side of the way; game.js
-  `#layTrails`, sunk as deep as any print in any ground; "Great footprints of stone, sunk deep in
-  the ground ... They lead off to the north.", once, as they're come upon).
+  `#layTrails`, sunk as deep as any print in any ground; said once, as they're come upon, in the
+  step's own words, `spoor`: "Great footprints of stone, sunk deep in the ground: the stone golem's.
+  They lead off to the north.").
 - *place*: somewhere to go, `far` (150 to 250 m for the sample's) from where the thread was last,
   where a cache could be (`#threadSpot`), or the plan's place of a kind nearest it (`site`, its
   heart as it's built: the ruins of Harrowstone quarry's), marked on every player's maps (a scroll,
   its seal sea-green: mapicons.js `thread`); done once a player's within its `reach`
-  (`#threadFollow`), those there taking part.
+  (`#threadFollow`), those there taking part. What's found there is its kind's: places.js
+  `PLACE_KINDS` `scene`, laid out round its heart as it's built (setpieces/scenes.js `SCENES`:
+  `crushed`, an adventuring company flattened where it stood).
 - *talk*: one of the folk (`role`: a barkeep...; an adventurer of a `calling` at a guild, or, none
   of that calling left there, any of its adventurers: `talksFor`) in the settlement nearest where
   it was last (`#nearestTown`; or, `home`, the one its rumour was told in): the thread's question
@@ -969,9 +972,11 @@ of a kind (`openerOf`: the first of that kind, and the nearest village or bigger
 the card it leads to's in play and not done in the world and the thread's not begun (`Legends`
 `opening`): their question (`ask`) among their first choices, the tale told a piece at a time
 (`tale`, each piece's question asked for the next), then taken up (`take`: the talk's `{ thread,
-step: null }`, the thread begun where it was told, its `home` that settlement) or left. Every
-guild has a mage at it (insides.js `guildFolkOf`: the last at its tables, if none of the others
-is), and a mage hired from it leaves the rumour to any adventurer still there.
+step: null }`, the thread begun where it was told, its `home` that settlement; their parting
+words, `taken`, and the talk's over, so it's not offered again) or left. Every guild has one of
+every calling the threads' talk asks for (`TALK_CALLINGS`: a mage, so far; insides.js
+`guildFolkOf`: the last at its tables taking it up if none of the others has it), and one hired
+from it leaves the rumour to any adventurer still there.
 
 The sample's thread (`sampleTrail`, debug mode's) has a step of each kind: where the Sample came
 from (20 gold; the nearest ruins revealed); the barkeep in the nearest settlement asked (15 gold;
@@ -1043,17 +1048,19 @@ for him, four metres of cut stone, his runes up its arms, its heart a crystal bo
 pedlar, a hair of black in it he never looked closely enough to see. It worked a season and never
 tired; then one morning it turned round and broke the quarry: the cranes, the cutters, the guards,
 and Venn himself. It has wandered the hills round the ruins since, and folk go miles round.
-- **The ruins of Harrowstone quarry** (worldplan/settle.js `RUINED_QUARRY`: one a world, laid out
-  after the Tower of Sar Mordal from numbers of its own, so nothing laid out before moves for it):
+- **The ruins of Harrowstone quarry** (worldplan/settle.js `RUINED_QUARRY`, the first of the
+  `LANDMARKS`: one a world, laid out after the Tower of Sar Mordal from numbers of its own, so
+  nothing laid out before moves for it):
   up in the hills (the plan's height 0.5 to 0.78, off the plain and below the peaks' snows), on
   gentle dry ground, 2,600 to 4,400 m from the nearest people's start (tier 3 or so land) and
   within 900 m of a village or bigger, clear of the other sites and well away from the great lairs,
   dens, hells and the tower; each looser a quarter at a time if nowhere will do. Laid out as a
-  people's quarry is (setpieces/neutral.js "ruined quarry"), ruined: its faces and stone weathered
-  and grown over (`ruined`: art/kits/works.js in a weathered tone), its crane thrown down across
-  the floor (art/kits/neutral.js `fallenCrane`), its masons' lodge a heap of rubble and timbers,
-  its cart left on one wheel, two of its cutters' or guards' bones in the yard, boulders the golem
-  threw; and in the middle of its floor what's left of the Lantern Company (`crushed`), four of
+  people's quarry is (setpieces/neutral.js "ruined quarry"), ruined (`ruinsOf`, as any works can
+  be): its faces and stone weathered and grown over (`ruined`: art/kits/works.js in a weathered
+  tone), its crane thrown down across the floor (art/kits/neutral.js `fallenCrane`), its masons'
+  lodge a heap of rubble and timbers, its cart left on one wheel; two of its cutters' or guards'
+  bones in the yard, boulders the golem threw; and in the middle of its floor, its kind's scene
+  (places.js `scene`, setpieces/scenes.js `crushed`), what's left of the Lantern Company, four of
   them flattened where they stood, a dark stain pressed into the ground under each, their bones
   crushed flat, their cloaks over them, a round shield beaten flat and a helm crushed, a bow
   snapped and its arrows strewn, a mace and a holy book's loose pages, a staff broken in two and a
@@ -1063,7 +1070,8 @@ and Venn himself. It has wandered the hills round the ruins since, and folk go m
   anything worth knowing?"), in four pieces (the quarry and Venn; the golem and its flawed heart;
   the morning it turned; the Lantern Company, Bram, Ilsa, old Corwin and Tamsin, who learnt her
   first spells beside the mage, gone up after it ten days ago and not come back), then "I'll find
-  out what became of them." begins the thread.
+  out what became of them." begins the thread, the mage's parting words ("Then go with care...")
+  ending the talk.
 - **The remains** (its first step, a *place*: the ruins' heart): reached, 30 gold to each there and
   Tamsin's note (writings.js `tamsin`, two pages, in the journal's *Writings*: the shield lasting
   one blow, the arrows breaking, "watch the ground, the shadow comes before the rock does", and
@@ -1093,7 +1101,8 @@ How it fights (creatures.js `stoneGolem`, weapons.js NATURAL `stoneGolem`; a wor
   where it lands (`quake`: battle.js `#quake`, a blast, earth's, everyone of the other side in it
   hurt and thrown).
 - **Further off, boulders** (the user: "Have it toss large rocks at the player in ranged attacks";
-  "Lobbed and dodgeable"): within 24 m, every 7 seconds, it drives its hammer into the ground and
+  "Lobbed and dodgeable"): from 5 m to 24 m (nearer, it closes in and uses its hammer: weapons.js
+  `least`), every 7 seconds, it drives its hammer into the ground and
   crouches, tears a boulder out with its other hand and heaves it up and over (beasts/model.js
   `chains`: the end of its slam, then its shield arm's swing; the boulder in its hand from the
   crouch till it's let go, `carry`), let go seven tenths of the way through. The boulder (battle.js
@@ -1106,9 +1115,47 @@ How it fights (creatures.js `stoneGolem`, weapons.js NATURAL `stoneGolem`; a wor
 
 Kept as every rare card and thread is (`Legends`: its thread's `home` besides, carried on from a
 world kept before it as none); the world's plan, its new place, and the rules two games share
-changed with it (`NET_VERSION` 196). Debug mode's *Golem* button (`game.golem()`, the host's `rare`
-command, `golem`) brings its thread to it (begun, its steps before done, by the player) and deals
-it a little ahead of them at once; refused while another's out, or once it's done in the world.
+changed with it (`NET_VERSION` 196, and 197 as debug mode came to deal any card by its id). Debug
+mode's *Card and its thread* (the Stone Golem chosen, *Deal card*: `game.dealCard(id)`, the host's
+`rare` command, `card`) brings its thread to it (begun, its steps before done, by the player) and
+deals it a little ahead of them at once; refused while another's out, or once it's done in the
+world. The model viewer shows it as the game draws it, under
+*For the mightiest*: each of its blows, and its heave, the boulder in its hand from the crouch and
+thrown on as it's let go, down onto the ground 8 m ahead, its shadow and ring there as it comes.
+
+### Building a card
+
+The Stone Golem is made of pieces any card can be made of. A card that waits somewhere of its own,
+with a rumour to begin it and a quest to follow, is these, each data:
+1. **Its place** (worldplan/settle.js `LANDMARKS`, one a world each, laid out after those before it
+   from numbers of their own): an `id`, a `kind`, a `name`, and where it's to be kept (heights
+   `hills`, lands `biomes`, gentle as `steep`, `from`/`to` metres from the nearest start, within
+   `guild` metres of a village or bigger for its rumour). Its kind in places.js `PLACE_KINDS`
+   (`icon`, `holds`, and `scene`: what's found at its heart, setpieces/scenes.js `SCENES`); its
+   layout in setpieces/neutral.js `LAYOUTS` (a people's works ruined: `ruinsOf`), its look in
+   art/kits/neutral.js, its size in `NEUTRAL`.
+2. **Its thread** (core/rare.js `THREADS`): its rumour (`opens`: told by an adventurer of a
+   `calling` at the guild nearest it, every guild keeping one of each called for, `TALK_CALLINGS`;
+   `ask`, `tale`, `take`, `taken`, `leave`), then its steps (`STEPS`): a *place* (`site`: its kind;
+   `reach`; a `reward` of gold and a writing, core/writings.js); a *card* kept at a site (`far`, and
+   `spoor`, how its prints are told); a *talk* back at its `home`; or any of the others (*Threads*).
+3. **Its card** (`RARE_CARDS`): `where` "site", `requires` its thread's card step, its `shape` (a
+   `foe`: its `creature`, `champion` rank, `up` tiers, `title`) and its `reward` (a unique,
+   `UNIQUES`, and gold), `kind` "unique" to come once a world.
+4. **Its foe** (creatures.js, weapons.js `NATURAL`): a world's boss (`worldBoss`: its bar across the
+   top, its model wanted at once), seeing further (`sight`), never thrown (`steady`); its blows,
+   one at random (`either`), heaving the ground (`quake`), lobbing what bursts (`bomb`: battle.js
+   `BOMBS`, its shadow on the ground, `shadow`: spellfx.js `BOMB_LOOKS`), none nearer than its
+   `least`. Drawn from its model (beasts/model.js `MODELS`: clips played one into the next,
+   `chains`; what it carries in its hand, `carry`, thrown on in the model viewer too), its prints
+   (world/tracks3d.js `OWN`), its spoils, lore and voice.
+5. **Its reward's effect** (core/legendary.js `EFFECTS`, on any piece a unique is: core/gear.js
+   `effectOf`): one let loose by blows struck, or a ward by blows taken (`ward`: `guard`, `skin`,
+   `harden`; what the wearer's told, `felt`; drawn and heard as its `element` has it, app/game.js
+   `WARD_LOOKS`).
+
+Then debug mode deals it by its id (*Card and its thread*), and the unit tests (test/rare.test.js
+*the Golem of Harrowstone*) show how to follow one through.
 
 ## Adventurers' caches
 
