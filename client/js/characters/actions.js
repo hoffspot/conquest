@@ -192,21 +192,21 @@ const LIMB_TRIES = 3;
 const LIMB_STRAIN = 6;
 // (Nor further than sinks what the hand holds into the body by more than this: metres)
 const LIMB_SINK = 0.005;
-// A hand that's jumped: as moved out of the body, `jump` metres (of its body's own) further from
-// where it was last frame than its place was moved (so not as its moves go); and every frame,
-// standing at rest. Moved out again beginning from the move it had last frame (the arm reached
-// whose hand was placed nearest it, within `match`, as long ago as `stale` seconds at most), let
-// in towards the body a little (halving every `half` seconds, so the hand settles back to where
-// it's moved out from none by degrees, not at once), that's kept if the arms are as far out of
-// the body (no more than `deeper` further in, or no further than `deep`), what they hold as far
-// out of it (or no further than `sunk`), and neither arm more strained (`strain` degrees, or no
-// more than `strained`): a third of what the motion check counts (motioncheck.js MEASURES), and
-// less. Moved out from none each frame, three moves a frame (12, 4 and 1 cm, folding an orc's
-// arms), a second that measured a little deeper strained the arm and was taken back, the hand
-// 20 cm from where it was the frame before, and back the next; or two ways out of the body, as
-// near as each other to clearing it, taken by turns: a sentry's arms folded jumped up to 37 cm in
-// a frame on a bulky orc's body and 25 on a man's, the barkeep's 19.5
-const CLEAR_KEEP = Object.freeze({ jump: 0.02, match: 0.15, stale: 0.25, half: 0.1, deeper: 0.002, strain: 1, deep: 0.01, sunk: 0.004, strained: 1 });
+// Standing at rest with nothing in hand, each frame's moves out of the body begun from last
+// frame's (the arm reached whose hand was placed nearest it, within `match` metres of its body's
+// own, as long ago as `stale` seconds at most), let in towards the body a little (halving every
+// `half` seconds, so the hand settles back to where it's moved out from none by degrees, not at
+// once), and moved out from there; kept if that leaves no harm, a forearm no further in the torso
+// than `deep`, what's held no more than `sunk` further in the body and the arm no more than
+// `strained` degrees further past its range (a third of what the motion check counts,
+// motioncheck.js MEASURES, and less); or else if it's no worse than moved out from none, no more
+// than `deeper` further in and `strain` degrees more strained. Moved out from none each frame,
+// three moves a frame (12, 4 and 1 cm, folding an orc's arms), a second that measured a little
+// deeper strained the arm and was taken back, the hand 20 cm from where it was the frame before,
+// and back the next; or two ways out of the body, as near as each other to clearing it, were
+// taken by turns: a sentry's arms folded jumped up to 37 cm in a frame on a bulky orc's body and
+// 25 on a man's, the barkeep's 19.5
+const CLEAR_KEEP = Object.freeze({ match: 0.15, stale: 0.25, half: 0.1, deep: 0.01, sunk: 0.004, strained: 1, deeper: 0.002, strain: 1 });
 const DRAW_IN = { at: [-0.08, -0.62, 0.32], pronate: 30, shape: "relaxed" };
 const SWUNG_BACK = { at: [0.05, -0.85, -0.2], pronate: 10, shape: "relaxed" };
 
@@ -2625,7 +2625,7 @@ export class Actions {
 
         /** Where each elbow swivelled to last frame (Rig.reachArm), to stay near; null: not reaching. */
         this.swivel = { right: null, left: null };
-        /** Each hand's moves out of the body last frame (place()), an arm reached each: [{ shift, free (where it was placed before it), at (where it was after), time }], in its body's own metres. */
+        /** Each hand's moves out of the body last frame (place()), an arm reached each: [{ shift, free (where it was placed before it), time }], in its body's own metres. */
         this.cleared = { right: [], left: [] };
 
         /** How each hand was turned last frame (world), reaching; null: not reaching. */
@@ -3379,7 +3379,7 @@ export class Actions {
         this.haft.right = null;
         this.haft.left = null;
 
-        // (Each hand's moves out of the body this frame, for a jump next frame: CLEAR_KEEP)
+        // (Each hand's moves out of the body this frame, to begin next frame's from: CLEAR_KEEP)
         const cleared = { right: [], left: [] };
 
         for (const [layer, { hands, weight }] of this.reaching.entries()) {
@@ -3494,10 +3494,12 @@ export class Actions {
 
                 return shift;
             };
-            // (Standing at rest, its moves slow, a hand jumping as the moves begun from none come and
-            // go shows: moved out from last frame's moves, kept if that leaves no harm (CLEAR_KEEP);
-            // else, and otherwise, from none)
-            const resting = Boolean(this.attack?.rest) && clear.some((side) => this.cleared[side].length);
+            // (Standing at rest with nothing in hand, its moves slow, a hand jumping as the moves
+            // begun from none come and go shows: moved out from last frame's moves, kept if that
+            // leaves no harm, or else if it's no worse than moved out from none (CLEAR_KEEP);
+            // otherwise, from none. Not holding anything: what a hand holds was further in the
+            // body, the motion check found, than this measures)
+            const resting = Boolean(this.attack?.rest) && clear.some((side) => this.cleared[side].length) && !clear.some((side) => this.#holding(side));
             const warmed = resting ? solve((side) => this.#warmShift(side, free[side])) : null;
             const warmth = warmed ? this.#clearance(clear) : null;
             const harmless = warmth && warmth.sunk <= (deep ?? 0) + CLEAR_KEEP.sunk && clear.every((side) => warmth.deep[side] <= CLEAR_KEEP.deep && warmth.strain[side] <= (start[side] ?? 0) + CLEAR_KEEP.strained);
@@ -3508,38 +3510,20 @@ export class Actions {
 
             const shift = harmless ? warmed : solve();
 
-            // (A hand that's jumped from where it was last frame further than its place has, or,
-            // standing at rest, a hand moved out from last frame's moves that wasn't harmless:
-            // moved out again from last frame's move, kept if that's no worse (CLEAR_KEEP); each
-            // arm's move kept for next frame)
+            // (Each arm's move kept for next frame)
             if (clear.length) {
-                const now = this.#handsNow(clear, free);
-                const jumped = harmless ? [] : clear.filter((side) => now[side].was && (warmed || now[side].at.distanceTo(now[side].was.at) - now[side].here.distanceTo(now[side].was.free) > CLEAR_KEEP.jump));
                 let chosen = shift;
 
-                if (jumped.length) {
+                if (warmed && !harmless) {
                     const fresh = this.#clearance(clear);
-                    let kept = warmed;
-                    let tried = warmth;
-
-                    repose();
-
-                    if (kept) {
-                        reachAll(kept);
-                    } else {
-                        kept = solve((side) => (jumped.includes(side) ? this.#warmShift(side, free[side]) : null));
-                        tried = this.#clearance(clear);
-                    }
-
                     const worse =
-                        tried.sunk > Math.max(fresh.sunk + CLEAR_KEEP.deeper, CLEAR_KEEP.sunk) ||
-                        clear.some((side) => tried.deep[side] > Math.max(fresh.deep[side] + CLEAR_KEEP.deeper, CLEAR_KEEP.deep) || tried.strain[side] > Math.max(fresh.strain[side] + CLEAR_KEEP.strain, CLEAR_KEEP.strained));
+                        warmth.sunk > Math.max(fresh.sunk + CLEAR_KEEP.deeper, CLEAR_KEEP.sunk) ||
+                        clear.some((side) => warmth.deep[side] > Math.max(fresh.deep[side] + CLEAR_KEEP.deeper, CLEAR_KEEP.deep) || warmth.strain[side] > Math.max(fresh.strain[side] + CLEAR_KEEP.strain, CLEAR_KEEP.strained));
 
-                    if (worse) {
+                    if (!worse) {
                         repose();
-                        reachAll(shift);
-                    } else {
-                        chosen = kept;
+                        reachAll(warmed);
+                        chosen = warmed;
                     }
                 }
 
@@ -3879,20 +3863,11 @@ export class Actions {
     // How far a forearm or hand has come into the torso (`Side`'s; `skin`: the torso's), and the
     // push (world) that'd take its deepest point out again, its skin resting on the torso's
     // (LIMB_CLEAR off it); or null, if it's clear
-    // Where each hand of `sides` was placed (`free`, world) and is now, in its body's own metres; and
-    // last frame's move kept for the arm reached whose hand was placed nearest it, if any (CLEAR_KEEP)
-    #handsNow(sides, free) {
-        const object = this.character.object;
+    // Whether a hand (`side`'s) holds anything
+    #holding(side) {
+        const handBone = this.rig.bone(side === "right" ? "RightHand" : "LeftHand");
 
-        return Object.fromEntries(
-            sides.map((side) => {
-                const here = object.worldToLocal(free[side].clone());
-                const at = object.worldToLocal(this.rig.bone(side === "right" ? "RightHand" : "LeftHand").getWorldPosition(new THREE.Vector3()));
-                const was = this.cleared[side].reduce((best, each) => (each.free.distanceTo(here) < (best?.free.distanceTo(here) ?? CLEAR_KEEP.match) ? each : best), null);
-
-                return [side, { here, at, was: was && this.time - was.time <= CLEAR_KEEP.stale ? was : null }];
-            }),
-        );
+        return this.character.items.some((model) => model.parent === handBone);
     }
 
     // How far each arm of `sides` is in the torso, how far what the hands hold is in the body, and
@@ -3928,17 +3903,14 @@ export class Actions {
     }
 
     // Keep each hand's move out of the body (`shift`: world, or null for none; placed at `free`
-    // before it) in `cleared`, in its body's own metres, with where the hand is now, for next frame
-    // (CLEAR_KEEP)
+    // before it) in `cleared`, in its body's own metres, for next frame (CLEAR_KEEP)
     #keepClear(sides, shift, free, cleared) {
         const object = this.character.object;
         const back = object.getWorldQuaternion(new THREE.Quaternion()).invert();
         const size = this.#size();
 
         for (const side of sides) {
-            const at = object.worldToLocal(this.rig.bone(side === "right" ? "RightHand" : "LeftHand").getWorldPosition(new THREE.Vector3()));
-
-            cleared[side].push({ shift: (shift[side]?.clone() ?? new THREE.Vector3()).applyQuaternion(back).divideScalar(size), free: object.worldToLocal(free[side].clone()), at, time: this.time });
+            cleared[side].push({ shift: (shift[side]?.clone() ?? new THREE.Vector3()).applyQuaternion(back).divideScalar(size), free: object.worldToLocal(free[side].clone()), time: this.time });
         }
     }
 
