@@ -46,6 +46,8 @@ const PLACES = Object.freeze({
     banditChief: "at the head of the outlaws holding a cave, a ruin or a watchtower",
     goblinBomber: "among the goblins' raiding parties",
     goblinKing: "at the head of a goblin war band, and on the goblin caves' throne",
+    orcWarlord: "on a cave's throne, his goblins about him",
+    orcReaver: "at the head of the outlaws in their hideout",
     dragon: "in the drake's lair",
     dreadthorn: "in the Dreadthorns' lairs",
     moonfang: "in the werewolves' dens",

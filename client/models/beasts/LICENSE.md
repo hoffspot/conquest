@@ -444,6 +444,49 @@ shows it (*Coming to the wilds*).
 
 Don't copy it out of this game or use it in anything else.
 
+## orc-king.bin, orc-king.brown.bin, orc-king.red.bin, orc-warlord.bin, orc-reaver.bin
+
+**A modular orc**, its axe and its animations (its Unreal Engine files: its body, whole and from
+the waist up, the pieces it wears, its axe, its textures in three skins and four eyes' colours,
+and 50 animations, exported from Unreal Engine by this repository's owner), bought on **Fab** by
+this repository's owner under **Fab's Standard License**: the Orc King, the Orc Warlord and the Orc
+Reaver.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/orc-king.json`, `private/orc-warlord.json`, `private/orc-reaver.json`, which stay out of
+the repository with the bought files), their `phone` builds. Each is one of its dressings, its
+pieces joined onto its body and skinned to its skeleton, its axe on the bone that holds it
+(`hand_r`); its five materials (outfit, body, teeth, eyes, axe), each its textures (colour, normal
+at 512 pixels, and occlusion, roughness and metal) as KTX2; its full mesh simplified to about 55%,
+with two lower details packed in.
+
+- **The Orc King** (`orc-king.bin`): its finest dressing, armoured from his shoulder to his knees
+  (trousers, boots, loincloth and belt, shoulder, upper arm, wrist and knee armour, straps,
+  earrings), green-skinned and yellow-eyed, 54,514 triangles; 22 of its own clips (attacks, combos,
+  kicks, a leaping attack, blocks, flinches, idles, walk, run, battlecry and chest thump). His other
+  skins, brown and red, are their skin's and eyes' colour textures alone (`orc-king.brown.bin`,
+  `orc-king.red.bin`). Kept for a card: the model viewer shows him (*Coming to the wilds*).
+- **The Orc Warlord** (`orc-warlord.bin`), a cave's boss: trousers, boots, loincloth and belt,
+  bracers, straps and earrings, brown-skinned and red-eyed, 47,725 triangles; the ten of its clips
+  the game plays.
+- **The Orc Reaver** (`orc-reaver.bin`), an outlaws' hideout's boss: its whole body, bare-legged and
+  barefoot, in loincloth and belt, bracers, straps and earrings, red-skinned and yellow-eyed, 52,225
+  triangles; the same ten clips.
+
+The pack has no fall, so each has Mesh2Motion's `Death_A` (CC0, from
+<https://github.com/Mesh2Motion/mesh2motion-app>'s `human-addon-animations.glb`), played on its
+bones (the pipeline's `retarget`): it staggers, drops to its knees and pitches forward onto its
+face. Its pack's demo animations (`Demo`, `MM_*`) aren't in them: they're Epic's mannequin's,
+licensed for Unreal Engine only.
+
+They're scrambled as the game serves them, with whose they are in their glTF assets' `copyright`.
+They aren't in this repository, but in the private one the game's builds fetch them from
+(`docs/LICENSED_MODELS.md`).
+
+Don't copy them out of this game or use them in anything else.
+
 ## kaiju.bin
 
 **Kaiju**, by **HuyKhoi2407** (its Blender files, rigged and animated, `Kaiju_Animation-baked.blend`

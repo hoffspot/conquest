@@ -236,7 +236,9 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         try {
             assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest" }).sort(), ["moonfang", "werewolf"]);
             assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest", dungeon: { levels: [{ packs: [{ foes: [{ creature: "direWolf" }, { creature: "werewolf" }] }] }, { packs: [] }] } }), ["werewolf"]);
-            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "caves" }), [], "none in today's caves");
+            // (Today's caves and outlaws' hideouts: only the orc that may be on their throne)
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "caves" }), ["orcWarlord"], "the caves' Orc Warlord");
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "hideout" }), ["orcReaver"], "the hideouts' Orc Reaver");
             assert.deepEqual(modelsInside({ kind: "tavern" }), []);
             assert.deepEqual(modelsInside(null), []);
         } finally {

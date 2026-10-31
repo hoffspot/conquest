@@ -81,6 +81,8 @@ const ABOUT = {
     goblin: ["Goblin raider", "Far out", "cleaver"],
     goblinBomber: ["Goblin bomber", "Among goblin raiders: keeps its distance and lobs lit bombs", null],
     goblinKing: ["Goblin King", "The goblins' elite, leading their war band: a great cleaver, and a bigger bomb now and then", "cleaver"],
+    orcWarlord: ["Orc warlord", "A cave's throne, his goblins about him: a great axe", "axe"],
+    orcReaver: ["Orc reaver", "At the head of the outlaws in their hideout: a great axe", "axe"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
     cultist: ["Cultist", "Far out, in camps", "wand"],
     cultLeader: ["High priest of the cult", "By a hell's portal, at its rite by night"],
@@ -1403,7 +1405,7 @@ const groups = [
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
-    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "greaterDemon", "demonLord"]],
+    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord"]],
 ];
 
 for (const [label, ids] of groups) {

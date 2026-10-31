@@ -81,6 +81,9 @@ export const THEMES = {
             // about it, raiders and bombers: creatures.js `boss`)
             { id: "goblinKing", creature: "goblinKing", title: "the Goblin King", weight: 1, guard: ["goblin", "goblinBomber"] },
             { id: "frostTroll", creature: "frostTroll", title: "the Frost Troll", weight: 1 },
+            // (An orc warlord come down out of the orcs' lands, the caves' goblins his now, his
+            // raiders and bombers about his throne: creatures.js)
+            { id: "orcWarlord", creature: "orcWarlord", title: "the Orc Warlord", weight: 1, guard: ["goblin", "goblinBomber"] },
         ],
         rooms: {
             mouth: [{ id: "mouth", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [3, 5], at: "wall" }], torches: [1, 1] }],
@@ -126,6 +129,8 @@ export const THEMES = {
         bosses: [
             { id: "banditLord", creature: "banditChief", title: "the Outlaw King", weight: 3 },
             { id: "ogreBoss", creature: "ogre", title: "the Ogre Captain", weight: 1 },
+            // (An orc outcast at the head of the outlaws, his cutthroats about him: creatures.js)
+            { id: "orcReaver", creature: "orcReaver", title: "the Orc Reaver", weight: 1, guard: ["bandit"] },
         ],
         rooms: {
             gate: [{ id: "gate", props: [{ char: "%", count: [1, 2], at: "wall" }, { char: "K", count: [0, 1], at: "corner" }, { char: "n", count: [0, 1], at: "wall" }, { char: "J", count: [0, 1], at: "wall", size: [3, 1] }, { char: "d", count: [2, 3], at: "wall" }], torches: [2, 2] }],

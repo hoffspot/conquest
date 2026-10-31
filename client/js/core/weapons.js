@@ -751,6 +751,20 @@ export const NATURAL = Object.freeze({
             ranged({ id: "hellfire", reach: 8, damage: [6, 10], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
         ],
     },
+    // (The orcs on a dungeon's throne (creatures.js): a great axe in both hands, swept, chopped down
+    // or spun round low, the blow landing nearly two fifths of the way through, as their model's
+    // clips have it; their stand-ins holding a battle axe. The Warlord's the heavier, the Reaver's
+    // the quicker)
+    orcWarlord: {
+        label: "Great axe",
+        equipment: ["battleAxe"],
+        attacks: [melee({ id: "cleave", damage: [10, 17], hitAt: 720, duration: 1900, interval: 2100, stagger: 400, reaction: "chop", animation: "hammer", afflict: { kind: "bleed", chance: 0.3 } })],
+    },
+    orcReaver: {
+        label: "Great axe",
+        equipment: ["battleAxe"],
+        attacks: [melee({ id: "hack", damage: [8, 14], hitAt: 640, duration: 1700, interval: 1800, stagger: 300, reaction: "chop", animation: "hammer", afflict: { kind: "bleed", chance: 0.35 } })],
+    },
 });
 
 /** A weapon (a WEAPONS key) or a creature's own (a NATURAL key), or null. */

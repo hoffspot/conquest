@@ -21,9 +21,12 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 - **Its theme**: its look and feel, how its levels are dug, who's in it, and how each kind of room
   is dressed. Four, three of them each dug its own way:
   - **caves** (`caves`): caverns scattered about and wandering tunnels between them, with goblins,
-    cave spiders, bats, slimes, trolls and worse;
+    cave spiders, bats, slimes, trolls and worse, and on the throne at the bottom a troll king, the
+    Broodmother, the Goblin King, the Frost Troll or the Orc Warlord (*The orcs on a dungeon's
+    throne*, below);
   - **an outlaws' hideout** (`hideout`): rooms dug one off another down short tunnels, with
-    bandits, their hounds, hired ogres and hedge priests;
+    bandits, their hounds, hired ogres and hedge priests, and at their head the Outlaw King, the
+    Ogre Captain or the Orc Reaver;
   - **an ancient temple** (`ancient`): pillared halls up a straight middle way, rooms off them
     either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
   - **an ants' nest** (`nest`): dug as ants dig, a gallery winding up through layered earth with
@@ -640,6 +643,18 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   XIV's tankbusters read the table, the one holding it isn't the only one who has to mind it; its
   own war band about it, raiders and bombers in turn (a boss's `guard` in its theme, in place of
   one of the theme's packs); and never thrown by a blast, as no dungeon's boss is.
+- **The orcs on a dungeon's throne** (creatures.js `orcWarlord`, `orcReaver`), met nowhere else:
+  the Orc Warlord on a cave's, his goblins about him (raiders and bombers in turn, his `guard`), and
+  the Orc Reaver at the head of an outlaws' hideout, his cutthroats about him. Each is a dressing of
+  a modular orc bought on Fab (beasts/model.js; `client/models/beasts/LICENSE.md`): the Warlord
+  brown-skinned and red-eyed, in trousers, boots, belt and bracers, drawn 2.08 m tall; the Reaver
+  red-skinned and yellow-eyed, bare-legged and barefoot in his loincloth, 1.99 m (and a boss's 1.22
+  times that). Each swings a great axe two-handed, swept round, chopped down or spun low, one at
+  random each time, the blow landing nearly two fifths of the way through it (weapons.js), and it
+  may lay a wound open; between blows they roar, thump their chests and look about. They fall as
+  Mesh2Motion's `Death_A` (CC0) has it: staggering, dropping to the knees, pitching onto the face.
+  The orc's finest dressing, the Orc King's, armoured from his shoulder to his knees, isn't met
+  yet: he's kept for a card.
 - **An ants' nest's Ant Monster calls her flock** (creatures.js `call`, battle.js `#calls`,
   host.js `#flock`). Six seconds after she first sets on someone, then every 15 seconds as a boss
   (20 elsewhere), between blows, she stops to call (`CALL`): a motion of her own that strikes no
