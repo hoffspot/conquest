@@ -77,7 +77,7 @@ describe("the orcs on a dungeon's throne", () => {
                 ["beast-orc-king", ["red"], 2.08],
             ],
         );
-        assert.deepEqual(ASSETS.models["beast-orc-king-skins"].files.map(({ path }) => path), ["models/beasts/orc-king.brown.bin", "models/beasts/orc-king.red.bin"]);
+        assert.deepEqual(ASSETS.models["beast-orc-king-skins"].files.map(({ path }) => path), ["models/beasts/orc-king-2.brown.bin", "models/beasts/orc-king-2.red.bin"]);
     });
 
     it("times their axes' blows to the Orc's clips: nearly two fifths of the way through each swing, the Warlord's the heavier, the Reaver's the quicker", () => {

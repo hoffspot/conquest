@@ -796,13 +796,13 @@ const BRUTES = {
         wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"]],
         walk: "orc",
     },
-    // (The Orc King, standing in for his own model: green-skinned and red-eyed, tusked, crowned, in
-    // trousers, belt and bracers)
+    // (The Orc King, standing in for his own model: green-skinned and yellow-eyed, tusked, crowned,
+    // in trousers, belt and bracers)
     orcKing: {
         macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.7], height: [0.9, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
         details: { browRidge: [0.8, 1], underbite: [0.7, 0.9], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.6], eyeSize: [-0.5, -0.3], earPoint: [0.8, 1], earSize: [0.3, 0.6], noseWidth: [0.5, 0.8], armLength: [0.6, 0.8], handSize: [0.8, 1], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.15] },
         skin: { tones: ["#4e6a34", "#56723a", "#486230"], warts: [0.2, 0.4], veins: [0.5, 0.8], blush: [0, 0.1], brows: [0.6, 0.9], warpaint: "#5a1a14" },
-        irises: ["#c02018"],
+        irises: ["#e8b020"],
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers"], ["breeches"], ["tusks"], ["crown"]],
         walk: "orc",

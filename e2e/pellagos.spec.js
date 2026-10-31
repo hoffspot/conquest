@@ -17888,6 +17888,98 @@ test("the Stone Golem dealt before the player: drawn from its model at once, its
     expect(await playUntil(page, () => (window.pellagos.game.battle.actor(window.pellagos.game.me).thrownAt ?? -1) >= 0, { seconds: 10 })).toBe(true);
 });
 
+test("the Orc King dealt before the player at his war camp: drawn from his model at once, his bar across the top, his camp's tents round its fire; his leap carries him to them as they keep off, and he stands on guard", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: the debug overlay's Rare card, the Orc
+    // King's, his thread brought to him, dealt a little ahead of them)
+    const dealt = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(11).keys()].every((j) => [...Array(11).keys()].every((i) => !squares.blocked(cx - 15 + i * 3, cy - 15 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 80; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 50000;
+
+        // (What they're told, kept)
+        const message = game.hud.message.bind(game.hud);
+
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+
+            return message(text, seconds);
+        };
+
+        return game.host.command(game.me, { type: "rare", card: "orcKing" });
+    });
+
+    expect(dealt).toMatchObject({ ok: true, card: "orcKing" });
+
+    const kingOf = () => window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "orcKing");
+
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "orcKing").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    await expect(page.locator("#bossbar .name")).toHaveText("Vorgash, the Orc King");
+    expect(await page.evaluate(kingOf)).toMatchObject({ wild: { worldBoss: true, steady: true, champion: "boss" } });
+
+    // (His war camp pitched where he's kept: seven orc tents round a fire)
+    expect(await playUntil(page, () => window.pellagos.game.camps.size >= 1, { seconds: 10 })).toBe(true);
+
+    // (Eight metres off, his leap made ready: in the air from his spring, coming down beside them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const king = game.battle.actors.find((actor) => actor.wild?.creature === "orcKing");
+
+        game.host.battle.place(king.id, "town", [Math.floor(me.x), Math.floor(me.y + 8)]);
+        Object.assign(king, { facing: Math.PI, readyAt: 0, attack: null, guardAt: Infinity, movesAt: { leap: game.battle.time, spin: Infinity } });
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "orcKing").id)?.airborne === true, { seconds: 15 })).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => text.includes("leaps at you")))).toBe(true);
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const me = game.battle.actor(game.me);
+                const king = game.battle.actors.find((actor) => actor.wild?.creature === "orcKing");
+
+                return !game.avatars.get(king.id).airborne && Math.hypot(king.x - me.x, king.y - me.y) < 3;
+            },
+            { seconds: 10 },
+        ),
+    ).toBe(true);
+
+    // (On guard: his guard held up, told to them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const king = game.battle.actors.find((actor) => actor.wild?.creature === "orcKing");
+
+        Object.assign(king, { guardAt: game.battle.time, movesAt: { leap: Infinity, spin: Infinity } });
+    });
+
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "orcKing").id)?.doing.guard), { seconds: 15 })).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => text.includes("stands on guard: strike from the side or behind")))).toBe(true);
+});
+
 test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(240000);

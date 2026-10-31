@@ -1263,6 +1263,44 @@ describe("the Iron Crown (rare.js ironcrown, RARE_CARDS orcKing)", () => {
         }
     });
 
+    it("brings his champions as he's worn down: Ironjaw at two thirds, by name, a tier under him, of his pack, from behind him; Bloodtusk at one third", () => {
+        const { host, ada } = hosted();
+        const [x, y] = ada.square;
+        let dealt = null;
+
+        for (let k = 0; k < 12 && !dealt?.ok; k++) {
+            put(ada, [x + k * 40, y - k * 25]);
+            dealt = host.command(HOST_PLAYER, { type: "rare", card: "orcKing" });
+        }
+
+        const id = host.legends.active.ids[0];
+        const king = host.battle.actor(id);
+        const one = host.wild.get(id);
+        const champions = () => [...host.wild].filter(([, each]) => each.called === id).map(([who, each]) => ({ ...each, name: host.battle.actor(who)?.name }));
+
+        Object.assign(king, { movesAt: { leap: Infinity, spin: Infinity }, guardAt: Infinity });
+        put(ada, [Math.floor(king.x) + 2, Math.floor(king.y)]);
+        run(host, 2000);
+        assert.deepEqual(champions(), []);
+
+        king.hp = Math.floor(king.maxHp * 0.6);
+        run(host, 6000);
+        assert.deepEqual(
+            champions().map(({ creature, tier, pack, name }) => [creature, tier, pack, name]),
+            [["orcIronjaw", Math.max(1, one.tier - 1), one.pack, "Ironjaw"]],
+        );
+
+        king.hp = Math.floor(king.maxHp * 0.3);
+        run(host, 6000);
+        assert.deepEqual(
+            champions().map(({ creature, name }) => [creature, name]),
+            [
+                ["orcIronjaw", "Ironjaw"],
+                ["orcBloodtusk", "Bloodtusk"],
+            ],
+        );
+    });
+
     it("deals the King at once in debug mode, his thread brought to him; never another while one's out", () => {
         const { host, ada } = hosted();
         const [x, y] = ada.square;

@@ -231,10 +231,12 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
     // black widow, the Ant Monster, the greater demon (the River of Fire's master), the infernal
     // demon (a hell's lord), the fiend (its packs), its six flayed and six gorgers, the henchmen,
-    // the walkers, the orcs on a dungeon's throne, the kaiju (the Behemoth of the Rift) and the
-    // Stone Golem (the first rare card's world boss): every bought model but the Orc King, kept for
-    // a card, listed as to come; read, its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Orc King"]);
+    // the walkers, the orcs on a dungeon's throne, the kaiju (the Behemoth of the Rift), the Stone
+    // Golem (the first rare card's world boss) and the Orc King (the second's), his champions and
+    // his raiders: every bought model, none left to come; read, its clips listed, the one asked
+    // for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds']").count()).toBe(0);
+    expect(await page.locator("#picker optgroup[label=\"The Orc King's war band\"] option").allTextContents()).toEqual(["Orc King", "Ironjaw", "Bloodtusk", "Orc raider"]);
     expect(await page.locator("#picker optgroup[label='For the mightiest'] option").allTextContents()).toEqual(expect.arrayContaining(["Behemoth of the Rift", "Stone golem"]));
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
@@ -878,7 +880,25 @@ test("the Stone Golem as the game draws it: a stone-grey brute till its model's 
     expect(held.findIndex(Boolean)).toBeLessThan(held.findLastIndex(Boolean));
 });
 
-test("and the Orc King, kept for a card: the Orc in his finest dressing, his 23 clips (his fall Mesh2Motion's), his five materials, each of his skins put on, and whose he is", async ({ page }) => {
+test("the Orc King as the game draws him: a crowned orc till his model's read, then the King, his blows each their own clip, his combo, his flurry and its kick, his leap and his spin, his battlecry; his champions in his brown and red skins", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=orcKing");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: [], specials: ["chop", "sweep", "backhand", "combo", "kick", "spin", "leap", "rally", "flurry"], rests: ["thump", "look"], skin: "" });
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.17, 1);
+
+    for (const [kind, skin] of [
+        ["orcIronjaw", "brown"],
+        ["orcBloodtusk", "red"],
+    ]) {
+        await openViewer(page, `/model-viewer.html?creature=${kind}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.current().skin)).toBe(skin);
+        expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.08, 1);
+    }
+});
+
+test("and the Orc King, a rare card's foe: the Orc in his finest dressing, his 23 clips (his fall Mesh2Motion's), his five materials, each of his skins put on (his champions'), and whose he is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-orc-king&clip=Attack%20Chop");
 
@@ -912,7 +932,7 @@ test("and the Orc King, kept for a card: the Orc in his finest dressing, his 23 
     await page.waitForFunction(() => window.lab.watch().clip === "Attack Chop", null, { timeout: 60000 });
     await expect(page.locator("#name")).toHaveText("The Orc King");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ triangles: 54514, bones: 79, materials: 5 });
-    await expect(page.locator("#details")).toContainText("a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives");
+    await expect(page.locator("#details")).toContainText("Snake|3D's modular orc, bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives");
 
     // (Each of his skins put on)
     expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Brown", "Red"]);

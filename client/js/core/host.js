@@ -9294,8 +9294,8 @@ export class Host {
 
     // A creature calling its flock to it (battle.js "call": creatures.js `call`, the Ant Monster;
     // `rally`, the Orc King's champions): as many of its kind as it calls (`count`, [least, most],
-    // by chance) come running from FLOCK.from metres behind it, never more of those it's called
-    // about at once than `most`, nor more bodies about anyone than BODIES has; FLOCK.down tiers
+    // by chance) come running from FLOCK.from metres behind it, never more of those of that kind
+    // it's called about at once than `most`, nor more bodies about anyone than BODIES has; FLOCK.down tiers
     // under it (or `down`), by their own name if they've one (`title`), of its pack, coming for
     // anyone they see. In a dungeon, out with its level's foes (let go with them; none of its plan's,
     // so nothing's kept of their falling: #delveFell); leaving their gold and parts only (`extra`).
@@ -9308,7 +9308,8 @@ export class Host {
             return;
         }
 
-        const about = [...this.wild].filter(([each, one]) => one.called === id && this.battle.actor(each) && !this.battle.actor(each).dead).length;
+        // (Of its kind: one that calls two kinds, the Orc King his champions, has each's `most`)
+        const about = [...this.wild].filter(([each, one]) => one.called === id && one.creature === kind && this.battle.actor(each) && !this.battle.actor(each).dead).length;
         const from = this.battle.actor(target) ?? actor;
         const away = from === actor ? 0 : atan2(y - from.y, x - from.x);
         const at = [x + cos(away) * FLOCK.from, y + sin(away) * FLOCK.from];

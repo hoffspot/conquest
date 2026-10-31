@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "e59259fbf2",
+    release: "52ac2923cb",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2382,54 +2382,54 @@ export const ASSETS = Object.freeze({
         },
         "beast-orc-king": {
             "tier": "demand",
-            "label": "The Orc King (a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "label": "The Orc King (Snake|3D's modular orc, bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/orc-king.bin",
-                    "hash": "9a91e7d2d2",
-                    "bytes": 4888684
+                    "path": "models/beasts/orc-king-2.bin",
+                    "hash": "d49402a199",
+                    "bytes": 4888688
                 }
             ]
         },
         "beast-orc-king-skins": {
             "tier": "demand",
-            "label": "The Orc King's other skins: brown and red (a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "label": "The Orc King's other skins: brown and red (Snake|3D's modular orc, bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/orc-king.brown.bin",
-                    "hash": "9b4b1ae7b7",
-                    "bytes": 259620
+                    "path": "models/beasts/orc-king-2.brown.bin",
+                    "hash": "c3113834f0",
+                    "bytes": 259648
                 },
                 {
-                    "path": "models/beasts/orc-king.red.bin",
-                    "hash": "d9c22374b3",
-                    "bytes": 257916
+                    "path": "models/beasts/orc-king-2.red.bin",
+                    "hash": "f6a49d61db",
+                    "bytes": 257944
                 }
             ]
         },
         "beast-orc-warlord": {
             "tier": "demand",
-            "label": "The Orc Warlord, a cave's boss (a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "label": "The Orc Warlord, a cave's boss (Snake|3D's modular orc, bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/orc-warlord.bin",
-                    "hash": "e52a58f840",
+                    "path": "models/beasts/orc-warlord-2.bin",
+                    "hash": "7802fbbb8f",
                     "bytes": 3964864
                 }
             ]
         },
         "beast-orc-reaver": {
             "tier": "demand",
-            "label": "The Orc Reaver, an outlaws' hideout's boss (a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "label": "The Orc Reaver, an outlaws' hideout's boss (Snake|3D's modular orc, bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/orc-reaver.bin",
-                    "hash": "6f50ed2a13",
-                    "bytes": 4031552
+                    "path": "models/beasts/orc-reaver-2.bin",
+                    "hash": "1e33169981",
+                    "bytes": 4031556
                 }
             ]
         },

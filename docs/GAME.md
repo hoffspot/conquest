@@ -847,9 +847,12 @@ The world's rare encounters, and what the player keeps of them:
   found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
   asked first (gone for good, and never given again). Its effect, if it has one, whatever it is
   (*Legendary weapons*, above).
-- **A world's boss** (creatures.js `worldBoss`: the Stone Golem): its bar across the top of the
-  screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a title),
-  and its model wanted as soon as it's about, drawn from it at once, in view or not.
+- **A world's boss** (creatures.js `worldBoss`: the Stone Golem, the Orc King): its bar across the
+  top of the screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a
+  title), and its model wanted as soon as it's about, drawn from it at once, in view or not; and
+  those of the champions it rallies to it (creatures.js `rally`).
+- **A foe's last words** (rare.js `RARE_CARDS` `last`: the Orc King's), said to those who took part
+  as it falls, before they're told they've overcome it.
 
 ### Writings (core/writings.js, app/reader.js)
 
@@ -1268,6 +1271,17 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     every blow on them 35 to 55% lighter again and none able to knock them down or throw them (a
     shell the grey-gold of cut stone closes round them and holds while it lasts, shards and grit
     thrown off, a ring of dust, a stone's grind heard; "Stoneheart: your skin turns to stone!").
+  - *A unique's own* (`unique`, never rolled on a legendary weapon), on every blow with no charge to
+    fill (`always`: no charge shown, `charge.js`). The only one so far, *Cleave*, Kingsplitter's (a
+    great axe: docs/WILDS.md *The Orc King*): every blow up close carries on through every other foe
+    within 2.6 m of its wielder and no more than 60° either side of the way to whoever it was struck
+    at (battle.js `#cleave`), each struck half as hard at the axe's first level to four fifths at its
+    highest (`share`), their armour's (a blow of its own, `cleave`: dodged and caught on a shield as
+    any is), staggered half as long; a pale arc swept out to its reach and a spray off each it
+    caught, steel heard ringing (`clash`); in hand, a cold steel glow, glints falling off it
+    (world/legendaries.js, effects.js `legendCleave`). Its card: "Cleave: every blow up close
+    cleaves on through every other foe within 2.6 m before you, each struck 80% as hard". In might,
+    its share again of every blow's harm on half a foe more (might.js `CLEAVED`).
   - *One of each at most* (might.js `fighterOf`: `legendary`, `ward`): the weapon's first, then
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).

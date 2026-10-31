@@ -2271,6 +2271,7 @@ export class Battle {
         for (const actor of this.actors) {
             this.#arm(actor);
             this.#hover(actor);
+            this.#offGuard(actor);
             this.#think(actor);
         }
 
@@ -4418,21 +4419,21 @@ export class Battle {
     #onGuard(actor, target) {
         const { every, first, ms, chance, share, within, turn, front } = actor.wild.stance;
 
-        if (actor.guarding) {
-            if (this.time < actor.guarding.until && !actor.dead) {
+        if (actor.onGuard) {
+            if (this.time < actor.onGuard.until && !actor.dead) {
                 // (Not turning while it's staggered: no more than a step's turn since it last did)
-                const most = ((turn * Math.PI) / 180) * (Math.min(STEP_MS, this.time - actor.guarding.at) / 1000);
+                const most = ((turn * Math.PI) / 180) * (Math.min(STEP_MS, this.time - actor.onGuard.at) / 1000);
                 const off = wrapAngle(atan2(target.x - actor.x, target.y - actor.y) - actor.facing);
 
                 actor.path = [];
                 actor.facing = wrapAngle(actor.facing + Math.max(-most, Math.min(most, off)));
-                actor.guarding.at = this.time;
+                actor.onGuard.at = this.time;
 
                 return true;
             }
 
-            actor.shield = actor.guarding.shield;
-            actor.guarding = null;
+            actor.shield = actor.onGuard.shield;
+            actor.onGuard = null;
 
             return false;
         }
@@ -4444,13 +4445,22 @@ export class Battle {
         }
 
         actor.guardAt = this.time + every + ms;
-        actor.guarding = { until: this.time + ms, at: this.time, shield: actor.shield ?? null };
+        actor.onGuard = { until: this.time + ms, at: this.time, shield: actor.shield ?? null };
         actor.shield = { chance, share, spells: false, front: Math.cos((front * Math.PI) / 180) };
         actor.path = [];
         actor.facing = atan2(target.x - actor.x, target.y - actor.y);
-        this.#emit("guard", { id: actor.id, target: target.id, until: actor.guarding.until });
+        this.#emit("guard", { id: actor.id, target: target.id, until: actor.onGuard.until });
 
         return true;
+    }
+
+    // Off guard once its time's up, or it's fallen (#onGuard), whatever it's doing then (stunned,
+    // after no one): the shield it had before, if any, back
+    #offGuard(actor) {
+        if (actor.onGuard && (actor.dead || this.time >= actor.onGuard.until)) {
+            actor.shield = actor.onGuard.shield;
+            actor.onGuard = null;
+        }
     }
 
     // Calling others to it as it's worn down (`wild.rally`: creatures.js `rally`): once at each of
