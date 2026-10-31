@@ -5,7 +5,10 @@
 > gone, and what's described below is in the git history. Some of it lives on in Pellagos: the
 > fixed-step, deterministic simulation kept apart from the browser, A* path finding, seeded
 > random numbers, the generated town layouts, the character engine, the service worker, the
-> static server and the tests.
+> static server and the tests. They live on as ideas: their code has been rewritten since, and
+> none of the book's code, images or sounds is in the repository now. The book's code and assets
+> are in its history before 24 September 2026, under the book's own licence
+> ([The book's licence](#the-books-licence), below).
 
 This document describes how the game in this repository related to the book's code: where it came
 from, what changed and why, which bugs were fixed, and what stayed the same.
@@ -555,3 +558,46 @@ These are the same as in the book:
 - Browsers slow down timers in background tabs, so a multiplayer game slows down for both players
   while one of them has the game in a hidden tab.
 - A dropped connection ends the multiplayer game; there is no reconnecting.
+
+## The book's licence
+
+The book's code and assets are in this repository's git history, from its first commits (the
+partial port of the first edition's code, 2021 to 2023) to the last commit before
+`aec39bc0`, "Pellagos, part 1: remove the RTS", on 24 September 2026 (the modernized Last Colony
+of this document, with the book's images and sounds). That code and those assets are under the
+book's own licence, below, not the repository's Apache License 2.0 (`LICENSE`), even where a
+commit of that time carries only `LICENSE`. They aren't in the repository from `aec39bc0` on,
+and the game, the server and the Mac app don't hold them. (This licence was kept in the
+repository's root as `LICENSE-BOOK-CODE.txt`, and in the Mac app, until October 2026.)
+
+The book: *Pro HTML5 Games* (2nd edition) by Aditya Ravi Shankar, Apress 2017; its code is at
+[Apress/pro-html5-games-17](https://github.com/Apress/pro-html5-games-17). As its licence asks,
+its copyright notice and permission notice are reproduced here:
+
+```text
+Freeware License, some rights reserved
+
+Copyright (c) 2017 Aditya Ravi Shankar
+
+Permission is hereby granted, free of charge, to anyone obtaining a copy
+of this software and associated documentation files (the "Software"),
+to work with the Software within the limits of freeware distribution and fair use.
+This includes the rights to use, copy, and modify the Software for personal use.
+Users are also allowed and encouraged to submit corrections and modifications
+to the Software for the benefit of other users.
+
+It is not allowed to reuse,  modify, or redistribute the Software for
+commercial use in any way, or for a user’s educational materials such as books
+or blog articles without prior permission from the copyright holder.
+
+The above copyright notice and this permission notice need to be included
+in all copies or substantial portions of the software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS OR APRESS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
