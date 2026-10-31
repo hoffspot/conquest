@@ -75,12 +75,14 @@ export class Avatar {
      * @param {object} [options]
      * @param {string} [options.walk] - A WALK_STYLES key.
      * @param {string} [options.guard] - How it holds its weapon to fight (actions.js GUARDS).
+     * @param {number} [options.phase] - How far round its guard's sway it starts (0 to 1: actions.js
+     *   Actions), at random if not given.
      */
-    constructor(character, { walk = "natural", guard = null } = {}) {
+    constructor(character, { walk = "natural", guard = null, phase = undefined } = {}) {
         this.character = character;
         this.object = character.object;
         this.walker = new Walker(character, WALK_STYLES[walk] ?? WALK_STYLES.natural);
-        this.actions = new Actions(character);
+        this.actions = new Actions(character, { phase });
         this.actions.setWeapon(guard);
         // (Its head turned to where it's looking, on top of whatever it's doing, unless it's down
         // or thrown)

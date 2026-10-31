@@ -381,7 +381,7 @@ export class Debug {
         const rare = element("button", { type: "button", onclick: () => this.game?.rare() }, "Deal");
         const inside = element("button", { type: "button", onclick: () => this.game?.rare({ inside: true }) }, "Inside");
         // (A card in play that follows a thread before the player, its thread brought to it: core/rare.js
-        // RARE_CARDS, the Stone Golem's)
+        // RARE_CARDS, the Stone Golem's, the Orc King's)
         const cards = element("select", {}, ...Object.values(RARE_CARDS).filter(({ requires }) => requires).map(({ id, title }) => element("option", { value: id }, title)));
         const card = element("button", { type: "button", onclick: () => this.game?.dealCard(cards.value) }, "Deal card");
 

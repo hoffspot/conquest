@@ -424,6 +424,29 @@ describe("a kind's moves (crowd.js recordingMoves)", () => {
         assert.ok(gap(first("ready"), first("sheathe")) < 0.01);
         assert.ok(gap(last("sheathe"), first("stand")) < 0.01);
 
+        // (Its hands on guard, ready, and onto guard and off it the same every time they're
+        // recorded: each from the start of its guard's sway, not at random, so onto guard ends where
+        // on guard begins on every load, as above; its head turns as its gaze wanders, at random)
+        const again = soldier();
+        const twice = allAtOnce(recordingMoves(again.character, { walk: again.look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash", cast: CROWD_CASTS.grimoire }));
+
+        for (const name of ["guard", "ready", "rise", "lower"]) {
+            assert.deepEqual(twice.moves[name], moves[name], name);
+
+            for (let k = 0; k < moves[name].frames; k++) {
+                const row = moves[name].start + k;
+
+                for (const bone of ["RightHand", "LeftHand"].map(index)) {
+                    const at = row * width * 4 + bone * 12;
+
+                    assert.ok(
+                        [...Array(12).keys()].every((n) => Math.abs(twice.data[at + n] - data[at + n]) < 1e-6),
+                        `${name} ${k}: its hands recorded where they were before`,
+                    );
+                }
+            }
+        }
+
         // Each moment says what's in hand: on guard, its weapon and shield; at ease, both put
         // away; as the one drawn so is, running, flinching and falling; drawn, the shield taken
         // off its back first, then the sword; put away, the sword first

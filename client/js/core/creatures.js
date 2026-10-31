@@ -116,6 +116,22 @@ export const COLOSSUS = Object.freeze({
  * of that fights its own way (`colossus`: COLOSSUS, battle.js #colossus). One a world's boss
  * (`worldBoss`), met once, has its bar across the top of the screen as the colossal do (game.js).
  * One that sees further than most has its own `sight` (squares: battle.js SIGHT, else).
+ *
+ * Moves of its own, for a mightier foe to be fought with its own ways (battle.js, the building
+ * blocks a rare card's foe is made of: core/rare.js):
+ *  - `moves`: attacks besides its weapon's, each made now and then (battle.js #moves): the first
+ *    `first` ms after it first sets on anyone, then every `every` ms, while whoever it's after is
+ *    `least` to `most` metres off. Each an attack as a weapon's are (weapons.js), and any of: a
+ *    leap (`leap`: { lift, up }, in the air from `lift` ms till its blow lands, LEAP), landing by
+ *    them; a blow on the ground or all round it (`quake`: { ahead, radius, toss, kind, element },
+ *    `ahead` 0 for all round), shown on the ground before it lands (`telegraph`); several blows
+ *    (`blows`: [{ at, share, toss }], weapons.js);
+ *  - `stance`: standing on guard now and then (battle.js #onGuard: { first, every, ms, within,
+ *    chance, share, turn, front }), what comes at it from in front caught as a shield catches it,
+ *    turning after whoever it's after no faster than `turn` degrees a second, so it's got round;
+ *  - `rally`: calling others to it as it's worn down (battle.js #rallies: [{ below, call,
+ *    animation, hitAt, duration }], once at each mark, `below` a share of its hit points; its
+ *    `call` as `call`'s, and `down` tiers under its own and with a name of its own, `title`).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -326,6 +342,52 @@ export const CREATURES = Object.freeze({
     // (weapons.js NATURAL stoneGolem). Earth harms it little; it knows where they are by night as by
     // day, through the ground, and further off than most (`sight`), for its boulders to reach them)
     stoneGolem: { name: "Stone golem", hp: 130, weapon: "stoneGolem", speed: 1, chase: 2.3, temper: "aggressive", roam: 18, leash: 60, pack: [1, 1], tiers: [6, 10], biomes: [], blood: "stone", armor: 0.35, perilous: true, darkSight: true, sight: 26, steady: true, wards: { earth: 0.5 }, worldBoss: true },
+    // (The Orc King, Vorgash the Ironcrowned: the clan-king who bound the four clans of the
+    // marches to him, outlawed by the Horde for it, whose raiders burn the border villages (docs/
+    // WILDS.md *The Orc King*). One a world, met only as his rare card's foe in his war camp (core/
+    // rare.js RARE_CARDS orcKing), a world's boss, drawn from the Orc's fanciest dressing (beasts/
+    // model.js). His great axe chopped, swept, backhanded, in combos of three blows and with a kick
+    // that throws whoever it lands on (weapons.js NATURAL orcKing); and his own moves: a leap that
+    // lands on whoever keeps off, and his axe spun high all round him, both shown on the ground before
+    // they land (`moves`); his guard up now and then, only got round (`stance`); and his battlecry as
+    // he's worn down, at two thirds and at one third, each bringing one of his champions (`rally`))
+    orcKing: {
+        name: "Orc King",
+        hp: 140,
+        hands: true,
+        weapon: "orcKing",
+        speed: 1.1,
+        chase: 2.6,
+        temper: "aggressive",
+        roam: 12,
+        leash: 50,
+        pack: [1, 1],
+        tiers: [6, 10],
+        biomes: [],
+        blood: "red",
+        armor: 0.25,
+        perilous: true,
+        sight: 22,
+        steady: true,
+        worldBoss: true,
+        moves: [
+            { id: "leap", kind: "melee", reach: 0, damage: [14, 22], hitAt: 1270, duration: 2300, interval: 2600, stagger: 500, reaction: "crush", animation: "leap", first: 5000, every: 11000, least: 4, most: 10, leap: { lift: 550, up: 0 }, quake: { ahead: 0, radius: 2.6, toss: 1, kind: "orcSlam" }, telegraph: true },
+            { id: "spin", kind: "melee", reach: 0, damage: [13, 21], hitAt: 970, duration: 2500, interval: 2800, stagger: 450, reaction: "chop", animation: "spin", first: 9000, every: 13000, least: 0, most: 3, quake: { ahead: 0, radius: 3.4, toss: 0.9, kind: "orcSpin", element: null }, telegraph: true },
+        ],
+        stance: { first: 14000, every: 15000, ms: 3500, within: 5, chance: 1, share: 1, turn: 75, front: 60 },
+        rally: [
+            { below: 2 / 3, animation: "rally", hitAt: 1000, duration: 2900, call: { kind: "orcIronjaw", count: [1, 1], most: 1, down: 1, title: "Ironjaw" } },
+            { below: 1 / 3, animation: "rally", hitAt: 1000, duration: 2900, call: { kind: "orcBloodtusk", count: [1, 1], most: 1, down: 1, title: "Bloodtusk" } },
+        ],
+    },
+    // (His champions, the chiefs of the two clans that stood with him first, called to him as he's
+    // worn down: Ironjaw of the brown-skinned Ironjaw clan, Bloodtusk of the red Bloodtusk; drawn
+    // from his model in their own skins; their axes swept and chopped, their kicks throwing)
+    orcIronjaw: { name: "Orc champion", hp: 85, hands: true, weapon: "orcChampion", speed: 1.15, chase: 2.6, temper: "aggressive", roam: 6, leash: 40, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "red", armor: 0.2, perilous: true, steady: true },
+    orcBloodtusk: { name: "Orc champion", hp: 80, hands: true, weapon: "orcChampion", speed: 1.2, chase: 2.7, temper: "aggressive", roam: 6, leash: 40, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "red", armor: 0.15, perilous: true, steady: true },
+    // (His raiders, the war band's orcs that burn the border villages: met only where his rare card
+    // puts them, at a village they've burned (core/rare.js THREADS orcKing). A cleaver each)
+    orcRaider: { name: "Orc raider", hp: 46, hands: true, weapon: "orcRaider", speed: 1.3, chase: 2.6, temper: "aggressive", roam: 8, leash: 30, pack: [2, 4], tiers: [3, 10], biomes: [], blood: "red", armor: 0.1 },
 });
 
 /**
@@ -513,9 +575,9 @@ export function notable(wild, { master = false } = {}) {
  * boss (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null, worldBoss = false, sight = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null, worldBoss = false, sight = null, moves = null, stance = null, rally = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, ...(worldBoss ? { worldBoss } : {}), ...(sight ? { sight } : {}), bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}) };
+    return { steady, keep, ...(worldBoss ? { worldBoss } : {}), ...(sight ? { sight } : {}), bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}), ...(moves ? { moves: structuredClone(moves) } : {}), ...(stance ? { stance: { ...stance } } : {}), ...(rally ? { rally: structuredClone(rally) } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

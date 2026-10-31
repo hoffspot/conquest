@@ -41,7 +41,7 @@ import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAI
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
-import { cardOf, LOCKS, lockSite, openerOf, talksFor, THREADS, threadTalk, threadTracks, threadWords, UNIQUES } from "../core/rare.js";
+import { campOf, cardOf, LOCKS, lockSite, openerOf, talksFor, THREADS, threadTalk, threadTracks, threadWords, UNIQUES } from "../core/rare.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -833,7 +833,7 @@ const UNLEASHED_MOTES = Object.freeze({
     dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
     sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
 });
-const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast" });
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", cleave: "clash" });
 
 // How a ward let loose on whoever wears it is drawn (core/legendary.js EFFECTS `ward`), by its
 // element: the shell closing round them and holding while it lasts, the shards thrown off it, the
@@ -877,15 +877,26 @@ const BURSTS = Object.freeze({
 // BLAST_HEARD.quaked of it, and what's heard: its jaws slamming down, its roar, its tread; its
 // breath's drawn by its beam (beasts/beam.js), whoever it lands on thrown as by any blast. And the
 // Stone Golem's, as heavy: its hammer pounding the ground (battle.js #quake) and its boulder
-// coming down (BOMBS boulder), each the ground heaving and the stone heard crashing down
+// coming down (BOMBS boulder), each the ground heaving and the stone heard crashing down. And the
+// Orc King's: coming down from his leap (the ground heaving, heard crashing down as the golem's
+// hammer is) and his axe spun all round him (the dust thrown up round him; his swing's heard as
+// he swings it); and a kick that throws whoever it lands on (battle.js #hit `toss`: its blow heard
+// landing as any is), no more than they're thrown
 const COLOSSAL_BLASTS = Object.freeze({
     colossalSlam: { quake: "slam", shake: 0.8, sound: "deathThudBig" },
     colossalRoar: { quake: "roar", shake: 0.6, sound: null },
     colossalTread: { quake: "tread", shake: 0.35, sound: null },
     atomicBreath: { quake: null, shake: 0.3, sound: null },
     golemPound: { quake: "slam", shake: 0.55, sound: "impactEarthMid" },
+    orcSlam: { quake: "slam", shake: 0.45, sound: "impactEarthMid" },
+    orcSpin: { quake: "spin", shake: 0.15, sound: null },
+    shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });
+
+// How long (seconds) a rare card's foe's last words (core/rare.js RARE_CARDS `last`: the Orc
+// King's) are shown before the player's told they've overcome it
+const LAST_WORDS = 9;
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
 const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"], riftFire: ["riftFlames", "smoke"] });
@@ -3690,6 +3701,7 @@ export class Game {
             this.#syncForts();
             this.#syncStockades();
             this.#syncBurnt();
+            this.#syncThreadCamps();
 
             const took = performance.now() - started;
 
@@ -5098,9 +5110,12 @@ export class Game {
     // hour (beasts/model.js modelsMet: its land, how far it is from their home, by night or day)
     // The kinds drawn from a model of the colossal (the Behemoth of the Rift: battle.js #colossus)
     // and of a world's boss (the Stone Golem) alive anywhere in the battle: each's model wanted as
-    // soon as it's come, as big as it is
+    // soon as it's come, as big as it is; and those a world's boss calls to it as it's worn down
+    // (creatures.js `rally`: the Orc King's champions), ready for when they come
     #modelsAbout() {
-        return [...new Set(this.battle.actors.filter((actor) => (actor.wild?.colossus || actor.wild?.worldBoss) && !actor.dead && MODELS[actor.wild.creature]).map((actor) => actor.wild.creature))];
+        const bosses = this.battle.actors.filter((actor) => (actor.wild?.colossus || actor.wild?.worldBoss) && !actor.dead);
+
+        return [...new Set(bosses.flatMap((actor) => [actor.wild.creature, ...(actor.wild.rally ?? []).map(({ call }) => call.kind)]).filter((kind) => MODELS[kind]))];
     }
 
     #modelsHere() {
@@ -5552,6 +5567,19 @@ export class Game {
                 hud.message("Thrown off your feet!", 1.2);
             }
         }
+    }
+
+    // A blow about to land on the ground round a point (battle.js "telegraph": the Orc King's leap,
+    // where he'll come down, and his spin all round him): how far it'll reach shown on the ground
+    // till it lands (spellfx.js telegraph), on the player's own map
+    #telegraphed(event) {
+        if (event.map !== this.mapId) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf(event.map);
+
+        this.spellFx.telegraph(new THREE.Vector3(ox + event.x, 0, oz + event.y), { radius: event.radius, seconds: Math.max(0.1, (event.lands - this.battle.time) / 1000) });
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
@@ -6400,9 +6428,10 @@ export class Game {
      */
     rareIcons() {
         const seen = [...this.raresSeen.values()].filter(({ map }) => map === "town").map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
-        // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps)
+        // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps, a
+        // fight's, and a card's kept at a site marked on the maps, `mark`: the Orc King's war camp)
         const threads = Object.entries(this.host.legends?.threads ?? {})
-            .filter(([id, thread]) => thread.place && ["place", "lock"].includes(this.host.legends.stepOf(id)?.kind))
+            .filter(([id, thread]) => thread.place && (["place", "lock", "fight"].includes(this.host.legends.stepOf(id)?.kind) || this.host.legends.stepOf(id)?.mark))
             .map(([id, { place: [x, z] }]) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: where it leads` }));
 
         return [...seen, ...threads];
@@ -6773,11 +6802,14 @@ export class Game {
     // the first time (within FRESH.seen of their prints): said, what made them and which way they
     // lead
     #spyFresh(me) {
-        // (A rare card's, as its step tells them: core/rare.js threadTracks, the Stone Golem's)
+        // (A rare card's: core/rare.js threadTracks, the Stone Golem's sunk deep, the Orc King's war
+        // band's; said as its step says, `spoor`)
         for (const tracks of threadTracks(this.host.legends)) {
             if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
+                const way = compass(tracks.points[0], tracks.points.at(-1));
+
                 this.freshSeen.add(tracks.id);
-                this.hud.message(`${tracks.spoor ?? "Tracks"}: the ${CREATURES[tracks.creature]?.name?.toLowerCase() ?? "creature"}'s. They lead off to the ${compass(tracks.points[0], tracks.points.at(-1))}.`, 4.5);
+                this.hud.message(tracks.spoor ? threadWords(tracks.spoor, { way }) : `Tracks: the ${CREATURES[tracks.creature]?.name?.toLowerCase() ?? "creature"}'s. They lead off to the ${way}.`, 4.5);
             }
         }
 
@@ -7952,7 +7984,7 @@ export class Game {
         // core/rare.js threadTalk)
         const asker = folk.find(({ id }) => id === npc.id) ?? npc;
         const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !this.host.hired?.has(each.id))) : null;
-        const tree = asked ? threadTalk(own, asked, (text) => text.replace(/\{way\}/g, asked.way ?? "near")) : own;
+        const tree = asked ? threadTalk(own, asked, (text) => text.replace(/\{way\}/g, asked.way ?? "near").replace(/\{place\}/g, asked.place ?? "the village")) : own;
 
         this.#tradeOver(npc);
 
@@ -11403,13 +11435,13 @@ export class Game {
         const threads = Object.entries(this.host.legends?.threads ?? {}).map(([id, thread]) => {
             const def = this.host.legends.stepOf(id);
             const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-            const where = (def?.kind === "place" || def?.kind === "lock") && thread.place ? thread.place : town?.at;
+            const where = (def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.mark) && thread.place ? thread.place : town?.at;
 
             return {
                 title: THREADS[id]?.title ?? "A thread",
                 state: thread.done ? "Its end" : `Step ${thread.step + 1} of ${THREADS[id]?.steps.length ?? thread.step + 1}`,
                 words: thread.done ? (thread.by.length ? `Followed to its end by ${names(thread.by)}.` : "Followed to its end.") : this.#threadWordsOf(id),
-                where: !thread.done && at && where ? `${town && def?.kind !== "place" ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
+                where: !thread.done && at && where ? `${town && def?.kind !== "place" && !def?.mark ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
             };
         });
 
@@ -12068,7 +12100,13 @@ export class Game {
 
                 this.raresSeen.delete(event.n);
 
-                if (took) {
+                // (Its foe's last words, if it has any (core/rare.js RARE_CARDS `last`: the Orc
+                // King's), said first to those who took part)
+                if (took && card?.last) {
+                    this.hud.message(card.last, LAST_WORDS);
+                    this.sound?.play("rareDone");
+                    this.#after(LAST_WORDS, () => this.hud.message(`You've overcome ${named}${unique ? ". It won't come again." : "."}`, 5));
+                } else if (took) {
                     this.hud.message(`You've overcome ${named}${unique ? ". It won't come again." : "."}`, 5);
                     this.sound?.play("rareDone");
                 } else if (saw && by.length) {
@@ -12196,7 +12234,7 @@ export class Game {
             const opener = legends?.opening?.(id) ? openerOf(this.world.plan, id) : null;
 
             if (opener && opener.town.id === town && talksFor(THREADS[id].opens, one, hall)) {
-                return { thread: id, step: null, way: compass(opener.town.at, opener.site.at) };
+                return { thread: id, step: null, way: compass(opener.town.at, opener.site.at), place: opener.site.name ?? null };
             }
         }
 
@@ -12216,7 +12254,7 @@ export class Game {
         const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
         // (Which way: to a place, a lock's way in, or where a card kept at a site is, its tracks
         // leading there; else to its settlement)
-        const to = def.kind === "place" || def.kind === "lock" || (def.kind === "card" && thread.place) ? thread.place : town?.at;
+        const to = def.kind === "place" || def.kind === "lock" || def.kind === "fight" || (def.kind === "card" && thread.place) ? thread.place : town?.at;
         // (A lock's place, by its name: core/rare.js LOCKS, lockSite)
         const site = def.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
 
@@ -12662,6 +12700,42 @@ export class Game {
     // has burnt, gone on to its next stage or stands whole again, its place's buildings built
     // again (the start town's blocks it's in: town3d.js rebuild; a settlement's chunks:
     // chunks3d.js rebuild)
+    // The camps of the world's threads (core/rare.js STEPS `card`'s `camp`: the Orc King's war camp)
+    // pitched where their cards are kept while their threads are at them (campOf: their people's
+    // tents round a fire, world/camps3d.js), struck once they're past
+    #syncThreadCamps() {
+        const legends = this.host?.legends;
+        const wanted = new Map();
+
+        for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
+            const def = legends.stepOf(id);
+
+            if (def?.camp && thread.place) {
+                wanted.set(`thread-camp-${id}`, { ...def.camp, at: thread.place });
+            }
+        }
+
+        this.threadCamps ??= new Set();
+
+        for (const key of [...this.threadCamps]) {
+            if (!wanted.has(key)) {
+                this.camps?.strike(key);
+                this.threadCamps.delete(key);
+            }
+        }
+
+        const [ox, oz] = this.originOf("town");
+
+        for (const [key, { people, tents, at }] of wanted) {
+            if (!this.threadCamps.has(key)) {
+                const camp = campOf(at, tents);
+
+                this.camps?.pitch(key, people, { fire: [ox + camp.fire[0], oz + camp.fire[1]], tents: camp.tents.map((tent) => ({ at: [ox + tent.at[0], oz + tent.at[1]], facing: tent.facing })) });
+                this.threadCamps.add(key);
+            }
+        }
+    }
+
     #syncBurnt() {
         const was = this.burntNow ?? new Map();
         const now = this.#burntPlaces();
@@ -13417,6 +13491,12 @@ export class Game {
                 continue;
             }
 
+            // (A blow's warning on the ground, drawn whether whoever's to strike it is or not)
+            if (event.type === "telegraph") {
+                this.#telegraphed(event);
+                continue;
+            }
+
             // (A projectile gone astray, its target gone or through a door: no one's, out of the air)
             if (event.type === "fizzle") {
                 effects.land(event.projectile);
@@ -13454,8 +13534,38 @@ export class Game {
                         this.sound?.voice(creature, "call", avatar.object.position);
                     }
 
+                    // (One rallying a champion of its own to it as it's worn down, by name: battle.js
+                    // #rallies, the Orc King's)
                     if (event.target === this.me) {
-                        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                        this.hud.message(event.title ? `${actor.name[0].toUpperCase()}${actor.name.slice(1)} roars a battlecry: ${event.title} is coming!` : `${actor.name[0].toUpperCase()}${actor.name.slice(1)} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                    }
+
+                    break;
+                }
+                case "leap": {
+                    // (Leaping at someone (battle.js #moves: the Orc King's): springing up as its clip
+                    // has it and coming down where it lands (beast.js actions.leap; a people-shaped
+                    // stand-in's walked there), its warning on the ground there (#telegraphed); told to them)
+                    const actor = battle.actor(event.id);
+                    const [ox, oz] = this.originOf(event.map);
+
+                    avatar.actions.leap?.({ to: [ox + event.to[0], oz + event.to[1]], lift: event.lift / 1000, land: event.land / 1000, up: event.up, ground: (x, z) => this.#standsAt(actor.map, x - ox, z - oz) });
+
+                    if (event.target === this.me) {
+                        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} leaps at you!`, 1.5);
+                    }
+
+                    break;
+                }
+                case "guard": {
+                    // (Standing on guard a while (battle.js #onGuard: the Orc King's): its guard held
+                    // up (beast.js actions.guard); told to whoever it's after, and how to get round it)
+                    const actor = battle.actor(event.id);
+
+                    avatar.actions.guard?.({ seconds: (event.until - battle.time) / 1000 });
+
+                    if (event.target === this.me) {
+                        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} stands on guard: strike from the side or behind!`, 2.5);
                     }
 
                     break;
@@ -14747,7 +14857,12 @@ export class Game {
         }
 
         this.lastAttack.set(event.id, battle.time);
-        this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
+
+        // (Its swing heard; a creature's own way with a great axe in hand, the Orc King's and his
+        // champions', as a battle axe's is)
+        if (!this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000) && actor.wild && weaponOf(actor.weapon)?.equipment?.includes("battleAxe")) {
+            this.sound?.attack("hammer", avatar.object.position, event.hitAt / 1000);
+        }
 
         // (The Behemoth of the Rift drawing breath: its atomic breath heard as its clip has it
         // (beasts/sounds.js CLIP_SOUNDS): charging, loudest as it fires, and fired, the beam's
@@ -15601,7 +15716,7 @@ export class Game {
         });
     }
 
-    /** A card in play (core/rare.js RARE_CARDS: the Stone Golem's) dealt before the player at once by its id, its thread brought to it (the debug overlay's): host.js "rare", `card`. */
+    /** A card in play (core/rare.js RARE_CARDS: the Stone Golem's, the Orc King's) dealt before the player at once by its id, its thread brought to it (the debug overlay's): host.js "rare", `card`. */
     dealCard(card) {
         this.#command({ type: "rare", card }, (result) => {
             if (!result.ok) {
@@ -16596,7 +16711,8 @@ export class Game {
     #charging() {
         const actor = this.battle.actor(this.me);
 
-        return actor?.legendary ? { effect: actor.legendary.effect, charge: actor.charge ?? 0, of: actor.legendary.charge, foughtAt: actor.foughtAt ?? -Infinity } : null;
+        // (No charge to an effect on every blow: a unique's cleave, core/legendary.js `always`)
+        return actor?.legendary && !EFFECTS[actor.legendary.effect]?.always ? { effect: actor.legendary.effect, charge: actor.charge ?? 0, of: actor.legendary.charge, foughtAt: actor.foughtAt ?? -Infinity } : null;
     }
 
     // How each foe with a plate over it looks to the player (core/might.js: Host fightFor), every
@@ -16643,17 +16759,17 @@ export class Game {
     // A legendary weapon's effect let loose (battle.js "unleashed": core/legendary.js), where it
     // was: ice bursting round the foe frozen in it, a ring of fire, stone spears from the ground,
     // lightning leaping foe to foe, a white flash and a ring round a blast (the blast itself, and
-    // those it throws, as a blast's: #blast); heard, and, the player's own, their charge flaring
-    // as it empties
+    // those it throws, as a blast's: #blast), an axe's blow cleaving on through others; heard,
+    // and, the player's own, their charge flaring as it empties
     #unleashed(event) {
         // (A ward's let loose on whoever wears it (Stoneheart's stone skin), not by a weapon's charge:
-        // they're told what it does to them)
+        // they're told what it does to them; a cleave by every blow, with none)
         const def = EFFECTS[event.effect];
         const ward = def?.ward ? (WARD_LOOKS[def.element] ?? WARD_LOOKS.earth) : null;
 
-        if (event.id === this.me && !ward) {
+        if (event.id === this.me && !ward && !def?.always) {
             this.charge.flare();
-        } else if (event.id === this.me) {
+        } else if (event.id === this.me && ward) {
             this.hud.message(`${def.label}: ${def.felt ?? "it's let loose on you!"}`, 1.6);
         }
 
@@ -16703,6 +16819,18 @@ export class Game {
         } else if (event.effect === "ruinblast") {
             fx.flash(point, { colour: 0xfff4c0, intensity: 60, distance: 14, life: 0.3, size: 4 });
             fx.ring(at, { colour: 0xffd060, from: 0.3, to: radius * 1.4, life: 0.55 });
+        } else if (event.effect === "cleave") {
+            // (A blow carried on through the others before its wielder: a pale arc swept out to its
+            // reach, and a bright spray off each it caught)
+            fx.ring(at, { colour: 0xe8eef4, from: 0.6, to: radius, life: 0.28, opacity: 0.55 });
+
+            for (const id of event.struck) {
+                const hit = this.avatars.get(id)?.point(0.6);
+
+                if (hit) {
+                    fx.spray(UNLEASHED_MOTES.sparks, hit);
+                }
+            }
         } else if (ward) {
             // (A ward on whoever wears it a while (Stoneheart's skin of stone): a shell the colour of
             // its element closing round them and holding while it lasts, shards thrown off, a ring

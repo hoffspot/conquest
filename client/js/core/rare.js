@@ -11,15 +11,16 @@
 // shop's stock, its prices, a festival, a place revealed). A thread may come before its card
 // instead (`opens`: a rumour heard first, its steps leading to the card). The cards are designed
 // one at a time, each with its thread: the first, the Stone Golem of Harrowstone (stoneGolem: its
-// thread begun by a guild mage's rumour, harrowstone), besides debug mode's sample (SAMPLE, its
-// thread and the card that follows it).
+// thread begun by a guild mage's rumour, harrowstone); the second, the Orc King (orcKing: his
+// thread, ironcrown, begun by a guild warrior's rumour of a border village his raiders burned);
+// besides debug mode's sample (SAMPLE, its thread and the card that follows it).
 //
 // Pure data and arithmetic, no DOM; a world's host keeps its Legends and drives it with its own
 // random (host.js #rare...), every copy alike.
 
 import { DAY, timeOfDay } from "./daytime.js";
 import { shuffled } from "./director.js";
-import { hypot, sin } from "./exact.js";
+import { atan2, cos, hypot, sin } from "./exact.js";
 import { rollGear } from "./gear.js";
 import { createRandom } from "./random.js";
 
@@ -71,7 +72,8 @@ export const VENUES = Object.freeze(["wilds", "inside"]);
  * gates? (when it's met: `hours`, `biomes`, `peoples`, each those it may be in), shape (what it is
  * in the world: SHAPES), reward ({ unique?, gold? }: UNIQUES), thread? (the thread it starts once
  * it's done: THREADS), requires? ({ thread, step }: a thread's follow-up, dealt only while the
- * thread's at that step, and before any other) }`.
+ * thread's at that step, and before any other), last? (what's said to those who took part as its
+ * foe falls: the Orc King's last words) }`.
  */
 export const RARE_CARDS = Object.freeze({
     // (The Stone Golem of Harrowstone (creatures.js stoneGolem): a world's boss, once a world, kept
@@ -88,6 +90,23 @@ export const RARE_CARDS = Object.freeze({
         shape: Object.freeze({ kind: "foe", creature: "stoneGolem", champion: "boss", up: 2, title: "the Stone Golem of Harrowstone" }),
         reward: Object.freeze({ unique: "heartOfHarrowstone", gold: 750 }),
         requires: Object.freeze({ thread: "harrowstone", step: 1 }),
+    }),
+    // (The Orc King, Vorgash the Ironcrowned (creatures.js orcKing): a world's boss, once a world,
+    // kept at his war camp in the marches, where his war band's tracks lead from the border village
+    // they burned (his thread's card step), a rank above a dungeon's master; his champions roared
+    // to him as he's worn down; his last words said as he falls (`last`); his reward his great axe,
+    // Kingsplitter, and a purse of gold)
+    orcKing: Object.freeze({
+        id: "orcKing",
+        title: "The Orc King",
+        word: "War drums beat under the smoke of the cooking fires. By the great fire a huge orc rises, an iron crown on his brow and a great axe in his fists: Vorgash, the Orc King.",
+        last: "The Orc King sinks to his knees in the ashes of his fire, his crown rolled away from him. \"Tell Urzag,\" he rasps, \"my brother... he was right. The crown was never worth the clans' blood. I put my mark on him for saying so.\" He says no more.",
+        kind: "unique",
+        venue: "wilds",
+        where: "site",
+        shape: Object.freeze({ kind: "foe", creature: "orcKing", champion: "boss", up: 2, title: "Vorgash, the Orc King" }),
+        reward: Object.freeze({ unique: "kingsplitter", gold: 900 }),
+        requires: Object.freeze({ thread: "ironcrown", step: 1 }),
     }),
 });
 
@@ -114,6 +133,14 @@ export const UNIQUES = Object.freeze({
         base: "amulet",
         effect: "stoneheart",
         about: "A shard of the crystal that was the Stone Golem's heart, the blight that drove it mad burnt out of it as it fell, set in old silver. It is warm to the touch, and steady as a heartbeat. Blows land lighter on whoever wears it, and now and then their skin turns to stone. Found nowhere else.",
+    }),
+    // (The Orc King's reward: his great axe, its effect a blow that cleaves, legendary.js cleave)
+    kingsplitter: Object.freeze({
+        id: "kingsplitter",
+        name: "Kingsplitter",
+        base: "axe",
+        effect: "cleave",
+        about: "The Orc King's great axe, beaten out of the iron of the Horde's tribute, its edge nicked by every clan chief who stood against him. Each blow it strikes cleaves on through whoever else stands before its wielder, the harder the finer the axe. Found nowhere else.",
     }),
 });
 
@@ -207,9 +234,11 @@ export function cardOf(id) {
  * The kinds of step a thread has (THREADS `steps`):
  * - `card`: a follow-up card (`card`: one whose `requires` is this step), dealt before any other
  *   while the thread's at it; done once it's done. One kept at a site (its `where`) is kept `far`
- *   ([least, most] metres) from where the thread was last, up on the highest open ground there
- *   (its place: not marked on the maps, its foe's prints leading there from where it was last:
- *   threadTracks, said as they're come upon in its words, `spoor`).
+ *   ([least, most] metres) from where the thread was last (that way from it that the nearest of a
+ *   people's settlements is, if it's `toward` them), up on the highest open ground there (its
+ *   place: its foe's prints leading there from where it was last, threadTracks, said as they're
+ *   come upon in its words, `spoor`, {way} which way they lead; marked on the maps, `mark`); a camp
+ *   pitched there while it is (`camp`: { people, tents }: campOf, world/camps3d.js).
  * - `place`: somewhere to go, `far` ([least, most] metres) from where the thread was last (its
  *   encounter, or the place of the step before), on open ground, or the plan's place of a kind
  *   (`site`: "ruined quarry", the nearest), marked on every player's maps; done once someone comes
@@ -221,10 +250,15 @@ export function cardOf(id) {
  *   the thread's (`ask`, and their `reply`) added to their talk; done once it's asked.
  * - `contract`: a contract on the board of that settlement's adventurers' guild: `need` beasts
  *   brought down near where it was last; done once it's reported done.
+ * - `fight`: foes to drive out of somewhere (`at` "opener": the place its opener's rumour told of,
+ *   a settlement, its `town`; else as a place step's), marked on every player's maps: its `foes`
+ *   ([{ creature, count: [least, most], title?, champion? }], `up` tiers above the land there) put
+ *   there as someone first comes within `reach` of it, let go again if everyone goes RARE `far`
+ *   from it first; done once the last of them's fallen, those near taking part.
  * - `lock`: a lock opened (`lock`: LOCKS), as the thread comes to it, its way in marked on every
  *   player's maps; done once someone goes in by it.
  */
-export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock"]);
+export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock", "fight"]);
 
 /**
  * How a thread's step changes the world as it's done (a step's `change`), in the settlement it
@@ -234,19 +268,25 @@ export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock"]
  * - `price`: a shop's prices there (`shop`, or every shop's) times `times`;
  * - `festival`: a festival there (`name`), its shops' prices times `times`, cried as it begins;
  * - `reveal`: the place of the plan's nearest where it was last (`site`, a kind: "ruins") shown on
- *   every player's maps.
- * Each for `lasts` ms of the world's play, or, none, for good.
+ *   every player's maps;
+ * - `burn`: `count` of the settlement's houses set burning, as the Behemoth of the Rift burns
+ *   them, built again over the days after (core/burnt.js): the border village the Orc King's
+ *   raiders burned.
+ * Each for `lasts` ms of the world's play, or, none, for good (but a burn: its houses are built
+ * again). A thread's `begins` is one made as it's begun.
  */
-export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal"]);
+export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal", "burn"]);
 
 /**
  * The threads, by id: what comes of a rare encounter once it's done, the world's, step by step:
  * `{ id, title (as the journal has it), opens? (a thread that comes before its card, begun by a
- * rumour: OPENERS), steps: [{ kind (STEPS), word (what's known of it, as it begins and in the
+ * rumour: OPENERS), begins? (the world changed as it's begun: CHANGES, in its first step's
+ * settlement), steps: [{ kind (STEPS), word (what's known of it, as it begins and in the
  * journal: {town} its settlement's name, {way} which way it is from where it was last), reward? ({
  * gold?, unique? (UNIQUES), writing? (writings.js WRITINGS) }: each who takes part in it given
  * their own), change? (CHANGES), and its kind's own }] }`. The sample's, debug mode's, has one of
- * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step.
+ * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step; the
+ * Iron Crown's too, its first step a fight.
  */
 export const THREADS = Object.freeze({
     sampleTrail: Object.freeze({
@@ -286,7 +326,7 @@ export const THREADS = Object.freeze({
         }),
         steps: Object.freeze([
             Object.freeze({ kind: "place", site: "ruined quarry", reach: 18, word: "The Lantern Company went up to the ruins of Harrowstone quarry, {way} of {town}, after its golem, and never came back. Find out what became of them.", reward: Object.freeze({ gold: 30, writing: "tamsin" }) }),
-            Object.freeze({ kind: "card", card: "stoneGolem", far: Object.freeze([110, 170]), spoor: "Great footprints of stone, sunk deep in the ground", word: "What's left of the Lantern Company lies crushed in the ruins of Harrowstone. Great round footprints lead away from them, {way} up into the hills: the golem's. Follow them, and finish what the Company began." }),
+            Object.freeze({ kind: "card", card: "stoneGolem", far: Object.freeze([110, 170]), spoor: "Great footprints of stone, sunk deep in the ground: the stone golem's. They lead off to the {way}.", word: "What's left of the Lantern Company lies crushed in the ruins of Harrowstone. Great round footprints lead away from them, {way} up into the hills: the golem's. Follow them, and finish what the Company began." }),
             Object.freeze({
                 kind: "talk",
                 role: "adventurer",
@@ -299,17 +339,66 @@ export const THREADS = Object.freeze({
             }),
         ]),
     }),
+    // (The Iron Crown (docs/WILDS.md *The Orc King*): begun by a guild warrior's rumour in the
+    // settlement nearest the border village the Orc King's raiders burned, the orcs' neighbours'
+    // nearest the orcs (borderOf), its houses set burning as it's taken up; the raiders left among
+    // the ashes driven out, their leader carrying the King's orders; his war band's tracks followed
+    // to his war camp in the marches, towards the orcs' lands, and the King (RARE_CARDS orcKing);
+    // and word of it taken back to the warrior, who pays the guild's bounty. The Orc Reaver is the
+    // brother he cast out: hinted at in the rumour, the orders, his last words and the Reaver's
+    // page in the bestiary, never said outright)
+    ironcrown: Object.freeze({
+        id: "ironcrown",
+        title: "The Iron Crown",
+        opens: Object.freeze({
+            kind: "talk",
+            role: "adventurer",
+            calling: "warrior",
+            near: Object.freeze({ border: "orc" }),
+            ask: "Heard anything worth knowing?",
+            tale: Object.freeze([
+                Object.freeze({ say: "You've not heard? {place} burned two nights back, the village out {way} of here by the marches. Orcs. Not a Horde war band under the Warchief's banners: raiders, painted for war, torches in their fists.", ask: "Orcs of the Horde?" }),
+                Object.freeze({ say: "No. The Horde's Warchief outlawed them a year ago. They follow Vorgash, clan-king of the Ashfang, who calls himself the Orc King. He fought the chiefs of the Ironjaw, the Bloodtusk and the Gravemaw one after another, and took their clans for his own: four clans under one iron crown. They say he had a brother who spoke against it. No one's seen the brother since.", ask: "What does he want?" }),
+                Object.freeze({ say: "Land. The Horde gave him none, so he takes ours. His war band burns a village on the border, falls back to his camp out in the marches, and comes again somewhere else. Those who got out of {place} say some of the raiders stayed behind to pick through the ashes.", ask: "And no one's gone after them?" }),
+                Object.freeze({ say: "The guild sent two of ours. Neither came back. The lords say it's the Horde's business; the Horde says he's no orc of theirs. Someone has to drive those raiders out of {place} before they burn the rest of it. And then someone has to find the King." }),
+            ]),
+            take: "I'll go to {place}.",
+            leave: "Not for me.",
+        }),
+        begins: Object.freeze({ kind: "burn", count: 6 }),
+        steps: Object.freeze([
+            Object.freeze({
+                kind: "fight",
+                at: "opener",
+                reach: 45,
+                foes: Object.freeze([Object.freeze({ creature: "orcRaider", count: Object.freeze([4, 5]) }), Object.freeze({ creature: "orcRaider", count: Object.freeze([1, 1]), champion: "mini", title: "Grukk of the Gravemaw" })]),
+                word: "The Orc King's raiders burned {town}, by the marches, and some of them are still there among the ashes. Drive them out.",
+                reward: Object.freeze({ gold: 60, writing: "ironcrown" }),
+            }),
+            Object.freeze({ kind: "card", card: "orcKing", far: Object.freeze([220, 320]), toward: "orc", mark: true, spoor: "The war band's tracks: many heavy boots, trampling the grass flat. They lead off to the {way}, towards the Orc King's war camp.", camp: Object.freeze({ people: "orc", tents: 7 }), word: "The raiders' leader carried the Orc King's orders: his war band falls back to his camp in the marches. Their tracks lead {way} out of {town}, towards the orcs' lands. Follow them to his war camp, and end this." }),
+            Object.freeze({
+                kind: "talk",
+                role: "adventurer",
+                calling: "warrior",
+                home: true,
+                word: "The Orc King is dead and his war band broken. Take word of it, and his orders, to the warrior at the guild in {town}.",
+                ask: "Vorgash is dead. His war band's broken.",
+                reply: "Dead? Then the clans will go back to the Horde, or scatter into the hills, and the border can sleep. A brother, you say, in his orders? There's an orc at the head of the outlaws up in the hills, by all accounts: Urzag, they call him, with a brand between his shoulders. If he was the one who spoke against the crown... well. That's a tale for another night. Here: the guild's bounty on the Orc King, and the border's thanks. They're rebuilding already.",
+                reward: Object.freeze({ gold: 200 }),
+            }),
+        ]),
+    }),
 });
 
 /**
  * How a thread that comes before its card is begun (THREADS `opens`): a rumour told by one of the
  * folk (`kind` "talk": an adventurer of a `calling`, `role`'s, at the guild in the settlement
- * nearest the plan's place of a kind, `near`: openerTown; none of that calling left there, any of
- * its adventurers), asked of them (`ask`), the tale told a piece at a time (`tale`: each piece's
- * words, {way} which way the place is from there, and what's asked for the next), then taken up
- * (`take`: the thread begun, its home that settlement; their parting words `taken`, the talk over)
- * or left (`leave`). Only while the card it leads to is in play and not done in the world, and the
- * thread not begun.
+ * nearest the plan's place of a kind, `near`, or a people's border village, `near` { border }:
+ * openerOf; none of that calling left there, any of its adventurers), asked of them (`ask`), the
+ * tale told a piece at a time (`tale`: each piece's words, {way} which way the place is from there
+ * and {place} its name, and what's asked for the next), then taken up (`take`: the thread begun,
+ * its home that settlement; their parting words `taken`, the talk over) or left (`leave`). Only
+ * while the card it leads to is in play and not done in the world, and the thread not begun.
  */
 export const OPENERS = Object.freeze(["talk"]);
 
@@ -326,11 +415,17 @@ export const GUILD_KINDS = Object.freeze(["village", "town", "city", "capital"])
 
 /**
  * The plan's place of a kind a thread's opener's near (`opens.near`): the first of them (`plan`'s
- * sites), or null; and the settlement with a guild nearest it (GUILD_KINDS), the rumour's. The same
- * on every copy: { site, town } (the plan's), or null.
+ * sites), or null; and the settlement with a guild nearest it (GUILD_KINDS), the rumour's. Or a
+ * people's border village (`near` { border }: borderOf), and the settlement with a guild nearest
+ * it but it, not theirs either. The same on every copy: { site, town } (the plan's), or null.
  */
 export function openerOf(plan, thread) {
     const opens = THREADS[thread]?.opens;
+
+    if (opens?.near?.border) {
+        return borderOf(plan, opens.near.border);
+    }
+
     const site = opens ? ((plan?.sites ?? []).filter((one) => one.kind === opens.near).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] ?? null) : null;
 
     if (!site) {
@@ -338,10 +433,53 @@ export function openerOf(plan, thread) {
     }
 
     const towns = (plan.places ?? []).filter((place) => GUILD_KINDS.includes(place.kind));
-    const town = towns.reduce((best, place) => (!best || hypot(place.at[0] - site.at[0], place.at[1] - site.at[1]) < hypot(best.at[0] - site.at[0], best.at[1] - site.at[1]) ? place : best), null);
+    const town = nearestOf(towns, site.at);
 
     return town ? { site, town } : null;
 }
+
+// The one of `places` nearest `at` (the first, at the same distance), or null
+const nearestOf = (places, at) => places.reduce((best, place) => (!best || hypot(place.at[0] - at[0], place.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? place : best), null);
+
+/**
+ * A people's border village (the plan's: `people`, a RACES id): the village of another people's
+ * nearest any settlement of theirs; and the settlement with a guild nearest it but it, not theirs
+ * either (GUILD_KINDS), where it's talked of. The same on every copy: { site (the village), town },
+ * or null.
+ */
+export function borderOf(plan, people) {
+    const places = plan?.places ?? [];
+    const theirs = places.filter((place) => place.race === people);
+    const near = (place) => Math.min(...theirs.map((one) => hypot(one.at[0] - place.at[0], one.at[1] - place.at[1])));
+    const villages = places.filter((place) => place.kind === "village" && place.race && place.race !== people);
+    const site = theirs.length ? villages.reduce((best, place) => (!best || near(place) < near(best) ? place : best), null) : null;
+    const town = site ? nearestOf(places.filter((place) => GUILD_KINDS.includes(place.kind) && place.id !== site.id && place.race !== people), site.at) : null;
+
+    return site && town ? { site, town } : null;
+}
+
+/**
+ * Where a camp's pitched (a thread's card step's `camp`: the Orc King's war camp) about its place
+ * (`at`, [x, y] metres: its foe stands there): its fire CAMP.fire metres to its north, `tents` in
+ * a ring CAMP.ring round the fire, each facing it (battle.js facings), the first to the south-west.
+ * { fire, tents: [{ at, facing }] }.
+ */
+export function campOf([x, y], tents) {
+    const fire = [x, y - CAMP.fire];
+
+    return {
+        fire,
+        tents: Array.from({ length: tents }, (_, k) => {
+            const angle = Math.PI * 0.75 + (k / tents) * Math.PI * 2;
+            const at = [fire[0] + cos(angle) * CAMP.ring, fire[1] + sin(angle) * CAMP.ring];
+
+            return { at, facing: atan2(fire[0] - at[0], fire[1] - at[1]) };
+        }),
+    };
+}
+
+/** A thread's camp (campOf): how far its fire is from where its foe stands, and its tents from its fire (metres). */
+export const CAMP = Object.freeze({ fire: 4, ring: 9 });
 
 /**
  * Whether one of the folk (`folk`: { role, talk, look }; `hall`, the rest at their guild) is one
@@ -453,8 +591,9 @@ export function threadTalk(tree, { thread, step }, fill = (text) => text) {
  * The tracks a card kept at a site leaves (STEPS `card`, its `where` "site": the Stone Golem's),
  * while its thread's at its step: from where the thread was last (the Lantern Company's remains)
  * to the card's place, wandering a little either side of the way (`wander` metres, every `every`),
- * the same on every copy. [{ id, creature (its shape's), spoor (its step's words for them, or
- * null), points ([[x, y]]) }]. `legends`: the world's (Legends, or as it's kept).
+ * the same on every copy. [{ id, creature (its shape's), spoor (what's said as they're come upon:
+ * its step's words, {way} which way they lead; or null), points ([[x, y]]) }]. `legends`: the
+ * world's (Legends, or as it's kept).
  */
 export function threadTracks(legends) {
     return Object.entries(legends?.threads ?? {}).flatMap(([id, thread]) => {
@@ -864,6 +1003,7 @@ export class Legends {
         thread.step += 1;
         thread.town = null;
         thread.place = null;
+        thread.foes = null;
         thread.done = thread.step >= THREADS[id].steps.length;
 
         return { thread: id, step, def, next: this.stepOf(id) };

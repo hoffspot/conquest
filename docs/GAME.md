@@ -847,9 +847,12 @@ The world's rare encounters, and what the player keeps of them:
   found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
   asked first (gone for good, and never given again). Its effect, if it has one, whatever it is
   (*Legendary weapons*, above).
-- **A world's boss** (creatures.js `worldBoss`: the Stone Golem): its bar across the top of the
-  screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a title),
-  and its model wanted as soon as it's about, drawn from it at once, in view or not.
+- **A world's boss** (creatures.js `worldBoss`: the Stone Golem, the Orc King): its bar across the
+  top of the screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a
+  title), and its model wanted as soon as it's about, drawn from it at once, in view or not; and
+  those of the champions it rallies to it (creatures.js `rally`).
+- **A foe's last words** (rare.js `RARE_CARDS` `last`: the Orc King's), said to those who took part
+  as it falls, before they're told they've overcome it.
 
 ### Writings (core/writings.js, app/reader.js)
 
@@ -1271,6 +1274,17 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     Any ward's made of the same: its numbers (`guard`, `skin`, `harden`), what the wearer's told
     (`felt`), and its `element`, which says how it's drawn and heard (app/game.js `WARD_LOOKS`: the
     shell's, the shards' and the ring's colours, its element's casting heard).
+  - *A unique's own* (`unique`, never rolled on a legendary weapon), on every blow with no charge to
+    fill (`always`: no charge shown, `charge.js`). The only one so far, *Cleave*, Kingsplitter's (a
+    great axe: docs/WILDS.md *The Orc King*): every blow up close carries on through every other foe
+    within 2.6 m of its wielder and no more than 60° either side of the way to whoever it was struck
+    at (battle.js `#cleave`), each struck half as hard at the axe's first level to four fifths at its
+    highest (`share`), their armour's (a blow of its own, `cleave`: dodged and caught on a shield as
+    any is), staggered half as long; a pale arc swept out to its reach and a spray off each it
+    caught, steel heard ringing (`clash`); in hand, a cold steel glow, glints falling off it
+    (world/legendaries.js, effects.js `legendCleave`). Its card: "Cleave: every blow up close
+    cleaves on through every other foe within 2.6 m before you, each struck 80% as hard". In might,
+    its share again of every blow's harm on half a foe more (might.js `CLEAVED`).
   - *One of each at most* (might.js `fighterOf`: `legendary`, `ward`): the weapon's first, then
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).
@@ -3991,6 +4005,11 @@ now in their crowd):
     moments'. Till 2026-10-28 its guard was recorded from the moment it was told to stand on
     guard, the arms still coming up from its sides: every 2 seconds, going round, the sword hand
     dropped 33 cm and the shield hand 48 cm in a frame and rose again.
+  - **The same every time.** Each is played from the start of its guard's sway (avatar.js
+    `phase` 0; an avatar's is at random, so those on guard together don't sway as one), so its
+    hands are recorded where they were the time before, and onto guard ends 4 cm from where on
+    guard begins. Till 2026-10-31 each move's sway began at random: onto guard ended 3 to over 8
+    cm from where on guard began, a different jump on every load.
   - **What's in hand.** Each moment says what's in hand then (its flags, the last texel of its row:
     the weapon, the shield; 1 in hand, 0 put away, `AS` as the soldier drawn so is), so a draw
     shows the shield on the back, then on the arm, then the sword drawn too.

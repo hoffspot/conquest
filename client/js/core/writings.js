@@ -120,6 +120,32 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (The Orc King's orders, found on his raid leader among the ashes of the border village his
+    // raiders burned: core/rare.js THREADS ironcrown, given as its first step's done. A word in it of
+    // the brother he cast out, the Orc Reaver, never named as such)
+    ironcrown: Object.freeze({
+        title: "The Orc King's orders",
+        by: "Vorgash, the Orc King, by his scribe's hand",
+        found: "Rolled tight in a leather case on Grukk of the Gravemaw, the raid leader, among the ashes of the border village",
+        entries: Object.freeze([
+            {
+                heading: "To Grukk of the Gravemaw",
+                hand: "A careful scribe's hand in the common tongue, the Iron Crown pressed into black wax beneath.",
+                text: [
+                    "The King sends this to Grukk. Burn the village by the marches as you burned the last. Take the grain, drive off the herds, leave the well. Let them see the smoke from their walls and know whose land this is now.",
+                    "Do not wait for whoever comes after. Fall back to the war camp by the second night. Ironjaw and Bloodtusk hold it with me, and any chief who wants his share of the plunder can come to my fire and ask for it.",
+                ],
+            },
+            {
+                heading: "Below, in another hand",
+                hand: "Scratched with a knife's point, in the orcs' own tongue.",
+                text: [
+                    "If you meet Urzag's outlaws on the hill roads, kill them. If he comes himself, send him to me. My brother chose the hills and the company of thieves over his own blood. He wears my mark on his back still. I would see it once more before I take his head.",
+                ],
+                signed: "V.",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */

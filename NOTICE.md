@@ -25,6 +25,7 @@ It doesn't cover:
   Hellwalker), Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five skins; and the
   Lord of the Pit, the Infernal Demon, Lilpupinduy's Infernal Demon RIG from Fab, with its dark
   look; and the Stone Golem, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab,
-  with its three other skins; and the Orc, a modular orc from Fab, in three dressings (the Orc King,
-  with his two other skins, the Orc Warlord and the Orc Reaver), his fall Mesh2Motion's (CC0); and
+  with its three other skins; and the Orc, Snake|3D's modular orc from Fab, in three dressings (the
+  Orc King, with his two other skins, his champions', the Orc Warlord and the Orc Reaver), his fall
+  Mesh2Motion's (CC0); and
   the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

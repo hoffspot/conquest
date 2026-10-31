@@ -147,6 +147,10 @@ const ABOUT = {
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
     kaiju: ["Behemoth of the Rift", "Out of the rift by the Tower of Sar Mordal, against a town by night: everyone's enemy"],
     stoneGolem: ["Stone golem", "In the hills by the ruins of Harrowstone quarry, once a world: its rare card's foe, a world's boss"],
+    orcKing: ["Orc King", "In his war camp in the marches by the orcs' lands, once a world: his rare card's foe, a world's boss", "axe"],
+    orcIronjaw: ["Ironjaw", "The Orc King's champion, called at his first battlecry", "axe"],
+    orcBloodtusk: ["Bloodtusk", "The Orc King's champion, called at his second battlecry", "axe"],
+    orcRaider: ["Orc raider", "Among the ashes of a border village the Orc King's war band burned", "cleaver"],
     riftling: ["Riftling", "In and round the Tower of Sar Mordal, come through its rift"],
     riftStalker: ["Rift stalker", "At the top of the Tower of Sar Mordal, in Sinclair's study, the riftlings' master"],
     moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
@@ -1502,6 +1506,7 @@ const groups = [
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
+    ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
     ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord"]],
 ];
 

@@ -71,6 +71,11 @@ export function effectWords(effect, level = 1, weapon = null) {
     const numbers = effectAt(effect, level);
     const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
 
+    // (On every blow, with no charge to it: Kingsplitter's cleave)
+    if (def.always) {
+        return `${def.label}: every blow up close cleaves on through every other foe within ${numbers.reach} m before you, each struck ${Math.round(numbers.share * 100)}% as hard`;
+    }
+
     // (A ward, let loose by the blows its wearer takes: Stoneheart's)
     if (def.ward) {
         const percent = (share) => `${Math.round(share * 100)}%`;

@@ -10,7 +10,7 @@
 import { CHARGE, EFFECTS } from "../core/legendary.js";
 
 /** Each effect's colour on the charge (and in the world: world/legendaries.js). */
-export const EFFECT_COLOURS = Object.freeze({ frostbind: "#8fd8ff", cinderburst: "#ff7a2a", earthsunder: "#c8a060", stormlash: "#c8c0ff", ruinblast: "#ffd060" });
+export const EFFECT_COLOURS = Object.freeze({ frostbind: "#8fd8ff", cinderburst: "#ff7a2a", earthsunder: "#c8a060", stormlash: "#c8c0ff", ruinblast: "#ffd060", cleave: "#c8d4e0" });
 
 // Each effect's sign in the middle of the ring (viewBox -32 to 32)
 const SIGNS = Object.freeze({
