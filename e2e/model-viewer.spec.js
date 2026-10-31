@@ -34,11 +34,14 @@ test("the creature lab's address opens the model viewer on what it asked for; a 
     expect(new URL(page.url()).pathname).toBe("/model-viewer.html");
     await expect(page.locator("#name")).toHaveText("Goblin raider");
 
-    // (Its cleaver's attacks and its ways of resting, each by name)
+    // (Its cleaver's attacks and its ways of resting, each by name: not those that want the hand
+    // its cleaver's in, beasts/beast.js restWaysOf)
     const moves = page.locator("#moves");
 
     await expect(moves.getByRole("button", { name: "flat chop" })).toBeVisible();
-    await expect(moves.getByRole("button", { name: "arms folded" })).toBeVisible();
+    await expect(moves.getByRole("button", { name: "shifting the weight" })).toBeVisible();
+    await expect(moves.getByRole("button", { name: "arms folded" })).toHaveCount(0);
+    await expect(moves.getByRole("button", { name: "hands clasped behind" })).toHaveCount(0);
     await expect(page.locator("#clips")).toContainText("Built in code");
 
     // Paused, one chosen, stepped on 12 frames, back 5, and on 5 again: just where it was

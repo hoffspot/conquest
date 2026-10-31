@@ -1856,7 +1856,11 @@ further forward, clear of a helm's brim or an orc's horns, and lowered forward f
 the brow (`HELMED_LOOKING`, which moves only the shading hand, `SHADING`); clasping the hands
 behind, the left hand comes up to the waist first, over the scabbard, the elbow out to the side
 clear of the shield on the back, and goes behind from there (`ARMED_CLASPED`). Other folk's rests
-keep their own ways.
+keep their own ways. The wilds' people-shaped pass the time as a sentry does (beasts/beast.js
+`restsOf`), but with their weapon always in hand, never by folding the arms or clasping the hands
+behind (`handFree`, `restWaysOf`): made for a sword at the hip, they folded the arms round the
+blade in the hand, which was pushed out of the body and back (an orc raider's cleaver hand jumping
+up to 9 cm in a frame). The model viewer lists only the ways they have.
 
 **Falling** (`die`, `knockdown`) is played whole, as an animator's clip has it: every joint, the
 legs and arms too, and the pelvis turned and moved as far as it goes (FALLS, baked from
