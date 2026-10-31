@@ -8,6 +8,7 @@
 // (bandits, goblins, trolls...) are characters (characters/character.js), bigger or smaller.
 
 import * as THREE from "three";
+import { RESTS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { keyOf, LODS } from "../characters/lod.js";
 import { allAtOnce } from "../core/steps.js";
@@ -1048,6 +1049,16 @@ export function restsOf(id) {
 }
 
 /**
+ * Which of its role's rests (restsOf: their variants) a people-shaped creature passes the time
+ * with: with its weapon in its hand (`armed`), not those that want that hand free (actions.js
+ * RESTS `handFree`: a sentry's arms folded and hands clasped behind, made for a sword at the hip,
+ * folded the arms round the blade in its hand, the hand jumping as it was pushed out of the body).
+ */
+export function restWaysOf(id, armed) {
+    return (RESTS[restsOf(id)] ?? []).flatMap((rest, variant) => (armed && rest.handFree ? [] : [variant]));
+}
+
+/**
  * Whether one of a kind (a LOOKS id) is drawn as a beast (a BeastAvatar): every kind but the
  * people-shaped, and one of those drawn from a model once that's read (a hell's lord: till it is,
  * its stand-in's a character, as the rest of the people-shaped are).
@@ -1102,15 +1113,16 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
     // Standing a while, it passes the time as its kind does (actions.js's rests: restsOf), and
     // stops when it moves or fights
     const role = restsOf(id);
+    const ways = restWaysOf(id, Boolean(guard));
     const update = avatar.update.bind(avatar);
     const attack = avatar.actions.startAttack.bind(avatar.actions);
     let still = 0;
     let next = 3 + (seed % 5);
     let resting = false;
 
-    // (One of them, `variant` of its role's, or whichever's next)
+    // (One of them, `variant` of its role's, or whichever of its ways is next)
     avatar.rest = (variant = null) => {
-        resting = avatar.actions.rest(role, { variant }) !== null;
+        resting = avatar.actions.rest(role, { variant: variant ?? ways[avatar.actions.variety.next(`rest:${role}:${ways.join()}`, ways.length)] ?? null }) !== null;
     };
     avatar.update = (dt, x, z, facing, steer) => {
         update(dt, x, z, facing, steer);

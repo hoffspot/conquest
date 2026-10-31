@@ -38,7 +38,7 @@ import { filesOf } from "../app/catalog.js";
 import { BEAMS, EnergyBreath } from "../beasts/beam.js";
 import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
 import { CLIP_SOUNDS } from "../beasts/sounds.js";
-import { dressCreature, restsOf } from "../beasts/beast.js";
+import { dressCreature, restsOf, restWaysOf } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
 import { hasModel, MODELS, modelOf, wantModel } from "../beasts/model.js";
 import { ATTACKS, EMOTE_WAYS, RESTS } from "../characters/actions.js";
@@ -1339,7 +1339,7 @@ function movesOf() {
 
     return [
         ...(ATTACKS[animation]?.variants ?? []).map(({ name }, variant) => ({ group: "Attacks", label: name, what: "attack", which: null, variant })),
-        ...(RESTS[restsOf(kind)] ?? []).map(({ name }, variant) => ({ group: "Rests", label: name, what: "rest", which: null, variant })),
+        ...restWaysOf(kind, Boolean(weapon)).map((variant) => ({ group: "Rests", label: RESTS[restsOf(kind)][variant].name, what: "rest", which: null, variant })),
     ];
 }
 
