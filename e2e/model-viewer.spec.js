@@ -848,7 +848,7 @@ test("and the Stone Golem, the first rare card's world boss: all 25 of its own c
     }
 });
 
-test("the Stone Golem as the game draws it: a stone-grey brute till its model's read, then the golem, four metres tall, its hammer three ways, a boulder torn up and heaved, held in its hand from the crouch till it's let go", async ({ page }) => {
+test("the Stone Golem as the game draws it: a stone-grey brute till its model's read, then the golem, four metres tall, its hammer three ways, a boulder torn up and heaved, held in its hand from the crouch till it's let go, then thrown on and down onto the ground ahead", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=stoneGolem");
     await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
@@ -861,21 +861,34 @@ test("the Stone Golem as the game draws it: a stone-grey brute till its model's 
     await page.getByRole("button", { name: "Pause" }).click();
     await page.locator("#moves").getByRole("button", { name: "heave", exact: true }).click();
 
-    const held = await page.evaluate(() => {
-        const seen = [];
+    const { held, flown } = await page.evaluate(() => {
+        const seen = { held: [], flown: [] };
 
-        for (let k = 0; k < 90; k++) {
+        for (let k = 0; k < 140; k++) {
             window.lab.step(1);
-            seen.push(Boolean(window.lab.avatar().carried()));
+            seen.held.push(Boolean(window.lab.avatar().carried()));
+            seen.flown.push(window.lab.thrown());
         }
 
         return seen;
     });
+    // (Let go the first time: it heaves again after a while)
+    const letGo = held.findIndex((holding, k) => holding && !held[k + 1]);
 
     expect(held[0]).toBe(false);
     expect(held.some(Boolean)).toBe(true);
-    expect(held.at(-1)).toBe(false);
-    expect(held.findIndex(Boolean)).toBeLessThan(held.findLastIndex(Boolean));
+    expect(held.findIndex(Boolean)).toBeLessThan(letGo);
+    expect(letGo).toBeLessThan(held.length - 1);
+
+    // (Let go, thrown on: from then, up and over, then down onto the ground ahead, and gone; none
+    // before)
+    const flying = flown.slice(letGo + 1).filter((height) => height !== null);
+
+    expect(flown.slice(0, letGo + 1).every((height) => height === null)).toBe(true);
+    expect(flying.length).toBeGreaterThan(5);
+    expect(Math.max(...flying)).toBeGreaterThan(flying[0]);
+    expect(flying.at(-1)).toBeLessThan(1.5);
+    expect(flown.at(-1)).toBe(null);
 });
 
 test("and the Orc King, kept for a card: the Orc in his finest dressing, his 23 clips (his fall Mesh2Motion's), his five materials, each of his skins put on, and whose he is", async ({ page }) => {

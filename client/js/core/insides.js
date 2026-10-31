@@ -27,6 +27,7 @@ import { THEMES } from "./dungeons/themes.js";
 import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
 import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
+import { TALK_CALLINGS } from "./rare.js";
 import { createRandom } from "./random.js";
 import { ENTERED, GROUND, PLOT, SHOP_LANDMARKS } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
@@ -578,11 +579,17 @@ export function guildFolkOf(building, hall) {
         folk.push({ local: `adventurer${k + 3}`, title: "Adventurer", role: "patron", talk: "adventurer", look: callings[(k + 2) % callings.length], sex: sex(), map: hall.id, square: [x, y], facing, routine: { seated: true, act: "toast", every: [9000, 18000] } });
     });
 
-    // (A mage among them always, the last at the tables if none: one who hears what other mages
-    // hear, a rumour of the world's to tell, core/rare.js OPENERS)
-    if (!folk.some(({ look }) => look === "mage")) {
-        folk.at(-1).look = "mage";
-    }
+    // (One of every calling the threads' talk asks for among them always (core/rare.js
+    // TALK_CALLINGS: a mage, who hears what other mages hear, a rumour of the world's to tell), the
+    // last at the tables taking one up if none has it, then the one before them; never one of those
+    // callings already)
+    const spare = folk.filter(({ look }) => look && !TALK_CALLINGS.includes(look)).reverse();
+
+    TALK_CALLINGS.filter((calling) => !folk.some(({ look }) => look === calling)).forEach((calling, k) => {
+        if (spare[k]) {
+            spare[k].look = calling;
+        }
+    });
 
     return folk;
 }

@@ -36,6 +36,7 @@ import { Sound } from "../audio/sound.js";
 import { HERO_PEOPLES } from "../app/heroes.js";
 import { filesOf } from "../app/catalog.js";
 import { BEAMS, EnergyBreath } from "../beasts/beam.js";
+import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
 import { CLIP_SOUNDS } from "../beasts/sounds.js";
 import { dressCreature, restsOf } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
@@ -688,6 +689,7 @@ function showCreature(id, which) {
         id,
         kind,
         avatar,
+        throwing: MODELS[kind]?.carry ? throwingOn(avatar) : null,
         weapon,
         person: null,
         thing: null,
@@ -1057,7 +1059,101 @@ function advance(seconds, step = 1 / 60) {
         }
     }
 
+    throwOn(seconds);
     follow();
+}
+
+// What a creature carries through a move of its own (beasts/model.js MODELS `carry`: the Stone
+// Golem's boulder), thrown on as it's let go, as the game throws it (world/spellfx.js lob): up and
+// over, tumbling, down onto the ground ahead of it (THROWN.reach metres, or nearer, a third of the
+// way to where it's watched from, so it lands in view) as fast as the game throws it, its
+// shadow there growing and darkening as it comes, a ring round it as far as its blast reaches;
+// gone as it lands. Drawn on the creature (made once, hidden), so stepping back through what's
+// been kept shows it where it was (inspect.js Rewind)
+const THROWN = Object.freeze({ reach: 8, speed: 13, blast: 2.6 });
+const shadowGeometry = new THREE.CircleGeometry(1, 28);
+const ringGeometry = new THREE.RingGeometry(0.94, 1, 48);
+
+function throwingOn(avatar) {
+    const boulder = new THREE.Mesh(boulderGeometry(), boulderMaterial());
+    const shadow = new THREE.Mesh(shadowGeometry, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
+    const ring = new THREE.Mesh(ringGeometry, new THREE.MeshBasicMaterial({ color: 0xff5a1a, transparent: true, opacity: 0, depthWrite: false }));
+
+    boulder.castShadow = true;
+
+    for (const mesh of [boulder, shadow, ring]) {
+        mesh.visible = false;
+        avatar.object.add(mesh);
+    }
+
+    shadow.rotation.x = ring.rotation.x = -Math.PI / 2;
+
+    return { boulder, shadow, ring, held: null, flight: null };
+}
+
+// On a moment (`seconds`): what it carries held (where, kept), let go (thrown), or flying on
+function throwOn(seconds) {
+    const { avatar, throwing } = current;
+
+    if (!throwing) {
+        return;
+    }
+
+    const at = avatar.carried?.();
+    const object = avatar.object;
+
+    if (at) {
+        throwing.held = at;
+        throwing.radius = avatar.carriedRadius?.() ?? 0.4;
+    } else if (throwing.held) {
+        // (Let go: from where it was last held to the ground ahead of it, the way it faces)
+        const from = throwing.held;
+        const ahead = new THREE.Vector3(Math.sin(avatar.facing ?? 0), 0, Math.cos(avatar.facing ?? 0));
+        const root = object.getWorldPosition(new THREE.Vector3());
+        const watched = Math.hypot(camera.position.x - root.x, camera.position.z - root.z);
+        const to = root.clone().addScaledVector(ahead, Math.min(THROWN.reach, watched * 0.35)).setY(0);
+        const far = from.distanceTo(to);
+
+        throwing.flight = { from, to, high: 0.8 + 0.15 * far, travel: far / THROWN.speed, age: 0, spin: new THREE.Euler() };
+        throwing.held = null;
+    }
+
+    const { flight, boulder, shadow, ring } = throwing;
+    const scale = object.getWorldScale(new THREE.Vector3()).x;
+
+    boulder.visible = shadow.visible = ring.visible = Boolean(flight);
+
+    if (!flight) {
+        return;
+    }
+
+    flight.age += seconds;
+
+    const u = Math.min(1, flight.age / flight.travel);
+    const where = flight.from.clone().lerp(flight.to, u);
+
+    where.y += Math.sin(Math.PI * u) * flight.high;
+    boulder.position.copy(object.worldToLocal(where));
+    boulder.scale.setScalar(throwing.radius / scale);
+    boulder.rotation.x += seconds * 4;
+    boulder.rotation.z += seconds * 2.5;
+
+    // (Its shadow and ring where it'll land: small and faint as it's let go, as wide as its blast
+    // and darkest as it comes down)
+    const ground = object.worldToLocal(flight.to.clone().setY(0.03));
+
+    shadow.position.copy(ground);
+    ring.position.copy(ground).setY(ground.y + 0.01 / scale);
+    shadow.scale.setScalar(((0.3 + 0.7 * u) * THROWN.blast * 0.5) / scale);
+    ring.scale.setScalar(THROWN.blast / scale);
+    shadow.material.opacity = 0.35 + 0.55 * u * u;
+    ring.material.opacity = 0.4 + 0.5 * u;
+
+    // (Down: gone, till it's thrown again)
+    if (u >= 1) {
+        throwing.flight = null;
+        boulder.visible = shadow.visible = ring.visible = false;
+    }
 }
 
 // The camera and the sun keep up with it, up in the air too
@@ -1833,6 +1929,8 @@ window.lab = {
     sounding: () => sound.playing,
     // (A beam it breathes, what it's doing: beasts/beam.js)
     breath: () => current.avatar.breath?.state ?? null,
+    // (What it carries, thrown on: where it's flying, metres off the ground, or null: throwOn)
+    thrown: () => (current.throwing?.boulder.visible ? Number(current.throwing.boulder.getWorldPosition(new THREE.Vector3()).y.toFixed(2)) : null),
     // (How it's laid out and seen: how much of the view the bars and panel cover; where the middle
     // of what's shown is on the screen; and the camera, how far back, its fog, its view's shape)
     layout: () => ({ covered: { ...covered }, compact: document.body.classList.contains("compact"), side: document.body.classList.contains("side") }),

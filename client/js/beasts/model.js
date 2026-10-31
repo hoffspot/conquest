@@ -1643,6 +1643,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
             return held?.visible ? held.getWorldPosition(target) : null;
         },
 
+        // How big what it carries is in the world (its radius: MODELS `carry`), or 0
+        carriedRadius() {
+            return held ? held.getWorldScale(new THREE.Vector3()).x : 0;
+        },
+
         // One of its clips (by name: `lengths`' keys) alone, `time` seconds into it, as it was
         // made: the model viewer's, to watch each of them (not what the game asks of a body: pose)
         hold(clip, time) {

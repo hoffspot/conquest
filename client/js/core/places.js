@@ -68,8 +68,9 @@ export const PLACE_KINDS = Object.freeze({
     // (The Tower of Sar Mordal: the wizard Sinclair's, abandoned, its rift's own keeping it)
     "rift tower": { size: "medium", icon: "riftTower", holds: ["beast"] },
     // (The ruins of Harrowstone quarry: no one's, its golem wandering the hills round it, met only
-    // as its rare card's foe: core/rare.js)
-    "ruined quarry": { size: "medium", icon: "quarry", holds: [] },
+    // as its rare card's foe: core/rare.js; what's left of the Lantern Company at its heart, its
+    // `scene`: setpieces/scenes.js SCENES)
+    "ruined quarry": { size: "medium", icon: "quarry", holds: [], scene: "crushed" },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)

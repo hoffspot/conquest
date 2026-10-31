@@ -12,9 +12,11 @@
 // the seeded random numbers (random.js) and exact maths (exact.js) only.
 
 import { cos, hypot, PI, sin } from "../exact.js";
+import { PLACE_KINDS } from "../places.js";
 import { createRandom } from "../random.js";
 import { layoutCastle } from "./castle.js";
 import { pieceCatalog, PLOT } from "./pieces.js";
+import { SCENES } from "./scenes.js";
 import { layoutWorks, WORKS_SIZE } from "./works.js";
 
 /**
@@ -161,7 +163,9 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * { x, y (metres: the middle of its way in, on the line of its face), width, height, inside (what
  * it's like within: insides.js's kinds) }, facing out the way the site does) }; or null if the
  * kind isn't one. A dungeon's way in is dressed as its `theme` has it (core/dungeons/themes.js);
- * a people's works (works.js, its `people`'s) has its yard, posts and round too.
+ * a people's works (works.js, its `people`'s) has its yard, posts and round too. What's found at its
+ * heart (its kind's `scene`: core/places.js PLACE_KINDS, setpieces/scenes.js SCENES) laid out there,
+ * from numbers of its own.
  */
 export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = null, people = null }) {
     const size = neutralSize({ kind, theme });
@@ -173,8 +177,9 @@ export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = nul
     const random = createRandom((seed ^ 0x5eed) >>> 0);
     const [width, depth] = [size[0] * PLOT, size[1] * PLOT];
     const laid = WORKS_SIZE[kind] ? layoutWorks(kind, random, width, depth, people) : LAYOUTS[kind](random, width, depth, seed, form, facing, theme);
+    const scene = SCENES[PLACE_KINDS[kind]?.scene];
 
-    return { size, ...laid };
+    return { size, ...laid, ...(scene ? { parts: [...laid.parts, ...scene(createRandom((seed ^ 0x5ce4e) >>> 0), laid.heart)] } : {}) };
 }
 
 /**
@@ -837,42 +842,12 @@ const LAYOUTS = {
     // in, gone into by the dark doorway at its foot on its south side; to its east the rift he
     // tore in the air, green; the bones of what came too near it about it
     // The ruins of Harrowstone quarry (worldplan/settle.js RUINED_QUARRY: the Stone Golem's), as its
-    // golem left them twenty years ago: laid out as a people's quarry is (works.js), ruined, its
-    // faces and the stone on its floor weathered and grown over (`ruined`: art/kits/works.js), its
-    // crane thrown down across the floor (`fallenCrane`), its masons' lodge a heap of rubble and
-    // timbers, the cart it was loading left on one wheel; the bones of its cutters and its guards
-    // about it, and boulders the golem tore out and threw. In the middle of its floor what's left
-    // of the Lantern Company (`crushed`), four of them, flattened where they stood (`who`: their
-    // shield, their bow, their mace, their staff), a boulder on one: its heart there
+    // golem left them twenty years ago: a people's quarry ruined (ruinsOf); the bones of its cutters
+    // and its guards about it, and boulders the golem tore out and threw. In the middle of its floor
+    // what's left of the Lantern Company (its kind's scene: setpieces/scenes.js `crushed`), its heart
     "ruined quarry"(random, width, depth) {
-        const quarry = layoutWorks("quarry", random, width, depth, null);
-        const parts = [];
-        const solid = [...quarry.solid];
-        const [hx, hy] = quarry.heart;
-
-        for (const part of quarry.parts) {
-            if (part.part === "derrick") {
-                parts.push({ part: "fallenCrane", x: part.x, y: part.y + 2.4, turn: random.range(-0.5, 0.5), seed: part.seed });
-                solid.push(box(part.x, part.y + 2.4, 5.2, 1.4));
-            } else if (part.part === "lodge") {
-                const [lx, ly] = [(part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2];
-
-                parts.push({ part: "rubble", x: lx - 1, y: ly, r: 1.5, seed: part.seed });
-                parts.push({ part: "timbers", x: lx + 2.2, y: ly + 0.6, r: 1.3, seed: random.seed() });
-            } else if (part.part === "sledge") {
-                parts.push({ part: "cart", x: part.x, y: part.y, turn: part.turn + 1.3 });
-            } else {
-                parts.push({ ...part, ruined: true });
-            }
-        }
-
-        // (The Lantern Company, where the golem caught them, before its back face)
-        for (const [k, who] of ["shield", "bow", "mace", "staff"].entries()) {
-            const angle = (k / 4) * TAU + random.range(-0.4, 0.4);
-            const out = random.range(1.6, 3.2);
-
-            parts.push({ part: "crushed", x: hx + cos(angle) * out, y: hy - 1.5 + sin(angle) * out * 0.8, turn: random.range(0, TAU), who, boulder: k === 2, seed: random.seed() });
-        }
+        const { parts, solid, heart } = ruinsOf("quarry", random, width, depth);
+        const [hx, hy] = heart;
 
         // (Two of its cutters or its guards, where they fell, out in the yard; and boulders it threw)
         for (const side of [-1, 1]) {
@@ -937,6 +912,36 @@ const box = (x, y, w, d) => [x - w / 2, y - d / 2, x + w / 2, y + d / 2];
 
 // How far the boulders the Stone Golem threw lie from the ruins of Harrowstone quarry's heart, at
 // the least, clear of the Lantern Company there (metres)
+/**
+ * A people's works (works.js: a quarry, a lumber mill...) as it's left once it's been ruined, for a
+ * ruined one's layout (LAYOUTS: "ruined quarry"): its faces and its stone weathered and grown over
+ * (`ruined`: art/kits/works.js), its crane thrown down across its floor (`fallenCrane`), its lodge
+ * a heap of rubble and timbers, its cart left on one wheel. { parts, solid, heart }.
+ */
+export function ruinsOf(kind, random, width, depth) {
+    const works = layoutWorks(kind, random, width, depth, null);
+    const parts = [];
+    const solid = [...works.solid];
+
+    for (const part of works.parts) {
+        if (part.part === "derrick") {
+            parts.push({ part: "fallenCrane", x: part.x, y: part.y + 2.4, turn: random.range(-0.5, 0.5), seed: part.seed });
+            solid.push(box(part.x, part.y + 2.4, 5.2, 1.4));
+        } else if (part.part === "lodge") {
+            const [lx, ly] = [(part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2];
+
+            parts.push({ part: "rubble", x: lx - 1, y: ly, r: 1.5, seed: part.seed });
+            parts.push({ part: "timbers", x: lx + 2.2, y: ly + 0.6, r: 1.3, seed: random.seed() });
+        } else if (part.part === "sledge") {
+            parts.push({ part: "cart", x: part.x, y: part.y, turn: part.turn + 1.3 });
+        } else {
+            parts.push({ ...part, ruined: true });
+        }
+    }
+
+    return { parts, solid, heart: works.heart };
+}
+
 const HEART_CLEAR = 5;
 
 /**

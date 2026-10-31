@@ -208,12 +208,13 @@ export function cardOf(id) {
  * - `card`: a follow-up card (`card`: one whose `requires` is this step), dealt before any other
  *   while the thread's at it; done once it's done. One kept at a site (its `where`) is kept `far`
  *   ([least, most] metres) from where the thread was last, up on the highest open ground there
- *   (its place: not marked on the maps, its foe's prints leading there from where it was last).
+ *   (its place: not marked on the maps, its foe's prints leading there from where it was last:
+ *   threadTracks, said as they're come upon in its words, `spoor`).
  * - `place`: somewhere to go, `far` ([least, most] metres) from where the thread was last (its
  *   encounter, or the place of the step before), on open ground, or the plan's place of a kind
  *   (`site`: "ruined quarry", the nearest), marked on every player's maps; done once someone comes
- *   within `reach` of it. What's found there (`scene`: "crushed", what's left of the Lantern
- *   Company, drawn there from the step's on: world/scenes3d.js).
+ *   within `reach` of it. What's found there is its kind's (core/places.js PLACE_KINDS `scene`:
+ *   setpieces/scenes.js, laid out at its heart), its writing given (`reward.writing`).
  * - `talk`: one of the folk (`role`: roles.js ROLES, a barkeep, a priest...; an adventurer of a
  *   `calling`, at its guild, or, none of that calling left there, any of them) in the settlement
  *   nearest where it was last (`home`: the one the thread was begun in, its rumour's): a word of
@@ -280,11 +281,12 @@ export const THREADS = Object.freeze({
                 Object.freeze({ say: "Still up there. It's wandered those hills twenty years, round and round the ruins, as if it's looking for work. Drovers go miles out of their way. Ten days ago the Lantern Company went up after it: Bram, Ilsa, old Corwin, and Tamsin, who learnt her first spells beside me. They swore they'd bring back its heart. They haven't come back at all." }),
             ]),
             take: "I'll find out what became of them.",
+            taken: "Then go with care, and keep your eyes on the hills. If there's anything of them left to find, bring me word. Tamsin was the best I ever taught; she'd not have run from it.",
             leave: "Not for me.",
         }),
         steps: Object.freeze([
-            Object.freeze({ kind: "place", site: "ruined quarry", scene: "crushed", reach: 18, word: "The Lantern Company went up to the ruins of Harrowstone quarry, {way} of {town}, after its golem, and never came back. Find out what became of them.", reward: Object.freeze({ gold: 30, writing: "tamsin" }) }),
-            Object.freeze({ kind: "card", card: "stoneGolem", far: Object.freeze([110, 170]), word: "What's left of the Lantern Company lies crushed in the ruins of Harrowstone. Great round footprints lead away from them, {way} up into the hills: the golem's. Follow them, and finish what the Company began." }),
+            Object.freeze({ kind: "place", site: "ruined quarry", reach: 18, word: "The Lantern Company went up to the ruins of Harrowstone quarry, {way} of {town}, after its golem, and never came back. Find out what became of them.", reward: Object.freeze({ gold: 30, writing: "tamsin" }) }),
+            Object.freeze({ kind: "card", card: "stoneGolem", far: Object.freeze([110, 170]), spoor: "Great footprints of stone, sunk deep in the ground", word: "What's left of the Lantern Company lies crushed in the ruins of Harrowstone. Great round footprints lead away from them, {way} up into the hills: the golem's. Follow them, and finish what the Company began." }),
             Object.freeze({
                 kind: "talk",
                 role: "adventurer",
@@ -305,10 +307,19 @@ export const THREADS = Object.freeze({
  * nearest the plan's place of a kind, `near`: openerTown; none of that calling left there, any of
  * its adventurers), asked of them (`ask`), the tale told a piece at a time (`tale`: each piece's
  * words, {way} which way the place is from there, and what's asked for the next), then taken up
- * (`take`: the thread begun, its home that settlement) or left (`leave`). Only while the card it
- * leads to is in play and not done in the world, and the thread not begun.
+ * (`take`: the thread begun, its home that settlement; their parting words `taken`, the talk over)
+ * or left (`leave`). Only while the card it leads to is in play and not done in the world, and the
+ * thread not begun.
  */
 export const OPENERS = Object.freeze(["talk"]);
+
+/**
+ * The callings the threads' talk asks for of a guild's adventurers (THREADS `opens` and steps of
+ * `kind` "talk", their `calling`): every guild has one of each (core/insides.js guildFolkOf).
+ */
+export const TALK_CALLINGS = Object.freeze(
+    [...new Set(Object.values(THREADS).flatMap(({ opens = null, steps }) => [opens, ...steps].filter((def) => def?.kind === "talk" && def.calling).map(({ calling }) => calling)))].sort(),
+);
 
 /** The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger). */
 export const GUILD_KINDS = Object.freeze(["village", "town", "city", "capital"]);
@@ -416,12 +427,16 @@ export function threadTalk(tree, { thread, step }, fill = (text) => text) {
     if (step === null) {
         const pieces = def.tale.map(({ say, ask }, k) => {
             const last = k === def.tale.length - 1;
-            const next = last ? [{ say: def.take, next: start, do: [{ thread, step: null }] }, { say: def.leave, next: start }] : [{ say: ask, next: `${node}:${k + 1}` }, { say: "Another time.", next: start }];
+            const next = last ? [{ say: def.take, next: def.taken ? `${node}:taken` : start, do: [{ thread, step: null }] }, { say: def.leave, next: start }] : [{ say: ask, next: `${node}:${k + 1}` }, { say: "Another time.", next: start }];
 
             return [`${node}:${k}`, { say: [fill(say)], choices: next }];
         });
 
-        return { ...tree, nodes: { ...tree.nodes, [start]: { ...first, choices: [{ say: def.ask, next: `${node}:0` }, ...choices] }, ...Object.fromEntries(pieces) } };
+        // (Taken up, their parting words, if they've any, and the talk's over: talked to again, it's
+        // not offered)
+        const taken = def.taken ? [[`${node}:taken`, { say: [fill(def.taken)], choices: [{ say: "Farewell.", next: null }] }]] : [];
+
+        return { ...tree, nodes: { ...tree.nodes, [start]: { ...first, choices: [{ say: def.ask, next: `${node}:0` }, ...choices] }, ...Object.fromEntries([...pieces, ...taken]) } };
     }
 
     return {
@@ -438,8 +453,8 @@ export function threadTalk(tree, { thread, step }, fill = (text) => text) {
  * The tracks a card kept at a site leaves (STEPS `card`, its `where` "site": the Stone Golem's),
  * while its thread's at its step: from where the thread was last (the Lantern Company's remains)
  * to the card's place, wandering a little either side of the way (`wander` metres, every `every`),
- * the same on every copy. [{ id, creature (its shape's), points ([[x, y]]) }]. `legends`: the
- * world's (Legends, or as it's kept).
+ * the same on every copy. [{ id, creature (its shape's), spoor (its step's words for them, or
+ * null), points ([[x, y]]) }]. `legends`: the world's (Legends, or as it's kept).
  */
 export function threadTracks(legends) {
     return Object.entries(legends?.threads ?? {}).flatMap(([id, thread]) => {
@@ -462,7 +477,7 @@ export function threadTracks(legends) {
             return [ax + (bx - ax) * u + nx * off, ay + (by - ay) * u + ny * off];
         });
 
-        return [{ id: `thread:${id}`, creature: card.shape.creature, points }];
+        return [{ id: `thread:${id}`, creature: card.shape.creature, spoor: def.spoor ?? null, points }];
     });
 }
 

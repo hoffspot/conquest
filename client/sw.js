@@ -14,7 +14,11 @@
 //
 // A file asked for by name that a release keeps by hash (a worker's modules, as the import map
 // doesn't reach into workers; the font; the WebAssembly the navigation's glue fetches) is its copy
-// by hash: the release of the page asking, or (a worker, a page that hasn't said) the newest.
+// by hash: the release of the page asking, or (a worker, the game's page before it's said) the
+// newest. Never for the site's other pages (the model viewer and the other labs, the admin's
+// page): they never say a release, and the newest a game's page said may be older than theirs (the
+// game not opened since an update), its copies of the game's code not working with their own; what
+// they ask for by name is fetched from the network first, as the rest.
 //
 // A release a page finds is newer than its own (js/app/updater.js) is downloaded in the background:
 // the files of it that aren't kept, one at a time, each checked by its hash and kept, the page told
@@ -331,10 +335,30 @@ async function fetchToKeep(url) {
 // Each release's files by name (their addresses without the hash), worked out as first wanted
 const named = new Map();
 
+// The game's own page (index.html, or the folder it's in), which says its release on starting
+const GAME = new URL("./", self.location.href).pathname;
+
+/**
+ * Whether what asks for a file by name, not having said its release, is given the newest's: a
+ * worker, the game's page before it's said (the font its page asks for) or no page at all; not
+ * another of the site's pages (the labs, the admin's), which never say one.
+ */
+async function takesNewest(clientId) {
+    const client = clientId ? await self.clients.get?.(clientId) : null;
+
+    if (client?.type !== "window") {
+        return true;
+    }
+
+    const page = new URL(client.url).pathname;
+
+    return page === GAME || page === `${GAME}index.html`;
+}
+
 /** The address with its hash of a file asked for by name that a release keeps (null if none does). */
 async function hashedOf(url, clientId) {
     const known = await readState();
-    const name = (clientId && known.pages[clientId]) || known.newest;
+    const name = (clientId && known.pages[clientId]) || ((await takesNewest(clientId)) ? known.newest : null);
     const release = name ? known.releases[name] : null;
 
     if (!release) {

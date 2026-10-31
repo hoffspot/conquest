@@ -24,9 +24,10 @@ const hashOf = (body) => createHash("sha256").update(body).digest("hex").slice(0
 // Load sw.js with a fake network that answers every request with `files[path]` (or "new version"),
 // the way GitHub Pages does (whatever the query, letting browsers reuse the file for ten minutes),
 // and with the network failing if asked. `stored` is what the caches hold to start with
-// ({ name: { path: body } }), `open` the pages open (their ids), `estimate` what the browser says
-// of its storage.
-function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["page-1"], estimate, tags = false } = {}) {
+// ({ name: { path: body } }), `open` the pages open (their ids), `pages` where some of them are
+// ({ id: path }: the rest unknown to it, as a worker's is), `estimate` what the browser says of its
+// storage.
+function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["page-1"], pages = {}, estimate, tags = false } = {}) {
     const handlers = {};
     const store = new Map();
     const requests = [];
@@ -68,7 +69,7 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
                 handlers[type] = handler;
             },
             skipWaiting: () => {},
-            clients: { claim: async () => {}, matchAll: async () => open.map((id) => ({ id })) },
+            clients: { claim: async () => {}, matchAll: async () => open.map((id) => ({ id })), get: async (id) => (pages[id] ? { id, type: "window", url: full(pages[id]) } : undefined) },
             navigator: estimate ? { storage: { estimate: async () => estimate } } : {},
         },
         caches: {
@@ -402,6 +403,28 @@ describe("service worker", () => {
         assert.equal(await (await worker.request(old[0], { page: "page-1" })).text(), "navworker v1");
         assert.equal(await (await worker.request(old[0], { page: "page-2" })).text(), "navworker v2");
         assert.equal(await (await worker.request(old[0], { page: "worker-3" })).text(), "navworker v2");
+        assert.deepEqual(worker.requests, []);
+    });
+
+    it("gives the site's other pages (the model viewer, the labs), which never say a release, none of a release's copies: what they ask for by name from the network, as the server has it now; the game's page before it's said, the newest's", async () => {
+        const old = ["/js/beasts/model.js", "model v1"];
+        const worker = loadServiceWorker({ open: ["page-1", "viewer-1", "game-2"], pages: { "viewer-1": "/model-viewer.html?creature=stoneGolem", "game-2": "/index.html?play" } });
+
+        // (The game last played on a release now gone by: its copy kept)
+        await worker.tell("page-1", release("r1", { boot: [old] }, 1));
+        worker.files[old[0]] = old[1];
+        await worker.request(address(old), { page: "page-1" });
+
+        // (The server moved on since; the model viewer opened, not the game: the server's, not the
+        // game's last, which wouldn't work with the viewer's own code)
+        worker.files[old[0]] = "model v2";
+        worker.requests.length = 0;
+        assert.equal(await (await worker.request(old[0], { page: "viewer-1" })).text(), "model v2");
+        assert.deepEqual(worker.requests.map(({ url }) => url), [full(old[0])]);
+
+        // (The game's page, before it's said its release: the newest's, kept)
+        worker.requests.length = 0;
+        assert.equal(await (await worker.request(old[0], { page: "game-2" })).text(), "model v1");
         assert.deepEqual(worker.requests, []);
     });
 

@@ -144,17 +144,30 @@ export const RIFT_TOWER = Object.freeze({ name: "The Tower of Sar Mordal", biome
 
 /**
  * The ruins of Harrowstone quarry (core/rare.js THREADS harrowstone: where Magister Aldric Venn's
- * golem was made and went mad, the Stone Golem's), one a world, so named (`name`): up in the hills
- * (the plan's height within `hills`: not down on the plain, nor up among the peaks' snows) on
- * ground no steeper than `steep` (the plan's height between
- * a cell and its neighbours) and dry; between `from` and `to` metres from the nearest people's
- * start, and within `guild` metres of a settlement with a guild (a village or bigger: its rumour's
- * told there); `clear` cells from the settlements, `sites` from the other sites, `camps` from the
- * camps and `apart` from the great lairs, the dens, the hells' ways in and the Tower of Sar Mordal.
- * `tries` darts at most each time, the first `strict` share of them only up in the hills; failing,
- * each time its distances a `wider` share looser. None, if nowhere will do.
+ * golem was made and went mad, the Stone Golem's): the first of the LANDMARKS.
  */
-export const RUINED_QUARRY = Object.freeze({ name: "Harrowstone", hills: Object.freeze([0.5, 0.78]), steep: 0.06, from: 2600, to: 4400, guild: 900, clear: 6, sites: 6, camps: 4, apart: 20, tries: 8000, strict: 0.7, wider: 1.25 });
+export const RUINED_QUARRY = Object.freeze({ id: "ruined-quarry-1", kind: "ruined quarry", name: "Harrowstone", numbers: Object.freeze([71, 43]), hills: Object.freeze([0.5, 0.78]), steep: 0.06, from: 2600, to: 4400, guild: 900, clear: 6, sites: 6, camps: 4, apart: 20, tries: 8000, strict: 0.7, wider: 1.25 });
+
+/**
+ * The places a world has one of, for a rare card's thread to send someone to (core/rare.js STEPS
+ * `place`, its `site`: the kind, its nearest): each laid out after the Tower of Sar Mordal, in
+ * order, from numbers of its own (`numbers`: the plan's seed times the first, plus the second), so
+ * one added after another moves nothing laid out before it. Each is its `id`, of a `kind` (places.js
+ * PLACE_KINDS: its layout setpieces/neutral.js LAYOUTS, what's at its heart its `scene`), so named
+ * (`name`); kept, if it's given them:
+ * - `hills`: the plan's height within [least, most] (Harrowstone: up in the hills, not down on the
+ *   plain, nor up among the peaks' snows); `biomes`: in one of these lands (races.js BIOMES ids);
+ * - `steep`: on ground no steeper than this (the plan's height between a cell and its neighbours);
+ * - `from`, `to`: between so many metres from the nearest people's start;
+ * - `guild`: within so many metres of a settlement with a guild (a village or bigger: where a
+ *   rumour of it's told, core/rare.js THREADS `opens`);
+ * and always on dry land off the beach, `clear` cells from the settlements, `sites` from the other
+ * sites, `camps` from the camps and `apart` from the great lairs, the dens, the hells' ways in, the
+ * Tower of Sar Mordal and the landmarks before it. `tries` darts at most each time, the first
+ * `strict` share of them only where its `hills` and `biomes` have it; failing, each time its
+ * distances a `wider` share looser. None, if nowhere will do. Its people the land's, if anyone's.
+ */
+export const LANDMARKS = Object.freeze([RUINED_QUARRY]);
 
 // The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
 const GUILDED = Object.freeze(["village", "town", "city", "capital"]);
@@ -738,9 +751,11 @@ export function settleLand(land, seed) {
     // out before moves for it)
     sites.push(...riftTower(land, places, sites, camps, createRandom(seed * 67 + 41)));
 
-    // (And the ruins of Harrowstone quarry after it, the same way, from numbers of their own:
-    // nothing laid out before moves for them)
-    sites.push(...ruinedQuarry(land, places, sites, camps, createRandom(seed * 71 + 43)));
+    // (And the landmarks after it, the same way, each from numbers of its own: nothing laid out
+    // before moves for them)
+    for (const landmark of LANDMARKS) {
+        sites.push(...landmarkOf(landmark, land, places, sites, camps, createRandom(seed * landmark.numbers[0] + landmark.numbers[1])));
+    }
 
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
@@ -1166,18 +1181,20 @@ function riftTower(land, places, sites, camps, random) {
     return [];
 }
 
-// The ruins of Harrowstone quarry (RUINED_QUARRY): as the Tower of Sar Mordal is found, one, kept
-// up in the hills where it's dry and gentle, as far from the nearest start as it should be and
-// near a settlement with a guild, clear of the settlements, the sites and the camps, and far from
-// the great lairs, the dens, the hells and the tower; its people the land's, if anyone's. None, if
-// nowhere will do
-function ruinedQuarry(land, places, sites, camps, random) {
+// One of the LANDMARKS: as the Tower of Sar Mordal is found, one, kept where it's to be (its
+// heights, its lands, gentle enough), as far from the nearest start as it should be and near a
+// settlement with a guild if it's to be, clear of the settlements, the sites and the camps, and far
+// from the great lairs, the dens, the hells, the tower and the landmarks before it; its people the
+// land's, if anyone's. None, if nowhere will do
+function landmarkOf(landmark, land, places, sites, camps, random) {
     const { biome, water, territory, height } = land;
-    const { name, hills, steep, from, to, guild, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict, wider } = RUINED_QUARRY;
+    const { id, kind, name, hills = null, biomes = null, steep = null, from = null, to = null, guild = null, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict, wider } = landmark;
     const starts = places.filter(({ start }) => start).map(({ at }) => at);
-    const towns = places.filter(({ kind }) => GUILDED.includes(kind));
-    const kept = sites.filter((site) => BEAST_LAIRS.includes(site.kind) || site.theme === "hell" || site.kind === "rift tower");
-    const steeply = ([x, y]) => NEIGHBOURS.some(([dx, dy]) => Math.abs(height[cellIndex(x + dx, y + dy)] - height[cellIndex(x, y)]) > steep);
+    const towns = places.filter(({ kind: each }) => GUILDED.includes(each));
+    const kinds = LANDMARKS.map(({ kind: each }) => each);
+    const kept = sites.filter((site) => BEAST_LAIRS.includes(site.kind) || site.theme === "hell" || site.kind === "rift tower" || kinds.includes(site.kind));
+    const steeply = ([x, y]) => steep !== null && NEIGHBOURS.some(([dx, dy]) => Math.abs(height[cellIndex(x + dx, y + dy)] - height[cellIndex(x, y)]) > steep);
+    const wrongly = (at) => (hills !== null && (height[at] < hills[0] || height[at] > hills[1])) || (biomes !== null && !biomes.includes(BIOMES[biome[at]].id));
 
     for (let round = 0, loose = 1; round < 6; round++, loose *= wider) {
         for (let k = 0; k < tries; k++) {
@@ -1185,13 +1202,13 @@ function ruinedQuarry(land, places, sites, camps, random) {
             const at = cellIndex(...cell);
             const spot = centre(...cell);
 
-            if (water[at] || biome[at] === BIOME.beach || (k < tries * strict && (height[at] < hills[0] || height[at] > hills[1])) || steeply(cell) || !dry(land, ...cell, 1)) {
+            if (water[at] || biome[at] === BIOME.beach || (k < tries * strict && wrongly(at)) || steeply(cell) || !dry(land, ...cell, 1)) {
                 continue;
             }
 
-            const home = starts.length ? Math.min(...starts.map(([x, y]) => hypot(x - spot[0], y - spot[1]))) : from;
+            const home = starts.length ? Math.min(...starts.map(([x, y]) => hypot(x - spot[0], y - spot[1]))) : (from ?? 0);
 
-            if (home < from / loose || home > to * loose || !towns.some(({ at: [x, y] }) => hypot(x - spot[0], y - spot[1]) <= guild * loose)) {
+            if ((from !== null && home < from / loose) || (to !== null && home > to * loose) || (guild !== null && !towns.some(({ at: [x, y] }) => hypot(x - spot[0], y - spot[1]) <= guild * loose))) {
                 continue;
             }
 
@@ -1199,7 +1216,7 @@ function ruinedQuarry(land, places, sites, camps, random) {
                 continue;
             }
 
-            return [{ id: "ruined-quarry-1", kind: "ruined quarry", race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed() }];
+            return [{ id, kind, race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed() }];
         }
     }
 

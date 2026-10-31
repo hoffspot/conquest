@@ -25,7 +25,9 @@ const THREE = await import("three");
 const { buildWorld } = await import("../client/js/core/overworld.js");
 const { isNeutral, restingOf } = await import("../client/js/core/sites.js");
 const { heightAt } = await import("../client/js/core/terrain/height.js");
-const { layoutNeutral, NEUTRAL } = await import("../client/js/core/setpieces/neutral.js");
+const { layoutNeutral, NEUTRAL, ruinsOf } = await import("../client/js/core/setpieces/neutral.js");
+const { SCENES } = await import("../client/js/core/setpieces/scenes.js");
+const { PLACE_KINDS } = await import("../client/js/core/places.js");
 const { WORKS_SIZE } = await import("../client/js/core/setpieces/works.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { WORLD_SIZE } = await import("../client/js/core/worldplan/plan.js");
@@ -85,6 +87,31 @@ describe("the sites no people keeps (setpieces/neutral.js)", () => {
         // (Different seeds, different layouts)
         assert.notDeepEqual(layoutNeutral({ kind: "ruins", seed: 1 }), layoutNeutral({ kind: "ruins", seed: 2 }));
         assert.equal(layoutNeutral({ kind: "castle", seed: 1 }), null);
+    });
+
+    it("lays what's found at a kind's heart (its scene: places.js PLACE_KINDS, setpieces/scenes.js) round it, from numbers of its own, and none at a kind without one: the Lantern Company in Harrowstone's ruins", () => {
+        assert.equal(PLACE_KINDS["ruined quarry"].scene, "crushed");
+        assert.ok(Object.values(PLACE_KINDS).every(({ scene = null }) => scene === null || SCENES[scene]), "(every scene named one there is)");
+
+        for (let seed = 1; seed <= 12; seed++) {
+            const laid = layoutNeutral({ kind: "ruined quarry", seed });
+            const company = laid.parts.filter(({ part }) => part === "crushed");
+
+            assert.deepEqual(company.map(({ who }) => who), ["shield", "bow", "mace", "staff"], String(seed));
+            assert.ok(company.every(({ x, y }) => Math.hypot(x - laid.heart[0], y - laid.heart[1]) < 5), `${seed}: round its heart`);
+            assert.equal(company.filter(({ boulder }) => boulder).length, 1);
+
+            // (The rest of it as it'd be without them, its scene's numbers its own: a people's quarry
+            // ruined first, as any works can be, ruinsOf)
+            const ruins = ruinsOf("quarry", createRandom((seed ^ 0x5eed) >>> 0), NEUTRAL["ruined quarry"][0] * PLOT, NEUTRAL["ruined quarry"][1] * PLOT);
+
+            assert.deepEqual(laid.parts.slice(0, ruins.parts.length), ruins.parts, String(seed));
+            assert.ok(ruins.parts.some(({ part }) => part === "fallenCrane") && ruins.parts.some(({ ruined }) => ruined));
+        }
+
+        for (const kind of ["ruins", "graveyard", "dragon's lair"]) {
+            assert.ok(!layoutNeutral({ kind, seed: 3 }).parts.some(({ part }) => part === "crushed"), kind);
+        }
     });
 
     it("puts a stair-house down to the crypt under an old hall against its back wall, in its middle: in the way, its door's way into the hall clear of the columns, no heap of fallen stone on it", () => {

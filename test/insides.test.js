@@ -17,6 +17,7 @@ const { GIVEN_NAMES, namePeople } = await import("../client/js/core/names.js");
 const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
+const { TALK_CALLINGS } = await import("../client/js/core/rare.js");
 const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { crosses, squaresOf } = await import("../client/js/core/grid.js");
@@ -356,6 +357,11 @@ describe("a guild's hall and folk (insides.js)", () => {
 
             assert.equal(new Set(adventurers.slice(0, 5).map(({ look }) => look)).size, Math.min(5, adventurers.length));
             assert.ok(adventurers.every(({ look }) => ["warrior", "ranger", "mage", "rogue", "cleric"].includes(look)));
+
+            // (One of every calling the threads' talk asks for among them: a mage, for Harrowstone's
+            // rumour, core/rare.js TALK_CALLINGS)
+            assert.ok(TALK_CALLINGS.includes("mage"));
+            assert.ok(TALK_CALLINGS.every((calling) => adventurers.some(({ look }) => look === calling)), `${seed}: ${adventurers.map(({ look }) => look)}`);
             assert.equal(new Set(folk.map(({ local }) => local)).size, folk.length);
         }
     });
