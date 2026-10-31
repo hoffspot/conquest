@@ -4005,6 +4005,11 @@ now in their crowd):
     moments'. Till 2026-10-28 its guard was recorded from the moment it was told to stand on
     guard, the arms still coming up from its sides: every 2 seconds, going round, the sword hand
     dropped 33 cm and the shield hand 48 cm in a frame and rose again.
+  - **The same every time.** Each is played from the start of its guard's sway (avatar.js
+    `phase` 0; an avatar's is at random, so those on guard together don't sway as one), so its
+    hands are recorded where they were the time before, and onto guard ends 4 cm from where on
+    guard begins. Till 2026-10-31 each move's sway began at random: onto guard ended 3 to over 8
+    cm from where on guard began, a different jump on every load.
   - **What's in hand.** Each moment says what's in hand then (its flags, the last texel of its row:
     the weapon, the shield; 1 in hand, 0 put away, `AS` as the soldier drawn so is), so a draw
     shows the shield on the back, then on the arm, then the sword drawn too.
