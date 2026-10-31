@@ -1121,7 +1121,8 @@ mode's *Card and its thread* (the Stone Golem chosen, *Deal card*: `game.dealCar
 deals it a little ahead of them at once; refused while another's out, or once it's done in the
 world. The model viewer shows it as the game draws it, under
 *For the mightiest*: each of its blows, and its heave, the boulder in its hand from the crouch and
-thrown on as it's let go, down onto the ground 8 m ahead, its shadow and ring there as it comes.
+thrown on as it's let go, down onto the ground ahead of it (8 m, or nearer to land in view), its
+shadow and ring there as it comes.
 
 ### Building a card
 
