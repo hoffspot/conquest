@@ -20,4 +20,15 @@ export const SCENES = Object.freeze({
             return { part: "crushed", x: hx + cos(angle) * out, y: hy - 1.5 + sin(angle) * out * 0.8, turn: random.range(0, TAU), who, boulder: k === 2, seed: random.seed() };
         });
     },
+    // Those who went to a thin place before and were burnt where they fell (`challengers`), three of
+    // them strewn before its heart, each by what they carried (a shield, a bow, a staff), the ground
+    // scorched under them: the Sundered Ring's, where Vharzul the Greenflame tests whoever comes
+    challengers(random, [hx, hy]) {
+        return ["shield", "bow", "staff"].map((who, k) => {
+            const angle = Math.PI * 0.5 + (k - 1) * 0.9 + random.range(-0.3, 0.3);
+            const out = random.range(2, 3.4);
+
+            return { part: "crushed", x: hx + cos(angle) * out, y: hy + sin(angle) * out * 0.7, turn: random.range(0, TAU), who, boulder: false, burnt: true, seed: random.seed() };
+        });
+    },
 });

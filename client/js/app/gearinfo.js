@@ -71,7 +71,11 @@ export function effectWords(effect, level = 1, weapon = null) {
     const numbers = effectAt(effect, level);
     const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
 
-    // (On every blow, with no charge to it: Kingsplitter's cleave)
+    // (On every blow, with no charge to it: Greenbrand's witchfire, Kingsplitter's cleave)
+    if (def.always && effect === "witchfire") {
+        return `${def.label}: every blow up close sets the foe struck alight with green fire, leaping on to ${numbers.leaps === 1 ? "the nearest foe" : `the ${numbers.leaps} nearest foes`} within ${numbers.reach} m of them, each struck ${Math.round(numbers.share * 100)}% as hard and set alight`;
+    }
+
     if (def.always) {
         return `${def.label}: every blow up close cleaves on through every other foe within ${numbers.reach} m before you, each struck ${Math.round(numbers.share * 100)}% as hard`;
     }

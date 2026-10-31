@@ -832,8 +832,9 @@ const UNLEASHED_MOTES = Object.freeze({
     fire: mote([0xffe08a, 0xff3a0a], { count: 16, size: [0.16, 0.32], speed: [0.8, 2.2], life: [0.35, 0.7], gravity: -3 }),
     dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
     sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
+    greenfire: mote([0xd8ffe0, 0x18c050], { count: 14, size: [0.14, 0.3], speed: [0.8, 2], life: [0.35, 0.65], gravity: -3 }),
 });
-const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", cleave: "clash" });
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", cleave: "clash", witchfire: "legendCinderburst" });
 
 // How a ward let loose on whoever wears it is drawn (core/legendary.js EFFECTS `ward`), by its
 // element: the shell closing round them and holding while it lasts, the shards thrown off it, the
@@ -890,6 +891,10 @@ const COLOSSAL_BLASTS = Object.freeze({
     golemPound: { quake: "slam", shake: 0.55, sound: "impactEarthMid" },
     orcSlam: { quake: "slam", shake: 0.45, sound: "impactEarthMid" },
     orcSpin: { quake: "spin", shake: 0.15, sound: null },
+    // (Vharzul the Greenflame's: his wings swept round before him, the dust thrown up; and his ring
+    // of green fire bursting all round him, heard as fire bursts)
+    wingSweep: { quake: "spin", shake: 0.1, sound: null },
+    greenFlare: { quake: "flare", shake: 0.25, sound: "impactFireMid" },
     shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });
@@ -6438,7 +6443,7 @@ export class Game {
         const threads = Object.entries(legends?.threads ?? {})
             .filter(([id]) => !legends.gaveUp?.(id, this.me))
             .map(([id, thread]) => ({ id, thread, def: legends.stepOf(id), fell: (thread.fell ?? []).includes(this.me) }))
-            .filter(({ thread, def, fell }) => thread.place && (["place", "lock", "fight"].includes(def?.kind) || def?.mark || (def?.kind === "card" && fell)))
+            .filter(({ thread, def, fell }) => thread.place && (["place", "lock", "fight", "enter"].includes(def?.kind) || def?.mark || (def?.kind === "card" && fell)))
             .map(({ id, thread: { place: [x, z] }, def, fell }) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: ${def?.kind === "card" && fell ? "where you fell to it" : "where it leads"}` }));
 
         return [...seen, ...threads];
@@ -11453,13 +11458,13 @@ export class Game {
             // (Its card kept where they fell to it: there, and that it waits for them still)
             const fell = def?.kind === "card" && thread.place && (thread.fell ?? []).includes(this.me);
             const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-            const where = ((def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.mark) && thread.place) || fell ? thread.place : town?.at;
+            const where = ((def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.kind === "enter" || def?.mark) && thread.place) || fell ? thread.place : town?.at;
 
             return {
                 title,
                 state: thread.done ? "Its end" : `Step ${thread.step + 1} of ${THREADS[id]?.steps.length ?? thread.step + 1}`,
                 words: thread.done ? (thread.by.length ? `Followed to its end by ${names(thread.by)}.` : "Followed to its end.") : `${this.#threadWordsOf(id)}${fell ? " You fell to it there, and it waits for you there still." : ""}`,
-                where: !thread.done && at && where ? `${town && def?.kind !== "place" && !def?.mark && !fell ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
+                where: !thread.done && at && where ? `${town && def?.kind !== "place" && def?.kind !== "enter" && !def?.mark && !fell ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
                 thread: thread.done ? null : id,
             };
         });
@@ -12277,7 +12282,7 @@ export class Game {
         const home = keeper.home ? this.world.plan?.places.find((place) => place.id === this.host.legends?.threads[id]?.home) : null;
 
         if (home) {
-            return { words: `The ${keeper.calling ?? keeper.role} at the guild in ${home.name} who told you of it will take you back on it, where it stood.`, name: home.name, at: home.at };
+            return { words: `The ${keeper.calling ?? keeper.role} at the ${keeper.post ?? "guild"} in ${home.name} who told you of it will take you back on it, where it stood.`, name: home.name, at: home.at };
         }
 
         return { words: "The receptionist at any guild will take you back on it, where it stood.", name: null, at: null };
@@ -13598,9 +13603,11 @@ export class Game {
                     }
 
                     // (One rallying a champion of its own to it as it's worn down, by name: battle.js
-                    // #rallies, the Orc King's)
+                    // #rallies, the Orc King's; or in words of its own, `told`: Vharzul's fiends)
                     if (event.target === this.me) {
-                        this.hud.message(event.title ? `${actor.name[0].toUpperCase()}${actor.name.slice(1)} roars a battlecry: ${event.title} is coming!` : `${actor.name[0].toUpperCase()}${actor.name.slice(1)} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                        const name = `${actor.name[0].toUpperCase()}${actor.name.slice(1)}`;
+
+                        this.hud.message(event.told ? `${name} ${event.told}` : event.title ? `${name} roars a battlecry: ${event.title} is coming!` : `${name} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
                     }
 
                     break;
@@ -16882,6 +16889,23 @@ export class Game {
         } else if (event.effect === "ruinblast") {
             fx.flash(point, { colour: 0xfff4c0, intensity: 60, distance: 14, life: 0.3, size: 4 });
             fx.ring(at, { colour: 0xffd060, from: 0.3, to: radius * 1.4, life: 0.55 });
+        } else if (event.effect === "witchfire") {
+            // (Green fire bursting from the foe struck, and leaping on to each it caught: a tongue of
+            // it from one to the next, green flames off each)
+            fx.flash(point, { colour: 0x6aff8a, intensity: 30, distance: 9, life: 0.3, size: 2 });
+            fx.spray(UNLEASHED_MOTES.greenfire, point);
+
+            let from = point;
+
+            for (const id of event.struck) {
+                const to = this.avatars.get(id)?.point(0.6);
+
+                if (to) {
+                    fx.lightning(from.clone(), to.clone(), { colour: 0x4aff7a, width: 0.06, life: 0.3, jag: 0.25, branches: 0 });
+                    fx.spray(UNLEASHED_MOTES.greenfire, to);
+                    from = to;
+                }
+            }
         } else if (event.effect === "cleave") {
             // (A blow carried on through the others before its wielder: a pale arc swept out to its
             // reach, and a bright spray off each it caught)

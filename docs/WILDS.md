@@ -927,7 +927,9 @@ given that step's reward (`reward`: gold, a unique, a writing to read in the jou
 own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#threadSetUp`):
 - *card*: a follow-up card (one whose `requires` is that step), dealt in place of the director's
   as any rare card is, before any other while the thread's at it and never otherwise
-  (`Legends` `wants`, `pick`); done once it's done. One kept at a site has its place: `far` (110
+  (`Legends` `wants`, `pick`); done once it's done; one with hours (`gates` `hours`) only dealt in
+  them. One kept at a site has its place: the place of the step before (`here`: Vharzul's, at the
+  Sundered Ring), or `far` (110
   to 170 m for the golem's) from where the thread was last (or, `toward` a people, within half a
   radian either side of the way to their nearest settlement: the Orc King's war camp, 220 to 320 m
   out from the village his raiders burned towards the orcs' lands), the highest of a couple of
@@ -958,6 +960,10 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
   last); done as it's reported done, by whoever reports it first (`#rewarded`).
 - *lock*: a lock opened as the thread comes to it, its way in marked; done once someone goes in
   by it (*Locks*, below).
+- *enter*: a way in to go in by, the plan's dungeon of a `theme` nearest where the thread was last
+  (a hell's way in: its cult's camp), marked on every player's maps (a scroll, its seal sea-green)
+  and in the journal; done once someone goes in by it (the host's `#threadCrossed`, its `site`),
+  they alone taking part (as anyone goes into a hell: by night, its rite broken).
 - *fight*: foes to drive out of somewhere: the settlement its opener's rumour told of (`at`
   "opener", its middle; the Orc King's raiders in the border village they burned), or, as a
   place's, a spot `far` from where it was last; marked on every player's maps, as a place is. Its
@@ -999,7 +1005,10 @@ where it was told, its `home` that settlement; their parting words, `taken`, and
 so it's not offered again) or left. Every guild has one of every calling the threads' talk asks
 for (`TALK_CALLINGS`: a mage and a warrior, so far; insides.js `guildFolkOf`: the last at its
 tables taking one up if none of the others has it), and one hired from it leaves the rumour to any
-adventurer still there.
+adventurer still there. Or another of the folk tells it where they keep (`role`, `post`: the
+Exile's Road's priest, at the temple of that settlement, every village or bigger having one as it
+has a guild), who takes back on it whoever gives it up (`keeperOf`: "The priest at the temple in
+Sarmir who told you of it will take you back on it, where it stood.").
 
 A player can give a thread up, and take it back up, free, any time (the user: "If the player dies
 on a unique quest or drops a unique quest from their journal, ensure there is a logical place they
@@ -1267,14 +1276,109 @@ His raiders (creatures.js `orcRaider`: drawn as people are, an orc of his clans,
 grey, tusked, a cleaver each, 6 to 11, laying a wound open now and then) are met only where his
 thread puts them. The rules two games share changed with it (`NET_VERSION` 198).
 
+### Vharzul the Greenflame
+
+The third rare card (`RARE_CARDS` `vharzul`; its thread `exile`, *The Exile's Road*), a world's
+boss, once a world (the user: "I want to make the green version of the Lord of the Pit a unique
+card that shows up out in the wilds somewhere and leads the player to the location of the entrance
+to the Hell dungeon. Come up with a backstory on the cultists and why the Hells dungeon exists").
+
+Why the hells are: when the Six drove the Hollow One, the seventh spark, under the world
+(core/lore/gods.js), the dark it lies in became its prison, and the hells are that dark, realm on
+realm, the Lord of the Pit ruling it in its name. Where the world's skin wears thin (Sinclair's
+*thin places*: core/writings.js), the hells press up against it, and by night things come through.
+The cult in the wilds is the Hollow Choir: they say the Hollow One was cheated by the Six and that
+feeding it will wake it, and every night they sing a gate open at a thin place they keep, a hell's
+way in, and feed it what they've taken (the cage and the cart at their camps; the flayed below are
+their sacrifices). The temples' priests say as much asked of the Hollow One (dialogue.js
+`hollow`), and the bestiary names the Choir (core/lore/bestiary.js `cultist`, `cultLeader`).
+
+Vharzul was the Pit's first lord. His brother, who sits its throne now, threw him down, the Forge
+Demon beating out the chains he was cast out in, and cast him up through a thin place into the
+world above, every gate below keyed to the Choir's song, which they sing for his brother now, so
+none opens to him. Burning between the worlds turned his fire the green of the thin places: he's
+drawn from the Lord of the Pit's model in its other skin (beasts/model.js `vharzul`: the
+catalog's `beast-infernal-skins`, `dark`, its glows and its armour's cloth green). He haunts the
+thin place he came up through, testing whoever comes by night for one strong enough to go down and
+put his brother off the throne.
+- **The Sundered Ring** (worldplan/settle.js `SUNDERED_RING`, the second of the `LANDMARKS`: one a
+  world, laid out after Harrowstone from numbers of its own, so nothing laid out before moves for
+  it): on the heaths, the dark woods, the badlands or the marshes, on gentle ground, 2,800 to
+  4,600 m from the nearest people's start and within 1,000 m of a village or bigger. Laid out as
+  a ring of standing stones (setpieces/neutral.js "sundered ring"), wider and taller, nine to eleven
+  of them, every one scorched black (`scorched`), most split across as the world tore under them,
+  their stumps broken off jagged and their tops lying beyond them where they were thrown (`split`),
+  one or two thrown down whole; no flat stone in its middle but a scar of green glass where the
+  ground melted (`scar`, art/kits/neutral.js), the earth round it charred, cracks of glass running
+  out from it and shards of it standing up out of it, all of it dark by day and glowing the green
+  of the thin places at night (`SMOULDERS` `greenglass`). Before it, its kind's scene (places.js
+  `scene`, setpieces/scenes.js `challengers`): Maelis, Tobin and Wynn, burnt where they fell, the
+  ground scorched under them, a shield beaten flat, a bow snapped, a staff broken. On the maps once
+  found, as standing stones, no one's.
+- **The rumour**: the priest at the temple in the settlement nearest the ring tells it (`opens`
+  `role` "priest", `post` "temple": "Something weighs on you."), in four pieces: the green fire
+  seen from the bell tower on the hill {way} of there; what a thin place is, and the hells the
+  Hollow One lies in; the Hollow Choir, who give the hill a wide berth too; and the three who went
+  up at midsummer, Maelis, a knight of the Red Horn, the hunter Tobin and a young mage, and never
+  came back. "I'll go up to the Ring." begins the thread; "Then go by day first... Aurelia's light
+  go with you." ends the talk. Given up, it's the priest who takes a player back on it, at the
+  temple there (`back`: "About the Sundered Ring: I'll go up there after all.").
+- **The ring** (its first step, a *place*: the ring's heart): reached, 40 gold to each there and
+  Maelis's note (writings.js `maelis`, three pages, in the journal's *Writings*: the split stones
+  and the glass; Vharzul come up out of it at dusk, naming himself, the Pit's first lord, his
+  brother, the gates keyed to the Choir's song; the champion he wants, and how he tested them; and
+  "If you are reading this, you are the next. It will come at dusk.").
+- **Vharzul** (its second, the card, `here`: at the ring itself): dealt as someone comes within 70
+  m, but only after dusk (`gates` `hours`: dusk and night; the host's `#rareSites` holds a site's
+  card to its hours), and gone at dawn if no one's taken him on; a dungeon master's rank, two tiers
+  above the land, "Vharzul the Greenflame" ("The glass between the broken stones flares
+  green..."). As he falls, his last words (`last`: "Strong enough. At last, strong enough..."), a
+  burning claw driven into a stone, the mark smoking there pointing the way. Then his reward to
+  each who fought him: Greenbrand (`UNIQUES` `greenbrand`, a sword ground from his horn, its
+  effect Witchfire, its own: docs/GAME.md *Legendary weapons*) and 900 gold.
+- **Through the gate** (the third, *enter*, `theme` "hell"): the hell's way in nearest the ring,
+  the way his brand points, marked on every player's maps and in their journal ("Vharzul's brand,
+  burnt into a stone of the Sundered Ring, points {way} to where the Hollow Choir sing their gate
+  open..."); done once someone goes in by it, by night, the Choir's rite there broken (*The way
+  in*, docs/DUNGEONS.md): 250 gold to whoever went in, the thread at its end. Down there, the Lord
+  of the Pit is his brother.
+
+How he fights (creatures.js `vharzul`, weapons.js NATURAL `vharzul`; a world's boss, his bar
+across the top of the screen; 80 hit points at the first tier, half as many again as his card's
+(`shape` `health` 1.5: 120, the Lord's), four times that as a boss, nearly three tenths of every
+blow turned by his black iron; fire harming him half as much, `wards`; never
+thrown; seeing in the dark and further off than most, `sight` 22):
+- **His claws and green fire**: the Lord of the Pit's claws swept one way or the other (10 to 16,
+  burning half the time), and the thin places' green fire flung from his hands as they open, 10 m
+  (8 to 13, setting them burning: `riftFire`, the rift's own, drawn and heard as the rift
+  stalker's is).
+- **His wings** (`moves` `wing`, Wing Attack L): every 7 seconds, the first 3 after he sets on
+  anyone, at whoever's within 3 m, his wings swept round before him (11 to 18, 2.4 m round a point
+  1.5 m before him: `quake`, `wingSweep`), throwing whoever they catch; none behind him.
+- **His ring of green fire** (`moves` `flare`, Cast): every 14 seconds, the first 8 after he sets on
+  anyone, at whoever's within 4.5 m, green fire burst all round him (13 to 21, 4.2 m round, fire's,
+  setting whoever it catches burning: `quake` `afflict`), shown on the ground round him first
+  (`telegraph`), drawn as a ring of green flame rolling out (spellfx.js quake `flare`), heard as
+  fire bursts (`impactFireMid`).
+- **The thin place torn open** (`rally`, Spell Loop): at two thirds of his hit points, then at one
+  third, once each, he tears it open behind him and fiends come through (creatures.js `fiend`, two,
+  then two or three, a tier under him), told in his own words (`told`: "Vharzul the Greenflame
+  tears the thin place open behind him: fiends come through!"); their models wanted as soon as he's
+  about (game.js `#modelsAbout`).
+
+Till his model's read (and where the licensed models aren't, as in CI) he's drawn as the Lord's
+stand-in, darker, his eyes green (beasts/looks.js). The model viewer shows him under *For the
+mightiest*. The rules two games share changed with him (`NET_VERSION` 200: his rally's words, his
+fire's burning, the *enter* step).
+
 ### Building a card
 
-The Stone Golem and the Orc King are made of pieces any card can be made of. A card that waits
+The Stone Golem, the Orc King and Vharzul the Greenflame are made of pieces any card can be made of. A card that waits
 somewhere of its own, with a rumour to begin it and a quest to follow, is these, each data:
 1. **Its place** (worldplan/settle.js `LANDMARKS`, one a world each, laid out after those before it
    from numbers of their own): an `id`, a `kind`, a `name`, and where it's to be kept (heights
    `hills`, lands `biomes`, gentle as `steep`, `from`/`to` metres from the nearest start, within
-   `guild` metres of a village or bigger for its rumour). Its kind in places.js `PLACE_KINDS`
+   `guild` metres of a village or bigger for its rumour: Harrowstone's, the Sundered Ring's). Its kind in places.js `PLACE_KINDS`
    (`icon`, `holds`, and `scene`: what's found at its heart, setpieces/scenes.js `SCENES`); its
    layout in setpieces/neutral.js `LAYOUTS` (a people's works ruined: `ruinsOf`), its look in
    art/kits/neutral.js, its size in `NEUTRAL`.
@@ -1287,11 +1391,14 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    on the maps, a `camp` pitched there); a *fight* (`foes` to drive out first, where its rumour was
    told of: `at` "opener"); a *talk* back at its `home`; or any of the others (*Threads*). A rumour
    told at a people's border village (`near` { border }: `borderOf`), and the world changed as it's
-   taken up (`begins`: `burn`, the village set burning), are the Orc King's.
+   taken up (`begins`: `burn`, the village set burning), are the Orc King's. A rumour told by
+   another of the folk where they keep (`role`, `post`: a temple's priest), a card kept at the place
+   of the step before (`here`), and a way in to go in by (*enter*, `theme`: a hell's), Vharzul's.
 3. **Its card** (`RARE_CARDS`): `where` "site", `requires` its thread's card step, its `shape` (a
-   `foe`: its `creature`, `champion` rank, `up` tiers, `title`) and its `reward` (a unique,
+   `foe`: its `creature`, `champion` rank, `up` tiers, `title`, how much tougher than its kind it
+   is, `health`) and its `reward` (a unique,
    `UNIQUES`, and gold), `kind` "unique" to come once a world; what its foe says as it falls
-   (`last`).
+   (`last`); the hours it comes in (`gates` `hours`: Vharzul's, after dusk).
 4. **Its foe** (creatures.js, weapons.js `NATURAL`): a world's boss (`worldBoss`: its bar across the
    top, its model wanted at once), seeing further (`sight`), never thrown (`steady`); its blows,
    one at random (`either`), heaving the ground (`quake`), lobbing what bursts (`bomb`: battle.js
@@ -1299,7 +1406,9 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    `least`; a blow struck several times (`blows`), one that throws (`toss`); attacks of its own now
    and then (`moves`: a `leap` at someone, a blow all round it, where it lands shown first,
    `telegraph`), a guard to get round (`stance`), and champions called at its health's marks
-   (`rally`: by name, `title`, a tier or more under it, `down`): the Orc King's (*How he fights*).
+   (`rally`: by name, `title`, a tier or more under it, `down`, or told in words of its own,
+   `told`): the Orc King's (*How he fights*); a blow that leaves something on whoever it catches
+   (`quake` `afflict`: Vharzul's ring of fire, setting them burning).
    Drawn from its model (beasts/model.js `MODELS`: clips played one into the next,
    `chains`; what it carries in its hand, `carry`, thrown on in the model viewer too), its prints
    (world/tracks3d.js `OWN`), its spoils, lore and voice.
@@ -1307,10 +1416,10 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    `effectOf`): one let loose by blows struck, or a ward by blows taken (`ward`: `guard`, `skin`,
    `harden`; what the wearer's told, `felt`; drawn and heard as its `element` has it, app/game.js
    `WARD_LOOKS`); or a unique's own (`unique`, never rolled on a legendary), on every blow with no
-   charge to fill (`always`: Kingsplitter's Cleave).
+   charge to fill (`always`: Kingsplitter's Cleave, Greenbrand's Witchfire).
 
 Then debug mode deals it by its id (*Card and its thread*), and the unit tests (test/rare.test.js
-*the Golem of Harrowstone*, *the Iron Crown*) show how to follow one through.
+*the Golem of Harrowstone*, *the Iron Crown*, *the Exile's Road*) show how to follow one through.
 
 ## Adventurers' caches
 

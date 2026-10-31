@@ -164,6 +164,8 @@ export const SMOULDERS = Object.freeze({
     scorch: { colour: 0x1c1714, glow: [0.1, 0.01, 0.002], waver: 0.6 },
     runes: { colour: 0x262220, glow: [0.42, 0.05, 0.006], waver: 0.25 },
     coals: { colour: 0x2c2826, glow: [1.5, 0.42, 0.08], waver: 0.35 },
+    // (The Sundered Ring's scar of green glass: dark green-black by day, the thin places' green at night)
+    greenglass: { colour: 0x0e1a12, glow: [0.03, 0.34, 0.1], waver: 0.45 },
 });
 
 const smouldering = new Map();
@@ -285,16 +287,34 @@ function mouthOf(solid, piece, random, part, [cx, y, front]) {
 
 const BUILD = {
     // A standing stone: tall and flat-sided, its broad faces to the ring's middle, narrowing a
-    // little and rounded off at the top, leaning a touch; or fallen, lying along the ring
+    // little and rounded off at the top, leaning a touch; or fallen, lying along the ring. Scorched
+    // black (`scorched`: the Sundered Ring's), and split across (`split`: so much of it standing, a
+    // jagged break across its top, its top lying beyond it, laid out as a fallen stone of its own)
     stone(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const stone = material(MEGALITH[piece.people] ?? "rock");
+        const stone = material(part.scorched ? "rock-dark" : (MEGALITH[piece.people] ?? "rock"));
         const [ax, az] = [-Math.sin(part.angle), Math.cos(part.angle)];
 
         if (part.fallen) {
             const lying = corners(cx, cz, ax, az, m(part.h * 0.9), m(part.w));
 
             solid.extrude(lying, -m(0.2), m(part.d * 1.1), stone, { batter: m(0.12) });
+
+            return;
+        }
+
+        // (Split: its stump, broken off jagged, a little higher at one side than the other)
+        if (part.split) {
+            const stump = part.h * part.split;
+            const foot = corners(cx, cz, ax, az, m(part.w), m(part.d));
+
+            solid.extrude(foot, -m(FOOTING), m(stump * 0.85), stone, { batter: m(0.06) });
+
+            for (const side of [-1, 1]) {
+                const half = corners(cx + side * ax * m(part.w * 0.25), cz + side * az * m(part.w * 0.25), ax, az, m(part.w * 0.5), m(part.d * 0.92));
+
+                solid.extrude(half, m(stump * 0.85), m(stump * (side > 0 ? random.range(1, 1.15) : random.range(0.88, 0.98))), stone, { batter: m(part.w * 0.12) });
+            }
 
             return;
         }
@@ -307,6 +327,62 @@ const BUILD = {
         const top = corners(cx + lean[0], cz + lean[1], ax, az, m(part.w * 0.86), m(part.d * 0.86));
 
         solid.extrude(top, m(part.h * 0.82), m(part.h), stone, { batter: m(part.w * 0.18) });
+    },
+
+    // A scar of green glass where the ground melted as the world tore (the Sundered Ring's heart:
+    // setpieces/neutral.js "sundered ring"), `r` metres round, its edge ragged; cracks of it running
+    // out across the scorched earth round it (`cracks`), shards of it standing up out of it
+    // (`shards`), all of it dark by day and glowing the green of the thin places at night
+    // (SMOULDERS `greenglass`); the earth round it charred to ash. Lying a little over the ground
+    scar(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [glass, ash] = [smoulder("greenglass"), material("earth-sooty")];
+        const r = m(part.r);
+        const sides = 18;
+        // (Its edge, ragged, from the middle out `out` (a share of `r`) at each of its corners)
+        const ragged = (out, y, lo, hi) =>
+            Array.from({ length: sides }, (_, k) => {
+                const a = part.turn + (k / sides) * Math.PI * 2;
+                const reach = r * out * random.range(lo, hi);
+
+                return [cx + Math.cos(a) * reach, y, cz + Math.sin(a) * reach];
+            });
+        const fan = (rim, stuff) => {
+            const middle = [cx, rim[0][1], cz];
+
+            rim.forEach((point, k) => solid.facing([middle, rim[(k + 1) % rim.length], point], [0, 1, 0], stuff, undefined, null));
+        };
+
+        fan(ragged(1.45, m(0.02), 0.85, 1.15), ash);
+        fan(ragged(1, m(0.05), 0.8, 1.1), glass);
+
+        // (Its cracks: thin strips of it running out from its edge, narrowing)
+        for (let k = 0; k < part.cracks; k++) {
+            const a = part.turn + (k / part.cracks) * Math.PI * 2 + random.range(-0.3, 0.3);
+            const [ux, uz] = [Math.cos(a), Math.sin(a)];
+            const [from, to] = [r * 0.9, r * random.range(1.7, 2.4)];
+            const wide = m(random.range(0.08, 0.14));
+            const bend = random.range(-0.25, 0.25);
+            const along = (t) => [cx + ux * (from + (to - from) * t) - uz * bend * t * r, cz + uz * (from + (to - from) * t) + ux * bend * t * r];
+            const [a0, a1] = [along(0), along(1)];
+
+            solid.facing([[a0[0] - uz * wide, m(0.04), a0[1] + ux * wide], [a1[0], m(0.04), a1[1]], [a0[0] + uz * wide, m(0.04), a0[1] - ux * wide]], [0, 1, 0], glass, undefined, null);
+        }
+
+        // (Its shards: thin blades of glass standing up out of it, leaning out)
+        for (let k = 0; k < part.shards; k++) {
+            const a = random.range(0, Math.PI * 2);
+            const out = r * random.range(0.2, 0.85);
+            const [x, z] = [cx + Math.cos(a) * out, cz + Math.sin(a) * out];
+            const tall = m(random.range(0.25, 0.7));
+            const wide = m(random.range(0.06, 0.12));
+            const lean = random.range(0.1, 0.35) * tall;
+            const tip = [x + Math.cos(a) * lean, tall, z + Math.sin(a) * lean];
+            const [px, pz] = [-Math.sin(a) * wide, Math.cos(a) * wide];
+
+            solid.face([[x - px, 0, z - pz], [x + px, 0, z + pz], tip], glass, [[0, 0], [m(1), 0], [m(0.5), m(1)]], null);
+            solid.face([[x + px, 0, z + pz], [x - px, 0, z - pz], tip], glass, [[0, 0], [m(1), 0], [m(0.5), m(1)]], null);
+        }
     },
 
     // The flat stone in the ring's middle, on two low stones
@@ -717,7 +793,9 @@ const BUILD = {
     // a ribcage's arcs splayed, a skull broken and long bones strewn; their cloak flat over them;
     // and what they carried, by who they were (`who`): a round shield beaten flat and a helm
     // crushed, a bow snapped and its arrows strewn, a mace and a holy book's loose pages, a staff
-    // broken in two and a satchel; a boulder on one of them (`boulder`)
+    // broken in two and a satchel; a boulder on one of them (`boulder`). Or burnt where they fell
+    // (`burnt`: those who went to the Sundered Ring before, setpieces/scenes.js `challengers`): the
+    // ground scorched black under them and their cloaks charred
     crushed(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
         const [ax, az] = [Math.cos(part.turn ?? 0), Math.sin(part.turn ?? 0)];
@@ -740,8 +818,8 @@ const BUILD = {
         const bone = material("bone");
 
         // (The stain, and the cloak flat over the middle of them)
-        blot(0, 0, random.range(1, 1.3), 0.02, "mud-dark", 13);
-        blot(random.range(-0.2, 0.2), random.range(-0.15, 0.15), 0.55, 0.035, { shield: "wool-blue", bow: "wool-green", mace: "linen", staff: "cloth-violet" }[part.who] ?? "linen", 9);
+        blot(0, 0, random.range(1, 1.3), 0.02, part.burnt ? "earth-sooty" : "mud-dark", 13);
+        blot(random.range(-0.2, 0.2), random.range(-0.15, 0.15), 0.55, 0.035, part.burnt ? "timber-char" : ({ shield: "wool-blue", bow: "wool-green", mace: "linen", staff: "cloth-violet" }[part.who] ?? "linen"), 9);
 
         // (The ribcage, its arcs pressed flat and splayed out)
         for (let k = 0; k < 5; k++) {

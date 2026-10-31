@@ -81,7 +81,7 @@ export const BESTIARY_LORE = Object.freeze({
         sign: "bare bone toe-marks in the mud, and flakes of rust",
     }),
     cultist: Object.freeze({
-        lore: "Robed followers of whatever the hells' portals let through, met in the marshes, jungle, dark woods and burning lands, oftener by night at their rites. They strike with wands and pitch their camps by the old ruins. At a hell's way in they stand round their high priest till daybreak.",
+        lore: "The Hollow Choir: robed followers of the Hollow One, who say it was the seventh spark, cheated by the Six, and that feeding it will wake it. Met in the marshes, jungle, dark woods and burning lands, oftener by night at their rites. They strike with wands and pitch their camps by the old ruins. At a hell's way in they stand round their high priest till daybreak.",
         sign: "candle stubs, and a ring burnt in the grass",
     }),
     troll: Object.freeze({
@@ -397,15 +397,15 @@ export const BESTIARY_LORE = Object.freeze({
         sign: "long bare footprints, wet with bile",
     }),
     cultLeader: Object.freeze({
-        lore: "The cult's high priest, robed as its faithful are and a head taller, keeping its rite at a hell's way in, only after dark. It swings its staff and calls hellfire down out of the dark. Once it and all its faithful are slain, the portal stands open till daybreak; the next night the cult's back at it.",
+        lore: "The Hollow Choir's high priest, robed as its faithful are and a head taller, keeping its rite at a hell's way in, only after dark, singing its gate open. It swings its staff and calls hellfire down out of the dark. Once it and all its faithful are slain, the portal stands open till daybreak; the next night the cult's back at it.",
         sign: "a pentagram scorched into the earth, candles at its points",
     }),
     greaterDemon: Object.freeze({
-        lore: "The master of the River of Fire, waiting by the Hellforge at the portal down: a winged, horned demon nearly twice a man's height that sat the Pit's throne before the Lord who sits it now. It smashes with burning fists and hurls hellfire from its hand, and no blast moves it.",
+        lore: "The master of the River of Fire, waiting by the Hellforge at the portal down: a winged, horned demon nearly twice a man's height that forged the black iron of the Lord who sits the Pit's throne now, and the chains he cast his brother Vharzul out with. It smashes with burning fists and hurls hellfire from its hand, and no blast moves it.",
         sign: "fist-sized dents in the anvils, still warm",
     }),
     demonLord: Object.freeze({
-        lore: "The Lord of the Pit, on his horned throne at the bottom of a hell, under the violet light that is his own. Armoured in black iron, his wings burning, nearly twice a man's height, he sweeps with burning claws and flings hellfire from his open hands, and no blast moves him. Beyond his throne lies the way out.",
+        lore: "The Lord of the Pit, on his horned throne at the bottom of a hell, under the violet light that is his own, the throne he took from his brother Vharzul. Armoured in black iron, his wings burning, nearly twice a man's height, he sweeps with burning claws and flings hellfire from his open hands, and no blast moves him. Beyond his throne lies the way out.",
         sign: "sigils glowing violet in polished black stone",
     }),
     fiend: Object.freeze({
@@ -443,5 +443,9 @@ export const BESTIARY_LORE = Object.freeze({
     orcRaider: Object.freeze({
         lore: "One of the Orc King's war band, sent to burn the border villages: an orc of one of his four clans, a cleaver in hand, its blows now and then laying a wound open. Some stay behind among the ashes for what's left.",
         sign: "torches thrown down among the ashes, and orc tracks",
+    }),
+    vharzul: Object.freeze({
+        lore: "Vharzul, the first Lord of the Pit, thrown down from its throne by his brother and cast up through a thin place into the world above, the gates below barred to him. Burning between the worlds turned his fire green. He keeps to the Sundered Ring, the broken stones where he came through, and only by night, testing whoever comes for one strong enough to go down and take back his throne. Nearly twice a man's height, his wings spread, he sweeps with burning claws, flings green fire from his hands, throws whoever crowds him with a sweep of his wings and bursts green fire all round him, the ground warning of it first. Worn down, he tears the thin place open behind him, and fiends come through it. Fire harms him little, and no blast moves him.",
+        sign: "standing stones split and scorched, and a scar of green glass in the turf between them",
     }),
 });

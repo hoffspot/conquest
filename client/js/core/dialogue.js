@@ -731,7 +731,7 @@ export const TREES = Object.freeze({
                 choices: "more",
             },
             hollow: {
-                say: "The seventh spark, that never woke. It only wanted, and fed on the others' light. The Six drove it under the world, but its hunger seeps up still. The orcs are what it made of the first hunters it caught.",
+                say: "The seventh spark, that never woke. It only wanted, and fed on the others' light. The Six drove it under the world, into the dark the old books call the hells, but its hunger seeps up still. The orcs are what it made of the first hunters it caught; the Hollow Choir would have it wake again.",
                 choices: "more",
             },
         },

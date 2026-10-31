@@ -435,6 +435,9 @@ export const CREATURE_VOICES = Object.freeze({
     orcBloodtusk: { family: "troll", rate: 1.16, fall: "deathThudBig" },
     orcRaider: { family: "troll", rate: 1.23 },
     demonLord: { family: "troll", rate: 0.72 },
+    // (Vharzul the Greenflame, the Pit's first lord: the Lord's voice, lower still, falling as a
+    // great beast does)
+    vharzul: { family: "troll", rate: 0.71, fall: "deathThudBig" },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },
     fiend: { family: "bigCat", rate: 0.74, fall: "deathThudBig" },

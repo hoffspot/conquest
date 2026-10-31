@@ -149,6 +149,15 @@ export const RIFT_TOWER = Object.freeze({ name: "The Tower of Sar Mordal", biome
 export const RUINED_QUARRY = Object.freeze({ id: "ruined-quarry-1", kind: "ruined quarry", name: "Harrowstone", numbers: Object.freeze([71, 43]), hills: Object.freeze([0.5, 0.78]), steep: 0.06, from: 2600, to: 4400, guild: 900, clear: 6, sites: 6, camps: 4, apart: 20, tries: 8000, strict: 0.7, wider: 1.25 });
 
 /**
+ * The Sundered Ring (core/rare.js THREADS exile: the broken stones where Vharzul the Greenflame,
+ * the Pit's first lord, was cast up through a thin place, the Greenflame's): the second of the
+ * LANDMARKS. Out on the wild lands the thin places are (the heaths, the dark woods, the badlands
+ * and the marshes), on gentle ground, 2,800 to 4,600 m from the nearest people's start and within
+ * 1,000 m of a village or bigger, where its rumour's told.
+ */
+export const SUNDERED_RING = Object.freeze({ id: "sundered-ring-1", kind: "sundered ring", name: "the Sundered Ring", numbers: Object.freeze([73, 47]), biomes: Object.freeze(["heath", "darkwood", "badlands", "marsh"]), steep: 0.07, from: 2800, to: 4600, guild: 1000, clear: 6, sites: 6, camps: 4, apart: 20, tries: 8000, strict: 0.7, wider: 1.25 });
+
+/**
  * The places a world has one of, for a rare card's thread to send someone to (core/rare.js STEPS
  * `place`, its `site`: the kind, its nearest): each laid out after the Tower of Sar Mordal, in
  * order, from numbers of its own (`numbers`: the plan's seed times the first, plus the second), so
@@ -167,7 +176,7 @@ export const RUINED_QUARRY = Object.freeze({ id: "ruined-quarry-1", kind: "ruine
  * `strict` share of them only where its `hills` and `biomes` have it; failing, each time its
  * distances a `wider` share looser. None, if nowhere will do. Its people the land's, if anyone's.
  */
-export const LANDMARKS = Object.freeze([RUINED_QUARRY]);
+export const LANDMARKS = Object.freeze([RUINED_QUARRY, SUNDERED_RING]);
 
 // The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
 const GUILDED = Object.freeze(["village", "town", "city", "capital"]);

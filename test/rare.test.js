@@ -230,8 +230,21 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(Object.values(high.bonuses).reduce((a, b) => a + b, 0) > Object.values(low.bonuses).reduce((a, b) => a + b, 0));
     });
 
-    it("has two cards in play, the Stone Golem's and the Orc King's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
-        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing"]);
+    it("has three cards in play, the Stone Golem's, the Orc King's and Vharzul the Greenflame's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
+        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing", "vharzul"]);
+
+        // (Vharzul: a world's boss, kept at the Sundered Ring itself, his thread's second step, only
+        // after dusk; his reward a blade ground from his horn, its witchfire its own, and gold; his
+        // last words pointing the way to a hell)
+        const exile = RARE_CARDS.vharzul;
+
+        assert.equal(exile.where, "site");
+        assert.deepEqual(exile.requires, { thread: "exile", step: 1 });
+        assert.deepEqual([THREADS.exile.steps[1].card, THREADS.exile.steps[1].here], ["vharzul", true]);
+        assert.deepEqual(exile.gates.hours, ["dusk", "night"]);
+        assert.deepEqual([exile.shape.creature, exile.shape.champion], ["vharzul", "boss"]);
+        assert.deepEqual([UNIQUES[exile.reward.unique].base, UNIQUES[exile.reward.unique].effect], ["sword", "witchfire"]);
+        assert.ok(exile.last.includes("my brother") && exile.last.includes("Choir"));
 
         // (The Orc King: a world's boss, kept at his war camp where his war band's tracks lead, his
         // thread's second step; his reward his great axe, its cleave its own, and gold; his last
@@ -312,7 +325,7 @@ describe("rare encounters (rare.js)", () => {
         assert.equal(last.next, null);
         assert.equal(legends.threads.sampleTrail.done, true);
         assert.equal(legends.advance("sampleTrail"), null, "done");
-        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock", "fight"]);
+        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock", "fight", "enter"]);
         assert.ok(THREADS.sampleTrail.steps.every((step) => STEPS.includes(step.kind) && (!step.change || CHANGES.includes(step.change.kind))));
     });
 
@@ -1103,7 +1116,7 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
         assert.equal(host.legends.active, null, "(not hers while she's given it up)");
 
         // Taken back up: not of any adventurer, but of the mage who told it, at her guild, as it stands
-        assert.deepEqual(keeperOf("harrowstone"), { role: "adventurer", calling: "mage", home: true });
+        assert.deepEqual(keeperOf("harrowstone"), { role: "adventurer", calling: "mage", home: true, post: "guild" });
         assert.equal(keeperOf("sampleTrail").role, "receptionist");
 
         const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "harrowstone", back: true });
@@ -1262,6 +1275,138 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
         assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 150));
         assert.ok(ended.some(({ change }) => change === "done"));
         assert.ok(thread.done);
+    });
+});
+
+describe("the Exile's Road (rare.js exile, RARE_CARDS vharzul)", () => {
+    it("begins with a temple priest's rumour in the settlement nearest the Sundered Ring; Maelis and the others found burnt there, her note on her; Vharzul met there only after dusk, a world's boss; felled, Greenbrand and a purse for each who fought him; the hell's way in his brand points to marked, the thread done once it's gone in by, the Choir's rite broken", () => {
+        const { host, ada, bram } = hosted();
+        const plan = host.world.plan;
+        const opener = openerOf(plan, "exile");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        // (The war's clock set to a time of day, a day on from where it is (a new world starts at
+        // minute 18 of its day: daytime.js DAY.start): the morning, or past dusk, night)
+        const timeOf = (when) => Object.assign(host.war, { turn: Math.ceil(host.war.turn / 60) * 60 + (when === "night" ? 40 : 60 + 20), clock: 0 });
+
+        // (The ring's priest: at the temple in the village or bigger nearest it)
+        assert.ok(opener && opener.site.kind === "sundered ring" && GUILD_KINDS.includes(opener.town.kind));
+        assert.ok(host.legends.opening("exile"));
+        assert.deepEqual(keeperOf("exile"), { role: "priest", calling: null, home: true, post: "temple" });
+
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "exile", step: null }, (text) => text.replace(/\{way\}/g, "east"));
+
+        assert.equal(tree.nodes.greet.choices[0].say, "Something weighs on you.");
+        assert.ok(tree.nodes["thread:exile:0"].say[0].includes("Sundered Ring") && tree.nodes["thread:exile:0"].say[0].includes("east of here"));
+        assert.ok(tree.nodes["thread:exile:2"].say[0].includes("Hollow Choir"));
+
+        // (Not a guild's adventurer's to tell, but the priest's)
+        const guild = into(host, "guild", opener.town.id);
+
+        assert.ok(talkTo(host, guild.folk.find((one) => one.role === "adventurer" || one.talk === "adventurer")));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "exile", step: null } }), { ok: false, reason: "thread" });
+
+        const temple = into(host, "church", opener.town.id);
+
+        assert.ok(talkTo(host, temple.folk.find((one) => one.role === "priest")));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "exile", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+
+        const thread = host.legends.threads.exile;
+
+        assert.deepEqual([thread.step, thread.home], [0, opener.town.id]);
+
+        // The ring by day: what's left of Maelis and the others, her note, a purse each; nothing
+        // else there by day
+        timeOf("day");
+
+        const ring = host.world.maps.town.sites.heartOf(opener.site);
+
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(ring[0]), Math.floor(ring[1])]);
+        put(bram, [Math.floor(ring[0]) + 2, Math.floor(ring[1])]);
+
+        const reached = told(run(host, 2500));
+
+        assert.equal(thread.step, 1);
+        assert.ok(["ada", "bram"].every((who) => reached.some(({ change, id, gold, writing }) => change === "given" && id === (who === "ada" ? HOST_PLAYER : who) && gold === 40 && writing === "maelis")), JSON.stringify(reached));
+        assert.deepEqual(thread.place, thread.at, "(kept at the ring itself)");
+        run(host, 3000);
+        assert.equal(host.legends.active, null, "(not by day)");
+
+        // After dusk: there, a world's boss, by name
+        timeOf("night");
+        run(host, 1500);
+
+        const active = host.legends.active;
+
+        assert.equal(active?.card, "vharzul");
+
+        const lord = host.battle.actor(active.ids[0]);
+
+        assert.equal(lord.name, RARE_CARDS.vharzul.shape.title);
+        assert.ok(lord.wild.worldBoss && lord.wild.champion === "boss" && lord.wild.moves.length === 2 && lord.wild.rally.length === 2);
+        assert.ok(Math.hypot(lord.x - ring[0], lord.y - ring[1]) < 12, "(at the ring)");
+
+        // Felled, Ada and Bram beside him: each given Greenbrand, its witchfire its own, and a purse
+        put(bram, [Math.floor(lord.x) - 2, Math.floor(lord.y)]);
+
+        const events = felled(host, ada, lord.id);
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(given.every(({ item, gold: purse }) => item?.unique === "greenbrand" && item.id === "sword" && item.effect === "witchfire" && item.name === "Greenbrand" && purse === RARE_CARDS.vharzul.reward.gold));
+        assert.ok(host.legends.gone.has("vharzul"));
+
+        // The hell's way in nearest the ring, as his brand points: marked, and gone in by, the
+        // Choir's rite broken that night
+        const hell = plan.sites.filter(({ theme }) => theme === "hell").sort((a, b) => Math.hypot(a.at[0] - ring[0], a.at[1] - ring[1]) - Math.hypot(b.at[0] - ring[0], b.at[1] - ring[1]))[0];
+
+        assert.equal(thread.step, 2);
+        assert.equal(thread.site, hell.id);
+        assert.deepEqual(thread.place, [...hell.at]);
+
+        host.world.maps.town.sites.heartOf(hell);
+
+        const building = host.world.interiors.buildings.get(`site:${hell.id}`);
+
+        // (Ada kept hard to kill the while, as through the rest)
+        const hardy = (ms) => {
+            const events = [];
+
+            for (let t = 0; t < ms; t += 250) {
+                Object.assign(ada, { hp: 1e6, maxHp: 1e6 });
+                events.push(...run(host, 250));
+            }
+
+            return events;
+        };
+
+        timeOf("night");
+        put(ada, host.world.maps.town.sites.set.get(hell.id).entrance.outside);
+        put(bram, [Math.floor(ring[0]), Math.floor(ring[1])]);
+        hardy(1500);
+
+        for (const id of host.lairs.get(hell.id).ids) {
+            host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        hardy(2000);
+        put(ada, building.door.ends.find(({ map }) => map === "town").arrive);
+
+        const entered = host.command(HOST_PLAYER, { type: "enter", link: building.door.id });
+
+        assert.equal(entered.ok, true, JSON.stringify(entered));
+
+        const went = [];
+
+        for (let t = 0; t < 30000 && !thread.done; t += 250) {
+            went.push(...hardy(250));
+        }
+
+        assert.ok(thread.done, "(its end, gone in by)");
+        assert.equal(ada.map, building.maps[0]);
+        assert.ok(told(went).some(({ change, id, gold }) => change === "given" && id === HOST_PLAYER && gold === 250));
+        assert.ok(!told(went).some(({ change, id }) => change === "given" && id === "bram"), "(only who went in)");
     });
 });
 

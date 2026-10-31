@@ -1734,6 +1734,22 @@ export class SpellFx {
             return;
         }
 
+        // (A ring of green fire bursting all round (Vharzul the Greenflame's): green flame rolling
+        // out to as far as it reached, sparks thrown up green and white)
+        if (kind === "flare") {
+            this.ring(ground, { colour: 0x4aff7a, from: radius * 0.3, to: radius * 1.05, life: 0.55, opacity: 0.85 });
+            this.after(0.08, () => this.ring(ground, { colour: 0xb8ffc8, from: radius * 0.6, to: radius * 1.15, life: 0.45, opacity: 0.5 }));
+
+            for (let k = 0; k < 16; k++) {
+                const angle = (k / 16) * Math.PI * 2 + Math.random() * 0.3;
+                const out = new THREE.Vector3(Math.cos(angle), 0.4, Math.sin(angle));
+
+                this.spray(p([0xd8ffe0, 0x18c050], { count: 3, size: [0.2, 0.45], speed: [2, 4.5], life: [0.4, 0.8], gravity: -2.4, spread: 0.6, glow: true, opacity: 0.9, grow: 0.6 }), this.onGround(at.x + out.x * radius * 0.8, at.z + out.z * radius * 0.8, 0.3), out.multiplyScalar(2));
+            }
+
+            return;
+        }
+
         // (A great axe spun all round (the Orc King's): the dust thrown up in a ring as far as it reached)
         if (kind === "spin") {
             this.ring(ground, { colour: 0xd8ccb4, from: radius * 0.5, to: radius * 1.05, life: 0.45, opacity: 0.55 });

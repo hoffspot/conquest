@@ -30,6 +30,7 @@ export const NEUTRAL = Object.freeze({
     ...WORKS_SIZE,
     "ruined quarry": WORKS_SIZE.quarry,
     "standing stones": [6, 6],
+    "sundered ring": [7, 7],
     shrine: [3, 3],
     cave: [5, 4],
     ruins: [6, 5],
@@ -328,6 +329,44 @@ const LAYOUTS = {
 
         // (Its heart beside the flat stone, on the side away from where it's come at)
         return { parts, solid, heart: [cx, cy - 2.4] };
+    },
+
+    // The Sundered Ring (worldplan/settle.js SUNDERED_RING: where Vharzul the Greenflame was cast up
+    // through a thin place, core/rare.js THREADS exile): a wider ring of tall stones, every one of
+    // them scorched black, most split across as the world tore under them, their tops thrown outward
+    // and lying where they fell, one or two thrown down whole; no flat stone in its middle, but a
+    // scar of green glass where the ground melted, cracks running out from it, shards of it standing
+    // up out of it (`scar`: its `r`, glowing green at night as the thin place opens)
+    "sundered ring"(random, width, depth) {
+        const [cx, cy] = [width / 2, depth / 2];
+        const count = random.int(9, 11);
+        const radius = random.range(9.4, 10.6);
+        const fallen = new Set([random.int(0, count - 1), ...(random.chance(0.5) ? [random.int(0, count - 1)] : [])]);
+        const parts = [{ part: "scar", x: cx, y: cy, r: random.range(2.6, 3.2), turn: random.range(0, TAU), cracks: random.int(5, 7), shards: random.int(6, 9) }];
+        const solid = [];
+        const turn = random.range(0, TAU);
+
+        for (let k = 0; k < count; k++) {
+            const angle = turn + (k / count) * TAU + random.range(-0.12, 0.12);
+            const [x, y] = [cx + cos(angle) * radius, cy + sin(angle) * radius];
+            const split = !fallen.has(k) && random.chance(0.7);
+            const stone = { part: "stone", x, y, angle, w: random.range(1, 1.5), d: random.range(0.55, 0.8), h: random.range(2.8, 4.2), fallen: fallen.has(k), scorched: true, split: split ? random.range(0.3, 0.55) : null };
+
+            parts.push(stone);
+            solid.push(stone.fallen ? box(x, y, 1.6, 1.6) : box(x, y, 1.2, 1.2));
+
+            // (Its top thrown outward, lying where it fell beyond it)
+            if (split) {
+                const out = random.range(1.4, 2.2);
+
+                parts.push({ part: "stone", x: x + cos(angle) * out, y: y + sin(angle) * out, angle: angle + random.range(-0.5, 0.5), w: stone.w * 0.9, d: stone.d, h: stone.h * (1 - stone.split), fallen: true, scorched: true, split: null });
+            }
+        }
+
+        // (Its heart beside the scar, on the side away from where it's come at: what's left of those
+        // who came before, setpieces/scenes.js `challengers`. Nothing grows through the scar and the
+        // scorched ground round it, its `court`)
+        return { parts, solid, heart: [cx, cy - 4.2], court: { at: [cx, cy], radius: 6.5, ground: "road" } };
     },
 
     // A figure on a stepped plinth, braziers either side of its front, a curved wall behind

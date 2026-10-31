@@ -264,6 +264,8 @@ export const SPOILS = Object.freeze({
     // (The River of Fire's master: what the lord pays it in)
     greaterDemon: { gold: [40, 90], items: [{ id: "obsidian", chance: 0.7, count: [1, 2] }, { id: "soulShard", chance: 0.5 }, { id: "fireGland", chance: 0.4 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
+    // (Vharzul the Greenflame: the Lord's, his reward besides: core/rare.js RARE_CARDS vharzul)
+    vharzul: { gold: [80, 160], items: [{ id: "obsidian", chance: 0.9, count: [2, 3] }, { id: "soulShard", chance: 0.8 }, { id: "fireGland", chance: 0.6 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)
     flayling: { gold: [2, 8], items: [{ id: "boneDust", chance: 0.3 }, { id: "cultSigil", chance: 0.15 }] },

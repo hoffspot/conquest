@@ -388,6 +388,48 @@ export const CREATURES = Object.freeze({
     // (His raiders, the war band's orcs that burn the border villages: met only where his rare card
     // puts them, at a village they've burned (core/rare.js THREADS orcKing). A cleaver each)
     orcRaider: { name: "Orc raider", hp: 46, hands: true, weapon: "orcRaider", speed: 1.3, chase: 2.6, temper: "aggressive", roam: 8, leash: 30, pack: [2, 4], tiers: [3, 10], biomes: [], blood: "red", armor: 0.1 },
+    // (Vharzul the Greenflame: the Pit's first lord, thrown down by his brother, who sits its throne
+    // now, and cast up through a thin place into the world above, the gates below barred to him;
+    // burning between the worlds turned his fire the green of the thin places (docs/WILDS.md
+    // *Vharzul the Greenflame*). One a world, met only as his rare card's foe, by night, at the
+    // Sundered Ring where he was cast up (core/rare.js RARE_CARDS vharzul), a world's boss; drawn from
+    // the Lord of the Pit's model in its other skin, its glows green (beasts/model.js). His claws
+    // burning and the thin places' green fire flung from his hands (weapons.js NATURAL vharzul); and
+    // his own moves: his wings swept round before him, throwing whoever they catch, and a ring of
+    // green fire burst all round him, setting them burning, shown on the ground before it does
+    // (`moves`); and as he's worn down, at two thirds and at one third, the thin place torn open
+    // behind him and fiends come through it (`rally`, `told`). Fire harms him little. His kind's hit
+    // points about a fiend's: his card makes him half as tough again (rare.js `health`))
+    vharzul: {
+        name: "Vharzul the Greenflame",
+        hp: 80,
+        hands: true,
+        weapon: "vharzul",
+        speed: 1.1,
+        chase: 2.5,
+        temper: "aggressive",
+        roam: 10,
+        leash: 45,
+        pack: [1, 1],
+        tiers: [6, 10],
+        biomes: [],
+        blood: "red",
+        armor: 0.28,
+        perilous: true,
+        darkSight: true,
+        sight: 22,
+        steady: true,
+        wards: { fire: 0.5 },
+        worldBoss: true,
+        moves: [
+            { id: "wing", kind: "melee", reach: 0, damage: [11, 18], hitAt: 470, duration: 1040, interval: 1500, stagger: 450, reaction: "crush", animation: "wing", first: 3000, every: 7000, least: 0, most: 3, quake: { ahead: 1.5, radius: 2.4, toss: 1, kind: "wingSweep", element: null } },
+            { id: "flare", kind: "melee", reach: 0, damage: [13, 21], hitAt: 1500, duration: 2720, interval: 3000, stagger: 450, reaction: "fire", animation: "flare", first: 8000, every: 14000, least: 0, most: 4.5, quake: { ahead: 0, radius: 4.2, toss: 0.6, kind: "greenFlare", element: "fire", afflict: { kind: "burn", chance: 0.8 } }, telegraph: true },
+        ],
+        rally: [
+            { below: 2 / 3, animation: "rally", hitAt: 1700, duration: 3400, call: { kind: "fiend", count: [2, 2], most: 3, down: 1, told: "tears the thin place open behind him: fiends come through!" } },
+            { below: 1 / 3, animation: "rally", hitAt: 1700, duration: 3400, call: { kind: "fiend", count: [2, 3], most: 4, down: 1, told: "tears the thin place open again: more fiends come through!" } },
+        ],
+    },
 });
 
 /**
