@@ -12214,7 +12214,7 @@ test("the wilds director lays an ambush ahead of a player crossing the wilds: it
     expect(laid.shown).toBe(laid.count);
 });
 
-test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack, only to be thrown away, the player asked first; its thread begun, in the journal's Legends with what was met", async ({ page }) => {
+test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack, only to be thrown away, the player asked first; its thread begun, in the journal's Legends with what was met; given up from there, hers alone, and taken back up of a guild's receptionist where it stood", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
@@ -12335,6 +12335,79 @@ test("a rare encounter dealt in the wilds (debug mode's sample) in a party of tw
     await ask.getByRole("button", { name: "Throw away", exact: true }).click();
     await expect(cell).toHaveCount(0);
     expect(await page.evaluate(() => window.pellagos.game.progress.legends.uniques)).toEqual(["sampleSignet"]);
+    await page.keyboard.press("i");
+    await expect(pack).toBeHidden();
+
+    // Its thread given up from the journal: hers alone (Bram's still), who'll take her back on it
+    // said there, and its mark off her maps
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+
+    const trail = legends.locator(".journal-trail", { hasText: "The Sample's trail" });
+
+    await expect(trail).toContainText("Step 1 of");
+    await trail.getByRole("button", { name: "Give up The Sample's trail" }).click();
+    await expect(trail).toContainText("Given up");
+    await expect(trail).toContainText("The receptionist at any guild will take you back on it, where it stood.");
+    await expect(trail.getByRole("button", { name: "Give up The Sample's trail" })).toHaveCount(0);
+    expect(
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            return { mine: game.host.legends.gaveUp("sampleTrail", game.me), bram: game.host.legends.gaveUp("sampleTrail", "bram"), led: game.rareIcons().some(({ kind }) => kind === "thread"), told: game.messages.some(({ text }) => text.startsWith("You've given up The Sample's trail.")) };
+        }),
+    ).toEqual({ mine: true, bram: false, led: false, told: true });
+    await page.keyboard.press("Escape");
+    await expect(journal).toBeHidden();
+
+    // Taken back up of a guild's receptionist, as she'd talk of anything: its question among her
+    // first choices, and her reply; hers again where it stood, its mark back on her maps
+    const receptionist = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild" && each.place === "home");
+        const player = game.battle.actor(game.me);
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.stop();
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.host.command(game.me, { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 20 && player.map === "town"; k++) {
+            game.advance(0.25, { render: false });
+        }
+
+        const one = game.battle.actors.find(({ map, role }) => map === player.map && role === "receptionist");
+
+        game.approaching = one.id;
+        game.battle.command(game.me, { type: "approach", target: one.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.start();
+
+        return one.name;
+    });
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(receptionist);
+    await talk.getByRole("button", { name: "About The Sample's trail: I'd take it up again." }).click();
+    await expect(talk.locator(".talk-line")).toContainText("Then it's yours again, as it stood when you left it.");
+    expect(
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            return { mine: game.host.legends.gaveUp("sampleTrail", game.me), step: game.host.legends.threads.sampleTrail.step, told: game.messages.some(({ text }) => text.startsWith("The Sample's trail: yours again.")) };
+        }),
+    ).toEqual({ mine: false, step: 0, told: true });
+    await talk.getByRole("button", { name: "Farewell." }).click();
+    await expect(talk).toBeHidden();
+    await page.keyboard.press("j");
+    await expect(trail).toContainText("Step 1 of");
+    await expect(trail.getByRole("button", { name: "Give up The Sample's trail" })).toBeVisible();
+    expect(await page.evaluate(() => window.pellagos.game.rareIcons().some(({ kind }) => kind === "thread"))).toBe(true);
 });
 
 test("a rare encounter inside (debug mode's inside sample) on a dungeon's floor: felled, a ward broken and a door shown in the rock, an arch over its way in; gone through to a sealed room of its own, drawn, its keepers woken, its chest each one's reward once they've fallen", async ({ page }) => {

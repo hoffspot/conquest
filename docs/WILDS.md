@@ -978,6 +978,32 @@ every calling the threads' talk asks for (`TALK_CALLINGS`: a mage, so far; insid
 `guildFolkOf`: the last at its tables taking it up if none of the others has it), and one hired
 from it leaves the rumour to any adventurer still there.
 
+A player can give a thread up, and take it back up, free, any time (the user: "If the player dies
+on a unique quest or drops a unique quest from their journal, ensure there is a logical place they
+can go to to pick the quest back up again"):
+- **Given up** (the journal's *Legends*, its *Give up* button: the host's `abandon` command with
+  its `thread`, `#giveUpThread`; `Legends` `giveUp`, the thread's `left`): for them alone. It goes
+  on for everyone else as it was; it's not theirs to follow meanwhile: its steps not done by them
+  (`#threadFollow`, `#threadDone`, `#threadCrossed`, `#threadTalk`, refused `thread`), its rewards
+  not theirs, its contract not on their board (`#threadContracts`), its card not dealt them
+  (`#rareSites`, `#rareMet`), its marks off their maps. The journal keeps it as *Given up*, with
+  who'll take them back on it and where (game.js `#takenBackBy`: "The mage at the guild in Sarmir
+  who told you of it will take you back on it, where it stood.", and "Sarmir, north-west"), as
+  the message said as it's given up.
+- **Taken back up** of whoever gave it them (`keeperOf`: its rumour's teller, an adventurer of the
+  opener's `calling` at the guild in its `home` settlement; a thread begun by a card's end, the
+  receptionist at any guild): their question among the first choices (`threadTalk`, `back`: the
+  opener's own `back` words, else `TAKE_BACK`, "About {title}: I'd take it up again."), the talk's
+  `{ thread, back: true }` (`#threadTalk`; `Legends` `takeBack`). It's theirs again where it stands
+  then, its steps done by the others while they were away done for them too.
+- **Fallen to its card** (one kept at a site, its thread at that step, they having taken it on or
+  been within `RARE.far` of it: the host's `#threadFell`, at the "death"; `Legends` `fellTo`, the
+  thread's `fell`): where it's kept is theirs to find again, though it's not marked for anyone
+  else: its haunt on their maps (the scroll), and in the journal ("You fell to it there, and it
+  waits for you there still."), till its step's done. And its foe, left alone (everyone fallen to
+  it or gone further than `RARE.far`, set on no one), is whole again for whoever comes to it next
+  (`#rareFollow`); let go after `RARE.wait`, it's dealt there afresh as someone comes to it.
+
 The sample's thread (`sampleTrail`, debug mode's) has a step of each kind: where the Sample came
 from (20 gold; the nearest ruins revealed); the barkeep in the nearest settlement asked (15 gold;
 the Feast of the Sample there, a day at four-fifths the prices); the guild's contract there (10
@@ -1086,6 +1112,10 @@ and Venn himself. It has wandered the hills round the ruins since, and folk go m
 - **Its end** (the third, a *talk* with the mage at its home): 150 gold, the guild's old bounty on
   it ("the guild posted a bounty on that golem the year it went mad, and no one ever thought to
   take it down"), the thread at its end.
+- **Given up, or fallen to it**: the mage who told it takes a player back on it, at her guild, where
+  it stands ("About the Lantern Company: I'll see it through after all.", her opener's `back`);
+  one who falls to the golem has its haunt on their maps and in their journal from then, and finds
+  it whole again (*Threads*).
 
 How it fights (creatures.js `stoneGolem`, weapons.js NATURAL `stoneGolem`; a world's boss,
 `worldBoss`, its bar across the top of the screen):
@@ -1115,7 +1145,8 @@ How it fights (creatures.js `stoneGolem`, weapons.js NATURAL `stoneGolem`; a wor
 
 Kept as every rare card and thread is (`Legends`: its thread's `home` besides, carried on from a
 world kept before it as none); the world's plan, its new place, and the rules two games share
-changed with it (`NET_VERSION` 196, and 197 as debug mode came to deal any card by its id). Debug
+changed with it (`NET_VERSION` 196, 197 as debug mode came to deal any card by its id, and 198 as
+threads came to be given up and taken back up: *Threads*). Debug
 mode's *Card and its thread* (the Stone Golem chosen, *Deal card*: `game.dealCard(id)`, the host's
 `rare` command, `card`) brings its thread to it (begun, its steps before done, by the player) and
 deals it a little ahead of them at once; refused while another's out, or once it's done in the

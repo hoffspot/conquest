@@ -829,14 +829,18 @@ The world's rare encounters, and what the player keeps of them:
   eye opened wide in a sea-green star where a rare encounter out was seen, by them or one of their
   party, till it ends.
 - **On the maps, too**: where one of the world's threads leads next (a scroll, its seal
-  sea-green), and a place a thread's revealed, known to every player.
+  sea-green), and a place a thread's revealed, known to every player; and where a thread's card is
+  kept that they fell to, to them alone. None of a thread they've given up.
 - **In the journal** (app/journal.js, *Legends*): those out that they or their party have seen,
   with what was said of each and which way and how far it was seen from them now; the world's
   threads still to follow, each's step, what's known of the next and where (docs/WILDS.md
-  *Threads*); those overcome in this world, the latest first, by whom and where (a unique's never
+  *Threads*), each with *Give up* (free: for them alone, the thread going on for the rest); those
+  they've given up, who'll take them back on it and where (its rumour's teller at its home guild,
+  else any guild's receptionist: the thread theirs again where it stands); those overcome in this world, the latest first, by whom and where (a unique's never
   to come again); the threads followed to their end; and the uniques their character's been
   given, each in its sea-green, with its tale, kept with them.
-- **In talk and the shops**: a thread's question in the talk of the one it's for; a thread's
+- **In talk and the shops**: a thread's question in the talk of the one it's for (and, one they
+  gave up, theirs to take back up of whoever told it them); a thread's
   contract on a guild's board; a festival's prices, and a thread's wares on a shop's shelves.
 - **At a door**: one a thread's lock keeps shut (or a hell's portal sealed from this side, or a
   sealed room's door without its key) says what might open it as it's chosen, and isn't walked to;

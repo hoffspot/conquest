@@ -283,6 +283,7 @@ export const THREADS = Object.freeze({
             take: "I'll find out what became of them.",
             taken: "Then go with care, and keep your eyes on the hills. If there's anything of them left to find, bring me word. Tamsin was the best I ever taught; she'd not have run from it.",
             leave: "Not for me.",
+            back: Object.freeze({ ask: "About the Lantern Company: I'll see it through after all.", reply: "Good. I didn't think you'd leave them up there. The ruins are where they were, and so is the golem. Go carefully." }),
         }),
         steps: Object.freeze([
             Object.freeze({ kind: "place", site: "ruined quarry", reach: 18, word: "The Lantern Company went up to the ruins of Harrowstone quarry, {way} of {town}, after its golem, and never came back. Find out what became of them.", reward: Object.freeze({ gold: 30, writing: "tamsin" }) }),
@@ -309,7 +310,8 @@ export const THREADS = Object.freeze({
  * words, {way} which way the place is from there, and what's asked for the next), then taken up
  * (`take`: the thread begun, its home that settlement; their parting words `taken`, the talk over)
  * or left (`leave`). Only while the card it leads to is in play and not done in the world, and the
- * thread not begun.
+ * thread not begun. Given up by a player since (Legends `giveUp`), the one who told it takes them
+ * back on it (`back`: what they ask, and the reply; keeperOf, TAKE_BACK).
  */
 export const OPENERS = Object.freeze(["talk"]);
 
@@ -320,6 +322,21 @@ export const OPENERS = Object.freeze(["talk"]);
 export const TALK_CALLINGS = Object.freeze(
     [...new Set(Object.values(THREADS).flatMap(({ opens = null, steps }) => [opens, ...steps].filter((def) => def?.kind === "talk" && def.calling).map(({ calling }) => calling)))].sort(),
 );
+
+/**
+ * Who takes a player back on a thread they gave up (Legends `giveUp`), as they'd be talked to
+ * (talksFor): the one who told its rumour, if it's begun by one (THREADS `opens`: an adventurer of
+ * its `calling` at the guild in its home settlement, `home`), else the receptionist at any guild.
+ * { role, calling, home }.
+ */
+export function keeperOf(id) {
+    const opens = THREADS[id]?.opens;
+
+    return opens?.kind === "talk" ? { role: opens.role, calling: opens.calling ?? null, home: true } : { role: "receptionist", calling: null, home: false };
+}
+
+/** What a player asks to take a thread they gave up back up, and the reply, if its opener says nothing of its own (`opens.back`): {title} its title. */
+export const TAKE_BACK = Object.freeze({ ask: "About {title}: I'd take it up again.", reply: "Then it's yours again, as it stood when you left it." });
 
 /** The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger). */
 export const GUILD_KINDS = Object.freeze(["village", "town", "city", "capital"]);
@@ -412,10 +429,10 @@ const lasting = (change, played) => change.until === null || change.until === un
  * its `tale` told a piece at a time, each piece's question asked for the next, then taken up, its
  * doing `{ thread, step: null }` sent on, or left), its words filled in (`fill`: {way}).
  */
-export function threadTalk(tree, { thread, step }, fill = (text) => text) {
-    const def = step === null ? THREADS[thread]?.opens : THREADS[thread]?.steps[step];
+export function threadTalk(tree, { thread, step, back = false }, fill = (text) => text) {
+    const def = back ? { kind: "talk" } : step === null ? THREADS[thread]?.opens : THREADS[thread]?.steps[step];
 
-    if (!def || def.kind !== "talk") {
+    if (!def || def.kind !== "talk" || !THREADS[thread]) {
         return tree;
     }
 
@@ -423,6 +440,21 @@ export function threadTalk(tree, { thread, step }, fill = (text) => text) {
     const first = tree.nodes[start];
     const choices = typeof first.choices === "string" ? (tree.nodes[first.choices]?.choices ?? []) : (first.choices ?? []);
     const node = `thread:${thread}`;
+
+    // (A thread they gave up, taken back up: asked of the one who'd take them back on it, keeperOf)
+    if (back) {
+        const words = THREADS[thread].opens?.back ?? TAKE_BACK;
+        const titled = (text) => fill(text.replace(/\{title\}/g, THREADS[thread].title));
+
+        return {
+            ...tree,
+            nodes: {
+                ...tree.nodes,
+                [start]: { ...first, choices: [{ say: titled(words.ask), next: `${node}:back`, do: [{ thread, back: true }] }, ...choices] },
+                [`${node}:back`]: { say: [titled(words.reply)], choices: [{ say: "Thank you.", next: start }, { say: "Farewell.", next: null }] },
+            },
+        };
+    }
 
     if (step === null) {
         const pieces = def.tale.map(({ say, ask }, k) => {
@@ -540,7 +572,8 @@ export function makeUnique(id, level, random) {
  *   it's done), at (where it was last: [x, y]), town (the settlement of a talk or contract step,
  *   or a place step's nearest), place (a place step's: [x, y]; a card's kept at a site), home (the
  *   settlement its rumour was told in, an opener's), began (when), by (the names of those who've
- *   taken part), took (their ids), done }.
+ *   taken part), took (their ids), left (the players who've given it up: giveUp), fell (those
+ *   fallen to its card where it's kept: fellTo), done }.
  * - `changes`: the world's changes (CHANGES), each { kind, thread, town, ..., from, until }.
  * - `opened`: the locks opened (LOCKS).
  * - `vaults`: the sealed rooms inside cards have brought, by their number (VAULT): { n, card,
@@ -836,6 +869,60 @@ export class Legends {
         return this.threads[id];
     }
 
+    /**
+     * A thread given up by a player (`who`: their id): not theirs to follow (its steps done by
+     * others, its card not dealt them, its rewards not theirs) till they take it back up
+     * (`takeBack`), where it stands then; it goes on for anyone else. Whether it was now (begun, not
+     * done, not given up by them already).
+     */
+    giveUp(id, who) {
+        const thread = this.threads[id];
+
+        if (!thread || thread.done || (thread.left ?? []).includes(who)) {
+            return false;
+        }
+
+        thread.left = [...(thread.left ?? []), who];
+        thread.fell = (thread.fell ?? []).filter((one) => one !== who);
+
+        return true;
+    }
+
+    /** A thread a player gave up taken back up by them: theirs to follow again, at the step it's at. Whether it was now. */
+    takeBack(id, who) {
+        const thread = this.threads[id];
+
+        if (!thread || thread.done || !(thread.left ?? []).includes(who)) {
+            return false;
+        }
+
+        thread.left = thread.left.filter((one) => one !== who);
+
+        return true;
+    }
+
+    /** Whether a player's given a thread up (and not taken it back up). */
+    gaveUp(id, who) {
+        return Boolean(this.threads[id]?.left?.includes(who));
+    }
+
+    /**
+     * A player fallen to the card a thread's at, kept at its site (STEPS `card`, its `where` "site":
+     * the Stone Golem): where it's kept known to them from then (on their maps, in their journal)
+     * while the thread's at that step. Whether it was now.
+     */
+    fellTo(id, who) {
+        const thread = this.threads[id];
+
+        if (!thread || thread.done || !thread.place || (thread.fell ?? []).includes(who) || (thread.left ?? []).includes(who)) {
+            return false;
+        }
+
+        thread.fell = [...(thread.fell ?? []), who];
+
+        return true;
+    }
+
     /** The step a thread's at (THREADS), or null (not begun, or done). */
     stepOf(id) {
         const thread = this.threads[id];
@@ -864,6 +951,7 @@ export class Legends {
         thread.step += 1;
         thread.town = null;
         thread.place = null;
+        thread.fell = [];
         thread.done = thread.step >= THREADS[id].steps.length;
 
         return { thread: id, step, def, next: this.stepOf(id) };
