@@ -1,7 +1,7 @@
 // Tracks on the ground (docs/WILDS.md *Tracks*): a print where each of the wild's creatures sets a
 // foot down (app/game.js, its avatar's footfalls), as its feet are (PRINTS: a dog's paw, a cat's,
 // a bear's broad one; a cloven hoof; a drake's three-toed claw; a lizard's splayed toes; a boot, a
-// bare foot, a frog's webbed one; a spider's or a centipede's pricks; a serpent's slither, a
+// bare foot, a frog's webbed one; the Stone Golem's great round stone foot; a spider's or a centipede's pricks; a serpent's slither, a
 // slime's smear), deeper in what takes a print well (snow, mud, sand) and fainter in grass and in a
 // wood's fallen leaves, none on stone, boards or water (TAKES). Each lies along the ground where it
 // slopes, darkening it as the contact shadows do (contacts.js: right by day and by night alike,
@@ -36,6 +36,7 @@ export const PRINTS = Object.freeze({
     pricks: { size: 0.3, long: 1 },
     slither: { size: 0.35, long: 2.2 },
     smear: { size: 0.5, long: 1.3 },
+    stone: { size: 0.3, long: 1.25 },
 });
 
 const KINDS = Object.keys(PRINTS);
@@ -64,6 +65,7 @@ const OWN = Object.freeze({
     basilisk: "lizard",
     olm: "lizard",
     ahuizotl: "lizard",
+    stoneGolem: "stone",
 });
 
 // The people-shaped (drawn as people are) who go barefoot: the rest leave a boot's print
@@ -269,6 +271,22 @@ function drawPrint(context, kind) {
             ellipse(64, 64, 44, 56);
             context.globalAlpha = 1;
             ellipse(64, 64, 30, 42);
+            break;
+        }
+        case "stone": {
+            // (A great flat foot of cut stone, its heel square, three blunt toes, pressed deep)
+            context.beginPath();
+            context.moveTo(30, 112);
+            context.lineTo(98, 112);
+            context.lineTo(104, 60);
+            context.quadraticCurveTo(64, 46, 24, 60);
+            context.closePath();
+            context.fill();
+
+            for (const [x, y] of [[36, 40], [64, 32], [92, 40]]) {
+                ellipse(x, y, 15, 17);
+            }
+
             break;
         }
     }

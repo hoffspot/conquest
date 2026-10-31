@@ -15,7 +15,7 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
+import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
@@ -229,8 +229,21 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(Object.values(high.bonuses).reduce((a, b) => a + b, 0) > Object.values(low.bonuses).reduce((a, b) => a + b, 0));
     });
 
-    it("has no card in play yet, only the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
-        assert.deepEqual(Object.keys(RARE_CARDS), []);
+    it("has one card in play, the Stone Golem's, kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
+        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem"]);
+
+        // (The golem: a world's boss, kept where its thread's tracks lead, its thread's second step;
+        // its reward the cleansed shard of its heart, an amulet with a ward of its own, and gold)
+        const golem = RARE_CARDS.stoneGolem;
+
+        assert.equal(golem.kind, "unique");
+        assert.equal(golem.where, "site");
+        assert.deepEqual(golem.requires, { thread: "harrowstone", step: 1 });
+        assert.equal(THREADS.harrowstone.steps[1].card, "stoneGolem");
+        assert.equal(golem.shape.creature, "stoneGolem");
+        assert.equal(UNIQUES[golem.reward.unique].base, "amulet");
+        assert.ok(golem.reward.gold >= 500);
+        assert.equal(cardOf("stoneGolem"), golem);
         assert.equal(cardOf("sample"), SAMPLE);
         assert.equal(cardOf("nothing"), null);
         assert.ok(SAMPLE.debug && SHAPES.includes(SAMPLE.shape.kind) && UNIQUES[SAMPLE.reward.unique]);
@@ -949,5 +962,156 @@ describe("rare encounters inside (host.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "rare", inside: true }).card, SAMPLE_DEEP.id);
         assert.equal(host.legends.active.map, building.maps[0]);
         assert.ok(REFUSALS.rareFloor);
+    });
+});
+
+describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)", () => {
+    // Into a building of the settlement (`place`) of a kind, the player put at its door and gone in
+    function into(host, kind, place) {
+        // (Laid out now, as it would be as the world near it's made: its buildings added)
+        host.world.maps.town.settlements.of(host.world.plan.places.find(({ id }) => id === place));
+
+        const building = [...host.world.interiors.buildings.values()].find((one) => one.kind === kind && one.place === place);
+        const me = host.battle.actor(HOST_PLAYER);
+
+        put(me, building.door.ends[0].squares[0]);
+        Object.assign(me, { map: "town" });
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
+        run(host, STEP_MS * 4);
+
+        return building;
+    }
+
+    // A foe felled by `actor`, beside it, kept alive the while
+    function felled(host, actor, id) {
+        const foe = host.battle.actor(id);
+        const events = [];
+
+        put(actor, foe.square.map((v, k) => v + (k ? 0 : 1)));
+        Object.assign(foe, { hp: 1 });
+        Object.assign(actor, { power: { melee: 1e4, ranged: 1e4 } });
+        host.command(actor.id, { type: "engage", target: id });
+
+        for (let t = 0; t < 8000 && !foe.dead; t += 250) {
+            Object.assign(actor, { hp: 1e6, maxHp: 1e6 });
+            events.push(...run(host, 250));
+        }
+
+        events.push(...run(host, 500));
+
+        return events;
+    }
+
+    // Talking to one of a building's folk (`folk`: its record), stood before them
+    function talkTo(host, folk) {
+        const me = host.battle.actor(HOST_PLAYER);
+        const them = host.battle.actor(folk.id);
+
+        put(me, [them.square[0], them.square[1] + 1]);
+        Object.assign(me, { map: them.map });
+
+        return host.command(HOST_PLAYER, { type: "talk", with: them.id }).ok;
+    }
+
+    it("begins with a guild mage's rumour in the settlement nearest Harrowstone's ruins; the Lantern Company found crushed there, Tamsin's note on them; the golem dealt where its tracks lead, a world's boss; felled, its heart and a purse for each who fought it; word taken back to the mage, the guild's bounty paid", () => {
+        const { host, ada, bram } = hosted();
+        const opener = openerOf(host.world.plan, "harrowstone");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+
+        // (Its rumour's there to be told: the card's in play, the thread not begun; never dealt from
+        // a deck, nor near anyone before it's come to)
+        assert.ok(opener && GUILD_KINDS.includes(opener.town.kind) && opener.site.kind === "ruined quarry");
+        assert.ok(host.legends.opening("harrowstone"));
+        assert.equal(host.legends.threads.harrowstone, undefined);
+
+        // The rumour: told by a mage of the guild there (every guild has one), not by another of
+        // them while a mage is there; its tale told a piece at a time, then taken up
+        const guild = into(host, "guild", opener.town.id);
+        const mage = guild.folk.find(({ look, role, talk }) => look === "mage" && (role === "adventurer" || talk === "adventurer"));
+        const other = guild.folk.find(({ look, role, talk }) => look !== "mage" && (role === "adventurer" || talk === "adventurer"));
+
+        assert.ok(mage, "a mage at its guild");
+        assert.ok(talkTo(host, other));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", step: null } }), { ok: false, reason: "thread" }, "(not one of them while a mage is there)");
+        assert.ok(talkTo(host, mage));
+
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "harrowstone", step: null }, (text) => text.replace(/\{way\}/g, "north"));
+        const pieces = Object.keys(tree.nodes).filter((node) => node.startsWith("thread:harrowstone:"));
+
+        assert.equal(pieces.length, THREADS.harrowstone.opens.tale.length);
+        assert.ok(tree.nodes["thread:harrowstone:0"].say[0].includes("north of here"));
+        assert.deepEqual(tree.nodes[pieces.at(-1)].choices[0].do, [{ thread: "harrowstone", step: null }]);
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", step: null } }).ok, true);
+
+        const thread = host.legends.threads.harrowstone;
+        const quarry = host.world.maps.town.sites.heartOf(opener.site);
+
+        assert.equal(thread.step, 0);
+        assert.equal(thread.home, opener.town.id);
+        assert.deepEqual(thread.place, [...quarry], "(the ruins' heart, where the Company lies)");
+        assert.equal(host.legends.opening("harrowstone"), false, "(told once)");
+
+        // The ruins reached: the Lantern Company found, Tamsin's note and what they had on them
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(quarry[0]), Math.floor(quarry[1])]);
+        put(bram, [Math.floor(quarry[0]) + 60, Math.floor(quarry[1])]);
+
+        const found = told(run(host, 2500));
+
+        assert.ok(found.some(({ change, id, gold, writing }) => change === "given" && id === HOST_PLAYER && gold === 30 && writing === "tamsin"), JSON.stringify(found));
+        assert.equal(thread.step, 1);
+
+        // Its tracks, from the Company's remains to where the golem is, up in the hills
+        const haunt = thread.place;
+        const [tracks] = threadTracks(host.legends);
+        const far = Math.hypot(haunt[0] - quarry[0], haunt[1] - quarry[1]);
+
+        assert.ok(far >= 109 && far <= 171, `${far} m`);
+        assert.equal(tracks.creature, "stoneGolem");
+        assert.deepEqual(tracks.points[0], thread.at);
+        assert.deepEqual(tracks.points.at(-1), haunt);
+        assert.equal(host.legends.active, null, "(not dealt till it's come to)");
+
+        // The golem dealt as Ada comes near where its tracks lead: a world's boss, a dungeon master's
+        // rank, named
+        put(ada, [Math.floor(haunt[0]) + 30, Math.floor(haunt[1])]);
+        run(host, 1000);
+
+        const active = host.legends.active;
+        const golem = host.battle.actor(active.ids[0]);
+
+        assert.equal(active.card, "stoneGolem");
+        assert.deepEqual(active.at, haunt);
+        assert.ok(golem.wild.worldBoss && golem.wild.steady && golem.wild.champion === "boss");
+        assert.equal(golem.name, RARE_CARDS.stoneGolem.shape.title);
+
+        // Felled, Ada and Bram beside it: each given the heart of Harrowstone and a purse, and the
+        // card gone from the world for good
+        const gold = { ada: host.players.get(HOST_PLAYER).progress.gold, bram: host.players.get("bram").progress.gold };
+
+        put(bram, [Math.floor(golem.x) - 2, Math.floor(golem.y)]);
+
+        const events = felled(host, ada, golem.id);
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(given.every(({ item, gold: purse }) => item?.unique === "heartOfHarrowstone" && item.effect === "stoneheart" && purse === RARE_CARDS.stoneGolem.reward.gold));
+        assert.equal(host.players.get("bram").progress.gold, gold.bram + RARE_CARDS.stoneGolem.reward.gold);
+        assert.ok(host.legends.gone.has("stoneGolem"));
+        assert.equal(thread.step, 2);
+        assert.equal(thread.town, opener.town.id, "(word taken back to its home)");
+        assert.deepEqual(threadTracks(host.legends), [], "(its tracks gone with it)");
+
+        // Word of it taken back to the mage: the guild's old bounty paid, the thread at its end
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, mage));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", step: 2 } }).ok, true);
+
+        const ended = told(run(host, 200));
+
+        assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 150));
+        assert.ok(ended.some(({ change }) => change === "done"));
+        assert.ok(thread.done);
     });
 });

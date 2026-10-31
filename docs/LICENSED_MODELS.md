@@ -14,9 +14,10 @@ flayed, Fab's Monster1's six builds, and its six gorgers, Fab's Monster2's four 
 hells' henchmen of the Pit, Andrew Ermakov's Monster3 "Villain's Henchman" from Fab, with its three
 other skins; the hells' walkers, Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five
 skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts' bosses, two
-dressings of a modular orc from Fab; and, to come, the Stone Golem, Alexander Lenski's Armored
-Stone Golem - Dark Fantasy Boss from Fab, with its three other skins, and the Orc King, the orc's
-finest dressing, with his two other skins, each kept for a card; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). This page is how such
+dressings of a modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world boss,
+Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other skins
+(kept for something rarer); and, to come, the Orc King, the orc's finest dressing, with his two
+other skins, kept for a card; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,

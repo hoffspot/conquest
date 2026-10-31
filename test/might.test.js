@@ -9,8 +9,8 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { CREATURES, ELITES, tierPower } from "../client/js/core/creatures.js";
 import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
 import { AFFIXES, affixesFor, bonusCount, bonusCounts, effectOf, GEAR, levelFactor, levelOf, LEVELS, rollGear, ROLLS, statsOf } from "../client/js/core/gear.js";
-import { CHARGE, chargeOf, effectAt, EFFECTS, effectFor, effectStrength } from "../client/js/core/legendary.js";
-import { falloff, fightLook, heroValue, LOOT_LEVEL, MIGHT, mightOf, mightTier, packPower, partsOf, powerOf, scaleOf, tierPowerOf, levelFor } from "../client/js/core/might.js";
+import { BLOW_EFFECTS, CHARGE, chargeOf, effectAt, EFFECTS, effectFor, effectStrength, WARD_CHARGE } from "../client/js/core/legendary.js";
+import { falloff, fighterOf, fightLook, heroValue, LOOT_LEVEL, MIGHT, mightOf, mightTier, packPower, partsOf, powerOf, scaleOf, tierPowerOf, levelFor } from "../client/js/core/might.js";
 import { EXCEPTIONAL, fallenOff, MAKES, priceOf, Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { atLevel } from "../client/js/core/stock.js";
@@ -238,8 +238,8 @@ describe("a legendary weapon's effect (legendary.js)", () => {
         assert.ok(["sword", "staff", "wand", "grimoire", "hammer", "greatsword", "axe", "bow", "gauntlets"].every((id) => chargeOf(id) >= CHARGE.least));
     });
 
-    it("is as strong as the weapon's level: its harm in proportion to it, how long and far from a little to all of it", () => {
-        for (const id of Object.keys(EFFECTS)) {
+    it("is as strong as the weapon's level: its harm in proportion to it, how long and far from a little to all of it; a ward's guard, its stone skin's length and hardness too", () => {
+        for (const id of BLOW_EFFECTS) {
             const [weak, strong] = [effectAt(id, 10), effectAt(id, 100)];
 
             assert.ok(Math.abs(weak.damage[1] - strong.damage[1] * 0.1) < 0.011, `${id}: a tenth the harm at level 10`);
@@ -253,6 +253,19 @@ describe("a legendary weapon's effect (legendary.js)", () => {
             }
         }
 
+        // (A ward, a unique's: Stoneheart's, from its first level's to its highest's, no harm of its own)
+        for (const id of Object.keys(EFFECTS).filter((each) => EFFECTS[each].ward)) {
+            const [weak, strong] = [effectAt(id, 1), effectAt(id, 100)];
+
+            assert.equal(weak.damage, undefined, id);
+
+            for (const key of ["guard", "skin", "harden"]) {
+                assert.equal(weak[key], EFFECTS[id][key][0], `${id} ${key} at the first level`);
+                assert.equal(strong[key], EFFECTS[id][key][1], `${id} ${key} at the highest`);
+            }
+        }
+
+        assert.deepEqual(BLOW_EFFECTS, ["frostbind", "cinderburst", "earthsunder", "stormlash", "ruinblast"]);
         assert.equal(effectStrength(10), 0.1);
     });
 
@@ -285,6 +298,71 @@ describe("a legendary weapon's effect (legendary.js)", () => {
         player.foughtAt = battle.time - CHARGE.idle - 1;
         battle.actor("orc").dead = true;
         assert.ok(battle.time - player.foughtAt > CHARGE.idle);
+    });
+
+    it("is a unique's own on any piece, held or worn: one let loose by blows struck and one ward at most, the weapon's first, then each piece's as they're worn", () => {
+        const level = 50;
+        const amulet = { ...rollGear("amulet", "legendary", createRandom(3), { level }), unique: "heartOfHarrowstone", effect: "stoneheart" };
+        const ring = { ...rollGear("ring", "legendary", createRandom(4), { level }), unique: "ring", effect: "cinderburst" };
+        const plain = { ...rollGear("sword", "fine", createRandom(5), { level }) };
+        const fighter = fighterOf(new Progress({ gear: { mainHand: plain, amulet, ring1: ring } }, { weapon: "sword" }));
+
+        // (Worn, whatever they strike with: the ring's let loose by the sword's blows, its charge
+        // the sword's; the amulet's a ward, charged by the blows they take)
+        assert.equal(effectOf(amulet), "stoneheart");
+        assert.equal(effectOf(ring), "cinderburst");
+        assert.equal(effectOf({ ...ring, effect: undefined }), null, "(a legendary ring rolls none of its own)");
+        assert.deepEqual(fighter.legendary, { effect: "cinderburst", level: levelOf(level), charge: chargeOf("sword") });
+        assert.deepEqual(fighter.ward, { effect: "stoneheart", level: levelOf(level), charge: WARD_CHARGE.blows });
+
+        // (A legendary sword's own first; none, no ward)
+        const legendary = { ...rollGear("sword", "legendary", createRandom(6), { level }) };
+
+        assert.equal(fighterOf(new Progress({ gear: { mainHand: legendary, ring1: ring } }, { weapon: "sword" })).legendary.effect, effectOf(legendary));
+        assert.equal(fighterOf(new Progress({ gear: { mainHand: plain, ring1: ring } }, { weapon: "sword" })).ward, null);
+
+        // (Counted in their might: what the ward keeps off)
+        assert.ok(mightOf(new Progress({ gear: { mainHand: plain, amulet } }, { weapon: "sword" })) > mightOf(new Progress({ gear: { mainHand: plain, amulet: { ...amulet, effect: undefined } } }, { weapon: "sword" })));
+    });
+
+    it("lets a ward loose on whoever wears it by the blows they take: every blow on them lighter, and once it's full their skin stone a while, the blows on them lighter again", () => {
+        const fight = (ward) => {
+            const battle = new Battle({ blocked: Array.from({ length: 12 }, () => new Uint8Array(12)) }, { seed: 4 });
+
+            battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [4, 4], hp: 100000 });
+            battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [5, 5], ai: "patrol", patrol: [[5, 5], [5, 5]], hp: 100000 });
+
+            const player = battle.actor("player");
+
+            player.ward = ward;
+
+            const events = [];
+            let stone = 0;
+
+            for (let t = 0; t < 12000; t += STEP_MS) {
+                events.push(...battle.advance(STEP_MS));
+                stone += player.stoneUntil > battle.time ? 1 : 0;
+            }
+
+            const taken = events.filter(({ type, id }) => type === "hit" && id === "player");
+
+            return { player, events, stone, taken, harm: taken.reduce((sum, { damage }) => sum + damage, 0) };
+        };
+        const bare = fight(null);
+        const warded = fight({ effect: "stoneheart", level: 100, charge: 3 });
+        const unleashed = warded.events.filter(({ type }) => type === "unleashed");
+        const numbers = effectAt("stoneheart", 100);
+
+        assert.ok(bare.taken.length >= 4, "the orc's blows land");
+        assert.equal(bare.events.filter(({ type }) => type === "unleashed").length, 0);
+        assert.ok(unleashed.length >= 1, "let loose");
+        const { id, target, effect, level, radius, struck, time, until } = unleashed[0];
+
+        assert.deepEqual({ id, target, effect, level, radius, struck }, { id: "player", target: "player", effect: "stoneheart", level: 100, radius: null, struck: [] }, "on them, striking no one");
+        assert.equal(until - time, numbers.skin, "their skin stone as long as its level makes it");
+        assert.ok(warded.stone > 0, "their skin stone a while");
+        assert.ok(warded.stone * STEP_MS <= numbers.skin * unleashed.length, "no longer than its skin");
+        assert.ok(warded.harm < bare.harm * (1 - numbers.guard), `lighter: ${warded.harm} taken against ${bare.harm}`);
     });
 });
 

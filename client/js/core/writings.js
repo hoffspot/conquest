@@ -94,6 +94,32 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (Tamsin's last note, found on what's left of the Lantern Company in the ruins of Harrowstone
+    // quarry: core/rare.js THREADS harrowstone, given as its first step's done)
+    tamsin: Object.freeze({
+        title: "A note in Tamsin's hand",
+        by: "Tamsin of the Lantern Company",
+        found: "Folded in a belt pouch among the Lantern Company's remains, in the ruins of Harrowstone quarry",
+        entries: Object.freeze([
+            {
+                heading: "At dusk",
+                hand: "Pencil, pressed hard.",
+                text: [
+                    "We found it at dusk, standing in the old pit as if it was waiting for the morning shift. Bram went in first with his shield up. The shield lasted one blow.",
+                    "It doesn't tire. It doesn't bleed. Corwin's light only makes the crystal in its chest flicker, violet, like a bad tooth. Ilsa's arrows break on it. When we keep back it tears rocks out of the hillside and throws them: watch the ground, the shadow comes before the rock does.",
+                ],
+            },
+            {
+                heading: "Later",
+                hand: "The same pencil, the lines running downhill.",
+                text: [
+                    "Venn's runes are still cut along its arms. If I could read them I could stop it. I can't. Corwin can't walk. We're going to try to get out by the cutting on the far side while it's at the cranes.",
+                    "If you find this, take it to my teacher at the guild, and say I'm sorry. Say the crystal was flawed. Venn never knew. Someone should know.",
+                ],
+                signed: "T.",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */

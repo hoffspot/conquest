@@ -152,6 +152,8 @@ export const PARTS = Object.freeze({
     riftHeart: { label: "Heart of the Behemoth", worth: 1200, icon: "heart", tint: "#3ad0ff" },
     riftlingScale: { label: "Riftling's scale", worth: 26, icon: "scale", tint: "#24301e" },
     riftGland: { label: "Rift-fire gland", worth: 75, icon: "gland", tint: "#5aff90" },
+    golemStone: { label: "Runed golem stone", worth: 90, icon: "shard", tint: "#8a857a" },
+    blightCrystal: { label: "Blighted crystal shard", worth: 260, icon: "shard", tint: "#8a4ad0" },
 });
 
 /**
@@ -249,6 +251,10 @@ export const SPOILS = Object.freeze({
     kaiju: { items: [{ id: "riftScale", chance: 0.95, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
     riftling: { items: [{ id: "riftlingScale", chance: 0.7, count: [1, 2] }, { id: "riftGland", chance: 0.2 }] },
     riftStalker: { items: [{ id: "riftlingScale", chance: 0.9, count: [2, 4] }, { id: "riftGland", chance: 0.8 }, { id: "riftSpine", chance: 0.25 }] },
+    // (The Stone Golem of Harrowstone: the stones its maker cut his runes in, and splinters of the
+    // flawed crystal at its heart, dark with the blight in it; the cleansed shard its rare card's
+    // own: core/rare.js UNIQUES)
+    stoneGolem: { items: [{ id: "golemStone", chance: 0.95, count: [3, 6] }, { id: "blightCrystal", chance: 0.7, count: [1, 2] }] },
     // (The River of Fire's master: what the lord pays it in)
     greaterDemon: { gold: [40, 90], items: [{ id: "obsidian", chance: 0.7, count: [1, 2] }, { id: "soulShard", chance: 0.5 }, { id: "fireGland", chance: 0.4 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },

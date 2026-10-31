@@ -68,10 +68,11 @@ describe("seeing from high ground (core/sighting.js)", () => {
 });
 
 describe("places seen from high ground, in play (host.js #spotting)", () => {
-    // A world (seed 2) with Ada and Bea in a party and Cy in none; and a rise in it with four
-    // places in sight (found by scanning the world: none of them near where the players start)
+    // A world (seed 2) with Ada and Bea in a party and Cy in none; and a rise in it with five
+    // places in sight (found by scanning the world: none of them near where the players start), the
+    // ruins of Harrowstone quarry among them
     const RISE = [400, 1108];
-    const SEEN = ["camp-25", "standing-stones-118", "ruins-37", "dungeon-6"];
+    const SEEN = ["camp-25", "ruined-quarry-1", "standing-stones-118", "ruins-37", "dungeon-6"];
 
     function together() {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });

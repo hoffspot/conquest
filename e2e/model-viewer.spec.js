@@ -231,11 +231,11 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
     // black widow, the Ant Monster, the greater demon (the River of Fire's master), the infernal
     // demon (a hell's lord), the fiend (its packs), its six flayed and six gorgers, the henchmen,
-    // the walkers, the orcs on a dungeon's throne and the kaiju (the Behemoth of the Rift): every
-    // bought model but the Stone Golem and the Orc King, kept for cards, listed as to come; read,
-    // its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Stone Golem", "Orc King"]);
-    expect(await page.locator("#picker optgroup[label='For the mightiest'] option").allTextContents()).toContain("Behemoth of the Rift");
+    // the walkers, the orcs on a dungeon's throne, the kaiju (the Behemoth of the Rift) and the
+    // Stone Golem (the first rare card's world boss): every bought model but the Orc King, kept for
+    // a card, listed as to come; read, its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Orc King"]);
+    expect(await page.locator("#picker optgroup[label='For the mightiest'] option").allTextContents()).toEqual(expect.arrayContaining(["Behemoth of the Rift", "Stone golem"]));
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -802,7 +802,7 @@ test("and the Infernal Demon: all 21 of its own clips, as long as they were made
     await page.waitForFunction(() => window.lab.current().thing.skin === "dark", null, { timeout: 60000 });
 });
 
-test("and the Stone Golem, kept for a card: all 25 of its own clips, its hammer and shield on the bones that hold them, its three materials, each of its skins put on, and whose it is", async ({ page }) => {
+test("and the Stone Golem, the first rare card's world boss: all 25 of its own clips, its hammer and shield on the bones that hold them, its three materials, each of its skins put on, and whose it is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-golem&clip=Attack%201");
 
@@ -846,6 +846,36 @@ test("and the Stone Golem, kept for a card: all 25 of its own clips, its hammer 
         await page.getByLabel("Skin").selectOption(skin);
         await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
     }
+});
+
+test("the Stone Golem as the game draws it: a stone-grey brute till its model's read, then the golem, four metres tall, its hammer three ways, a boulder torn up and heaved, held in its hand from the crouch till it's let go", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=stoneGolem");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: [], specials: ["smash", "sweep", "pound", "heave"], rests: ["look", "shift", "stretch"], skin: "" });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["smash", "sweep", "pound", "heave"]));
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(3.99, 1);
+
+    // (Its heave, paused and stepped on: the boulder in its hand once it's crouched, gone from it
+    // once it's let go; none before)
+    await page.getByRole("button", { name: "Pause" }).click();
+    await page.locator("#moves").getByRole("button", { name: "heave", exact: true }).click();
+
+    const held = await page.evaluate(() => {
+        const seen = [];
+
+        for (let k = 0; k < 90; k++) {
+            window.lab.step(1);
+            seen.push(Boolean(window.lab.avatar().carried()));
+        }
+
+        return seen;
+    });
+
+    expect(held[0]).toBe(false);
+    expect(held.some(Boolean)).toBe(true);
+    expect(held.at(-1)).toBe(false);
+    expect(held.findIndex(Boolean)).toBeLessThan(held.findLastIndex(Boolean));
 });
 
 test("and the Orc King, kept for a card: the Orc in his finest dressing, his 23 clips (his fall Mesh2Motion's), his five materials, each of his skins put on, and whose he is", async ({ page }) => {

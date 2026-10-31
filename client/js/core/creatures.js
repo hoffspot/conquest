@@ -113,7 +113,9 @@ export const COLOSSUS = Object.freeze({
  * where it falls, battle.js BOMBS, its `damage` at the blast's heart: a hell's Cinder Husk). How
  * little some kinds of harm hurt it (`wards`: { fire, water, air, earth, magic }, a share kept
  * off each, as a player's charms keep it: battle.js `charmed`, half at most). One too vast for any
- * of that fights its own way (`colossus`: COLOSSUS, battle.js #colossus).
+ * of that fights its own way (`colossus`: COLOSSUS, battle.js #colossus). One a world's boss
+ * (`worldBoss`), met once, has its bar across the top of the screen as the colossal do (game.js).
+ * One that sees further than most has its own `sight` (squares: battle.js SIGHT, else).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -313,6 +315,17 @@ export const CREATURES = Object.freeze({
     riftling: { name: "Riftling", hp: 46, weapon: "riftling", speed: 1.5, chase: 3.6, temper: "aggressive", roam: 6, leash: 28, pack: [1, 1], tiers: [7, 9], biomes: [], blood: "ichor", armor: 0.1, darkSight: true },
     riftStalker: { name: "Rift stalker", hp: 150, weapon: "riftStalker", speed: 1.3, chase: 3, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [9, 9], biomes: [], blood: "ichor", armor: 0.25, perilous: true, darkSight: true, steady: true },
     kaiju: { name: "Behemoth of the Rift", hp: 2400, weapon: "kaiju", speed: 1.5, chase: 2.2, temper: "aggressive", roam: 0, leash: 400, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "ichor", armor: 0.3, perilous: true, darkSight: true, steady: true, colossus: COLOSSUS },
+    // (The Stone Golem of Harrowstone: a quarry's golem, raised by an idle mage to cut and haul its
+    // stone, its heart a crystal with a flaw in it no one saw; gone mad, it broke the quarry and
+    // everyone in it, and has wandered the hills by its ruins since (docs/WILDS.md *The Stone
+    // Golem*). One a world, met only as its rare card's foe (core/rare.js RARE_CARDS stoneGolem), a
+    // world's boss (`worldBoss`: its bar across the top of the screen, its model wanted as soon as
+    // it's about: game.js). Four metres of stone, drawn from a bought model of its own
+    // (beasts/model.js); too heavy to throw, slow to turn aside, its hammer and its shield arm
+    // knocking whoever they catch off their feet, boulders torn up and hurled at whoever keeps off
+    // (weapons.js NATURAL stoneGolem). Earth harms it little; it knows where they are by night as by
+    // day, through the ground, and further off than most (`sight`), for its boulders to reach them)
+    stoneGolem: { name: "Stone golem", hp: 130, weapon: "stoneGolem", speed: 1, chase: 2.3, temper: "aggressive", roam: 18, leash: 60, pack: [1, 1], tiers: [6, 10], biomes: [], blood: "stone", armor: 0.35, perilous: true, darkSight: true, sight: 26, steady: true, wards: { earth: 0.5 }, worldBoss: true },
 });
 
 /**
@@ -500,9 +513,9 @@ export function notable(wild, { master = false } = {}) {
  * boss (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null, worldBoss = false, sight = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}) };
+    return { steady, keep, ...(worldBoss ? { worldBoss } : {}), ...(sight ? { sight } : {}), bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

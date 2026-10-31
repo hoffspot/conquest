@@ -703,6 +703,8 @@ export const LOOKS = Object.freeze({
     // (The Lord of the Pit's henchmen, broad and a man's height, and a hell's walkers, lean and a head
     // taller, until their own models are read: creatures.js)
     henchman: { body: "humanoid", scale: [1.02, 1.06] },
+    // (The Stone Golem, four metres of stone, until its own model is read: creatures.js)
+    stoneGolem: { body: "humanoid", scale: [2.2, 2.3] },
     brimstoneWalker: { body: "humanoid", scale: [1.12, 1.16] },
     ashWalker: { body: "humanoid", scale: [1.12, 1.16] },
     hellwalker: { body: "humanoid", scale: [1.12, 1.16] },
@@ -894,6 +896,9 @@ const BRUTES = {
         wear: [["loincloth"], ["belt"], ["orcHelm"]],
         walk: "orc",
     },
+    // (The Stone Golem, standing in for its own model: a hulking brute the grey of cut stone, its
+    // eyes the blighted violet of the crystal at its heart, bracered)
+    stoneGolem: { ...gorger(["#7a766c", "#6e6a62", "#868176"], [["bracers"]]), irises: ["#b070ff", "#8a4ad0"] },
     // (A hell's walkers, standing in for their own model: gaunt and skinned as the flayed are, in
     // their level's skin: brimstone amber, ash grey, raw flesh, bile green)
     brimstoneWalker: flayed(["#9a6a2a", "#8a5e24", "#a87632"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),

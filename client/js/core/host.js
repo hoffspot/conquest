@@ -25,7 +25,7 @@ import { Explored } from "./explored.js";
 import { abilityLabel, abilityOf, BANES, bynameOf, capOf, ENMITY_WEIGHTS, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
-import { DEBUG_CARDS, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, SAMPLE, SAMPLE_DEEP, siteDoor, threadWares, threadWords, THREADS, UNIQUES, VAULT, vaultOrigin } from "./rare.js";
+import { cardOf as rareCard, DEBUG_CARDS, hourOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, SAMPLE, SAMPLE_DEEP, siteDoor, talksFor, threadWares, threadWords, THREADS, UNIQUES, VAULT, vaultOrigin } from "./rare.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -2206,8 +2206,9 @@ export class Host {
                 // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
                 return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
             case "rare":
-                // (Debug mode's sample rare encounter dealt ahead of them: core/rare.js SAMPLE)
-                return this.debugs(playerId) ? (command.inside ? this.#rareNowInside(player, actor) : this.#rareNow(player, actor)) : refuse("command");
+                // (Debug mode's sample rare encounter dealt ahead of them: core/rare.js SAMPLE; or the
+                // Stone Golem, `golem`)
+                return this.debugs(playerId) ? (command.golem ? this.#golemNow(player, actor) : command.inside ? this.#rareNowInside(player, actor) : this.#rareNow(player, actor)) : refuse("command");
             case "burn":
                 // (Houses near them burnt as the Behemoth burns them, `ago` ms of play ago: the
                 // debug overlay's)
@@ -3960,8 +3961,9 @@ export class Host {
         actor.shield = player.progress.guard(bonus);
         actor.enmityWeight = actor.shield ? 1 + SHIELD_ENMITY * player.progress.rank("shield") : 1;
 
-        // (Blows sooner, health drawn from them, foes left bleeding: core/gear.js; and a legendary
-        // weapon's effect, its charge begun again with another: core/legendary.js)
+        // (Blows sooner, health drawn from them, foes left bleeding: core/gear.js; and the effect
+        // their blows let loose (a legendary weapon's, or a unique's worn anywhere), and the ward the
+        // blows they take do (a unique's), each's charge begun again with another: core/legendary.js)
         const fighter = fighterOf(player.progress, bonus);
 
         actor.haste = fighter.haste;
@@ -3971,6 +3973,11 @@ export class Host {
         if (JSON.stringify(actor.legendary ?? null) !== JSON.stringify(fighter.legendary)) {
             actor.legendary = fighter.legendary;
             actor.charge = 0;
+        }
+
+        if (JSON.stringify(actor.ward ?? null) !== JSON.stringify(fighter.ward)) {
+            actor.ward = fighter.ward;
+            actor.steeled = 0;
         }
 
         // (The kinds of creature they know where to strike: Mastered in their bestiary)
@@ -10202,6 +10209,7 @@ export class Host {
         this.#strangersAbout(homes);
         this.#obstaclesAbout(homes);
         this.#ambushesAbout();
+        this.#rareSites(homes);
         this.#rareFollow();
         this.#threadFollow();
         this.#vaultsAbout();
@@ -10518,10 +10526,11 @@ export class Host {
         return card ? this.#rarePut(legends.cards[card], actor, was.heading, homes) : false;
     }
 
-    // A rare card (`card`) put out ahead of a player (`actor`, going the way of `heading`), as its
-    // shape is (rare.js SHAPES): out now, told. Whether it could be
-    #rarePut(card, actor, heading, homes) {
-        const spot = this.#rareSpot(card, actor, heading);
+    // A rare card (`card`) put out ahead of a player (`actor`, going the way of `heading`), or at
+    // its own place (`at`: one kept at a site), as its shape is (rare.js SHAPES): out now, told.
+    // Whether it could be
+    #rarePut(card, actor, heading, homes, at = null) {
+        const spot = at ? { heart: [...at], square: [Math.floor(at[0]), Math.floor(at[1])] } : this.#rareSpot(card, actor, heading);
         const ids = spot && card.shape.kind === "foe" ? this.#rareFoe(card, spot, homes) : [];
 
         if (!ids.length) {
@@ -10597,6 +10606,29 @@ export class Host {
         this.#event("roused", { ids: [id], creature: kind });
 
         return [id];
+    }
+
+    // The rare cards kept at a site (rare.js `where` "site": the Stone Golem), dealt as they're come
+    // to (#caches, at each look about): one wanted now (its thread at its step, its place set) and
+    // not done in the world, none out, and a player out in the world who's not done it within RARE
+    // `site` of its place
+    #rareSites(homes) {
+        if (!this.legends.free({ site: true })) {
+            return;
+        }
+
+        for (const card of Object.values(this.legends.cards)) {
+            const place = card.where === "site" && !card.debug && card.requires && this.legends.wants(card) && !this.legends.gone.has(card.id) ? this.legends.threads[card.requires.thread]?.place : null;
+            const comer = place ? [...this.players.values()].find((player) => {
+                const actor = this.battle.actor(player.id);
+
+                return actor && !actor.dead && actor.map === "town" && hypot(actor.x - place[0], actor.y - place[1]) <= RARE.site && !player.progress.legends.met.includes(card.id);
+            }) : null;
+
+            if (comer && this.#rarePut(card, this.battle.actor(comer.id), null, homes, place)) {
+                return;
+            }
+        }
     }
 
     // The rare encounter out followed (#caches, at each look about): seen by those within RARE
@@ -11205,12 +11237,13 @@ export class Host {
 
     // --- Threads (core/rare.js THREADS; docs/WILDS.md *Threads*) ---
 
-    // A rare encounter's thread begun where it was done (`at`), by those who took part (`ids`): at
-    // its first step, set up (#threadSetUp), told
-    #threadBegin(id, at, ids) {
+    // A rare encounter's thread begun where it was done (`at`), by those who took part (`ids`); or
+    // one begun by a rumour, where it was told (`home`: that settlement): at its first step, set up
+    // (#threadSetUp), told
+    #threadBegin(id, at, ids, { home = null } = {}) {
         const by = ids.map((one) => this.players.get(one)?.hero.name).filter(Boolean);
 
-        if (!this.legends.begin(id, { at, ids, by })) {
+        if (!this.legends.begin(id, { at, ids, by, home })) {
             return;
         }
 
@@ -11218,16 +11251,24 @@ export class Host {
         this.#event("thread", { change: "begun", thread: id, step: 0, ids: [...ids] });
     }
 
-    // The step a thread's at made ready (rare.js STEPS): a place's spot found (#threadSpot), on the
-    // maps; a talk's or contract's settlement, the nearest where it was last
+    // The step a thread's at made ready (rare.js STEPS): a place's spot found (#threadSpot), or the
+    // plan's place of its kind nearest where it was last (`site`), on the maps, with the settlement
+    // nearest where it was last; a card kept at a site, its place (#threadHaunt); a talk's or
+    // contract's settlement, the nearest where it was last (or the thread's home, `home`)
     #threadSetUp(id) {
         const thread = this.legends.threads[id];
         const def = this.legends.stepOf(id);
 
         if (def?.kind === "place") {
-            thread.place = this.#threadSpot(thread.at, def.far ?? [150, 250]);
-        } else if (def?.kind === "talk" || def?.kind === "contract") {
+            const site = def.site ? this.#nearestSite(def.site, thread.at) : null;
+
+            // (The place's heart, as it's built: sites.js, the Lantern Company's remains there)
+            thread.place = site ? [...(this.world.maps.town?.sites?.heartOf(site) ?? site.at)] : this.#threadSpot(thread.at, def.far ?? [150, 250]);
             thread.town = this.#nearestTown(thread.at);
+        } else if (def?.kind === "card" && rareCard(def.card)?.where === "site") {
+            thread.place = this.#threadHaunt(thread.at, def.far ?? [110, 170]);
+        } else if (def?.kind === "talk" || def?.kind === "contract") {
+            thread.town = def.home && thread.home ? thread.home : this.#nearestTown(thread.at);
         } else if (def?.kind === "lock") {
             // (Its lock opened, its way in marked: told)
             const site = LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
@@ -11309,6 +11350,40 @@ export class Host {
         }
 
         return [...at];
+    }
+
+    // The plan's place of a kind (`kind`: one of its sites') nearest `at`, or null
+    #nearestSite(kind, at) {
+        const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === kind);
+
+        return sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
+    }
+
+    // Where a card kept at a site is kept (rare.js STEPS `card`, its `where` "site": the Stone
+    // Golem), `far` ([least, most] metres) from `at`: of a couple of dozen spots where a cache could
+    // be (caches.js cacheClear, openAround), the one highest up (the plan's land); or, none of them,
+    // a thread's place step's spot there
+    #threadHaunt(at, [least, most]) {
+        const plan = this.world.plan;
+        const overworld = this.world.maps.town;
+        const squares = squaresOf(overworld);
+        let best = null;
+
+        for (let tries = 0; tries < 24; tries++) {
+            const turn = this.random.next() * 2 * Math.PI;
+            const reach = least + this.random.next() * (most - least);
+            const heart = [Math.floor(at[0] + cos(turn) * reach) + 0.5, Math.floor(at[1] + sin(turn) * reach) + 0.5];
+
+            if (plan && cacheClear(plan, heart, { nearRoad: () => false, others: [] }) && openAround(heart, (x, y) => squares.blocked(x, y))) {
+                const high = landAt(plan, ...heart).height ?? 0;
+
+                if (!best || high > best.high) {
+                    best = { heart, high };
+                }
+            }
+        }
+
+        return best ? best.heart : this.#threadSpot(at, [least, most]);
     }
 
     // The settlement nearest `at` (a plan place a people holds, or any settlement of a world with
@@ -11403,14 +11478,31 @@ export class Host {
     }
 
     // A thread's word asked of one of the folk (a choice of their talk: rare.js threadTalk): the
-    // one its talk step's for (its `role`, in its settlement), at that step; the step done by who
-    // asked
+    // one its talk step's for (its `role`, an adventurer's `calling`: talksFor; in its settlement),
+    // at that step; the step done by who asked. Or (`step` null) a thread's opener's rumour taken
+    // up (rare.js OPENERS: told by the one it's for, at the guild in the settlement nearest its
+    // place, openerOf): the thread begun there, by who took it up, its home that settlement
     #threadTalk(player, actor, { thread: id, step }) {
+        const npc = this.battle.actor(actor.talkingTo);
+        const folk = npc ? this.folk.get(npc.id) : null;
+        const hall = npc ? [...this.folk.values()].filter((one) => one.map === npc.map) : [];
+
+        if (step === null) {
+            const opener = this.legends.opening(id) ? openerOf(this.world.plan, id) : null;
+
+            if (!opener || !folk || !talksFor(THREADS[id].opens, folk, hall) || this.#townOfMap(npc.map) !== opener.town.id) {
+                return refuse("thread");
+            }
+
+            this.#threadBegin(id, opener.town.at, [player.id], { home: opener.town.id });
+
+            return OK;
+        }
+
         const thread = this.legends.threads[id];
         const def = this.legends.stepOf(id);
-        const npc = this.battle.actor(actor.talkingTo);
 
-        if (def?.kind !== "talk" || thread.step !== step || !npc || npc.role !== def.role || this.#townOfMap(npc.map) !== thread.town) {
+        if (def?.kind !== "talk" || thread.step !== step || !npc || !talksFor(def, folk ?? npc, hall) || this.#townOfMap(npc.map) !== thread.town) {
             return refuse("thread");
         }
 
@@ -11480,6 +11572,43 @@ export class Host {
         const town = folk?.place ?? this.#townOfMap(trading?.map);
 
         return town && shop ? threadWares(this.legends.changes, { town, shop, played: this.legends.played }) : [];
+    }
+
+    // The Stone Golem (rare.js RARE_CARDS stoneGolem) dealt before a player at once (the debug
+    // overlay's): its thread brought to its step (begun, its rumour's home the settlement nearest
+    // its ruins, and its steps before done, by them), its place a little ahead of them; not while
+    // another's out, nor once it's done in the world
+    #golemNow(player, actor) {
+        const card = this.legends.cards.stoneGolem;
+
+        if (!card || this.legends.active || this.legends.gone.has(card.id) || actor.map !== "town") {
+            return refuse("rareOut");
+        }
+
+        const { thread: id, step } = card.requires;
+        const at = [actor.x, actor.y];
+
+        if (!this.legends.threads[id]) {
+            this.#threadBegin(id, at, [player.id], { home: openerOf(this.world.plan, id)?.town.id ?? null });
+        }
+
+        for (let k = 0; this.legends.threads[id] && !this.legends.threads[id].done && this.legends.threads[id].step < step && k < 8; k++) {
+            this.#threadDone(id, [player.id], at);
+        }
+
+        const squares = squaresOf(this.world.maps.town);
+        const [hx, hy] = this.travel.get(player.id)?.heading ?? [sin(actor.facing ?? 0), cos(actor.facing ?? 0)];
+        const spots = [18, 22, 26, 14].flatMap((reach) => [0, 0.5, -0.5, 1, -1].map((turn) => [Math.floor(actor.x + (hx * cos(turn) - hy * sin(turn)) * reach) + 0.5, Math.floor(actor.y + (hx * sin(turn) + hy * cos(turn)) * reach) + 0.5]));
+        const place = spots.find((heart) => openAround(heart, (x, y) => squares.blocked(x, y))) ?? null;
+        const homes = [...this.players.values()].map((each) => ({ at: this.#whereIs(each), home: this.#homeOf(each) })).filter(({ at: where }) => where);
+
+        if (!place || !this.legends.wants(card)) {
+            return refuse("rareRoom");
+        }
+
+        this.legends.threads[id].place = place;
+
+        return this.#rarePut(card, actor, null, homes, place) ? { ok: true, n: this.legends.active.n, card: card.id } : refuse("rareRoom");
     }
 
     // Debug mode's sample (rare.js SAMPLE), or the card that follows it while its thread's at it,

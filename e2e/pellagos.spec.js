@@ -8102,7 +8102,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await page.evaluate(() => window.pellagos.game.toggleJournal());
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
-    await expect(journal).toContainText("1 of 105 kinds of creature met");
+    await expect(journal).toContainText("1 of 106 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them
@@ -17829,6 +17829,63 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
     };
 
     expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
+});
+
+test("the Stone Golem dealt before the player: drawn from its model at once, its bar across the top; a boulder torn up and heaved at them, its shadow on the ground where it'll land, and them thrown off their feet", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: the debug overlay's Golem, its thread
+    // brought to it, dealt a little ahead of them)
+    const dealt = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(11).keys()].every((j) => [...Array(11).keys()].every((i) => !squares.blocked(cx - 15 + i * 3, cy - 15 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 80; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 50000;
+
+        return game.host.command(game.me, { type: "rare", golem: true });
+    });
+
+    expect(dealt).toMatchObject({ ok: true, card: "stoneGolem" });
+
+    const golemOf = () => window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem");
+
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    await expect(page.locator("#bossbar .name")).toHaveText("The Stone Golem of Harrowstone");
+    expect(await page.evaluate(golemOf)).toMatchObject({ wild: { worldBoss: true, steady: true, champion: "boss" } });
+
+    // (Sixteen metres off, out of reach of its hammer: it heaves a boulder at them, its shadow on
+    // the ground where it'll land as it flies; standing there, they're caught and thrown)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const golem = game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem");
+
+        game.host.battle.place(golem.id, "town", [Math.floor(me.x), Math.floor(me.y + 16)]);
+        Object.assign(golem, { facing: Math.PI });
+    });
+
+    expect(await playUntil(page, () => [...window.pellagos.game.spellFx.bombs.values()].some((bomb) => bomb.shadow?.visible), { seconds: 20 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem").attack?.attack.animation)).toBe("heave");
+    expect(await playUntil(page, () => (window.pellagos.game.battle.actor(window.pellagos.game.me).thrownAt ?? -1) >= 0, { seconds: 10 })).toBe(true);
 });
 
 test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {

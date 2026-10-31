@@ -401,6 +401,9 @@ export const CREATURE_VOICES = Object.freeze({
     // they are; a riftling's highest)
     riftling: { family: "kaiju", rate: 1.24, fall: "deathThudMid" },
     riftStalker: { family: "kaiju", rate: 1.12, fall: "deathThudBig" },
+    // (The Stone Golem: a troll's voice slowed into a grinding rumble, as big as it is; it comes
+    // down as the biggest beasts do)
+    stoneGolem: { family: "troll", rate: 0.72, fall: "deathThudBig" },
     wildBull: { family: "dragon", rate: 1.2, fall: "deathThudBig" },
     capeBuffalo: { family: "dragon", rate: 1.1, fall: "deathThudBig" },
     kelpie: { family: "dragon", rate: 1.24, fall: "deathThudBig" },

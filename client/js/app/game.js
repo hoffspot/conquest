@@ -41,7 +41,7 @@ import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAI
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
-import { cardOf, LOCKS, lockSite, THREADS, threadTalk, threadWords, UNIQUES } from "../core/rare.js";
+import { cardOf, LOCKS, lockSite, openerOf, talksFor, THREADS, threadTalk, threadTracks, threadWords, UNIQUES } from "../core/rare.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -70,6 +70,7 @@ import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, levelOf, offHandFree } from "../core/gear.js";
+import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
@@ -628,12 +629,13 @@ const RITE_HEARD = 110;
 // their signs are drawn (`signs`, metres) and their prints (`prints`), laid again once they've gone
 // `again` metres on; how far apart a print falls from the next, against how big what made them
 // is (`stride`: [a share of its size, least, most metres]), and how deep they are against fresh
-// ones (`depth`)
+// ones (`depth`); a rare card's kept at a site (the Stone Golem's) as deep as any print is, in any
+// ground (`sunk`)
 // How near the player a shrine can be tapped to pray at (metres, out in the world: #shrineAt), and
 // how near a tap's ray passes the space before it (its heart, a little above the ground)
 const SHRINE_TAP = Object.freeze({ seen: 40, near: 2.6, up: 1.2 });
 
-const TRAIL_SEEN = Object.freeze({ signs: 40, prints: 45, again: 12, stride: Object.freeze([0.6, 0.45, 2.4]), depth: 0.85 });
+const TRAIL_SEEN = Object.freeze({ signs: 40, prints: 45, again: 12, stride: Object.freeze([0.6, 0.45, 2.4]), depth: 0.85, sunk: 1 });
 
 // Who's heard of the nearest hell's cult, and will say (#cultWords): those whose trade it is to
 // hear things, always; of the rest who'd say (dialogue.js: those asked "Anything strange out
@@ -831,7 +833,7 @@ const UNLEASHED_MOTES = Object.freeze({
     dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
     sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
 });
-const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast" });
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", stoneheart: "castEarthMid" });
 const ATOMIC_LEAD = 0.05;
 const BOSS_NEAR = 150;
 
@@ -846,9 +848,11 @@ const SMALL_BOMBS = new Set(Object.values(BOMBERS).flatMap(({ weapon }) => weapo
 // people's bomb that has no wick to fizz (by its kind), lying where it landed: a starfire seed pod
 // shimmering, a shadowfire orb's flame, a swamp-gas bladder hissing, bursting as foul water does;
 // and a catapult's pot of burning pitch, heard flying (`flying`, from where it's flung), nothing
-// heard lying there (it bursts as it lands), bursting as a great blast
+// heard lying there (it bursts as it lands), bursting as a great blast; and the Stone Golem's
+// boulder, a heavy stone heard flying, landing as the colossal's blows do (COLOSSAL_BLASTS)
 const BURSTS = Object.freeze({
     firePot: { flying: "fireball", gathering: null, burst: "explosionLarge" },
+    boulder: { flying: "stoneShot", gathering: null },
     // (A legendary weapon's Ruinblast: core/legendary.js)
     ruinblast: { burst: "legendRuinblast" },
     embers: { gathering: "castFireLow", burst: "impactFireMid" },
@@ -861,12 +865,16 @@ const BURSTS = Object.freeze({
 // The colossal's blasts (battle.js #colossal, #rake, #stride: the Behemoth of the Rift's), each as
 // the ground shakes under it (spellfx.js quake) and how hard the camera's shaken within
 // BLAST_HEARD.quaked of it, and what's heard: its jaws slamming down, its roar, its tread; its
-// breath's drawn by its beam (beasts/beam.js), whoever it lands on thrown as by any blast
+// breath's drawn by its beam (beasts/beam.js), whoever it lands on thrown as by any blast. And the
+// Stone Golem's, as heavy: its hammer pounding the ground (battle.js #quake) and its boulder
+// coming down (BOMBS boulder), each the ground heaving and the stone heard crashing down
 const COLOSSAL_BLASTS = Object.freeze({
     colossalSlam: { quake: "slam", shake: 0.8, sound: "deathThudBig" },
     colossalRoar: { quake: "roar", shake: 0.6, sound: null },
     colossalTread: { quake: "tread", shake: 0.35, sound: null },
     atomicBreath: { quake: null, shake: 0.3, sound: null },
+    golemPound: { quake: "slam", shake: 0.55, sound: "impactEarthMid" },
+    boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
@@ -888,6 +896,8 @@ const SPILLS = Object.freeze({
     pixies: ["wither"],
     magmaSlime: ["lavaSplash", "embers"],
     rockTusker: ["stoneChips", "dust"],
+    // (What's cut stone: the Stone Golem's chips and grit)
+    stone: ["stoneChips", "dust"],
     hodmedod: ["straw", "dust"],
     draugr: ["boneChips", "dust"],
     mare: ["shadows"],
@@ -5036,8 +5046,8 @@ export class Game {
     }
 
     // Whether one of the wild's people-shaped creatures drawn as its stand-in (a character: a
-    // hell's lord) has had its model read since, and may be drawn again from it: out of view, not
-    // attacking or fallen
+    // hell's lord) has had its model read since, and may be drawn again from it: out of view (a
+    // world's boss, the Stone Golem, seen or not), not attacking or fallen
     #modelSince(id, avatar) {
         const actor = this.battle.actor(id);
         const kind = actor?.kind === "beast" ? actor.wild?.creature : null;
@@ -5046,7 +5056,7 @@ export class Game {
             return false;
         }
 
-        return this.view.heightOnScreen(avatar.object.position, avatar.character.height, this.view.pixelsPerMetre()) <= 0;
+        return Boolean(actor.wild?.worldBoss) || this.view.heightOnScreen(avatar.object.position, avatar.character.height, this.view.pixelsPerMetre()) <= 0;
     }
 
     // The kinds drawn from a model in the places with a way in near the player, out in the world
@@ -5077,9 +5087,10 @@ export class Game {
     // The kinds drawn from a model that may be met where the player is, out in the world, at this
     // hour (beasts/model.js modelsMet: its land, how far it is from their home, by night or day)
     // The kinds drawn from a model of the colossal (the Behemoth of the Rift: battle.js #colossus)
-    // alive anywhere in the battle: each's model wanted as soon as it's come, as big as it is
+    // and of a world's boss (the Stone Golem) alive anywhere in the battle: each's model wanted as
+    // soon as it's come, as big as it is
     #modelsAbout() {
-        return [...new Set(this.battle.actors.filter((actor) => actor.wild?.colossus && !actor.dead && MODELS[actor.wild.creature]).map((actor) => actor.wild.creature))];
+        return [...new Set(this.battle.actors.filter((actor) => (actor.wild?.colossus || actor.wild?.worldBoss) && !actor.dead && MODELS[actor.wild.creature]).map((actor) => actor.wild.creature))];
     }
 
     #modelsHere() {
@@ -5449,7 +5460,8 @@ export class Game {
         const [ox, oz] = this.originOf(event.map);
         const look = BOMBS[event.kind]?.look ?? null;
         const thrower = look ? null : this.avatars.get(event.id);
-        const from = () => (thrower ? thrower.hand("Right") : this.spellFx.onGround(ox + event.from[0], oz + event.from[1], look ? 0.2 : 1.2));
+        // (From its hand; or, what it carries let go of, where that is: the Stone Golem's boulder)
+        const from = () => (thrower ? (thrower.carried?.() ?? thrower.hand("Right")) : this.spellFx.onGround(ox + event.from[0], oz + event.from[1], look ? 0.2 : 1.2));
         const to = new THREE.Vector3(ox + event.x, 0, oz + event.y);
         const travel = Math.max(0.1, (event.lands - this.battle.time) / 1000);
         const fuse = (event.bursts - event.lands) / 1000;
@@ -6726,8 +6738,9 @@ export class Game {
 
         this.trailSigns.update(this.clock);
 
-        // (Laid again as the player goes, or as the wilds director lays fresh tracks or they go)
-        const fresh = [...(this.host.fresh?.keys() ?? [])].join();
+        // (Laid again as the player goes, or as the wilds director lays fresh tracks or they go, or a
+        // rare card's tracks come or go)
+        const fresh = [...(this.host.fresh?.keys() ?? []), ...threadTracks(this.host.legends).map(({ id, points }) => `${id}:${points.at(-1)}`)].join();
 
         if (!this.trailsAt || Math.hypot(me.x - this.trailsAt[0], me.y - this.trailsAt[1]) > TRAIL_SEEN.again || fresh !== this.freshLaid) {
             this.trailsAt = [me.x, me.y];
@@ -6750,6 +6763,14 @@ export class Game {
     // the first time (within FRESH.seen of their prints): said, what made them and which way they
     // lead
     #spyFresh(me) {
+        // (A rare card's, sunk deep: core/rare.js threadTracks, the Stone Golem's)
+        for (const tracks of threadTracks(this.host.legends)) {
+            if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
+                this.freshSeen.add(tracks.id);
+                this.hud.message(`Great footprints of stone, sunk deep in the ground: the ${CREATURES[tracks.creature]?.name?.toLowerCase() ?? "golem"}'s. They lead off to the ${compass(tracks.points[0], tracks.points.at(-1))}.`, 4.5);
+            }
+        }
+
         for (const tracks of this.host.fresh?.values() ?? []) {
             if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
                 this.freshSeen.add(tracks.id);
@@ -6794,11 +6815,14 @@ export class Game {
         }
 
         // (The trails out of the wild's homes, worn; and the wilds director's fresh tracks, made
-        // not long ago, deeper: core/director.js FRESH)
+        // not long ago, deeper: core/director.js FRESH; and a rare card's kept at a site, sunk deep
+        // even into stony ground, `sunk`: the Stone Golem's, from the Lantern Company's remains to
+        // where it is, core/rare.js threadTracks)
         const near = ({ points }) => points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= TRAIL_SEEN.prints + 10);
         const fresh = [...(this.host.fresh?.values() ?? [])].filter(near).map((tracks) => ({ ...tracks, fresh: true }));
+        const sunk = threadTracks(this.host.legends).filter(near).map((tracks) => ({ ...tracks, fresh: true, sunk: true }));
 
-        for (const trail of [...trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints), ...fresh]) {
+        for (const trail of [...trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints), ...fresh, ...sunk]) {
             const creature = trail.fresh ? trail.creature : this.host.trailCreatureOf(this.me, trail);
             const { print, size } = creature ? lookPrint(creature, CREATURE_LOOKS[creature], this.gaitsSeen.get(creature)) : { print: null };
 
@@ -6819,7 +6843,8 @@ export class Game {
                     const [x, z] = [hx + ((fx - hx) * on) / length, hy + ((fy - hy) * on) / length];
                     const [across] = footAt(foot, size);
                     const [px, pz] = [x - Math.cos(facing) * across, z + Math.sin(facing) * across];
-                    const takes = Math.hypot(px - me.x, pz - me.y) <= TRAIL_SEEN.prints ? TAKES[this.#footingAt(map, px, pz)] : 0;
+                    const footing = Math.hypot(px - me.x, pz - me.y) <= TRAIL_SEEN.prints ? (TAKES[this.#footingAt(map, px, pz)] ?? 0) : null;
+                    const takes = footing === null ? 0 : trail.sunk ? Math.max(TRAIL_SEEN.sunk, footing) : footing;
 
                     foot = foot === "left" ? "right" : "left";
 
@@ -7913,9 +7938,11 @@ export class Game {
             return;
         }
 
-        // (A thread's word to ask them, its talk step theirs: core/rare.js threadTalk)
-        const asked = building && npc.role ? this.#threadAsked(npc.role, this.#townOf(building)) : null;
-        const tree = asked ? threadTalk(own, asked) : own;
+        // (A thread's word to ask them, its talk step theirs; or a rumour of theirs that begins one:
+        // core/rare.js threadTalk)
+        const asker = folk.find(({ id }) => id === npc.id) ?? npc;
+        const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !this.host.hired?.has(each.id))) : null;
+        const tree = asked ? threadTalk(own, asked, (text) => text.replace(/\{way\}/g, asked.way ?? "near")) : own;
 
         this.#tradeOver(npc);
 
@@ -12050,8 +12077,21 @@ export class Game {
 
                 break;
             case "given":
+                // (Its reward: a unique, bound to them, and its gold in their purse)
                 if (event.id === this.me) {
-                    this.hud.message(`${event.item?.name ?? "A unique"} is yours: found nowhere else, and bound to you.`, 5);
+                    const purse = event.gold ? `${event.gold} gold` : null;
+
+                    if (event.item) {
+                        this.hud.message(`${event.item.name ?? "A unique"} is yours: found nowhere else, and bound to you.${purse ? ` And ${purse}.` : ""}`, 5);
+                    } else if (purse) {
+                        this.hud.message(`${cardOf(event.card)?.title ?? "Something rare"}: ${purse}.`, 4);
+                    }
+
+                    if (purse) {
+                        this.hud.setGold(this.progress.gold);
+                        this.sound?.play("coins");
+                    }
+
                     this.onProgress(this.progress);
                 }
 
@@ -12126,14 +12166,27 @@ export class Game {
         }
     }
 
-    // A thread's talk step for one of the folk (their `role`, in the settlement `town`): { thread,
-    // step } of the first thread at one that's theirs, or null
-    #threadAsked(role, town) {
-        for (const [id, thread] of Object.entries(this.host.legends?.threads ?? {})) {
-            const def = this.host.legends.stepOf(id);
+    // A thread's talk step for one of the folk (`one`: their role, their calling, core/rare.js
+    // talksFor; in the settlement `town`, `hall` the folk with them): { thread, step } of the first
+    // thread at one that's theirs; or a rumour of theirs that begins one (rare.js OPENERS, openerOf:
+    // its card in play, the thread not begun), { thread, step: null, way (which way its place is
+    // from here) }; or null
+    #threadAsked(one, town, hall) {
+        const legends = this.host.legends;
 
-            if (def?.kind === "talk" && def.role === role && thread.town === town) {
+        for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
+            const def = legends.stepOf(id);
+
+            if (def?.kind === "talk" && talksFor(def, one, hall) && thread.town === town) {
                 return { thread: id, step: thread.step };
+            }
+        }
+
+        for (const id of Object.keys(THREADS)) {
+            const opener = legends?.opening?.(id) ? openerOf(this.world.plan, id) : null;
+
+            if (opener && opener.town.id === town && talksFor(THREADS[id].opens, one, hall)) {
+                return { thread: id, step: null, way: compass(opener.town.at, opener.site.at) };
             }
         }
 
@@ -12151,7 +12204,9 @@ export class Game {
         }
 
         const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-        const to = def.kind === "place" || def.kind === "lock" ? thread.place : town?.at;
+        // (Which way: to a place, a lock's way in, or where a card kept at a site is, its tracks
+        // leading there; else to its settlement)
+        const to = def.kind === "place" || def.kind === "lock" || (def.kind === "card" && thread.place) ? thread.place : town?.at;
         // (A lock's place, by its name: core/rare.js LOCKS, lockSite)
         const site = def.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
 
@@ -15536,6 +15591,15 @@ export class Game {
         });
     }
 
+    /** The Stone Golem dealt before the player at once, its thread brought to it (the debug overlay's): host.js "rare", `golem`. */
+    golem() {
+        this.#command({ type: "rare", golem: true }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Only out in the world of the world you've opened, with no rare encounter out and the golem not slain", 2.5);
+            }
+        });
+    }
+
     /** The Behemoth of the Rift called up before the player (the debug overlay's): host.js "rift". */
     rift() {
         this.#command({ type: "rift" }, (result) => {
@@ -15556,19 +15620,21 @@ export class Game {
     }
 
     // The bar across the top for the great foe nearest the player (hud.js boss): the Behemoth of
-    // the Rift (battle.js #colossus) alive within BOSS_NEAR metres of them; looked for a couple of
-    // times a second (MARSHAL.every), its health kept up with every frame
+    // the Rift (battle.js #colossus), or a world's boss (creatures.js `worldBoss`: the Stone
+    // Golem), alive within BOSS_NEAR metres of them; looked for a couple of times a second
+    // (MARSHAL.every), its health kept up with every frame
     #bossBar(dt) {
         const me = this.battle.actor(this.me);
 
         if ((this.bossClock = (this.bossClock ?? 0) - dt) <= 0) {
             this.bossClock = MARSHAL.every;
-            this.bossId = me ? (this.battle.actors.find((actor) => actor.ai === "colossus" && !actor.dead && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= BOSS_NEAR)?.id ?? null) : null;
+            this.bossId = me ? (this.battle.actors.find((actor) => (actor.ai === "colossus" || actor.wild?.worldBoss) && !actor.dead && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= BOSS_NEAR)?.id ?? null) : null;
         }
 
         const boss = this.bossId === null || this.bossId === undefined ? null : this.battle.actor(this.bossId);
 
-        this.hud.boss(boss && !boss.dead ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp } : null);
+        // (Its name as a title: "The Stone Golem of Harrowstone", a rare card's foe's)
+        this.hud.boss(boss && !boss.dead ? { name: boss.name.replace(/^the /, "The "), hp: boss.hp, maxHp: boss.maxHp } : null);
     }
 
     // What the mouse pointer shows over the view, looked at again every AIM_MS while the mouse is
@@ -16570,8 +16636,13 @@ export class Game {
     // those it throws, as a blast's: #blast); heard, and, the player's own, their charge flaring
     // as it empties
     #unleashed(event) {
-        if (event.id === this.me) {
+        // (A ward's let loose on whoever wears it (Stoneheart's stone skin), not by a weapon's charge)
+        const ward = Boolean(EFFECTS[event.effect]?.ward);
+
+        if (event.id === this.me && !ward) {
             this.charge.flare();
+        } else if (event.id === this.me) {
+            this.hud.message("Stoneheart: your skin turns to stone!", 1.6);
         }
 
         if (event.map !== this.mapId) {
@@ -16620,6 +16691,15 @@ export class Game {
         } else if (event.effect === "ruinblast") {
             fx.flash(point, { colour: 0xfff4c0, intensity: 60, distance: 14, life: 0.3, size: 4 });
             fx.ring(at, { colour: 0xffd060, from: 0.3, to: radius * 1.4, life: 0.55 });
+        } else if (event.effect === "stoneheart") {
+            // (Their skin turned to stone a while: a shell the grey-gold of cut stone closing round
+            // them and holding while it lasts, stone shards and grit thrown off, a ring of dust)
+            const avatar = this.avatars.get(event.target);
+
+            fx.wardShell(() => this.avatars.get(event.target)?.object.position ?? null, { colour: 0xc8b48a, height: avatar?.character?.height ?? 1.8, life: Math.max(1, (event.until - this.battle.time) / 1000), rise: 0.08, opacity: 0.7 });
+            fx.shards(point, { count: 18, colour: 0x9a8c74, size: 0.07, speed: 2.5, up: 1.4, life: 0.7 });
+            fx.ring(at, { colour: 0xe8d4a0, from: 0.3, to: 1.6, life: 0.45 });
+            fx.scatter(UNLEASHED_MOTES.dust, at, 1.2, 2, { seconds: 0.2 });
         }
 
         // (A blast heard as a blast: #blast)

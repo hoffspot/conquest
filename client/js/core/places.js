@@ -67,6 +67,9 @@ export const PLACE_KINDS = Object.freeze({
     "werewolf's den": { size: "medium", icon: "lair", holds: ["beast"] },
     // (The Tower of Sar Mordal: the wizard Sinclair's, abandoned, its rift's own keeping it)
     "rift tower": { size: "medium", icon: "riftTower", holds: ["beast"] },
+    // (The ruins of Harrowstone quarry: no one's, its golem wandering the hills round it, met only
+    // as its rare card's foe: core/rare.js)
+    "ruined quarry": { size: "medium", icon: "quarry", holds: [] },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)

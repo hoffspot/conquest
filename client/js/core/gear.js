@@ -21,7 +21,7 @@
 // How each piece looks on a character is characters/liveries.js's.
 
 import { pow } from "./exact.js";
-import { effectFor, EFFECTS } from "./legendary.js";
+import { BLOW_EFFECTS, effectFor, EFFECTS } from "./legendary.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /**
@@ -405,24 +405,33 @@ export function rollGear(id, quality = "common", random, { people = null, level 
         item.name = `${pick(random, LEGEND.first)}${pick(random, LEGEND[kind])}`;
     }
 
-    // (A legendary weapon: an effect of its own besides, core/legendary.js)
+    // (A legendary weapon: an effect of its own besides, one of those blows let loose:
+    // core/legendary.js)
     if (quality === "legendary" && def.slot === "mainHand") {
-        item.effect = pick(random, Object.keys(EFFECTS));
+        item.effect = pick(random, BLOW_EFFECTS);
     }
 
     return item;
 }
 
 /**
- * The effect a legendary weapon has (core/legendary.js EFFECTS key), or null: its own; or, one
- * made before they had them, one of them as `effectFor` has it (the same wherever it's asked).
+ * The effect a piece has (core/legendary.js EFFECTS key), or null: its own, whatever it is, held
+ * or worn (a legendary weapon's, rolled on it; a unique's, core/rare.js UNIQUES: a ring's, an
+ * amulet's, a helm's...); or, a legendary weapon made before they had them, one of them as
+ * `effectFor` has it (the same wherever it's asked).
  */
 export function effectOf(item) {
-    if (item?.quality !== "legendary" || GEAR[item.id]?.slot !== "mainHand") {
+    const slot = GEAR[item?.id]?.slot;
+
+    if (!slot) {
         return null;
     }
 
-    return EFFECTS[item.effect] ? item.effect : effectFor(item);
+    if (EFFECTS[item.effect]) {
+        return item.effect;
+    }
+
+    return item.quality === "legendary" && slot === "mainHand" ? effectFor(item) : null;
 }
 
 /**

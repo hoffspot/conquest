@@ -222,7 +222,8 @@ export const HAZARDS = Object.freeze({
  * whoever it catches; the cat folk's clay sun jar of desert naphtha, setting them alight; the
  * lizard folk's swamp-gas bladder, poisoning them; the orcs', goblin bombs); a town's catapult's
  * pot of burning pitch, flung far, bursting the moment it lands and setting what it catches
- * alight (weapons.js NATURAL catapult); and what a hell's
+ * alight (weapons.js NATURAL catapult); a boulder the Stone Golem tears out of the ground and
+ * hurls, a great shadow on the ground under it where it'll come down, bursting as it lands; and what a hell's
  * creatures leave where they fall dead (creatures.js `burst`), swelling a moment before it bursts,
  * drawn as it is, not as a bomb (`look`): a cinder husk's embers, and a bloat gorger's bile,
  * poisoning whoever it catches (its blast's `element`, fire's but for it, and what it leaves on
@@ -239,6 +240,7 @@ export const BOMBS = Object.freeze({
     cinders: { radius: 2.2, toss: 0.6, fuse: 1200, speed: 9, soonest: 0, look: "embers" },
     bile: { radius: 2.4, toss: 0.4, fuse: 1000, speed: 9, soonest: 0, look: "bile", element: "earth", afflict: { kind: "poison", chance: 0.8 } },
     firePot: { radius: 3.5, toss: 1.1, fuse: 100, speed: 16, soonest: 900, afflict: { kind: "burn", chance: 0.8 } },
+    boulder: { radius: 2.6, toss: 1.3, fuse: 0, speed: 13, soonest: 1200, element: "earth" },
 });
 
 // Food thrown to beasts (core/wary.js BAIT, toss): how fast it flies (metres a second) and how
@@ -2330,6 +2332,12 @@ export class Battle {
         const sought = actor.target === null ? null : this.actor(actor.target);
 
         if (sought && (sought.wild?.colossus || actor.engine) && !sought.dead && this.hostile(sought, actor) && this.canSee(actor, sought, Math.max(SIGHT, longestReach(actor.arms)))) {
+            return true;
+        }
+
+        // (One that sees further than most, its own `sight` (the Stone Golem), whoever it's after in
+        // sight as far as it sees: its boulders reach them)
+        if (sought && actor.wild?.sight > SIGHT && !sought.dead && this.hostile(sought, actor) && this.canSee(actor, sought, actor.wild.sight)) {
             return true;
         }
 
@@ -5520,6 +5528,8 @@ export class Battle {
                 this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, map: actor.map, x: actor.x, y: actor.y });
             } else if (attack.bomb) {
                 this.#lob(actor, target, attack);
+            } else if (attack.quake) {
+                this.#quake(actor, attack);
             } else if (attack.bait) {
                 this.#layBait(actor, target, current);
             } else if (attack.kind === "ranged") {
@@ -5935,6 +5945,54 @@ export class Battle {
         }
     }
 
+    // How much of a blow a ward worn lets through (core/legendary.js EFFECTS `ward`: Stoneheart's,
+    // as strong as the piece's level: effectAt): all but its `guard`, and, while their skin's stone
+    // (#steel), all but its `harden` of that; all of it, none worn
+    #wardThrough(target) {
+        const numbers = target.ward ? effectAt(target.ward.effect, target.ward.level) : null;
+
+        if (!numbers?.guard) {
+            return 1;
+        }
+
+        return (1 - numbers.guard) * (this.#stone(target) ? 1 - (numbers.harden ?? 0) : 1);
+    }
+
+    // Whether someone's skin is stone now (a ward let loose on them: #steel)
+    #stone(actor) {
+        return (actor.stoneUntil ?? -Infinity) > this.time;
+    }
+
+    // A blow that did harm taken by one who wears a ward (core/legendary.js EFFECTS `ward`): its
+    // charge (`steeled`) the fuller, up to full (WARD_CHARGE), begun again after CHARGE.idle without
+    // being struck; not while their skin's stone already. Full, let loose on them: their skin stone
+    // for its `skin` ms (Stoneheart), every blow on them the lighter and none throwing them down.
+    // Told as "unleashed" ({ id, target (theirs), effect, level, map, x, y, until })
+    #steel(actor) {
+        if (this.time - (actor.steeledAt ?? -Infinity) > CHARGE.idle) {
+            actor.steeled = 0;
+        }
+
+        actor.steeledAt = this.time;
+
+        if (this.#stone(actor)) {
+            return;
+        }
+
+        actor.steeled = Math.min(actor.ward.charge, (actor.steeled ?? 0) + 1);
+
+        if (actor.steeled < actor.ward.charge) {
+            return;
+        }
+
+        const { effect, level } = actor.ward;
+        const numbers = effectAt(effect, level);
+
+        actor.steeled = 0;
+        actor.stoneUntil = this.time + (numbers.skin ?? 0);
+        this.#emit("unleashed", { id: actor.id, target: actor.id, effect, level, map: actor.map, x: actor.x, y: actor.y, radius: null, struck: [], until: actor.stoneUntil });
+    }
+
     // A legendary weapon's effect let loose on whoever its blow landed on (`blow`: "melee" or
     // "ranged", the wielder's power for it), its charge spent (core/legendary.js EFFECTS, as strong
     // as the weapon's level: effectAt): the foe frozen solid, fire bursting from it, stone spears
@@ -6156,6 +6214,17 @@ export class Battle {
         }
     }
 
+    // A blow that lands on the ground (an attack's `quake`: the Stone Golem's pound), `ahead`
+    // metres before whoever struck it, the way it faces: the ground heaving `radius` round there,
+    // everyone of the other side in it hurt (its damage, times their power for blows up close) and
+    // thrown away from them (#blast), its element earth's
+    #quake(actor, attack) {
+        const { ahead, radius, toss, kind } = attack.quake;
+        const [x, y] = [actor.x + sin(actor.facing ?? 0) * ahead, actor.y + cos(actor.facing ?? 0) * ahead];
+
+        this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power: actor.power?.melee ?? 1, toss, kind, heart: [actor.x, actor.y], element: "earth", reaction: attack.reaction ?? "crush", stagger: attack.stagger ?? 300 });
+    }
+
     // A bomb in the air (BOMBS), from where `by` stands to (x, y): landing a moment later, and
     // bursting once its fuse burns down. Told as "bomb": where it's from and to, when it lands and
     // when it bursts, and how far its blast reaches
@@ -6223,9 +6292,10 @@ export class Battle {
 
     // Can someone be thrown by a blast (TOSS)? Not too heavy or not solid (`steady`), one of the
     // perilous places' own, an elite or a dungeon's boss (or a hell's level's own), what stands over
-    // more than its square, a wagon or a siege engine; nor one thrown lately
+    // more than its square, a wagon or a siege engine; nor one whose skin's stone (#steel), nor one
+    // thrown lately
     #throwable(actor) {
-        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        return !actor.footprint && !this.#stone(actor) && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
@@ -6432,7 +6502,7 @@ export class Battle {
         // (A kind of creature Mastered in a player's bestiary, `mastered`: struck the harder, they
         // know where to: core/bestiary.js RESEARCH `edge`)
         const known = target.wild && attacker?.mastered?.includes(target.wild.creature) ? RESEARCH.edge : 1;
-        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element) * known;
+        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element) * known * this.#wardThrough(target);
         // (What can't be warded, charmed or shielded against: Prismatic Destruction's, `sure`)
         const whole = sure || factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
@@ -6463,6 +6533,11 @@ export class Battle {
 
         target.hp = Math.max(0, target.hp - damage);
 
+        // (A ward worn, its charge the fuller for a blow that did them harm: #steel)
+        if (target.ward && damage > 0 && target.hp > 0 && attacker && attacker !== target) {
+            this.#steel(target);
+        }
+
         // (A siege engine isn't staggered: what's struck is its timbers)
         if (!target.engine) {
             target.staggeredUntil = Math.max(target.staggeredUntil, this.time + (blocked ? Math.round(attack.stagger / 2) : attack.stagger));
@@ -6485,7 +6560,7 @@ export class Battle {
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
         // (warded against its school, less long)
-        if (attack.knockdown && !blocked && target.hp > 0 && !target.wild?.colossus && !target.engine) {
+        if (attack.knockdown && !blocked && target.hp > 0 && !target.wild?.colossus && !target.engine && !this.#stone(target)) {
             const down = Math.round(attack.knockdown * (warded ? WARD : 1));
 
             target.stunnedUntil = Math.max(target.stunnedUntil, this.time + down);
