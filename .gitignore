@@ -55,6 +55,11 @@ client/models/beasts/golem.bin
 client/models/beasts/golem.ember.bin
 client/models/beasts/golem.moss.bin
 client/models/beasts/golem.frost.bin
+client/models/beasts/orc-king.bin
+client/models/beasts/orc-king.brown.bin
+client/models/beasts/orc-king.red.bin
+client/models/beasts/orc-warlord.bin
+client/models/beasts/orc-reaver.bin
 client/models/beasts/kaiju.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin

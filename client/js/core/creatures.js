@@ -146,6 +146,13 @@ export const CREATURES = Object.freeze({
     // harder still, three at a time and oftener: dungeons/themes.js)
     goblinBomber: { name: "Goblin bomber", hp: 22, hands: true, weapon: "goblinBomber", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: [], blood: "red", keep: 4 },
     goblinKing: { name: "Goblin King", hp: 34, hands: true, weapon: "cleaver", speed: 1.3, chase: 2.5, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [3, 8], biomes: [], blood: "red", armor: 0.1, king: true, bomb: { kind: "bigBomb", damage: [8, 15], every: 7000, beyond: 3.5, reach: 11 }, boss: { bomb: { every: 4500, volley: 3, spread: 3 } } },
+    // (Orcs out of their own lands, met only as a dungeon's boss (dungeons/themes.js): the Orc
+    // Warlord on a cave's throne, his goblins about him, in trousers, boots and bracers; the Orc
+    // Reaver at the head of an outlaws' hideout, bare-legged in his loincloth. Each swinging a
+    // great axe two-handed: weapons.js. Drawn from models of their own once they're read:
+    // beasts/model.js)
+    orcWarlord: { name: "Orc warlord", hp: 95, hands: true, weapon: "orcWarlord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 24, pack: [1, 1], tiers: [4, 9], biomes: [], blood: "red", armor: 0.2, perilous: true, steady: true },
+    orcReaver: { name: "Orc reaver", hp: 80, hands: true, weapon: "orcReaver", speed: 1.2, chase: 2.6, temper: "aggressive", roam: 4, leash: 24, pack: [1, 1], tiers: [3, 9], biomes: [], blood: "red", armor: 0.1, perilous: true, steady: true },
     skeleton: { name: "Skeleton", hp: 34, hands: true, weapon: "skeleton", speed: 1, chase: 2, temper: "aggressive", roam: 6, leash: 16, pack: [1, 3], tiers: [3, 9], biomes: ["marsh", "heath", "tundra"], blood: "none", armor: 0.1, night: "only", darkSight: true },
     cultist: { name: "Cultist", hp: 28, hands: true, weapon: "wand", speed: 1.2, chase: 2.2, temper: "aggressive", roam: 8, leash: 20, pack: [1, 3], tiers: [3, 8], biomes: ["marsh", "jungle", "darkwood", "volcanic"], blood: "red", night: "more" },
     // The far wilds

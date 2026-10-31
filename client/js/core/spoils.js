@@ -179,6 +179,9 @@ export const SPOILS = Object.freeze({
     goblin: { gold: [2, 9], items: [{ id: "goblinEar", chance: 0.5 }, { id: "potion", chance: 0.1 }, { id: "goblinBomb", chance: 0.15 }] },
     goblinBomber: { gold: [2, 9], items: [{ id: "goblinBomb", chance: 0.75, count: [1, 3] }, { id: "goblinEar", chance: 0.5 }] },
     goblinKing: { gold: [10, 30], items: [{ id: "goblinBomb", chance: 0.9, count: [3, 5] }, { id: "tomeExplosion", chance: 0.05 }, { id: "goblinEar", chance: 0.9 }] },
+    // (The orcs on a dungeon's throne: what they've taken from those they lord it over)
+    orcWarlord: { gold: [25, 60], items: [{ id: "potion", chance: 0.6 }, { id: "goblinBomb", chance: 0.5, count: [1, 3] }, { id: "goblinEar", chance: 0.4 }] },
+    orcReaver: { gold: [20, 50], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }] },
     skeleton: { gold: [1, 6], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.2 }] },
     cultist: { gold: [4, 12], items: [{ id: "cultSigil", chance: 0.3 }, { id: "potion", chance: 0.15 }] },
     cultLeader: { gold: [30, 70], items: [{ id: "cultSigil", chance: 0.9, count: [1, 2] }, { id: "soulShard", chance: 0.4 }, { id: "potion", chance: 0.5 }] },

@@ -68,6 +68,14 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "The goblins' elite: as tall as a man, broad, crowned and caped in red edged with gold, leading a war band of raiders and bombers. It swings a great cleaver up close and hurls a bigger bomb at whoever keeps off. On a cave's throne it's harder still.",
         sign: "a scrap of red cloth edged with gold, among goblin tracks",
     }),
+    orcWarlord: Object.freeze({
+        lore: "An orc come down out of the orcs' lands to take a cave for his own, its goblins his raiders and bombers now. Half as tall again as a man, brown-skinned and red-eyed, in trousers, boots and bracers, he swings a great axe two-handed: swept round, chopped down or spun low, each blow laying a wound open. Too heavy for any blast to throw.",
+        sign: "an axe's bite in the cave's timbers, and goblin tracks all round",
+    }),
+    orcReaver: Object.freeze({
+        lore: "An orc cast out of his own kind, at the head of the outlaws in their hideout. Red-skinned and yellow-eyed, bare-legged and barefoot in a loincloth, he's quicker than the Warlord and nearly as strong, his great axe swept, chopped or spun round low, each blow laying a wound open.",
+        sign: "bare orc footprints, broad and clawed, among the outlaws' boots",
+    }),
     skeleton: Object.freeze({
         lore: "The bones of the long dead, risen with a rusty sword in hand and a light deep in each socket. Out in the marshes, heaths and tundra they walk only after dark, but those of the undead camps, the ruins and the graveyards are always there. A cut from that old blade can leave a sickness.",
         sign: "bare bone toe-marks in the mud, and flakes of rust",
