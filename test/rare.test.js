@@ -15,7 +15,7 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
+import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
@@ -230,8 +230,20 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(Object.values(high.bonuses).reduce((a, b) => a + b, 0) > Object.values(low.bonuses).reduce((a, b) => a + b, 0));
     });
 
-    it("has one card in play, the Stone Golem's, kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
-        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem"]);
+    it("has two cards in play, the Stone Golem's and the Orc King's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
+        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing"]);
+
+        // (The Orc King: a world's boss, kept at his war camp where his war band's tracks lead, his
+        // thread's second step; his reward his great axe, its cleave its own, and gold; his last
+        // words said as he falls)
+        const king = RARE_CARDS.orcKing;
+
+        assert.equal(king.where, "site");
+        assert.deepEqual(king.requires, { thread: "ironcrown", step: 1 });
+        assert.equal(THREADS.ironcrown.steps[1].card, "orcKing");
+        assert.equal(king.shape.creature, "orcKing");
+        assert.deepEqual([UNIQUES[king.reward.unique].base, UNIQUES[king.reward.unique].effect], ["axe", "cleave"]);
+        assert.ok(king.reward.gold > RARE_CARDS.stoneGolem.reward.gold && king.last.includes("Urzag"));
 
         // (The golem: a world's boss, kept where its thread's tracks lead, its thread's second step;
         // its reward the cleansed shard of its heart, an amulet with a ward of its own, and gold)
@@ -300,7 +312,7 @@ describe("rare encounters (rare.js)", () => {
         assert.equal(last.next, null);
         assert.equal(legends.threads.sampleTrail.done, true);
         assert.equal(legends.advance("sampleTrail"), null, "done");
-        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock"]);
+        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock", "fight"]);
         assert.ok(THREADS.sampleTrail.steps.every((step) => STEPS.includes(step.kind) && (!step.change || CHANGES.includes(step.change.kind))));
     });
 
@@ -966,54 +978,54 @@ describe("rare encounters inside (host.js)", () => {
     });
 });
 
+// Into a building of the settlement (`place`) of a kind, the player put at its door and gone in
+function into(host, kind, place) {
+    // (Laid out now, as it would be as the world near it's made: its buildings added)
+    host.world.maps.town.settlements.of(host.world.plan.places.find(({ id }) => id === place));
+
+    const building = [...host.world.interiors.buildings.values()].find((one) => one.kind === kind && one.place === place);
+    const me = host.battle.actor(HOST_PLAYER);
+
+    put(me, building.door.ends[0].squares[0]);
+    Object.assign(me, { map: "town" });
+    assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
+    run(host, STEP_MS * 4);
+
+    return building;
+}
+
+// A foe felled by `actor`, beside it, kept alive the while
+function felled(host, actor, id) {
+    const foe = host.battle.actor(id);
+    const events = [];
+
+    put(actor, foe.square.map((v, k) => v + (k ? 0 : 1)));
+    Object.assign(foe, { hp: 1 });
+    Object.assign(actor, { power: { melee: 1e4, ranged: 1e4 } });
+    host.command(actor.id, { type: "engage", target: id });
+
+    for (let t = 0; t < 8000 && !foe.dead; t += 250) {
+        Object.assign(actor, { hp: 1e6, maxHp: 1e6 });
+        events.push(...run(host, 250));
+    }
+
+    events.push(...run(host, 500));
+
+    return events;
+}
+
+// Talking to one of a building's folk (`folk`: its record), stood before them
+function talkTo(host, folk) {
+    const me = host.battle.actor(HOST_PLAYER);
+    const them = host.battle.actor(folk.id);
+
+    put(me, [them.square[0], them.square[1] + 1]);
+    Object.assign(me, { map: them.map });
+
+    return host.command(HOST_PLAYER, { type: "talk", with: them.id }).ok;
+}
+
 describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)", () => {
-    // Into a building of the settlement (`place`) of a kind, the player put at its door and gone in
-    function into(host, kind, place) {
-        // (Laid out now, as it would be as the world near it's made: its buildings added)
-        host.world.maps.town.settlements.of(host.world.plan.places.find(({ id }) => id === place));
-
-        const building = [...host.world.interiors.buildings.values()].find((one) => one.kind === kind && one.place === place);
-        const me = host.battle.actor(HOST_PLAYER);
-
-        put(me, building.door.ends[0].squares[0]);
-        Object.assign(me, { map: "town" });
-        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }).ok, true);
-        run(host, STEP_MS * 4);
-
-        return building;
-    }
-
-    // A foe felled by `actor`, beside it, kept alive the while
-    function felled(host, actor, id) {
-        const foe = host.battle.actor(id);
-        const events = [];
-
-        put(actor, foe.square.map((v, k) => v + (k ? 0 : 1)));
-        Object.assign(foe, { hp: 1 });
-        Object.assign(actor, { power: { melee: 1e4, ranged: 1e4 } });
-        host.command(actor.id, { type: "engage", target: id });
-
-        for (let t = 0; t < 8000 && !foe.dead; t += 250) {
-            Object.assign(actor, { hp: 1e6, maxHp: 1e6 });
-            events.push(...run(host, 250));
-        }
-
-        events.push(...run(host, 500));
-
-        return events;
-    }
-
-    // Talking to one of a building's folk (`folk`: its record), stood before them
-    function talkTo(host, folk) {
-        const me = host.battle.actor(HOST_PLAYER);
-        const them = host.battle.actor(folk.id);
-
-        put(me, [them.square[0], them.square[1] + 1]);
-        Object.assign(me, { map: them.map });
-
-        return host.command(HOST_PLAYER, { type: "talk", with: them.id }).ok;
-    }
-
     it("deals a card in play by its id before someone in debug mode, its thread brought to it, begun at the settlement nearest its place; refused while another's out, and for one there isn't", () => {
         const { host, ada } = hosted({ party: false });
 
@@ -1250,5 +1262,246 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
         assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 150));
         assert.ok(ended.some(({ change }) => change === "done"));
         assert.ok(thread.done);
+    });
+});
+
+describe("the Iron Crown (rare.js ironcrown, RARE_CARDS orcKing)", () => {
+    it("begins with a guild warrior's rumour of a border village the orcs' raiders burned; the raiders left there driven out, their leader's orders on him; the Orc King dealt at his war camp towards the orcs' lands; felled, Kingsplitter and a purse for each who fought him; word taken back, the guild's bounty paid", () => {
+        const { host, ada, bram } = hosted();
+        const plan = host.world.plan;
+        const opener = openerOf(plan, "ironcrown");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        const near = (place) => Math.min(...plan.places.filter(({ race }) => race === "orc").map(({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1])));
+
+        // (The orcs' border village: the village of another people's nearest any settlement of
+        // theirs, and the guild nearest it, not theirs either, where it's talked of)
+        assert.ok(opener && opener.site.kind === "village" && opener.site.race !== "orc" && opener.town.race !== "orc" && opener.town.id !== opener.site.id && GUILD_KINDS.includes(opener.town.kind));
+        assert.ok(plan.places.filter(({ kind, race }) => kind === "village" && race && race !== "orc").every((place) => near(place) >= near(opener.site)));
+        assert.ok(host.legends.opening("ironcrown"));
+
+        // The rumour: told by a warrior at the guild there (or, none there, any of its adventurers),
+        // the village's name and which way it is in it; taken up, the village set burning
+        const guild = into(host, "guild", opener.town.id);
+        const adventurer = (one) => one.role === "adventurer" || one.talk === "adventurer";
+        const teller = guild.folk.find((one) => adventurer(one) && one.look === "warrior") ?? guild.folk.find(adventurer);
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "ironcrown", step: null }, (text) => text.replace(/\{way\}/g, "east").replace(/\{place\}/g, opener.site.name));
+
+        assert.ok(tree.nodes["thread:ironcrown:0"].say[0].includes(`${opener.site.name} burned`) && tree.nodes["thread:ironcrown:0"].say[0].includes("east of here"));
+        assert.ok(talkTo(host, teller));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", step: null } }).ok, true);
+
+        const thread = host.legends.threads.ironcrown;
+        const village = host.world.maps.town.settlements.of(opener.site);
+
+        assert.equal(thread.step, 0);
+        assert.equal(thread.town, opener.site.id);
+        assert.ok(Math.hypot(thread.place[0] - opener.site.at[0], thread.place[1] - opener.site.at[1]) < 60, "(the village's middle)");
+        assert.ok(village);
+
+        const burning = host.burnt.find(({ place }) => place === opener.site.id);
+
+        assert.ok(burning && burning.pieces.length >= 1 && burning.pieces.length <= 6, JSON.stringify(burning));
+        assert.equal(thread.foes, null, "(the raiders not out till someone comes)");
+
+        // The village reached: the raiders there, their leader by name; everyone gone far off, let
+        // go, to be there again when they come back
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        Object.assign(ada, { map: "town" });
+
+        const [vx, vy] = thread.place.map(Math.floor);
+
+        put(ada, [vx, vy]);
+        put(bram, [vx + 3, vy]);
+        run(host, 1200);
+
+        const raiders = () => thread.foes.map((id) => host.battle.actor(id)).filter(Boolean);
+
+        assert.ok(thread.foes?.length >= 5 && thread.foes.length <= 6, JSON.stringify(thread.foes));
+        assert.ok(raiders().every((one) => one.wild.creature === "orcRaider" && host.wild.get(one.id).thread === "ironcrown"));
+        assert.equal(raiders().filter((one) => one.name === "Grukk of the Gravemaw").length, 1);
+
+        put(ada, [vx + 400, vy]);
+        put(bram, [vx + 402, vy]);
+        run(host, 1200);
+        assert.equal(thread.foes, null, "(let go)");
+        put(ada, [vx, vy]);
+        put(bram, [vx + 3, vy]);
+        run(host, 1200);
+        assert.ok(thread.foes?.length >= 5);
+
+        // Driven out: their leader's orders, and a purse, for each there
+        for (const id of thread.foes) {
+            host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        const driven = told(run(host, 2500));
+
+        assert.ok(["ada", "bram"].every((who) => driven.some(({ change, id, gold, writing }) => change === "given" && id === (who === "ada" ? HOST_PLAYER : who) && gold === 60 && writing === "ironcrown")), JSON.stringify(driven));
+        assert.equal(thread.step, 1);
+
+        // His war band's tracks, out of the village towards the orcs' lands, to his war camp
+        const camp = thread.place;
+        const far = Math.hypot(camp[0] - thread.at[0], camp[1] - thread.at[1]);
+        const orcs = plan.places.filter(({ race, kind }) => race === "orc" && kind !== "farmstead");
+        const [tracks] = threadTracks(host.legends);
+
+        assert.ok(far >= 219 && far <= 321, `${far} m`);
+        assert.ok(orcs.length > 0);
+        assert.equal(thread.town, opener.site.id);
+        assert.equal(tracks.creature, "orcKing");
+        assert.ok(tracks.spoor.includes("{way}") && tracks.spoor.includes("war camp"));
+        assert.equal(host.legends.active, null);
+
+        // The King dealt as Ada comes near his camp: a world's boss, named, his own moves, guard and
+        // rally his
+        put(ada, [Math.floor(camp[0]) + 30, Math.floor(camp[1])]);
+        put(bram, [Math.floor(camp[0]) + 32, Math.floor(camp[1])]);
+        run(host, 1000);
+
+        const active = host.legends.active;
+        const king = host.battle.actor(active.ids[0]);
+
+        assert.equal(active.card, "orcKing");
+        assert.equal(king.name, RARE_CARDS.orcKing.shape.title);
+        assert.ok(king.wild.worldBoss && king.wild.champion === "boss" && king.wild.moves.length === 2 && king.wild.stance && king.wild.rally.length === 2);
+
+        // Felled, Ada and Bram beside him: each given Kingsplitter, its cleave its own, and a purse
+        put(bram, [Math.floor(king.x) - 2, Math.floor(king.y)]);
+
+        const events = felled(host, ada, king.id);
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(given.every(({ item, gold: purse }) => item?.unique === "kingsplitter" && item.id === "axe" && item.effect === "cleave" && item.name === "Kingsplitter" && purse === RARE_CARDS.orcKing.reward.gold));
+        assert.ok(host.legends.gone.has("orcKing"));
+        assert.equal(thread.step, 2);
+        assert.equal(thread.town, opener.town.id, "(word taken back to its home)");
+
+        // Word taken back to the guild: its bounty paid, the thread at its end
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, teller));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", step: 2 } }).ok, true);
+
+        const ended = told(run(host, 200));
+
+        assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 200));
+        assert.ok(thread.done);
+    });
+
+    it("pitches his war camp about where he's kept: its fire before him, its tents in a ring round it, each facing it", () => {
+        const { fire, tents } = campOf([100, 200], 7);
+
+        assert.deepEqual(fire, [100, 200 - CAMP.fire]);
+        assert.equal(tents.length, 7);
+
+        for (const { at, facing } of tents) {
+            assert.ok(Math.abs(Math.hypot(at[0] - fire[0], at[1] - fire[1]) - CAMP.ring) < 1e-6);
+            assert.ok(Math.abs(Math.atan2(fire[0] - at[0], fire[1] - at[1]) - facing) < 1e-9);
+        }
+    });
+
+    it("brings his champions as he's worn down: Ironjaw at two thirds, by name, a tier under him, of his pack, from behind him; Bloodtusk at one third", () => {
+        const { host, ada } = hosted();
+        const [x, y] = ada.square;
+        let dealt = null;
+
+        for (let k = 0; k < 12 && !dealt?.ok; k++) {
+            put(ada, [x + k * 40, y - k * 25]);
+            dealt = host.command(HOST_PLAYER, { type: "rare", card: "orcKing" });
+        }
+
+        const id = host.legends.active.ids[0];
+        const king = host.battle.actor(id);
+        const one = host.wild.get(id);
+        const champions = () => [...host.wild].filter(([, each]) => each.called === id).map(([who, each]) => ({ ...each, name: host.battle.actor(who)?.name }));
+
+        Object.assign(king, { movesAt: { leap: Infinity, spin: Infinity }, guardAt: Infinity });
+        put(ada, [Math.floor(king.x) + 2, Math.floor(king.y)]);
+        run(host, 2000);
+        assert.deepEqual(champions(), []);
+
+        king.hp = Math.floor(king.maxHp * 0.6);
+        run(host, 6000);
+        assert.deepEqual(
+            champions().map(({ creature, tier, pack, name }) => [creature, tier, pack, name]),
+            [["orcIronjaw", Math.max(1, one.tier - 1), one.pack, "Ironjaw"]],
+        );
+
+        king.hp = Math.floor(king.maxHp * 0.3);
+        run(host, 6000);
+        assert.deepEqual(
+            champions().map(({ creature, name }) => [creature, name]),
+            [
+                ["orcIronjaw", "Ironjaw"],
+                ["orcBloodtusk", "Bloodtusk"],
+            ],
+        );
+    });
+
+    it("deals the King at once in debug mode, his thread brought to him; never another while one's out", () => {
+        const { host, ada } = hosted();
+        const [x, y] = ada.square;
+        let dealt = null;
+
+        // (Where there's open ground ahead of Ada for him)
+        for (let k = 0; k < 12 && !dealt?.ok; k++) {
+            put(ada, [x + k * 40, y - k * 25]);
+            dealt = host.command(HOST_PLAYER, { type: "rare", card: "orcKing" });
+        }
+
+        assert.equal(dealt.card, "orcKing", JSON.stringify(dealt));
+        assert.equal(host.legends.threads.ironcrown.step, 1);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "stoneGolem" }), { ok: false, reason: "rareOut" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "sample" }), { ok: false, reason: "rareOut" });
+    });
+
+    it("given up, its raiders aren't brought out by her alone, nor is she among those who drive them out; taken back up of the warrior who told it, in her own words, where it stood", () => {
+        const { host, ada, bram } = hosted();
+        const opener = openerOf(host.world.plan, "ironcrown");
+        const guild = into(host, "guild", opener.town.id);
+        const adventurer = (one) => one.role === "adventurer" || one.talk === "adventurer";
+        const teller = guild.folk.find((one) => adventurer(one) && one.look === "warrior") ?? guild.folk.find(adventurer);
+        const told = (events) => events.filter(({ type }) => type === "thread");
+
+        assert.ok(talkTo(host, teller));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "abandon", thread: "ironcrown" }), { ok: true });
+
+        // (Ada in the burned village alone: no raiders for her)
+        const thread = host.legends.threads.ironcrown;
+        const [vx, vy] = thread.place.map(Math.floor);
+
+        Object.assign(ada, { map: "town" });
+        put(ada, [vx, vy]);
+        put(bram, [vx + 400, vy]);
+        run(host, 1200);
+        assert.equal(thread.foes, null, "(not hers to bring out)");
+
+        // (Bram comes: out for him, and driven out by him alone, Ada beside him)
+        put(bram, [vx + 3, vy]);
+        run(host, 1200);
+        assert.ok(thread.foes?.length >= 5);
+
+        for (const id of thread.foes) {
+            host.battle.afflict(id, "poison", { by: "bram", damage: 1e7 });
+        }
+
+        const driven = told(run(host, 2500));
+
+        assert.equal(thread.step, 1);
+        assert.ok(driven.some(({ change, id }) => change === "given" && id === "bram"));
+        assert.ok(!driven.some(({ change, id }) => change === "given" && id === HOST_PLAYER), "(none of it hers)");
+
+        // Taken back up: the warrior who told it, at the guild there, in the opener's own words
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "ironcrown", back: true });
+
+        assert.equal(keeperOf("ironcrown").calling, "warrior");
+        assert.equal(tree.nodes.greet.choices[0].say, "About the Orc King: I'll go after him after all.");
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, teller));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", back: true } }), { ok: true });
+        assert.ok(!host.legends.gaveUp("ironcrown", HOST_PLAYER));
+        assert.equal(thread.step, 1, "(where it stood)");
     });
 });

@@ -93,6 +93,9 @@ export function fighterOf(progress, bonus = progress.bonuses()) {
 // (A legendary effect is a weapon's in hand: not spiked boots' alone)
 const WEAPONS_HELD = (weapon) => weapon !== "boots";
 
+/** How many foes besides the one it's struck at a cleaving blow catches, in a fight (core/legendary.js cleave): might's reckoning. */
+export const CLEAVED = 0.5;
+
 // What a blow does on average, before power
 const meanOf = ([least, most]) => (least + most) / 2;
 
@@ -119,7 +122,9 @@ function blowsHarm(actor, abilities) {
     const { damage, every: bleedEvery, ms } = AFFLICTIONS.bleed;
     const bleeding = actor.bleed > 0 ? Math.min(1, (actor.bleed * ms) / every) * ((damage * power * 1000) / bleedEvery) : 0;
     const numbers = actor.legendary ? effectAt(actor.legendary.effect, actor.legendary.level) : null;
-    const effect = numbers ? (meanOf(numbers.damage) * power * 1000) / (actor.legendary.charge * every) : 0;
+    // (One let loose by its charge, its own harm now and then; or a cleave, every blow's own harm
+    // again on the others before them, as many as CLEAVED has it)
+    const effect = !numbers ? 0 : numbers.damage ? (meanOf(numbers.damage) * power * 1000) / (actor.legendary.charge * every) : kind === "melee" && numbers.share ? blows * numbers.share * CLEAVED : 0;
 
     return blows + doubled + bleeding + effect;
 }

@@ -646,15 +646,15 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
 - **The orcs on a dungeon's throne** (creatures.js `orcWarlord`, `orcReaver`), met nowhere else:
   the Orc Warlord on a cave's, his goblins about him (raiders and bombers in turn, his `guard`), and
   the Orc Reaver at the head of an outlaws' hideout, his cutthroats about him. Each is a dressing of
-  a modular orc bought on Fab (beasts/model.js; `client/models/beasts/LICENSE.md`): the Warlord
+  Snake|3D's modular orc, bought on Fab (beasts/model.js; `client/models/beasts/LICENSE.md`): the Warlord
   brown-skinned and red-eyed, in trousers, boots, belt and bracers, drawn 2.08 m tall; the Reaver
   red-skinned and yellow-eyed, bare-legged and barefoot in his loincloth, 1.99 m (and a boss's 1.22
   times that). Each swings a great axe two-handed, swept round, chopped down or spun low, one at
   random each time, the blow landing nearly two fifths of the way through it (weapons.js), and it
   may lay a wound open; between blows they roar, thump their chests and look about. They fall as
   Mesh2Motion's `Death_A` (CC0) has it: staggering, dropping to the knees, pitching onto the face.
-  The orc's finest dressing, the Orc King's, armoured from his shoulder to his knees, isn't met
-  yet: he's kept for a card.
+  The orc's finest dressing, the Orc King's, armoured from his shoulder to his knees, is a rare
+  card's foe out in the wilds (docs/WILDS.md *The Orc King*), not a dungeon's.
 - **An ants' nest's Ant Monster calls her flock** (creatures.js `call`, battle.js `#calls`,
   host.js `#flock`). Six seconds after she first sets on someone, then every 15 seconds as a boss
   (20 elsewhere), between blows, she stops to call (`CALL`): a motion of her own that strikes no

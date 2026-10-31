@@ -928,12 +928,18 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
 - *card*: a follow-up card (one whose `requires` is that step), dealt in place of the director's
   as any rare card is, before any other while the thread's at it and never otherwise
   (`Legends` `wants`, `pick`); done once it's done. One kept at a site has its place: `far` (110
-  to 170 m for the golem's) from where the thread was last, the highest of a couple of dozen spots
-  where a cache could be (`#threadHaunt`), not marked on the maps, its foe's prints leading there
-  from where it was last (`threadTracks`: wandering 9 m either side of the way; game.js
-  `#layTrails`, sunk as deep as any print in any ground; said once, as they're come upon, in the
-  step's own words, `spoor`: "Great footprints of stone, sunk deep in the ground: the stone golem's.
-  They lead off to the north.").
+  to 170 m for the golem's) from where the thread was last (or, `toward` a people, within half a
+  radian either side of the way to their nearest settlement: the Orc King's war camp, 220 to 320 m
+  out from the village his raiders burned towards the orcs' lands), the highest of a couple of
+  dozen spots where a cache could be (`#threadHaunt`), not marked on the maps unless it's to be
+  (`mark`), its foe's prints leading there from where it was last (`threadTracks`: wandering 9 m
+  either side of the way; game.js `#layTrails`, sunk as deep as any print in any ground; said once,
+  as they're come upon, in the step's own words, `spoor`, {way} which way they lead: "Great
+  footprints of stone, sunk deep in the ground: the stone golem's. They lead off to the north."). A
+  camp pitched there while the thread's at
+  it (`camp`: { people, tents }: rare.js `campOf`, its fire 4 m north of where its foe stands, its
+  tents in a ring 9 m round the fire, each facing it; drawn as a war's camp is, its people's tents,
+  world/camps3d.js, game.js `#syncThreadCamps`), struck once it's past.
 - *place*: somewhere to go, `far` (150 to 250 m for the sample's) from where the thread was last,
   where a cache could be (`#threadSpot`), or the plan's place of a kind nearest it (`site`, its
   heart as it's built: the ruins of Harrowstone quarry's), marked on every player's maps (a scroll,
@@ -952,6 +958,15 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
   last); done as it's reported done, by whoever reports it first (`#rewarded`).
 - *lock*: a lock opened as the thread comes to it, its way in marked; done once someone goes in
   by it (*Locks*, below).
+- *fight*: foes to drive out of somewhere: the settlement its opener's rumour told of (`at`
+  "opener", its middle; the Orc King's raiders in the border village they burned), or, as a
+  place's, a spot `far` from where it was last; marked on every player's maps, as a place is. Its
+  `foes` (`{ creature, count: [least, most], title?, champion? }` each, as strong as the land
+  there, `up` tiers above it: `#threadFoes`) are put out about it as a player first comes within
+  its `reach` (`#threadFight`), kept with the thread (their `thread`: never let go as the roaming
+  are), and let go again if everyone goes `RARE.far` from it first, to be put out afresh when
+  someone comes back; done once the last of them's fallen, those within twice its reach taking
+  part.
 
 As a step's done the world changes as it says (`change`, `CHANGES`; `Legends` `change`, the host's
 `#threadChange`), in the settlement it was at (or nearest where it was last), for its `lasts` or
@@ -960,7 +975,11 @@ for good: `stock`, a ware on a shop's shelves there (`threadWares`, in the host'
 prices times `times` (`priceTimes`, `shopPrice`'s `times`; the host's `shopTimes`), cried to the
 players in it as it begins ("Oakford holds the Feast of the Sample! Its shops' prices are down for
 the day.", `townHorn`); `reveal`, the plan's nearest place of a kind shown on every player's world
-map. Told (host.js "thread"): to those who took part, as it's begun and as each step's done, what's
+map; `burn`, `count` of the settlement's houses set burning, the nearest its middle, as the
+Behemoth of the Rift burns them (host.js `#burnAt`; core/burnt.js: burning till sunrise, then
+built again over the days after). A thread may change the world as it's begun too (`begins`, in
+its first step's settlement: the Iron Crown's border village set burning as its rumour's taken
+up). Told (host.js "thread"): to those who took part, as it's begun and as each step's done, what's
 next (`quill`), and its end (`rareDone`); each reward to whoever's given it. The journal's
 *Legends* has each thread: its step, what's known of the next (`threadWords`: its settlement,
 which way it is) and where; and those followed to their end, by whom. Kept in the world's
@@ -968,15 +987,19 @@ which way it is) and where; and those followed to their end, by whom. Kept in th
 
 A thread can come before its card instead (`opens`, `OPENERS`): begun by a rumour, not a card's end.
 An adventurer of a `calling` at the guild in the settlement with a guild nearest the plan's place
-of a kind (`openerOf`: the first of that kind, and the nearest village or bigger) tells it while
+of a kind (`openerOf`: the first of that kind, and the nearest village or bigger; or, `near` {
+border }, a people's border village, `borderOf`: the village of another people's nearest any
+settlement of theirs, and the settlement with a guild nearest it but it, not theirs either) tells
+it while
 the card it leads to's in play and not done in the world and the thread's not begun (`Legends`
 `opening`): their question (`ask`) among their first choices, the tale told a piece at a time
-(`tale`, each piece's question asked for the next), then taken up (`take`: the talk's `{ thread,
-step: null }`, the thread begun where it was told, its `home` that settlement; their parting
-words, `taken`, and the talk's over, so it's not offered again) or left. Every guild has one of
-every calling the threads' talk asks for (`TALK_CALLINGS`: a mage, so far; insides.js
-`guildFolkOf`: the last at its tables taking it up if none of the others has it), and one hired
-from it leaves the rumour to any adventurer still there.
+(`tale`, each piece's question asked for the next; {way}, which way the place is from there, and
+{place}, its name), then taken up (`take`: the talk's `{ thread, step: null }`, the thread begun
+where it was told, its `home` that settlement; their parting words, `taken`, and the talk's over,
+so it's not offered again) or left. Every guild has one of every calling the threads' talk asks
+for (`TALK_CALLINGS`: a mage and a warrior, so far; insides.js `guildFolkOf`: the last at its
+tables taking one up if none of the others has it), and one hired from it leaves the rumour to any
+adventurer still there.
 
 A player can give a thread up, and take it back up, free, any time (the user: "If the player dies
 on a unique quest or drops a unique quest from their journal, ensure there is a logical place they
@@ -1145,9 +1168,9 @@ How it fights (creatures.js `stoneGolem`, weapons.js NATURAL `stoneGolem`; a wor
 
 Kept as every rare card and thread is (`Legends`: its thread's `home` besides, carried on from a
 world kept before it as none); the world's plan, its new place, and the rules two games share
-changed with it (`NET_VERSION` 196, 197 as debug mode came to deal any card by its id, and 198 as
+changed with it (`NET_VERSION` 196, 197 as debug mode came to deal any card by its id, and 199 as
 threads came to be given up and taken back up: *Threads*). Debug
-mode's *Card and its thread* (the Stone Golem chosen, *Deal card*: `game.dealCard(id)`, the host's
+mode's *Card and its thread* (the Stone Golem or the Orc King chosen, *Deal card*: `game.dealCard(id)`, the host's
 `rare` command, `card`) brings its thread to it (begun, its steps before done, by the player) and
 deals it a little ahead of them at once; refused while another's out, or once it's done in the
 world. The model viewer shows it as the game draws it, under
@@ -1155,10 +1178,99 @@ world. The model viewer shows it as the game draws it, under
 thrown on as it's let go, down onto the ground ahead of it (8 m, or nearer to land in view), its
 shadow and ring there as it comes.
 
+### The Orc King
+
+The second rare card (`RARE_CARDS` `orcKing`; its thread `ironcrown`, *The Iron Crown*), a world's
+boss, once a world (the user: "Build 1, 2, and 3. Give 2 some rich backstory ... Have the unique
+drop be the Kingsplitter"; "Have some raiders left over at the burned village that the player has
+to defeat before being directed to the Orc King"). Vorgash the Ironcrowned, clan-king of the
+Ashfang, fought the chiefs of the Ironjaw, the Bloodtusk and the Gravemaw one after another and took
+their clans for his own: four clans under one iron crown, beaten out of the Warchief's own tribute.
+The Horde's Warchief outlawed him for it (orc players are sent after him as anyone is); the Horde
+gave him no land, so he takes the orcs' neighbours': his war band burns a border village, falls
+back to its camp in the marches, and comes again somewhere else. His brother Urzag spoke against
+the crown, and Vorgash branded him and cast him out: Urzag is the Orc Reaver, at the head of the
+outlaws in their hideouts (docs/DUNGEONS.md). That's never said outright, only hinted at: in the
+rumour ("They say he had a brother who spoke against it"), in the King's orders, in his last words
+and in the Reaver's page in the bestiary ("the brand between his shoulders was put there by his own
+brother").
+- **The rumour**: the warrior at the guild in the settlement nearest the orcs' border village
+  (`borderOf`: the village of another people's nearest any orc settlement; its guild's warrior, or
+  any of its adventurers) tells it ("Heard anything worth knowing?"), in four pieces (the village
+  burned two nights back, not by the Horde; Vorgash and his four clans, outlawed, and the brother
+  who spoke against him; what he wants and how his war band raids; the guild's two who never came
+  back, and the raiders still there), then "I'll go to {place}." begins the thread, and the
+  village's houses are set burning (`begins`: six of them, the nearest its middle).
+- **The raiders** (its first step, a *fight* in the village): four or five orc raiders and their
+  leader, Grukk of the Gravemaw (a mini-boss's rank), among the ashes, out as someone comes within
+  45 m. Driven out, 60 gold to each there and the King's orders (writings.js `ironcrown`, found on
+  Grukk: burn the village by the marches, fall back to the war camp by the second night, Ironjaw
+  and Bloodtusk with him; and, scratched below in the orcs' tongue, "If he comes himself, send him to
+  me. My brother chose the hills and the company of thieves over his own blood. He wears my mark on
+  his back still.").
+- **The King** (its second, the card): his war band's tracks lead out of the village towards the
+  orcs' lands, 220 to 320 m, to his war camp (*Threads*, `card`: `toward` the orcs, `mark`ed on the
+  maps; its `camp`, seven orc tents in a ring round a fire; its `spoor`, "The war band's tracks: many heavy
+  boots, trampling the grass flat. They lead off to the east, towards the Orc King's war camp."),
+  and he's dealt there as someone comes within 70 m, a dungeon master's rank, two tiers above the
+  land, "Vorgash, the Orc King". As he falls, his last words to those who took part (`last`: "Tell
+  Urzag, my brother... he was right. The crown was never worth the clans' blood. I put my mark on
+  him for saying so."), then their reward: Kingsplitter (`UNIQUES` `kingsplitter`, a great axe, the
+  `axe`, its effect Cleave, its own: docs/GAME.md *Legendary weapons*) and 900 gold each.
+- **Its end** (the third, a *talk* with the warrior at its home): 200 gold, the guild's bounty on
+  the King, and word of Urzag up in the hills, "a tale for another night".
+- **Given up**: the warrior who told it takes a player back on it, at the guild in its home, where
+  it stands ("About the Orc King: I'll go after him after all.", its opener's `back`; *Threads*). One who's
+  given it up doesn't bring out the raiders or count among those who drive them out.
+
+How he fights (creatures.js `orcKing`, weapons.js NATURAL `orcKing`; a world's boss, its bar
+across the top of the screen; 140 hit points at the first tier, four times that as a boss, a
+quarter of every blow turned by his armour; too heavy to throw; drawn from Snake|3D's orc in its
+finest dressing, 2.17 m tall and a boss's 1.22 times that). Each of these a building block for a
+rare card's foe (creatures.js `moves`, `stance`, `rally`; weapons.js `blows`, `toss`, `quake`'s
+`telegraph`):
+- **His axe up close**, one way at random each time (`either`): chopped down (13 to 21, laying a
+  wound open now and then), swept round (11 to 18), backhanded (10 to 16); a **combo** of three
+  blows (`blows`: each as his clip has it, 0.53, 1.07 and 1.89 seconds in, 45%, 45% and 70% of
+  the blow's harm: battle.js `#combo`), or a **flurry** of two ending in a kick that throws; or a
+  **kick** alone (6 to 10), throwing whoever it lands on back 3.3 m (`toss`: battle.js `#hit`, as a
+  blast throws, told as a blast of its own, `shove`), unless they catch it on a shield.
+- **His leap** (`moves` `leap`: battle.js `#moves`, `#leapFor`, `#lands`): every 11 seconds, the
+  first 5 seconds after he first sets on anyone, at whoever's 4 to 10 m off and in sight, he
+  crouches and springs (in the air from 0.55 seconds in), coming down 1.3 m short of them
+  (`LEAP.short`, as far that way as the ground's clear, on the nearest free square), the ground
+  heaving 2.6 m round where he lands (14 to 22, throwing them). Where he'll land is shown on the
+  ground as he crouches (`telegraph`: battle.js `#telegraphs`, "telegraph" { x, y, radius, lands };
+  spellfx.js `telegraph`: a bomb's pulsing red ring, the ground within it filling from its heart as
+  it comes), and told to whoever he's after ("Vorgash, the Orc King leaps at you!"). Drawn
+  (beast.js `actions.leap`) carried over the ground from his spring to where he lands, his clip
+  lifting him a metre.
+- **His spin** (`moves` `spin`): every 13 seconds, the first 9 after he sets on anyone, at whoever's
+  within 3 m, his axe spun high all round him (13 to 21, 3.4 m round, throwing; no element of its
+  own), its reach shown on the ground round him for the second before it lands.
+- **His guard** (`stance`: battle.js `#onGuard`): every 15 seconds, the first 14 after he sets on
+  anyone, with whoever he's after within 5 m, he stops and holds his guard up 3.5 seconds, every
+  blow and shot from within 60° of the way he faces caught whole (`front`, `chance` 1, `share` 1),
+  turning after them no faster than 75° a second, so it's got round: from his side or behind,
+  blows get through ("Vorgash, the Orc King stands on guard: strike from the side or behind!"; his
+  Block held, his Block Hit as a blow's caught: beast.js `actions.guard`, beasts/model.js
+  `guard`). Spells aren't caught.
+- **His battlecry** (`rally`: battle.js `#rallies`): at two thirds of his hit points, then at one
+  third, once each, he roars (his Battlecry clip, the call a second in), and a champion comes
+  running from behind him, a tier under him, by name (host.js `#flock`'s `down` and `title`):
+  **Ironjaw**, then **Bloodtusk** (creatures.js `orcIronjaw`, `orcBloodtusk`: his model in its
+  brown and red skins, 2.08 m; their axes chopped and swept, a kick that throws; their models wanted
+  as soon as he's about, game.js `#modelsAbout`). "Vorgash, the Orc King roars a battlecry: Ironjaw
+  is coming!".
+
+His raiders (creatures.js `orcRaider`: drawn as people are, an orc of his clans, green, brown or
+grey, tusked, a cleaver each, 6 to 11, laying a wound open now and then) are met only where his
+thread puts them. The rules two games share changed with it (`NET_VERSION` 198).
+
 ### Building a card
 
-The Stone Golem is made of pieces any card can be made of. A card that waits somewhere of its own,
-with a rumour to begin it and a quest to follow, is these, each data:
+The Stone Golem and the Orc King are made of pieces any card can be made of. A card that waits
+somewhere of its own, with a rumour to begin it and a quest to follow, is these, each data:
 1. **Its place** (worldplan/settle.js `LANDMARKS`, one a world each, laid out after those before it
    from numbers of their own): an `id`, a `kind`, a `name`, and where it's to be kept (heights
    `hills`, lands `biomes`, gentle as `steep`, `from`/`to` metres from the nearest start, within
@@ -1168,26 +1280,37 @@ with a rumour to begin it and a quest to follow, is these, each data:
    art/kits/neutral.js, its size in `NEUTRAL`.
 2. **Its thread** (core/rare.js `THREADS`): its rumour (`opens`: told by an adventurer of a
    `calling` at the guild nearest it, every guild keeping one of each called for, `TALK_CALLINGS`;
-   `ask`, `tale`, `take`, `taken`, `leave`), then its steps (`STEPS`): a *place* (`site`: its kind;
+   `ask`, `tale`, `take`, `taken`, `leave`; and `back`, what's asked and said as a player who gave
+   it up is taken back on it, `keeperOf`), then its steps (`STEPS`): a *place* (`site`: its kind;
    `reach`; a `reward` of gold and a writing, core/writings.js); a *card* kept at a site (`far`, and
-   `spoor`, how its prints are told); a *talk* back at its `home`; or any of the others (*Threads*).
+   `spoor`, how its prints are told, {way} which way they lead; `toward` a people's lands, `mark`ed
+   on the maps, a `camp` pitched there); a *fight* (`foes` to drive out first, where its rumour was
+   told of: `at` "opener"); a *talk* back at its `home`; or any of the others (*Threads*). A rumour
+   told at a people's border village (`near` { border }: `borderOf`), and the world changed as it's
+   taken up (`begins`: `burn`, the village set burning), are the Orc King's.
 3. **Its card** (`RARE_CARDS`): `where` "site", `requires` its thread's card step, its `shape` (a
    `foe`: its `creature`, `champion` rank, `up` tiers, `title`) and its `reward` (a unique,
-   `UNIQUES`, and gold), `kind` "unique" to come once a world.
+   `UNIQUES`, and gold), `kind` "unique" to come once a world; what its foe says as it falls
+   (`last`).
 4. **Its foe** (creatures.js, weapons.js `NATURAL`): a world's boss (`worldBoss`: its bar across the
    top, its model wanted at once), seeing further (`sight`), never thrown (`steady`); its blows,
    one at random (`either`), heaving the ground (`quake`), lobbing what bursts (`bomb`: battle.js
    `BOMBS`, its shadow on the ground, `shadow`: spellfx.js `BOMB_LOOKS`), none nearer than its
-   `least`. Drawn from its model (beasts/model.js `MODELS`: clips played one into the next,
+   `least`; a blow struck several times (`blows`), one that throws (`toss`); attacks of its own now
+   and then (`moves`: a `leap` at someone, a blow all round it, where it lands shown first,
+   `telegraph`), a guard to get round (`stance`), and champions called at its health's marks
+   (`rally`: by name, `title`, a tier or more under it, `down`): the Orc King's (*How he fights*).
+   Drawn from its model (beasts/model.js `MODELS`: clips played one into the next,
    `chains`; what it carries in its hand, `carry`, thrown on in the model viewer too), its prints
    (world/tracks3d.js `OWN`), its spoils, lore and voice.
 5. **Its reward's effect** (core/legendary.js `EFFECTS`, on any piece a unique is: core/gear.js
    `effectOf`): one let loose by blows struck, or a ward by blows taken (`ward`: `guard`, `skin`,
    `harden`; what the wearer's told, `felt`; drawn and heard as its `element` has it, app/game.js
-   `WARD_LOOKS`).
+   `WARD_LOOKS`); or a unique's own (`unique`, never rolled on a legendary), on every blow with no
+   charge to fill (`always`: Kingsplitter's Cleave).
 
 Then debug mode deals it by its id (*Card and its thread*), and the unit tests (test/rare.test.js
-*the Golem of Harrowstone*) show how to follow one through.
+*the Golem of Harrowstone*, *the Iron Crown*) show how to follow one through.
 
 ## Adventurers' caches
 

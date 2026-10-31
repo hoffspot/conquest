@@ -665,7 +665,9 @@ const ENDS_AS = Object.freeze({ draw: "ready", lower: "ready", sheathe: "stand",
  * rows, width (texels: three a bone, and one), flags (the texel of a row its flags are in),
  * moves: name -> { start, frames, length (seconds), loop }, stride: how far a walk's and a run's
  * go over theirs (metres) }. Each one played over and over has its end eased into its start (none
- * of it jumps going round), and those standing are recorded once they've settled. `walk` its
+ * of it jumps going round), and those standing are recorded once they've settled; each from the
+ * start of its guard's sway (`phase` 0, not at random as an avatar's is), so they're the same
+ * every time they're recorded and one move ends where the next begins. `walk` its
  * walk's style; `guard` how it fights (actions.js GUARDS); `attack` its weapon's blow ({
  * animation, hitAt, duration }: weapons.js, ms); `reaction` how it flinches (actions.js
  * REACTIONS); `cast` how it casts (CROWD_CASTS), if it does. `calm`: one that never fights (the
@@ -689,7 +691,8 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
     const play = (name, { loop = false, start, until, speed = 0, facing = 0, settle = 0, away = false, as = false }) => {
         character.sheathe(away);
 
-        const avatar = new Avatar(character, { walk, guard });
+        // (From the start of its guard's sway: actions.js Actions `phase`)
+        const avatar = new Avatar(character, { walk, guard, phase: 0 });
         let z = 0;
 
         avatar.place(0, 0, facing);
@@ -1184,8 +1187,9 @@ export function* makingTemplate(kit, key, { look, guard = null, attack = null, r
             node.castShadow = false;
         });
 
-        // (Stood on guard a moment, what it holds where it's held; calm, at ease)
-        const avatar = new Avatar(character, { walk: look.walk, guard });
+        // (Stood on guard a moment, what it holds where it's held; calm, at ease: its guard's sway
+        // from its start, the same every time it's made)
+        const avatar = new Avatar(character, { walk: look.walk, guard, phase: 0 });
 
         avatar.place(0, 0, 0);
         avatar.actions.setGuard(!calm);

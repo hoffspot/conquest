@@ -444,13 +444,13 @@ shows it (*Coming to the wilds*).
 
 Don't copy it out of this game or use it in anything else.
 
-## orc-king.bin, orc-king.brown.bin, orc-king.red.bin, orc-warlord.bin, orc-reaver.bin
+## orc-king-2.bin, orc-king-2.brown.bin, orc-king-2.red.bin, orc-warlord-2.bin, orc-reaver-2.bin
 
-**A modular orc**, its axe and its animations (its Unreal Engine files: its body, whole and from
-the waist up, the pieces it wears, its axe, its textures in three skins and four eyes' colours,
-and 50 animations, exported from Unreal Engine by this repository's owner), bought on **Fab** by
-this repository's owner under **Fab's Standard License**: the Orc King, the Orc Warlord and the Orc
-Reaver.
+**A modular orc**, by **Snake|3D**, its axe and its animations (its Unreal Engine files: its body,
+whole and from the waist up, the pieces it wears, its axe, its textures in three skins and four
+eyes' colours, and 50 animations, exported from Unreal Engine by this repository's owner), bought on
+**Fab** by this repository's owner under **Fab's Standard License**: the Orc King and his champions,
+the Orc Warlord and the Orc Reaver.
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
@@ -462,16 +462,16 @@ pieces joined onto its body and skinned to its skeleton, its axe on the bone tha
 at 512 pixels, and occlusion, roughness and metal) as KTX2; its full mesh simplified to about 55%,
 with two lower details packed in.
 
-- **The Orc King** (`orc-king.bin`): its finest dressing, armoured from his shoulder to his knees
+- **The Orc King** (`orc-king-2.bin`): its finest dressing, armoured from his shoulder to his knees
   (trousers, boots, loincloth and belt, shoulder, upper arm, wrist and knee armour, straps,
   earrings), green-skinned and yellow-eyed, 54,514 triangles; 22 of its own clips (attacks, combos,
-  kicks, a leaping attack, blocks, flinches, idles, walk, run, battlecry and chest thump). His other
-  skins, brown and red, are their skin's and eyes' colour textures alone (`orc-king.brown.bin`,
-  `orc-king.red.bin`). Kept for a card: the model viewer shows him (*Coming to the wilds*).
-- **The Orc Warlord** (`orc-warlord.bin`), a cave's boss: trousers, boots, loincloth and belt,
+  kicks, a leaping attack, blocks, flinches, idles, walk, run, battlecry and chest thump): a rare
+  card's foe, the Iron Crown's. His other skins, brown and red, are their skin's and eyes' colour
+  textures alone (`orc-king-2.brown.bin`, `orc-king-2.red.bin`): his champions, Ironjaw and Bloodtusk.
+- **The Orc Warlord** (`orc-warlord-2.bin`), a cave's boss: trousers, boots, loincloth and belt,
   bracers, straps and earrings, brown-skinned and red-eyed, 47,725 triangles; the ten of its clips
   the game plays.
-- **The Orc Reaver** (`orc-reaver.bin`), an outlaws' hideout's boss: its whole body, bare-legged and
+- **The Orc Reaver** (`orc-reaver-2.bin`), an outlaws' hideout's boss: its whole body, bare-legged and
   barefoot, in loincloth and belt, bracers, straps and earrings, red-skinned and yellow-eyed, 52,225
   triangles; the same ten clips.
 
@@ -481,9 +481,11 @@ bones (the pipeline's `retarget`): it staggers, drops to its knees and pitches f
 face. Its pack's demo animations (`Demo`, `MM_*`) aren't in them: they're Epic's mannequin's,
 licensed for Unreal Engine only.
 
-They're scrambled as the game serves them, with whose they are in their glTF assets' `copyright`.
-They aren't in this repository, but in the private one the game's builds fetch them from
-(`docs/LICENSED_MODELS.md`).
+They're scrambled as the game serves them, with whose they are (Snake|3D's, bought on Fab) in
+their glTF assets' `copyright`. They aren't in this repository, but in the private one the game's
+builds fetch them from (`docs/LICENSED_MODELS.md`), where the same models scrambled before his name
+was in them (`orc-king.bin` and its skins, `orc-warlord.bin`, `orc-reaver.bin`) are kept for the
+game's earlier versions.
 
 Don't copy them out of this game or use them in anything else.
 

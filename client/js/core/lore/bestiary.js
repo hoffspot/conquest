@@ -73,7 +73,7 @@ export const BESTIARY_LORE = Object.freeze({
         sign: "an axe's bite in the cave's timbers, and goblin tracks all round",
     }),
     orcReaver: Object.freeze({
-        lore: "An orc cast out of his own kind, at the head of the outlaws in their hideout. Red-skinned and yellow-eyed, bare-legged and barefoot in a loincloth, he's quicker than the Warlord and nearly as strong, his great axe swept, chopped or spun round low, each blow laying a wound open.",
+        lore: "An orc cast out of his own kind, at the head of the outlaws in their hideout. Red-skinned and yellow-eyed, bare-legged and barefoot in a loincloth, he's quicker than the Warlord and nearly as strong, his great axe swept, chopped or spun round low, each blow laying a wound open. The outlaws say he was born to a clan-king's tent, and that the brand between his shoulders was put there by his own brother.",
         sign: "bare orc footprints, broad and clawed, among the outlaws' boots",
     }),
     skeleton: Object.freeze({
@@ -427,5 +427,21 @@ export const BESTIARY_LORE = Object.freeze({
     stoneGolem: Object.freeze({
         lore: "Four metres of cut stone, raised by an idle mage to work Harrowstone quarry for him, its heart a crystal flawed by a vein of blight no one saw. One morning it turned on the quarry and broke it, and everyone in it, its maker too; it has wandered the hills by the ruins ever since, and folk go miles round. Its hammer knocks men off their feet, it pounds the ground till it heaves, and whoever keeps their distance it hurls boulders at: watch for the shadow, and get out from under it. No blast moves it, and earth harms it little.",
         sign: "great round footprints sunk deep in the turf, and boulders torn out of the hillside",
+    }),
+    orcKing: Object.freeze({
+        lore: "Vorgash the Ironcrowned, clan-king of the Ashfang, who bound the Ironjaw, the Bloodtusk and the Gravemaw to him and was outlawed by the Horde for it. From his war camp in the marches his raiders burn the border villages. Green-skinned, armoured from shoulder to knee, taller than any orc, he fights with a great axe in combos of three blows, kicks whoever crowds him off their feet, leaps on whoever keeps off and spins his axe all round him, the ground warning of both before they land. Now and then he stands on guard, and only a blow from his side or behind gets through. Worn down, he roars for his champions.",
+        sign: "the ashes of a border village, and the tracks of his war band leading away from it",
+    }),
+    orcIronjaw: Object.freeze({
+        lore: "The chief of the Ironjaw, the first clan to kneel to the Orc King and his champion since. Brown-skinned and broad, he comes at the King's battlecry with a great axe, sweeping, chopping, and kicking whoever's in his way off their feet.",
+        sign: "a broad orc's tracks beside the King's, never far behind",
+    }),
+    orcBloodtusk: Object.freeze({
+        lore: "The chief of the Bloodtusk, the red clan, and the Orc King's champion. Quicker than Ironjaw, he comes at the King's second battlecry, his great axe swept and chopped, his kick throwing whoever's in his way.",
+        sign: "red ochre smeared on the posts of a burned house",
+    }),
+    orcRaider: Object.freeze({
+        lore: "One of the Orc King's war band, sent to burn the border villages: an orc of one of his four clans, a cleaver in hand, its blows now and then laying a wound open. Some stay behind among the ashes for what's left.",
+        sign: "torches thrown down among the ashes, and orc tracks",
     }),
 });

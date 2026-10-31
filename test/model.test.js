@@ -54,8 +54,11 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // Stone Golem)
             const guarding = Object.values(LAIRS).some(({ master, guards = [] }) => MODELS[master[0]]?.asset === asset && guards.some(([kind]) => kind === id));
             const carded = Object.values(RARE_CARDS).some(({ shape }) => shape?.creature === id) && CREATURES[id].worldBoss;
+            // (Or a rare card's world boss calls it to it as it's worn down, its model wanted with
+            // its own: the Orc King's champions)
+            const rallied = Object.entries(CREATURES).some(([boss, one]) => one.worldBoss && one.rally?.some(({ call }) => call.kind === id) && Object.values(RARE_CARDS).some(({ shape }) => shape?.creature === boss));
 
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, or is a rare card's world boss`);
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);

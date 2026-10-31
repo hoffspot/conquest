@@ -38,7 +38,11 @@ import { WEAPONS } from "./weapons.js";
  *    its charge full, their skin stone for `skin` ms, every blow on them `harden` the lighter again
  *    and none throwing them down (battle.js #steel); what they're told then, `felt`. A ward is drawn
  *    as its element has it (app/game.js WARD_LOOKS: a shell closing round them), heard as
- *    UNLEASHED_SOUNDS has it or its element's casting. Any ward's numbers are these three.
+ *    UNLEASHED_SOUNDS has it or its element's casting. Any ward's numbers are these three;
+ *  - cleave (a unique's own, `unique`: Kingsplitter's, never rolled on a legendary weapon; always,
+ *    `always`, no charge to it): every blow up close cleaving on through every other foe within
+ *    `reach` metres before whoever strikes it (no more than `arc` degrees either side of the way to
+ *    whoever it's struck at), each struck `share` as hard (battle.js #cleave).
  */
 export const EFFECTS = Object.freeze({
     frostbind: {
@@ -95,10 +99,22 @@ export const EFFECTS = Object.freeze({
         skin: [3000, 6000],
         harden: [0.35, 0.55],
     },
+    // (A unique's own, never rolled on a legendary weapon; on every blow, with no charge to fill:
+    // Kingsplitter's, rare.js)
+    cleave: {
+        label: "Cleave",
+        unique: true,
+        always: true,
+        element: null,
+        about: "Every blow cleaves on through every other foe before its wielder, each struck nearly as hard as the first.",
+        share: [0.5, 0.8],
+        reach: 2.6,
+        arc: 60,
+    },
 });
 
-/** The effects let loose by blows struck (EFFECTS but the wards): those rolled on a legendary weapon. */
-export const BLOW_EFFECTS = Object.freeze(Object.keys(EFFECTS).filter((id) => !EFFECTS[id].ward));
+/** The effects let loose by blows struck (EFFECTS but the wards and a unique's own): those rolled on a legendary weapon. */
+export const BLOW_EFFECTS = Object.freeze(Object.keys(EFFECTS).filter((id) => !EFFECTS[id].ward && !EFFECTS[id].unique));
 
 /**
  * A ward's charge (EFFECTS `ward`): full after `blows` blows taken (a blow that does harm, not one
@@ -130,7 +146,7 @@ export const effectStrength = (level) => Math.max(1, Math.min(100, Number.isFini
 /**
  * An effect's numbers at a weapon's level (or a piece's, EFFECTS, each between its first level's
  * and its highest's): { damage: [least, most] (before the wielder's power), freeze, radius, near,
- * knockdown, leaps, reach, falls, stun, toss, guard, skin, harden }, those it has.
+ * knockdown, leaps, reach, falls, stun, toss, guard, skin, harden, share, arc }, those it has.
  */
 export function effectAt(id, level = 1) {
     const def = EFFECTS[id];
@@ -144,15 +160,15 @@ export function effectAt(id, level = 1) {
     const between = ([first, highest]) => first + (highest - first) * share;
     const numbers = def.damage ? { damage: def.damage.map((value) => Math.round(value * strength * 100) / 100) } : {};
 
-    for (const key of ["freeze", "radius", "knockdown", "leaps", "stun", "toss", "guard", "skin", "harden"]) {
+    for (const key of ["freeze", "radius", "knockdown", "leaps", "stun", "toss", "guard", "skin", "harden", "share"]) {
         if (def[key]) {
             const value = between(def[key]);
 
-            numbers[key] = key === "leaps" ? Math.round(value) : key === "radius" || key === "toss" || key === "guard" || key === "harden" ? Math.round(value * 100) / 100 : Math.round(value);
+            numbers[key] = key === "leaps" ? Math.round(value) : key === "radius" || key === "toss" || key === "guard" || key === "harden" || key === "share" ? Math.round(value * 100) / 100 : Math.round(value);
         }
     }
 
-    for (const key of ["near", "reach", "falls"]) {
+    for (const key of ["near", "reach", "falls", "arc"]) {
         if (def[key] !== undefined) {
             numbers[key] = def[key];
         }

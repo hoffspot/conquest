@@ -397,6 +397,10 @@ export const CALLED_CRY_MS = 1500;
  */
 export const FLOCK = Object.freeze({ from: 7, down: 2 });
 
+// How far either side of the way to a people's nearest settlement a thread's card kept at a site
+// may be kept, if it's to be towards them (radians: #threadHaunt, rare.js STEPS `card` `toward`)
+const THREAD_TOWARD = 0.5;
+
 /**
  * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
  * camping out in the world (no camp within a settlement, nor with anything hostile within `clear`
@@ -9175,7 +9179,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && one.vault === undefined && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && !one.thread && one.vault === undefined && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -9293,14 +9297,15 @@ export class Host {
         }
     }
 
-    // A creature calling its flock to it (battle.js "call": creatures.js `call`, the Ant Monster):
-    // as many of its kind as it calls (`count`, [least, most], by chance) come running from
-    // FLOCK.from metres behind it, never more of those it's called about at once than `most`, nor
-    // more bodies about anyone than BODIES has; FLOCK.down tiers under it, of its pack, coming for
+    // A creature calling its flock to it (battle.js "call": creatures.js `call`, the Ant Monster;
+    // `rally`, the Orc King's champions): as many of its kind as it calls (`count`, [least, most],
+    // by chance) come running from FLOCK.from metres behind it, never more of those of that kind
+    // it's called about at once than `most`, nor more bodies about anyone than BODIES has; FLOCK.down tiers
+    // under it (or `down`), by their own name if they've one (`title`), of its pack, coming for
     // anyone they see. In a dungeon, out with its level's foes (let go with them; none of its plan's,
     // so nothing's kept of their falling: #delveFell); leaving their gold and parts only (`extra`).
     // Told as "roused", and "called" ({ id, ids, kind })
-    #flock({ id, target, kind, count: [least, most], most: cap, map, x, y }) {
+    #flock({ id, target, kind, count: [least, most], most: cap, down = null, title = null, map, x, y }) {
         const caller = this.wild.get(id);
         const actor = this.battle.actor(id);
 
@@ -9308,7 +9313,8 @@ export class Host {
             return;
         }
 
-        const about = [...this.wild].filter(([each, one]) => one.called === id && this.battle.actor(each) && !this.battle.actor(each).dead).length;
+        // (Of its kind: one that calls two kinds, the Orc King his champions, has each's `most`)
+        const about = [...this.wild].filter(([each, one]) => one.called === id && one.creature === kind && this.battle.actor(each) && !this.battle.actor(each).dead).length;
         const from = this.battle.actor(target) ?? actor;
         const away = from === actor ? 0 : atan2(y - from.y, x - from.x);
         const at = [x + cos(away) * FLOCK.from, y + sin(away) * FLOCK.from];
@@ -9322,7 +9328,7 @@ export class Host {
             for (let k = 0; k < count; k++) {
                 const more = `wild-${this.nextWild++}`;
 
-                this.#rouse(more, kind, Math.max(1, caller.tier - FLOCK.down), free(at), { pack: caller.pack, leader: id, map, dungeon: caller.dungeon ?? null, temper: "aggressive", extra: true, called: id });
+                this.#rouse(more, kind, Math.max(1, caller.tier - (down ?? FLOCK.down)), free(at), { pack: caller.pack, leader: id, map, dungeon: caller.dungeon ?? null, temper: "aggressive", extra: true, called: id, title });
                 ids.push(more);
             }
         } catch {
@@ -9604,7 +9610,7 @@ export class Host {
     // anything, an elite, called, nor sent after someone), minded on first seeing a player, one
     // of a pack of `packSize`; one of a den's, standing its ground there, its nerve never gone
     // (`stands`)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null, thread = null }) {
         const spec = CREATURES[creature];
         const reacting = reacts && wary(creature) && map === "town" && !elite && !camp && !lair && !cache && !stranger && !trial && !place && !works && !dungeon && !called && !champion && !ambush;
         const lead = elite === "lead";
@@ -9615,7 +9621,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}), ...(thread ? { thread } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -11268,13 +11274,25 @@ export class Host {
         }
 
         this.#threadSetUp(id);
+
+        // (The world changed as it's begun: the border village the Orc King's raiders burned)
+        const begins = THREADS[id]?.begins;
+
+        if (begins) {
+            const thread = this.legends.threads[id];
+
+            this.#threadChange(id, begins, thread.town ?? this.#nearestTown(thread.place ?? thread.at), thread.place ?? thread.at);
+        }
+
         this.#event("thread", { change: "begun", thread: id, step: 0, ids: [...ids] });
     }
 
     // The step a thread's at made ready (rare.js STEPS): a place's spot found (#threadSpot), or the
     // plan's place of its kind nearest where it was last (`site`), on the maps, with the settlement
-    // nearest where it was last; a card kept at a site, its place (#threadHaunt); a talk's or
-    // contract's settlement, the nearest where it was last (or the thread's home, `home`)
+    // nearest where it was last; a fight's, the settlement its opener told of (`at` "opener": its
+    // middle), or as a place's, its foes not yet out; a card kept at a site, its place (#threadHaunt:
+    // towards a people's lands, `toward`), with the settlement nearest where it was last; a talk's
+    // or contract's settlement, the nearest where it was last (or the thread's home, `home`)
     #threadSetUp(id) {
         const thread = this.legends.threads[id];
         const def = this.legends.stepOf(id);
@@ -11285,8 +11303,16 @@ export class Host {
             // (The place's heart, as it's built: sites.js, the Lantern Company's remains there)
             thread.place = site ? [...(this.world.maps.town?.sites?.heartOf(site) ?? site.at)] : this.#threadSpot(thread.at, def.far ?? [150, 250]);
             thread.town = this.#nearestTown(thread.at);
+        } else if (def?.kind === "fight") {
+            const opener = def.at === "opener" ? openerOf(this.world.plan, id) : null;
+            const town = opener ? this.#peopledAt(opener.site.id) : null;
+
+            thread.place = town ? [...town.middle] : this.#threadSpot(thread.at, def.far ?? [150, 250]);
+            thread.town = town ? opener.site.id : this.#nearestTown(thread.place);
+            thread.foes = null;
         } else if (def?.kind === "card" && rareCard(def.card)?.where === "site") {
-            thread.place = this.#threadHaunt(thread.at, def.far ?? [110, 170]);
+            thread.place = this.#threadHaunt(thread.at, def.far ?? [110, 170], def.toward ?? null);
+            thread.town = this.#nearestTown(thread.at);
         } else if (def?.kind === "talk" || def?.kind === "contract") {
             thread.town = def.home && thread.home ? thread.home : this.#nearestTown(thread.at);
         } else if (def?.kind === "lock") {
@@ -11380,17 +11406,22 @@ export class Host {
     }
 
     // Where a card kept at a site is kept (rare.js STEPS `card`, its `where` "site": the Stone
-    // Golem), `far` ([least, most] metres) from `at`: of a couple of dozen spots where a cache could
-    // be (caches.js cacheClear, openAround), the one highest up (the plan's land); or, none of them,
-    // a thread's place step's spot there
-    #threadHaunt(at, [least, most]) {
+    // Golem), `far` ([least, most] metres) from `at` (the way the nearest of a people's settlements
+    // is from there, give or take THREAD_TOWARD, if it's `toward` them: the Orc King's war camp, out
+    // in the marches before the orcs' lands): of a couple of dozen spots where a cache could be
+    // (caches.js cacheClear, openAround), the one highest up (the plan's land); or, none of them, a
+    // thread's place step's spot there
+    #threadHaunt(at, [least, most], toward = null) {
         const plan = this.world.plan;
         const overworld = this.world.maps.town;
         const squares = squaresOf(overworld);
+        const theirs = toward ? (plan?.places ?? []).filter((place) => place.race === toward && SETTLEMENT_KINDS[place.kind]) : [];
+        const nearest = theirs.reduce((best, place) => (!best || hypot(place.at[0] - at[0], place.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? place : best), null);
+        const way = nearest ? atan2(nearest.at[1] - at[1], nearest.at[0] - at[0]) : null;
         let best = null;
 
         for (let tries = 0; tries < 24; tries++) {
-            const turn = this.random.next() * 2 * Math.PI;
+            const turn = way === null ? this.random.next() * 2 * Math.PI : way + (this.random.next() * 2 - 1) * THREAD_TOWARD;
             const reach = least + this.random.next() * (most - least);
             const heart = [Math.floor(at[0] + cos(turn) * reach) + 0.5, Math.floor(at[1] + sin(turn) * reach) + 0.5];
 
@@ -11464,6 +11495,18 @@ export class Host {
     // or nearest where it was last: `at`): a shop's stock or prices, a festival (cried), a place
     // shown on the maps (the plan's nearest of its kind)
     #threadChange(id, change, town, at) {
+        // (A settlement's houses set burning, as the Behemoth burns them, the nearest its middle:
+        // built again over the days after, core/burnt.js)
+        if (change.kind === "burn") {
+            const place = town ? this.#peopledAt(town) : null;
+
+            if (place) {
+                this.#burnAt({ ...place, place: town }, "", place.middle, change.count, elapsedOf(this.war));
+            }
+
+            return;
+        }
+
         if (change.kind === "reveal") {
             const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === change.site);
             const site = sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
@@ -11487,10 +11530,17 @@ export class Host {
     }
 
     // The place steps of the threads followed (#caches, at each look about): done once a player's
-    // come within its `reach`, those there taking part
+    // come within its `reach`, those there taking part. A fight step's foes put out as a player
+    // first comes within its `reach` (#threadFoes); done once the last of them's fallen, those near
+    // taking part; let go if everyone's gone RARE `far` from it first, to be put out again
     #threadFollow() {
         for (const [id, thread] of Object.entries(this.legends.threads)) {
             const def = this.legends.stepOf(id);
+
+            if (def?.kind === "fight" && thread.place) {
+                this.#threadFight(id, thread, def);
+                continue;
+            }
 
             if (def?.kind !== "place" || !thread.place) {
                 continue;
@@ -11502,6 +11552,67 @@ export class Host {
                 this.#threadDone(id, there.map((actor) => actor.id), thread.place);
             }
         }
+    }
+
+    // A thread's fight step followed (#threadFollow): its foes out as a player comes within its
+    // `reach` of its place; done once they've all fallen (those within twice its reach taking
+    // part), or let go, everyone gone RARE `far` from it (none of those who've given it up)
+    #threadFight(id, thread, def) {
+        const players = [...this.players.keys()].filter((one) => !this.legends.gaveUp(id, one)).map((one) => this.battle.actor(one)).filter((actor) => actor && !actor.dead && actor.map === "town");
+        const off = (actor) => hypot(actor.x - thread.place[0], actor.y - thread.place[1]);
+
+        if (!thread.foes) {
+            if (players.some((actor) => off(actor) <= def.reach)) {
+                thread.foes = this.#threadFoes(id, def, thread.place);
+            }
+
+            return;
+        }
+
+        const standing = thread.foes.filter((one) => this.battle.actor(one) && !this.battle.actor(one).dead);
+
+        if (!standing.length) {
+            const there = players.filter((actor) => off(actor) <= def.reach * 2);
+
+            this.#threadDone(id, there.map((actor) => actor.id), thread.place);
+        } else if (players.every((actor) => off(actor) > RARE.far)) {
+            for (const one of standing) {
+                this.#release(one);
+            }
+
+            thread.foes = null;
+        }
+    }
+
+    // A thread's fight step's foes (rare.js STEPS `fight`) put out about its place (`at`), as strong
+    // as the land is there (as a rare card's foe is: its `up` tiers above it), each kind's count
+    // rolled, by name and rank if they've one (`title`, `champion`), kept with the thread till they
+    // fall or it lets them go (`thread`), set on whoever's nearest: their ids
+    #threadFoes(id, def, at) {
+        const homes = [...this.players.values()].map((each) => ({ at: this.#whereIs(each), home: this.#homeOf(each) })).filter(({ at: where }) => where);
+        const tier = Math.min(TIERS, tierAt(at, homes.map(({ home }) => home), landAt(this.world.plan, ...at).biome) + (def.up ?? 0));
+        const free = this.#spots();
+        const ids = [];
+
+        for (const { creature, count: [least, most], title = null, champion = null } of def.foes) {
+            for (let k = this.random.int(least, most); k > 0; k--) {
+                const one = `wild-${this.nextWild++}`;
+
+                try {
+                    this.#rouse(one, creature, tier, free(at), { pack: `thread-${id}`, temper: "aggressive", roam: 10, thread: id, title, champion });
+                } catch {
+                    break;
+                }
+
+                ids.push(one);
+            }
+        }
+
+        if (ids.length) {
+            this.#event("roused", { ids, creature: def.foes[0].creature });
+        }
+
+        return ids;
     }
 
     // A thread's word asked of one of the folk (a choice of their talk: rare.js threadTalk): the
@@ -11621,9 +11732,9 @@ export class Host {
         return town && shop ? threadWares(this.legends.changes, { town, shop, played: this.legends.played }) : [];
     }
 
-    // A card in play (rare.js RARE_CARDS: the Stone Golem's) dealt before a player at once, by its
-    // id (the debug overlay's): its thread, if it follows one, brought to its step (begun, its
-    // rumour's home the settlement nearest its place, and its steps before done, by them), its
+    // A card in play (rare.js RARE_CARDS: the Stone Golem's, the Orc King's) dealt before a player
+    // at once, by its id (the debug overlay's): its thread, if it follows one, brought to its step
+    // (begun, its rumour's home its opener's settlement, and its steps before done, by them), its
     // place a little ahead of them; not while another's out, nor once it's done in the world
     #cardNow(player, actor, cardId) {
         const card = this.legends.cards[cardId];
