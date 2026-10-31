@@ -3924,9 +3924,6 @@
   "rest/courtesan/2|orc-thinnest-f": {
    "joint": 3.32
   },
-  "rest/courtesan/3|human-bulkiest-f": {
-   "limb": 0.0498
-  },
   "rest/courtesan/3|human-bulkiest-m": {
    "item": 0.0148
   },
@@ -4293,12 +4290,6 @@
   },
   "rest/sentry/2|orc-shortest-f": {
    "joint": 3.25
-  },
-  "rest/sentry/3|orc-bulkiest-f": {
-   "limb": 0.0901
-  },
-  "rest/sentry/3|orc-bulkiest-m": {
-   "limb": 0.045
   },
   "rest/sentry/3|orc-thinnest-f": {
    "item": 0.0122
