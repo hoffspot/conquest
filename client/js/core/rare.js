@@ -20,7 +20,7 @@
 
 import { DAY, timeOfDay } from "./daytime.js";
 import { shuffled } from "./director.js";
-import { cos, hypot, sin } from "./exact.js";
+import { atan2, cos, hypot, sin } from "./exact.js";
 import { rollGear } from "./gear.js";
 import { createRandom } from "./random.js";
 
@@ -464,7 +464,7 @@ export function campOf([x, y], tents) {
             const angle = Math.PI * 0.75 + (k / tents) * Math.PI * 2;
             const at = [fire[0] + cos(angle) * CAMP.ring, fire[1] + sin(angle) * CAMP.ring];
 
-            return { at, facing: Math.atan2(fire[0] - at[0], fire[1] - at[1]) };
+            return { at, facing: atan2(fire[0] - at[0], fire[1] - at[1]) };
         }),
     };
 }

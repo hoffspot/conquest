@@ -433,7 +433,7 @@ export const CREATURE_VOICES = Object.freeze({
     orcKing: { family: "troll", rate: 1, fall: "deathThudBig" },
     orcIronjaw: { family: "troll", rate: 1.1, fall: "deathThudBig" },
     orcBloodtusk: { family: "troll", rate: 1.16, fall: "deathThudBig" },
-    orcRaider: { family: "troll", rate: 1.3 },
+    orcRaider: { family: "troll", rate: 1.23 },
     demonLord: { family: "troll", rate: 0.72 },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },

@@ -4446,7 +4446,7 @@ export class Battle {
 
         actor.guardAt = this.time + every + ms;
         actor.onGuard = { until: this.time + ms, at: this.time, shield: actor.shield ?? null };
-        actor.shield = { chance, share, spells: false, front: Math.cos((front * Math.PI) / 180) };
+        actor.shield = { chance, share, spells: false, front: cos((front * Math.PI) / 180) };
         actor.path = [];
         actor.facing = atan2(target.x - actor.x, target.y - actor.y);
         this.#emit("guard", { id: actor.id, target: target.id, until: actor.onGuard.until });
