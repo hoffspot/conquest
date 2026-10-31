@@ -41,7 +41,7 @@ import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAI
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
-import { campOf, cardOf, LOCKS, lockSite, openerOf, talksFor, THREADS, threadTalk, threadTracks, threadWords, UNIQUES } from "../core/rare.js";
+import { campOf, cardOf, keeperOf, LOCKS, lockSite, openerOf, talksFor, THREADS, threadTalk, threadTracks, threadWords, UNIQUES } from "../core/rare.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -2266,6 +2266,9 @@ export class Game {
             this.#command({ type: "share", request: id }, (result) => this.#requestShared(result));
         };
         this.journal.onRead = (id) => this.read(id);
+        this.journal.onGiveUpThread = (id) => {
+            this.#command({ type: "abandon", thread: id }, () => this.journal.open && this.#showJournal());
+        };
         this.journal.onGiveUpTreasure = (id) => {
             this.#command({ type: "treasure", do: "abandon", treasure: id }, () => this.journal.open && this.#showJournal());
         };
@@ -6429,10 +6432,14 @@ export class Game {
     rareIcons() {
         const seen = [...this.raresSeen.values()].filter(({ map }) => map === "town").map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
         // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps, a
-        // fight's, and a card's kept at a site marked on the maps, `mark`: the Orc King's war camp)
-        const threads = Object.entries(this.host.legends?.threads ?? {})
-            .filter(([id, thread]) => thread.place && (["place", "lock", "fight"].includes(this.host.legends.stepOf(id)?.kind) || this.host.legends.stepOf(id)?.mark))
-            .map(([id, { place: [x, z] }]) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: where it leads` }));
+        // fight's, and a card's kept at a site marked on the maps, `mark`: the Orc King's war camp;
+        // and where a card's kept that they fell to, `fell`. None of a thread they've given up)
+        const legends = this.host.legends;
+        const threads = Object.entries(legends?.threads ?? {})
+            .filter(([id]) => !legends.gaveUp?.(id, this.me))
+            .map(([id, thread]) => ({ id, thread, def: legends.stepOf(id), fell: (thread.fell ?? []).includes(this.me) }))
+            .filter(({ thread, def, fell }) => thread.place && (["place", "lock", "fight"].includes(def?.kind) || def?.mark || (def?.kind === "card" && fell)))
+            .map(({ id, thread: { place: [x, z] }, def, fell }) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: ${def?.kind === "card" && fell ? "where you fell to it" : "where it leads"}` }));
 
         return [...seen, ...threads];
     }
@@ -7983,7 +7990,7 @@ export class Game {
         // (A thread's word to ask them, its talk step theirs; or a rumour of theirs that begins one:
         // core/rare.js threadTalk)
         const asker = folk.find(({ id }) => id === npc.id) ?? npc;
-        const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !this.host.hired?.has(each.id))) : null;
+        const asked = building && npc.role ? this.#threadAsked(asker, this.#townOf(building), folk.filter((each) => each.map === npc.map && !this.host.hired?.has(each.id)), building.kind === "guild") : null;
         const tree = asked ? threadTalk(own, asked, (text) => text.replace(/\{way\}/g, asked.way ?? "near").replace(/\{place\}/g, asked.place ?? "the village")) : own;
 
         this.#tradeOver(npc);
@@ -11431,17 +11438,29 @@ export class Game {
             .reverse()
             .map(({ card, by, at: where, map }) => ({ title: titleOf(card), state: "Overcome", words: by.length ? `Overcome by ${names(by)}${cardOf(card)?.kind === "unique" ? ": it won't come again." : "."}` : "Overcome.", where: at && where && (map ?? "town") === "town" ? bearing(at, where) : "" }));
         const uniques = (this.progress.legends?.uniques ?? []).map((id) => UNIQUES[id]).filter(Boolean).map(({ name, about }) => ({ name, about }));
-        // (The world's threads: what's next of each, and where; those at an end, that they are)
+        // (The world's threads: what's next of each, and where, theirs to give up; those they've
+        // given up, who'll take them back on it and where; those at an end, that they are)
         const threads = Object.entries(this.host.legends?.threads ?? {}).map(([id, thread]) => {
             const def = this.host.legends.stepOf(id);
+            const title = THREADS[id]?.title ?? "A thread";
+
+            if (!thread.done && this.host.legends.gaveUp?.(id, this.me)) {
+                const back = this.#takenBackBy(id);
+
+                return { title, state: "Given up", words: back.words, where: at && back.at ? `${back.name}, ${bearing(at, back.at)}` : "", thread: null };
+            }
+
+            // (Its card kept where they fell to it: there, and that it waits for them still)
+            const fell = def?.kind === "card" && thread.place && (thread.fell ?? []).includes(this.me);
             const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-            const where = (def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.mark) && thread.place ? thread.place : town?.at;
+            const where = ((def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.mark) && thread.place) || fell ? thread.place : town?.at;
 
             return {
-                title: THREADS[id]?.title ?? "A thread",
+                title,
                 state: thread.done ? "Its end" : `Step ${thread.step + 1} of ${THREADS[id]?.steps.length ?? thread.step + 1}`,
-                words: thread.done ? (thread.by.length ? `Followed to its end by ${names(thread.by)}.` : "Followed to its end.") : this.#threadWordsOf(id),
-                where: !thread.done && at && where ? `${town && def?.kind !== "place" && !def?.mark ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
+                words: thread.done ? (thread.by.length ? `Followed to its end by ${names(thread.by)}.` : "Followed to its end.") : `${this.#threadWordsOf(id)}${fell ? " You fell to it there, and it waits for you there still." : ""}`,
+                where: !thread.done && at && where ? `${town && def?.kind !== "place" && !def?.mark && !fell ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
+                thread: thread.done ? null : id,
             };
         });
 
@@ -12218,9 +12237,19 @@ export class Game {
     // talksFor; in the settlement `town`, `hall` the folk with them): { thread, step } of the first
     // thread at one that's theirs; or a rumour of theirs that begins one (rare.js OPENERS, openerOf:
     // its card in play, the thread not begun), { thread, step: null, way (which way its place is
-    // from here) }; or null
-    #threadAsked(one, town, hall) {
+    // from here) }; or, first, a thread the player gave up that they'd take them back on (rare.js
+    // keeperOf: its rumour's teller at its home's guild, else a guild's receptionist: `guild`, this
+    // is one), { thread, back: true }; or null
+    #threadAsked(one, town, hall, guild = false) {
         const legends = this.host.legends;
+
+        for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
+            const keeper = keeperOf(id);
+
+            if (!thread.done && legends.gaveUp?.(id, this.me) && talksFor(keeper, one, hall) && (keeper.home ? thread.home === town : guild)) {
+                return { thread: id, back: true };
+            }
+        }
 
         for (const [id, thread] of Object.entries(legends?.threads ?? {})) {
             const def = legends.stepOf(id);
@@ -12239,6 +12268,19 @@ export class Game {
         }
 
         return null;
+    }
+
+    // Who'll take the player back on a thread they gave up (core/rare.js keeperOf), in words, and
+    // where: { words, name (its settlement's), at } (at null: any guild's)
+    #takenBackBy(id) {
+        const keeper = keeperOf(id);
+        const home = keeper.home ? this.world.plan?.places.find((place) => place.id === this.host.legends?.threads[id]?.home) : null;
+
+        if (home) {
+            return { words: `The ${keeper.calling ?? keeper.role} at the guild in ${home.name} who told you of it will take you back on it, where it stood.`, name: home.name, at: home.at };
+        }
+
+        return { words: "The receptionist at any guild will take you back on it, where it stood.", name: null, at: null };
     }
 
     // A thread's step's words, filled in as it is now (core/rare.js threadWords): its settlement's
@@ -12270,6 +12312,27 @@ export class Game {
         const mine = (event.ids ?? []).includes(this.me);
 
         switch (event.change) {
+            case "left":
+                // (Given up: who'll take them back on it, and where)
+                if (event.id === this.me) {
+                    this.hud.message(`You've given up ${title}. ${this.#takenBackBy(event.thread).words}`, 6);
+                }
+
+                break;
+            case "back":
+                if (event.id === this.me) {
+                    this.hud.message(`${title}: yours again. ${this.#threadWordsOf(event.thread)}`, 6);
+                    this.sound?.play("quill");
+                }
+
+                break;
+            case "fell":
+                // (Fallen to its card: where it waits marked for them)
+                if (event.id === this.me) {
+                    this.hud.message(`${title}: where you fell to it is on your map. It waits for you there.`, 6);
+                }
+
+                break;
             case "begun":
             case "step":
                 if (mine) {

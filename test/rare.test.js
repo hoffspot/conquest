@@ -15,7 +15,7 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
+import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, TAKE_BACK, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
@@ -1054,6 +1054,109 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
         assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "stoneGolem" }), { ok: false, reason: "rareOut" }, "(one out already)");
     });
 
+    it("is given up by a player alone, and taken back up from whoever told it, where it stood: nothing of it theirs meanwhile, while it goes on for the rest; and where its golem's kept is theirs to find again once they fall to it", () => {
+        const { host, ada, bram } = hosted();
+        const opener = openerOf(host.world.plan, "harrowstone");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        const goldOf = (id) => host.players.get(id).progress.gold;
+
+        // (Begun by Ada, of the guild's mage)
+        const guild = into(host, "guild", opener.town.id);
+        const mage = guild.folk.find(({ look, role, talk }) => look === "mage" && (role === "adventurer" || talk === "adventurer"));
+        const other = guild.folk.find(({ look, role, talk }) => look !== "mage" && (role === "adventurer" || talk === "adventurer"));
+
+        assert.ok(talkTo(host, mage));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+
+        const thread = host.legends.threads.harrowstone;
+
+        // Given up: hers alone, once
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "abandon", thread: "harrowstone" }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "abandon", thread: "harrowstone" }), { ok: false, reason: "thread" }, "(given up already)");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "abandon", thread: "nothing" }), { ok: false, reason: "thread" });
+        assert.ok(host.legends.gaveUp("harrowstone", HOST_PLAYER) && !host.legends.gaveUp("harrowstone", "bram"));
+
+        // (Ada at the ruins alone: nothing done, nothing hers)
+        const quarry = host.world.maps.town.sites.heartOf(opener.site);
+        const before = { ada: goldOf(HOST_PLAYER), bram: goldOf("bram") };
+
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(quarry[0]), Math.floor(quarry[1])]);
+        put(bram, [Math.floor(quarry[0]) + 80, Math.floor(quarry[1])]);
+        run(host, 2500);
+        assert.equal(thread.step, 0, "(not done by one who's given it up)");
+
+        // (It goes on for the rest: Bram comes, and it's his, Ada beside him getting nothing of it)
+        put(bram, [Math.floor(quarry[0]) + 2, Math.floor(quarry[1])]);
+        run(host, 2500);
+        assert.equal(thread.step, 1);
+        assert.equal(goldOf("bram"), before.bram + 30);
+        assert.equal(goldOf(HOST_PLAYER), before.ada, "(none of its rewards hers)");
+
+        // (Its golem not dealt for her alone at its haunt)
+        const haunt = thread.place;
+
+        put(bram, [Math.floor(haunt[0]) + 400, Math.floor(haunt[1])]);
+        put(ada, [Math.floor(haunt[0]) + 30, Math.floor(haunt[1])]);
+        run(host, 1500);
+        assert.equal(host.legends.active, null, "(not hers while she's given it up)");
+
+        // Taken back up: not of any adventurer, but of the mage who told it, at her guild, as it stands
+        assert.deepEqual(keeperOf("harrowstone"), { role: "adventurer", calling: "mage", home: true });
+        assert.equal(keeperOf("sampleTrail").role, "receptionist");
+
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "harrowstone", back: true });
+
+        assert.equal(tree.nodes.greet.choices[0].say, THREADS.harrowstone.opens.back.ask);
+        assert.deepEqual(tree.nodes.greet.choices[0].do, [{ thread: "harrowstone", back: true }]);
+        assert.deepEqual(tree.nodes["thread:harrowstone:back"].say, [THREADS.harrowstone.opens.back.reply]);
+        assert.ok(TAKE_BACK.ask.includes("{title}"));
+
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, other));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", back: true } }), { ok: false, reason: "thread" }, "(not one of the others)");
+        assert.ok(talkTo(host, mage));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", back: true } }), { ok: true });
+        assert.ok(!host.legends.gaveUp("harrowstone", HOST_PLAYER));
+        assert.equal(thread.step, 1, "(where it stood)");
+        assert.ok(told(run(host, 200)).some(({ change, id, thread: one }) => change === "back" && id === HOST_PLAYER && one === "harrowstone"));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", back: true } }), { ok: false, reason: "thread" }, "(hers already)");
+
+        // Falling to its golem: where it's kept hers to find again (on her maps, in her journal)
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(haunt[0]) + 30, Math.floor(haunt[1])]);
+        run(host, 1500);
+
+        const golem = host.battle.actor(host.legends.active.ids[0]);
+        const fell = [];
+
+        assert.equal(host.legends.active.card, "stoneGolem");
+        put(ada, [Math.floor(golem.x) + 2, Math.floor(golem.y)]);
+        Object.assign(ada, { hp: 5, maxHp: 5 });
+        golem.hp = Math.round(golem.maxHp / 2);
+
+        for (let t = 0; t < 30000 && !ada.dead; t += 250) {
+            fell.push(...told(run(host, 250)));
+        }
+
+        fell.push(...told(run(host, 1000)));
+        assert.ok(ada.dead, "(fallen to it)");
+        assert.deepEqual(thread.fell, [HOST_PLAYER]);
+        assert.ok(fell.some(({ change, id, at }) => change === "fell" && id === HOST_PLAYER && at[0] === haunt[0] && at[1] === haunt[1]));
+        assert.equal(thread.step, 1, "(still at its golem)");
+
+        // (Its golem, left alone, whole again for when she comes back)
+        run(host, 1000);
+        assert.equal(host.legends.active?.card, "stoneGolem");
+        assert.equal(golem.hp, golem.maxHp);
+
+        // (Its step done, the mark let go of)
+        host.legends.advance("harrowstone", { ids: ["bram"] });
+        assert.deepEqual(thread.fell, []);
+    });
+
     it("begins with a guild mage's rumour in the settlement nearest Harrowstone's ruins; the Lantern Company found crushed there, Tamsin's note on them; the golem dealt where its tracks lead, a world's boss; felled, its heart and a purse for each who fought it; word taken back to the mage, the guild's bounty paid", () => {
         const { host, ada, bram } = hosted();
         const opener = openerOf(host.world.plan, "harrowstone");
@@ -1350,5 +1453,55 @@ describe("the Iron Crown (rare.js ironcrown, RARE_CARDS orcKing)", () => {
         assert.equal(host.legends.threads.ironcrown.step, 1);
         assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "stoneGolem" }), { ok: false, reason: "rareOut" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "sample" }), { ok: false, reason: "rareOut" });
+    });
+
+    it("given up, its raiders aren't brought out by her alone, nor is she among those who drive them out; taken back up of the warrior who told it, in her own words, where it stood", () => {
+        const { host, ada, bram } = hosted();
+        const opener = openerOf(host.world.plan, "ironcrown");
+        const guild = into(host, "guild", opener.town.id);
+        const adventurer = (one) => one.role === "adventurer" || one.talk === "adventurer";
+        const teller = guild.folk.find((one) => adventurer(one) && one.look === "warrior") ?? guild.folk.find(adventurer);
+        const told = (events) => events.filter(({ type }) => type === "thread");
+
+        assert.ok(talkTo(host, teller));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "abandon", thread: "ironcrown" }), { ok: true });
+
+        // (Ada in the burned village alone: no raiders for her)
+        const thread = host.legends.threads.ironcrown;
+        const [vx, vy] = thread.place.map(Math.floor);
+
+        Object.assign(ada, { map: "town" });
+        put(ada, [vx, vy]);
+        put(bram, [vx + 400, vy]);
+        run(host, 1200);
+        assert.equal(thread.foes, null, "(not hers to bring out)");
+
+        // (Bram comes: out for him, and driven out by him alone, Ada beside him)
+        put(bram, [vx + 3, vy]);
+        run(host, 1200);
+        assert.ok(thread.foes?.length >= 5);
+
+        for (const id of thread.foes) {
+            host.battle.afflict(id, "poison", { by: "bram", damage: 1e7 });
+        }
+
+        const driven = told(run(host, 2500));
+
+        assert.equal(thread.step, 1);
+        assert.ok(driven.some(({ change, id }) => change === "given" && id === "bram"));
+        assert.ok(!driven.some(({ change, id }) => change === "given" && id === HOST_PLAYER), "(none of it hers)");
+
+        // Taken back up: the warrior who told it, at the guild there, in the opener's own words
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "ironcrown", back: true });
+
+        assert.equal(keeperOf("ironcrown").calling, "warrior");
+        assert.equal(tree.nodes.greet.choices[0].say, "About the Orc King: I'll go after him after all.");
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, teller));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "ironcrown", back: true } }), { ok: true });
+        assert.ok(!host.legends.gaveUp("ironcrown", HOST_PLAYER));
+        assert.equal(thread.step, 1, "(where it stood)");
     });
 });
