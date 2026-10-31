@@ -1271,6 +1271,9 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     every blow on them 35 to 55% lighter again and none able to knock them down or throw them (a
     shell the grey-gold of cut stone closes round them and holds while it lasts, shards and grit
     thrown off, a ring of dust, a stone's grind heard; "Stoneheart: your skin turns to stone!").
+    Any ward's made of the same: its numbers (`guard`, `skin`, `harden`), what the wearer's told
+    (`felt`), and its `element`, which says how it's drawn and heard (app/game.js `WARD_LOOKS`: the
+    shell's, the shards' and the ring's colours, its element's casting heard).
   - *A unique's own* (`unique`, never rolled on a legendary weapon), on every blow with no charge to
     fill (`always`: no charge shown, `charge.js`). The only one so far, *Cleave*, Kingsplitter's (a
     great axe: docs/WILDS.md *The Orc King*): every blow up close carries on through every other foe
@@ -5596,7 +5599,13 @@ it.
    `npm run build:manifest`, and `main.js`'s own script), so a page is only ever its own release's
    files. What's asked for by name (a worker's modules, which an import map doesn't reach; the
    font; the WebAssembly Recast's glue fetches) the service worker gives from the same copies, by
-   the release of the page asking (or the newest). It keeps a copy only once its bytes match the
+   the release of the page asking (or the newest: a worker, the game's page before it's said).
+   Never to the site's other pages (the model viewer, the labs, the admin's page), which never say
+   a release: the newest a game's page said may be older than theirs (the game not opened since an
+   update), and its copies of the game's code put together with their own newer code don't work
+   (the Stone Golem shown under *For the mightiest*, from the viewer's own code, and again under
+   *Coming to the wilds*, from the game's old models); what they ask for by name is fetched from
+   the network first, as everything else is. It keeps a copy only once its bytes match the
    hash, fetches a file the loader's fetching once (the page importing it straight after waits for
    it), and lets go of what no release in use lists: the newest's, and that of each page still
    open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the

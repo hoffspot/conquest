@@ -2210,9 +2210,9 @@ export class Host {
                 // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
                 return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
             case "rare":
-                // (Debug mode's sample rare encounter dealt ahead of them: core/rare.js SAMPLE; or one
-                // of the cards a thread leads to, `card` (the Stone Golem's, `golem`))
-                return this.debugs(playerId) ? (command.golem || typeof command.card === "string" ? this.#cardNow(player, actor, command.golem ? "stoneGolem" : command.card) : command.inside ? this.#rareNowInside(player, actor) : this.#rareNow(player, actor)) : refuse("command");
+                // (Debug mode's sample rare encounter dealt ahead of them: core/rare.js SAMPLE; or a
+                // card in play by its id, `card`, its thread brought to it: the Stone Golem's)
+                return this.debugs(playerId) ? (typeof command.card === "string" ? this.#cardNow(player, actor, command.card) : command.inside ? this.#rareNowInside(player, actor) : this.#rareNow(player, actor)) : refuse("command");
             case "burn":
                 // (Houses near them burnt as the Behemoth burns them, `ago` ms of play ago: the
                 // debug overlay's)
@@ -11685,25 +11685,25 @@ export class Host {
         return town && shop ? threadWares(this.legends.changes, { town, shop, played: this.legends.played }) : [];
     }
 
-    // One of the rare cards a thread leads to (rare.js RARE_CARDS: the Stone Golem, the Orc King)
-    // dealt before a player at once (the debug overlay's): its thread brought to its step (begun,
-    // its rumour's home its opener's settlement, and its steps before done, by them), its place a
-    // little ahead of them; not while another's out, nor once it's done in the world
-    #cardNow(player, actor, which) {
-        const card = this.legends.cards[which];
+    // A card in play (rare.js RARE_CARDS: the Stone Golem's, the Orc King's) dealt before a player
+    // at once, by its id (the debug overlay's): its thread, if it follows one, brought to its step
+    // (begun, its rumour's home its opener's settlement, and its steps before done, by them), its
+    // place a little ahead of them; not while another's out, nor once it's done in the world
+    #cardNow(player, actor, cardId) {
+        const card = this.legends.cards[cardId];
 
-        if (!card?.requires || card.debug || this.legends.active || this.legends.gone.has(card.id) || actor.map !== "town") {
+        if (!card || this.legends.active || this.legends.gone.has(card.id) || actor.map !== "town") {
             return refuse("rareOut");
         }
 
-        const { thread: id, step } = card.requires;
+        const { thread: id = null, step = 0 } = card.requires ?? {};
         const at = [actor.x, actor.y];
 
-        if (!this.legends.threads[id]) {
+        if (id && !this.legends.threads[id]) {
             this.#threadBegin(id, at, [player.id], { home: openerOf(this.world.plan, id)?.town.id ?? null });
         }
 
-        for (let k = 0; this.legends.threads[id] && !this.legends.threads[id].done && this.legends.threads[id].step < step && k < 8; k++) {
+        for (let k = 0; id && this.legends.threads[id] && !this.legends.threads[id].done && this.legends.threads[id].step < step && k < 8; k++) {
             this.#threadDone(id, [player.id], at);
         }
 
@@ -11717,7 +11717,9 @@ export class Host {
             return refuse("rareRoom");
         }
 
-        this.legends.threads[id].place = place;
+        if (id) {
+            this.legends.threads[id].place = place;
+        }
 
         return this.#rarePut(card, actor, null, homes, place) ? { ok: true, n: this.legends.active.n, card: card.id } : refuse("rareRoom");
     }

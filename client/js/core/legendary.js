@@ -36,7 +36,9 @@ import { WEAPONS } from "./weapons.js";
  *    (the nearer, the worse) and thrown back `toss` (as Explosion throws: 3 metres a toss);
  *  - stoneheart (a ward, `ward`): every blow on whoever wears it `guard` the lighter, always; and,
  *    its charge full, their skin stone for `skin` ms, every blow on them `harden` the lighter again
- *    and none throwing them down (battle.js #steel);
+ *    and none throwing them down (battle.js #steel); what they're told then, `felt`. A ward is drawn
+ *    as its element has it (app/game.js WARD_LOOKS: a shell closing round them), heard as
+ *    UNLEASHED_SOUNDS has it or its element's casting. Any ward's numbers are these three;
  *  - cleave (a unique's own, `unique`: Kingsplitter's, never rolled on a legendary weapon; always,
  *    `always`, no charge to it): every blow up close cleaving on through every other foe within
  *    `reach` metres before whoever strikes it (no more than `arc` degrees either side of the way to
@@ -91,6 +93,8 @@ export const EFFECTS = Object.freeze({
         ward: true,
         element: "earth",
         about: "Every blow lands a little lighter on whoever wears it; and every so many blows they take, their skin turns to stone a while, every blow on them blunted and none able to throw them down.",
+        // (What the one wearing it's told as it's let loose on them: app/game.js #unleashed)
+        felt: "your skin turns to stone!",
         guard: [0.04, 0.1],
         skin: [3000, 6000],
         harden: [0.35, 0.55],

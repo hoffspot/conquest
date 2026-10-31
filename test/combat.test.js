@@ -4,7 +4,7 @@ import { Battle, BODY, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SLID
 import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
-import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
+import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, NATURAL, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { parseGrid, quickEnough } from "./helpers.js";
 
@@ -155,6 +155,17 @@ describe("weapons (weapons.js)", () => {
         assert.equal(chooseAttack("bow", [0, 0], [13, 4]), null);
         assert.equal(chooseAttack("wand", [0, 0], [4, 5])?.id, "bolt");
         assert.equal(chooseAttack("sword", [0, 0], [2, 0]), null);
+    });
+
+    it("throws no nearer than a ranged attack's least, closing in to strike up close instead: the Stone Golem's boulders", () => {
+        const boulder = NATURAL.stoneGolem.attacks.find(({ id }) => id === "boulder");
+
+        assert.equal(boulder.least, 5);
+        assert.equal(chooseAttack("stoneGolem", [0, 0], [2, 0])?.kind, "melee", "(at its feet, its hammer)");
+        assert.equal(chooseAttack("stoneGolem", [0, 0], [4, 0]), null, "(a little off, neither: it closes in)");
+        assert.equal(chooseAttack("stoneGolem", [0, 0], [5, 0])?.id, "boulder");
+        assert.equal(chooseAttack("stoneGolem", [0, 0], [24, 0])?.id, "boulder");
+        assert.equal(chooseAttack("stoneGolem", [0, 0], [25, 0]), null);
     });
 });
 

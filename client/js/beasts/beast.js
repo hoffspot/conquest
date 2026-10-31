@@ -992,6 +992,11 @@ export class BeastAvatar {
         return this.plan.carried?.(target) ?? null;
     }
 
+    /** How big what it carries in its hand is in the world (its radius), or 0. */
+    carriedRadius() {
+        return this.plan.carriedRadius?.() ?? 0;
+    }
+
     /**
      * Let go of what it's made of (its materials), and of its hold on its look's body and pieces,
      * shared by its kind (let go of a while after none of its look is drawn: sculpt.js forget).

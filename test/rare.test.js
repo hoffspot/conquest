@@ -17,6 +17,7 @@ import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAMP, campOf, cardOf, CHANGES, DEBUG_CARDS, gatesHold, GUILD_KINDS, hourOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadTracks, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { squaresOf } from "../client/js/core/grid.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
 
@@ -1025,6 +1026,34 @@ function talkTo(host, folk) {
 }
 
 describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)", () => {
+    it("deals a card in play by its id before someone in debug mode, its thread brought to it, begun at the settlement nearest its place; refused while another's out, and for one there isn't", () => {
+        const { host, ada } = hosted({ party: false });
+
+        const squares = squaresOf(host.world.maps.town);
+        const open = ([cx, cy]) => [...Array(11).keys()].every((j) => [...Array(11).keys()].every((i) => !squares.blocked(cx - 15 + i * 3, cy - 15 + j * 3)));
+        const [sx, sy] = host.world.start.at;
+        const field = Array.from({ length: 400 }, (_, k) => [Math.floor(sx + 300 + (k % 20) * 40), Math.floor(sy + 300 + Math.floor(k / 20) * 40)]).find(open);
+
+        // (Out in an open field, facing north: debug mode on)
+        host.debugs = () => true;
+        put(ada, field);
+        Object.assign(ada, { map: "town", facing: 0 });
+        host.travel.set(HOST_PLAYER, { at: [ada.x, ada.y], walked: 0, next: null, heading: [0, 1], deck: [] });
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "nothing" }), { ok: false, reason: "rareOut" });
+
+        const dealt = host.command(HOST_PLAYER, { type: "rare", card: "stoneGolem" });
+        const thread = host.legends.threads.harrowstone;
+        const golem = host.battle.actor(host.legends.active.ids[0]);
+
+        assert.equal(dealt.ok, true);
+        assert.equal(dealt.card, "stoneGolem");
+        assert.equal(thread.step, RARE_CARDS.stoneGolem.requires.step);
+        assert.equal(thread.home, openerOf(host.world.plan, "harrowstone").town.id);
+        assert.ok(golem.wild.worldBoss && Math.hypot(golem.x - ada.x, golem.y - ada.y) < 30, "(a little ahead of them)");
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", card: "stoneGolem" }), { ok: false, reason: "rareOut" }, "(one out already)");
+    });
+
     it("begins with a guild mage's rumour in the settlement nearest Harrowstone's ruins; the Lantern Company found crushed there, Tamsin's note on them; the golem dealt where its tracks lead, a world's boss; felled, its heart and a purse for each who fought it; word taken back to the mage, the guild's bounty paid", () => {
         const { host, ada, bram } = hosted();
         const opener = openerOf(host.world.plan, "harrowstone");
@@ -1048,11 +1077,15 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
         assert.ok(talkTo(host, mage));
 
         const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "harrowstone", step: null }, (text) => text.replace(/\{way\}/g, "north"));
-        const pieces = Object.keys(tree.nodes).filter((node) => node.startsWith("thread:harrowstone:"));
+        const pieces = Object.keys(tree.nodes).filter((node) => /^thread:harrowstone:\d+$/.test(node));
 
         assert.equal(pieces.length, THREADS.harrowstone.opens.tale.length);
         assert.ok(tree.nodes["thread:harrowstone:0"].say[0].includes("north of here"));
         assert.deepEqual(tree.nodes[pieces.at(-1)].choices[0].do, [{ thread: "harrowstone", step: null }]);
+
+        // (Taken up, their parting words, and the talk over: talked to again, it's not offered)
+        assert.equal(tree.nodes[pieces.at(-1)].choices[0].next, "thread:harrowstone:taken");
+        assert.deepEqual(tree.nodes["thread:harrowstone:taken"], { say: [THREADS.harrowstone.opens.taken], choices: [{ say: "Farewell.", next: null }] });
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "harrowstone", step: null } }).ok, true);
 
         const thread = host.legends.threads.harrowstone;
@@ -1081,6 +1114,7 @@ describe("the Golem of Harrowstone (rare.js harrowstone, RARE_CARDS stoneGolem)"
 
         assert.ok(far >= 109 && far <= 171, `${far} m`);
         assert.equal(tracks.creature, "stoneGolem");
+        assert.equal(tracks.spoor, THREADS.harrowstone.steps[1].spoor, "(said as its step has it, as they're come upon)");
         assert.deepEqual(tracks.points[0], thread.at);
         assert.deepEqual(tracks.points.at(-1), haunt);
         assert.equal(host.legends.active, null, "(not dealt till it's come to)");
@@ -1212,7 +1246,7 @@ describe("the Iron Crown (rare.js ironcrown, RARE_CARDS orcKing)", () => {
         assert.ok(orcs.length > 0);
         assert.equal(thread.town, opener.site.id);
         assert.equal(tracks.creature, "orcKing");
-        assert.ok(tracks.words.includes("{way}") && tracks.words.includes("war camp"));
+        assert.ok(tracks.spoor.includes("{way}") && tracks.spoor.includes("war camp"));
         assert.equal(host.legends.active, null);
 
         // The King dealt as Ada comes near his camp: a world's boss, named, his own moves, guard and

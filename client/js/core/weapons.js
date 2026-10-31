@@ -33,6 +33,8 @@
 //    bursting there a moment later (battle.js BOMBS: which), its damage at the blast's heart
 //  - drain (some): a share of the harm a hit does drawn back into whoever dealt it, healing it
 //    (battle.js #hit: a hell's Flayed Hierarch's curse)
+//  - least (some ranged): never at one nearer than this (squares): closing in to strike up close
+//    instead (the Stone Golem's boulders, none hurled at one at its feet)
 //  - quake (the Stone Golem's pound): instead of striking one, the blow lands `ahead` metres before
 //    whoever strikes it and the ground heaves `radius` metres round there, everyone of the other
 //    side in it hurt and thrown (`toss`, as a blast throws: battle.js #quake); its blast's `kind`,
@@ -771,7 +773,7 @@ export const NATURAL = Object.freeze({
                     melee({ id: "pound", reach: 2, damage: [14, 22], hitAt: 860, duration: 2400, interval: 3200, stagger: 500, reaction: "crush", animation: "pound", quake: { ahead: 1.6, radius: 3.5, toss: 1.2, kind: "golemPound" } }),
                 ],
             },
-            ranged({ id: "boulder", reach: 24, damage: [12, 20], hitAt: 1890, duration: 2600, interval: 7000, stagger: 400, reaction: "crush", animation: "heave", bomb: "boulder" }),
+            ranged({ id: "boulder", reach: 24, least: 5, damage: [12, 20], hitAt: 1890, duration: 2600, interval: 7000, stagger: 400, reaction: "crush", animation: "heave", bomb: "boulder" }),
         ],
     },
     // (The River of Fire's master, the Greater Demon: the Lord of the Pit's fists and hellfire as
@@ -893,7 +895,8 @@ export const distanceBetween = ([ax, ay], [bx, by]) => Math.sqrt((ax - bx) * (ax
 
 /**
  * Can an attack from square `from` reach square `to`? Melee reaches the squares touching the
- * attacker's; ranged, squares whose middles are within its reach (sight is checked separately).
+ * attacker's; ranged, squares whose middles are within its reach, and no nearer than its `least`
+ * if it has one (sight is checked separately).
  */
 export function inReach(attack, from, to) {
     const rings = ringsApart(from, to);
@@ -902,7 +905,13 @@ export function inReach(attack, from, to) {
         return false;
     }
 
-    return attack.kind === "melee" ? rings <= attack.reach : distanceBetween(from, to) <= attack.reach;
+    if (attack.kind === "melee") {
+        return rings <= attack.reach;
+    }
+
+    const distance = distanceBetween(from, to);
+
+    return distance <= attack.reach && distance >= (attack.least ?? 0);
 }
 
 // A weapon's attacks (a WEAPONS or NATURAL key) or a character's (armsOf)

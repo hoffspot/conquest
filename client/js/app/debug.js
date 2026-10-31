@@ -380,10 +380,10 @@ export class Debug {
         // floor they're on: core/rare.js SAMPLE, SAMPLE_DEEP)
         const rare = element("button", { type: "button", onclick: () => this.game?.rare() }, "Deal");
         const inside = element("button", { type: "button", onclick: () => this.game?.rare({ inside: true }) }, "Inside");
-        // (One of the cards a thread leads to before the player, its thread brought to it: core/
-        // rare.js RARE_CARDS, the Stone Golem, the Orc King)
+        // (A card in play that follows a thread before the player, its thread brought to it: core/rare.js
+        // RARE_CARDS, the Stone Golem's, the Orc King's)
         const cards = element("select", {}, ...Object.values(RARE_CARDS).filter(({ requires }) => requires).map(({ id, title }) => element("option", { value: id }, title)));
-        const card = element("button", { type: "button", onclick: () => this.game?.card(cards.value) }, "Deal");
+        const card = element("button", { type: "button", onclick: () => this.game?.dealCard(cards.value) }, "Deal card");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -402,7 +402,7 @@ export class Debug {
             element("label", { class: "field" }, "Behemoth of the Rift", rift),
             element("label", { class: "field" }, "Burnt houses", stages, burn),
             element("label", { class: "field" }, "Rare encounter", rare, inside),
-            element("label", { class: "field" }, "Rare card", cards, card),
+            element("label", { class: "field" }, "Card and its thread", cards, card),
         );
     }
 }

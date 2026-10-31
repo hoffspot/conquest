@@ -17836,7 +17836,7 @@ test("the Stone Golem dealt before the player: drawn from its model at once, its
     test.setTimeout(240000);
     await playing(page, "/?play&seed=5");
 
-    // (Out in an open field, the lone orc out of the way: the debug overlay's Golem, its thread
+    // (Out in an open field, the lone orc out of the way: the debug overlay's card dealt, its thread
     // brought to it, dealt a little ahead of them)
     const dealt = await page.evaluate(async () => {
         const { game } = window.pellagos;
@@ -17861,7 +17861,7 @@ test("the Stone Golem dealt before the player: drawn from its model at once, its
         me.facing = 0;
         me.hp = me.maxHp = 50000;
 
-        return game.host.command(game.me, { type: "rare", golem: true });
+        return game.host.command(game.me, { type: "rare", card: "stoneGolem" });
     });
 
     expect(dealt).toMatchObject({ ok: true, card: "stoneGolem" });
@@ -17883,8 +17883,16 @@ test("the Stone Golem dealt before the player: drawn from its model at once, its
         Object.assign(golem, { facing: Math.PI });
     });
 
-    expect(await playUntil(page, () => [...window.pellagos.game.spellFx.bombs.values()].some((bomb) => bomb.shadow?.visible), { seconds: 20 })).toBe(true);
-    expect(await page.evaluate(() => window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem").attack?.attack.animation)).toBe("heave");
+    // (Its heave and the boulder's shadow seen at once, the boulder let go 0.7 s before the heave's
+    // over: looked for together, not one after the other, half a second of the game apart)
+    const heaving = () => {
+        const { game } = window.pellagos;
+        const golem = game.battle.actors.find((actor) => actor.wild?.creature === "stoneGolem");
+
+        return golem.attack?.attack.animation === "heave" && [...game.spellFx.bombs.values()].some((bomb) => bomb.shadow?.visible);
+    };
+
+    expect(await playUntil(page, heaving, { seconds: 30 })).toBe(true);
     expect(await playUntil(page, () => (window.pellagos.game.battle.actor(window.pellagos.game.me).thrownAt ?? -1) >= 0, { seconds: 10 })).toBe(true);
 });
 
@@ -17893,8 +17901,8 @@ test("the Orc King dealt before the player at his war camp: drawn from his model
     test.setTimeout(240000);
     await playing(page, "/?play&seed=5");
 
-    // (Out in an open field, the lone orc out of the way: the debug overlay's Rare card, the Orc
-    // King's, his thread brought to him, dealt a little ahead of them)
+    // (Out in an open field, the lone orc out of the way: the debug overlay's Card and its thread,
+    // the Orc King's, his thread brought to him, dealt a little ahead of them)
     const dealt = await page.evaluate(async () => {
         const { game } = window.pellagos;
         const { squaresOf } = await import("./js/core/grid.js");
