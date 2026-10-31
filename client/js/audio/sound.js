@@ -428,6 +428,12 @@ export const CREATURE_VOICES = Object.freeze({
     // (The orcs on a dungeon's throne: a troll's voice, higher; the Reaver's higher still)
     orcWarlord: { family: "troll", rate: 1.12 },
     orcReaver: { family: "troll", rate: 1.2 },
+    // (The Orc King: a troll's voice, his champions' higher, his raiders' higher still; the King
+    // and his champions falling as a great beast does)
+    orcKing: { family: "troll", rate: 1, fall: "deathThudBig" },
+    orcIronjaw: { family: "troll", rate: 1.1, fall: "deathThudBig" },
+    orcBloodtusk: { family: "troll", rate: 1.16, fall: "deathThudBig" },
+    orcRaider: { family: "troll", rate: 1.3 },
     demonLord: { family: "troll", rate: 0.72 },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },

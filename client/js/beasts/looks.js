@@ -139,6 +139,10 @@ export const LOOKS = Object.freeze({
     // (The orcs on a dungeon's throne: big orcs, until the bought models of their own are read)
     orcWarlord: { body: "humanoid", scale: [1.13, 1.17] },
     orcReaver: { body: "humanoid", scale: [1.08, 1.12] },
+    orcKing: { body: "humanoid", scale: [1.19, 1.21] },
+    orcIronjaw: { body: "humanoid", scale: [1.14, 1.16] },
+    orcBloodtusk: { body: "humanoid", scale: [1.14, 1.16] },
+    orcRaider: { body: "humanoid", scale: [0.98, 1.06] },
     skeleton: {
         body: "biped",
         scale: [0.95, 1.05],
@@ -790,6 +794,48 @@ const BRUTES = {
         irises: ["#e8b020", "#f0c030"],
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"]],
+        walk: "orc",
+    },
+    // (The Orc King, standing in for his own model: green-skinned and red-eyed, tusked, crowned, in
+    // trousers, belt and bracers)
+    orcKing: {
+        macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.7], height: [0.9, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.8, 1], underbite: [0.7, 0.9], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.6], eyeSize: [-0.5, -0.3], earPoint: [0.8, 1], earSize: [0.3, 0.6], noseWidth: [0.5, 0.8], armLength: [0.6, 0.8], handSize: [0.8, 1], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.15] },
+        skin: { tones: ["#4e6a34", "#56723a", "#486230"], warts: [0.2, 0.4], veins: [0.5, 0.8], blush: [0, 0.1], brows: [0.6, 0.9], warpaint: "#5a1a14" },
+        irises: ["#c02018"],
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["breeches"], ["tusks"], ["crown"]],
+        walk: "orc",
+    },
+    // (His champions, standing in for theirs: Ironjaw brown-skinned, Bloodtusk red, as the Orc
+    // Warlord and the Orc Reaver are)
+    orcIronjaw: {
+        macro: { gender: 1, muscle: [0.9, 1], weight: [0.55, 0.7], height: [0.85, 0.95], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.7, 1], underbite: [0.6, 0.9], jawWidth: [0.7, 1], headSquare: [0.3, 0.6], eyeSize: [-0.5, -0.2], earPoint: [0.8, 1], earSize: [0.3, 0.6], noseWidth: [0.5, 0.8], armLength: [0.6, 0.8], handSize: [0.7, 0.9], neck: [0.7, 1], shoulders: [0.8, 1], belly: [0, 0.2] },
+        skin: { tones: ["#6a5236", "#5e4a30", "#74593a"], warts: [0.2, 0.4], veins: [0.4, 0.7], blush: [0, 0.1], brows: [0.5, 0.8], warpaint: "#1a0c08" },
+        irises: ["#8a5a20", "#a06a28"],
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["breeches"], ["tusks"]],
+        walk: "orc",
+    },
+    orcBloodtusk: {
+        macro: { gender: 1, muscle: [0.85, 1], weight: [0.45, 0.6], height: [0.85, 0.95], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.7, 1], underbite: [0.7, 1], jawWidth: [0.5, 0.8], headSquare: [0.2, 0.5], eyeSize: [-0.5, -0.2], earPoint: [0.8, 1], earSize: [0.3, 0.6], noseWidth: [0.5, 0.8], armLength: [0.6, 0.8], handSize: [0.7, 0.9], neck: [0.6, 0.9], shoulders: [0.8, 1], belly: [0, 0.1] },
+        skin: { tones: ["#7a2e22", "#6e281c", "#843426"], warts: [0.2, 0.4], veins: [0.4, 0.7], blush: [0, 0.1], brows: [0.5, 0.8], warpaint: "#e8d8b0" },
+        irises: ["#e8b020", "#f0c030"],
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["breeches"], ["tusks"]],
+        walk: "orc",
+    },
+    // (His raiders: orcs of his four clans, green, brown or grey, tusked, some with a crest of hair,
+    // in a loincloth or breeches)
+    orcRaider: {
+        macro: { gender: 1, muscle: [0.75, 0.9], weight: [0.4, 0.55], height: [0.6, 0.8], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.6, 0.9], underbite: [0.5, 0.8], jawWidth: [0.4, 0.8], headSquare: [0.2, 0.5], eyeSize: [-0.4, -0.1], earPoint: [0.7, 1], earSize: [0.3, 0.6], noseWidth: [0.4, 0.8], armLength: [0.5, 0.7], handSize: [0.6, 0.8], neck: [0.5, 0.8], shoulders: [0.6, 0.9], belly: [0, 0.2] },
+        skin: { tones: ["#56723a", "#4e6a34", "#6a5236", "#5e4a30", "#5c6052"], warts: [0.2, 0.5], veins: [0.3, 0.6], blush: [0, 0.1], brows: [0.4, 0.8], warpaint: "#5a1a14" },
+        irises: ["#c02018", "#e8b020", "#d88a20"],
+        hair: { styles: ["bald", "bald", "mohawk", "topknot"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers", null], ["breeches", null], ["tusks"]],
         walk: "orc",
     },
     boggart: {

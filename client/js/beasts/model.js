@@ -116,6 +116,27 @@ const orc = (asset, scale) => Object.freeze({
     flinch: 0.6,
 });
 
+// The Orc King and his champions (MODELS): the Orc's fanciest dressing (the catalog's
+// beast-orc-king), in its `skins`, drawn `scale` times 1.81 metres tall, as the orcs on a throne
+// are (orc) but each blow its own clip (weapons.js NATURAL orcKing, orcChampion): his axe chopped
+// down, swept, backhanded; a combo of three blows (Combo 2) and a flurry of two ending in a kick
+// (a chain of Combo 3 and Kick 2); a kick alone; his axe spun high all round him; his leap (Leap
+// Attack: springing up a quarter of the way through it, coming down past half way, its clip
+// lifting him a metre); his battlecry, rallying his champions; each through as much of its clip
+// as `spans` says. On guard (beast.js actions.guard), his Block held, his Block Hit as a blow's
+// caught on it (`guard`)
+const kingly = (scale, skins = null) =>
+    Object.freeze({
+        ...orc("beast-orc-king", scale),
+        ...(skins ? { skins: Object.freeze(skins) } : {}),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ chop: "Attack Chop", sweep: "Attack Sweep", backhand: "Attack Backhand", combo: "Combo 2", kick: "Kick 2", spin: "Attack Spin High", leap: "Leap Attack", rally: "Battlecry" }),
+        spans: Object.freeze({ backhand: Object.freeze([0.35, 2.4]), combo: Object.freeze([0.5, 3.3]), spin: Object.freeze([0.15, 2.6]), leap: Object.freeze([0.3, 2.8]) }),
+        chains: Object.freeze({ flurry: Object.freeze([Object.freeze({ clip: "Combo 3", from: 0.5, to: 2 }), Object.freeze({ clip: "Kick 2", from: 0.3, to: 1.25 })]) }),
+        rests: Object.freeze({ thump: "Chest Thump", look: "Idle Looking" }),
+        guard: Object.freeze({ hold: "Block", struck: "Block Hit" }),
+    });
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -135,7 +156,9 @@ const orc = (asset, scale) => Object.freeze({
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
  * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
- * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false).
+ * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false). One that
+ * stands on guard (battle.js #onGuard) holds its guard up in a clip of its own (`guard`: `hold`,
+ * looped) and braces behind it in another as a blow's caught on it (`struck`).
  */
 export const MODELS = Object.freeze({
     // (The Behemoth of the Rift: drawn 36 metres long, as it's made. Its jaws slammed down (the
@@ -564,11 +587,16 @@ export const MODELS = Object.freeze({
     // (The orcs on a dungeon's throne (creatures.js), each in a dressing of the Orc's: the Orc
     // Warlord on a cave's, brown-skinned and red-eyed, in trousers, boots, belt and bracers, drawn
     // 2.08 metres tall; the Orc Reaver at the head of an outlaws' hideout, red-skinned and
-    // yellow-eyed, bare-legged and barefoot in his loincloth, drawn 1.99. Its finest dressing,
-    // the Orc King's, armoured from his shoulder to his knees, kept for a card: the catalog's
-    // beast-orc-king)
+    // yellow-eyed, bare-legged and barefoot in his loincloth, drawn 1.99)
     orcWarlord: orc("beast-orc-warlord", 1.15),
     orcReaver: orc("beast-orc-reaver", 1.1),
+    // (Its finest dressing, armoured from his shoulder to his knees: the Orc King, his rare card's
+    // foe (core/rare.js), green-skinned, drawn 2.17 metres tall (and bigger yet as the boss he is:
+    // beasts/champions.js); and his champions in the brown skin (Ironjaw) and the red (Bloodtusk),
+    // drawn 2.08: kingly)
+    orcKing: kingly(1.2),
+    orcIronjaw: kingly(1.15, ["brown"]),
+    orcBloodtusk: kingly(1.15, ["red"]),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,
@@ -1160,7 +1188,7 @@ export function strideOn(model, strides, speed, dt) {
  * (seconds). `lengths`: each clip's length (seconds); `died`: how long it's been dead (seconds: its
  * fall plays at its own pace, longer than the game's). A pure function.
  */
-export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, hang = null, t = 0, strides = null }, { lengths, died = 0 }) {
+export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, guard = null, dead = null, fly = null, hang = null, t = 0, strides = null }, { lengths, died = 0 }) {
     const { clips } = model;
     // (A clip it has: one it borrows only once it's been lent it, borrowClips)
     const has = (clip) => Boolean(clip) && lengths[clip] !== undefined;
@@ -1225,6 +1253,20 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     // Resting its way (a roar), eased in and out
     if (rest && model.rests[rest.name]) {
         over(model.rests[rest.name], rest.w, loop(model.rests[rest.name], rest.t));
+    }
+
+    // On guard (its model's `guard`: { w, t, struck }): its guard held up, eased in and out, and
+    // bracing behind it from the start of its `struck` as a blow's caught on it, eased in and out
+    if (guard && model.guard && has(model.guard.hold)) {
+        over(model.guard.hold, guard.w, loop(model.guard.hold, guard.t));
+
+        const length = lengths[model.guard.struck] ?? 0;
+
+        if (guard.struck !== null && has(model.guard.struck) && guard.struck < length) {
+            const u = guard.struck / length;
+
+            over(model.guard.struck, guard.w * smoothstep(Math.min(1, u / 0.15, (1 - u) / 0.15)), at(model.guard.struck, guard.struck));
+        }
     }
 
     // Attacking: the clip for its way, through to its end (or as much of it as its `spans` says),

@@ -35,7 +35,13 @@
 //    (battle.js #hit: a hell's Flayed Hierarch's curse)
 //  - quake (the Stone Golem's pound): instead of striking one, the blow lands `ahead` metres before
 //    whoever strikes it and the ground heaves `radius` metres round there, everyone of the other
-//    side in it hurt and thrown (`toss`, as a blast throws: battle.js #quake); its blast's `kind`
+//    side in it hurt and thrown (`toss`, as a blast throws: battle.js #quake); its blast's `kind`,
+//    and its element (`element`: earth's, else; null, none). `ahead` 0, all round whoever strikes it
+//    (the Orc King's spin). Shown on the ground before it lands (`telegraph`: battle.js #telegraphs)
+//  - blows (the Orc King's combos): instead of one blow, several, each `at` ms into the attack, its
+//    `share` of the attack's damage, any of them throwing (`toss`); `hitAt` the first's
+//  - toss (a kick): a blow up close that throws whoever it lands on back, away from whoever struck
+//    it (as a blast throws, `toss` times as far: battle.js #hit), unless it's caught on a shield
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
 
@@ -791,6 +797,52 @@ export const NATURAL = Object.freeze({
         label: "Great axe",
         equipment: ["battleAxe"],
         attacks: [melee({ id: "hack", damage: [8, 14], hitAt: 640, duration: 1700, interval: 1800, stagger: 300, reaction: "chop", animation: "hammer", afflict: { kind: "bleed", chance: 0.35 } })],
+    },
+    // (The Orc King (creatures.js): his great axe chopped down, swept, backhanded (each nearly two
+    // fifths of the way through its clip, as his model has it: beasts/model.js), or in a combo of
+    // three blows (`blows`: each when it lands, its share of the blow's harm), a third flurry ending
+    // in a kick that throws; or a kick alone, throwing whoever it lands on back (`toss`). His leap
+    // and his spin are moves of his own (creatures.js `moves`))
+    orcKing: {
+        label: "Great axe",
+        equipment: ["battleAxe"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "chop", damage: [13, 21], hitAt: 640, duration: 1750, interval: 2000, stagger: 450, reaction: "chop", animation: "chop", afflict: { kind: "bleed", chance: 0.35 } }),
+                    melee({ id: "sweep", damage: [11, 18], hitAt: 720, duration: 1800, interval: 2000, stagger: 400, reaction: "chop", animation: "sweep" }),
+                    melee({ id: "backhand", damage: [10, 16], hitAt: 620, duration: 1700, interval: 1900, stagger: 400, reaction: "chop", animation: "backhand" }),
+                    melee({ id: "combo", damage: [12, 19], hitAt: 530, duration: 2600, interval: 2900, stagger: 350, reaction: "chop", animation: "combo", blows: [{ at: 530, share: 0.45 }, { at: 1070, share: 0.45 }, { at: 1890, share: 0.7 }] }),
+                    melee({ id: "flurry", damage: [12, 19], hitAt: 500, duration: 2300, interval: 2600, stagger: 350, reaction: "chop", animation: "flurry", blows: [{ at: 500, share: 0.45 }, { at: 1200, share: 0.45 }, { at: 1720, share: 0.35, toss: 1 }] }),
+                    melee({ id: "kick", damage: [6, 10], hitAt: 540, duration: 1250, interval: 1500, stagger: 300, reaction: "punch", animation: "kick", toss: 1.1 }),
+                ],
+            },
+        ],
+    },
+    // (His champions (creatures.js orcIronjaw, orcBloodtusk), drawn from his model: their axes swept
+    // and chopped as his are, a kick that throws now and then)
+    orcChampion: {
+        label: "Great axe",
+        equipment: ["battleAxe"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "chop", damage: [9, 15], hitAt: 640, duration: 1750, interval: 2000, stagger: 400, reaction: "chop", animation: "chop", afflict: { kind: "bleed", chance: 0.3 } }),
+                    melee({ id: "sweep", damage: [8, 13], hitAt: 720, duration: 1800, interval: 2000, stagger: 350, reaction: "chop", animation: "sweep" }),
+                    melee({ id: "kick", damage: [4, 7], hitAt: 540, duration: 1250, interval: 1500, stagger: 300, reaction: "punch", animation: "kick", toss: 0.9 }),
+                ],
+            },
+        ],
+    },
+    // (His raiders (creatures.js orcRaider): a cleaver each, hacked as a goblin's is, harder)
+    orcRaider: {
+        label: "Orc cleaver",
+        equipment: ["cleaver"],
+        attacks: [melee({ id: "hack", damage: [6, 11], hitAt: 520, duration: 900, interval: 1400, stagger: 250, reaction: "hack", animation: "cleaver", afflict: { kind: "bleed", chance: 0.15 } })],
     },
 });
 

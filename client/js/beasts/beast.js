@@ -102,6 +102,9 @@ function levelsOf(geometry, lods) {
 
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const smoothstep = (u) => u * u * (3 - 2 * u);
+
+// How long (seconds) one going on guard, or off it, takes to raise its guard, or lower it
+const GUARD_EASE = 0.25;
 const clamp01 = (u) => Math.min(1, Math.max(0, u));
 
 // A stand-in's thread, hanging from the roof as it lurks (BeastAvatar.hang): one for all of them
@@ -245,7 +248,7 @@ export class BeastAvatar {
         this.follow = { x: 0, z: 0, vx: 0, vz: 0 };
         this.speed = 0;
         this.clock = own() * 100;
-        this.doing = { attack: null, react: null, dead: null, tossed: null };
+        this.doing = { attack: null, react: null, dead: null, tossed: null, leap: null, guard: null };
         this.random = own;
 
         /** Flying (a winged one: `winged`), if it is: { beat, bank, climb } (fly/soar/arrive). */
@@ -316,16 +319,38 @@ export class BeastAvatar {
             startAttack: (animation, { hitAt = 0.4, duration = 0.8, reach = null } = {}) => {
                 doing.attack = { t: 0, hit: Math.min(0.9, hitAt / duration), duration, style: this.#styleFor(animation), reach: reach === null ? null : reach / this.scale };
             },
-            react: () => {
+            // (A blow caught on its guard (`block`), on guard: braced behind it, its own way (its
+            // model's `guard`'s `struck`))
+            react: (kind = null) => {
+                if (kind === "block" && doing.guard) {
+                    doing.guard.struck = 0;
+
+                    return;
+                }
+
                 doing.react = { t: 0 };
             },
             // (Knocked about: a creature's only jolted)
             knockdown: () => {
                 doing.react = { t: 0 };
                 doing.attack = null;
+                doing.guard = null;
+            },
+            // (Leaping (battle.js "leap": the Orc King's): springing up `lift` seconds from now and
+            // coming down `land` seconds from now at `to` ([x, z]), over the ground (`ground`: how
+            // high it is at x, z), `up` metres higher at the top of its arc than its clip has it)
+            leap: ({ to, lift, land, up = 0, ground }) => {
+                doing.leap = { t: 0, from: null, to: [...to], lift: Math.max(0, lift), land: Math.max(lift + 0.05, land), up, ground };
+            },
+            // (On guard a while (battle.js "guard": the Orc King's), `seconds`: its guard held up
+            // (its model's `guard`'s `hold`))
+            guard: ({ seconds }) => {
+                doing.guard = { t: 0, seconds: Math.max(0.3, seconds), struck: null };
             },
             die: ({ from = 0 } = {}) => {
                 doing.attack = null;
+                doing.guard = null;
+                doing.leap = null;
 
                 // (Thrown, in the air: it falls dead where it lands)
                 if (doing.tossed && doing.tossed.t < doing.tossed.flight) {
@@ -345,6 +370,8 @@ export class BeastAvatar {
                 doing.attack = null;
                 doing.react = null;
                 doing.tossed = null;
+                doing.leap = null;
+                doing.guard = null;
             },
             // (Thrown by a blast: tumbling whole through the air, landing on its side, and righting
             // itself `seconds` after it was thrown; or, dead, lying there)
@@ -354,6 +381,8 @@ export class BeastAvatar {
 
                 doing.attack = null;
                 doing.react = null;
+                doing.leap = null;
+                doing.guard = null;
                 doing.tossed = { t: 0, from: [this.object.position.x, this.object.position.z], to: [...to], flight: Math.max(0.3, flight), up, ground, rights: seconds === null ? Infinity : Math.max(flight + TUMBLE.lie, seconds - TUMBLE.right), roll: (this.random() < 0.5 ? -1 : 1) * turns * Math.PI * 2, dead: seconds === null };
 
                 return doing.tossed.flight;
@@ -520,9 +549,12 @@ export class BeastAvatar {
         }
 
         // (Thrown by a blast: tumbling, then righting itself where it lands, and walking back to
-        // its actor from there)
-        if (this.doing.tossed) {
-            this.#tumble(dt);
+        // its actor from there; leaping, in the air, landing where its actor will be)
+        if (this.doing.tossed || (this.doing.leap && this.#leaps(dt))) {
+            if (this.doing.tossed) {
+                this.#tumble(dt);
+            }
+
             Object.assign(follow, { x: object.position.x, z: object.position.z, vx: 0, vz: 0 });
             this.last.set(object.position.x, 0, object.position.z);
 
@@ -693,14 +725,56 @@ export class BeastAvatar {
         return Boolean(this.plan.beam && this.doing.attack) && !this.doing.dead;
     }
 
-    /** Is it thrown (actions.toss) and not on its feet again yet? */
+    /** Is it thrown (actions.toss) and not on its feet again yet, or in the air leaping (actions.leap)? */
     get thrown() {
-        return Boolean(this.doing.tossed);
+        return Boolean(this.doing.tossed) || this.#aloft();
     }
 
-    /** Is it in the air, thrown, not down yet? */
+    /** Is it in the air, thrown or leaping, not down yet? */
     get airborne() {
-        return Boolean(this.doing.tossed) && this.doing.tossed.t < this.doing.tossed.flight;
+        return (Boolean(this.doing.tossed) && this.doing.tossed.t < this.doing.tossed.flight) || this.#aloft();
+    }
+
+    // In the air, leaping (actions.leap), from when it springs up
+    #aloft() {
+        const leap = this.doing.leap;
+
+        return Boolean(leap) && leap.t >= leap.lift;
+    }
+
+    // Leaping (actions.leap): crouching till it springs up (its clip's), then over the ground from
+    // where it sprang to where it lands, as fast all the way, facing the way it's going, its clip
+    // taking it up and down (and `up` higher at the top); done once it's down. Whether it's in the air
+    #leaps(dt) {
+        const leap = this.doing.leap;
+
+        leap.t += dt;
+
+        if (leap.t < leap.lift) {
+            return false;
+        }
+
+        leap.from ??= [this.object.position.x, this.object.position.z];
+
+        const { from, to, ground, up } = leap;
+        const u = Math.min(1, (leap.t - leap.lift) / (leap.land - leap.lift));
+        const x = from[0] + (to[0] - from[0]) * u;
+        const z = from[1] + (to[1] - from[1]) * u;
+
+        if (Math.hypot(to[0] - from[0], to[1] - from[1]) > 0.1) {
+            this.facing = Math.atan2(to[0] - from[0], to[1] - from[1]);
+        }
+
+        this.object.position.set(x, ground(x, z) + 4 * up * u * (1 - u), z);
+        this.object.rotation.set(0, this.facing, 0);
+        this.speed = 0;
+        this.animate(dt);
+
+        if (u >= 1) {
+            this.doing.leap = null;
+        }
+
+        return true;
     }
 
     // Thrown (actions.toss): along its arc, rolling over and over, landing on its side; lying a
@@ -764,9 +838,19 @@ export class BeastAvatar {
         // (Its own legs' speed: it's scaled up or down from the size it's built at)
         const speed = doing.dead ? 0 : this.speed / this.scale;
 
-        // Standing a while, it rests one of its ways; moving, fighting or struck, it stops, easing
-        // out of it
-        const busy = speed > 0.15 || doing.attack || doing.react || doing.dead || this.hanging;
+        // (On guard (actions.guard), as long as it's told; a blow caught on it, braced behind it)
+        if (doing.guard) {
+            doing.guard.t += dt;
+            doing.guard.struck = doing.guard.struck === null ? null : doing.guard.struck + dt;
+
+            if (doing.guard.t >= doing.guard.seconds || doing.dead) {
+                doing.guard = null;
+            }
+        }
+
+        // Standing a while, it rests one of its ways; moving, fighting, struck or on guard, it
+        // stops, easing out of it
+        const busy = speed > 0.15 || doing.attack || doing.react || doing.dead || doing.guard || this.hanging;
 
         this.still = busy ? 0 : this.still + dt;
 
@@ -797,6 +881,7 @@ export class BeastAvatar {
             attack: doing.attack ? { u: Math.min(1, doing.attack.u ?? 0), hit: doing.attack.hit, style: doing.attack.style, reach: doing.attack.reach } : null,
             rest: this.resting ? { name: this.resting.name, w: smoothstep(this.restWeight), t: this.resting.t } : null,
             react: doing.react ? { u: Math.min(1, doing.react.u ?? 0) } : null,
+            guard: doing.guard ? { w: smoothstep(Math.max(0, Math.min(1, doing.guard.t / GUARD_EASE, (doing.guard.seconds - doing.guard.t) / GUARD_EASE))), t: doing.guard.t, struck: doing.guard.struck } : null,
             dead: doing.dead ? { u: Math.min(1, doing.dead.u ?? 0), side: doing.dead.side } : null,
             onStep: (foot, pace) => this.walker.onStep?.(foot, pace * this.scale),
             fly: this.flight,

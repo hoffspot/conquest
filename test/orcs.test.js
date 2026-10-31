@@ -1,7 +1,8 @@
 // The orcs on a dungeon's throne (core/creatures.js orcWarlord, orcReaver): the Orc Warlord a
 // cave's boss, his goblins about him, and the Orc Reaver an outlaws' hideout's, at the head of its
 // outlaws; met nowhere else. Each drawn from a dressing of the Orc's model (beasts/model.js), its
-// finest, the Orc King's, kept for a card; their great axes' blows timed to its clips.
+// finest the Orc King's, his rare card's foe, and his champions' in its other skins; their great
+// axes' blows timed to its clips.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CREATURES } from "../client/js/core/creatures.js";
@@ -54,7 +55,7 @@ describe("the orcs on a dungeon's throne", () => {
         }
     });
 
-    it("draws each from a dressing of the Orc's, its finest the Orc King's, kept for a card", () => {
+    it("draws each from a dressing of the Orc's, its finest the Orc King's, and his champions in its brown and red skins", () => {
         assert.equal(MODELS.orcWarlord.asset, "beast-orc-warlord");
         assert.equal(MODELS.orcReaver.asset, "beast-orc-reaver");
 
@@ -66,8 +67,16 @@ describe("the orcs on a dungeon's throne", () => {
             assert.ok(ASSETS.models[asset]?.licensed, asset);
         }
 
-        // (The King, and his brown and red skins, in no kind's model yet)
-        assert.ok(!Object.values(MODELS).some(({ asset }) => asset === "beast-orc-king"));
+        // (The King in his own skin, drawn 2.17 metres tall; Ironjaw in the brown, Bloodtusk in the
+        // red, drawn 2.08)
+        assert.deepEqual(
+            ["orcKing", "orcIronjaw", "orcBloodtusk"].map((kind) => [MODELS[kind].asset, MODELS[kind].skins ?? [""], +((MODELS[kind].length / MODELS[kind].made.long) * MODELS[kind].made.tall).toFixed(2)]),
+            [
+                ["beast-orc-king", [""], 2.17],
+                ["beast-orc-king", ["brown"], 2.08],
+                ["beast-orc-king", ["red"], 2.08],
+            ],
+        );
         assert.deepEqual(ASSETS.models["beast-orc-king-skins"].files.map(({ path }) => path), ["models/beasts/orc-king.brown.bin", "models/beasts/orc-king.red.bin"]);
     });
 
@@ -81,5 +90,37 @@ describe("the orcs on a dungeon's throne", () => {
 
         assert.ok(warlord.damage[1] > reaver.damage[1] && warlord.duration > reaver.duration);
         assert.deepEqual(Object.keys(MODELS.orcWarlord.attacks), ["sweep", "chop", "spin"]);
+    });
+
+    it("times the King's blows to his clips: each where his axe (or his foot) moves fastest in it, as much of it played as his `spans` say; his leap landing as he comes down", () => {
+        // (When each blow lands in its clip, seconds, as his model has it: where the hand holding
+        // his axe, or the kicking foot, is quickest; and how long each clip is)
+        const BLOWS = { chop: [0.85], sweep: [1], backhand: [1.1], combo: [1.07, 1.65, 2.53], kick: [0.63], spin: [1.12], leap: [1.68] };
+        const LENGTHS = { "Attack Chop": 2.33, "Attack Sweep": 2.5, "Kick 2": 1.47 };
+        const { orcKing: king } = MODELS;
+        const ways = [...NATURAL.orcKing.attacks[0].either, ...CREATURES.orcKing.moves];
+
+        for (const [way, times] of Object.entries(BLOWS)) {
+            const attack = ways.find(({ id }) => id === way);
+            const [from, to] = king.spans[way] ?? [0, LENGTHS[king.specials[way]]];
+            const lands = attack.blows?.map(({ at }) => at) ?? [attack.hitAt];
+
+            assert.equal(lands.length, times.length, way);
+            lands.forEach((at, k) => assert.ok(Math.abs(at / attack.duration - (times[k] - from) / (to - from)) < 0.02, `${way}: ${at} of ${attack.duration}`));
+        }
+
+        // (His flurry: two blows of Combo 3, at 1.03 and 1.78 seconds into it, then Kick 2's)
+        const flurry = ways.find(({ id }) => id === "flurry");
+        const [first, second] = king.chains.flurry;
+        const whole = second.to - second.from + (first.to - first.from);
+        const at = [1.03 - first.from, 1.78 - first.from, first.to - first.from + 0.63 - second.from];
+
+        flurry.blows.forEach(({ at: ms }, k) => assert.ok(Math.abs(ms / flurry.duration - at[k] / whole) < 0.02, `flurry ${k}: ${ms}`));
+
+        // (Springing up 0.9 seconds into his Leap Attack, down at 1.68)
+        const leap = CREATURES.orcKing.moves.find(({ id }) => id === "leap");
+        const [from, to] = king.spans.leap;
+
+        assert.ok(Math.abs(leap.leap.lift / leap.duration - (0.9 - from) / (to - from)) < 0.02);
     });
 });

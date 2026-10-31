@@ -1734,6 +1734,14 @@ export class SpellFx {
             return;
         }
 
+        // (A great axe spun all round (the Orc King's): the dust thrown up in a ring as far as it reached)
+        if (kind === "spin") {
+            this.ring(ground, { colour: 0xd8ccb4, from: radius * 0.5, to: radius * 1.05, life: 0.45, opacity: 0.55 });
+            dust(14, radius * 0.85, 3, 0.7);
+
+            return;
+        }
+
         if (kind === "roar") {
             this.ring(ground, { colour: 0xd8e8ff, from: 1, to: radius, life: 0.7, opacity: 0.5 });
             this.after(0.12, () => this.ring(ground, { colour: 0xa8b8c8, from: 1, to: radius * 1.2, life: 0.9, opacity: 0.35 }));
@@ -2364,6 +2372,26 @@ export class SpellFx {
         });
 
         return group;
+    }
+
+    /**
+     * A blow's warning on the ground round a point (battle.js "telegraph": the Orc King's leap, where
+     * he'll come down, and his axe spun all round him), `radius` m, the `seconds` till it lands: a
+     * bomb's pulsing ring (#warning), and the ground within it filling red from its heart as the
+     * blow comes. Returns it.
+     */
+    telegraph(centre, { radius = 3, seconds = 1 } = {}) {
+        const fill = new THREE.Mesh(this.geometries.disc, this.#additive(0xff2a0a, { map: this.#texture("glow"), opacity: 0.35 }));
+
+        fill.renderOrder = ORDER.glow;
+        this.#lay(fill, centre, radius, 0.065);
+        this.#show(fill, seconds, (t) => {
+            const wide = radius * 1.1 * Math.max(0.05, t);
+
+            fill.scale.set(wide, 1, wide);
+        });
+
+        return this.#warning(centre, radius, seconds);
     }
 
     // A ring on the ground `radius` m round a point, warning of a blast, `seconds`: pulsing,

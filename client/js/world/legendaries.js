@@ -19,6 +19,7 @@ export const LOOK = Object.freeze({
     earthsunder: { colour: 0xc8a060, motes: "legendEarth" },
     stormlash: { colour: 0xa8b8ff, motes: "legendStorm" },
     ruinblast: { colour: 0xffc040, motes: "legendRuin" },
+    cleave: { colour: 0xc8d4e0, motes: "legendCleave" },
     rate: { rest: 7, blow: 45 },
     glow: 0.45,
 });
