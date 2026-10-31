@@ -1136,9 +1136,11 @@ const BARKEEP_RESTS = [
 ];
 
 // Arms folded with a sword or cleaver at the left hip and the left hand free (the shield slung on
-// the back): the hand brought up in front first, over the hilt, and let down the same way
+// the back): the hand brought up in front first, over the hilt, and let down the same way. Not
+// for one with its weapon in its hand (`handFree`: beasts/beast.js restWaysOf): the arms folded
+// round the blade, the hand holding it pushed out of the body and back
 const OVER_THE_HILT = { left: { at: [-0.04, -0.52, 0.4], pronate: 30, shape: "relaxed" } };
-const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", keys: [...BARKEEP_RESTS[3].keys.slice(0, 1), [0.22, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(1, -1), [1.82, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(-1)] };
+const ARMED_FOLDED = { ...BARKEEP_RESTS[3], name: "arms folded", handFree: true, keys: [...BARKEEP_RESTS[3].keys.slice(0, 1), [0.22, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(1, -1), [1.82, OVER_THE_HILT], ...BARKEEP_RESTS[3].keys.slice(-1)] };
 
 // Shifting the weight with the left hand free: the thumb brought to the belt from in front, over
 // the hilt, and hooked in it a little forward of where it is unarmed, the upper arm kept off a
@@ -1150,9 +1152,9 @@ const HELMED_LOOKING = { ...ADVENTURER_RESTS[1], keys: ADVENTURER_RESTS[1].keys.
 
 // Hands clasped behind with a sword or cleaver at the left hip: the left hand brought up to the
 // waist first, over the scabbard, the elbow out to the side, clear of a shield slung on the back,
-// and back behind it, and let down the same way
+// and back behind it, and let down the same way (nor for one with its weapon in hand: `handFree`)
 const OVER_THE_SCABBARD = { left: { at: [-0.24, -0.56, -0.08], palm: [-0.3, 0, -0.95], towards: [-0.2, -0.9, -0.3], elbow: [0.9, -0.3, 0], shape: "relaxed" } };
-const ARMED_CLASPED = { ...PRIEST_RESTS[4], keys: [...PRIEST_RESTS[4].keys.slice(0, 1), [0.25, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(1, -1), [1.88, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(-1)] };
+const ARMED_CLASPED = { ...PRIEST_RESTS[4], handFree: true, keys: [...PRIEST_RESTS[4].keys.slice(0, 1), [0.25, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(1, -1), [1.88, OVER_THE_SCABBARD], ...PRIEST_RESTS[4].keys.slice(-1)] };
 
 const BELT_HOOK = [-0.2, -0.62, 0.28];
 // (Brought over the hilt a little wide of it, so the thumb doesn't catch the scabbard's throat)
