@@ -2702,8 +2702,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     among a few smaller stones strung out along the same way (terrain plan M7b: core/wilds.js
     `CLUSTER`), rocky outcrops, basalt columns in the volcanic lands, cairns and standing stones;
   - trees long fallen and gone silver (their trunks bending and tapering, broken branches, the
-    root plate torn up with earth still in it), old stumps (sawn or broken, roots flaring,
-    shelf fungus), dead trees still standing, piles of logs;
+    root plate torn up with earth still in it), old stumps (*Stumps*, below), dead trees still
+    standing, piles of logs;
   - bushes (with red, black or white berries, pink or white flowers, the heath's yellow gorse):
     each a lumpy mound of small leaves in its land's green, lit as one soft mass, darker at its
     foot, sprigs of leaves standing out of it so its outline is leaves, drawn as the hedges are
@@ -2717,6 +2717,36 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     carved with glyphs under a serpent's head, the elves' moonstones (a crescent cut in each that
     holds the light) and bud lamps hanging from curling verdigris posts, the dark elves' stumps
     shrouded in web, silk cocoons and clusters of black crystal with violet hearts.
+- **Stumps** (`world/art/kits/wilds.js` `stump`, `STUMPS`; the research report behind them,
+  *Realistic procedural tree stumps*): each land's own trees' (`STUMP_LANDS`: oak and pine in
+  the fields, beech in the woods, alder and birch in the marsh, birch in the elves' woods, oak
+  and spruce in the darkwood, buttressed trees in the jungle), each one age, its top, bark, moss
+  and fungus all of a piece:
+  - **Its wall** fourteen sides round in rings from just under the ground, its outline a few slow
+    waves, its foot flaring out in lobes where its roots go (two or three running from them into
+    the ground), its bark wrapped round it a whole number of times (no seam), lit smooth, darker
+    at its foot and between its roots.
+  - **Its top** made inward from the wall's own top ring, so nothing shows through where they
+    meet (a stump's body is closed but for its foot, under the ground): the bark's cut edge, the
+    inner bark a step down, then the cut wood, its sapwood and heartwood (pale round orange in
+    oak and pine, all one in the others) round a pith off the middle. Sawn, the cut level or a
+    few degrees out; felled, the hinge left standing across it, torn and jagged; broken off,
+    torn, highest on the side that held, one to three slivers standing up there, bare of bark,
+    the floor of the break sinking a little to the middle (never peaked) and shards of
+    splintered wood standing in it.
+  - **The cut wood** drawn with the end grain's picture (`engine/painters.js` `ENDGRAIN`, two
+    layers of the atlas, 256 pixels square): its rings out from the pith, wide when the tree was
+    young, then narrowing, years good and bad among them, each pale earlywood and then latewood
+    ending sharp, none narrower than three pixels (narrower, they'd shimmer far off: they fade
+    to their wood's colour instead), rays, the pith dark, and checks where it dried, wide at the
+    bark and tapering in. Drawn once in the middle of its picture, centred on the pith, turned
+    and mirrored so no two show the same (and not shifted when placed, as the bark is).
+  - **Its age:** fresh (cream, its rings faint, a hairline check or two), weathered (silver,
+    checked wide, its latewood standing as ridges, moss at its foot on its shaded side, now and
+    then bracket fungus) or old (darker, greener, its heart rotting or rotted out to a hollow,
+    more moss, bracket fungus in tiers more often than not).
+  - About 260 to 360 triangles each (a few hundred more in a view than the old ones, which were
+    about a hundred).
 - **Rocks** (`world/art/kits/rocks.js`; the research report behind them, *Realistic procedural
   rock generation*): not balls pushed in and out by noise and cut flat, lit facet by facet, but a
   few big fracture planes joined by edges worn round, quiet noise on top, and dirt, wear, moss and
@@ -2810,8 +2840,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   **How it's drawn cheaply.** Every look is made once, the first time it's wanted, eight of each
   kind for each land, from a seed (24 MB of them kept at most, `LOOKS_KEPT`: those least lately
   wanted let go of, and made again the same if they're wanted again): rocks as rocks.js makes
-  them (*Rocks*, below); trunks and branches tapered, bent tubes; stumps, mounds, haystacks
-  and mushrooms turned on a lathe. Blades of grass and petals are real triangles, not pictures
+  them (*Rocks*, below); trunks and branches tapered, bent tubes; stumps in rings (*Stumps*,
+  above); mounds, haystacks and mushrooms turned on a lathe. Blades of grass and petals are real triangles, not pictures
   with holes in (a blade is one triangle, a flower's head five), so nothing is drawn twice over
   the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,
   stretched, tinted and its texture shifted, so no two look alike, and a tile's are baked into
