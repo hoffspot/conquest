@@ -3434,7 +3434,8 @@ export class Actions {
                 for (let k = 0; ; k++) {
                     const grips = reachAll(shift);
 
-                    free ??= Object.fromEntries(clear.map((side) => [side, grips[side].position.clone()]));
+                    // (A hand given no place, on a pommel no longer there as it lets go, has none)
+                    free ??= Object.fromEntries(clear.map((side) => [side, grips[side]?.position.clone() ?? null]));
 
                     // (After the last move, only to take it back)
                     if (!clear.length || k > LIMB_TRIES) {
@@ -3886,8 +3887,13 @@ export class Actions {
 
     // The move out of the body to begin a hand's from (`side`'s; placed at `free` before it, world):
     // last frame's for the arm reached whose hand was placed nearest it, let in towards the body a
-    // little (CLEAR_KEEP), in the world as the body is now; or null for none
+    // little (CLEAR_KEEP), in the world as the body is now; or null for none (or for a hand given
+    // no place, `free` null)
     #warmShift(side, free) {
+        if (!free) {
+            return null;
+        }
+
         const object = this.character.object;
         const here = object.worldToLocal(free.clone());
         const was = this.cleared[side].reduce((best, each) => (each.free.distanceTo(here) < (best?.free.distanceTo(here) ?? CLEAR_KEEP.match) ? each : best), null);
@@ -3903,13 +3909,14 @@ export class Actions {
     }
 
     // Keep each hand's move out of the body (`shift`: world, or null for none; placed at `free`
-    // before it) in `cleared`, in its body's own metres, for next frame (CLEAR_KEEP)
+    // before it, or given no place, null: not kept) in `cleared`, in its body's own metres, for
+    // next frame (CLEAR_KEEP)
     #keepClear(sides, shift, free, cleared) {
         const object = this.character.object;
         const back = object.getWorldQuaternion(new THREE.Quaternion()).invert();
         const size = this.#size();
 
-        for (const side of sides) {
+        for (const side of sides.filter((each) => free[each])) {
             cleared[side].push({ shift: (shift[side]?.clone() ?? new THREE.Vector3()).applyQuaternion(back).divideScalar(size), free: object.worldToLocal(free[side].clone()), time: this.time });
         }
     }

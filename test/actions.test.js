@@ -674,6 +674,23 @@ describe("a blade hung at the hip (equipment.js SHEATHS, Character.hang, Actions
         assert.equal(drawn.character.held, 0, "nothing to hold in the scabbard");
     });
 
+    it("lets go of the pommel when the blade's drawn mid-stride, the hand on it as it eases off with nothing to hold, the arm kept out of the body", () => {
+        // (Eased off over an eighth of a second, the hand's reached for a pommel no longer there:
+        // given no place of its own, it was once kept out of the body from where it had none,
+        // and threw)
+        for (const body of BODIES.filter(({ people }) => people === "human")) {
+            const { character, walker } = soldier(body);
+
+            walk(walker, 1.3, 1.5);
+            assert.ok(character.held > 0.99, `${body.id}: holding it`);
+
+            character.sheathe(false);
+            assert.equal(character.pommelOf("Left"), null, `${body.id}: no pommel at the hip`);
+            walk(walker, 1.3, 0.5);
+            assert.equal(character.held, 0, `${body.id}: let go`);
+        }
+    });
+
     it("holds a torch carried at night up before the body, its shaft upright, not on the pommel: its flame clear of the other hand and the head; put out, the hand goes back to the pommel", () => {
         for (const body of BODIES) {
             const { character, walker } = soldier(body);
