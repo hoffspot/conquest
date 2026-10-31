@@ -37,21 +37,25 @@ export const CHAMPION_HEIGHT = Object.freeze({ tallest: 3.3, least: 1.05 });
  */
 export const REGALIA = Object.freeze({
     // The caves': a troll crowned, the Goblin King bigger than the wild's (its own crown and cape
-    // on it already: beasts/looks.js), the frost troll's circlet of silver like ice; the
-    // broodmother vast and blood-marked, the cave bear and the old tusker grizzled
+    // on it already: beasts/looks.js), the frost troll's circlet of silver like ice, the Orc
+    // Warlord as his model's made him (beasts/model.js); the broodmother vast and blood-marked,
+    // the cave bear and the old tusker grizzled
     trollKing: { wear: ["crown"] },
     goblinKing: { scale: 1.15, glow: 1.2 },
     broodmother: { tint: 0xc07060, scale: 1.45, glow: 1.4 },
     frostTroll: { wear: ["circletElf"] },
+    orcWarlord: {},
     troll: {},
     bear: { tint: 0x9a9088, scale: 1.15 },
     ogre: { wear: ["orcHelm"] },
     tusker: { tint: 0xa8a49c, scale: 1.1 },
     brood: { tint: 0xb07068, scale: 1.2 },
     // An outlaws' hideout's: their king crowned, the ogre captain and the hired muscle helmed, the
-    // lieutenant in a soldier's helm, the hedge priest hooded
+    // Orc Reaver as his model's made him, the lieutenant in a soldier's helm, the hedge priest
+    // hooded
     banditLord: { wear: ["crown"] },
     ogreBoss: { wear: ["orcHelm"] },
+    orcReaver: {},
     lieutenant: { wear: ["nasalHelm"] },
     enforcer: { wear: ["orcHelm"] },
     hedgePriest: { wear: ["darkHood"] },

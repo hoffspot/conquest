@@ -93,6 +93,28 @@ const walker = (skins) => Object.freeze({
     flinch: 0.6,
 });
 
+// One of the orcs on a dungeon's throne (MODELS): one of the Orc's dressings (its catalog entry),
+// made 1.81 metres tall and drawn `scale` times that; its own clips: its great axe swept, chopped
+// down or spun round low, one at random each time (each blow nearly two fifths of the way
+// through its clip), its flinch, its battlecry and its chest thumped as it rests, looking about;
+// its fall Mesh2Motion's (CC0), staggering, dropping to its knees and pitching onto its face.
+// Walking at 0.94 m/s as it's made, its run a heavy jog (1.15), played faster at its chase
+const orc = (asset, scale) => Object.freeze({
+    asset,
+    length: +(0.96 * scale).toFixed(3),
+    made: Object.freeze({ long: 0.96, tall: 1.81 }),
+    clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+    attacks: Object.freeze({ sweep: "Attack Sweep", chop: "Attack Chop", spin: "Attack Spin Low" }),
+    specials: Object.freeze({}),
+    rests: Object.freeze({ roar: "Battlecry", thump: "Chest Thump", look: "Idle Looking" }),
+    fire: Object.freeze({}),
+    joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+    mouth: null,
+    pace: +(0.94 * scale).toFixed(2),
+    runPace: +(1.15 * scale).toFixed(2),
+    flinch: 0.6,
+});
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -505,6 +527,14 @@ export const MODELS = Object.freeze({
     ashWalker: walker(["ash"]),
     hellwalker: walker(["", "char"]),
     bileWalker: walker(["bile"]),
+    // (The orcs on a dungeon's throne (creatures.js), each in a dressing of the Orc's: the Orc
+    // Warlord on a cave's, brown-skinned and red-eyed, in trousers, boots, belt and bracers, drawn
+    // 2.08 metres tall; the Orc Reaver at the head of an outlaws' hideout, red-skinned and
+    // yellow-eyed, bare-legged and barefoot in his loincloth, drawn 1.99. Its finest dressing,
+    // the Orc King's, armoured from his shoulder to his knees, kept for a card: the catalog's
+    // beast-orc-king)
+    orcWarlord: orc("beast-orc-warlord", 1.15),
+    orcReaver: orc("beast-orc-reaver", 1.1),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,

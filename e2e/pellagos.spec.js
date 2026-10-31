@@ -8102,7 +8102,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await page.evaluate(() => window.pellagos.game.toggleJournal());
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
-    await expect(journal).toContainText("1 of 103 kinds of creature met");
+    await expect(journal).toContainText("1 of 105 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them

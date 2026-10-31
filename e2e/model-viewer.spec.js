@@ -231,10 +231,10 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
     // black widow, the Ant Monster, the greater demon (the River of Fire's master), the infernal
     // demon (a hell's lord), the fiend (its packs), its six flayed and six gorgers, the henchmen,
-    // the walkers, and the kaiju (the Behemoth of the Rift): every bought model but the Stone
-    // Golem, kept for a card, listed as to come; read, its clips listed, the one asked for by its
-    // address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Stone Golem"]);
+    // the walkers, the orcs on a dungeon's throne and the kaiju (the Behemoth of the Rift): every
+    // bought model but the Stone Golem and the Orc King, kept for cards, listed as to come; read,
+    // its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Stone Golem", "Orc King"]);
     expect(await page.locator("#picker optgroup[label='For the mightiest'] option").allTextContents()).toContain("Behemoth of the Rift");
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
@@ -845,6 +845,63 @@ test("and the Stone Golem, kept for a card: all 25 of its own clips, its hammer 
     for (const skin of ["ember", "moss", "frost"]) {
         await page.getByLabel("Skin").selectOption(skin);
         await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
+});
+
+test("and the Orc King, kept for a card: the Orc in his finest dressing, his 23 clips (his fall Mesh2Motion's), his five materials, each of his skins put on, and whose he is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-orc-king&clip=Attack%20Chop");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack Backhand",
+        "Attack Chop",
+        "Attack Spin High",
+        "Attack Spin Low",
+        "Attack Sweep",
+        "Battlecry",
+        "Block",
+        "Block Hit",
+        "Chest Thump",
+        "Combo 1",
+        "Combo 2",
+        "Combo 3",
+        "Hit",
+        "Hit Left",
+        "Hit Right",
+        "Idle",
+        "Idle Looking",
+        "Kick",
+        "Kick 2",
+        "Leap Attack",
+        "Run",
+        "Walk",
+        // (Its fall last: Mesh2Motion's, played on its bones after its own)
+        "Death",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack Chop", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Orc King");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ triangles: 54514, bones: 79, materials: 5 });
+    await expect(page.locator("#details")).toContainText("a modular orc bought on Fab, its fall Mesh2Motion's (CC0): used with the permission its Standard License gives");
+
+    // (Each of his skins put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Brown", "Red"]);
+
+    for (const skin of ["brown", "red"]) {
+        await page.getByLabel("Skin").selectOption(skin);
+        await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
+});
+
+test("the orcs on a dungeon's throne as the game draws them: big orcs till their models are read, then the Orc's dressings, their great axes swept, chopped or spun round low, and their rests", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+
+    for (const [creature, height] of [["orcWarlord", 2.08], ["orcReaver", 1.99]]) {
+        await openViewer(page, `/model-viewer.html?creature=${creature}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: ["sweep", "chop", "spin"], specials: [], rests: ["roar", "thump", "look"], skin: "" });
+        expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["sweep", "chop", "spin", "roar", "thump", "look"]));
+        expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(height, 1);
     }
 });
 
