@@ -155,7 +155,7 @@ app's game has them. It runs on a pull request that changes `mac/`, `scripts/bui
 `scripts/install-mac.sh`, how the server's started and updated (`server/world.js`, `serve.js`,
 `launch.js`, `server/update/`), `server/platform/`, the workflow or the licensed models' step
 (`.github/actions/licensed-models/`); on `main` when a merge changes what the app holds (`client/`, `server/`, `mac/`, `package.json`,
-`scripts/build-mac-app.js`, `scripts/stamp-version.js`, the licences or the workflow), one run at a
+`scripts/build-mac-app.js`, `scripts/stamp-version.js`, `LICENSE` or the workflow), one run at a
 time; and by hand (Mac app, Run workflow). It keeps the zip, the server's archive (signed with the
 project's key when the repository has it as the Actions secret `PELLAGOS_RELEASE_KEY`:
 `npm run release-key`, below) and the formula with the run as `pellagos-server-mac` (and pictures

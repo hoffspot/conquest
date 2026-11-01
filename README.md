@@ -1153,11 +1153,17 @@ what it doesn't cover.
 
 This repository began as a modernization of Last Colony, the real-time strategy game from
 [*Pro HTML5 Games*](https://www.apress.com/9781484229095) by Aditya Ravi Shankar. Pellagos has
-replaced it (the book's game is in the git history, and
-[docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes it); the book's license for its code and
-assets is in [LICENSE-BOOK-CODE.txt](LICENSE-BOOK-CODE.txt).
+replaced it, and none of the book's code, images or sounds is in the repository now. The book's
+game is in the git history before `aec39bc0` (24 September 2026), and
+[docs/MODERNIZATION.md](docs/MODERNIZATION.md) describes it; that history's code and assets are
+under the book's own license, reproduced there
+([The book's licence](docs/MODERNIZATION.md#the-books-licence)), not `LICENSE`.
 
 ## Devlog
+
+> **History.** This log began in 2022, while the repository was a port of the book's code. The
+> book's code and assets are no longer in the repository (see above); the first lines below are
+> about that time.
 
 Working through the book Pro HTML5 Games, with all code and assets from the supporting materials.
 This application will be neither good nor bug free so YMMV.
