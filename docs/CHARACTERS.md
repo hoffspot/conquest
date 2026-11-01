@@ -1432,7 +1432,23 @@ twice, its curve flat there, before it's left. Each key says:
   move of the last moves the arm only as far as it's blended, so at a punch's last frame (8% of
   it) the guard's forearm was left 6 cm into the chest. Not under one blended more than that:
   moving the arm under it turns the elbow the last reaches from, which it couldn't always move
-  clear again (a grimoire's blow, 98% in, had a forearm 5 cm in the hip).
+  clear again (a grimoire's blow, 98% in, had a forearm 5 cm in the hip). Standing at rest with
+  nothing in hand, each frame's moves begin from the last frame's (`CLEAR_KEEP`, `#warmShift`,
+  `#keepClear`: the move kept for the arm reached whose hand was placed nearest, within 15 cm of its
+  body's own, let in towards the body a little, halving every 0.1 s), measured and moved out from
+  there, kept if that leaves no harm: a forearm no more than 1 cm in the torso, what's held no more
+  than 4 mm further in the body, the arm no more than 1° further past its range (a third of what the
+  motion check counts, and less); else moved out from none too, and the one begun from last frame's
+  kept if it's no worse. Not while a hand holds anything (a tankard, tongs), nor otherwise than at
+  rest: there, the motion check found what's held, or a forearm drawing a grimoire, further in the
+  body than these measures do (its own measures, the whole body's, are too slow for every frame).
+  Moved out from none each frame, as till 2026-10-31, three moves a frame (12, 4 and 1 cm, folding
+  an orc's arms), a second that measured a little deeper strained the arm and was taken back, the
+  hand 20 cm from where it was the frame before and back the next; or two ways out of the body, as
+  near as each other to clearing it, were taken by turns: a sentry's arms folded jumped up to 37 cm
+  in a frame on a bulky orc's body and 25 on a man's, the barkeep's 19.5 (now 6 and 10 at most, the
+  fold's own moves stepping up to 4.2 cm off the last with none kept out of the body:
+  test/folding.test.js).
 - **A second hand on and off the weapon.** A second hand that grips the other's weapon in some
   keys and not in others (`onto`) lets go of it nearer those that don't, so it can swing free
   while a staff is whirled and take hold of it again on guard.
