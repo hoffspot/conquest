@@ -187,16 +187,14 @@ export async function fetchNode({ version = NODE.version, cache = path.join(root
     return { file, shasums };
 }
 
-/** The server and the game, as they're served: copied into `into` (server/, client/, package.json, the licences). */
+/** The server and the game, as they're served: copied into `into` (server/, client/, package.json, the licence). */
 async function copyServer(into, { version }) {
     await mkdir(into, { recursive: true });
     await cp(path.join(root, "server"), path.join(into, "server"), { recursive: true });
     await cp(path.join(root, "client"), path.join(into, "client"), { recursive: true });
     await writeFile(path.join(into, "package.json"), packageJson({ version }));
 
-    for (const licence of ["LICENSE", "LICENSE-BOOK-CODE.txt"]) {
-        await cp(path.join(root, licence), path.join(into, licence));
-    }
+    await cp(path.join(root, "LICENSE"), path.join(into, "LICENSE"));
 }
 
 /**

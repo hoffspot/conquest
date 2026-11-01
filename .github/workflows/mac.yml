@@ -26,7 +26,6 @@ on:
       - scripts/build-mac-app.js
       - scripts/stamp-version.js
       - LICENSE
-      - LICENSE-BOOK-CODE.txt
       - .github/workflows/mac.yml
   pull_request:
     paths:

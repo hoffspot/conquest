@@ -1,9 +1,6 @@
 # Notice
 
-`LICENSE` (the Apache License 2.0) covers this repository's own code and assets. The book's code
-it began from is under its own licence, `LICENSE-BOOK-CODE.txt`.
-
-It doesn't cover:
+`LICENSE` (the Apache License 2.0) covers this repository's own code and assets. It doesn't cover:
 
 - **The assets credited to others** in `README.md`'s *Credits and license*, each under its own
   licence, kept beside it.
@@ -29,3 +26,8 @@ It doesn't cover:
   Orc King, with his two other skins, his champions', the Orc Warlord and the Orc Reaver), his fall
   Mesh2Motion's (CC0); and
   the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+- **The book's code and assets, in the git history.** The repository began as Last Colony, the
+  game from the book *Pro HTML5 Games* by Aditya Ravi Shankar. None of the book's code, images or
+  sounds is in the repository now: the last of them went with `aec39bc0`, "Pellagos, part 1:
+  remove the RTS", on 24 September 2026. The history before that commit holds them, under the
+  book's own licence, reproduced in `docs/MODERNIZATION.md`, *The book's licence*.
