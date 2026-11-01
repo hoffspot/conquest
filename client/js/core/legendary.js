@@ -42,7 +42,11 @@ import { WEAPONS } from "./weapons.js";
  *  - cleave (a unique's own, `unique`: Kingsplitter's, never rolled on a legendary weapon; always,
  *    `always`, no charge to it): every blow up close cleaving on through every other foe within
  *    `reach` metres before whoever strikes it (no more than `arc` degrees either side of the way to
- *    whoever it's struck at), each struck `share` as hard (battle.js #cleave).
+ *    whoever it's struck at), each struck `share` as hard (battle.js #cleave);
+ *  - witchfire (a unique's own, `unique`: Greenbrand's; always, `always`, no charge to it): every
+ *    blow up close setting the foe struck alight with green fire, and the fire leaping on from them
+ *    to as many more as `leaps`, each the nearest not yet caught within `reach` metres of the last,
+ *    each struck `share` as hard, fire's, and set alight too (battle.js #witchfire).
  */
 export const EFFECTS = Object.freeze({
     frostbind: {
@@ -110,6 +114,18 @@ export const EFFECTS = Object.freeze({
         share: [0.5, 0.8],
         reach: 2.6,
         arc: 60,
+    },
+    // (A unique's own, never rolled on a legendary weapon; on every blow, with no charge to fill:
+    // Greenbrand's, rare.js, ground from Vharzul the Greenflame's horn)
+    witchfire: {
+        label: "Witchfire",
+        unique: true,
+        always: true,
+        element: "fire",
+        about: "Every blow sets the foe struck alight with green fire, and the fire leaps on to the nearest foes beside it.",
+        share: [0.35, 0.6],
+        leaps: [1, 2],
+        reach: 4,
     },
 });
 

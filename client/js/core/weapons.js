@@ -752,6 +752,17 @@ export const NATURAL = Object.freeze({
             ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 900, duration: 1500, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
         ],
     },
+    // (Vharzul the Greenflame (creatures.js), the Pit's first lord: the Lord of the Pit's claws, a
+    // little harder, burning; and the thin places' green fire flung from his hands as they open
+    // (riftFire, as the rift's own is), six tenths of the way through his spell, further than the
+    // Lord's hellfire. His wings and his ring of green fire are moves of his own (creatures.js `moves`))
+    vharzul: {
+        label: "Burning claws and green fire",
+        attacks: [
+            melee({ id: "smash", damage: [10, 16], hitAt: 500, duration: 1500, interval: 1800, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "greenfire", reach: 10, damage: [8, 13], hitAt: 900, duration: 1500, interval: 3400, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "riftFire", speed: 13 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
     // (The Stone Golem of Harrowstone: creatures.js. Up close, one of its three blows at random, each
     // landing where its model's clip has it: its hammer thrust down over its shoulder (the blow
     // well over half way through, Attack 3), swept round at its side (two fifths of the way,

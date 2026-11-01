@@ -475,8 +475,8 @@ export const MODELS = Object.freeze({
     // drawn as it's made, 3.2 metres tall (3.5 to its wings' tips), its wings spread 5.2 and
     // burning; its own clips: its claws swept one way or the other (its smash), hellfire flung
     // from its hands as it opens them (its spell, weapons.js's "wand"). Walking at 1.62 m/s; its
-    // run a sprint (5.88), played slower at its chase. In its own red: its green kept for
-    // something rarer (the catalog's skins))
+    // run a sprint (5.88), played slower at its chase. In its own red: its green is Vharzul the
+    // Greenflame's, the Pit's first lord, cast out (the catalog's skins: `vharzul`, below))
     demonLord: Object.freeze({
         asset: "beast-infernal",
         length: 1.92,
@@ -484,6 +484,27 @@ export const MODELS = Object.freeze({
         clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
         attacks: Object.freeze({ claw: "Attack L", rake: "Attack R" }),
         specials: Object.freeze({ wand: "Spell In" }),
+        rests: Object.freeze({}),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 1.62,
+        runPace: 5.88,
+        flinch: 0.5,
+    }),
+    // (Vharzul the Greenflame, the Pit's first lord, cast out (creatures.js): the Lord of the Pit's
+    // Infernal Demon in its other skin (the catalog's beast-infernal-skins, `dark`: its glows green,
+    // its armour's cloth green), drawn as the Lord is; his own moves on its clips the Lord doesn't
+    // play: his wings swept round before him (Wing Attack L), his ring of green fire (Cast), and the
+    // thin place torn open behind him as fiends come through it (Spell Loop, his rally))
+    vharzul: Object.freeze({
+        asset: "beast-infernal",
+        skins: Object.freeze(["dark"]),
+        length: 1.92,
+        made: Object.freeze({ long: 1.92, tall: 3.51 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Attack L", rake: "Attack R" }),
+        specials: Object.freeze({ wand: "Spell In", wing: "Wing Attack L", flare: "Cast", rally: "Spell Loop" }),
         rests: Object.freeze({}),
         fire: Object.freeze({}),
         joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),

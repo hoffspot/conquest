@@ -123,7 +123,8 @@ function blowsHarm(actor, abilities) {
     const bleeding = actor.bleed > 0 ? Math.min(1, (actor.bleed * ms) / every) * ((damage * power * 1000) / bleedEvery) : 0;
     const numbers = actor.legendary ? effectAt(actor.legendary.effect, actor.legendary.level) : null;
     // (One let loose by its charge, its own harm now and then; or a cleave, every blow's own harm
-    // again on the others before them, as many as CLEAVED has it)
+    // again on the others before them, as many as CLEAVED has it; or witchfire, leaping on to the
+    // others beside them, as many the same)
     const effect = !numbers ? 0 : numbers.damage ? (meanOf(numbers.damage) * power * 1000) / (actor.legendary.charge * every) : kind === "melee" && numbers.share ? blows * numbers.share * CLEAVED : 0;
 
     return blows + doubled + bleeding + effect;

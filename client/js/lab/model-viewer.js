@@ -159,6 +159,7 @@ const ABOUT = {
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
     frostTroll: ["Frost troll", "The snows: for the mightiest", "hammer"],
     demonLord: ["Demon lord", "A hell's throne, at the bottom of its pit"],
+    vharzul: ["Vharzul the Greenflame", "At the Sundered Ring by night, once a world: the Pit's first lord, cast out; his rare card's foe, a world's boss"],
     greaterDemon: ["Greater demon", "A hell's River of Fire, by the Hellforge: its master"],
     fiend: ["Fiend", "A hell's every level, in packs: the more of them the deeper down"],
     flayling: ["Flayling", "A hell's Breach, in swarms: raw claws that leave you bleeding"],
@@ -1507,7 +1508,7 @@ const groups = [
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
     ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
-    ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord"]],
+    ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul"]],
 ];
 
 for (const [label, ids] of groups) {

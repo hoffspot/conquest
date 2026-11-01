@@ -71,6 +71,10 @@ export const PLACE_KINDS = Object.freeze({
     // as its rare card's foe: core/rare.js; what's left of the Lantern Company at its heart, its
     // `scene`: setpieces/scenes.js SCENES)
     "ruined quarry": { size: "medium", icon: "quarry", holds: [], scene: "crushed" },
+    // (The Sundered Ring: no one's, where Vharzul the Greenflame was cast up through a thin place,
+    // met there by night as its rare card's foe: core/rare.js; those who came before him burnt at
+    // its heart, its `scene`)
+    "sundered ring": { size: "medium", icon: "stones", holds: [], scene: "challengers" },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)

@@ -87,6 +87,10 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 A hell (`themes.js` `hell`) is a dungeon four levels deep, each level a realm of its own, met only
 at the highest tiers. Two or three are in every world, each gone into from a cult's camp out in the
 wilds, and only by night, once the cult keeping its rite there is slain ([The way in](#the-way-in-a-cults-camp-by-night)).
+Why they are: the hells are the dark under the world the Six drove the Hollow One into, its prison,
+pressing up against the world where its skin wears thin; the cult is the Hollow Choir, who would
+wake it, singing a gate open each night at a thin place they keep (docs/WILDS.md *Vharzul the
+Greenflame*, whose quest ends going down through one).
 
 - **Its realms**, one a level, top to bottom (its `realms`, each a theme's fields for its level:
   `themes.js` `realmOf`; each level carries its own `realm`, `look`, `style`, `ground` and
@@ -178,8 +182,8 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   from its hands as it opens them in its spell (the special `wand`, as the weapon names it, six
   tenths of the way through); no rest of its own; its walk at its pace (1.62 m/s), its run a
   sprint (5.88 m/s) played slower at its chase. It's in its own red: its dark look, its glows
-  green, is kept for something rarer (the catalog's `beast-infernal-skins`), and shown in the
-  model viewer. Its henchmen stand about it (*Its own kinds*, above). Till the model's read (and
+  green (the catalog's `beast-infernal-skins`), is his brother's, Vharzul the Greenflame's, the
+  Pit's first lord, whom he threw down and cast out (docs/WILDS.md *Vharzul the Greenflame*). Its henchmen stand about it (*Its own kinds*, above). Till the model's read (and
   where the licensed models aren't, as in CI) it's drawn as its stand-in, a people-shaped brute as
   the wild's are (`beasts/looks.js`): bigger than a troll, red as a coal, horned and tusked.
 - **The River of Fire's master, the Forge Demon** (`creatures.js` `greaterDemon`, tier 10, met

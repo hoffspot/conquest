@@ -1279,7 +1279,7 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     (`felt`), and its `element`, which says how it's drawn and heard (app/game.js `WARD_LOOKS`: the
     shell's, the shards' and the ring's colours, its element's casting heard).
   - *A unique's own* (`unique`, never rolled on a legendary weapon), on every blow with no charge to
-    fill (`always`: no charge shown, `charge.js`). The only one so far, *Cleave*, Kingsplitter's (a
+    fill (`always`: no charge shown, `charge.js`). Two so far. *Cleave*, Kingsplitter's (a
     great axe: docs/WILDS.md *The Orc King*): every blow up close carries on through every other foe
     within 2.6 m of its wielder and no more than 60° either side of the way to whoever it was struck
     at (battle.js `#cleave`), each struck half as hard at the axe's first level to four fifths at its
@@ -1288,7 +1288,17 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     caught, steel heard ringing (`clash`); in hand, a cold steel glow, glints falling off it
     (world/legendaries.js, effects.js `legendCleave`). Its card: "Cleave: every blow up close
     cleaves on through every other foe within 2.6 m before you, each struck 80% as hard". In might,
-    its share again of every blow's harm on half a foe more (might.js `CLEAVED`).
+    its share again of every blow's harm on half a foe more (might.js `CLEAVED`). And *Witchfire*
+    (fire), Greenbrand's (a sword ground from Vharzul the Greenflame's horn: docs/WILDS.md *Vharzul
+    the Greenflame*): every blow up close sets the foe struck burning (battle.js `#witchfire`), and
+    the fire leaps on from them to the nearest foe not yet caught within 4 m, once at the blade's
+    first level, twice at its highest (`leaps`), each struck a third as hard to three fifths
+    (`share`), their armour's, fire's (warded against fire, the less), and set burning too; a green
+    flash and green flames off the foe struck, a tongue of green fire leaping on to each it caught,
+    heard as a Cinderburst (`legendCinderburst`); in hand, a green glow, green flames licking up off
+    it (effects.js `legendWitchfire`). Its card: "Witchfire: every blow up close sets the foe struck
+    alight with green fire, leaping on to the 2 nearest foes within 4 m of them, each struck 60% as
+    hard and set alight". In might, as a cleave.
   - *One of each at most* (might.js `fighterOf`: `legendary`, `ward`): the weapon's first, then
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).

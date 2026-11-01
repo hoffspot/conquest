@@ -5716,9 +5716,9 @@ export class Battle {
             if (attack.kind === "colossal") {
                 this.#colossal(actor, attack, current.ahead);
             } else if (attack.call) {
-                const { kind, count, most, down = null, title = null } = attack.call;
+                const { kind, count, most, down = null, title = null, told = null } = attack.call;
 
-                this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, ...(down === null ? {} : { down }), ...(title ? { title } : {}), map: actor.map, x: actor.x, y: actor.y });
+                this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, ...(down === null ? {} : { down }), ...(title ? { title } : {}), ...(told ? { told } : {}), map: actor.map, x: actor.x, y: actor.y });
             } else if (attack.bomb) {
                 this.#lob(actor, target, attack);
             } else if (attack.quake) {
@@ -6327,6 +6327,38 @@ export class Battle {
         }
     }
 
+    // A blow up close setting the foe struck alight with green fire (core/legendary.js witchfire:
+    // Greenbrand's, as strong as the piece's level: effectAt), the fire leaping on from them to as
+    // many more as its `leaps`, each the nearest not yet caught within its `reach` of the last, each
+    // struck its `share` as hard as the blow would strike them (their armour's), fire's, and set
+    // alight too (warded against fire, the less). Told as "unleashed", with whoever it leapt to
+    #witchfire(actor, target, attack) {
+        const { share, leaps, reach } = effectAt(actor.legendary.effect, actor.legendary.level);
+        const power = actor.power?.melee ?? 1;
+        const chain = [target];
+
+        for (let k = 0; k < leaps; k++) {
+            const last = chain.at(-1);
+            const next = this.#foesNear(actor, last.map, last.x, last.y, reach).find((one) => !chain.includes(one) && !one.dead);
+
+            if (!next) {
+                break;
+            }
+
+            chain.push(next);
+        }
+
+        if (!target.dead) {
+            this.afflict(target.id, "burn", { by: actor.id, power });
+        }
+
+        for (const one of chain.slice(1)) {
+            this.#hit(actor, one, { id: "witchfire", kind: "witchfire", element: "fire", reaction: "fire", stagger: Math.round((attack.stagger ?? 150) / 2), afflict: { kind: "burn", chance: 1 } }, null, { damage: Math.max(1, Math.round(rollDamage(attack, this.random) * power * share * (1 - (one.armor ?? 0)))) });
+        }
+
+        this.#emit("unleashed", { id: actor.id, target: target.id, effect: "witchfire", level: actor.legendary.level, map: actor.map, x: target.x, y: target.y, radius: reach, struck: chain.slice(1).map(({ id }) => id) });
+    }
+
     // Held fast by a legendary weapon's effect `ms` (frozen solid, or shocked: `look`): stunned as a
     // spell stuns, less long warded against its element; never the colossal
     #freeze(by, target, ms, look) {
@@ -6489,12 +6521,13 @@ export class Battle {
     // King's leap), or sweeps all round (`ahead` 0: his spin), `ahead` metres before whoever struck
     // it, the way it faces: the ground heaving `radius` round there, everyone of the other side in
     // it hurt (its damage, times their power for blows up close) and thrown away from them
-    // (#blast), its element earth's (but as given, `element`: null, none)
+    // (#blast), its element earth's (but as given, `element`: null, none), leaving on them what it
+    // says (`afflict`: Vharzul's ring of green fire, setting them burning)
     #quake(actor, attack) {
-        const { ahead, radius, toss, kind, element = "earth" } = attack.quake;
+        const { ahead, radius, toss, kind, element = "earth", afflict = null } = attack.quake;
         const [x, y] = [actor.x + sin(actor.facing ?? 0) * ahead, actor.y + cos(actor.facing ?? 0) * ahead];
 
-        this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power: actor.power?.melee ?? 1, toss, kind, heart: [actor.x, actor.y], element, reaction: attack.reaction ?? "crush", stagger: attack.stagger ?? 300 });
+        this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power: actor.power?.melee ?? 1, toss, kind, heart: [actor.x, actor.y], element, reaction: attack.reaction ?? "crush", stagger: attack.stagger ?? 300, afflict });
     }
 
     // A bomb in the air (BOMBS), from where `by` stands to (x, y): landing a moment later, and
@@ -6910,10 +6943,15 @@ export class Battle {
             this.#die(target, attacker);
         }
 
-        // A unique's cleave (core/legendary.js cleave: Kingsplitter's): every blow up close carried on
-        // through every other foe before whoever struck it (#cleave)
+        // A unique's own on every blow up close (core/legendary.js `always`): its cleave, carried on
+        // through every other foe before whoever struck it (Kingsplitter's: #cleave); or its
+        // witchfire, the foe struck set alight and the fire leaping on (Greenbrand's: #witchfire)
         if (weaponBlow && blow === "melee" && EFFECTS[attacker.legendary?.effect]?.always && !attacker.dead) {
-            this.#cleave(attacker, target, attack);
+            if (attacker.legendary.effect === "witchfire") {
+                this.#witchfire(attacker, target, attack);
+            } else {
+                this.#cleave(attacker, target, attack);
+            }
         }
 
         // A legendary weapon's blow landing with its charge full: its effect let loose on whoever

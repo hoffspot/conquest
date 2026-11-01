@@ -20,6 +20,7 @@ export const LOOK = Object.freeze({
     stormlash: { colour: 0xa8b8ff, motes: "legendStorm" },
     ruinblast: { colour: 0xffc040, motes: "legendRuin" },
     cleave: { colour: 0xc8d4e0, motes: "legendCleave" },
+    witchfire: { colour: 0x4aff7a, motes: "legendWitchfire" },
     rate: { rest: 7, blow: 45 },
     glow: 0.45,
 });

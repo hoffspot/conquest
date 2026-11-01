@@ -146,6 +146,38 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (The knight Maelis's last note, found on her at the Sundered Ring, where Vharzul the Greenflame
+    // burnt the three who came at midsummer: core/rare.js THREADS exile, given as its first step's done)
+    maelis: Object.freeze({
+        title: "A note in Maelis's hand",
+        by: "Maelis, a knight of the Red Horn",
+        found: "Folded in the gauntlet of a knight burnt where she fell at the heart of the Sundered Ring",
+        entries: Object.freeze([
+            {
+                heading: "Midsummer, by day",
+                text: [
+                    "The stones are split as the priest said, every one of them, and burnt black on the side that faces in. Where the flat stone should be there is only glass: green, cracked, warm to the hand at noon. Tobin found sheep's bones round it and would not stay near it. Wynn says the world is thin here, thin as paper, and that the glass is where it tore.",
+                    "We will wait for the dusk. Brannoc, guide my aim.",
+                ],
+            },
+            {
+                heading: "The same night",
+                hand: "The hand is shaking, the ink spattered.",
+                text: [
+                    "It came up out of the glass as the sun went down: a lord of the Pit, as the old tales draw them, but its fire green, not red. It did not strike at once. It asked us our names, and gave us its own: Vharzul, who sat the Pit's throne before his brother threw him down and cast him up through this place.",
+                    "Every gate below is keyed to the Choir's song, it said, and the Choir sing for his brother now, so the gates will not open to him. It wants a champion to go down for it. It tests whoever comes. Wynn did not last the first breath of its fire. Tobin ran, and it let him run, and then it did not.",
+                ],
+            },
+            {
+                heading: "Later",
+                hand: "Barely legible, written lying down.",
+                text: [
+                    "It says I was nearly strong enough. It says the next may be. If you are reading this, you are the next. It will come at dusk. Do not fight it by day; you will only find stones. And whatever it promises you, remember that it was the Pit's lord before it was an exile.",
+                ],
+                signed: "Maelis",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */

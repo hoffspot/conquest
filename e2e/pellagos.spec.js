@@ -8122,7 +8122,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await page.evaluate(() => window.pellagos.game.toggleJournal());
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
-    await expect(journal).toContainText("1 of 110 kinds of creature met");
+    await expect(journal).toContainText("1 of 111 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them
@@ -18151,6 +18151,89 @@ test("the Orc King dealt before the player at his war camp: drawn from his model
 
     expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "orcKing").id)?.doing.guard), { seconds: 15 })).toBe(true);
     expect(await page.evaluate(() => window.said.some((text) => text.includes("stands on guard: strike from the side or behind")))).toBe(true);
+});
+
+test("Vharzul the Greenflame dealt before the player by night: drawn from the Lord of the Pit's model in its green skin at once, his bar across the top; his ring of green fire sets them burning, and worn down he tears the thin place open, fiends coming through, told in his words", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field by night, the lone orc out of the way: the debug overlay's Card and its
+    // thread, his, his thread brought to him, dealt a little ahead of them)
+    const dealt = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(11).keys()].every((j) => [...Array(11).keys()].every((i) => !squares.blocked(cx - 15 + i * 3, cy - 15 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 80; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 50000;
+
+        // (Past dusk: a new world starts at minute 18 of its day, daytime.js)
+        Object.assign(game.host.war, { turn: Math.ceil(game.host.war.turn / 60) * 60 + 40, clock: 0 });
+
+        // (What they're told, kept)
+        const message = game.hud.message.bind(game.hud);
+
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+
+            return message(text, seconds);
+        };
+
+        return game.host.command(game.me, { type: "rare", card: "vharzul" });
+    });
+
+    expect(dealt).toMatchObject({ ok: true, card: "vharzul" });
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "vharzul").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    await expect(page.locator("#bossbar .name")).toHaveText("Vharzul the Greenflame");
+    expect(
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const lord = game.battle.actors.find((actor) => actor.wild?.creature === "vharzul");
+
+            return { skin: game.avatars.get(lord.id).plan.skin, worldBoss: lord.wild.worldBoss, champion: lord.wild.champion };
+        }),
+    ).toEqual({ skin: "dark", worldBoss: true, champion: "boss" });
+
+    // (Three metres off, his ring of green fire made ready: it bursts round him, setting them burning)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const lord = game.battle.actors.find((actor) => actor.wild?.creature === "vharzul");
+
+        game.host.battle.place(lord.id, "town", [Math.floor(me.x), Math.floor(me.y + 3)]);
+        Object.assign(lord, { facing: Math.PI, readyAt: 0, attack: null, movesAt: { wing: Infinity, flare: game.battle.time } });
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "vharzul").attack?.attack.id === "flare", { seconds: 15 })).toBe(true);
+    expect(await playUntil(page, () => (window.pellagos.game.battle.actor(window.pellagos.game.me).afflictions ?? []).some(({ kind }) => kind === "burn"), { seconds: 10 })).toBe(true);
+
+    // (Worn down past two thirds: the thin place torn open, fiends through it, told)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const lord = game.battle.actors.find((actor) => actor.wild?.creature === "vharzul");
+
+        Object.assign(lord, { hp: Math.floor(lord.maxHp * 0.6), readyAt: 0, attack: null, movesAt: { wing: Infinity, flare: Infinity } });
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.some((actor) => actor.wild?.creature === "fiend" && !actor.dead), { seconds: 20 })).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => text === "Vharzul the Greenflame tears the thin place open behind him: fiends come through!"))).toBe(true);
 });
 
 test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {

@@ -25,7 +25,7 @@ import { Explored } from "./explored.js";
 import { abilityLabel, abilityOf, BANES, bynameOf, capOf, ENMITY_WEIGHTS, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
-import { cardOf as rareCard, DEBUG_CARDS, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, SAMPLE, SAMPLE_DEEP, siteDoor, talksFor, threadWares, threadWords, THREADS, UNIQUES, VAULT, vaultOrigin } from "./rare.js";
+import { cardOf as rareCard, DEBUG_CARDS, gatesHold, hourOf, keeperOf, Legends, LOCKS, lockSite, makeUnique, openerOf, priceTimes, RARE, SAMPLE, SAMPLE_DEEP, siteDoor, talksFor, threadWares, threadWords, THREADS, UNIQUES, VAULT, vaultOrigin } from "./rare.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -10597,9 +10597,10 @@ export class Host {
 
     // A rare card's foe (rare.js SHAPES `foe`) put out at its spot: of its creature, or what lives
     // there (creatures.js encounterAt), as strong as the land is there and its `up` more, ranked as
-    // a dungeon's are (CHAMPIONS), called by its title. Its ids
+    // a dungeon's are (CHAMPIONS), called by its title, its hit points its kind's times its `health`
+    // (Vharzul's, half again). Its ids
     #rareFoe(card, { heart }, homes) {
-        const { creature = null, champion = "mini", up = 0, title = null } = card.shape;
+        const { creature = null, champion = "mini", up = 0, title = null, health = 1 } = card.shape;
         const plan = this.world.plan;
         const encounter = encounterAt(plan, heart, homes.map(({ home }) => home), this.random, this.#dark());
         const kind = creature ?? (encounter && !CREATURES[encounter.creature].perilous ? encounter.creature : null);
@@ -10612,7 +10613,7 @@ export class Host {
         const id = `wild-${this.nextWild++}`;
 
         try {
-            this.#rouse(id, kind, tier, this.#spots()(heart), { pack: `rare-${id}`, champion, title });
+            this.#rouse(id, kind, tier, this.#spots()(heart), { pack: `rare-${id}`, champion, title, health });
         } catch {
             return [];
         }
@@ -10632,7 +10633,9 @@ export class Host {
         }
 
         for (const card of Object.values(this.legends.cards)) {
-            const place = card.where === "site" && !card.debug && card.requires && this.legends.wants(card) && !this.legends.gone.has(card.id) ? this.legends.threads[card.requires.thread]?.place : null;
+            // (In its hours, if it's any: Vharzul only after dusk)
+            const kept = card.where === "site" && !card.debug && card.requires && this.legends.wants(card) && !this.legends.gone.has(card.id) ? this.legends.threads[card.requires.thread]?.place : null;
+            const place = kept && gatesHold(card, this.#rareAt(kept)) ? kept : null;
             const comer = place ? [...this.players.values()].find((player) => {
                 const actor = this.battle.actor(player.id);
 
@@ -11311,7 +11314,16 @@ export class Host {
             thread.town = town ? opener.site.id : this.#nearestTown(thread.place);
             thread.foes = null;
         } else if (def?.kind === "card" && rareCard(def.card)?.where === "site") {
-            thread.place = this.#threadHaunt(thread.at, def.far ?? [110, 170], def.toward ?? null);
+            // (Kept where the thread was last, `here`: Vharzul at the Sundered Ring; else its haunt)
+            thread.place = def.here ? [...thread.at] : this.#threadHaunt(thread.at, def.far ?? [110, 170], def.toward ?? null);
+            thread.town = this.#nearestTown(thread.at);
+        } else if (def?.kind === "enter") {
+            // (The plan's dungeon of its theme nearest where it was last, its way in marked: a hell's
+            // cult's camp, the way Vharzul's brand points)
+            const site = this.#nearestSite("dungeon", thread.at, def.theme ?? null);
+
+            thread.place = site ? [...site.at] : null;
+            thread.site = site?.id ?? null;
             thread.town = this.#nearestTown(thread.at);
         } else if (def?.kind === "talk" || def?.kind === "contract") {
             thread.town = def.home && thread.home ? thread.home : this.#nearestTown(thread.at);
@@ -11366,11 +11378,11 @@ export class Host {
     }
 
     // A player gone in by a way in (`event`: the battle's "cross"): a thread whose lock step's
-    // that way's, done by them
+    // that way's, or whose enter step's (its `site`: a hell's), done by them
     #threadCrossed(event) {
         for (const [id, thread] of Object.entries(this.legends.threads)) {
             const def = this.legends.stepOf(id);
-            const site = def?.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
+            const site = def?.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : def?.kind === "enter" && thread.site ? { id: thread.site } : null;
 
             if (site && event.link === siteDoor(site) && event.from === "town" && !this.legends.gaveUp(id, event.id)) {
                 this.#threadDone(id, [event.id], thread.place);
@@ -11398,9 +11410,10 @@ export class Host {
         return [...at];
     }
 
-    // The plan's place of a kind (`kind`: one of its sites') nearest `at`, or null
-    #nearestSite(kind, at) {
-        const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === kind);
+    // The plan's place of a kind (`kind`: one of its sites'; a dungeon of a `theme`, if it's given)
+    // nearest `at`, or null
+    #nearestSite(kind, at, theme = null) {
+        const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === kind && (!theme || site.theme === theme));
 
         return sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
     }

@@ -685,6 +685,9 @@ export const LOOKS = Object.freeze({
     // (A hell's lord, and the River of Fire's master: great horned brutes, until the bought models
     // of their own are read)
     demonLord: { body: "humanoid", scale: [1.6, 1.65] },
+    // (Vharzul the Greenflame, the Pit's first lord, cast out: the Lord's brute, his eyes the green
+    // of the thin places, until his model's read)
+    vharzul: { body: "humanoid", scale: [1.6, 1.65] },
     greaterDemon: { body: "humanoid", scale: [1.55, 1.6] },
     // (A hell's fiend: lean, horned and a head and more taller than a man, until its own model's read)
     fiend: { body: "humanoid", scale: [1.28, 1.33] },
@@ -882,6 +885,18 @@ const BRUTES = {
         details: { browRidge: [0.9, 1], underbite: [0.5, 0.8], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.7], eyeSize: [-0.6, -0.3], earPoint: [0.9, 1], earSize: [0.4, 0.7], noseHump: [0.4, 0.8], armLength: [0.7, 0.9], handSize: [0.8, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.2] },
         skin: { tones: ["#8a2216", "#7a1c12", "#962a1a"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.6, 0.9], warpaint: "#140808" },
         irises: ["#ffb020", "#ff8a1a"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (Vharzul the Greenflame, standing in for his own model: the Lord's brute, darker, the colour
+    // of a coal gone cold, his eyes burning the green of the thin places)
+    vharzul: {
+        macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.75], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.9, 1], underbite: [0.5, 0.8], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.7], eyeSize: [-0.6, -0.3], earPoint: [0.9, 1], earSize: [0.4, 0.7], noseHump: [0.4, 0.8], armLength: [0.7, 0.9], handSize: [0.8, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.2] },
+        skin: { tones: ["#5a1a14", "#4e1610", "#621c16"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.6, 0.9], warpaint: "#0a1a0c" },
+        irises: ["#7aff5a", "#4af07a"],
         slit: true,
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"], ["orcHelm"]],

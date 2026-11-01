@@ -108,13 +108,32 @@ export const RARE_CARDS = Object.freeze({
         reward: Object.freeze({ unique: "kingsplitter", gold: 900 }),
         requires: Object.freeze({ thread: "ironcrown", step: 1 }),
     }),
+    // (Vharzul the Greenflame (creatures.js vharzul): the Pit's first lord, cast out by his brother;
+    // a world's boss, once a world, kept at the Sundered Ring where he was cast up (his thread's card
+    // step, `here`: the ring itself), and met only after dusk (`gates`), gone at dawn if no one's
+    // taken him on; his fiends come through the thin place as he's worn down; his last words said as
+    // he falls, his brand pointing the way to a hell; his reward a blade ground from his horn,
+    // Greenbrand, and a purse of gold)
+    vharzul: Object.freeze({
+        id: "vharzul",
+        title: "Vharzul the Greenflame",
+        word: "The glass between the broken stones flares green. Out of the scar a great winged shape rises, green fire running along its wings and over its black iron: Vharzul the Greenflame, who was lord of the Pit.",
+        last: "Vharzul sinks to one knee in the scar he came through, and laughs. \"Strong enough. At last, strong enough.\" He drives a burning claw into the nearest stone, and the mark smokes there, pointing away across the land. \"The Choir sing their gate open at nightfall, there. Break their song and go down, and put my brother off my throne.\" His fire gutters out.",
+        kind: "unique",
+        venue: "wilds",
+        where: "site",
+        gates: Object.freeze({ hours: Object.freeze(["dusk", "night"]) }),
+        shape: Object.freeze({ kind: "foe", creature: "vharzul", champion: "boss", up: 2, title: "Vharzul the Greenflame", health: 1.5 }),
+        reward: Object.freeze({ unique: "greenbrand", gold: 900 }),
+        requires: Object.freeze({ thread: "exile", step: 1 }),
+    }),
 });
 
 /**
  * What a card is in the world (its `shape.kind`):
  * - `foe`: a foe of its own, ranked as a dungeon's are (`champion`: "mini" or "boss"), `up` tiers
- *   above the land, called by its `title`; of `creature`, or, none, what lives there; done once it
- *   falls.
+ *   above the land, called by its `title`, its hit points its kind's times its `health` (1, but
+ *   Vharzul's); of `creature`, or, none, what lives there; done once it falls.
  */
 export const SHAPES = Object.freeze(["foe"]);
 
@@ -141,6 +160,15 @@ export const UNIQUES = Object.freeze({
         base: "axe",
         effect: "cleave",
         about: "The Orc King's great axe, beaten out of the iron of the Horde's tribute, its edge nicked by every clan chief who stood against him. Each blow it strikes cleaves on through whoever else stands before its wielder, the harder the finer the axe. Found nowhere else.",
+    }),
+    // (Vharzul the Greenflame's reward: a blade ground from one of his horns, its effect witchfire,
+    // legendary.js: the foe struck set alight, the fire leaping on)
+    greenbrand: Object.freeze({
+        id: "greenbrand",
+        name: "Greenbrand",
+        base: "sword",
+        effect: "witchfire",
+        about: "A blade ground from one of Vharzul the Greenflame's horns, the Pit's first lord, and it has never stopped burning. Every blow it strikes sets the foe alight with the green fire of the thin places, and the fire leaps on to whoever stands nearest them, the further the finer the blade. Found nowhere else.",
     }),
 });
 
@@ -238,7 +266,8 @@ export function cardOf(id) {
  *   people's settlements is, if it's `toward` them), up on the highest open ground there (its
  *   place: its foe's prints leading there from where it was last, threadTracks, said as they're
  *   come upon in its words, `spoor`, {way} which way they lead; marked on the maps, `mark`); a camp
- *   pitched there while it is (`camp`: { people, tents }: campOf, world/camps3d.js).
+ *   pitched there while it is (`camp`: { people, tents }: campOf, world/camps3d.js). Or kept where
+ *   the thread was last (`here`: the place of the step before, Vharzul's at the Sundered Ring).
  * - `place`: somewhere to go, `far` ([least, most] metres) from where the thread was last (its
  *   encounter, or the place of the step before), on open ground, or the plan's place of a kind
  *   (`site`: "ruined quarry", the nearest), marked on every player's maps; done once someone comes
@@ -257,8 +286,11 @@ export function cardOf(id) {
  *   from it first; done once the last of them's fallen, those near taking part.
  * - `lock`: a lock opened (`lock`: LOCKS), as the thread comes to it, its way in marked on every
  *   player's maps; done once someone goes in by it.
+ * - `enter`: a way in to go in by, the plan's dungeon of a theme nearest where the thread was last
+ *   (`theme`: "hell", a hell's way in, its cult's camp), marked on every player's maps; done once
+ *   someone goes in by it (by night, its rite broken, as anyone goes into a hell).
  */
-export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock", "fight"]);
+export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock", "fight", "enter"]);
 
 /**
  * How a thread's step changes the world as it's done (a step's `change`), in the settlement it
@@ -286,7 +318,8 @@ export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal", "b
  * gold?, unique? (UNIQUES), writing? (writings.js WRITINGS) }: each who takes part in it given
  * their own), change? (CHANGES), and its kind's own }] }`. The sample's, debug mode's, has one of
  * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step; the
- * Iron Crown's too, its first step a fight.
+ * Iron Crown's too, its first step a fight; the Exile's Road's, a priest's rumour, its last step a
+ * hell's way in gone through.
  */
 export const THREADS = Object.freeze({
     sampleTrail: Object.freeze({
@@ -390,11 +423,43 @@ export const THREADS = Object.freeze({
             }),
         ]),
     }),
+    // (The Exile's Road (docs/WILDS.md *Vharzul the Greenflame*): begun by a temple priest's rumour
+    // in the settlement nearest the Sundered Ring, of green fire on the hill there and the three who
+    // went up after it at midsummer; what's left of them found at the ring, the knight Maelis's note
+    // on her; Vharzul, met there after dusk (RARE_CARDS vharzul); and, his brand pointing the way,
+    // the Hollow Choir's rite at the nearest hell's way in broken and its portal gone through)
+    exile: Object.freeze({
+        id: "exile",
+        title: "The Exile's Road",
+        opens: Object.freeze({
+            kind: "talk",
+            role: "priest",
+            post: "temple",
+            near: "sundered ring",
+            ask: "Something weighs on you.",
+            tale: Object.freeze([
+                Object.freeze({ say: "Green fire. Out at the Sundered Ring, {way} of here: the old standing stones on the hill, split down the middle and black as if the sky struck them. The shepherds see it after dark and won't graze the hill. I've seen it myself, from the bell tower.", ask: "What is the Sundered Ring?" }),
+                Object.freeze({ say: "A thin place. You know the Six drove the Hollow One down under the world? The dark it lies in is the hells, and where the world's skin wears thin, the hells press up against it. By night, things can come through at such places. The Ring is one. Something came through it years ago, and split the stones doing it.", ask: "And the robed folk out in the wilds?" }),
+                Object.freeze({ say: "The Hollow Choir, they call themselves. They say the Hollow One was the seventh spark, cheated by the Six, and that feeding it will wake it. Every night they sing a gate open at a thin place they keep, and feed it whatever they've taken. Whatever burns at the Ring is no friend of theirs, mind. They give that hill a wide berth too.", ask: "Has anyone gone up there?" }),
+                Object.freeze({ say: "Three went up at midsummer: Maelis, a knight of the Red Horn, a hunter called Tobin, and a young mage who should have known better. They meant to put the fire out. They haven't come back, and the fire hasn't gone out. I pray for them every night, and every night it burns." }),
+            ]),
+            take: "I'll go up to the Ring.",
+            taken: "Then go by day first, and see what's become of them. Whatever it is comes with the dark. Aurelia's light go with you.",
+            leave: "Not for me.",
+            back: Object.freeze({ ask: "About the Sundered Ring: I'll go up there after all.", reply: "Thank the Six. It burned again last night. Go by day, and come back with the dawn." }),
+        }),
+        steps: Object.freeze([
+            Object.freeze({ kind: "place", site: "sundered ring", reach: 18, word: "Maelis, Tobin and a young mage went up to the Sundered Ring, {way} of {town}, after the green fire there, and never came back. Go and see what's become of them.", reward: Object.freeze({ gold: 40, writing: "maelis" }) }),
+            Object.freeze({ kind: "card", card: "vharzul", here: true, word: "Whatever burns at the Sundered Ring comes only after dark: Maelis met it at dusk. Go back to the ring when the sun's down, and face it." }),
+            Object.freeze({ kind: "enter", theme: "hell", word: "Vharzul's brand, burnt into a stone of the Sundered Ring, points {way} to where the Hollow Choir sing their gate open: a hell's way in. Break their rite by night, and go down through it.", reward: Object.freeze({ gold: 250 }) }),
+        ]),
+    }),
 });
 
 /**
  * How a thread that comes before its card is begun (THREADS `opens`): a rumour told by one of the
- * folk (`kind` "talk": an adventurer of a `calling`, `role`'s, at the guild in the settlement
+ * folk (`kind` "talk": an adventurer of a `calling`, `role`'s, at the guild in the settlement, or
+ * another of the folk where they keep, `post`: a priest at its temple; the settlement
  * nearest the plan's place of a kind, `near`, or a people's border village, `near` { border }:
  * openerOf; none of that calling left there, any of its adventurers), asked of them (`ask`), the
  * tale told a piece at a time (`tale`: each piece's words, {way} which way the place is from there
@@ -417,13 +482,14 @@ export const TALK_CALLINGS = Object.freeze(
 /**
  * Who takes a player back on a thread they gave up (Legends `giveUp`), as they'd be talked to
  * (talksFor): the one who told its rumour, if it's begun by one (THREADS `opens`: an adventurer of
- * its `calling` at the guild in its home settlement, `home`), else the receptionist at any guild.
- * { role, calling, home }.
+ * its `calling` at the guild in its home settlement, `home`; or another of the folk where they keep,
+ * its `post`: the Exile's Road's priest at the temple), else the receptionist at any guild.
+ * { role, calling, home, post }.
  */
 export function keeperOf(id) {
     const opens = THREADS[id]?.opens;
 
-    return opens?.kind === "talk" ? { role: opens.role, calling: opens.calling ?? null, home: true } : { role: "receptionist", calling: null, home: false };
+    return opens?.kind === "talk" ? { role: opens.role, calling: opens.calling ?? null, home: true, post: opens.post ?? "guild" } : { role: "receptionist", calling: null, home: false, post: "guild" };
 }
 
 /** What a player asks to take a thread they gave up back up, and the reply, if its opener says nothing of its own (`opens.back`): {title} its title. */
@@ -626,15 +692,16 @@ export function threadTalk(tree, { thread, step, back = false }, fill = (text) =
  * while its thread's at its step: from where the thread was last (the Lantern Company's remains)
  * to the card's place, wandering a little either side of the way (`wander` metres, every `every`),
  * the same on every copy. [{ id, creature (its shape's), spoor (what's said as they're come upon:
- * its step's words, {way} which way they lead; or null), points ([[x, y]]) }]. `legends`: the
- * world's (Legends, or as it's kept).
+ * its step's words, {way} which way they lead; or null), points ([[x, y]]) }]. None of one kept
+ * where the thread was last (`here`: Vharzul, who comes up out of the Sundered Ring's scar, not
+ * walking there). `legends`: the world's (Legends, or as it's kept).
  */
 export function threadTracks(legends) {
     return Object.entries(legends?.threads ?? {}).flatMap(([id, thread]) => {
         const def = !thread.done ? THREADS[id]?.steps[thread.step] : null;
         const card = def?.kind === "card" ? cardOf(def.card) : null;
 
-        if (card?.where !== "site" || !thread.place || !card.shape?.creature) {
+        if (card?.where !== "site" || !thread.place || !card.shape?.creature || def.here) {
             return [];
         }
 

@@ -41,6 +41,8 @@ const BURSTS = {
     legendRuin: { count: 2, colours: [0xfff4c0, 0xff8a1a], size: [0.03, 0.07], speed: [0.2, 0.6], life: [0.3, 0.6], gravity: -1, spread: 0.8, glow: true },
     // (Kingsplitter's edge: cold glints of steel coming off it, falling)
     legendCleave: { count: 2, colours: [0xffffff, 0xb8c4d0], size: [0.02, 0.05], speed: [0.2, 0.5], life: [0.2, 0.45], gravity: 3, spread: 0.7, glow: true },
+    // (Greenbrand's edge: green flames licking up off it, rising)
+    legendWitchfire: { count: 2, colours: [0xd8ffe0, 0x18c050], size: [0.04, 0.08], speed: [0.2, 0.6], life: [0.3, 0.6], gravity: -2, spread: 0.6, glow: true },
     impact: { count: 14, colours: [0xffffff, 0xffd27a], size: [0.08, 0.18], speed: [1.5, 3.5], life: [0.12, 0.3], gravity: 4, spread: 1.4, glow: true },
     arcane: { count: 30, colours: [0xd9c4ff, 0x6a4dff], size: [0.06, 0.16], speed: [1, 3], life: [0.3, 0.6], gravity: -1.5, spread: 2, glow: true, swirl: 6 },
     fire: { count: 34, colours: [0xffe08a, 0xff3a0a], size: [0.18, 0.36], speed: [0.8, 2.4], life: [0.35, 0.75], gravity: -3, spread: 1.8, glow: true, grow: 0.4 },
