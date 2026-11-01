@@ -321,6 +321,8 @@ const INNER = 36;
 const GAP = 0.04;
 const ICON_AT = 84;
 const ICON_SCALE = 0.74;
+// (The puck in the hub of a wheel slid away from the finger: its radius)
+const PUCK = 7;
 
 /**
  * Which slice a finger `dx`, `dy` pixels from where the wheel opened is in (a DIRECTIONS
@@ -337,6 +339,86 @@ export function directionOf(dx, dy, dead = INNER) {
 }
 
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+
+// Near the screen's edge (wheelPlace, flickReach): how far a wheel's kept off it (and off the
+// notch and the home bar), how far a finger's kept off its slices once it's slid on (the finger,
+// and the icon it's on, clear of them), and the least a flick toward the edge is cut to
+const EDGE = 6;
+const FINGER = 24;
+const LEAST_FLICK = 12;
+
+/**
+ * Where a wheel opened at `x`, `y` (client pixels) is drawn, on a screen `width` by `height`
+ * pixels with `insets` ({ top, right, bottom, left }: the notch's and the home bar's): right
+ * there, if it's wholly on the screen there (`moved` false); otherwise slid onto it, and, if that
+ * left the finger on its slices (not its hub), on further the way it slid, clear of the finger.
+ * The way it's flicked is measured from the finger all the same (ActionWheel.point): a finger
+ * on one of the party's icons at the left of the screen, its middle 34 pixels in, flicks left
+ * for W as it would anywhere, the whole wheel to the right of it. { x, y, moved }
+ */
+export function wheelPlace(x, y, { width, height, insets = {} }) {
+    const half = OUTER + 4;
+    const { top = 0, right = 0, bottom = 0, left = 0 } = insets;
+    // (Kept within from and to, or, on a screen too small for it, in their middle)
+    const fit = (value, from, to) => (to - from >= 2 * (half + EDGE) ? Math.min(to - half - EDGE, Math.max(from + half + EDGE, value)) : (from + to) / 2);
+    const fitted = (px, py) => [fit(px, left, width - right), fit(py, top, height - bottom)];
+    let [cx, cy] = fitted(x, y);
+
+    if (cx === x && cy === y) {
+        return { x, y, moved: false };
+    }
+
+    const clear = OUTER + FINGER;
+    const onSlices = (px, py) => Math.hypot(px - x, py - y) > INNER && Math.hypot(px - x, py - y) < clear;
+
+    if (onSlices(cx, cy)) {
+        const d = Math.hypot(cx - x, cy - y);
+        const [px, py] = fitted(x + ((cx - x) / d) * clear, y + ((cy - y) / d) * clear);
+
+        // (On a screen too small to clear it, as far on as it went)
+        if (!onSlices(px, py)) {
+            [cx, cy] = [px, py];
+        }
+    }
+
+    return { x: cx, y: cy, moved: true };
+}
+
+/**
+ * How far a finger at `x`, `y` (client pixels; where it went down) must go `dx`, `dy`'s way to
+ * flick into a slice, on a screen `width` by `height` pixels: `flick`, or, where the screen's edge
+ * is nearer than that that way (with EDGE to spare), as far as there's room for (no less than
+ * LEAST_FLICK), so a slice toward the edge can be flicked into from by it, the finger or the
+ * mouse stopped there.
+ */
+export function flickReach(x, y, dx, dy, { width, height, flick }) {
+    const length = Math.hypot(dx, dy);
+
+    if (length === 0) {
+        return flick;
+    }
+
+    const [ux, uy] = [dx / length, dy / length];
+    const across = ux < 0 ? x / -ux : ux > 0 ? (width - x) / ux : Infinity;
+    const down = uy < 0 ? y / -uy : uy > 0 ? (height - y) / uy : Infinity;
+
+    return Math.max(LEAST_FLICK, Math.min(flick, Math.min(across, down) - EDGE));
+}
+
+// The notch's and the home bar's insets (pixels), as the browser has them now
+function screenInsets() {
+    const probe = document.createElement("div");
+
+    probe.style.cssText = "position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px)";
+    document.body.append(probe);
+
+    const style = getComputedStyle(probe);
+    const insets = { top: parseFloat(style.paddingTop) || 0, right: parseFloat(style.paddingRight) || 0, bottom: parseFloat(style.paddingBottom) || 0, left: parseFloat(style.paddingLeft) || 0 };
+
+    probe.remove();
+
+    return insets;
+}
 
 /** An SVG path for a ring's sector: from radius r0 to r1, angle a0 to a1 (radians, clockwise from east). */
 export function sectorPath(r0, r1, a0, a1) {
@@ -415,6 +497,11 @@ export class ActionWheel {
         this.target = null;
         this.side = 0;
         this.open = false;
+        // (Where its middle's drawn; whether it was slid there, off the finger; and whether its
+        // slices are chosen by the pointer over them: show)
+        this.centre = null;
+        this.moved = false;
+        this.clickable = false;
     }
 
     /**
@@ -423,27 +510,36 @@ export class ActionWheel {
      * if `flip`. `counts` says how many of each thing to use there are, and `off` which slices
      * can't be used as things are (a blow for another kind of weapon, a thing all used up).
      * `looks` gives what's in the slices their own labels and icons, and `hub` an icon for its
-     * middle (drawWheel). Its middle's right at `x`, `y`: under the finger that opened it, however
-     * near the screen's edge (its slices are flicked into by the way the finger goes from there,
-     * not touched, so one past the edge is flicked into all the same); or, `onScreen` (a wheel
-     * whose slices are clicked), kept wholly on the screen.
+     * middle (drawWheel). Its middle's right at `x`, `y`, under the finger that opened it, where
+     * it's wholly on the screen there; near the screen's edge, slid onto it, clear of the finger
+     * (wheelPlace: `moved`), growing out from where the finger is. Its slices are flicked into
+     * by the way the finger goes from where it went down all the same, a puck in its hub showing
+     * the way (`point`); or, opened by a mouse (`mouse`), the slice under the pointer's chosen
+     * (`clickable`: `sliceAt`). `onScreen` (a wheel whose slices are clicked, the pack's), kept
+     * wholly on the screen, over the thing, wherever.
      */
-    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [], looks = null, hub = null, onScreen = false } = {}) {
+    show(x, y, target, slots, { side = 0, flip = false, counts = {}, off = [], looks = null, hub = null, onScreen = false, mouse = false } = {}) {
         const size = 2 * OUTER + 8;
         const half = OUTER + 4;
+        const place = onScreen ? { x: Math.min(innerWidth - half - 4, Math.max(half + 4, x)), y: Math.min(innerHeight - half - 4, Math.max(half + 4, y)), moved: false } : wheelPlace(x, y, { width: innerWidth, height: innerHeight, insets: screenInsets() });
+        // (Flicked from a finger the wheel's slid away from: a puck in its hub for where it's going)
+        const puck = place.moved && !mouse ? `<circle class="puck" r="${PUCK}" cx="0" cy="0"/>` : "";
 
         useDefs();
-        this.element.innerHTML = `<svg viewBox="${-half} ${-half} ${size} ${size}" width="${size}" height="${size}">${drawWheel({ slots, side, flip, counts, looks, hub })}</svg>`;
+        this.element.innerHTML = `<svg viewBox="${-half} ${-half} ${size} ${size}" width="${size}" height="${size}">${drawWheel({ slots, side, flip, counts, looks, hub })}${puck}</svg>`;
 
         for (const slice of this.element.querySelectorAll(".slice")) {
             slice.classList.toggle("off", off.includes(slice.dataset.direction));
         }
 
-        const left = onScreen ? Math.min(innerWidth - half - 4, Math.max(half + 4, x)) : x;
-        const top = onScreen ? Math.min(innerHeight - half - 4, Math.max(half + 4, y)) : y;
-
-        this.element.style.left = `${left}px`;
-        this.element.style.top = `${top}px`;
+        this.element.style.left = `${place.x}px`;
+        this.element.style.top = `${place.y}px`;
+        // (Slid onto the screen, it grows out from the finger)
+        this.element.style.transformOrigin = place.moved ? `${x - place.x + half}px ${y - place.y + half}px` : "";
+        this.element.classList.toggle("slid", place.moved);
+        this.centre = { x: place.x, y: place.y };
+        this.moved = place.moved;
+        this.clickable = place.moved && mouse;
         this.element.hidden = false;
         this.element.classList.remove("shown");
         void this.element.offsetWidth;
@@ -491,20 +587,52 @@ export class ActionWheel {
         }
     }
 
-    /** Show a slice chosen (lit) or refused (flashed red), or neither (null). */
+    /** Show a slice chosen (lit), refused (flashed red) or aimed at (the pointer over it), or none (null). */
     mark(direction, how) {
         for (const slice of this.element.querySelectorAll(".slice")) {
             const here = slice.dataset.direction === direction;
 
             slice.classList.toggle("chosen", here && how === "chosen");
             slice.classList.toggle("refused", here && how === "refused");
+            slice.classList.toggle("aimed", here && how === "aimed");
         }
+    }
+
+    /**
+     * Which slice is at a point on the screen (client pixels), on the wheel as it's drawn (a
+     * DIRECTIONS direction), or null: its hub, or off it.
+     */
+    sliceAt(x, y) {
+        const [dx, dy] = [x - (this.centre?.x ?? 0), y - (this.centre?.y ?? 0)];
+        const reach = Math.hypot(dx, dy);
+
+        return this.open && reach >= INNER - 2 && reach <= OUTER + 8 ? directionOf(dx, dy, 0) : null;
+    }
+
+    /**
+     * The puck in the hub of a wheel slid away from the finger, put where the finger's going: it
+     * `dx`, `dy` pixels from where it went down, flicking into a slice `dead` pixels from there,
+     * so the puck's at the hub's edge as the finger flicks into the slice past it.
+     */
+    point(dx, dy, dead = INNER) {
+        const puck = this.element.querySelector(".puck");
+        const length = Math.hypot(dx, dy);
+
+        if (!puck) {
+            return;
+        }
+
+        const scale = length > 0 ? Math.min(length * (INNER / dead), INNER + PUCK) / length : 0;
+
+        puck.setAttribute("cx", (dx * scale).toFixed(1));
+        puck.setAttribute("cy", (dy * scale).toFixed(1));
     }
 
     /** Close it, after a moment if a slice was just chosen (so it shows). */
     hide({ after = 0 } = {}) {
         this.open = false;
         this.slots = null;
+        this.clickable = false;
         clearTimeout(this.closing);
         this.closing = setTimeout(() => {
             if (!this.open) {

@@ -117,6 +117,18 @@ async function playing(page, address) {
 // game's time go by: whether it did. Half a second at a time, a frame at a time, the page's events
 // let in between them as between frames, so what's done elsewhere (skins painted in a worker)
 // comes back to be waited on, as in play; with `realTime`, no faster than the clock
+// The mouse moved over the slice of the action wheel open that's in `direction` (its middle), as a
+// wheel opened by the mouse at the screen's edge, slid onto it, has its slices chosen: let go of
+// over it, or clicked (ActionWheel.show, game.js #letGoWheel)
+async function pointAtSlice(page, direction) {
+    // (Grown out to its full size)
+    await page.waitForTimeout(200);
+
+    const face = await page.locator(`.action-wheel .slice[data-direction="${direction}"] .face`).boundingBox();
+
+    await page.mouse.move(face.x + face.width / 2, face.y + face.height / 2, { steps: 4 });
+}
+
 async function playUntil(page, done, { seconds = 30, realTime = false } = {}) {
     const start = Date.now();
 
@@ -3261,7 +3273,7 @@ test("Auto target lock (Game options, on to start with): an enemy tapped stays t
     expect(far.lock).toBe(null);
 });
 
-test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the Action Bar's Vigor cast on it); held and flicked W, told to wait; held and flicked SW, Dismiss asks first, and it's kept; the party menu (P) lists it, Follow sets it following, and Dismiss, asked first, sends it off", async ({ page }) => {
+test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the Action Bar's Vigor cast on it); held, its wheel beside it on the screen, W chosen, told to wait; SW, Dismiss asks first, and it's kept; the party menu (P) lists it, Follow sets it following, and Dismiss, asked first, sends it off", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Summon learnt and cast where the player stands
@@ -3342,10 +3354,16 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(chosen.healed).toBe(true);
     expect(chosen.player).toBeCloseTo(0.5, 1);
 
-    // Held: the wheel opens with its middle right under the finger (the icon's by the screen's
-    // edge: past it, not pulled in off the finger); flicked W, told to wait where it is
+    // Held: the wheel opens beside the icon (by the screen's edge: slid wholly onto it, clear of
+    // the finger, ActionWheel.show); held with the mouse, its slices chosen by the pointer: W
+    // moved over and let go of, told to wait where it is
     const box = await member.boundingBox();
     const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+    const over = async (direction) => {
+        const face = await page.locator(`.action-wheel .slice[data-direction="${direction}"] .face`).boundingBox();
+
+        await page.mouse.move(face.x + face.width / 2, face.y + face.height / 2, { steps: 4 });
+    };
 
     await page.mouse.move(cx, cy);
     await page.mouse.down();
@@ -3355,12 +3373,14 @@ test("the player's party: a creature called to their side has an icon down the l
         const { wheel } = window.pellagos.game;
         const at = wheel.element.getBoundingClientRect();
 
-        return { open: Boolean(wheel.open), slots: { ...wheel.slots }, middle: { x: at.x + at.width / 2, y: at.y + at.height / 2 } };
+        return { open: Boolean(wheel.open), slots: { ...wheel.slots }, middle: { x: at.x + at.width / 2, y: at.y + at.height / 2 }, left: at.x, clickable: wheel.clickable };
     });
 
-    expect(Math.hypot(opened.middle.x - cx, opened.middle.y - cy)).toBeLessThan(1);
+    expect(opened.left).toBeGreaterThanOrEqual(0);
+    expect(Math.hypot(opened.middle.x - cx, opened.middle.y - cy)).toBeGreaterThan(128);
+    expect(opened.clickable).toBe(true);
 
-    await page.mouse.move(Math.max(1, cx - 34), cy, { steps: 4 });
+    await over("w");
     await page.mouse.up();
 
     const waiting = await page.evaluate((id) => {
@@ -3381,7 +3401,7 @@ test("the player's party: a creature called to their side has an icon down the l
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.waitForTimeout(700);
-    await page.mouse.move(Math.max(1, cx - 26), cy + 26, { steps: 4 });
+    await over("sw");
     await page.mouse.up();
     await expect(ask).toBeVisible();
     await expect(ask.locator("#dismissnote")).toContainText("for good");
@@ -11898,17 +11918,17 @@ test("meat bait the player carries goes on an enemy's wheel of itself the first 
     expect(placed.told).toContain(`Meat bait is on an enemy's wheel one, at ${placed.place.toUpperCase()}: hold on a beast and throw it to them.`);
     expect(placed).toMatchObject({ mood: "curious", mark: "?", carried: 3 });
 
-    // Held on the wolf: the bait on its slice ("Meat"); flicked into it, thrown
+    // Held on the wolf (by the top of the screen: its wheel slid down onto it, its slices chosen by
+    // the mouse over them): the bait on its slice ("Meat"); let go of over it, thrown
     const { x, y } = placed.at;
-    const way = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }[placed.place];
 
     await page.evaluate(() => window.pellagos.game.start());
     await page.mouse.move(x, y);
     await page.mouse.down();
     await expect(wheel).toBeVisible();
     await expect(wheel.locator(`.slice[data-direction="${placed.place}"] .label`)).toHaveText("Meat");
-    await page.mouse.move(x + way[0] * 20, y + way[1] * 20, { steps: 2 });
-    await page.mouse.move(x + way[0] * 50, y + way[1] * 50, { steps: 2 });
+    expect(await page.evaluate(() => window.pellagos.game.wheel.clickable)).toBe(true);
+    await pointAtSlice(page, placed.place);
     await page.mouse.up();
 
     const fed = await page.evaluate(async () => {
@@ -11960,7 +11980,7 @@ test("meat bait the player carries goes on an enemy's wheel of itself the first 
     await expect(page.locator("#party .member.tamed")).toHaveAttribute("aria-label", "Wolf, tamed, at your side");
 });
 
-test("Endurance at Adept brings Taunt: put on an enemy's wheel and flicked on a wary wolf warning the player off, it's made to come at them, heard and told (Taunted over it); its slice greyed as it cools down, and flicked again too soon, refused", async ({ page }) => {
+test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a wary wolf warning the player off, it's made to come at them, heard and told (Taunted over it); its slice greyed as it cools down, and chosen again too soon, refused", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
@@ -11993,15 +12013,16 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and flicked on a 
 
     expect(ready).toMatchObject({ learnt: true, mood: "warn", after: null });
 
-    // Held on the wolf: Taunt at SW; flicked into it, the wolf taunted
+    // Held on the wolf (by the top of the screen: its wheel slid down onto it, its slices chosen by
+    // the mouse over them): Taunt at SW; let go of over it, the wolf taunted
     const flick = async ({ x, y }) => {
         await page.evaluate(() => window.pellagos.game.start());
         await page.mouse.move(x, y);
         await page.mouse.down();
         await expect(wheel).toBeVisible();
         await expect(wheel.locator('.slice[data-direction="sw"] .label')).toHaveText("Taunt");
-        await page.mouse.move(x - 20, y + 20, { steps: 2 });
-        await page.mouse.move(x - 50, y + 50, { steps: 2 });
+        expect(await page.evaluate(() => window.pellagos.game.wheel.clickable)).toBe(true);
+        await pointAtSlice(page, "sw");
         await page.mouse.up();
         await page.evaluate(() => window.pellagos.game.stop());
     };
@@ -12037,8 +12058,8 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and flicked on a 
     expect(taunted.heard).toContain("taunt");
     expect(taunted.floated).toContain("Taunted");
 
-    // Flicked again a moment after: its slice greyed over as it cools down, flashed refused, and
-    // nothing done (its cooldown as it was)
+    // Chosen again a moment after: its slice greyed over as it cools down, flashed refused, and
+    // nothing done (its cooldown as it was); the wheel left open, closed with Escape
     await page.evaluate(() => window.taunting.heard.splice(0));
     await page.evaluate(() => window.pellagos.game.start());
     await page.mouse.move(taunted.at.x, taunted.at.y);
@@ -12048,12 +12069,14 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and flicked on a 
 
     const readyAt = await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).readyAt.taunt);
 
-    await page.mouse.move(taunted.at.x - 20, taunted.at.y + 20, { steps: 2 });
-    await page.mouse.move(taunted.at.x - 50, taunted.at.y + 50, { steps: 2 });
-    await expect(wheel.locator('.slice[data-direction="sw"]')).toHaveClass(/refused/);
+    await pointAtSlice(page, "sw");
     await page.mouse.up();
+    await expect(wheel.locator('.slice[data-direction="sw"]')).toHaveClass(/refused/);
     expect(await page.evaluate(() => window.taunting.heard)).toContain("denied");
     expect(await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).readyAt.taunt)).toBe(readyAt);
+    await page.keyboard.press("Escape");
+    await expect(wheel).toBeHidden();
+    await expect(page.locator("#menu")).toBeHidden();
 });
 
 test("Show whom foes are on (Game options, on): a ring round a foe's icon on the right, grey off them, yellow about to turn on them, orange on them with another close, red held; a dot for one of theirs it's on, and a count on that one's icon; a taunt's mark over it; none of it with the switch off", async ({ page }) => {
@@ -15797,7 +15820,9 @@ test("their followers' wheel, held on one of the player's own (a creature called
     await page.locator("#resumebutton").click();
     await page.evaluate(() => window.pellagos.game.stop());
 
-    // Held by its icon, the wheel opens under the finger; flicked from there (`flick`: dx, dy)
+    // Held by its icon with the mouse, at the screen's edge: the wheel opens beside it, slid wholly
+    // onto the screen (ActionWheel.show), its slices chosen by the pointer: moved over one and let
+    // go of (`pick`); or, turned over (let go over S), kept open, and clicked (`click`)
     const wheel = page.locator(".action-wheel");
     const member = page.locator(`#party .member[data-id="${id}"]`);
     const box = await member.boundingBox();
@@ -15807,27 +15832,45 @@ test("their followers' wheel, held on one of the player's own (a creature called
         await page.mouse.down();
         await page.waitForTimeout(700);
         await expect(wheel).toBeVisible();
+        // (Grown out to its full size)
+        await page.waitForTimeout(200);
     };
-    const flick = async (from, [dx, dy]) => {
-        await page.mouse.move(from[0] + dx / 2, from[1] + dy / 2, { steps: 2 });
-        await page.mouse.move(from[0] + dx, from[1] + dy, { steps: 2 });
+    const sliceAt = async (direction) => {
+        const face = await wheel.locator(`.slice[data-direction="${direction}"] .face`).boundingBox();
+
+        return [face.x + face.width / 2, face.y + face.height / 2];
+    };
+    const pick = async (direction) => {
+        const [x, y] = await sliceAt(direction);
+
+        await page.mouse.move(x, y, { steps: 4 });
+        await page.mouse.up();
+    };
+    const click = async (direction) => {
+        const [x, y] = await sliceAt(direction);
+
+        await page.mouse.click(x, y);
     };
     const turnOver = async () => {
-        await flick([cx, cy], [0, 55]);
+        await pick("s");
         await expect(wheel).toHaveAttribute("data-side", "2");
-
-        return [cx, cy + 55];
+        await page.waitForTimeout(200);
     };
     const settle = () => page.evaluate(() => window.pellagos.game.advance(0.05));
 
     // Its ability at NE by its own name; flicked there with the player locked on the wolf, its
     // next blow twice as hard, after it
     await hold();
+
+    // (Wholly on the screen, to the right of the icon)
+    const drawn = await wheel.locator("svg").boundingBox();
+
+    expect(drawn.x).toBeGreaterThanOrEqual(0);
+    expect(drawn.x).toBeGreaterThan(box.x + box.width / 2);
     await expect(wheel.locator('.slice[data-direction="ne"] .label')).toHaveText("Savage blow");
     await expect(wheel.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
     await page.evaluate(() => (window.pellagos.game.battle.actor(window.pellagos.game.me).lock = "test-wolf"));
-    await flick([cx, cy], [28, -28]);
-    await page.mouse.up();
+    await pick("ne");
     await settle();
     await expect(page.locator("#banner")).toContainText(": Savage blow!");
     expect(await page.evaluate((called) => ({ empowered: window.pellagos.game.battle.actor(called).empowered?.factor, assist: window.pellagos.game.battle.actor(called).assist }), id)).toEqual({ empowered: 2, assist: "test-wolf" });
@@ -15841,16 +15884,13 @@ test("their followers' wheel, held on one of the player's own (a creature called
         game.advance(0.05);
     });
 
-    // Turned over: Hold fire at E, the draught at NE; flicked E, holding fire
+    // Turned over: Hold fire at E, the draught at NE; E clicked, holding fire
     await hold();
-
-    let from = await turnOver();
-
+    await turnOver();
     await expect(wheel.locator('.slice[data-direction="e"] .label')).toHaveText("Hold fire");
     await expect(wheel.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
     await expect(wheel.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
-    await flick(from, [34, 0]);
-    await page.mouse.up();
+    await click("e");
     await settle();
     await expect(page.locator("#banner")).toContainText("holds fire.");
     expect(await page.evaluate((called) => window.pellagos.game.host.stance(called).holdFire, id)).toBe(true);
@@ -15865,10 +15905,9 @@ test("their followers' wheel, held on one of the player's own (a creature called
     }, id);
 
     await hold();
-    from = await turnOver();
+    await turnOver();
     await expect(wheel.locator('.slice[data-direction="e"] .label')).toHaveText("At will");
-    await flick(from, [28, -28]);
-    await page.mouse.up();
+    await click("ne");
     await settle();
     await expect(page.locator("#banner")).toContainText("You give ");
 
@@ -16089,6 +16128,59 @@ test("magic: the spellbook shows every school and the tomes; an element opened b
 
 test.describe("on a phone", () => {
     test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+    test("a follower's wheel held by its icon at the screen's edge: slid wholly onto the screen beside it, clear of the finger; flicked from the finger, the puck in its hub going the same way, toward the edge as far as there's room for: left, Wait here", async ({ page }) => {
+        await playing(page, "/?play&seed=1");
+
+        // Summon learnt and cast: a creature called, its icon down the left of the screen
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            game.progress.learn("summon");
+            Object.assign(game.battle.actor(game.me), { spellReadyAt: 0, spellsReadyAt: {} });
+            game.host.command(game.me, { type: "cast", spell: "summon" });
+        });
+        expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && document.querySelector("#party .member.summon"), { seconds: 60 })).toBe(true);
+
+        const id = await page.evaluate(() => [...window.pellagos.game.host.companions.keys()][0]);
+        const wheel = page.locator(".action-wheel");
+        const box = await page.locator(`#party .member[data-id="${id}"]`).boundingBox();
+        const finger = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type, x = finger.x, y = finger.y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y, id: 0 }] });
+        const puck = () => wheel.locator(".puck").evaluate((circle) => Number(circle.getAttribute("cx")));
+
+        // Held: the wheel opens to the icon's right, wholly on the screen, the finger off its
+        // slices, the puck in its hub (it was centred on the finger, a third of it off the screen)
+        await touch("touchStart");
+        await page.waitForTimeout(700);
+        await expect(wheel).toBeVisible();
+        await page.waitForTimeout(200);
+
+        const drawn = await wheel.locator("svg").boundingBox();
+        const middle = { x: drawn.x + drawn.width / 2, y: drawn.y + drawn.height / 2 };
+
+        expect(drawn.x).toBeGreaterThanOrEqual(0);
+        expect(drawn.x + drawn.width).toBeLessThanOrEqual(390);
+        expect(Math.hypot(middle.x - finger.x, middle.y - finger.y)).toBeGreaterThan(128);
+        expect(await puck()).toBe(0);
+        await expect(wheel.locator('.slice[data-direction="w"] .label')).toHaveText("Wait here");
+
+        // A little left of where it went down: the puck goes left from the hub, nothing chosen yet
+        await touch("touchMove", finger.x - 10, finger.y);
+        expect(await puck()).toBeLessThan(-5);
+        await expect(wheel.locator(".slice.chosen")).toHaveCount(0);
+
+        // On, to 5 pixels from the screen's edge (less than the 30 a flick is elsewhere, from an
+        // icon 34 pixels in: as far as there's room for): W, Wait here
+        await touch("touchMove", 5, finger.y);
+        await expect(wheel.locator('.slice[data-direction="w"]')).toHaveClass(/chosen/);
+        await touch("touchEnd");
+        await page.evaluate(() => window.pellagos.game.advance(0.05));
+        expect(await page.evaluate((called) => window.pellagos.game.host.waiting(called), id)).toBe(true);
+    });
 
     test("turned on its side and back, the world's drawn the shape of the screen, never stretched: even told it's resized while it's still turning, as Chrome on Android tells it", async ({ page }) => {
         // (Full screen while playing off: the browser here can't be turned, resized, while it's
