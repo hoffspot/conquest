@@ -295,6 +295,18 @@ const noting = (fetched) => (url) => {
     return fromDisk(url);
 };
 
+// Wait, a tick at a time, for what's going on meanwhile (a sound made a variant a tick at a time,
+// recordings read and decoded) till `done` says it's come, or `ms` have passed: by time, not by
+// counting ticks, as on a busy machine (the other test files running beside this one) each takes
+// longer. What's checked after says whether it came
+async function until(done, ms = 5000) {
+    const end = performance.now() + ms;
+
+    while (!done() && performance.now() < end) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+}
+
 // The music's recordings of the scores `names` (sound.js FIRST's: those downloaded at the start)
 const musicFiles = (names = FIRST) => [...new Map(names.flatMap((name) => scoreFiles(SCORES[name]))).entries()];
 
@@ -600,23 +612,26 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(sound.play("warHorn", { volume: 0.8 }), null);
         assert.equal(played.length, 0);
 
-        for (let k = 0; k < 50 && !of("warHorn").length; k++) {
-            await tick();
-        }
+        await until(() => of("warHorn").length > 0);
 
         assert.equal(sound.buffers.get("warHorn")?.length, SOUNDS.warHorn.variants);
         assert.equal(of("warHorn").length, 1);
         assert.ok(sound.play("warHorn"));
         assert.equal(of("warHorn").length, 2);
 
-        // (A recorded-only sound's stand-in made for it the same way)
-        played.length = 0;
-        sound.recorded.delete("clash");
-        assert.equal(sound.play("clash"), null);
+        // (A recorded-only sound's stand-in made for it the same way: its recordings, downloaded
+        // and decoded as it was prepared, taken away once they're all in, MP3s and all, so none
+        // comes in meanwhile, nor is decoded again, to be played in the stand-in's place, as one
+        // still being decoded did on a busy machine)
+        await until(() => sound.recorded.get("clash")?.length === RECORDED.clash.length);
 
-        for (let k = 0; k < 50 && !of("block").length; k++) {
-            await tick();
+        for (const held of [sound.recorded, sound.decoded, sound.mp3s]) {
+            held.delete("clash");
         }
+
+        played.length = 0;
+        assert.equal(sound.play("clash"), null);
+        await until(() => of("block").length > 0);
 
         assert.equal(of("block").length, 1);
 
@@ -625,9 +640,7 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(sound.play("beastGrowl"), null);
         sound.context.currentTime += 1;
 
-        for (let k = 0; k < 50 && !sound.buffers.has("beastGrowl"); k++) {
-            await tick();
-        }
+        await until(() => sound.buffers.has("beastGrowl"));
 
         await tick();
         assert.equal(of("beastGrowl").length, 0);
@@ -638,11 +651,6 @@ describe("playing sounds (sound.js)", () => {
         const played = fakeAudio();
         const sound = new Sound({ fetch: fromDisk });
         const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-        const until = async (done) => {
-            for (let k = 0; k < 100 && !done(); k++) {
-                await tick();
-            }
-        };
         // (A made sound's own plays: the music may play meanwhile)
         const of = (name) => played.filter(({ source }) => sound.buffers.get(name)?.includes(source.buffer));
 
@@ -698,9 +706,7 @@ describe("playing sounds (sound.js)", () => {
         sound.makeAhead(["castPrismatic", "prismaticBlast"], { keep: true });
         sound.makeAhead("townHorn");
 
-        for (let k = 0; k < 100 && !["castPrismatic", "prismaticBlast", "townHorn"].every((name) => sound.buffers.has(name)); k++) {
-            await tick();
-        }
+        await until(() => ["castPrismatic", "prismaticBlast", "townHorn"].every((name) => sound.buffers.has(name)));
 
         played.length = 0;
         assert.ok(sound.play("prismaticBlast"));
@@ -713,9 +719,7 @@ describe("playing sounds (sound.js)", () => {
         played.length = 0;
         sound.play("twigSnap");
 
-        for (let k = 0; k < 100 && !(heard("twigSnap") && sound.took.has("twigSnap")); k++) {
-            await tick();
-        }
+        await until(() => heard("twigSnap") && sound.took.has("twigSnap"));
 
         now += MADE_KEPT * 1000 + 1;
         sound.update(60);
@@ -727,9 +731,7 @@ describe("playing sounds (sound.js)", () => {
         played.length = 0;
         assert.equal(sound.play("twigSnap"), null);
 
-        for (let k = 0; k < 100 && !heard("twigSnap"); k++) {
-            await tick();
-        }
+        await until(() => heard("twigSnap"));
 
         assert.ok(heard("twigSnap"));
 
