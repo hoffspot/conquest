@@ -8,7 +8,7 @@ import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { memberKind, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
-import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, readWheels, sectorPath, wheelPlace, WHEELS } from "../client/js/app/wheel.js";
+import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, sectorPath, wheelPlace, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
@@ -662,11 +662,11 @@ describe("saving (save.js)", () => {
         assert.equal(saveStanding({ seed: 1 }, standing), false);
     });
 
-    it("keeps what a saved game's character has put on their action wheels; not for another", () => {
+    it("keeps what a saved game's character has put on their action wheels and both their Action Bar's bars; not for another", () => {
         useStorage();
 
         const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
-        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], unit: [{ n: "unit:ability", ne: "item:potion" }, { w: "vigor" }], quick: ["stun", null, "item:ale", "vigor", "hold", null], version: 3 };
+        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], unit: [{ n: "unit:ability", ne: "item:potion" }, { w: "vigor" }], quick: ["stun", null, "item:ale", "vigor", "hold", null], quickTwo: ["burn", null, null, null, "item:potion", null], version: 3 };
 
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
@@ -1261,7 +1261,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const unit = [{ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }, { n: "vigor", ne: "unit:cover", e: "unit:stance", w: "item:potion" }];
 
         assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], unit, provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 3, placed: [] });
+        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], quickTwo: [null, null, null, null, null, null], version: 3, placed: [] });
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
@@ -1360,8 +1360,8 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
 
         // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
-        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], version: 3, placed: [] });
-        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 3 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], version: 3, placed: [] });
+        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], quickTwo: [...QUICK_TWO], version: 3, placed: [] });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 3 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], quickTwo: [...QUICK_TWO], version: 3, placed: [] });
 
         // (Bait put on an enemy's wheel of itself the first time it was carried: kept so, never again; nothing else kept there)
         assert.deepEqual(readWheels({ placed: ["meatBait", 3, null, "feedBag"] }).placed, ["meatBait", "feedBag"]);
@@ -1418,6 +1418,21 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         // (Four kept from before there were six: the two more empty)
         assert.deepEqual(readWheels({ quick: ["vigor", "stun", "burn", "item:potion"] }).quick, [...QUICK]);
+    });
+
+    it("keeps Action Bar 2 beside it, six slots of its own, empty to start with (and for a save from before there was one), read as Action Bar 1 is", () => {
+        assert.deepEqual(QUICK_TWO, [null, null, null, null, null, null]);
+        assert.deepEqual(readWheels(null).quickTwo, [...QUICK_TWO]);
+        assert.deepEqual(readWheels({ quick: ["stun"] }).quickTwo, [...QUICK_TWO], "kept from before there was one: empty");
+
+        // (As Action Bar 1's: Heal as kept before it was renamed, a fight to pick, gear and
+        // nonsense left out, a seventh too; kept wrongly, as it starts)
+        const kept = { quick: [...QUICK], quickTwo: ["heal", "fight", "item:sword", "powerStrike", "item:ale", "hold", "burn"] };
+
+        assert.deepEqual(readWheels(kept).quickTwo, ["vigor", null, null, "powerStrike", "item:ale", "hold"]);
+        assert.deepEqual(readWheels(kept).quick, [...QUICK], "(each bar its own)");
+        assert.deepEqual(readWheels({ quickTwo: "nonsense" }).quickTwo, [...QUICK_TWO]);
+        assert.deepEqual(readWheels({ quickTwo: ["unit:wait", "item:potion"] }).quickTwo, [null, "item:potion", null, null, null, null], "(nothing to tell their followers)");
     });
 
     it("flicks a school's spell up to the next of its school the player knows, and down to the one before; nothing further at either end, nor for anything else", () => {

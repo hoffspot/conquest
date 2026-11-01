@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=da57857f48",
+                    "./js/app/assets.js": "./js/app/assets.js?h=4bc2b76aaf",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=a47fed2d1e",
@@ -53,7 +53,7 @@
                     "./js/app/fight.js": "./js/app/fight.js?h=7a1237aa07",
                     "./js/app/forecast.js": "./js/app/forecast.js?h=224b049a4f",
                     "./js/app/fullscreen.js": "./js/app/fullscreen.js?h=34493b7fd9",
-                    "./js/app/game.js": "./js/app/game.js?h=db48777197",
+                    "./js/app/game.js": "./js/app/game.js?h=e9fc0ad144",
                     "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=39737dad0f",
                     "./js/app/governor.js": "./js/app/governor.js?h=0e63c16031",
                     "./js/app/hero-basics.js": "./js/app/hero-basics.js?h=2c87404887",
@@ -63,7 +63,7 @@
                     "./js/app/journal.js": "./js/app/journal.js?h=17dab9a700",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/loader.js": "./js/app/loader.js?h=9bf378d6ef",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=aea307b89c",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=4bbd6bb85a",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=fa7e3b294a",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=e041e0d8e8",
                     "./js/app/pacing.js": "./js/app/pacing.js?h=5c58080d6e",
@@ -72,7 +72,7 @@
                     "./js/app/peer.js": "./js/app/peer.js?h=236595671e",
                     "./js/app/pointer.js": "./js/app/pointer.js?h=a4c31cdac5",
                     "./js/app/press.js": "./js/app/press.js?h=e69824cb4b",
-                    "./js/app/quickbar.js": "./js/app/quickbar.js?h=6c0a265d7d",
+                    "./js/app/quickbar.js": "./js/app/quickbar.js?h=3ef5a3f825",
                     "./js/app/reader.js": "./js/app/reader.js?h=f578240396",
                     "./js/app/readying.js": "./js/app/readying.js?h=4efb30e81a",
                     "./js/app/rejoin.js": "./js/app/rejoin.js?h=61dff23565",
@@ -89,7 +89,7 @@
                     "./js/app/throng.js": "./js/app/throng.js?h=a99cd2abe2",
                     "./js/app/together.js": "./js/app/together.js?h=91b5fbc29d",
                     "./js/app/updater.js": "./js/app/updater.js?h=78825da8b2",
-                    "./js/app/wheel.js": "./js/app/wheel.js?h=05a23dc5bf",
+                    "./js/app/wheel.js": "./js/app/wheel.js?h=8fc50cbb1e",
                     "./js/app/wheelsetup.js": "./js/app/wheelsetup.js?h=a3da900105",
                     "./js/app/worldlink.js": "./js/app/worldlink.js?h=2847d5c85f",
                     "./js/app/worldmap.js": "./js/app/worldmap.js?h=b728879a85",
@@ -302,7 +302,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=d392dab2a0",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=d9256f2205",
-                    "./js/main.js": "./js/main.js?h=2195fea572",
+                    "./js/main.js": "./js/main.js?h=33985c3e95",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ac0b0422df",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -481,7 +481,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=2195fea572"></script>
+        <script type="module" src="js/main.js?h=33985c3e95"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -1221,7 +1221,7 @@
                     <h3>Fighting</h3>
                     <ul>
                         <li><strong>Tap an enemy</strong> to set on them: a red ring marks your target. Standing still, you strike whatever's in your weapon's reach by yourself.</li>
-                        <li>In a fight, the <strong>Action Bar</strong> rises along the bottom: tap one of its actions to use it at once (your attacks and spells, a healing draught). Hold one to change what's in it.</li>
+                        <li>In a fight, the <strong>Action Bar</strong> rises along the bottom: tap one of its actions to use it at once (your attacks and spells, a healing draught). Hold one to change what's in it. It has two bars: tap the <strong>Swap Bar</strong> button at its right end to swap between them.</li>
                         <li>Everyone attacking you has an icon down the <strong>right side</strong>: tap one to fight them.</li>
                         <li>Your name and <strong>health</strong> are in the bottom right. Drink a healing draught, or cast <strong>Vigor</strong>, before it runs out.</li>
                         <li>Whoever falls drops their <strong>loot</strong>: tap it to pick it up (or turn on Auto-snag in Game options, Gameplay).</li>
@@ -1297,6 +1297,7 @@
                             <tr><th scope="row">Q E</th><td>Turn the camera round you</td></tr>
                             <tr><th scope="row">R</th><td>Swing the camera round behind you</td></tr>
                             <tr><th scope="row">1 to 4</th><td>The Action Bar's actions, in a fight, or always with Always show (1 to 6 with six across; both in Game options, Action Wheel and Bar)</td></tr>
+                            <tr><th scope="row">`</th><td>Swap the Action Bar to its other bar, Action Bar 1 or Action Bar 2 (the key left of 1)</td></tr>
                             <tr><th scope="row">Tab</th><td>Set on the nearest foe in sight, then each next one out (Shift+Tab back)</td></tr>
                             <tr><th scope="row">X / Z</th><td>Set on the next foe in the enemies list, or the last</td></tr>
                             <tr><th scope="row">M</th><td>World map</td></tr>
@@ -1510,7 +1511,7 @@
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="quickbutton">
-                        <span class="text">Action Bar<small>What rises along the bottom in a fight (or always), four or six across</small></span>
+                        <span class="text">Action Bar<small>What rises along the bottom in a fight (or always), four or six across, and its two bars</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                 </div>
@@ -1703,7 +1704,7 @@
                     <button type="button" class="menu-back" data-back aria-label="Back to Action Wheel and Bar">‹</button>
                     <h2 id="quicktitle">Action Bar</h2>
                 </div>
-                <p class="wheels-note">In a fight, these rise from the bottom of the screen (or stay there, with Always show). Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it, or flick a spell up or down for the next or last spell of its school. Tap a slot here to choose what's in it.</p>
+                <p class="wheels-note">In a fight, these rise from the bottom of the screen (or stay there, with Always show). Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it, or flick a spell up or down for the next or last spell of its school. There are two bars, Action Bar 1 and Action Bar 2: swap between them with the Swap Bar button at the bar's right end (or `). Choose a bar here, then tap a slot to choose what's in it.</p>
                 <label class="switch option">
                     <span class="text">Six across<small>Six actions on the bar, not four with their names; on a narrow screen their names are smaller, or only their icons show</small></span>
                     <input type="checkbox" id="quicksixswitch" role="switch">

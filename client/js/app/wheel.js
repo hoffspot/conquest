@@ -21,7 +21,9 @@
 // The Action Bar (app/quickbar.js) is kept with the wheels: six slots (four shown, or all six:
 // Game options), each holding what a wheel's slice can (QUICK), rising from the bottom of the
 // screen in a fight; a school's spell in one flicked up or down to the next of its school or the
-// last (flicked).
+// last (flicked). It has two bars, swapped between (its Swap Bar button, or the ` key): Action
+// Bar 1 (`quick`) and Action Bar 2 (`quickTwo`: QUICK_TWO, empty till the player fills it), each
+// six slots of their own.
 //
 // The wheel is SVG over the game; the game (game.js) follows the finger and says what to do.
 
@@ -220,7 +222,10 @@ function withCover(sides) {
  */
 export const QUICK = Object.freeze(["vigor", "stun", "burn", "item:potion", null, null]);
 
-/** How many of the Action Bar's actions are shown: four, with their names, or six across. */
+/** Action Bar 2 until the player puts something on it: six empty slots. */
+export const QUICK_TWO = Object.freeze([null, null, null, null, null, null]);
+
+/** How many of the Action Bar's actions are shown, on either bar: four, with their names, or six across. */
 export const QUICK_SHOWN = Object.freeze({ four: 4, six: 6 });
 
 /**
@@ -256,7 +261,8 @@ export const offensive = (key) => actionOf(key)?.on === "enemy";
  * The player's wheels as kept (or nothing kept: the WHEELS they start with), made safe: each of
  * their own, an enemy's and their followers' (kept from before there was one: as it starts), two
  * sides, each slice holding something that goes on that wheel; their
- * Action Bar (`quick`: QUICK's six slots, each something that can be one, or null); which wheels
+ * Action Bars (`quick`, Action Bar 1: QUICK's six slots, each something that can be one, or null;
+ * `quickTwo`, Action Bar 2: QUICK_TWO's, the same); which wheels
  * they are (`version`: WHEELS_VERSION, kept from before brought up to it); and the things put on a
  * wheel of themselves the first time they were carried (`placed`: ITEMS ids, bait for the wild's
  * beasts, core/wary.js; app/game.js #placeBait), never again.
@@ -274,9 +280,8 @@ export function readWheels(kept) {
         });
     }
 
-    const quick = Array.isArray(kept?.quick) ? kept.quick : QUICK;
-
-    wheels.quick = QUICK.map((_, slot) => (quickable(actionOf(quick[slot])) ? (RENAMED[quick[slot]] ?? quick[slot]) : null));
+    wheels.quick = readBar(kept?.quick, QUICK);
+    wheels.quickTwo = readBar(kept?.quickTwo, QUICK_TWO);
 
     if (kept && !(kept.version >= 2)) {
         withAttack(wheels.enemy);
@@ -290,6 +295,14 @@ export function readWheels(kept) {
     wheels.placed = Array.isArray(kept?.placed) ? kept.placed.filter((id) => typeof id === "string") : [];
 
     return wheels;
+}
+
+// One of the Action Bar's bars as kept (or nothing kept, or kept wrongly: `start`, as it starts),
+// made safe: six slots, each something that can be on it, or null
+function readBar(kept, start) {
+    const bar = Array.isArray(kept) ? kept : start;
+
+    return start.map((_, slot) => (quickable(actionOf(bar[slot])) ? (RENAMED[bar[slot]] ?? bar[slot]) : null));
 }
 
 /**

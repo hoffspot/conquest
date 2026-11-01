@@ -5509,6 +5509,27 @@ the foe; green, the player). They're kept with the wheels (`pellagos.<id>.wheels
 back safely by `readWheels`: six, each something that can be one, or empty; a save from when there
 were four has the last two empty).
 
+**Two bars.** The Action Bar has two bars, Action Bar 1 (`quick`) and Action Bar 2 (`quickTwo`,
+kept with the wheels as Action Bar 1 is and read back the same way: six empty slots to start
+with, `QUICK_TWO`, and for a save from before there was a second). Both show four or six as Six
+across says. The **Swap Bar** button at the bar's right end (`.quick-swap`, 40 pixels wide, a
+column of the bar's grid after its slots: the bar's up to 600 pixels wide, or 680 six across)
+swaps them, tapped or clicked, or the key left of 1 (`` ` `` on most keyboards: `event.code`
+Backquote, so it's that key whatever's printed on it), while the bar's up (game.js `swapQuick`).
+The button shows the action wheel's two arrows chasing each other round over the number of the
+bar shown, lit gold while it's Action Bar 2 (`data-page`), and with a keyboard the `` ` `` in its
+corner as a slot shows its number. It swaps as it's pressed, not waiting on a lift (a phone's Safari
+can lose a finger's lift, as below). Swapped, the slots flip over to the other bar's one after
+another, left to right (`turn`, `SWAP_FLIP`: each 0.18 s, 0.025 s after the one before, edge on
+till its turn: what's in them is the other bar's by then), the button's arrows turn half round,
+and the action wheel's wooden tok sounds. A slot still pressed is let go of as it swaps, so a
+finger down on Action Bar 1's slot does nothing on Action Bar 2's. Everything below goes for the
+bar shown: its keys (1 to 4, or 6), its taps, flicks and holds, what's greyed and cooling, and a
+Prismatic chain's next spell ringed in it. The bar shown is kept as it is till it's swapped again,
+so the next fight brings it up as the last ended (`quickPage`; not saved: a game begun again starts
+on Action Bar 1). Bait carried for the first time isn't put on an enemy's wheel if it's on either
+bar.
+
 **Six across** (Game options, Action Wheel and Bar, Action Bar: the Six across switch, `quickSix`, off to start
 with; `QUICK_SHOWN`): six slots instead of four, a little closer together, on a bar up to 640
 pixels wide. Each slot is a size container (styles.css), so what's shown goes by how wide each
@@ -5556,8 +5577,10 @@ marches or pulses.
 
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
 pauses (when no one else is playing in the world) at **Game options, Action Wheel and Bar, Action Bar**
-(app/quicksetup.js) with that slot chosen, and Back to the game carries on. The Action Bar in Game
-options shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
+(app/quicksetup.js) with that slot chosen on the bar it's on, and Back to the game carries on. The
+Action Bar in Game options has two tabs over its slots, **Action Bar 1** and **Action Bar 2** (as the
+action wheels' sides have), opened on Action Bar 1 from Game options; a tab shows that bar's slots,
+the same slot chosen, the heading saying which ("Action Bar 2, slot 3"). It shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
 used on ("On your foe", "On yourself"). The click a browser fires as the finger's lifted lands on
 whatever's under it by then: after a hold (the Action Bar options opened over the finger still down) or an

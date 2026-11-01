@@ -1,6 +1,6 @@
 // The Action Bar options (Game options, Action Wheel and Bar, Action Bar; or one of its actions
 // held on in a fight): the Action Bar (app/quickbar.js), four or six as they're shown, drawn as they rise in a
-// fight. A slot tapped (or
+// fight; Action Bar 1 or Action Bar 2, chosen above them (each its own slots). A slot tapped (or
 // chosen with the keyboard) lists what can go in it: the spells, blows and things to use that can
 // go on either action wheel, each saying who it's used on. The one chosen goes in (or it's
 // emptied).
@@ -9,7 +9,7 @@
 
 import { useDefs } from "./icons.js";
 import { fillSlot, quickSlot } from "./quickbar.js";
-import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
+import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN, QUICK_TWO } from "./wheel.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
@@ -18,12 +18,34 @@ export class QuickSetup {
     constructor(root) {
         this.root = root;
         this.slot = 0;
-        this.quick = [...QUICK];
+
+        /** Which bar's slots are shown: 0, Action Bar 1, or 1, Action Bar 2. */
+        this.bar = 0;
+        this.bars = [[...QUICK], [...QUICK_TWO]];
         this.choices = [];
         this.counts = {};
 
-        /** Hears the Action Bar whenever something's put in (or taken out of) one of its slots. */
+        /**
+         * Hears the Action Bar whenever something's put in (or taken out of) one of its slots: that
+         * bar's slots, and which bar (0 or 1).
+         */
         this.onChange = () => {};
+
+        // Which bar: Action Bar 1 or Action Bar 2 (tabs, as the action wheels' sides are)
+        this.picker = element("div", "wheels-sides quick-bars");
+        this.picker.setAttribute("role", "tablist");
+        this.picker.setAttribute("aria-label", "Which bar");
+        this.barButtons = [0, 1].map((bar) => {
+            const button = element("button", "wheels-tab", `Action Bar ${bar + 1}`);
+
+            button.type = "button";
+            button.dataset.bar = String(bar + 1);
+            button.setAttribute("role", "tab");
+            button.addEventListener("click", () => this.#pickBar(bar));
+
+            return button;
+        });
+        this.picker.append(...this.barButtons);
 
         this.row = element("div", "quick-row");
         this.row.setAttribute("role", "tablist");
@@ -41,19 +63,32 @@ export class QuickSetup {
         this.heading = element("h3", "wheels-heading");
         this.list = element("div", "wheels-choices");
         this.list.setAttribute("role", "listbox");
-        this.root.replaceChildren(this.row, this.heading, this.list);
+        this.root.replaceChildren(this.picker, this.row, this.heading, this.list);
+    }
+
+    /** The slots of the bar shown. */
+    get quick() {
+        return this.bars[this.bar];
     }
 
     /**
-     * Show (or show again) the Action Bar, what can be put in its slots, and how many of each thing
-     * to use there are: { quick: [key], choices: [key], counts: { item: count } } (game.js
-     * quickSetup), with the `slot`th chosen.
+     * Show (or show again) the Action Bar, both its bars, what can be put in their slots, and how
+     * many of each thing to use there are: { quick: [key], quickTwo: [key], choices: [key],
+     * counts: { item: count } } (game.js quickSetup), with the `bar`th bar shown (0 or 1) and its
+     * `slot`th slot chosen.
      */
-    show({ quick, choices, counts = {} }, slot = this.slot) {
-        this.quick = [...quick];
+    show({ quick, quickTwo = QUICK_TWO, choices, counts = {} }, slot = this.slot, bar = this.bar) {
+        this.bars = [[...quick], [...quickTwo]];
         this.choices = choices;
         this.counts = counts;
+        this.bar = bar ? 1 : 0;
         this.#pick(slot);
+    }
+
+    // The other bar's slots shown, the same slot chosen in it
+    #pickBar(bar) {
+        this.bar = bar;
+        this.#pick(this.slot);
     }
 
     /** Show four of them or six (`count`: QUICK_SHOWN), as the Action Bar is. */
@@ -74,12 +109,15 @@ export class QuickSetup {
     // Put something in the chosen slot (null: empty it), and say so
     #put(key) {
         this.quick[this.slot] = key;
-        this.onChange([...this.quick]);
+        this.onChange([...this.quick], this.bar);
         this.#draw();
     }
 
     #draw() {
         useDefs();
+
+        this.barButtons.forEach((button, bar) => button.setAttribute("aria-selected", String(bar === this.bar)));
+        this.row.dataset.bar = String(this.bar + 1);
 
         this.slots.forEach((slot, index) => {
             const key = this.quick[index] ?? null;
@@ -93,7 +131,7 @@ export class QuickSetup {
         const now = this.quick[this.slot] ?? null;
         const keys = [null, ...this.choices];
 
-        this.heading.textContent = `Action Bar slot ${this.slot + 1}`;
+        this.heading.textContent = `Action Bar ${this.bar + 1}, slot ${this.slot + 1}`;
         this.list.replaceChildren(
             ...keys.map((key) => {
                 const choice = element("button", "wheels-choice");

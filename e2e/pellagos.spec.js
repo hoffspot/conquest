@@ -15359,7 +15359,7 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
     await expect(page.locator("#menuquick")).toBeVisible();
     await page.mouse.up();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(false);
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 3");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 3");
     await expect(page.locator('#quicksetup .quick-slot[data-slot="2"]')).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On your foe");
     await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("On yourself");
@@ -15376,7 +15376,7 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
     await page.locator("#optionsbutton").click();
     await page.locator("#actionsbutton").click();
     await page.locator("#quickbutton").click();
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 1");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 1");
     await page.locator("#quickback").click();
     await expect(page.locator("#menuactions")).toBeVisible();
 });
@@ -15560,6 +15560,164 @@ test("a Prismatic chain: an element's spell cast from the Action Bar rolls its s
     await expect(sigil).toBeHidden();
 });
 
+test("Action Bar 2: the Swap Bar button at the bar's right end, tapped, flips it to Action Bar 2 (empty to start with), saying which; an empty slot's key opens its choices on Action Bar 2's tab, what's put in it kept on that bar alone; the number keys use the bar shown; ` swaps back; the bar shown kept for the next fight; held on, the options opened on its tab; from Game options, on Action Bar 1's", async ({ page }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+    const swap = bar.locator(".quick-swap");
+    const heading = page.locator("#quicksetup .wheels-heading");
+    const tab = (n) => page.locator(`#quicksetup .wheels-tab[data-bar="${n}"]`);
+    const acted = () => page.evaluate(() => window.acted.at(-1));
+
+    // In a fight (the orc brought near, kept still and set on): Action Bar 1 up, the Swap Bar button
+    // at its right end, slim, saying 1. (What the bar's used for kept, as it's used; and the wheels
+    // as they're handed on to be kept)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 3, player.square[1] - 2];
+        const act = game.act.bind(game);
+
+        game.stop();
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, stunnedUntil: Infinity });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.command("player", { type: "engage", target: "orc", stand: true });
+        game.advance(0.1);
+        const keep = game.onWheels;
+
+        window.acted = [];
+        game.act = (key, on, options) => {
+            window.acted.push([key, on]);
+
+            return act(key, on, options);
+        };
+        window.kept = [];
+        game.onWheels = (wheels) => {
+            window.kept.push(wheels);
+            keep(wheels);
+        };
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(bar).toHaveAttribute("data-page", "1");
+    await expect(swap.locator(".quick-swap-bar")).toHaveText("1");
+    await expect(swap).toHaveAttribute("aria-label", "Swap Bar: Action Bar 1 shown, swap to Action Bar 2");
+    await expect(slot(1).locator(".quick-label")).toHaveText("Stun");
+
+    const [whole, button, fourth] = await Promise.all([bar.boundingBox(), swap.boundingBox(), slot(3).boundingBox()]);
+
+    expect(Math.abs(button.x + button.width - (whole.x + whole.width))).toBeLessThan(1);
+    expect(fourth.x + fourth.width).toBeLessThan(button.x);
+    expect(button.width).toBeLessThan(fourth.width);
+    expect(Math.abs(button.height - fourth.height)).toBeLessThan(1);
+
+    // Tapped: Action Bar 2, its slots empty to start with, the button saying 2
+    await swap.click();
+    await page.evaluate(() => window.pellagos.game.advance(0.1));
+    await expect(bar).toHaveAttribute("data-page", "2");
+    await expect(swap.locator(".quick-swap-bar")).toHaveText("2");
+    await expect(swap).toHaveAttribute("aria-label", "Swap Bar: Action Bar 2 shown, swap to Action Bar 1");
+
+    for (const n of [0, 1, 2, 3]) {
+        await expect(slot(n)).toHaveClass(/empty/);
+    }
+
+    // Its second slot's key, empty: its choices opened on Action Bar 2's tab, that slot chosen;
+    // Vigor put in it, kept on Action Bar 2 alone
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("2");
+    await expect(page.locator("#menuquick")).toBeVisible();
+    await expect(heading).toHaveText("Action Bar 2, slot 2");
+    await expect(tab(2)).toHaveAttribute("aria-selected", "true");
+    await expect(tab(1)).toHaveAttribute("aria-selected", "false");
+    await expect(page.locator('#quicksetup .quick-slot[data-slot="1"]')).toHaveAttribute("aria-selected", "true");
+    await page.locator('#quicksetup .wheels-choice[data-action="vigor"]').click();
+
+    const wheels = () => page.evaluate(() => ({ quick: window.pellagos.game.wheels.quick, quickTwo: window.pellagos.game.wheels.quickTwo }));
+
+    expect(await wheels()).toEqual({ quick: ["vigor", "stun", "burn", "item:potion", null, null], quickTwo: [null, "vigor", null, null, null, null] });
+
+    // (Action Bar 1's tab: its own slots, the same slot chosen)
+    await tab(1).click();
+    await expect(heading).toHaveText("Action Bar 1, slot 2");
+    await expect(page.locator('#quicksetup .quick-slot[data-slot="1"] .quick-label')).toHaveText("Stun");
+    await tab(2).click();
+    await expect(page.locator('#quicksetup .quick-slot[data-slot="1"] .quick-label')).toHaveText("Vigor");
+    await page.locator("#quickback").click();
+    await expect(page.locator("#menu")).not.toBeVisible();
+
+    // Back in the game, still on Action Bar 2: its 2 key casts Vigor, on the player
+    await expect(bar).toHaveAttribute("data-page", "2");
+    await expect(slot(1).locator(".quick-label")).toHaveText("Vigor");
+    await page.keyboard.press("2");
+    await expect.poll(acted).toEqual(["vigor", "self"]);
+
+    // ` swaps back to Action Bar 1: its 2 key Stun, on the orc
+    await page.keyboard.press("Backquote");
+    await expect(bar).toHaveAttribute("data-page", "1");
+    await expect(slot(1).locator(".quick-label")).toHaveText("Stun");
+    // (Vigor's cooldown, the spells' shared one, over at once)
+    await page.evaluate(() => Object.assign(window.pellagos.game.battle.actor("player"), { spellReadyAt: 0, spellsReadyAt: {} }));
+    await page.keyboard.press("2");
+    await expect.poll(acted).toEqual(["stun", "orc"]);
+
+    // Swapped to Action Bar 2 again, then the fight over: put away; the next fight, it's Action Bar 2 that rises
+    await page.keyboard.press("Backquote");
+    await expect(bar).toHaveAttribute("data-page", "2");
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+
+        game.stop();
+        battle.actor("player").order = null;
+        battle.actor("player").attack = null;
+        Object.assign(battle.actor("orc"), { target: null, attack: null, dead: true, respawnAt: Infinity });
+        game.advance(5);
+    });
+    await expect(bar).not.toHaveClass(/up/);
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const orc = game.battle.actor("orc");
+
+        Object.assign(orc, { dead: false, hp: orc.maxHp });
+        game.battle.command("player", { type: "engage", target: "orc", stand: true });
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(bar).toHaveAttribute("data-page", "2");
+    await expect(slot(1).locator(".quick-label")).toHaveText("Vigor");
+
+    // Held on Action Bar 2's Vigor: the options opened on Action Bar 2's tab, that slot chosen
+    await page.evaluate(() => window.pellagos.game.start());
+
+    const second = await slot(1).boundingBox();
+
+    await page.mouse.move(second.x + second.width / 2, second.y + second.height / 2);
+    await page.mouse.down();
+    await expect(page.locator("#menuquick")).toBeVisible();
+    await page.mouse.up();
+    await expect(heading).toHaveText("Action Bar 2, slot 2");
+    await expect(tab(2)).toHaveAttribute("aria-selected", "true");
+    await page.locator("#quickback").click();
+    await expect(page.locator("#menu")).not.toBeVisible();
+
+    // From Game options (Action Wheel and Bar): opened on Action Bar 1's tab
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#actionsbutton").click();
+    await page.locator("#quickbutton").click();
+    await expect(heading).toHaveText("Action Bar 1, slot 1");
+    await expect(tab(1)).toHaveAttribute("aria-selected", "true");
+
+    // Both bars handed on to be kept with the wheels (save.js saveWheels), each its own
+    expect(await page.evaluate(() => ({ quick: window.kept.at(-1).quick, quickTwo: window.kept.at(-1).quickTwo }))).toEqual({ quick: ["vigor", "stun", "burn", "item:potion", null, null], quickTwo: [null, "vigor", null, null, null, null] });
+});
+
 test("Always show (Game options, Action Bar): the Action Bar kept up along the bottom out of a fight, a key using one of its actions there, and remembered; switched off, down again with no fight", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -15728,7 +15886,7 @@ test("six actions across the Action Bar (Game options): only their icons on a ph
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("5");
     await expect(page.locator("#menuquick")).toBeVisible();
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 5");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 5");
     expect(await page.evaluate(() => [...document.querySelectorAll("#quicksetup .quick-slot")].filter((each) => !each.hidden).length)).toBe(6);
 });
 
@@ -16491,7 +16649,7 @@ test.describe("on a phone", () => {
         await touch("touchEnd");
         await longer();
         await expect(menu).toBeVisible();
-        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 2");
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 2");
         await page.locator("#quickback").tap();
         await expect(menu).not.toBeVisible();
         expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
@@ -16502,7 +16660,7 @@ test.describe("on a phone", () => {
         await expect(page.locator("#menuquick")).toBeVisible();
         await longer();
         await expect(menu).toBeVisible();
-        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 4");
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 4");
         await page.locator("#quickback").tap();
         await expect(menu).not.toBeVisible();
 

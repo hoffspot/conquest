@@ -1,6 +1,9 @@
 // The Action Bar: in a fight (an enemy the player's set to fight, or anyone after them), four
 // slots (or six: Game options) rise from the bottom of the screen side by side, lifting the
-// player's name and the zoom buttons above them. Each holds what the player's put in it (Game
+// player's name and the zoom buttons above them. It has two bars, Action Bar 1 and Action Bar 2,
+// each with slots of its own: the Swap Bar button at its right end (tapped or clicked) or the `
+// key swaps them, the slots flipped over one after another to the other bar's, the button saying
+// which is shown. Each holds what the player's put in it (Game
 // options, Action Wheel and Bar, Action Bar; or held on: app/quicksetup.js): a spell, a blow or a thing to use, as a
 // wheel's slice can (app/wheel.js QUICK). Tapped, it's used: an attack, a hex or a blow on the
 // enemy the player's set to fight; anything else (healing, a ward, a draught) on themselves. While
@@ -25,11 +28,17 @@
 //
 // It only shows and hears: the game (game.js) says what's in each and what to do.
 
-import { useDefs } from "./icons.js";
+import { ICONS, useDefs } from "./icons.js";
 import { BARE_MS, Press } from "./press.js";
 import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 
 export { QUICK_HOLD_MS } from "./press.js";
+
+/**
+ * The Action Bar swapped to its other bar: how long each slot takes to flip over to it (ms), and
+ * how long after the one before it each flips (ms), left to right.
+ */
+export const SWAP_FLIP = Object.freeze({ flip: 180, after: 25 });
 
 /** How long the Action Bar stays up once the fight's over (seconds), so it doesn't flicker. */
 export const QUICK_LINGER = 3;
@@ -123,8 +132,13 @@ export class QuickBar {
         this.slots = QUICK.map((_, index) => this.#listen(quickSlot(index), index));
         this.named = Object.assign(document.createElement("span"), { className: "quick-name" });
         this.named.setAttribute("aria-hidden", "true");
-        this.element.append(...this.slots, this.named);
+        this.swapper = this.#swapper();
+        this.element.append(...this.slots, this.swapper, this.named);
         root.append(this.element);
+
+        /** Which bar is shown: 0, Action Bar 1, or 1, Action Bar 2 (turn). */
+        this.page = 0;
+        this.turn(0);
 
         /** Whether they're up (in a fight). */
         this.up = false;
@@ -144,6 +158,9 @@ export class QuickBar {
 
         /** Hears a slot's press dropped as lost (its index, and Press onStale's: how long it was held, and how it was found), for the debug log. */
         this.onStale = () => {};
+
+        /** Hears the Swap Bar button tapped or clicked (or Enter or Space on it), to swap to the other bar. */
+        this.onSwap = () => {};
 
         this.left = QUICK.map(() => 0);
 
@@ -266,6 +283,65 @@ export class QuickBar {
         });
 
         return slot;
+    }
+
+    // The Swap Bar button, at the bar's right end: two arrows chasing each other round (as the action
+    // wheel's turned to its other side), the bar shown under them, and (with a keyboard) its key.
+    // Swapped as it's pressed, not waiting on a lift, as a slot's used (a phone's Safari can lose
+    // a finger's lift); Enter or Space on it, as a press
+    #swapper() {
+        const button = document.createElement("button");
+
+        button.type = "button";
+        button.className = "quick-swap";
+        button.innerHTML = `<svg class="quick-swap-icon" viewBox="-24 -24 48 48" aria-hidden="true">${ICONS.flip}</svg><span class="quick-swap-bar" aria-hidden="true"></span><span class="quick-key" aria-hidden="true">\`</span>`;
+        button.addEventListener("pointerdown", (event) => {
+            if (!this.up || event.button > 0) {
+                return;
+            }
+
+            event.preventDefault();
+            this.onSwap();
+        });
+        button.addEventListener("contextmenu", (event) => event.preventDefault());
+        button.addEventListener("click", (event) => {
+            if (keyboard(event)) {
+                this.onSwap();
+            }
+        });
+
+        return button;
+    }
+
+    /**
+     * Show the `page`th bar (0, Action Bar 1; 1, Action Bar 2): the Swap Bar button saying so.
+     * Swapped to it (`flip`), any slot still pressed let go of (what's under it changes) and the
+     * slots flipped over one after another, left to right, edge on to start with: what's in them
+     * is the other bar's by the time each turns to face the player (the game fills them, fill).
+     */
+    turn(page, { flip = false } = {}) {
+        this.page = page ? 1 : 0;
+        this.element.dataset.page = String(this.page + 1);
+        this.swapper.querySelector(".quick-swap-bar").textContent = String(this.page + 1);
+        this.swapper.setAttribute("aria-label", `Swap Bar: Action Bar ${this.page + 1} shown, swap to Action Bar ${2 - this.page}`);
+        this.swapper.title = "Swap Bar (`)";
+
+        if (!flip) {
+            return;
+        }
+
+        this.release();
+
+        if (still() || typeof this.element.animate !== "function") {
+            return;
+        }
+
+        // (Swapped again before the last flip's done: that one dropped, this one from edge on)
+        this.flips?.forEach((animation) => animation.cancel());
+        this.flips = this.slots
+            .filter((slot) => !slot.hidden)
+            .map((slot, index) => slot.animate([{ transform: "perspective(320px) rotateX(-90deg)" }, { transform: "perspective(320px) rotateX(0deg)" }], { duration: SWAP_FLIP.flip, delay: index * SWAP_FLIP.after, easing: "cubic-bezier(0.2, 0.8, 0.3, 1)", fill: "backwards" }));
+        this.swapper.querySelector(".quick-swap-icon").animate([{ transform: "rotate(0deg)" }, { transform: "rotate(180deg)" }], { duration: SWAP_FLIP.flip + SWAP_FLIP.after * 3, easing: "ease-out" });
     }
 
     /** Bring them up (in a fight) or put them away, lifting the player's name and the zoom buttons with them. */
