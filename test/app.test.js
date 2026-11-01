@@ -8,7 +8,7 @@ import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { memberKind, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
-import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
+import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, readWheels, sectorPath, wheelPlace, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
@@ -1186,6 +1186,61 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         // Slices are an eighth each, cut halfway between (22.5 degrees either side)
         assert.equal(directionOf(Math.sin(0.38) * 50, -Math.cos(0.38) * 50), "n");
         assert.equal(directionOf(Math.sin(0.41) * 50, -Math.cos(0.41) * 50), "ne");
+    });
+
+    it("opens right under the finger where it's wholly on the screen; at the screen's edge, slid onto it, clear of the finger, within the notch and the home bar", () => {
+        // (Its middle; 264 pixels across, kept 6 from the edge; the finger, on its slices once
+        // slid, 152 from its middle, clear of them; on its hub, left there)
+        const half = 132;
+        const onScreen = ({ x, y }, { width, height, insets = {} }) =>
+            x - half >= (insets.left ?? 0) + 6 - 1e-9 && x + half <= width - (insets.right ?? 0) - 6 + 1e-9 && y - half >= (insets.top ?? 0) + 6 - 1e-9 && y + half <= height - (insets.bottom ?? 0) - 6 + 1e-9;
+        const phone = { width: 390, height: 844 };
+
+        assert.deepEqual(wheelPlace(195, 420, phone), { x: 195, y: 420, moved: false }, "in the middle");
+
+        // One of the party's icons, its middle 34 pixels in from the left: the wheel to its right
+        const icon = wheelPlace(34, 300, phone);
+
+        assert.ok(icon.moved && onScreen(icon, phone), JSON.stringify(icon));
+        assert.equal(icon.y, 300, "level with the finger");
+        assert.ok(Math.hypot(icon.x - 34, icon.y - 300) >= 152 - 1e-9, "the finger off its slices");
+
+        // Held sideways, past the notch (59 pixels) and above the home bar (21)
+        const sideways = { width: 844, height: 390, insets: { left: 59, right: 59, bottom: 21 } };
+        const notched = wheelPlace(93, 360, sideways);
+
+        assert.ok(notched.moved && onScreen(notched, sideways), JSON.stringify(notched));
+        assert.ok(Math.hypot(notched.x - 93, notched.y - 360) >= 152 - 1e-9, "the finger off its slices");
+
+        // A little near the edge: slid on, the finger on its hub still, so no further
+        const near = wheelPlace(120, 300, phone);
+
+        assert.deepEqual(near, { x: 138, y: 300, moved: true });
+
+        // A corner: slid on both ways, clear of the finger
+        const corner = wheelPlace(985, 785, { width: 1000, height: 800 });
+
+        assert.ok(corner.moved && onScreen(corner, { width: 1000, height: 800 }), JSON.stringify(corner));
+        assert.ok(Math.hypot(corner.x - 985, corner.y - 785) >= 152 - 1e-9);
+
+        // A screen too small for it: in its middle
+        assert.deepEqual(wheelPlace(10, 10, { width: 200, height: 220 }), { x: 100, y: 110, moved: true });
+    });
+
+    it("flicks into a slice toward the screen's edge from as near it as there's room for: 30 pixels, or less, no less than 12", () => {
+        const screen = { width: 390, height: 844, flick: 30 };
+
+        assert.equal(flickReach(195, 420, -1, 0, screen), 30, "room enough");
+        assert.equal(flickReach(195, 420, 0, 0, screen), 30, "not moved");
+        assert.equal(flickReach(20, 420, -1, 0, screen), 14, "20 pixels in, left: as far as the edge, 6 to spare");
+        assert.equal(flickReach(20, 420, 1, 0, screen), 30, "20 pixels in, right: room enough");
+        assert.equal(flickReach(8, 420, -1, 0, screen), 12, "at the edge: no less than 12");
+        assert.ok(Math.abs(flickReach(24, 24, -1, -1, screen) - (24 * Math.SQRT2 - 6)) < 1e-9, "into a corner: as far as there's room for along the way it went");
+        assert.equal(flickReach(16, 24, -1, -1, screen), 16 * Math.SQRT2 - 6, "the nearer edge that way");
+
+        // So a finger 20 pixels in flicks left (W) 15 pixels, as far as there's room for
+        assert.equal(directionOf(-15, 0, flickReach(20, 420, -15, 0, screen)), "w");
+        assert.equal(directionOf(-15, 0, flickReach(195, 420, -15, 0, screen)), null, "in the middle, not yet");
     });
 
     it("turns over at S: the other seven slices hold what the player puts there", () => {

@@ -83,7 +83,8 @@ export function partyFit(count, room) {
 
 // Taps and holds on an icon (an attacker's, one of the party's), each told `onPress` (gesture "tap"
 // or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels (held, where it
-// went down: a wheel opened by the hold goes right under it), pointerId }):
+// went down: a wheel opened by the hold goes right under it, or, at the screen's edge, beside it),
+// pointerId, pointerType (a mouse's wheel, slid onto the screen, is clicked: game.js) }):
 // held HOLD_MS, not moving off it (HOLD_MOVE), a hold; let go before then, a tap; pressed from the
 // keyboard, a tap
 function pressable(root, onPress) {
@@ -100,7 +101,7 @@ function pressable(root, onPress) {
 
         press.timer = setTimeout(() => {
             press.done = true;
-            onPress("hold", { time: performance.now(), x: press.x, y: press.y, pointerId: event.pointerId });
+            onPress("hold", { time: performance.now(), x: press.x, y: press.y, pointerId: event.pointerId, pointerType: event.pointerType });
         }, HOLD_MS);
         held = press;
     });

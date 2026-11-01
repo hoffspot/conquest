@@ -188,7 +188,7 @@ import { Sigil } from "./sigil.js";
 import { Charge } from "./charge.js";
 import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
-import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
+import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, flickReach, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
 import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, KNACKS, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
 import { formationsOfBody } from "../core/engagement.js";
 
@@ -346,6 +346,9 @@ const AIM_MS = 100;
 // (pixels) from where it opened is in one of its slices
 const HOLD_MS = 400;
 const FLICK = 30;
+// (A wheel opened by a mouse and kept open to be clicked: how long the click after a press it takes
+// is kept from what's under it, ms: #lingerWheel)
+const CLICK_SWALLOW_MS = 500;
 
 // A swipe up from the player (straight ahead): this far up (pixels), mostly up, and quickly
 // (within this long, ms)
@@ -1178,6 +1181,8 @@ export class Game {
         this.allyTarget = null;
         this.lastMemberTap = null;
         this.memberWheel = null;
+        // (A wheel opened by a mouse, kept open to be clicked: what takes its listeners off, #lingerWheel)
+        this.wheelLinger = null;
         hud.onPartyMember = (id, gesture, press) => this.#memberPressed(id, gesture, press);
         hud.onPartyMore = () => this.toggleParty();
 
@@ -3015,6 +3020,7 @@ export class Game {
         this.hud.onPartyMember = () => {};
         this.hud.onPartyMore = () => {};
         this.memberWheel?.();
+        this.wheelLinger?.();
 
         for (const avatar of this.avatars.values()) {
             avatar.object.removeFromParent();
@@ -11222,7 +11228,7 @@ export class Game {
     // player's healing and wards for them), steered by the finger still down; tapped twice in
     // quick succession, running to them (and choosing them to help); tapped once, choosing them to
     // help, or, tapped on the one chosen, no one
-    #memberPressed(id, gesture, { time, x, y, pointerId }) {
+    #memberPressed(id, gesture, { time, x, y, pointerId, pointerType }) {
         const player = this.battle.actor(this.me);
         const member = this.battle.actor(id);
         const last = this.lastMemberTap;
@@ -11234,7 +11240,7 @@ export class Game {
         }
 
         if (gesture === "hold") {
-            this.#openMemberWheel(id, x, y, pointerId);
+            this.#openMemberWheel(id, x, y, pointerId, pointerType);
         } else if (last?.id === id && time - last.time <= DOUBLE_TAP_MS) {
             this.lastMemberTap = null;
 
@@ -11250,15 +11256,16 @@ export class Game {
         }
     }
 
-    // The wheel opened on one of the party's icons, under the finger (`x`, `y`), held by the
-    // pointer `pointerId`: steered as it moves, closed as it's lifted
-    #openMemberWheel(id, x, y, pointerId) {
+    // The wheel opened on one of the party's icons, under the finger (`x`, `y`: at the screen's
+    // edge, slid onto it beside the icon, ActionWheel.show), held by the pointer `pointerId` (of
+    // `pointerType`): steered as it moves, let go of as it's lifted (#letGoWheel)
+    #openMemberWheel(id, x, y, pointerId, pointerType) {
         if (this.wheel?.open || pointerId === null) {
             return;
         }
 
         const own = this.#ownUnit(id);
-        const pointer = { x, y, wheel: { originX: x, originY: y, target: id, kind: own ? "unit" : "ally", side: 0, refused: null, done: false } };
+        const pointer = { x, y, wheel: { originX: x, originY: y, target: id, kind: own ? "unit" : "ally", side: 0, refused: null, done: false, mouse: pointerType === "mouse" } };
         const mine = (event) => event.pointerId === pointerId;
         const move = (event) => {
             if (mine(event)) {
@@ -11270,10 +11277,9 @@ export class Game {
         const up = (event) => {
             if (mine(event)) {
                 letGo();
-
-                if (!pointer.wheel.done) {
-                    this.#closeWheel();
-                }
+                pointer.x = event.clientX;
+                pointer.y = event.clientY;
+                this.#letGoWheel(pointer);
             }
         };
         const letGo = () => {
@@ -15375,7 +15381,7 @@ export class Game {
         const canvas = this.view.canvas;
 
         this.#on(canvas, "pointerdown", (event) => {
-            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, start: event.timeStamp, moved: false, hold: null, wheel: null, swipe: false, drag: null, done: false };
+            const pointer = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, start: event.timeStamp, moved: false, hold: null, wheel: null, swipe: false, drag: null, done: false, type: event.pointerType };
 
             canvas.setPointerCapture?.(event.pointerId);
             this.pointers.set(event.pointerId, pointer);
@@ -15497,11 +15503,12 @@ export class Game {
                 return;
             }
 
-            // Let go with the wheel open: whatever was chosen, it closes (in the middle, nothing)
+            // Let go with the wheel open: whatever was chosen, it closes (in the middle, nothing);
+            // opened by a mouse and slid onto the screen, what's under it's chosen (#letGoWheel)
             if (pointer.wheel) {
-                if (!pointer.wheel.done) {
-                    this.#closeWheel();
-                }
+                pointer.x = event.clientX;
+                pointer.y = event.clientY;
+                this.#letGoWheel(pointer);
 
                 return;
             }
@@ -16545,7 +16552,8 @@ export class Game {
     }
 
     // The finger's been held on someone: open the wheel at its first side, its middle right under
-    // where the finger went down, which the way it's flicked is measured from
+    // where the finger went down (near the screen's edge, slid onto it: ActionWheel.show), which
+    // the way it's flicked is measured from
     #openWheel(pointer, { actor, wheel }) {
         const player = this.battle.actor(this.me);
 
@@ -16553,7 +16561,7 @@ export class Game {
             return;
         }
 
-        pointer.wheel = { originX: pointer.startX, originY: pointer.startY, target: wheel === "self" ? "self" : actor.id, kind: wheel, side: 0, refused: null, done: false };
+        pointer.wheel = { originX: pointer.startX, originY: pointer.startY, target: wheel === "self" ? "self" : actor.id, kind: wheel, side: 0, refused: null, done: false, mouse: pointer.type === "mouse" };
         this.#showWheel(pointer.wheel, pointer.startX, pointer.startY);
         this.sound?.play("wheel");
         globalThis.navigator?.vibrate?.(12);
@@ -16600,7 +16608,7 @@ export class Game {
 
         const looks = commands ? this.#unitLooks(stance, ability) : null;
 
-        this.wheel.show(x, y, open.target, slots, { side: open.side, flip: open.kind !== "provoke", counts, off, looks });
+        this.wheel.show(x, y, open.target, slots, { side: open.side, flip: open.kind !== "provoke", counts, off, looks, mouse: open.mouse });
         this.wheel.setCooldown(this.#cooldowns(slots, commands ? open.target : null));
     }
 
@@ -16637,8 +16645,12 @@ export class Game {
         return shares;
     }
 
-    // The finger moves with the wheel open: into a slice, try its action (once); into S, turn
-    // the wheel over, opened again under the finger
+    // The finger moves with the wheel open: flicked into a slice (FLICK pixels from where it went
+    // down, less toward the screen's edge if there's not that much room: flickReach), try its
+    // action (once); into S, turn the wheel over, opened again under the finger. A wheel slid onto
+    // the screen away from the finger shows where it's going with the puck in its hub; one opened
+    // by a mouse and slid so shows the slice under the pointer, chosen as it's let go of
+    // (#letGoWheel) or clicked (#lingerWheel)
     #steerWheel(pointer) {
         const open = pointer.wheel;
 
@@ -16646,7 +16658,17 @@ export class Game {
             return;
         }
 
-        const direction = directionOf(pointer.x - open.originX, pointer.y - open.originY, FLICK);
+        if (this.wheel.clickable) {
+            this.wheel.mark(this.wheel.sliceAt(pointer.x, pointer.y), "aimed");
+
+            return;
+        }
+
+        const [dx, dy] = [pointer.x - open.originX, pointer.y - open.originY];
+        const dead = flickReach(open.originX, open.originY, dx, dy, { width: globalThis.innerWidth, height: globalThis.innerHeight, flick: FLICK });
+        const direction = directionOf(dx, dy, dead);
+
+        this.wheel.point(dx, dy, dead);
 
         if (!direction) {
             open.refused = null;
@@ -16655,12 +16677,24 @@ export class Game {
             return;
         }
 
+        this.#pickSlice(open, direction, pointer);
+    }
+
+    // A slice of the wheel open (`open`) flicked into, let go over or clicked (`direction`), the
+    // pointer at `at`: S, the wheel turned over (flicked, opened again under the finger, to flick
+    // from there; clicked, where it is); one that can't be used as things are, refused; otherwise
+    // its action tried, and the wheel closed
+    #pickSlice(open, direction, at) {
         if (this.wheel.flipsAt(direction)) {
             open.side = (open.side + 1) % SIDES;
-            open.originX = pointer.x;
-            open.originY = pointer.y;
+
+            if (!this.wheel.clickable) {
+                open.originX = at.x;
+                open.originY = at.y;
+            }
+
             open.refused = null;
-            this.#showWheel(open, pointer.x, pointer.y);
+            this.#showWheel(open, open.originX, open.originY);
             this.sound?.play("wheel");
             globalThis.navigator?.vibrate?.(8);
 
@@ -16681,10 +16715,92 @@ export class Game {
         }
 
         open.done = true;
+        this.wheelLinger?.();
         this.wheel.mark(direction, "chosen");
         this.sound?.play("wheelSelect");
         this.wheel.hide({ after: 180 });
         this.act(action, open.target, { refused: () => this.wheel.mark(direction, "refused") });
+    }
+
+    // The finger (or the mouse's button) let go with the wheel open (`pointer`, where it was let go
+    // of): a flicked wheel closes, whatever was chosen (in the middle, nothing). One opened by a
+    // mouse and slid onto the screen: let go over a slice, that's picked; let go where it went
+    // down, or over a slice that turned it over or was refused, it stays open to be clicked
+    // (#lingerWheel); let go anywhere else, it closes
+    #letGoWheel(pointer) {
+        const open = pointer.wheel;
+
+        if (open.done) {
+            return;
+        }
+
+        if (this.wheel.clickable) {
+            const direction = this.wheel.sliceAt(pointer.x, pointer.y);
+
+            if (direction) {
+                this.#pickSlice(open, direction, pointer);
+            }
+
+            if (open.done) {
+                return;
+            }
+
+            if (direction || Math.hypot(pointer.x - open.originX, pointer.y - open.originY) <= TAP_SLOP) {
+                this.#lingerWheel(open);
+
+                return;
+            }
+        }
+
+        this.#closeWheel();
+    }
+
+    // A wheel opened by a mouse, slid onto the screen, kept open once the button's let go: the
+    // slice under the pointer shown, and clicked, picked (S turning it over where it is); a click
+    // anywhere else, or Escape, closes it, and does nothing more
+    #lingerWheel(open) {
+        if (this.wheelLinger) {
+            return;
+        }
+
+        const hover = (event) => this.wheel.mark(this.wheel.sliceAt(event.clientX, event.clientY), "aimed");
+        // (The click that follows a press taken by the wheel goes nowhere either: not to a button
+        // under it)
+        const swallow = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+        const press = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            document.addEventListener("click", swallow, { capture: true, once: true });
+            setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), CLICK_SWALLOW_MS);
+
+            const direction = event.button === 0 ? this.wheel.sliceAt(event.clientX, event.clientY) : null;
+
+            if (direction) {
+                this.#pickSlice(open, direction, { x: event.clientX, y: event.clientY });
+            } else {
+                this.#closeWheel();
+            }
+        };
+        const key = (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.#closeWheel();
+            }
+        };
+
+        document.addEventListener("pointermove", hover);
+        document.addEventListener("pointerdown", press, { capture: true });
+        document.addEventListener("keydown", key, { capture: true });
+        this.wheelLinger = () => {
+            document.removeEventListener("pointermove", hover);
+            document.removeEventListener("pointerdown", press, { capture: true });
+            document.removeEventListener("keydown", key, { capture: true });
+            this.wheelLinger = null;
+        };
     }
 
     /**
@@ -16708,6 +16824,8 @@ export class Game {
     }
 
     #closeWheel() {
+        this.wheelLinger?.();
+
         if (this.wheel?.open) {
             this.wheel.hide();
         }
