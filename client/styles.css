@@ -3526,6 +3526,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     opacity: 1;
 }
 
+/* (The action wheel, open, over the rest of the HUD: the party's icons, the attackers', the threat
+   arrows and a message, which drew over it, slid beside them at the screen's edge or not; under
+   a dialog) */
+.wheel.action-wheel {
+    z-index: 16;
+}
+
 .wheel svg {
     display: block;
     overflow: visible;
@@ -3597,6 +3604,18 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .wheel .refused .face {
     fill: rgba(200, 50, 40, 0.55);
+}
+
+/* (Opened by a mouse, slid onto the screen: the slice under the pointer, to be chosen) */
+.wheel .aimed .face {
+    fill: rgba(236, 200, 130, 0.3);
+}
+
+/* (Slid onto the screen, away from the finger: where the finger's going, in its hub) */
+.wheel .puck {
+    fill: rgba(246, 234, 210, 0.92);
+    stroke: rgba(0, 0, 0, 0.6);
+    stroke-width: 2;
 }
 
 :is(.wheel, .wheels-compass) .hub {

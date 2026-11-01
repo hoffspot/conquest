@@ -1922,8 +1922,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   a friend, `forFriends`; anything else on the player as ever); tapped again, the player's own
   again; gone (fallen, dismissed, their time up), let go. **Tapped twice** in quick succession,
   the player runs to them (an `approach` order with `run`). **Held**, their followers' wheel
-  opens right under where the finger went down, steered by it from wherever it's lifted
-  (`#openMemberWheel`: the page's own pointer events for that pointer), as held on one of the
+  opens beside the icon, slid onto the screen from its edge (*The action wheel*, *Near the
+  screen's edge*), flicked from where the finger went down or, held with a mouse, its slice
+  chosen by the pointer (`#openMemberWheel`: the page's own pointer events for that pointer), as held on one of the
   party in the world does (*The action wheel*: the `unit:` actions are core/host.js `order`
   commands, `#orderUnit`; `NET_VERSION` 99, and with Guard me, Fall back, Hold fire, their own
   ability and things given to them, 187). Told, each says so ("Bram guards you.", "Bram holds
@@ -5396,14 +5397,29 @@ Press and hold (0.4 s, without moving) on the player or an enemy, and a see-thro
 (SVG, 264 pixels across) opens with its middle right under where the finger went down, cut into
 eight slices like a compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and
 flick: as soon as the finger is 30 pixels from where it went down, the slice it's in is tried,
-lit gold if it's used; letting go before then does nothing. So the wheel's always drawn round
-the point it's flicked from, wherever on someone the finger landed (it opened round their
-middle once, so the slice the finger seemed to go into wasn't always the one it did); near the
-screen's edge it goes past it, the slices past the edge flicked into all the same.
+lit gold if it's used; letting go before then does nothing. So the wheel's drawn round the
+point it's flicked from, wherever on someone the finger landed (it opened round their middle
+once, so the slice the finger seemed to go into wasn't always the one it did).
+
+**Near the screen's edge** (`wheelPlace`, `flickReach`). Where it wouldn't all be on the screen
+round the finger (on one of the party's icons down the left, say, a third of it was off the
+screen, Wait here, Guard me and Dismiss with it), it's slid onto the screen, 6 pixels in from
+the edge, the notch and the home bar, and, if that leaves the finger on its slices rather than
+its hub, on further the way it slid, till the finger's 24 pixels clear of them; it grows out from
+the finger as it opens. It's flicked from where the finger went down all the same, so W is still
+a flick left: a puck in its hub (`ActionWheel.point`) goes the way the finger does, reaching the
+hub's edge as the finger flicks into the slice past it. Opened by a mouse and slid so, its
+slices are chosen by the pointer instead (`clickable`, `sliceAt`), as a wheel at the edge
+couldn't be flicked into past it: the slice under it is lit, and chosen as the button's let go
+of over it; let go of where it went down (or over S, turning it over, or over a slice refused),
+the wheel stays open, its slices clicked, and a click anywhere else or Escape closes it, doing
+nothing more (game.js `#letGoWheel`, `#lingerWheel`). And a flick toward the screen's edge needs
+only as far as there's room for, 6 pixels short of it (no less than 12), where that's under the
+30 pixels it is elsewhere. The pack's wheel for a thing does the same, held (app/pack.js).
 
 **Two sides.** S (`FLIP`) turns the wheel over: flicked into, the wheel's other side (wheel two,
-and from there back to wheel one) opens again under the finger, to flick from there. Its hub
-says which side it is. The other seven slices (`PLACES`) hold what the player's put there.
+and from there back to wheel one) opens again under the finger, to flick from there (chosen by
+a mouse's pointer, where it is). Its hub says which side it is. The other seven slices (`PLACES`) hold what the player's put there.
 
 **What's on them.** The player has three wheels to set, each with two sides (`SETTABLE`):
 - **Their own** (held on themselves): the heals and the spells cast on oneself or a friend

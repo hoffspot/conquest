@@ -32,7 +32,7 @@ import { GEAR_SLOTS } from "../core/gear.js";
 import { alike, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
 import { MAKES, rarityOf } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
-import { ActionWheel, directionOf } from "./wheel.js";
+import { ActionWheel, directionOf, flickReach } from "./wheel.js";
 
 // A thing offered in a trade, whole (core/host.js #offer): what it is, not how the pack shows it
 const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect", "unique"];
@@ -1101,7 +1101,7 @@ export class PackPanel {
             }
 
             const thing = this.#thingAt(place);
-            const press = { id: event.pointerId, place, x: event.clientX, y: event.clientY, at: event.timeStamp, hold: null, mode: null };
+            const press = { id: event.pointerId, place, x: event.clientX, y: event.clientY, at: event.timeStamp, hold: null, mode: null, mouse: event.pointerType === "mouse" };
 
             // Held: gear goes on or comes off; anything else, its wheel
             if (thing) {
@@ -1180,7 +1180,18 @@ export class PackPanel {
         this.#endPress();
 
         if (press.mode === "wheel") {
-            if (!press.done) {
+            // (Held with a mouse, the wheel slid onto the screen: let go over a slice, that's
+            // chosen; where it went down, it stays to be clicked, as one right-clicked does)
+            const direction = !press.done && this.wheel.clickable ? this.wheel.sliceAt(event.clientX, event.clientY) : null;
+            const key = direction ? this.wheel.actionAt(direction) : null;
+
+            if (key) {
+                press.done = true;
+                this.#choose(key);
+            } else if (!press.done && this.wheel.clickable && Math.hypot(event.clientX - press.x, event.clientY - press.y) <= DRAG) {
+                this.wheel.mark(null);
+                this.wheel.element.classList.add("clickable");
+            } else if (!press.done) {
                 this.#closeWheel();
             }
         } else if (press.mode === "drag") {
@@ -1363,27 +1374,41 @@ export class PackPanel {
         }
 
         // (Held, its middle right under where the finger went down, which the way it's flicked is
-        // measured from; right-clicked, over the thing, kept on the screen to be clicked on)
+        // measured from (at the screen's edge, slid onto it, ActionWheel.show: held with a mouse,
+        // the slice under the pointer's chosen); right-clicked, over the thing, kept on the screen
+        // to be clicked on)
         const box = press.place.element.getBoundingClientRect();
         const [x, y] = press.clicked ? [box.left + box.width / 2, box.top + box.height / 2] : [press.x, press.y];
 
         press.mode = "wheel";
         press.done = false;
         this.wheelFor = press.place.index;
-        this.wheel.show(x, y, stack.id, slots, { looks, hub: iconOf(stack), onScreen: Boolean(press.clicked) });
+        this.wheel.show(x, y, stack.id, slots, { looks, hub: iconOf(stack), onScreen: Boolean(press.clicked), mouse: Boolean(press.mouse) });
         this.wheel.element.classList.toggle("clickable", Boolean(press.clicked));
         this.#select(press.place, { card: false });
         globalThis.navigator?.vibrate?.(12);
     }
 
-    // The finger moves with a thing's wheel open: into a slice, it's done (once)
+    // The finger moves with a thing's wheel open: into a slice, it's done (once; toward the screen's
+    // edge, less far if there's not room: flickReach), the puck in the hub of a wheel slid onto the
+    // screen showing where it's going. Held with a mouse and slid so, the slice under the pointer
+    // shown, chosen as it's let go of (#up)
     #steer(press, dx, dy) {
         if (press.done) {
             return;
         }
 
-        const direction = directionOf(dx, dy, FLICK);
+        if (this.wheel.clickable) {
+            this.wheel.mark(this.wheel.sliceAt(press.x + dx, press.y + dy), "aimed");
+
+            return;
+        }
+
+        const dead = flickReach(press.x, press.y, dx, dy, { width: globalThis.innerWidth, height: globalThis.innerHeight, flick: FLICK });
+        const direction = directionOf(dx, dy, dead);
         const key = direction ? this.wheel.actionAt(direction) : null;
+
+        this.wheel.point(dx, dy, dead);
 
         this.wheel.mark(direction, direction ? (key ? "chosen" : "refused") : null);
 
