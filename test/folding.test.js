@@ -1,10 +1,11 @@
-// Arms folded (characters/actions.js RESTS `handFree`; beasts/beast.js restWaysOf): the wilds'
-// people-shaped, their weapon always in hand, never folding their arms round it nor clasping
-// their hands behind them, in the game or the model viewer; and every way an orc raider with its
-// cleaver passes the time without a jump in its hands
+// Arms folded (characters/actions.js RESTS `handFree`, place's CLEAR_KEEP; beasts/beast.js
+// restWaysOf): a sentry folding the arms with no jump in the hands as they're kept out of the
+// body, on the bodies they jumped worst on; the wilds' people-shaped, their weapon always in hand,
+// never folding their arms round it nor clasping their hands behind them, in the game or the model
+// viewer; and every way an orc raider with its cleaver passes the time without a jump in its hands
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { readHumanFiles } from "../scripts/lib/human-data.js";
+import { readHumanData, readHumanFiles } from "../scripts/lib/human-data.js";
 
 // (Pictures put on a canvas: enough of one for that in Node)
 globalThis.ImageData ??= class {
@@ -35,6 +36,7 @@ const THREE = await import("three");
 const { HumanData } = await import("../client/js/characters/body.js");
 const { SkinAtlas } = await import("../client/js/characters/skin.js");
 const { RESTS } = await import("../client/js/characters/actions.js");
+const { BODIES, dress, FRAME, motions } = await import("../client/js/characters/motioncheck.js");
 const { dressCreature, restsOf, restWaysOf } = await import("../client/js/beasts/beast.js");
 const { ROLES } = await import("../client/js/core/roles.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
@@ -91,7 +93,51 @@ function jumpiest(avatar, variant) {
     return most;
 }
 
+// The most either hand's step changed from one frame to the next (centimetres) as a motion of the
+// motion check's (its id) was played on one of its bodies (its id), as the check plays it
+// (motioncheck.js play: 30 frames a second)
+function jumpOf(id, bodyId) {
+    const motion = motions().find((each) => each.id === id);
+    const body = BODIES.find(({ id: each }) => each === bodyId);
+    const dressed = dress(readHumanData(), motion.look(body), { sheathed: motion.sheathed });
+    const hands = ["RightHand", "LeftHand"].map((name) => dressed.character.rig.bone(name));
+    const places = [];
+
+    motion.start(dressed, body);
+
+    for (let t = FRAME; t <= motion.seconds + 1e-6; t += FRAME) {
+        dressed.walker.update(FRAME, { speed: motion.speed });
+        dressed.character.object.updateMatrixWorld(true);
+        places.push(hands.map((bone) => bone.getWorldPosition(new THREE.Vector3())));
+    }
+
+    let most = 0;
+
+    for (let k = 2; k < places.length; k++) {
+        for (let side = 0; side < 2; side++) {
+            const [a, b, c] = [places[k - 2][side], places[k - 1][side], places[k][side]];
+
+            most = Math.max(most, c.clone().sub(b).sub(b.clone().sub(a)).length() * 100);
+        }
+    }
+
+    return most;
+}
+
 describe("arms folded (actions.js, beast.js restWaysOf)", () => {
+    it("folds a sentry's arms with no jump in either hand as it's kept out of the body: no step more than 6.5 cm off the last at 30 frames a second, on the bodies it jumped worst on", () => {
+        // (Standing at rest, each frame's moves out of the body begun from the last frame's, kept if
+        // that leaves no harm, CLEAR_KEEP: begun from none, a move taken back as it strained the arm
+        // left the hand 20 cm from where it was, and back the next frame: 37, 36 and 26 cm off the
+        // last. With none kept out of the body at all, the fold's own moves step up to 4.2 cm off
+        // the last)
+        for (const body of ["orc-bulkiest-f", "orc-shortest-f", "human-bulkiest-m"]) {
+            const most = jumpOf(`rest/sentry/${FOLDED}`, body);
+
+            assert.ok(most < 6.5, `${body}: a hand's step ${most.toFixed(2)} cm off the last`);
+        }
+    });
+
     it("has an orc raider with its cleaver pass the time with no jump in either hand: no step more than 3 cm off the last, in any of its ways", () => {
         // (Its arms folded round the cleaver, as it had them, its cleaver hand pushed out of the body
         // and back: 8.2 cm off the last)
