@@ -1256,12 +1256,21 @@ export class Game {
 
         /**
          * What's on the player's action wheels: their own, an enemy's and their followers', each two
-         * sides; and their Action Bar, six (four shown, or all six: app/wheel.js).
+         * sides; and their Action Bar's two bars, six each (four shown, or all six: app/wheel.js).
          */
         this.wheels = readWheels(wheels);
 
-        /** Hears one of the Action Bar's actions held on (its slot), to change what's in it (main.js: Action Bar). */
+        /**
+         * Hears one of the Action Bar's actions held on (its slot, and which bar: 0, Action Bar 1,
+         * or 1, Action Bar 2), to change what's in it (main.js: Action Bar).
+         */
         this.onChooseQuick = () => {};
+
+        /**
+         * Which of the Action Bar's bars is shown: 0, Action Bar 1, or 1, Action Bar 2 (swapQuick:
+         * its Swap Bar button, or the ` key); kept as it is for the next fight.
+         */
+        this.quickPage = 0;
 
         /** Whether the Action Bar is kept up out of a fight too (Game options: Always show). */
         this.quickAlways = false;
@@ -2247,8 +2256,10 @@ export class Game {
         this.wheel.element.classList.add("action-wheel");
         this.quickBar = new QuickBar(this.hud.root);
         this.quickBar.show(this.quickShown);
+        this.quickBar.turn(this.quickPage);
         this.quickBar.onUse = (slot) => this.quick(slot);
-        this.quickBar.onChoose = (slot) => this.onChooseQuick(slot);
+        this.quickBar.onChoose = (slot) => this.onChooseQuick(slot, this.quickPage);
+        this.quickBar.onSwap = () => this.swapQuick();
         this.quickBar.onFlick = (slot, way) => this.flickQuick(slot, way);
         this.quickBar.onStale = (slot, lost) => this.#pressLost(slot, lost);
         this.sigil = new Sigil(this.hud.plate);
@@ -12535,7 +12546,7 @@ export class Game {
             }
 
             const key = `item:${id}`;
-            const on = this.wheels.quick.includes(key) || this.wheels.enemy.some((side) => PLACES.some((place) => side[place] === key));
+            const on = this.wheels.quick.includes(key) || this.wheels.quickTwo.includes(key) || this.wheels.enemy.some((side) => PLACES.some((place) => side[place] === key));
             const side = on ? -1 : this.wheels.enemy.findIndex((slots) => PLACES.some((place) => !slots[place]));
 
             this.wheels.placed = [...this.wheels.placed, id];
@@ -15607,6 +15618,10 @@ export class Game {
                 this.toggleParty({ chat: true });
             } else if (/^[1-6]$/.test(event.key) && Number(event.key) <= this.quickShown && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
                 this.quick(Number(event.key) - 1);
+            } else if (event.code === "Backquote" && plain && this.quickBar?.up) {
+                // (The key left of 1, ` on most keyboards: the Action Bar swapped to its other bar)
+                event.preventDefault();
+                this.swapQuick();
             } else if ((event.key === "x" || event.key === "X" || event.key === "z" || event.key === "Z") && plain) {
                 // (X and Z: the next foe in the enemies list set on, or the last)
                 this.cycleTarget(event.key.toLowerCase() === "x" ? 1 : -1, "list");
@@ -17062,7 +17077,7 @@ export class Game {
     #quickKeys() {
         const prism = this.#prism();
         const chain = {};
-        const keys = this.wheels.quick.map((key, slot) => {
+        const keys = this.#quickBarShown().map((key, slot) => {
             const element = SPELLS[actionOf(key)?.spell]?.school;
             const next = nextOf(prism, element);
 
@@ -17115,6 +17130,28 @@ export class Game {
         return offensive(key) && !target ? "untargeted" : null;
     }
 
+    // What the player's put on the Action Bar's bar shown (or on the `page`th: 0, Action Bar 1; 1,
+    // Action Bar 2), slot by slot
+    #quickBarShown(page = this.quickPage) {
+        return page ? this.wheels.quickTwo : this.wheels.quick;
+    }
+
+    /**
+     * The Action Bar swapped to its other bar (Action Bar 1 to 2, or 2 to 1: its Swap Bar button,
+     * or the ` key), flipped over to it; kept as it is for the next fight. Returns which is shown
+     * now (0 or 1).
+     */
+    swapQuick() {
+        this.quickPage = 1 - this.quickPage;
+
+        // (Nothing rolled in on the bar swapped to: it's the other bar's, not the chain moving on)
+        this.quickShowing = null;
+        this.quickBar?.turn(this.quickPage, { flip: true });
+        this.sound?.play("wheel");
+
+        return this.quickPage;
+    }
+
     /** Show four of the Action Bar's actions (with their names) or six across (`count`: QUICK_SHOWN; Game options). */
     showQuick(count) {
         this.quickShown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
@@ -17128,7 +17165,7 @@ export class Game {
      * not a school's spell, it bounces. Returns what's in it now, and whether it turned.
      */
     flickQuick(slot, way) {
-        const quick = [...this.wheels.quick];
+        const quick = [...this.#quickBarShown()];
         const key = quick[slot] ?? null;
         const next = flicked(key, way, this.progress.known());
 
@@ -17140,7 +17177,7 @@ export class Game {
         }
 
         quick[slot] = next;
-        this.setQuick(quick);
+        this.setQuick(quick, this.quickPage);
         this.quickBar?.roll(slot, way, next);
         this.sound?.play("wheelSelect");
 
@@ -17153,12 +17190,13 @@ export class Game {
     // in it, how long it was held, how it was found and whether the bar was up
     #pressLost(slot, { ms, how, last = null }) {
         const found = how === "bare" ? "let go of once no finger was on the screen" : "taken over by the next";
-        const what = slot === "stick" ? "The thumb stick's touch" : `Action Bar slot ${slot + 1}'s press`;
+        const what = slot === "stick" ? "The thumb stick's touch" : `Action Bar${this.quickPage ? " 2" : ""} slot ${slot + 1}'s press`;
 
         telemetry.keep("press", {
             summary: `${what} was lost, its lift never heard: ${found}, ${(ms / 1000).toFixed(1)} s after it began`,
             slot,
-            action: slot === "stick" ? null : (this.wheels.quick[slot] ?? null),
+            action: slot === "stick" ? null : (this.#quickBarShown()[slot] ?? null),
+            bar: slot === "stick" ? null : this.quickPage + 1,
             ms: Math.round(ms),
             how,
             last,
@@ -17168,7 +17206,7 @@ export class Game {
     }
 
     /**
-     * Use one of the Action Bar's actions (its slot, 0 to 5, from the left): an attack, a hex or a blow on the enemy
+     * Use one of the Action Bar's actions (its slot, 0 to 5, from the left, on the bar shown): an attack, a hex or a blow on the enemy
      * the player's set to fight, anything else on themselves; refused (and said why) if it can't
      * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
      */
@@ -17178,7 +17216,7 @@ export class Game {
         const why = this.#quickRefusal(key, target) ?? ((this.#cooldowns({ slot: key }).slot ?? 0) > 0 ? "cooldown" : null);
 
         if (why === "empty") {
-            this.onChooseQuick(slot);
+            this.onChooseQuick(slot, this.quickPage);
 
             return { ok: false, reason: why };
         }
@@ -17223,19 +17261,23 @@ export class Game {
     }
 
     /**
-     * What's on the player's Action Bar, what can be put on it (app/wheel.js assignable), and
-     * how many of each thing they carry: for the Action Bar options.
+     * What's on the player's Action Bar, both its bars (`quick`, Action Bar 1; `quickTwo`, Action
+     * Bar 2), what can be put on them (app/wheel.js assignable), and how many of each thing they
+     * carry: for the Action Bar options.
      */
     quickSetup() {
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
         const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
 
-        return { quick: [...this.wheels.quick], choices: assignable("quick", { learnt, carries: this.progress.carried() }), counts };
+        return { quick: [...this.wheels.quick], quickTwo: [...this.wheels.quickTwo], choices: assignable("quick", { learnt, carries: this.progress.carried() }), counts };
     }
 
-    /** Put things on the player's Action Bar (as the Action Bar options have them), and keep them. */
-    setQuick(quick) {
-        this.wheels = readWheels({ ...this.wheels, quick });
+    /**
+     * Put things on one of the player's Action Bar's bars (`page`: 0, Action Bar 1; 1, Action Bar
+     * 2), as the Action Bar options have them, and keep them.
+     */
+    setQuick(quick, page = 0) {
+        this.wheels = readWheels({ ...this.wheels, [page ? "quickTwo" : "quick"]: quick });
         this.onWheels(structuredClone(this.wheels));
     }
 

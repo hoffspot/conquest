@@ -1501,9 +1501,10 @@ async function openWheels() {
 }
 
 // What's on the player's Action Bar, to change (app/quicksetup.js: loaded the first time), with
-// the `slot`th chosen. Opened from Game options (Action Wheel and Bar), Back goes back there; from
-// one of its actions held on in a fight (`fromFight`), back to the game.
-async function openQuick(slot = 0, { fromFight = false } = {}) {
+// the `bar`th bar shown (0, Action Bar 1; 1, Action Bar 2) and its `slot`th slot chosen. Opened
+// from Game options (Action Wheel and Bar), Back goes back there; from one of its actions held on
+// in a fight (`fromFight`), back to the game.
+async function openQuick(slot = 0, { fromFight = false, bar = 0 } = {}) {
     const game = state.game;
 
     if (!game) {
@@ -1519,9 +1520,9 @@ async function openQuick(slot = 0, { fromFight = false } = {}) {
     state.quickFromFight = fromFight;
     $("#quickback").textContent = fromFight ? "Back to the game" : "Back";
     $("#menuquick .menu-back").setAttribute("aria-label", fromFight ? "Back to the game" : "Back to Action Wheel and Bar");
-    state.quickSetup.onChange = (quick) => state.game?.setQuick(quick);
+    state.quickSetup.onChange = (quick, page) => state.game?.setQuick(quick, page);
     state.quickSetup.showCount(quickShown());
-    state.quickSetup.show(game.quickSetup(), slot);
+    state.quickSetup.show(game.quickSetup(), slot, bar);
     menuPage("quick");
 }
 
@@ -1530,12 +1531,13 @@ function quickShown() {
     return settings.quickSix ? 6 : 4;
 }
 
-// One of the Action Bar's actions held on in a fight (or an empty slot tapped): paused, its slot chosen to change
-function chooseQuick(slot) {
+// One of the Action Bar's actions held on in a fight (or an empty slot tapped): paused, its slot
+// chosen to change, on the bar it's on (`bar`: 0, Action Bar 1; 1, Action Bar 2)
+function chooseQuick(slot, bar = 0) {
     pause();
 
     if ($("#menu").open) {
-        openQuick(slot, { fromFight: true });
+        openQuick(slot, { fromFight: true, bar });
     }
 }
 
