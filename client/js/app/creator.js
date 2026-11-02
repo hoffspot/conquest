@@ -8,6 +8,10 @@
 // mouse wheel) to come nearer or stand further off, never so near the camera cuts into them; each
 // tab frames what it changes (the face close up, the hair head and shoulders). Choosing a weapon
 // shows it held on guard and swung.
+//
+// The new character's got ready before they're shown (prepare), a step at a time, so the page
+// never stops for it: while the title's up, a little each frame, and if it's not done by the time
+// they're wanted, faster, behind a screen saying so with how far it's come (#createwait).
 
 import * as THREE from "three";
 import { Character } from "../characters/character.js";
@@ -19,7 +23,7 @@ import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { bakeStudio } from "../world/environment.js";
 import { Progress } from "../core/progress.js";
-import { Steps } from "../core/steps.js";
+import { Steps, WAITING } from "../core/steps.js";
 import { guardOf, heroEquipment } from "./game.js";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, IRIS_COLOURS, randomHero, suggestName, tonesOf } from "./heroes.js";
 
@@ -40,6 +44,51 @@ const UPRIGHT_DISTANCE = 1.6;
 
 // How often the weapon is swung while choosing one (seconds)
 const DEMO_EVERY = 3.2;
+
+/**
+ * Getting the new character ready before they're shown (Creator prepare): how long a frame it
+ * takes while the title's up (`idle`, ms: little, so the title's not held up) and once they're
+ * wanted (`shown`, ms: most of the frame, the screen saying so drawn between); about how many
+ * steps the new character takes to build (`steps`: Character.building's, but those waiting on
+ * their skin painted elsewhere), and the share of the bar that building fills (`built`), the rest
+ * for what they're drawn with made ready on the graphics card.
+ */
+export const PREPARE = Object.freeze({ idle: 6, shown: 40, steps: 130, built: 0.85 });
+
+// The next frame (or a moment on, where nothing's drawn)
+const nextFrame = () => new Promise((resolve) => (globalThis.requestAnimationFrame ? requestAnimationFrame(() => resolve()) : setTimeout(resolve, 16)));
+
+// Steps (a generator's), each that isn't waiting on work done elsewhere counted (`count`)
+function* counted(steps, count) {
+    let step = steps.next();
+
+    while (!step.done) {
+        if (step.value !== WAITING) {
+            count();
+        }
+
+        step = steps.next(yield step.value);
+    }
+
+    return step.value;
+}
+
+// A hero as the character maker makes them: armed with a starting weapon, and spiked boots only
+// with another
+function normalised(hero) {
+    const made = structuredClone(hero);
+
+    made.weapon = STARTING_WEAPONS.includes(made.weapon) ? made.weapon : STARTING_WEAPONS[0];
+    made.boots = Boolean(made.boots) && made.weapon !== "boots";
+
+    return made;
+}
+
+// What a hero's character is built from (Character's options)
+const optionsOf = (hero) => ({ shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, new Progress({}, hero).worn(), hero.parts ?? []) });
+
+// (Whether two heroes would be built the same)
+const sameBuild = (a, b) => JSON.stringify(optionsOf(a)) === JSON.stringify(optionsOf(b));
 
 // A body's shape is rebuilt at most this often while a slider is dragged (ms)
 const RESHAPE_EVERY = 90;
@@ -239,45 +288,205 @@ export class Creator {
         this.step = "look";
         this.demoAt = 0;
 
-        this.#buildStage();
+        // (Getting the new character ready, prepare: the hero, and them, built and kept out of
+        // sight till they're shown (`standby`: the one shown's `avatar`); how long a frame it
+        // takes, how far it's come, 0 to 1; whether it's been given up, someone else made
+        // instead, run; and whether it's all been let go of, dispose)
+        this.prepared = null;
+        this.preparing = null;
+        this.standby = null;
+        this.budget = PREPARE.idle;
+        this.progress = 0;
+        this.abandoned = false;
+        this.disposed = false;
+        this.wait = root.querySelector("#createwait");
+    }
+
+    /**
+     * Get the new character (`hero`: a new one, if not given) ready before they're shown: built a
+     * step at a time (Character.building: their skin painted off the page's thread, where it can
+     * be), PREPARE.idle ms a frame till they're wanted (hurry), and what they're drawn with made
+     * ready on the graphics card without holding the page up (compileAsync), so neither the page
+     * nor their first frame stops for them, as it did for seconds on a phone opened at once. Once:
+     * run takes it up where it's got to. Resolves once they're ready (or it's all let go of).
+     */
+    prepare(hero = defaultHero()) {
+        if (!this.preparing) {
+            this.prepared = normalised(hero);
+            this.preparing = this.#preparing(this.prepared);
+        }
+
+        return this.preparing;
+    }
+
+    /** Get the new character ready faster, PREPARE.shown ms a frame: they're wanted now. */
+    hurry() {
+        this.budget = PREPARE.shown;
+    }
+
+    /** Let go of all of it, unshown (got ready for a new character no one went on to make). */
+    dispose() {
+        this.disposed = true;
+        this.#drop(this.avatar);
+        this.#drop(this.standby);
+        this.avatar = null;
+        this.standby = null;
+        this.studio?.dispose();
+    }
+
+    // A character taken off the plinth and let go of
+    #drop(avatar) {
+        avatar?.object.removeFromParent();
+        avatar?.character.dispose();
+    }
+
+    async #preparing(hero) {
+        // (The skin atlas, worked out off the page's thread while the title was up:
+        // characters/kit.js; and the stage, its light baked, at a frame's start)
+        await this.kit.ready;
+        await nextFrame();
+
+        if (this.disposed || this.abandoned) {
+            return;
+        }
+
+        this.#stage();
+
+        let taken = 0;
+        const steps = new Steps(counted(Character.building(this.kit, optionsOf(hero)), () => taken++), "the new character");
+
+        while (!steps.take(performance.now() + this.budget)) {
+            this.#shown(Math.min(taken / PREPARE.steps, 1) * PREPARE.built);
+            await nextFrame();
+
+            if (this.disposed || this.abandoned) {
+                return;
+            }
+        }
+
+        this.standby = this.#place(steps.value);
+        this.#shown(PREPARE.built);
+
+        // (Its shaders, compiled alongside the page where the browser can, KHR_parallel_shader_compile)
+        try {
+            await this.view.renderer.compileAsync(this.scene, this.camera);
+        } catch {
+            // (Compiled as they're drawn below instead)
+        }
+
+        if (this.disposed || this.abandoned) {
+            return;
+        }
+
+        // Posed and drawn once where no one sees it (the title's paintings over the view, or the
+        // screen saying they're being got ready): what's left to make ready for their first frame
+        // done now, not as they're first shown (their stance and how what they wear hangs worked
+        // out, the shadows' shaders, their pictures and shapes put on the graphics card)
+        this.standby.update(0, 0, 0, 0);
+
+        const height = this.standby.character.height;
+
+        this.camera.position.set(0, height * FRAMING.body.at, FRAMING.body.distance);
+        this.camera.lookAt(0, height * FRAMING.body.at, 0);
+        this.camera.updateProjectionMatrix();
+        this.view.render(this.scene, this.camera);
+        this.#shown(1);
+    }
+
+    // How far getting the new character ready has come (0 to 1), on the screen saying so
+    #shown(progress) {
+        this.progress = progress;
+
+        const bar = this.wait?.querySelector(".progress");
+
+        if (bar && !this.wait.hidden) {
+            bar.querySelector(".fill").style.transform = `scaleX(${progress.toFixed(4)})`;
+            bar.setAttribute("aria-valuenow", String(Math.round(progress * 100)));
+        }
     }
 
     /**
      * Make a character, starting from `hero` (a new one if not given). Resolves with it, named
-     * and armed, or null if the player went back to the title.
+     * and armed, or null if the player went back to the title. The one got ready already
+     * (prepare) is shown as soon as they're ready, a screen saying they're being got ready till
+     * then; anyone else's built at once.
      */
     run(hero = defaultHero()) {
-        this.hero = structuredClone(hero);
-        this.hero.weapon = STARTING_WEAPONS.includes(this.hero.weapon) ? this.hero.weapon : STARTING_WEAPONS[0];
-        this.hero.boots = Boolean(this.hero.boots) && this.hero.weapon !== "boots";
+        this.hero = normalised(hero);
 
-        this.#buildCharacter();
-        this.#buildPanel();
-        this.#goTo("look");
+        const ready = this.preparing && sameBuild(this.prepared, this.hero) ? this.preparing : null;
+        const start = () => {
+            this.#stage();
+            this.wait?.querySelector("button")?.removeEventListener("click", this.backOut);
+
+            // (The one got ready, shown; someone else, built at once, that one given up)
+            if (ready && this.standby) {
+                this.avatar = this.standby;
+                this.standby = null;
+            } else {
+                this.abandoned = true;
+                this.#drop(this.standby);
+                this.standby = null;
+                this.#buildCharacter();
+            }
+
+            this.#buildPanel();
+            this.#goTo("look");
+            this.#listen();
+            this.lastFrame = performance.now();
+            this.view.renderer.setAnimationLoop((now) => this.#frame(now));
+        };
+
         this.root.hidden = false;
-        this.#listen();
-        this.lastFrame = performance.now();
-        this.view.renderer.setAnimationLoop((now) => this.#frame(now));
+        this.finished = new Promise((resolve) => (this.finish = resolve));
 
-        return new Promise((resolve) => (this.finish = resolve));
+        if (ready && this.progress < 1) {
+            // (Not ready yet: got ready faster, behind the screen saying so, shown till their first frame)
+            this.hurry();
+
+            if (this.wait) {
+                this.wait.hidden = false;
+                this.#shown(this.progress);
+
+                // (Gone back from: to the title, all of it let go of)
+                this.backOut = () => this.#close(null);
+                this.wait.querySelector("button")?.addEventListener("click", this.backOut, { once: true });
+            }
+
+            ready.then(() => !this.disposed && start());
+        } else {
+            start();
+        }
+
+        return this.finished;
     }
 
     #close(result) {
         this.view.renderer.setAnimationLoop(null);
 
-        for (const [target, type, listener] of this.listeners) {
+        for (const [target, type, listener] of this.listeners ?? []) {
             target.removeEventListener(type, listener);
         }
 
-        this.avatar?.object.removeFromParent();
-        this.avatar?.character.dispose();
-        this.avatar = null;
-        this.studio.dispose();
+        this.dispose();
         this.root.hidden = true;
+
+        if (this.wait) {
+            this.wait.hidden = true;
+            this.wait.querySelector("button")?.removeEventListener("click", this.backOut);
+        }
+
         this.finish(result);
     }
 
     // --- The stage ---
+
+    // The stage, built once
+    #stage() {
+        if (!this.scene) {
+            this.#buildStage();
+        }
+    }
 
     #buildStage() {
         const scene = new THREE.Scene();
@@ -328,14 +537,18 @@ export class Creator {
         this.measured = null;
         this.measuring = null;
 
-        this.avatar?.object.removeFromParent();
-        this.avatar?.character.dispose();
+        this.#drop(this.avatar);
+        this.avatar = this.#place(new Character(this.kit, optionsOf(hero)));
+    }
 
-        const character = new Character(this.kit, { shape: hero.shape, look: hero.look, equipment: heroEquipment(hero.weapon, new Progress({}, hero).worn(), hero.parts ?? []) });
+    // A character built for the hero, put on the plinth (posed: an Avatar)
+    #place(character) {
+        const avatar = new Avatar(character, { guard: guardOf(this.hero?.weapon ?? this.prepared.weapon) });
 
-        this.avatar = new Avatar(character, { guard: guardOf(hero.weapon) });
-        this.avatar.place(0, 0, 0);
+        avatar.place(0, 0, 0);
         this.scene.add(character.object);
+
+        return avatar;
     }
 
     // Apply changes to the character, at most once a frame (and reshaping less often: it's slow)
@@ -449,6 +662,11 @@ export class Creator {
         camera.lookAt(this.look);
         this.#fitCamera();
         this.view.render(this.scene, camera);
+
+        // (Drawn: the screen saying they were being got ready taken away)
+        if (this.wait && !this.wait.hidden) {
+            this.wait.hidden = true;
+        }
     }
 
     // Keep the character in the part of the screen the panel doesn't cover

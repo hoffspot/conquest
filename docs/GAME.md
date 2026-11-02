@@ -1345,8 +1345,8 @@ sunny side and a shaded one, and steel mirrored grey walls. Now, outdoors, a wal
 about three times the light of one in the shade, which is sky-blue (the sun a little stronger,
 3.5, to make up the sunny side's share); steel mirrors the sky and the ground; indoors the light
 is warm, and dim (a little over half as strong): a room's own flames and the daylight through its
-windows light it (Inside the taverns, below). The character maker keeps a studio's light of its own (made when it opens, let go when
-it closes), so colours are chosen as they are.
+windows light it (Inside the taverns, below). The character maker keeps a studio's light of its own (made as it's got ready on the
+title, let go when it closes), so colours are chosen as they are.
 
 **Glows** (lamps, faerie fire, lava: world/art/engine/atlas.js glowMaterial) are shown in their
 own colours, untouched by the tone mapping, as the flames indoors are, not dulled and paled to a
@@ -5924,6 +5924,28 @@ it.
    among them) and a switch to wear spiked boots with any other, showing how their damage mixes.
    It shows the weapon chosen drawn with its flourish, then held on guard and swung every few
    seconds (in spiked boots too, a kick every other time). The hero's `boots` is saved with them.
+
+   **Got ready on the title** (`Creator` `prepare`, main.js `readyCreator`): opened on a fresh
+   page, it used to stop the page for seconds (in headless Chromium, 2.1 s building the character
+   at once and 0.7 s compiling their shaders on the first frame, after waiting a second or more for
+   the skin atlas; several times that on a phone), with nothing on the screen to say why. Now,
+   once the title's up, the character maker's made and its new character got ready meanwhile:
+   built a step at a time (`Character.building`, their skin painted in the skins worker), 6 ms a
+   frame (`PREPARE.idle`); their shaders compiled alongside the page where the browser can
+   (`compileAsync`); then posed and drawn once where no one sees it (the title's paintings are over
+   the view), so their stance, how what they wear hangs, the shadows' shaders and their pictures
+   on the graphics card are all done before they're shown. They're kept out of sight till then
+   (`standby`): `avatar` is the one shown. New character takes it up as far as it's got: ready,
+   it opens at once (headless Chromium, the title up 10 s: their first frame 0.32 s after the tap,
+   most of that the sound started by it; it was some 5 s); not yet, the rest's done faster
+   (`PREPARE.shown`, 40 ms a frame) behind a screen of the stage's own dark saying **Making your
+   character**, its bar filling as they're built (about 130 steps, `PREPARE.steps`, the last share
+   for the shaders) and a light passing along it while the skin atlas is still being worked out,
+   with **Back** to the title; it's taken away once they're first drawn. Tapped as soon as the
+   title shows, that screen's up 0.12 s after the tap, and the page goes on drawing it while they're
+   made. Another character asked for (not the new one got ready) is built at once, as ever, and
+   the one got ready given up. A game begun from the title instead (`playing`, `playingJoined`) lets
+   go of the one got ready; back at the title, another's got ready.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the

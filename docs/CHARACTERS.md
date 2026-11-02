@@ -824,7 +824,8 @@ they were, drawn at once as they stood (`#adopted`: both are drawn from the same
 and people); one hired from a crowd's figure is built so too, drawn a moment after (`#mirror`:
 dressed there and then, one held an iPhone up for 0.6 s). Another player coming into the world is
 still dressed at once. `new Character(...)`, `setLook` and `setEquipment` take
-every step at once, as before (the character maker, the paperdoll). Its hair is grown once: under a
+every step at once, as before (the paperdoll, and the character maker as a character's changed;
+its new character's built a step at a time while the title's up: GAME.md, *Making a character*). Its hair is grown once: under a
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
 again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
@@ -853,8 +854,8 @@ work it out before showing the title. Now the kit (`kit.js`, `elsewhere`) sends 
 and masks to the skins worker, which works it out there, keeps it for painting, and sends back what
 it found (`parts`); the page's own atlas is made from those, not worked out again, and the fields
 aren't sent back over. The kit comes back without its atlas and `ready` resolves once it has it:
-the title shows meanwhile, and making a character, playing and joining a world wait for it (by
-then it's usually there). Where there are no workers (or one fails), it's worked out here, after
+the title shows meanwhile, and the new character got ready on it (the character maker's), playing
+and joining a world wait for it (by then it's usually there). Where there are no workers (or one fails), it's worked out here, after
 the title's shown. The same atlas either way (`test/character-building.test.js`). The labs work it
 out here, as ever. In headless Chromium on "high", to the title: 4.8 s before (with the next
 change), 2.2 now.

@@ -1040,6 +1040,65 @@ dialog.about h2 {
     pointer-events: auto;
 }
 
+/* The new character still being got ready as the screen's opened (app/creator.js prepare): over
+   the whole screen, the stage's own dark, a bar filling as they're shaped, dressed and lit */
+.createwait {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 24px calc(var(--safe-right) + 24px) 24px calc(var(--safe-left) + 24px);
+    background: #17130f;
+    pointer-events: auto;
+}
+
+.createwait[hidden] {
+    display: none;
+}
+
+.createwait-title {
+    margin: 0;
+    font-size: 22px;
+    color: var(--gold-bright);
+    text-align: center;
+}
+
+.createwait .progress {
+    width: min(320px, 80vw);
+}
+
+/* (Nothing to show yet, the skin atlas still being worked out: a light passing along it) */
+.createwait .progress[aria-valuenow="0"] .fill {
+    transform: scaleX(0.25);
+    animation: createwait-busy 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes createwait-busy {
+    from {
+        transform: translateX(0) scaleX(0.25);
+    }
+
+    to {
+        transform: translateX(75%) scaleX(0.25);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .createwait .progress[aria-valuenow="0"] .fill {
+        animation: none;
+    }
+}
+
+.createwait .note {
+    margin: 0;
+    color: var(--muted);
+    text-align: center;
+}
+
 .creator {
     display: flex;
     flex-direction: column;

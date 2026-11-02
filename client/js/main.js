@@ -84,7 +84,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
+const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
 
 window.pellagos = {
     get game() {
@@ -101,6 +101,10 @@ window.pellagos = {
     released: () => released.any,
     get creator() {
         return state.creator;
+    },
+    /** The character maker got ready while the title's up (readyCreator), till it's opened or let go of. */
+    get readyCreator() {
+        return state.readyCreator;
     },
     get session() {
         return state.session;
@@ -307,7 +311,30 @@ function title() {
         $("#newbutton").focus();
     }
 
+    readyCreator();
     frontDoor();
+}
+
+// The character maker got ready while the title's up, its new character built a little each frame
+// (app/creator.js prepare), so New character opens at once, or sooner; let go of as a game's begun
+// instead (dropReadyCreator)
+function readyCreator() {
+    const Creator = state.modules?.Creator;
+
+    if (!Creator || !state.session || state.readyCreator || state.creator) {
+        return;
+    }
+
+    const { view, kit } = state.session;
+
+    state.readyCreator = new Creator({ view, kit });
+    state.readyCreator.prepare();
+}
+
+// The character maker got ready on the title let go of, a game begun instead
+function dropReadyCreator() {
+    state.readyCreator?.dispose();
+    state.readyCreator = null;
 }
 
 // The game opened from a world server's own address (its front door): the server remembered, and
@@ -964,9 +991,11 @@ async function create({ replacing = null, into = null } = {}) {
     // (Made to go into a world on a server: it says which)
     $("#createtitle").textContent = state.worldsAfter ? `Your character for ${state.worldsAfter.entered.card?.name ?? "the world"}` : "Make your character";
 
-    // (Its skin atlas, worked out while the title was up: characters/kit.js)
-    await kit.ready;
-    state.creator = new Creator({ view, kit });
+    // (The one got ready while the title was up, readyCreator, as far as it's got: what's left
+    // done now, faster, behind a screen saying so, app/creator.js run)
+    state.creator = state.readyCreator ?? new Creator({ view, kit });
+    state.readyCreator = null;
+    state.creator.prepare();
 
     const hero = await state.creator.run();
 
@@ -1108,6 +1137,7 @@ async function playing(save, { world, place, war }) {
     const { createGame } = state.modules;
     const { view, kit, sound } = state.session;
 
+    dropReadyCreator();
     state.game?.dispose();
     fetcher.hold("starting");
     show("loading");
@@ -2732,6 +2762,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     const keep = (write) => (kept || !save ? () => {} : write);
 
     $("#join").close();
+    dropReadyCreator();
     state.game?.dispose();
     fetcher.hold("starting");
     show("loading");
