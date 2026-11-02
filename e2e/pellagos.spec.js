@@ -1235,6 +1235,58 @@ async function keepSix(page) {
     }, KEPT);
 }
 
+test("New character opens at once once the title's been up a while: the new character got ready meanwhile, a step at a time, and shown as they were made; tapped before then, a screen saying they're being made, its bar filling, and Back from it to the title; a game begun from the title lets go of the one got ready", async ({ page }) => {
+    test.setTimeout(180000);
+
+    // (One character kept, to Continue as)
+    await page.addInitScript((save) => {
+        if (!localStorage.getItem("pellagos.characters")) {
+            localStorage.setItem(`pellagos.${save.id}.save`, JSON.stringify(save));
+            localStorage.setItem("pellagos.characters", JSON.stringify({ ids: [save.id], last: save.id }));
+        }
+    }, KEPT[0]);
+    await title(page);
+
+    const ready = () => page.evaluate(() => window.pellagos.readyCreator?.progress ?? null);
+    const wait = page.locator("#createwait");
+
+    // Tapped at once, still being got ready: a screen saying so, with its bar; Back from it, to the title
+    expect(await ready()).toBeLessThan(1);
+    await page.locator("#newbutton").click();
+    await expect(wait).toBeVisible();
+    await expect(wait).toContainText("Making your character");
+    await expect(wait.getByRole("progressbar")).toBeVisible();
+    await wait.getByRole("button", { name: "Back" }).click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect(wait).toBeHidden();
+
+    // Left on the title, got ready, a step at a time: New character opens with no screen to wait
+    // behind, the one got ready shown
+    await expect.poll(ready, { timeout: 90000 }).toBe(1);
+    await page.evaluate(() => {
+        const screen = document.querySelector("#createwait");
+
+        window.gotReady = window.pellagos.readyCreator;
+        window.waited = false;
+        new MutationObserver(() => (window.waited ||= !screen.hidden)).observe(screen, { attributes: true });
+    });
+    await page.locator("#newbutton").click();
+    await expect(page.locator("#createtabs [role=tab]").first()).toBeVisible();
+    await page.waitForFunction(() => window.pellagos.creator?.avatar);
+    expect(await page.evaluate(() => ({ same: window.pellagos.creator === window.gotReady, waited: window.waited, standby: window.pellagos.creator.standby, ready: window.pellagos.readyCreator }))).toEqual({ same: true, waited: false, standby: null, ready: null });
+
+    // Back at the title: another got ready
+    await page.locator("#createback").click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Boolean(window.pellagos.readyCreator) && window.pellagos.readyCreator !== window.gotReady)).toBe(true);
+
+    // Continue: the game begun, the one got ready let go of
+    await page.evaluate(() => (window.gotReady = window.pellagos.readyCreator));
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    expect(await page.evaluate(() => ({ ready: window.pellagos.readyCreator, disposed: window.gotReady.disposed }))).toEqual({ ready: null, disposed: true });
+});
+
 test("up to six characters kept: Characters on this device lists them, the one played last first, each in a world of their own; played, one's the one Continue as carries on with; deleted, asked first, it's gone for good, their world staying", async ({ page }) => {
     test.setTimeout(180000);
     await keepSix(page);
