@@ -12,7 +12,8 @@ import { findBlender, HERE } from "../lib/blender.js";
 import { loadConfig, loadConfigs } from "../lib/config.js";
 import { createIO } from "../lib/gltf.js";
 import { decodeImage } from "../lib/ktx2.js";
-import { figureDocument } from "./helpers.js";
+import { floorAt, readWalk } from "../lib/walk.js";
+import { figureDocument, sceneryDocument } from "./helpers.js";
 
 const blender = findBlender();
 const work = mkdtempSync(path.join(os.tmpdir(), "blenderpipeline-test-"));
@@ -364,6 +365,26 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
     });
 });
 
+describe("tangents left out (tangents: false)", () => {
+    it("leaves the FBX creature's tangents out, its normal map and all: Three.js works them out as it draws", async () => {
+        const config = { ...loadConfig(path.join(HERE, "examples", "fbx-creature.json"), { profile: "phone" }), tangents: false };
+        const out = path.join(work, "no-tangents");
+        const { report } = await buildAsset(config, { blender, out, log: () => {} });
+        const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
+        const primitives = document
+            .getRoot()
+            .listMeshes()
+            .flatMap((mesh) => mesh.listPrimitives());
+
+        assert.ok(report.exported.tangentsLeftOut > 0);
+        assert.ok(report.materials.some((material) => material.textures.includes("normal")));
+        assert.deepEqual(
+            primitives.filter((primitive) => primitive.getAttribute("TANGENT")),
+            [],
+        );
+    });
+});
+
 describe("a skeleton made to copy a control rig (muteConstraints)", () => {
     // (The extra fixture's chest copies a control's turn: its Idle sways the chest all the same,
     // but only once the constraint's muted)
@@ -427,6 +448,156 @@ describe("clips from another skeleton's file (retarget), and a bone's vertices g
         assert.ok(report.exported.verticesReweighted > 0);
         assert.ok(near(2 * Math.acos(Math.min(1, Math.abs(first.reduce((sum, v, i) => sum + v * last[i], 0)))), Math.PI / 2, 1e-3), "the body turned a quarter as the figure's arm does");
         assert.equal(raising.listChannels().filter((channel) => channel.getTargetPath() === "translation").length, 1);
+    });
+});
+
+describe("scenery cut into cells (cells), a material dropped (dropMaterials)", () => {
+    // (A wall 100 m long whose far row is Rock, and a tower at (60, 0, 50): cut into cells of 40 m,
+    // the Rock dropped, a lower detail packed in, where it's walked baked)
+    const cut = async (name = "scenery", more = {}) => {
+        const from = path.join(work, `${name}.glb`);
+        const file = path.join(work, `${name}.json`);
+        const out = path.join(work, name);
+
+        writeFileSync(from, await (await createIO()).writeBinary(sceneryDocument()));
+        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Ro*"], cells: { size: 40 }, textures: { bake: "never" }, lods: [{ ratio: 0.2, error: 0.05 }], packLods: true, compress: "none", walk: { from: [1, 0, 1] }, budgets: { drawCalls: 4 }, ...more }));
+
+        const { report } = await buildAsset(loadConfig(file), { blender, out, log: () => {} });
+        const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
+
+        return { report, document, out };
+    };
+    let scenery;
+
+    it("cuts each mesh into the cells its faces are in, each a mesh of its own named for its cell, with nothing of the dropped material", async () => {
+        scenery ??= cut();
+        const { report, document } = await scenery;
+        const nodes = document
+            .getRoot()
+            .listNodes()
+            .map((node) => node.getName())
+            .sort();
+
+        assert.deepEqual(report.exported.droppedMaterials, [{ material: "Rock", faces: 200 }]);
+        assert.deepEqual(
+            report.exported.cells.map(({ mesh, cells }) => [mesh, cells.map(({ name, cell, faces }) => [name, cell, faces])]),
+            [
+                [
+                    "Wall",
+                    [
+                        ["Wall@0,0", [0, 0], 240],
+                        ["Wall@1,0", [1, 0], 240],
+                        ["Wall@2,0", [2, 0], 120],
+                    ],
+                ],
+                ["Tower", [["Tower@1,1", [1, 1], 12]]],
+            ],
+        );
+        assert.deepEqual(nodes, ["Tower@1,1", "Tower@1,1.lod1", "Wall@0,0", "Wall@0,0.lod1", "Wall@1,0", "Wall@1,0.lod1", "Wall@2,0", "Wall@2,0.lod1"]);
+        assert.deepEqual(
+            report.materials.map((material) => material.name),
+            ["Stone"],
+        );
+        assert.equal(report.meshes.triangles, 612);
+        assert.equal(report.meshes.drawCalls, 4);
+        assert.ok(report.budgets.every((budget) => budget.ok));
+    });
+
+    it("bakes where it can be walked: along the wall, all one level, the tower's top out of reach", async () => {
+        scenery ??= cut();
+        const { report, out } = await scenery;
+        const walk = readWalk(JSON.parse(readFileSync(path.join(out, "scenery.walk.json"), "utf8")));
+
+        assert.deepEqual(report.walk, { ...report.walk, origin: [0, 0], size: [100, 52], links: [], left: { unreached: 16, small: 0 } });
+        assert.equal(report.walk.file.endsWith("scenery.walk.json"), true);
+        assert.deepEqual(
+            report.walk.levels.map(({ squares, box }) => [squares, box]),
+            [[300, [0, 0, 99, 2]]],
+        );
+        assert.ok(Math.abs(floorAt(walk, 0, 50, 1) - 0.3 * Math.max(...[50, 51].flatMap((x) => [1, 2].map((z) => Math.sin(x * 0.7) * Math.cos(z * 1.3))))) < 0.02);
+        assert.equal(floorAt(walk, 0, 50, 3), null);
+    });
+
+    it("quantized: on one grid, so the cells still meet; the tiled texture's coordinates brought into 0 to 1, with a transform to put them back", async () => {
+        const { report, document } = await cut("scenery-quantized", { compress: "quantize", tiledTexcoords: true, walk: null });
+        const stone = document.getRoot().listMaterials().find((material) => material.getName() === "Stone");
+        const transform = stone.getBaseColorTextureInfo().getExtension("KHR_texture_transform");
+        const wall = (name) => document.getRoot().listNodes().find((node) => node.getName() === name);
+        const uv = wall("Wall@0,0").getMesh().listPrimitives()[0].getAttribute("TEXCOORD_0");
+        const edge = (name, x) => {
+            const node = wall(name);
+            const matrix = node.getWorldMatrix();
+            const position = node.getMesh().listPrimitives()[0].getAttribute("POSITION");
+            const found = new Set();
+
+            for (let i = 0; i < position.getCount(); i++) {
+                const [px, py, pz] = position.getElement(i, []);
+                const [wx, wy, wz] = [0, 1, 2].map((axis) => matrix[axis] * px + matrix[4 + axis] * py + matrix[8 + axis] * pz + matrix[12 + axis]);
+
+                if (Math.abs(wx - x) < 0.01) {
+                    found.add(`${wz.toFixed(4)} ${wy.toFixed(4)}`);
+                }
+            }
+
+            return [...found].sort();
+        };
+
+        assert.deepEqual(report.exported.texcoordsTiled, [{ material: "Stone", offset: [0, 0], scale: [25, 1] }]);
+        assert.deepEqual([transform.getOffset(), transform.getScale()], [[0, 0], [25, 1]]);
+        assert.equal(uv.getComponentSize(), 2);
+        assert.ok(uv.getNormalized());
+        assert.ok(report.extensionsUsed.includes("KHR_texture_transform"));
+        assert.deepEqual(edge("Wall@0,0", 40), edge("Wall@1,0", 40));
+        assert.deepEqual(edge("Wall@0,0.lod1", 40), edge("Wall@1,0.lod1", 40));
+        assert.equal(edge("Wall@0,0", 40).length, 4);
+    });
+
+    it("keeps each cell's edges where they are as it's simplified, so its lower detail still meets the next cell's", async () => {
+        scenery ??= cut();
+        const { report, document } = await scenery;
+        const edge = (name, x) => {
+            const position = document
+                .getRoot()
+                .listNodes()
+                .find((node) => node.getName() === name)
+                .getMesh()
+                .listPrimitives()[0]
+                .getAttribute("POSITION");
+            const found = new Set();
+
+            for (let i = 0; i < position.getCount(); i++) {
+                const [px, py, pz] = position.getElement(i, []);
+
+                if (Math.abs(px - x) < 1e-3) {
+                    found.add(`${pz.toFixed(3)} ${py.toFixed(3)}`);
+                }
+            }
+
+            return [...found].sort();
+        };
+        const lod = report.lods.find((one) => one.level === 1);
+
+        assert.ok(lod.triangles < 0.6 * report.meshes.triangles, `${lod.triangles} triangles in the lower detail`);
+
+        for (const level of ["", ".lod1"]) {
+            assert.deepEqual(edge(`Wall@0,0${level}`, 40), edge(`Wall@1,0${level}`, 40), `where the first cell meets the second${level}`);
+            assert.deepEqual(edge(`Wall@1,0${level}`, 80), edge(`Wall@2,0${level}`, 80), `where the second meets the third${level}`);
+            assert.equal(edge(`Wall@0,0${level}`, 40).length, 4);
+        }
+    });
+
+    it("says what's wrong: a material to drop that isn't there; a skinned mesh cut into cells", async () => {
+        const from = path.join(work, "scenery-wrong.glb");
+        const file = path.join(work, "scenery-wrong.json");
+
+        writeFileSync(from, await (await createIO()).writeBinary(sceneryDocument()));
+        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Moss"] }));
+        await assert.rejects(buildAsset(loadConfig(file), { blender, out: path.join(work, "scenery-wrong"), log: () => {} }), /dropMaterials: no mesh exported has a material called Moss \(they have: Rock, Stone\)/);
+
+        const skinned = path.join(work, "skinned-cells.json");
+
+        writeFileSync(skinned, JSON.stringify({ source: path.join(HERE, "fixtures", "udim-creature", "udim-creature.blend"), cells: { size: 10 } }));
+        await assert.rejects(buildAsset(loadConfig(skinned), { blender, out: path.join(work, "skinned-cells"), log: () => {} }), /cells: .* is moved by an armature/);
     });
 });
 

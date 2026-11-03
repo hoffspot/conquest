@@ -52,7 +52,10 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    below). Then it picks what's exported: every mesh shown and rendered in the scene (or the
    `objects` or `collection` named), and the armature deforming them. Cameras, lights, hidden
    helpers, a rig's control objects (Maya's HumanIK) and bones' custom shapes (widgets) are left
-   out. It joins the objects asked to be one mesh (`join`).
+   out. It takes out the faces of the materials it's told to drop (`dropMaterials`), joins the
+   objects asked to be one mesh (`join`), and cuts each mesh into cells on the ground (`cells`),
+   for scenery the size of a castle: Blender separates them in one go, each face going to the
+   cell its centre is in, so nothing is cut through and a cell's edges meet the next cell's.
 2. Brings in actions from other files (`actions`): a `.blend`'s by name (one clip a file, as
    Mesh2Motion keeps them, or a pack bought separately), or an `.fbx`'s, the clip moving its
    skeleton (an animation FBX, as Unity and Unreal packs have one for each clip: the skeleton it
@@ -158,6 +161,8 @@ error, so a misspelt one isn't silently ignored.
 | `stripNamespaces` | `true` | "namespace:" taken off the names of objects, bones, materials, images and actions, in the source and the actions brought in |
 | `objects` / `collection` | all shown meshes | What to export, by name |
 | `join` | `{}` | `{ "Body": ["Body", "Teeth*"] }`: objects joined into one mesh each, named so (one draw call for each material in it; a group kept apart can be shown or hidden on its own). The first named is the one the others join |
+| `dropMaterials` | `[]` | `["M_Rock*", "M_Ground"]`: the faces of these materials taken out, and the materials with them (a mesh left with none, out altogether): what the game makes its own way, or another build carries, such as a castle's rock built apart from its walls |
+| `cells` | `null` | `{ "size": 40 }`: each mesh cut into cells this many metres on a side on the ground, by where its faces' centres are, each a mesh of its own named `<mesh>@<i>,<j>` (`i` along x, `j` along z, from the origin) with its materials. The game draws only the cells in view, each at its own detail. Its modifiers are applied first, and it can't be moved by an armature. Simplifying (`simplify`, `lods`) then keeps where one cell meets the next, and one material another, where they are (the vertices there locked), so no gap opens between them; every other edge is free to move. A lower-detail copy may also collapse edges where texture coordinates or normals part (meshopt's `Permissive`): without it the carved stone of a castle, a seam at every corner, stopped at a quarter of its triangles. It does by default (`"permissive": false` on a copy says not to); the full mesh doesn't, unless `simplify` says `"permissive": true` (a far-off stand-in's one detail) |
 | `materials` | `{}` | Materials made from texture files, in place of the source's of these names (*Materials from textures*, below) |
 | `variants` | `{}` | `{ "pale": { "materials": { "skin": { ... } } } }`: other looks, each `<name>.<variant>.glb` (*Variants*, below) |
 | `profiles` | `{}` | `{ "full": { ... }, "phone": { ... } }`: ways to build it, each a set of these settings merged over the rest, into `<out>/<profile>/` (*Profiles*, below) |
@@ -195,10 +200,55 @@ error, so a misspelt one isn't silently ignored.
 | `compress` | `"meshopt"` | `"meshopt"` (EXT_meshopt_compression: smallest; Three.js needs the meshopt decoder, which the game's loader has), `"quantize"` (KHR_mesh_quantization: Three.js reads it as it is) or `"none"` |
 | `resample` | `0.0001` | How far a resampled animation may stray from its keyframes |
 | `stripMaterialExtensions` | `true` | Leaves out transmission, sheen, clearcoat and the like |
-| `lods` | `[]` | `[{ "ratio": 0.35, "error": 0.02 }]`: lower-detail copies (share of vertices kept; error as a share of its size) |
+| `lods` | `[]` | `[{ "ratio": 0.35, "error": 0.02 }]`: lower-detail copies (share of vertices kept; error as a share of its size). `"materials": { "M_Rock*": 0.05 }` gives the parts of those materials a share of their own: a crag's rock simplified further than the carved stone on it |
 | `packLods` | `false` | The lower-detail copies in the one GLB, beside the full mesh, sharing everything else, not files of their own |
-| `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave) |
+| `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave); `materials` as a copy's |
+| `tangents` | `true` | Tangents kept for the normal maps (MikkTSpace's, as they're baked with). `false` leaves them out: Three.js works them out as it draws, near enough for scenery seen from afar, and about a seventh smaller (the White Castle's geometry: 29 MB with them, 25 without) |
+| `tiledTexcoords` | `false` | Texture coordinates past 0 to 1 (a texture tiled along a wall) brought into it, each material's textures given the offset and scale that put them back (KHR_texture_transform), so they're quantized as the rest are rather than kept as floats, twice the size. At 16 bits, which they take on the GPU anyway |
+| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` from where it's walked from (*Where it can be walked*, below) |
 | `budgets` | `{}` | Limits it's checked against: `triangles`, `vertices`, `joints`, `drawCalls`, `textureSize`, `textureMegabytes` (on the GPU, with mipmaps), `kilobytes` (the GLB), `clips` (names it must have) |
+
+## Where it can be walked
+
+For scenery the game walks on (a castle, its courts, its bridge), the pipeline bakes where a body
+can stand and go (`walk`, `lib/walk.js`), from its triangles as they are before they're simplified,
+into `<name>.walk.json`. It's plain data, the height of each square a body can stand on, with no
+mesh or texture.
+
+1. **Stretches.** The triangles are laid on a grid of 1 m squares, as the game's (`square`). Each
+   triangle's stretch over each square, from its lowest there to its highest, is stacked with the
+   rest, as Recast stacks its spans. Overlapping stretches are one (within `merge`, 0.1 m).
+2. **Floors.** The top of a stretch is a floor if:
+   - what may be stood on (no steeper than `slope`, 38°) within a step (`climb`) of the top covers
+     at least `cover` of the square (a quarter): not a sliver along its edge, nor a pillar's top.
+     A bridge's end and the court a step under it, in one square, are one floor;
+   - there's `headroom` over it (2 m).
+   A wall's square has none: its top is the wall's.
+3. **Walks.** Floors side by side, no more than `climb` apart (0.8 m), are walked between. What's
+   reached from `from` (`[x, y, z]`, as built: the floor of its square nearest it) is kept. The
+   rest is left out (`left.unreached`: a chasm's floor under a bridge, a tower's top).
+4. **Levels.** Where one floor is over another, both reached (a gallery over an arcade, a wall-walk
+   over a gate), a level can't hold both. So levels are grown from the lowest floor up, each taking
+   no square it already has a floor on:
+   - the ground's level is grown from `from`;
+   - each floor over it waits for a level of its own;
+   - where a walk crosses from one level to another is a link (its stairs, for the game to put
+     between maps);
+   - a level of fewer than `least` squares (20) is left out (`left.small`: a sill, a ledge).
+
+The file is `{ square, origin: [x, z], size: [along x, along z], from, levels: [{ squares, low,
+high, box, heights }], links: [{ from, to, crossings }], left }`:
+- `box` is a level's squares, `[x0, z0, x1, z1]`, inclusive, counted from `origin`.
+- `heights` are its floors' heights in centimetres, a little-endian Int16Array in base64, row by
+  row along z and each row along x, `-32768` where it has no floor.
+- `crossings` are `[x, z, x, z]`: a square of one level, beside a square of the other.
+
+`readWalk` and `floorAt` (`lib/walk.js`) read it back. The report gives each level's squares,
+heights and box, and how many crossings each link has (`walk`).
+
+For a bought scene, the walk is the one thing built from it that goes in the game's repository (its
+scrambled model goes in the private one). Players without the licensed models can walk it all the
+same.
 
 ## Materials from textures
 
@@ -314,8 +364,10 @@ the asset's.
 - `variants`: each variant's file and size, its materials and the textures in them;
 - `exported`: what Blender exported, how each mesh was baked and why, what was left out, the
   channels left out for not moving, each texture made KTX2 (its kind, mode, size and bytes), the
-  materials made from texture files and from which (`materialsFromTextures`), and the objects
-  joined (`joined`);
+  materials made from texture files and from which (`materialsFromTextures`), the objects
+  joined (`joined`), the materials dropped and how many faces went with them
+  (`droppedMaterials`), and the cells each mesh was cut into (`cells`: each cell's name, square
+  and faces);
 - `profile`, `built` (Blender, its glTF exporter, and the source's format), `budgets`,
   `validation`, `notes` and `warnings`.
 

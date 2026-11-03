@@ -42,6 +42,13 @@ export const DEFAULTS = Object.freeze({
     // Objects joined into one mesh each before they're exported: { "new name": ["object", "Fur*"] }
     // (one draw call for each material in it; a group kept apart can be shown or hidden alone)
     join: {},
+    // Faces of these materials taken out (names, * and ? wildcards), and the materials with them:
+    // what the game makes its own way, or another build carries (a castle's rock built apart)
+    dropMaterials: [],
+    // Each mesh cut into cells on the ground, { size: metres }, a mesh each ("<mesh>@<i>,<j>"),
+    // by where its faces' centres are: the game draws only those in view, each at its own detail;
+    // simplifying (simplify, lods) then keeps where one cell meets the next where it is, so none part
+    cells: null,
     // Materials made from texture files, in place of those in the source by these names:
     // { "material": { baseColor, alpha, alphaMap, normal, occlusion, roughness, metallic,
     // emission, emissionStrength, doubleSided } } (README.md, *Materials from textures*)
@@ -105,6 +112,13 @@ export const DEFAULTS = Object.freeze({
     // "feet": moved so it stands on the origin (its lowest point at y = 0, centred across);
     // "keep": where it was in Blender
     origin: "keep",
+    // Tangents kept, for its normal maps (MikkTSpace's, as they're baked with); false, left out:
+    // Three.js works them out as it draws, near enough for scenery seen from afar, and smaller
+    tangents: true,
+    // Texture coordinates past 0 to 1 (a texture tiled over a wall) brought into it, the textures
+    // given the offset and scale that put them back (KHR_texture_transform), so they're quantized
+    // with the rest rather than kept as floats
+    tiledTexcoords: false,
     // "meshopt" (EXT_meshopt_compression: needs MeshoptDecoder in Three.js), "quantize"
     // (KHR_mesh_quantization: Three.js reads it as it is) or "none"
     compress: "meshopt",
@@ -112,11 +126,19 @@ export const DEFAULTS = Object.freeze({
     resample: 1e-4,
     // Material extensions the game doesn't draw (transmission, sheen, clearcoat...) left out
     stripMaterialExtensions: true,
-    // Lower-detail copies: [{ ratio (of vertices kept), error (fraction of its size) }]
+    // Lower-detail copies: [{ ratio (of vertices kept), error (fraction of its size), materials?
+    // ({ "material": ratio }, * and ? wildcards: a ratio of their own for the parts of those
+    // materials, rock simplified further than carved stone), permissive? (cut into cells: edges
+    // where texture coordinates or normals part collapsed too; a lower detail's are by default) }]
     lods: [],
-    // The full mesh itself simplified ({ ratio, error }, as a lower-detail copy's), when even it
-    // is more than the game wants; the lower-detail copies' ratios stay shares of what Blender gave
+    // The full mesh itself simplified ({ ratio, error, materials? }, as a lower-detail copy's), when
+    // even it is more than the game wants; the lower-detail copies' ratios stay shares of what
+    // Blender gave
     simplify: null,
+    // Where it can be walked, baked from its triangles (lib/walk.js) into <name>.walk.json: {
+    // from: [x, y, z] (where it's walked from), square, slope, headroom, climb, least, cover, merge
+    // } (README.md, *Where it can be walked*)
+    walk: null,
     // The lower-detail copies in the one GLB, beside the full one, sharing its skeleton,
     // materials, textures and clips (each a mesh of its own: "<mesh>.lod1"..., extras.lod 1...),
     // rather than files of their own each carrying all of it again
@@ -137,6 +159,7 @@ const MAPS = { baseColor: "colour", alphaMap: "grey", normal: "normal", occlusio
 const MAP_KEYS = { file: 0, channel: 0, scale: 0, invert: 0, flipGreen: 0 };
 const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
+const WALK_KEYS = { from: 0, square: 0, slope: 0, headroom: 0, climb: 0, least: 0, cover: 0, merge: 0 };
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
 
 /**
@@ -296,6 +319,23 @@ export function resolveConfig(raw, file) {
     }
 
     config.join = resolveJoin(raw.join ?? {}, fail);
+
+    if (!Array.isArray(config.dropMaterials) || !config.dropMaterials.every((name) => typeof name === "string" && name)) {
+        fail("dropMaterials is a list of materials' names (* and ? wildcards)");
+    }
+
+    if (config.cells !== null) {
+        if (typeof config.cells !== "object" || Array.isArray(config.cells)) {
+            fail("cells is { size: metres a side } (or null: not cut)");
+        }
+
+        unknownKeys(config.cells, { size: 0 }, "cells.", fail);
+
+        if (!(typeof config.cells.size === "number" && config.cells.size > 0)) {
+            fail("cells.size is how many metres a cell is on a side, more than 0");
+        }
+    }
+
     config.materials = resolveMaterials(raw.materials ?? {}, where, "materials", fail);
     config.variants = Object.fromEntries(
         Object.entries(raw.variants ?? {}).map(([name, variant]) => {
@@ -368,11 +408,17 @@ export function resolveConfig(raw, file) {
     }
 
     for (const [i, lod] of config.lods.entries()) {
-        unknownKeys(lod, { ratio: 0, error: 0 }, `lods[${i}].`, fail);
+        unknownKeys(lod, { ratio: 0, error: 0, materials: 0, permissive: 0 }, `lods[${i}].`, fail);
+
+        if (lod.permissive !== undefined && typeof lod.permissive !== "boolean") {
+            fail(`lods[${i}].permissive is true or false`);
+        }
 
         if (!(lod.ratio > 0 && lod.ratio < 1)) {
             fail(`lods[${i}].ratio is the share of vertices kept, between 0 and 1`);
         }
+
+        checkRatios(lod.materials, `lods[${i}].materials`, fail);
     }
 
     if (!Array.isArray(config.keepBones)) {
@@ -394,10 +440,38 @@ export function resolveConfig(raw, file) {
     checkInvented(config.clips.invent, fail);
 
     if (config.simplify !== null) {
-        unknownKeys(config.simplify, { ratio: 0, error: 0 }, "simplify.", fail);
+        unknownKeys(config.simplify, { ratio: 0, error: 0, materials: 0, permissive: 0 }, "simplify.", fail);
+
+        if (config.simplify.permissive !== undefined && typeof config.simplify.permissive !== "boolean") {
+            fail("simplify.permissive is true or false");
+        }
+
+        if (config.simplify.permissive && !config.cells) {
+            fail("simplify.permissive is for scenery cut into cells (cells)");
+        }
 
         if (!(config.simplify.ratio > 0 && config.simplify.ratio < 1)) {
             fail("simplify.ratio is the share of vertices kept, between 0 and 1");
+        }
+
+        checkRatios(config.simplify.materials, "simplify.materials", fail);
+    }
+
+    if (config.walk !== null) {
+        if (typeof config.walk !== "object" || Array.isArray(config.walk)) {
+            fail("walk is { from: [x, y, z], ... } (or null: not baked)");
+        }
+
+        unknownKeys(config.walk, WALK_KEYS, "walk.", fail);
+
+        if (!(Array.isArray(config.walk.from) && config.walk.from.length === 3 && config.walk.from.every(Number.isFinite))) {
+            fail("walk.from is where it's walked from: [x, y, z], in metres, as built");
+        }
+
+        for (const key of Object.keys(WALK_KEYS).filter((key) => key !== "from" && key in config.walk)) {
+            if (!(typeof config.walk[key] === "number" && config.walk[key] >= 0)) {
+                fail(`walk.${key} is a number, 0 or more`);
+            }
         }
     }
 
@@ -405,7 +479,26 @@ export function resolveConfig(raw, file) {
         fail("packLods is true or false");
     }
 
+    if (typeof config.tiledTexcoords !== "boolean") {
+        fail("tiledTexcoords is true or false");
+    }
+
+    if (typeof config.tangents !== "boolean") {
+        fail("tangents is true or false");
+    }
+
     return config;
+}
+
+// The parts of some materials simplified by a ratio of their own: { "material": ratio }
+function checkRatios(ratios, prefix, fail) {
+    if (ratios === undefined) {
+        return;
+    }
+
+    if (ratios === null || typeof ratios !== "object" || Array.isArray(ratios) || !Object.entries(ratios).every(([name, ratio]) => name && ratio > 0 && ratio <= 1)) {
+        fail(`${prefix} is { "material": the share of its vertices kept (above 0, up to 1) }`);
+    }
 }
 
 // A map of names to names ({ "bone": "bone" }); `nulls`: or to null (left out)
@@ -589,6 +682,8 @@ export function blenderJob(config, { out, report, passes = null, variants = {} }
         collection: config.collection,
         stripNamespaces: config.stripNamespaces,
         join: config.join,
+        dropMaterials: config.dropMaterials,
+        cells: config.cells,
         materials: config.materials,
         variants: Object.fromEntries(Object.entries(config.variants).map(([name, variant]) => [name, { ...variant, out: variants[name] }])),
         actions: config.actions,
