@@ -233,6 +233,12 @@ In the game, in the world: the menu's **World**, or **World** at the top of the 
 - **Invite link**: the world's link, copied at once, with its code to scan, **Share…** on a phone,
   and **Replace the link**. It's the same link the management page gives.
 - **Open to anyone**: the switch (below).
+- **Delete this world** (its owner alone, never a trusted player): what goes with it said first,
+  then its name typed to be sure. Everyone in it is sent out ("That world was deleted"), its
+  owner's game too, back to the title; every key, ticket and invite to it stops, and each player's
+  game forgets what it held for it. The server keeps a backup of it (`backups/<id>/`, as any
+  deletion does), for the server's owner. A world a player made with no creator key is room for
+  another once it's deleted (*Players making worlds*).
 - **Make a short code**: for someone who has the game open already, typed in Multiplayer, Join a
   World Hosted on a Server (the server's **Enter a short code**). It works once, for half an hour.
   Host on a Server makes one too, as the world's made.
@@ -331,7 +337,8 @@ theirs brought), with no creator key, and own it, as whoever makes one with a ke
   ("Wren (a player, 1f0c…)").
 - **How many.** Each player makes **How many worlds each player may make that way** (`madeEach`,
   1 unless it's set) and all players together **How many in all** (`madeMost`, 20), counted from
-  the worlds kept: one deleted (the management page) is room for another. One address makes 3 an
+  the worlds kept: one deleted (by its owner, in the game's World panel, or on the management
+  page) is room for another. One address makes 3 an
   hour at most (server/api.js `MADE_PER_HOUR`). Worlds made with a creator key or the admin key
   are never counted.
 - **Said to the game**: the server's card says so (`server.makers`: how many each, and how many

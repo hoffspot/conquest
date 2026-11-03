@@ -137,7 +137,8 @@ test("a player's own world through the server's broker: listed on it, joined fro
     await expect(join.locator("#joincode")).toHaveValue(code);
     await expect(join.locator("#joinat")).toHaveValue("at");
     await expect(join.locator("#joinat option:checked")).toContainText("where it's listed");
-    await join.getByRole("button", { name: "Join" }).click();
+    // (Its own Join, not the listed world's card, which says Join it too)
+    await join.getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("direct");
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
@@ -202,7 +203,7 @@ test("a host whose game's reloaded opens their world to friends again under its 
 
     // Syl joins by its code
     await guest.goto(`${base}/?join=${code}`);
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
 
@@ -247,7 +248,7 @@ test("a host no direct link gets through to is joined relayed by the server; and
     // (Joined by the code's link: tried directly, then relayed)
     await guest.goto(`${base}/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("relayed");
 

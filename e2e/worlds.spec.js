@@ -354,7 +354,7 @@ test("a world that takes copies: a character on this device copied in once, told
     expect(await server.worlds.get(own.world).heroes.list(ownPlayer)).toEqual([]);
 });
 
-test("a world on this device brought to a server (Host on a Server, a world from this device) with a character who's been in it: told what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its invite link given, its owner going in as that character", async ({ page }) => {
+test("a world on this device brought to a server (Host on a Server, a world from this device) with a character who's been in it: told what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its invite link given, its owner going in as that character; deleted by its owner from the World panel, its name typed", async ({ page }) => {
     await ready(page, save("Wren", "human", "sword"));
 
     const before = server.worlds.size;
@@ -411,6 +411,27 @@ test("a world on this device brought to a server (Host on a Server, a world from
 
     expect(slot).toBe("1");
     expect(server.access.world(world).player(player).role).toBe("owner");
+
+    // Done with it: its owner deletes it from the World panel, told first what goes with it; a
+    // name not its own refused, and then its name typed
+    await page.locator("#menubutton").click();
+    await page.locator("#worldbutton").click();
+
+    const panel = page.locator("#worldpanel");
+
+    await expect(panel.locator("#worldpaneldeleting")).toBeVisible();
+    await expect(panel.locator("#worldpaneldeletenote")).toContainText("Wren's Vale goes from");
+    await expect(panel.locator("#worldpaneldeletenote")).toContainText("its land, its war and the heroes it keeps gone with it");
+    await panel.getByRole("button", { name: "Delete this world…" }).click();
+    await panel.locator("#worldpaneldeletename").fill("Wren's Val");
+    await panel.getByRole("button", { name: "Delete it for good" }).click();
+    await expect(panel.locator("#worldpanelstatus")).toHaveText("That isn't its name: type “Wren's Vale” exactly.");
+    expect(server.worlds.has(world)).toBe(true);
+    await panel.locator("#worldpaneldeletename").fill("Wren's Vale");
+    await panel.getByRole("button", { name: "Delete it for good" }).click();
+    await expect(page.locator("#titlenote")).toHaveText("Wren's Vale was deleted. The server keeps a backup of it, for its owner.", { timeout: 30000 });
+    expect(server.worlds.has(world)).toBe(false);
+    expect(await page.evaluate(({ key, id }) => JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.key === key).worlds[id] ?? null, { key: `127.0.0.1:${server.port}`, id: world })).toBeNull();
 });
 
 test("a server that proves to be another than the one pinned is sent no key", async ({ page }) => {

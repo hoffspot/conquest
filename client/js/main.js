@@ -87,7 +87,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, pageRelay: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false, hostAs: null, hostAfter: null, hostOn: null };
+const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, pageRelay: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false, hostAs: null, hostAfter: null, hostOn: null, deleting: null };
 
 window.pellagos = {
     get game() {
@@ -4854,7 +4854,19 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
             character,
             hero,
             onWaiting: (place) => tell.waiting(`The server's running as many worlds as it can: yours is ${place === 1 ? "next" : `number ${place}`} in line to open…`),
-            onClosed: (reason) => leftWorld(SERVER_REFUSALS[reason] ?? "You were sent out of the world."),
+            onClosed: (reason) => {
+                // (Deleted: nothing to come back to, so what was held for it here's forgotten; and
+                // by this game's own owner, said as their doing once the server's answered)
+                if (reason === "world-deleted") {
+                    state.servers?.forgetWorld(client.record.key, entered.world);
+
+                    if (state.deleting?.world === entered.world) {
+                        return;
+                    }
+                }
+
+                leftWorld(SERVER_REFUSALS[reason] ?? "You were sent out of the world.");
+            },
             onLink: (link) => {
                 holdForLink(link);
 
@@ -5005,12 +5017,69 @@ async function openWorldPanel() {
     $("#worldpanelinvite").hidden = true;
     $("#worldpanelopening").hidden = entered.role !== "owner";
     $("#worldpanelopen").checked = entered.card?.open === true;
+    showWorldDelete();
     $("#worldpanel").showModal();
 
     if (owner) {
         showWorldKeys();
     }
 }
+
+// Delete this world, for its owner alone (a trusted player may invite, never delete): what goes
+// with it said first, then its name typed to be sure
+function showWorldDelete() {
+    const { client, entered } = state.onServer;
+    const name = entered.card?.name ?? "this world";
+    const others = state.game?.others().length ?? 0;
+
+    $("#worldpaneldeleting").hidden = entered.role !== "owner";
+    $("#worldpaneldeletenote").textContent = `${name} goes from ${client.record.name ?? client.record.key} for good: ${others ? `the ${others === 1 ? "one" : others} playing in it with you sent out, ` : ""}its land, its war and the heroes it keeps gone with it, and every key and invite to it stopped. The server keeps a backup of it, which only the server's owner can bring back.`;
+    $("#worldpaneldelete").hidden = false;
+    $("#worldpaneldeleteform").hidden = true;
+    $("#worldpaneldeletename").value = "";
+    $("#worldpaneldeletelabel").textContent = `Type its name, “${name}”, to delete it`;
+}
+
+$("#worldpaneldelete").addEventListener("click", () => {
+    $("#worldpaneldelete").hidden = true;
+    $("#worldpaneldeleteform").hidden = false;
+    $("#worldpaneldeletename").focus();
+});
+
+$("#worldpaneldeletekeep").addEventListener("click", () => showWorldDelete());
+
+// Deleted: everyone in it sent out, this game too (the server closes its link: "world-deleted"),
+// back to the title, saying so; what's held for it here forgotten
+$("#worldpaneldeleteform").addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const { client, entered } = state.onServer ?? {};
+    const typed = $("#worldpaneldeletename").value.trim();
+    const name = entered?.card?.name ?? "";
+
+    if (!client) {
+        return;
+    }
+
+    if (typed !== name) {
+        $("#worldpanelstatus").textContent = `That isn't its name: type “${name}” exactly.`;
+
+        return;
+    }
+
+    $("#worldpaneldeletego").disabled = true;
+    state.deleting = { world: entered.world, name };
+
+    try {
+        await client.deleteWorld(entered.world, entered.session, typed);
+        leftWorld(`${name} was deleted. The server keeps a backup of it, for its owner.`);
+    } catch (error) {
+        state.deleting = null;
+        $("#worldpanelstatus").textContent = error.message;
+    } finally {
+        $("#worldpaneldeletego").disabled = false;
+    }
+});
 
 // The world's panel from the party menu's World button: the game paused under it, as the menu
 // pauses it (and Back to the game starts it again)

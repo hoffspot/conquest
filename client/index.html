@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=1cefb2b5d4",
+                    "./js/app/assets.js": "./js/app/assets.js?h=dbe4c9d16f",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=066ad296d6",
@@ -303,7 +303,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=d392dab2a0",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=8efbf27199",
-                    "./js/main.js": "./js/main.js?h=aedd2c2d3c",
+                    "./js/main.js": "./js/main.js?h=95c51b2757",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ac0b0422df",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -482,7 +482,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=aedd2c2d3c"></script>
+        <script type="module" src="js/main.js?h=95c51b2757"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -1095,6 +1095,7 @@
                         <li><strong>Go in</strong>, or come back to it any time from Join a World Hosted on a Server. Invite others later from the world's menu: <strong>World</strong>, then <strong>Invite link</strong>, <strong>Make a short code</strong>, or <strong>Open to anyone</strong>.</li>
                     </ol>
                     <p>Your owner's key is kept in this game. <strong>My servers and tickets</strong> (Known Servers) carries it to another device: keep that code to yourself.</p>
+                    <p>Done with it? In the world, its menu's <strong>World</strong>, then <strong>Delete this world</strong> at the foot, and type its name: everyone's sent out, and it's gone for good (the server keeps a backup for its owner). On a server where players may make only so many, that's room for another.</p>
                 </section>
                 <section id="mp-characters">
                     <h3>Your characters in a world on a server</h3>
@@ -1124,7 +1125,7 @@
                         <li><strong>Can't be reached from this page</strong>: a page opened over https (the game's website) can't reach a server at home over plain http. <strong>Open the game from the server</strong> opens it from the server itself, with your worlds.</li>
                         <li><strong>A short code that's run out</strong>: each works once, for half an hour. Ask for another.</li>
                         <li><strong>A link that's stopped working</strong>: its owner may have replaced it. Ask for the new one. If you've been in before, you come back as ever.</li>
-                        <li><strong>A server won't make your world</strong>: it needs a creator key, or you've made as many there as its owner lets each player. Ask its owner.</li>
+                        <li><strong>A server won't make your world</strong>: it needs a creator key, or you've made as many there as its owner lets each player. Delete one of yours (in it, <strong>World</strong>, <strong>Delete this world</strong>), or ask its owner.</li>
                     </ul>
                 </section>
                 <section id="mp-owners">
@@ -1185,6 +1186,20 @@
                 </label>
                 <h3 class="worlds-heading">Keys</h3>
                 <ul class="character-list" id="worldpanelkeys"></ul>
+                <!-- Deleting it, its owner's alone: its name typed to be sure -->
+                <div class="world-delete" id="worldpaneldeleting" hidden>
+                    <h3 class="worlds-heading">Delete this world</h3>
+                    <p class="note" id="worldpaneldeletenote"></p>
+                    <button type="button" class="button danger" id="worldpaneldelete">Delete this world…</button>
+                    <form id="worldpaneldeleteform" hidden>
+                        <label class="field" for="worldpaneldeletename" id="worldpaneldeletelabel">Type its name to delete it</label>
+                        <input type="text" id="worldpaneldeletename" class="text" autocomplete="off" spellcheck="false">
+                        <div class="menu">
+                            <button type="submit" class="button danger" id="worldpaneldeletego">Delete it for good</button>
+                            <button type="button" class="button" id="worldpaneldeletekeep">Keep it</button>
+                        </div>
+                    </form>
+                </div>
             </div>
             <p class="note warning" id="worldpanelstatus" role="status"></p>
             <div class="menu">

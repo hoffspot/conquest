@@ -8033,6 +8033,13 @@ dialog.worlds input.text.code-entry {
     text-align: left;
 }
 
+/* (The World panel's Delete this world, its owner's: set apart at its foot) */
+.world-delete {
+    margin-top: 18px;
+    padding-top: 2px;
+    border-top: 1px solid var(--field-border);
+}
+
 /* (Multiplayer's invites: the code to scan above its link) */
 #hostserverqr,
 #inviteqr {

@@ -196,6 +196,31 @@ describe("the servers the game remembers (app/servers.js KnownServers)", () => {
     });
 });
 
+describe("a world deleted by its owner from the game (app/servers.js ServerClient deleteWorld; main.js's World panel)", () => {
+    it("deletes it with its name typed, everyone in it sent out; refuses a name not its own, and any but its owner; forgets what was held for it", async () => {
+        const { server, address, adminKey } = await serve();
+        const servers = new KnownServers(memory());
+        const client = new ServerClient(servers.remember(address), { servers, timing: QUICK });
+        const made = await client.makeWorld(adminKey, { name: "Ashby", race: "human", seed: 3 });
+        const owner = await client.enter({ world: made.world });
+
+        // (A player in it too, by the players' key: they may not delete it)
+        const elsewhere = new KnownServers(memory());
+        const guest = new ServerClient(elsewhere.remember(address), { servers: elsewhere, timing: QUICK });
+        const entered = await guest.enter({ world: made.world, key: made.playerKey });
+
+        await assert.rejects(guest.deleteWorld(made.world, entered.session, "Ashby"), (error) => error instanceof ServerRefusal && error.error === "role");
+        await assert.rejects(client.deleteWorld(made.world, owner.session, "Ashb"), (error) => error instanceof ServerRefusal && error.error === "confirm" && /Type the world's name, "Ashby"/.test(error.message));
+        assert.ok(servers.get(address.key).worlds[made.world], "kept while it isn't deleted");
+        assert.ok(server.worlds.has(made.world));
+
+        assert.deepEqual(await client.deleteWorld(made.world, owner.session, "Ashby"), { deleted: made.world });
+        assert.equal(server.worlds.has(made.world), false);
+        assert.equal(servers.get(address.key).worlds[made.world], undefined, "what was held for it forgotten");
+        await assert.rejects(guest.enter({ world: made.world }), (error) => error instanceof ServerRefusal && error.error === "no-world");
+    });
+});
+
 describe("a world on a world server, from the game (app/servers.js ServerClient, app/together.js)", () => {
     it("pins the server's id, makes a world, enters it as its owner, plays in it, and comes back by its ticket", async () => {
         const { server, address, adminKey } = await serve();

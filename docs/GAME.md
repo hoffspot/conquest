@@ -2015,7 +2015,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   (main.js `showBlocked`). In a world on a
   server, playing together or alone, the menu's header has **World** (game.js `onWorldPanel`,
   main.js `worldPanelFromParty`): the world's own panel, as the menu's World opens it (docs/
-  SERVER.md *Owning a world*), the game paused under it as the menu pauses it.
+  SERVER.md *Owning a world*), the game paused under it as the menu pauses it. For its owner
+  alone, at its foot, **Delete this world** (main.js `showWorldDelete`): what goes with it said
+  (its land, its war, its heroes, who's sent out, every key and invite), then its name typed,
+  and **Delete it for good** (app/servers.js `deleteWorld`); everyone in it is sent out, the owner
+  back to the title told so, and each player's game forgets what it held for it.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through

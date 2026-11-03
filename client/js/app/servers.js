@@ -783,6 +783,19 @@ export class ServerClient {
         return made;
     }
 
+    /**
+     * A world deleted, by its owner (their session), its name typed to confirm it (`confirm`):
+     * everyone in it sent out ("world-deleted"), the server keeping a backup of it. What's held for
+     * it here forgotten. Returns { deleted }. Throws ServerRefusal ("confirm": the name's not its).
+     */
+    async deleteWorld(world, session, confirm) {
+        const deleted = await this.#call("DELETE", `/worlds/${world}`, { session, body: { confirm } });
+
+        this.servers?.forgetWorld(this.record.key, world);
+
+        return deleted;
+    }
+
     /** A world's settings changed (its owner's session: `settings`, as server/storage/worlds.js WORLD_SETTINGS has them): its details. */
     async changeWorld(world, session, settings) {
         return this.#call("PATCH", `/worlds/${world}`, { session, body: { settings } });
