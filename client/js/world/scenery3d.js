@@ -18,9 +18,12 @@ import { SHADOWS_ONLY } from "./shadows.js";
 /**
  * Which detail each cell's drawn at by how far its nearest point is from the camera (metres): the
  * nearest within `near`, the next beyond. Further off, blocks of cells `block` a side, each merged
- * into a mesh a material, drawn while none of their cells is near.
+ * into a mesh a material, drawn while none of their cells is near; and none drawn at all beyond
+ * `far`, past the fog's far edge (view.js OUTDOORS: 130 m), where they'd be the sky's colour. In
+ * the game at its bridge's foot, where the ground under the crag and its stairs are all near, the
+ * castle drew 214 draw calls with blocks of 3 by 3 and its nearest detail out to 45 m.
  */
-export const SCENERY_DETAIL = Object.freeze({ near: 45, block: 3 });
+export const SCENERY_DETAIL = Object.freeze({ near: 35, block: 2, far: 140 });
 
 // A cell's node, or one of its lower details' ("<cell>lod1": Three.js takes the dot out)
 const CELL = /^(.*@-?\d+,-?\d+)(?:\.?lod\d+)?$/;
@@ -126,7 +129,7 @@ export function blocksOf(cells, parent) {
         group.visible = false;
         parent.add(group);
 
-        return { cells: members, group, shadow };
+        return { cells: members, group, shadow, box: members.reduce((box, { box: cell }) => box.union(cell), new THREE.Box3()) };
     });
 }
 
@@ -297,12 +300,13 @@ export function* sceneryInterior(map) {
             const isNear = (cell) => cell.box.distanceToPoint(near) < SCENERY_DETAIL.near;
 
             for (const block of drawn.blocks) {
-                const whole = !block.cells.some(isNear);
+                const gone = block.box.distanceToPoint(near) > SCENERY_DETAIL.far;
+                const whole = !gone && !block.cells.some(isNear);
 
                 block.group.visible = whole;
 
                 for (const cell of block.cells) {
-                    showCell(cell, whole ? -1 : Math.min(isNear(cell) ? 0 : 1, cell.levels.length - 1));
+                    showCell(cell, gone || whole ? -1 : Math.min(isNear(cell) ? 0 : 1, cell.levels.length - 1));
                 }
             }
         },
