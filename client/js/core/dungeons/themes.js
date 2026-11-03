@@ -359,8 +359,12 @@ export const THEMES = {
                     { id: "boneChampion", creature: "skeleton", title: "Bone champion", weight: 2 },
                     { id: "flayedKing", creature: "draugr", title: "Flayed king", weight: 1 },
                     { id: "wailer", creature: "wraith", title: "Wailing shade", weight: 1 },
+                    // (The Bone Lord, the Halls' master before their hound: one of their great dead now)
+                    { id: "boneLord", creature: "wightLord", title: "the Bone Lord", weight: 1 },
                 ],
-                warden: { id: "boneLord", creature: "wightLord", title: "the Bone Lord", guard: ["skeleton"] },
+                // (Their master: the hound chained at the way down, so the dead stay down (creatures.js
+                // cerberus), the dead about it)
+                warden: { id: "hound", creature: "cerberus", title: "the Hound of the Halls", guard: ["skeleton"] },
                 rooms: {
                     gate: [{ id: "gate", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "&", count: [0, 1], at: "open", size: [2, 2] }, { char: "j", count: [1, 3], at: "open" }, { char: "k", count: [0, 2], at: "corner" }, { char: "d", count: [1, 2], at: "wall" }], torches: [1, 1] }],
                     hall: [

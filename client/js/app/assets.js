@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "94179f1d36",
+    release: "9370da75db",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2442,6 +2442,35 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/kaiju.bin",
                     "hash": "d1ca11cfe4",
                     "bytes": 3859268
+                }
+            ]
+        },
+        "beast-cerberus": {
+            "tier": "demand",
+            "label": "The cerberus (Panchenko Lyudmila's \"Cerberus\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/cerberus-2.bin",
+                    "hash": "801793dca3",
+                    "bytes": 5091316
+                }
+            ]
+        },
+        "beast-cerberus-skins": {
+            "tier": "demand",
+            "label": "The cerberus's other skins: dark and ash (Panchenko Lyudmila's \"Cerberus\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/cerberus.dark.bin",
+                    "hash": "a0250dbc3b",
+                    "bytes": 1533204
+                },
+                {
+                    "path": "models/beasts/cerberus.ash.bin",
+                    "hash": "36a1ac8c7c",
+                    "bytes": 1467348
                 }
             ]
         },

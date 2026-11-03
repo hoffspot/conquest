@@ -13,7 +13,9 @@
 // one at a time, each with its thread: the first, the Stone Golem of Harrowstone (stoneGolem: its
 // thread begun by a guild mage's rumour, harrowstone); the second, the Orc King (orcKing: his
 // thread, ironcrown, begun by a guild warrior's rumour of a border village his raiders burned);
-// besides debug mode's sample (SAMPLE, its thread and the card that follows it).
+// Vharzul the Greenflame (vharzul: his thread, exile, a temple priest's rumour); Ashmaw, the Hound
+// Unchained (ashmaw: its thread, unchained, a guild ranger's rumour of a hell's hound broken
+// loose); besides debug mode's sample (SAMPLE, its thread and the card that follows it).
 //
 // Pure data and arithmetic, no DOM; a world's host keeps its Legends and drives it with its own
 // random (host.js #rare...), every copy alike.
@@ -127,6 +129,23 @@ export const RARE_CARDS = Object.freeze({
         reward: Object.freeze({ unique: "greenbrand", gold: 900 }),
         requires: Object.freeze({ thread: "exile", step: 1 }),
     }),
+    // (Ashmaw, the Hound Unchained (creatures.js ashmaw): a hell's cerberus, broken loose; a world's
+    // boss, once a world, kept where its tracks lead from the Hollow Choir's ruined camp at a hell's
+    // way in (its thread's card step), a rank above a dungeon's master; the dead clawing up to its
+    // howl as it's worn down; what's seen as it falls said (`last`); its reward a link of its chain
+    // hammered into a ring, the Last Link, and a purse of gold)
+    ashmaw: Object.freeze({
+        id: "ashmaw",
+        title: "Ashmaw, the Hound Unchained",
+        word: "A howl from three throats at once rolls over the land, and the grass ahead begins to smoulder. Out of the smoke pads a hound the size of a hay cart, grey as ash, its three heads low, the last links of a broken chain dragging from its necks: Ashmaw.",
+        last: "Ashmaw's heads sink one after another, the fire going out of each throat. The chain about its necks cools from red to black, and the dead it called fall back into the earth. Somewhere far below, a way down stands unwatched.",
+        kind: "unique",
+        venue: "wilds",
+        where: "site",
+        shape: Object.freeze({ kind: "foe", creature: "ashmaw", champion: "boss", up: 2, title: "Ashmaw, the Hound Unchained" }),
+        reward: Object.freeze({ unique: "lastLink", gold: 850 }),
+        requires: Object.freeze({ thread: "unchained", step: 1 }),
+    }),
 });
 
 /**
@@ -169,6 +188,16 @@ export const UNIQUES = Object.freeze({
         base: "sword",
         effect: "witchfire",
         about: "A blade ground from one of Vharzul the Greenflame's horns, the Pit's first lord, and it has never stopped burning. Every blow it strikes sets the foe alight with the green fire of the thin places, and the fire leaps on to whoever stands nearest them, the further the finer the blade. Found nowhere else.",
+    }),
+    // (Ashmaw's reward: a link of the chain that held it, hammered into a ring, its effect
+    // legendary.js cinderburst: now and then a blow its wearer strikes bursting into fire round the
+    // foe)
+    lastLink: Object.freeze({
+        id: "lastLink",
+        name: "The Last Link",
+        base: "ring",
+        effect: "cinderburst",
+        about: "The last link of the chain that held Ashmaw at the way down from a hell's Halls of Bone, bitten through and hammered shut again into a ring. It's as warm as a hearthstone, always. Now and then a blow its wearer strikes bursts into hellfire round the foe, setting them burning, and those beside them. Found nowhere else.",
     }),
 });
 
@@ -270,7 +299,8 @@ export function cardOf(id) {
  *   the thread was last (`here`: the place of the step before, Vharzul's at the Sundered Ring).
  * - `place`: somewhere to go, `far` ([least, most] metres) from where the thread was last (its
  *   encounter, or the place of the step before), on open ground, or the plan's place of a kind
- *   (`site`: "ruined quarry", the nearest), marked on every player's maps; done once someone comes
+ *   (`site`: "ruined quarry", the nearest; a dungeon of a `theme`, "hell": a hell's way in, the
+ *   Hollow Choir's camp there), marked on every player's maps; done once someone comes
  *   within `reach` of it. What's found there is its kind's (core/places.js PLACE_KINDS `scene`:
  *   setpieces/scenes.js, laid out at its heart), its writing given (`reward.writing`).
  * - `talk`: one of the folk (`role`: roles.js ROLES, a barkeep, a priest...; an adventurer of a
@@ -319,7 +349,8 @@ export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal", "b
  * their own), change? (CHANGES), and its kind's own }] }`. The sample's, debug mode's, has one of
  * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step; the
  * Iron Crown's too, its first step a fight; the Exile's Road's, a priest's rumour, its last step a
- * hell's way in gone through.
+ * hell's way in gone through; the Hound Unchained's, a ranger's rumour, its first step a hell's way
+ * in come to.
  */
 export const THREADS = Object.freeze({
     sampleTrail: Object.freeze({
@@ -454,13 +485,56 @@ export const THREADS = Object.freeze({
             Object.freeze({ kind: "enter", theme: "hell", word: "Vharzul's brand, burnt into a stone of the Sundered Ring, points {way} to where the Hollow Choir sing their gate open: a hell's way in. Break their rite by night, and go down through it.", reward: Object.freeze({ gold: 250 }) }),
         ]),
     }),
+    // (The Hound Unchained (docs/WILDS.md *Ashmaw*): begun by a guild ranger's rumour in the
+    // settlement nearest a hell's way in (`near` { theme }), of the Hollow Choir's camp there torn
+    // apart and a chain bitten through, the old tale of the hound every hell keeps chained in its
+    // Halls of Bone, and the guild's tracker Hollis, gone after it, her dogs come home without her;
+    // her notes found at the Choir's camp (a place step at the hell's way in, `site` and `theme`);
+    // the hound's prints followed out into the wilds to Ashmaw (RARE_CARDS ashmaw); and word of it
+    // taken back to the ranger, who pays the bounty the farms got up)
+    unchained: Object.freeze({
+        id: "unchained",
+        title: "The Hound Unchained",
+        opens: Object.freeze({
+            kind: "talk",
+            role: "adventurer",
+            calling: "ranger",
+            near: Object.freeze({ theme: "hell" }),
+            ask: "Heard anything worth knowing?",
+            tale: Object.freeze([
+                Object.freeze({ say: "You know the hell's way in out {way} of here? {place}, the old maps call it. The Hollow Choir keep a camp at it, and sing their gate open every night. Ten nights back the singing stopped. A drover went by at dawn and found the camp torn to rags, and a chain lying across the way in, every link as thick as my wrist, the end of it bitten through.", ask: "Bitten through?" }),
+                Object.freeze({ say: "My grandmother used to say every hell keeps a hound in its Halls of Bone: three heads, chained at the way down so the dead stay down. I took it for a tale to keep children in at night. Seems the Choir sang their gate open wider than they meant, and it came up after them.", ask: "And now?" }),
+                Object.freeze({ say: "Now it hunts. Sheep gone from the folds with the hurdles burnt black, a woodcutter's hut, two carters on the road. Prints as wide as a shield, the grass scorched round every one. The drovers have started calling it Ashmaw.", ask: "Has anyone gone after it?" }),
+                Object.freeze({ say: "Hollis did. Best tracker this guild ever had, and her dogs the best in the land. She went out to the Choir's camp four days ago to pick up its trail. Last night her dogs came home without her, singed, and they won't go out past the gate. Someone has to find out what became of her, and put that thing down before it finds a village." }),
+            ]),
+            take: "I'll go out to the Choir's camp.",
+            taken: "Then go by day, and watch for smoke. If Hollis left any sign of where it went, it'll be at the camp. She always did.",
+            leave: "Not for me.",
+            back: Object.freeze({ ask: "About the hound: I'll go after it after all.", reply: "Good. It took another flock last night. The camp's where it was, and the trail with it. Mind the ground where it smoulders." }),
+        }),
+        steps: Object.freeze([
+            Object.freeze({ kind: "place", site: "dungeon", theme: "hell", reach: 18, word: "Something came up out of the hell's way in {way} of {town} and tore the Hollow Choir's camp there apart, and Hollis went out after it and never came back. Go to the camp, and find out what became of her.", reward: Object.freeze({ gold: 40, writing: "hollis" }) }),
+            Object.freeze({ kind: "card", card: "ashmaw", far: Object.freeze([140, 220]), spoor: "Paw prints as wide as a shield, the grass burnt black round each, and here and there a link of broken chain: Ashmaw's. They lead off to the {way}.", word: "Hollis tracked the hound out from the Choir's camp before it turned on her. Its prints lead away {way}, the grass burnt black round each. Follow them, and put it down." }),
+            Object.freeze({
+                kind: "talk",
+                role: "adventurer",
+                calling: "ranger",
+                home: true,
+                word: "Ashmaw is dead. Take word of it, and Hollis's notes, to the ranger at the guild in {town}.",
+                ask: "The hound's dead. And I found Hollis's notes.",
+                reply: "Dead? Then the farms can sleep. And Hollis... she wrote it all down to the last, didn't she. That's her: the trail first, herself after. Her dogs are with me; I'll see they're kept. Here: the farms got a bounty up between them when the flocks started going, and the guild's put to it. Someone will have to tell the priests the hound's chain is empty, down there.",
+                reward: Object.freeze({ gold: 200 }),
+            }),
+        ]),
+    }),
 });
 
 /**
  * How a thread that comes before its card is begun (THREADS `opens`): a rumour told by one of the
  * folk (`kind` "talk": an adventurer of a `calling`, `role`'s, at the guild in the settlement, or
  * another of the folk where they keep, `post`: a priest at its temple; the settlement
- * nearest the plan's place of a kind, `near`, or a people's border village, `near` { border }:
+ * nearest the plan's place of a kind, `near`, or a dungeon of a theme's, `near` { theme }, or a
+ * people's border village, `near` { border }:
  * openerOf; none of that calling left there, any of its adventurers), asked of them (`ask`), the
  * tale told a piece at a time (`tale`: each piece's words, {way} which way the place is from there
  * and {place} its name, and what's asked for the next), then taken up (`take`: the thread begun,
@@ -499,8 +573,9 @@ export const TAKE_BACK = Object.freeze({ ask: "About {title}: I'd take it up aga
 export const GUILD_KINDS = Object.freeze(["village", "town", "city", "capital"]);
 
 /**
- * The plan's place of a kind a thread's opener's near (`opens.near`): the first of them (`plan`'s
- * sites), or null; and the settlement with a guild nearest it (GUILD_KINDS), the rumour's. Or a
+ * The plan's place of a kind a thread's opener's near (`opens.near`; or a dungeon of a theme's,
+ * `near` { theme }: a hell's way in): the first of them (`plan`'s sites), or null; and the
+ * settlement with a guild nearest it (GUILD_KINDS), the rumour's. Or a
  * people's border village (`near` { border }: borderOf), and the settlement with a guild nearest
  * it but it, not theirs either. The same on every copy: { site, town } (the plan's), or null.
  */
@@ -511,7 +586,9 @@ export function openerOf(plan, thread) {
         return borderOf(plan, opens.near.border);
     }
 
-    const site = opens ? ((plan?.sites ?? []).filter((one) => one.kind === opens.near).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] ?? null) : null;
+    // (A dungeon of a theme's, `near` { theme }: a hell's way in)
+    const near = (one) => (opens.near?.theme ? one.kind === "dungeon" && one.theme === opens.near.theme : one.kind === opens.near);
+    const site = opens ? ((plan?.sites ?? []).filter(near).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0] ?? null) : null;
 
     if (!site) {
         return null;

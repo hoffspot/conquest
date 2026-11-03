@@ -99,7 +99,7 @@ Greenflame*, whose quest ends going down through one).
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
   | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes, and brimstone walkers | the Breach Priest, a cultist |
-  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs, and ash walkers | the Bone Lord, a wight lord |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs, and ash walkers; the Bone Lord, a wight lord, among its mini-bosses | the Hound of the Halls, a cerberus |
   | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons, and hellwalkers, met the most here | the Forge Demon, the Greater Demon |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends; its own bloat gorgers, pit ravagers and gorger warlords, the lord's henchmen and bile walkers | the Gatekeeper, an ogre; then the Lord of the Pit, its henchmen about it |
 
@@ -169,7 +169,7 @@ Greenflame*, whose quest ends going down through one).
   (`spoils.js`), and its place in the model viewer under *The hells*. Tests: `test/hell-kinds.test.js` (where they're met; the embers
   and the bile bursting on their foes, never their own; the wards; the drain; the rest of each),
   `e2e/model-viewer.spec.js` (each as the game draws it).
-- **Stand-ins for now**: everyone else in it but its lord, the River of Fire's master, its fiends
+- **Stand-ins for now**: everyone else in it but its lord, the Halls' hound, the River of Fire's master, its fiends
   and its own kinds is one of the wild's creatures, till bought models of more demons take their
   places (docs/LICENSED_MODELS.md). Each master has a look of its own
   (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
@@ -186,6 +186,23 @@ Greenflame*, whose quest ends going down through one).
   Pit's first lord, whom he threw down and cast out (docs/WILDS.md *Vharzul the Greenflame*). Its henchmen stand about it (*Its own kinds*, above). Till the model's read (and
   where the licensed models aren't, as in CI) it's drawn as its stand-in, a people-shaped brute as
   the wild's are (`beasts/looks.js`): bigger than a troll, red as a coal, horned and tusked.
+- **The Halls of Bone's master, the Hound of the Halls** (`creatures.js` `cerberus`, tiers 9 and
+  10, met nowhere else): the three-headed hound every hell keeps chained at the way down from its
+  Halls of Bone, so the dead stay down, the dead about it. Its three heads snap together, or it
+  lunges, laying a wound open; one head breathes fire at whoever keeps off; and now and then all
+  three breathe at once, the ground before it burning, shown on the ground before it does (a move
+  of its own, `HOUND_INFERNO`). Fire harms it little, and no blast moves it. It's drawn from a
+  bought model, Panchenko Lyudmila's Cerberus (`MODELS.cerberus`, `client/models/beasts/LICENSE.md`),
+  as it's made: 5.09 metres long and 2.21 tall, in its own skin or its dark one by its seed. Its
+  clips are its own: its heads snapping (0.15 to 1.3 seconds of its third attack, the jaws shut at
+  0.8), its lunge (its first attack's first 1.5 seconds), its fire from its middle head (its
+  `Fire`, the flames out from 0.9 to 2.1 seconds) and from all three (`Fire All`, each head's own
+  flames from 1.2 to 3.6 seconds: `mouths`, `together`); its flinch and its fall; looking about as
+  it rests; its walk at its pace (1.16 m/s), its run a bound (7.4 m/s) played slower at its chase.
+  Its fourth attack came through the export broken (its hips unkeyed, upside down) and isn't
+  played. Its stand-in is a great black hound, one head for three (`beasts/looks.js`). The Bone
+  Lord, the Halls' master before it, is one of their mini-bosses now. A hell's hound broke loose
+  once, and roams the wilds (docs/WILDS.md *Ashmaw*).
 - **The River of Fire's master, the Forge Demon** (`creatures.js` `greaterDemon`, tier 10, met
   nowhere else), by the Hellforge: the Greater Demon, the Lord of the Pit's model before the
   Infernal Demon's (`MODELS.greaterDemon`), its fists burning and hellfire hurled from its hand,
@@ -287,7 +304,7 @@ outlaws' hideout's are, but drawn as the inside of some great body: no dressed s
 - **Blood pooled on the floor** (`&`, walked through): one or two in most of its rooms, each a
   dark pool wandering round its squares' middle, drops splashed round it, wet (`bloodGeometry`).
   Every pool on a level is one mesh.
-- **The heart** (`@`): the room furthest in, by the portal down, where the Bone Lord waits, is
+- **The heart** (`@`): the room furthest in, by the portal down, where the Hound of the Halls waits, is
   always the heart's (the realm's `rooms.goal`). In its middle the heart stands on the floor, as
   tall as a man, narrowing to its apex, two chambers swelling at its top under a cap of fat,
   bruised in patches, veins glowing on it; its arteries rise from its top into the roof, its veins

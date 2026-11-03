@@ -511,3 +511,30 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## cerberus-2.bin, cerberus.dark.bin, cerberus.ash.bin
+
+**Cerberus**, by **Panchenko Lyudmila** (its Unreal Engine files: its skeletal mesh, its fur, its
+textures in three skins and its 19 animations, exported from Unreal Engine by this repository's
+owner), bought on **Fab** by this repository's owner under **Fab's Standard License**: the
+cerberus, the Halls of Bone's master in a hell and a world's boss out in the wilds.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/cerberus.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its three-headed body and its fur, 51,312 triangles with two lower details packed in
+(24,286 and 10,261); its two materials, each its textures (colour, normal, and occlusion with
+roughness; its body's glow; its fur's cut-out strands) as KTX2; and all 19 of its own clips: a
+lunge, its three heads snapping, a howl, its fire breathed from one head and from all three, three
+flinches, three deaths, two idles, walking, running, sidestepping either way and a leap (the leap
+and two of the deaths played in place: the game carries it over the ground), and a fourth attack
+that came through the export with its hips unkeyed, upside down, and isn't played. Its other two
+skins, dark and ash,
+are its body's colour, normals, roughness and glow alone (`cerberus.dark.bin`, `cerberus.ash.bin`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.

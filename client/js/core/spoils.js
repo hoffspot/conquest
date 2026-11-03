@@ -125,6 +125,8 @@ export const PARTS = Object.freeze({
     chimeraMane: { label: "Chimera's mane", worth: 34, icon: "pelt", tint: "#5a3216" },
     chimeraHorn: { label: "Chimera's horn", worth: 26, icon: "tusk", tint: "#9a8a70" },
     fireGland: { label: "Fire gland", worth: 30, icon: "gland", tint: "#ff8010" },
+    // (A cerberus's: a fang as long as a dagger, still warm)
+    hellFang: { label: "Hellhound fang", worth: 45, icon: "fang", tint: "#ff4a1a" },
     dragonScale: { label: "Drake scale", worth: 60, icon: "scale", tint: "#6e1812" },
     dragonFang: { label: "Drake fang", worth: 90, icon: "fang", tint: "#f0e4c8" },
     dragonHeart: { label: "Drake's heart", worth: 250, icon: "heart", tint: "#c02010" },
@@ -266,6 +268,11 @@ export const SPOILS = Object.freeze({
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (Vharzul the Greenflame: the Lord's, his reward besides: core/rare.js RARE_CARDS vharzul)
     vharzul: { gold: [80, 160], items: [{ id: "obsidian", chance: 0.9, count: [2, 3] }, { id: "soulShard", chance: 0.8 }, { id: "fireGland", chance: 0.6 }] },
+    // (A hell's cerberus, the Halls of Bone's master: its fangs, its fire's glands, the bones of the
+    // dead it kept down; Ashmaw's the same, more of them, its reward besides: core/rare.js RARE_CARDS
+    // ashmaw)
+    cerberus: { gold: [30, 70], items: [{ id: "hellFang", chance: 0.9, count: [1, 2] }, { id: "fireGland", chance: 0.6 }, { id: "boneDust", chance: 0.5, count: [1, 2] }, { id: "soulShard", chance: 0.3 }] },
+    ashmaw: { gold: [70, 140], items: [{ id: "hellFang", chance: 0.95, count: [2, 3] }, { id: "fireGland", chance: 0.8, count: [1, 2] }, { id: "soulShard", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)
     flayling: { gold: [2, 8], items: [{ id: "boneDust", chance: 0.3 }, { id: "cultSigil", chance: 0.15 }] },

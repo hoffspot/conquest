@@ -898,6 +898,11 @@ const COLOSSAL_BLASTS = Object.freeze({
     // of green fire bursting all round him, heard as fire bursts)
     wingSweep: { quake: "spin", shake: 0.1, sound: null },
     greenFlare: { quake: "flare", shake: 0.25, sound: "impactFireMid" },
+    // (A cerberus's (Ashmaw's): coming down from its leap, the ground heaving, heard crashing down
+    // as the Orc King's is; and its three heads' fire at once, the ground before it bursting into
+    // flame, heard as fire bursts)
+    houndLeap: { quake: "slam", shake: 0.4, sound: "impactEarthMid" },
+    houndInferno: { quake: "inferno", shake: 0.2, sound: "impactFireMid" },
     shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });

@@ -1711,7 +1711,8 @@ export class SpellFx {
      * Ground shaken by something colossal (`at`, on the ground; the camera shaken by `shake`): its
      * jaws slammed down (`kind` "slam": earth and stones thrown up, a ring of dust rolling out over
      * `radius` metres), its roar (`roar`: a pale shockwave racing out over it, the dust lifted
-     * all round), or its tread (`tread`: a little dust where its feet come down).
+     * all round), or its tread (`tread`: a little dust where its feet come down); a ring of green
+     * fire (`flare`), a great axe spun (`spin`), or three heads' fire at once (`inferno`).
      */
     quake(at, { radius = 5, kind = "slam", shake = 0 } = {}) {
         const ground = this.onGround(at.x, at.z);
@@ -1745,6 +1746,22 @@ export class SpellFx {
                 const out = new THREE.Vector3(Math.cos(angle), 0.4, Math.sin(angle));
 
                 this.spray(p([0xd8ffe0, 0x18c050], { count: 3, size: [0.2, 0.45], speed: [2, 4.5], life: [0.4, 0.8], gravity: -2.4, spread: 0.6, glow: true, opacity: 0.9, grow: 0.6 }), this.onGround(at.x + out.x * radius * 0.8, at.z + out.z * radius * 0.8, 0.3), out.multiplyScalar(2));
+            }
+
+            return;
+        }
+
+        // (Three heads' fire at once (a cerberus's): the ground where it lands bursting into flame,
+        // red and orange rolling out to as far as it reached, sparks and embers thrown up)
+        if (kind === "inferno") {
+            this.ring(ground, { colour: 0xff6a1a, from: radius * 0.3, to: radius * 1.05, life: 0.6, opacity: 0.85 });
+            this.after(0.1, () => this.ring(ground, { colour: 0xffd080, from: radius * 0.5, to: radius * 1.1, life: 0.45, opacity: 0.5 }));
+
+            for (let k = 0; k < 16; k++) {
+                const angle = (k / 16) * Math.PI * 2 + Math.random() * 0.3;
+                const out = new THREE.Vector3(Math.cos(angle), 0.5, Math.sin(angle));
+
+                this.spray(p([0xffe08a, 0xff3a0a], { count: 3, size: [0.22, 0.5], speed: [1.5, 4], life: [0.45, 0.85], gravity: -2.6, spread: 0.6, glow: true, opacity: 0.9, grow: 0.7 }), this.onGround(at.x + out.x * radius * 0.7, at.z + out.z * radius * 0.7, 0.3), out.multiplyScalar(2));
             }
 
             return;

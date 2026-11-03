@@ -90,6 +90,33 @@ export const COLOSSUS = Object.freeze({
 });
 
 /**
+ * A cerberus's three heads breathing fire at once (creatures.js cerberus and ashmaw, a move of
+ * theirs: battle.js #moves): the ground before it burning from just ahead of its jaws to as far as
+ * its fire reaches (`quake` `ahead` and `radius`, metres from where it stands), whoever's there
+ * struck by fire, set burning and thrown back a little, shown on the ground before it lands; its
+ * clip's fire out of all three mouths (beasts/model.js MODELS cerberus `together`), the blow landing
+ * as its flames are fullest.
+ */
+export const HOUND_INFERNO = Object.freeze({
+    id: "inferno",
+    kind: "melee",
+    reach: 0,
+    damage: Object.freeze([11, 17]),
+    hitAt: 1400,
+    duration: 3600,
+    interval: 3800,
+    stagger: 400,
+    reaction: "fire",
+    animation: "inferno",
+    first: 9000,
+    every: 15000,
+    least: 0,
+    most: 7,
+    quake: Object.freeze({ ahead: 4.5, radius: 3.5, toss: 0.4, kind: "houndInferno", element: "fire", afflict: Object.freeze({ kind: "burn", chance: 0.9 }) }),
+    telegraph: true,
+});
+
+/**
  * Every creature: its name, hit points and weapon (at the first tier's), walking and chasing
  * speeds (m/s), `temper` (and `guard`: how near, squares, a territorial one lets anyone come),
  * how far it wanders (`roam`, metres) and chases (`leash`), its pack ([least, most]), the tiers
@@ -428,6 +455,53 @@ export const CREATURES = Object.freeze({
         rally: [
             { below: 2 / 3, animation: "rally", hitAt: 1700, duration: 3400, call: { kind: "fiend", count: [2, 2], most: 3, down: 1, told: "tears the thin place open behind him: fiends come through!" } },
             { below: 1 / 3, animation: "rally", hitAt: 1700, duration: 3400, call: { kind: "fiend", count: [2, 3], most: 4, down: 1, told: "tears the thin place open again: more fiends come through!" } },
+        ],
+    },
+    // (The cerberus: the three-headed hound every hell keeps chained in its Halls of Bone at the
+    // way down, so the dead stay down (docs/DUNGEONS.md *Hells*): the Halls' master (dungeons/
+    // themes.js, the hell's realms' `warden`). Drawn from a bought model of its own, Panchenko
+    // Lyudmila's Cerberus (beasts/model.js), five metres of it, in its own skin or the dark one by
+    // its seed; too heavy to throw. Its three heads snapping together, or a lunge, and fire breathed
+    // from one head at whoever keeps off (weapons.js NATURAL cerberus); and now and then all three
+    // heads breathing at once, the ground before it burning, shown on the ground before it does
+    // (`moves`, HOUND_INFERNO). Fire harms it little; it sees in the dark)
+    cerberus: { name: "Cerberus", hp: 75, weapon: "cerberus", speed: 1.2, chase: 3.2, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.25, perilous: true, darkSight: true, sight: 22, steady: true, wards: { fire: 0.5 }, moves: [HOUND_INFERNO] },
+    // (Ashmaw, the Hound Unchained: a hell's cerberus, broken loose when the Hollow Choir sang their
+    // gate open too wide and came up after them (docs/WILDS.md *Ashmaw*). One a world, met only as
+    // its rare card's foe, out in the wilds where its tracks lead from the Choir's ruined camp
+    // (core/rare.js RARE_CARDS ashmaw), a world's boss, in the cerberus's ash-grey skin. The Halls'
+    // hound's bites, lunge and fire, harder (weapons.js NATURAL ashmaw); and its own moves: a leap
+    // that lands on whoever keeps off, and all three heads breathing fire at once, both shown on the
+    // ground before they land (`moves`); and as it's worn down, at two thirds and at one third, its
+    // three heads thrown back in a howl, the dead clawing up out of the ground to it (`rally`,
+    // `told`). Fire harms it little; it sees in the dark, and further off than most (`sight`))
+    ashmaw: {
+        name: "Ashmaw",
+        hp: 130,
+        weapon: "ashmaw",
+        speed: 1.25,
+        chase: 3.4,
+        temper: "aggressive",
+        roam: 14,
+        leash: 55,
+        pack: [1, 1],
+        tiers: [6, 10],
+        biomes: [],
+        blood: "red",
+        armor: 0.28,
+        perilous: true,
+        darkSight: true,
+        sight: 24,
+        steady: true,
+        wards: { fire: 0.5 },
+        worldBoss: true,
+        moves: [
+            { id: "leap", kind: "melee", reach: 0, damage: [13, 20], hitAt: 930, duration: 1560, interval: 1900, stagger: 450, reaction: "crush", animation: "leap", first: 4000, every: 10000, least: 4, most: 9, leap: { lift: 450, up: 0.6 }, quake: { ahead: 0, radius: 2.4, toss: 0.9, kind: "houndLeap" }, telegraph: true },
+            { ...HOUND_INFERNO, damage: [14, 22], first: 8000, every: 13000 },
+        ],
+        rally: [
+            { below: 2 / 3, animation: "rally", hitAt: 1500, duration: 3500, call: { kind: "skeleton", count: [2, 3], most: 4, down: 2, told: "throws back its three heads and howls: the dead claw their way up out of the ground!" } },
+            { below: 1 / 3, animation: "rally", hitAt: 1500, duration: 3500, call: { kind: "draugr", count: [1, 2], most: 3, down: 2, told: "howls again, and the barrow-dead come up to its call!" } },
         ],
     },
 });

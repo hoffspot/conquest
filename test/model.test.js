@@ -76,7 +76,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, borrows, detail = 3 } of Object.values(MODELS)) {
+        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, mouths = [], together = [], borrows, detail = 3 } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
@@ -98,9 +98,13 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
                 }
             }
 
-            for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {}), ...Object.values(carry).map((held) => held.bone)]) {
+            for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {}), ...mouths.flatMap((other) => Object.values(other)), ...Object.values(carry).map((held) => held.bone)]) {
                 assert.ok(nodes.has(bone), bone);
             }
+
+            // (Its other heads breathing with it only in a clip it breathes in, from a mouth of its own:
+            // a cerberus's three)
+            assert.ok(together.every((clip) => fire[clip]) && (!together.length || (mouth && mouths.length)), asset);
 
             // (Its detail packed in: three levels, each of as many meshes as the full one, one for
             // each of its parts; or as many as it says it has, `detail`: the black widow's full
@@ -435,5 +439,22 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         // (From the air, its hover's breath: the same while)
         assert.equal(breathing(model, { style: "breath", u: 0.2 }, lengths, true), false);
         assert.equal(breathing(model, { style: "breath", u: 1.2 / 3.4 }, lengths, true), true);
+    });
+
+    it("breathes a cerberus's fire from its middle head, or from all three at once, as far into its clip as its flames are out", () => {
+        const hound = MODELS.cerberus;
+        const lent = { Fire: 2.52, "Fire All": 5.04, "Attack 3": 2.04 };
+        const at = (style, u) => breathing(hound, { style, u }, lent);
+
+        // (Its middle head's: the whole of its Fire, its flames out from 0.9 to 2.1 seconds)
+        assert.equal(at("breath", 0.8 / 2.52), false);
+        assert.equal(at("breath", 1.5 / 2.52), true);
+        assert.equal(at("breath", 2.3 / 2.52), false);
+        // (All three's: Fire All played from 0.6 to 4.2 seconds, their flames out from 1.2 to 3.6)
+        assert.equal(at("inferno", 0.1), false);
+        assert.equal(at("inferno", (2 - 0.6) / 3.6), true);
+        assert.equal(at("inferno", (3.9 - 0.6) / 3.6), false);
+        assert.equal(at("bite", 0.5), false);
+        assert.deepEqual([hound.together, hound.mouths.length, MODELS.ashmaw.length > hound.length], [["Fire All"], 2, true]);
     });
 });
