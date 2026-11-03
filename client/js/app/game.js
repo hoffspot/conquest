@@ -903,6 +903,12 @@ const COLOSSAL_BLASTS = Object.freeze({
     // flame, heard as fire bursts)
     houndLeap: { quake: "slam", shake: 0.4, sound: "impactEarthMid" },
     houndInferno: { quake: "inferno", shake: 0.2, sound: "impactFireMid" },
+    // (The Demon Boss's (Ashkhar's): coming down from its leap, the ground heaving, heard crashing
+    // down as the Orc King's is; and its fists brought down at its feet, hellfire bursting out all
+    // round it, heard as fire bursts, or Ashkhar's frost, heard as ice cracks)
+    demonLeap: { quake: "slam", shake: 0.4, sound: "impactEarthMid" },
+    demonFlare: { quake: "inferno", shake: 0.3, sound: "impactFireMid" },
+    frostFlare: { quake: "frost", shake: 0.3, sound: "impactWaterHigh" },
     shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });

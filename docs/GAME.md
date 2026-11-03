@@ -851,7 +851,7 @@ The world's rare encounters, and what the player keeps of them:
   found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
   asked first (gone for good, and never given again). Its effect, if it has one, whatever it is
   (*Legendary weapons*, above).
-- **A world's boss** (creatures.js `worldBoss`: the Stone Golem, the Orc King, Vharzul the Greenflame, Ashmaw): its bar across the
+- **A world's boss** (creatures.js `worldBoss`: the Stone Golem, the Orc King, Vharzul the Greenflame, Ashmaw, Ashkhar the Bellbound): its bar across the
   top of the screen as the Behemoth of the Rift's is (hud.js `boss`, game.js `#bossBar`, its title a
   title), and its model wanted as soon as it's about, drawn from it at once, in view or not; and
   those of the champions it rallies to it (creatures.js `rally`).
@@ -1268,7 +1268,8 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
   - *One of the five on a piece that isn't the weapon*: let loose by the blows of whoever wears it,
     whatever they strike with, as a legendary weapon's is (its charge their weapon's): the Last
     Link's *Cinderburst*, a ring hammered from the last link of Ashmaw's chain (docs/WILDS.md
-    *Ashmaw*).
+    *Ashmaw*), and Bellsilver's *Frostbind*, an amulet of a link of the silver that bound Ashkhar
+    the Bellbound (docs/WILDS.md *Ashkhar the Bellbound*).
   - *A ward* (`ward`: `WARD_CHARGE`, battle.js `#steel`, `#wardThrough`), let loose on whoever wears
     it by the blows they take: every blow that does them harm fills its charge a mark, full after 6
     (lost after thirty seconds without being struck); full, it's let loose on them at once. The

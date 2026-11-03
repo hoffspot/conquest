@@ -98,7 +98,7 @@ Greenflame*, whose quest ends going down through one).
 
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
-  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes, and brimstone walkers | the Breach Priest, a cultist |
+  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes, and brimstone walkers; the Breach Priest, a cultist, among its mini-bosses | the Demon of the Breach, the Demon Boss |
   | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs, and ash walkers; the Bone Lord, a wight lord, among its mini-bosses | the Hound of the Halls, a cerberus |
   | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons, and hellwalkers, met the most here | the Forge Demon, the Greater Demon |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends; its own bloat gorgers, pit ravagers and gorger warlords, the lord's henchmen and bile walkers | the Gatekeeper, an ogre; then the Lord of the Pit, its henchmen about it |
@@ -186,6 +186,26 @@ Greenflame*, whose quest ends going down through one).
   Pit's first lord, whom he threw down and cast out (docs/WILDS.md *Vharzul the Greenflame*). Its henchmen stand about it (*Its own kinds*, above). Till the model's read (and
   where the licensed models aren't, as in CI) it's drawn as its stand-in, a people-shaped brute as
   the wild's are (`beasts/looks.js`): bigger than a troll, red as a coal, horned and tusked.
+- **The Breach's master, the Demon of the Breach** (`creatures.js` `demonBoss`, the Demon Boss,
+  tiers 9 and 10, met nowhere else): the demon that holds the Breach, where the thin place first
+  tore open, waiting by the rift over the cult's altar, its cultists and magma about it. It rakes
+  with its right claw, laying a wound open, sweeps with both from the side, knocking whoever it
+  catches back, or brings its fist down overhead, knocking them off their feet and setting them
+  burning (`weapons.js` `NATURAL.demonBoss`, one of the three at random). It leaps on whoever keeps
+  off (`DEMON_LEAP`), and now and then brings both fists down at its feet, hellfire bursting out
+  all round it, setting whoever it catches burning (`DEMON_FLARE`): each shown on the ground first.
+  Fire harms it little, and no blast moves it. It's drawn from a bought model, Panchenko
+  Lyudmila's DemonBoss (`MODELS.demonBoss`, `client/models/beasts/LICENSE.md`), a tenth bigger
+  than it's made: 2.83 metres tall, in its own red skin. Its clips are its own: its rake (its
+  second attack to 1.9 seconds, the blow at 1.05), its sweep (its first to 2.2, the blow at 1.15),
+  its fist (its third to 2.1, the blow at 1.35), its leap (the first second and a half of its fifth
+  attack, cut out as a clip of its own by the pipeline, `clips.invent`, and played in place: off
+  the ground at 0.5 seconds, down at 1.13), and its rage for its flare (the blow as its fists come
+  down, 1.4 seconds in); its flinch and its fall; looking about as it rests; its walk at its pace
+  (1.39 m/s as it's drawn), its run a gallop on all fours (3.09 m/s) played slower at its chase.
+  Its stand-in is a fiend's lean frame, bigger, red as a coal (`beasts/looks.js`). The Breach
+  Priest, the Breach's master before it, is one of its mini-bosses now. A demon of the Breach
+  came up on the moors once, and was bound there (docs/WILDS.md *Ashkhar the Bellbound*).
 - **The Halls of Bone's master, the Hound of the Halls** (`creatures.js` `cerberus`, tiers 9 and
   10, met nowhere else): the three-headed hound every hell keeps chained at the way down from its
   Halls of Bone, so the dead stay down, the dead about it. Its three heads snap together, or it
@@ -228,7 +248,7 @@ Greenflame*, whose quest ends going down through one).
   between a mini-boss's and the boss's (`play.js` `CHAMPIONS.floor`: three times the hit points,
   its blows 1.2 times as hard; drawn 1.16 times its kind's size, its eyes brighter:
   `beasts/champions.js` `CHAMPION_LOOKS.floor`). Its fall is told to whoever's in the hell: "The
-  Breach Priest is slain, and the portal down is open."
+  Demon of the Breach is slain, and the portal down is open."
 - **Portals, not stairs**: each level's way down is a portal of fire where other dungeons have
   stairs (the same squares, the same landing): an arch of the level's rock at the landing's edge,
   runes cut in its face glowing like coals, a worn step before it, and in it the guild portals'

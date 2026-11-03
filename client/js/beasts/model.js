@@ -173,6 +173,38 @@ const hounds = (length, skins) => {
     });
 };
 
+// The Demon Boss and Ashkhar the Bellbound (MODELS demonBoss, ashkhar): Panchenko Lyudmila's
+// DemonBoss (the catalog's beast-demon-boss), made 1.95 metres long and 2.57 tall, drawn `length`
+// long, in its `skins`. Its own clips: its right claw raked across before it (Attack 2, to 1.9
+// seconds, the blow at 1.05), both claws swept round from the side (Attack 1, to 2.2, the blow at
+// 1.15), its fist brought down overhead (Attack 3, to 2.1, the blow at 1.35), its leap (Leap: the
+// game's own, cut from the first second and a half of its fifth attack and played in place, the game
+// carrying it over the ground; its feet off the ground at 0.5 seconds and down at 1.13), and its
+// rage, its arms thrown up and its fists brought down at its feet (Rage, at 1.4 seconds: its flare,
+// and its rally); its flinch, its fall (Death 2), and looking about as it rests (Idle 2). Its run's
+// a gallop on all fours (Run 2). Walking at 1.26 m/s and galloping at 2.8 as it's made
+const demons = (length, skins) => {
+    const scale = length / 1.95;
+
+    return Object.freeze({
+        asset: "beast-demon-boss",
+        skins: Object.freeze(skins),
+        length,
+        made: Object.freeze({ long: 1.95, tall: 2.57 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run 2", react: "Hit 1", dead: "Death 2" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ rake: "Attack 2", sweep: "Attack 1", smash: "Attack 3", leap: "Leap", flare: "Rage", rally: "Rage" }),
+        spans: Object.freeze({ rake: Object.freeze([0, 1.9]), sweep: Object.freeze([0, 2.2]), smash: Object.freeze([0, 2.1]) }),
+        rests: Object.freeze({ look: "Idle 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "Jaw_joint", left: "hand_l" }),
+        mouth: null,
+        pace: +(1.26 * scale).toFixed(2),
+        runPace: +(2.8 * scale).toFixed(2),
+        flinch: 0.6,
+    });
+};
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -557,6 +589,12 @@ export const MODELS = Object.freeze({
     // (Ashmaw, the Hound Unchained (creatures.js): the cerberus a tenth bigger, always in its ash-grey
     // skin)
     ashmaw: hounds(5.6, ["ash"]),
+    // (The Demon Boss, the Breach's master (creatures.js): Panchenko Lyudmila's DemonBoss, drawn a
+    // tenth bigger than it's made, in its own red skin. Its moves: demons(), above)
+    demonBoss: demons(2.15, [""]),
+    // (Ashkhar the Bellbound (creatures.js): the Breach's demon a fifth bigger than it's made, in its
+    // blue skin, its fire smothered to frost)
+    ashkhar: demons(2.34, ["blue"]),
     // (The River of Fire's master (dungeons/themes.js `hell`), the Lord of the Pit's before: the
     // Greater Demon, made 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves
     // played on its skeleton (utilities/blenderpipeline's clips), its wings beating to them:

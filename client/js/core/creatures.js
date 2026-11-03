@@ -117,6 +117,57 @@ export const HOUND_INFERNO = Object.freeze({
 });
 
 /**
+ * The Demon Boss's leap (creatures.js demonBoss and ashkhar, a move of theirs: battle.js #moves): on
+ * whoever keeps off, its feet off the ground half a second in (its model's Leap: beasts/model.js,
+ * played in place, the creature carried over the ground) and down by them a little over a second in,
+ * the ground heaving all round where it lands, shown there first.
+ */
+export const DEMON_LEAP = Object.freeze({
+    id: "leap",
+    kind: "melee",
+    reach: 0,
+    damage: Object.freeze([11, 17]),
+    hitAt: 1130,
+    duration: 1500,
+    interval: 1800,
+    stagger: 450,
+    reaction: "crush",
+    animation: "leap",
+    first: 4000,
+    every: 10000,
+    least: 4,
+    most: 9,
+    leap: Object.freeze({ lift: 500, up: 0.5 }),
+    quake: Object.freeze({ ahead: 0, radius: 2.4, toss: 0.9, kind: "demonLeap" }),
+    telegraph: true,
+});
+
+/**
+ * The Demon of the Breach's flare (creatures.js demonBoss, a move of its own: battle.js #moves): its
+ * arms thrown up and its fists brought down at its feet (its model's Rage, the blow as they come down,
+ * 1.4 seconds in), hellfire bursting out all round it, whoever's caught burnt, thrown back and set
+ * burning, shown on the ground before it bursts. (Ashkhar's is cold instead: creatures.js ashkhar)
+ */
+export const DEMON_FLARE = Object.freeze({
+    id: "flare",
+    kind: "melee",
+    reach: 0,
+    damage: Object.freeze([10, 16]),
+    hitAt: 1400,
+    duration: 3600,
+    interval: 3800,
+    stagger: 400,
+    reaction: "fire",
+    animation: "flare",
+    first: 8000,
+    every: 14000,
+    least: 0,
+    most: 4.5,
+    quake: Object.freeze({ ahead: 0, radius: 4.2, toss: 0.7, kind: "demonFlare", element: "fire", afflict: Object.freeze({ kind: "burn", chance: 0.8 }) }),
+    telegraph: true,
+});
+
+/**
  * Every creature: its name, hit points and weapon (at the first tier's), walking and chasing
  * speeds (m/s), `temper` (and `guard`: how near, squares, a territorial one lets anyone come),
  * how far it wanders (`roam`, metres) and chases (`leash`), its pack ([least, most]), the tiers
@@ -504,6 +555,56 @@ export const CREATURES = Object.freeze({
         rally: [
             { below: 2 / 3, animation: "rally", hitAt: 1500, duration: 3500, call: { kind: "skeleton", count: [2, 3], most: 4, down: 2, told: "throws back its three heads and howls: the dead claw their way up out of the ground!" } },
             { below: 1 / 3, animation: "rally", hitAt: 1500, duration: 3500, call: { kind: "draugr", count: [1, 2], most: 3, down: 2, told: "howls again, and the barrow-dead come up to its call!" } },
+        ],
+    },
+    // (The Demon Boss: the demon that holds the Breach, a hell's first level, where the thin place
+    // first tore open (docs/DUNGEONS.md *Hells*): the Breach's master (dungeons/themes.js, the hell's
+    // realms' `warden`), its cultists and magma about it. Drawn from a bought model of its own,
+    // Panchenko Lyudmila's DemonBoss (beasts/model.js), two and a half metres of horned, clawed
+    // brute, in its own red skin; too heavy to throw. Its claws raked, swept or brought down overhead
+    // (weapons.js NATURAL demonBoss); and moves of its own (`moves`): a leap on whoever keeps off,
+    // and its fists brought down at its feet, hellfire bursting out all round it, each shown on the
+    // ground before it lands (DEMON_LEAP, DEMON_FLARE). Fire harms it little; it sees in the dark)
+    demonBoss: { name: "Demon Boss", hp: 65, weapon: "demonBoss", speed: 1.1, chase: 3, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.2, perilous: true, darkSight: true, sight: 20, steady: true, wards: { fire: 0.5 }, moves: [DEMON_LEAP, DEMON_FLARE] },
+    // (Ashkhar the Bellbound: a demon of the Breach that came up through a thin place on the moors a
+    // hundred years ago, and the Order of the Bell bound it in blessed silver chains under their
+    // shrine, its fire smothered to frost (docs/WILDS.md *Ashkhar*). Loose again since the Magpies
+    // stripped the shrine's silver; one a world, met only as its rare card's foe, out in the wilds
+    // where its frost-rimed prints lead from the shrine (core/rare.js RARE_CARDS ashkhar), a world's
+    // boss, the Demon Boss's model in its blue skin. The Breach demon's claws, harder, cold and
+    // slowing where they bite (weapons.js NATURAL ashkhar); a leap on whoever keeps off, and its
+    // fists brought down at its feet, frost bursting out all round it, slowing whoever it catches,
+    // both shown on the ground before they land (`moves`); and as it's worn down, at two thirds and
+    // at one third, its rage: the restless dead of the moor come to it (`rally`, `told`). Cold harms
+    // it little; it sees in the dark, and further off than most (`sight`). Its kind's hit points a
+    // demon's: its card makes it more than two and a half times as tough (rare.js `health`))
+    ashkhar: {
+        name: "Ashkhar the Bellbound",
+        hp: 48,
+        weapon: "ashkhar",
+        speed: 1.15,
+        chase: 3.2,
+        temper: "aggressive",
+        roam: 14,
+        leash: 55,
+        pack: [1, 1],
+        tiers: [6, 10],
+        biomes: [],
+        blood: "red",
+        armor: 0.24,
+        perilous: true,
+        darkSight: true,
+        sight: 24,
+        steady: true,
+        wards: { water: 0.5 },
+        worldBoss: true,
+        moves: [
+            { ...DEMON_LEAP, damage: [13, 20], first: 4000, every: 9500 },
+            { ...DEMON_FLARE, id: "frostflare", damage: [12, 18], first: 7000, every: 13000, reaction: "arcane", quake: { ...DEMON_FLARE.quake, kind: "frostFlare", element: "water", afflict: { kind: "slow", chance: 0.9, look: "frost" } } },
+        ],
+        rally: [
+            { below: 2 / 3, animation: "rally", hitAt: 1400, duration: 3600, call: { kind: "wraith", count: [2, 2], most: 3, down: 2, told: "throws back its horns and roars, and the moor's restless dead come to it!" } },
+            { below: 1 / 3, animation: "rally", hitAt: 1400, duration: 3600, call: { kind: "ghost", count: [2, 3], most: 4, down: 2, told: "roars again: the drowned and the lost rise out of the bog!" } },
         ],
     },
 });

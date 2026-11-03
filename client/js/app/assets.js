@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "e7e2915465",
+    release: "8916c57767",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2471,6 +2471,35 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/cerberus.ash.bin",
                     "hash": "36a1ac8c7c",
                     "bytes": 1467348
+                }
+            ]
+        },
+        "beast-demon-boss": {
+            "tier": "demand",
+            "label": "The Demon Boss (Panchenko Lyudmila's \"DemonBoss\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/demon-boss.bin",
+                    "hash": "bb671243a0",
+                    "bytes": 3072396
+                }
+            ]
+        },
+        "beast-demon-boss-skins": {
+            "tier": "demand",
+            "label": "The Demon Boss's other skins: blue and green (Panchenko Lyudmila's \"DemonBoss\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/demon-boss.blue.bin",
+                    "hash": "8033d22266",
+                    "bytes": 1430264
+                },
+                {
+                    "path": "models/beasts/demon-boss.green.bin",
+                    "hash": "acc0e80318",
+                    "bytes": 1423964
                 }
             ]
         },

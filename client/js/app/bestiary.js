@@ -66,6 +66,8 @@ const PLACES = Object.freeze({
     vharzul: "at the Sundered Ring by night, once a world",
     cerberus: "in the hells, chained at the way down from the Halls of Bone",
     ashmaw: "in the wilds where its tracks lead from a hell's way in, once a world",
+    demonBoss: "in the hells, holding the Breach",
+    ashkhar: "in the wilds where its frosted prints lead from a moorland shrine, once a world",
 });
 
 // The ants' nests' own, and the hells' (met nowhere else)

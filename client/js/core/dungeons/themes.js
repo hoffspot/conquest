@@ -317,8 +317,12 @@ export const THEMES = {
                     { id: "fireCaller", creature: "cultist", title: "Fire-caller", weight: 2 },
                     { id: "magmaHeart", creature: "magmaSlime", title: "Magma heart", weight: 1 },
                     { id: "breachHound", creature: "blackShuck", title: "Hound of the Breach", weight: 1 },
+                    // (The Breach Priest, the Breach's master before its demon: its cult's high priest now)
+                    { id: "breachPriest", creature: "cultist", title: "the Breach Priest", weight: 1 },
                 ],
-                warden: { id: "breachPriest", creature: "cultist", title: "the Breach Priest", guard: ["cultist", "magmaSlime"] },
+                // (Its master: the demon that holds the Breach, where the thin place first tore open
+                // (creatures.js demonBoss), its cultists and magma about it)
+                warden: { id: "breachDemon", creature: "demonBoss", title: "the Demon of the Breach", guard: ["cultist", "magmaSlime"] },
                 rooms: {
                     mouth: [{ id: "breach", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "k", count: [2, 2], at: "wall", mirror: true }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [2, 3], at: "wall" }], torches: [1, 1] }],
                     cavern: [
