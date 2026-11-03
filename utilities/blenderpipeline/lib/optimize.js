@@ -410,7 +410,7 @@ export function thinKeys(document, fps) {
  * another kept where they are: seamsOf's), on the same skeleton and materials as the full mesh.
  * Resolves with the meshes made.
  */
-export async function packLod(document, level, { ratio, error = 0.01, materials, seams = null }) {
+export async function packLod(document, level, { ratio, error = 0.01, materials, seams = null, permissive = Boolean(seams) }) {
     const root = document.getRoot();
     const made = [];
 
@@ -446,7 +446,7 @@ export async function packLod(document, level, { ratio, error = 0.01, materials,
                 lower.addTarget(lowerTarget);
             }
 
-            simplifyKeeping(lower, { ratio: ratioOf(primitive, { ratio, materials }), error, seams });
+            simplifyKeeping(lower, { ratio: ratioOf(primitive, { ratio, materials }), error, seams, permissive });
             copy.addPrimitive(lower);
         }
 
@@ -681,6 +681,20 @@ export async function optimize(config, { raw, glb, lodFile }) {
         simplifyFull(document, { ...config.simplify, seams });
     }
 
+    // (Tangents left out: Three.js works them out as it draws, from how the texture lies)
+    if (!config.tangents) {
+        for (const mesh of root.listMeshes()) {
+            for (const primitive of mesh.listPrimitives()) {
+                if (primitive.getAttribute("TANGENT")) {
+                    primitive.setAttribute("TANGENT", null);
+                    result.tangentsLeftOut = (result.tangentsLeftOut ?? 0) + 1;
+                }
+            }
+        }
+
+        await document.transform(prune());
+    }
+
     // Checked before it's compressed: the validator can't read meshopt's compression
     result.validation = await validate(await io.writeBinary(document), { ktx2: config.textures.format === "ktx2" });
 
@@ -691,7 +705,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
         if (lod.materials || seams) {
             for (const mesh of copy.getRoot().listMeshes()) {
                 for (const primitive of mesh.listPrimitives()) {
-                    simplifyKeeping(primitive, { ratio: ratioOf(primitive, lod), error: lod.error ?? 0.01, seams });
+                    simplifyKeeping(primitive, { ratio: ratioOf(primitive, lod), error: lod.error ?? 0.01, seams, permissive: lod.permissive ?? Boolean(seams) });
                 }
             }
 
@@ -769,11 +783,11 @@ export async function optimizeVariant(config, name, { raw, glb }) {
 }
 
 /** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error, materials, seams }. */
-function simplifyFull(document, { ratio, error = 0.01, materials, seams = null }) {
+function simplifyFull(document, { ratio, error = 0.01, materials, seams = null, permissive = false }) {
     for (const node of document.getRoot().listNodes()) {
         if (node.getMesh() && node.getExtras().lod === undefined) {
             for (const primitive of node.getMesh().listPrimitives()) {
-                simplifyKeeping(primitive, { ratio: ratioOf(primitive, { ratio, materials }), error, seams });
+                simplifyKeeping(primitive, { ratio: ratioOf(primitive, { ratio, materials }), error, seams, permissive });
             }
         }
     }
@@ -850,9 +864,11 @@ export function seamsOf(document) {
  * A primitive welded and simplified as glTF-Transform's simplifyPrimitive does it, `ratio` of its
  * triangles kept, at most `error` astray; but with `seams` (seamsOf's), its vertices at those
  * places locked where they are, and its other edges free to move (meshopt's own LockBorder locks
- * every open edge, which a building's carving is full of).
+ * every open edge, which a building's carving is full of). `permissive`: edges where its texture
+ * coordinates or normals part (every corner of carved stone has them) may be collapsed too, as a
+ * lower detail, seen from further off, can afford.
  */
-export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null }) {
+export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null, permissive = false }) {
     weldPrimitive(primitive);
 
     if (!seams) {
@@ -874,7 +890,13 @@ export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null }
     }
 
     const target = Math.floor((ratio * indices.length) / 3) * 3;
-    const [kept] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(0), 0, [], locks, target, error, []);
+    const [kept] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(0), 0, [], locks, target, error, permissive ? ["Permissive"] : []);
+
+    // (A small part simplified to nothing, a window's glass, say: kept as it is, rather than left
+    // a primitive with no triangles, which meshopt's compression can't write)
+    if (!kept.length) {
+        return primitive;
+    }
     primitive.setIndices(source.clone().setArray(kept));
 
     // (Its old indices let go of, if nothing else has them: the document's root aside)

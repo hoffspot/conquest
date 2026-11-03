@@ -365,6 +365,26 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
     });
 });
 
+describe("tangents left out (tangents: false)", () => {
+    it("leaves the FBX creature's tangents out, its normal map and all: Three.js works them out as it draws", async () => {
+        const config = { ...loadConfig(path.join(HERE, "examples", "fbx-creature.json"), { profile: "phone" }), tangents: false };
+        const out = path.join(work, "no-tangents");
+        const { report } = await buildAsset(config, { blender, out, log: () => {} });
+        const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
+        const primitives = document
+            .getRoot()
+            .listMeshes()
+            .flatMap((mesh) => mesh.listPrimitives());
+
+        assert.ok(report.exported.tangentsLeftOut > 0);
+        assert.ok(report.materials.some((material) => material.textures.includes("normal")));
+        assert.deepEqual(
+            primitives.filter((primitive) => primitive.getAttribute("TANGENT")),
+            [],
+        );
+    });
+});
+
 describe("a skeleton made to copy a control rig (muteConstraints)", () => {
     // (The extra fixture's chest copies a control's turn: its Idle sways the chest all the same,
     // but only once the constraint's muted)

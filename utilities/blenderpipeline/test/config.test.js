@@ -132,6 +132,9 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], climb: -1 } }, /walk.climb is a number, 0 or more/);
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], reach: 3 } }, /unknown setting walk.reach/);
         refuses({ source: "a.fbx", tiledTexcoords: "yes" }, /tiledTexcoords is true or false/);
+        refuses({ source: "a.fbx", tangents: 0 }, /tangents is true or false/);
+        refuses({ source: "a.fbx", lods: [{ ratio: 0.5, permissive: "yes" }] }, /lods\[0\].permissive is true or false/);
+        refuses({ source: "a.fbx", simplify: { ratio: 0.5, permissive: true } }, /simplify.permissive is for scenery cut into cells/);
         refuses({ source: "a.fbx", lods: [{ ratio: 0.5, materials: { "M_Rock*": 0 } }] }, /lods\[0\].materials is \{ "material": the share of its vertices kept/);
         refuses({ source: "a.fbx", simplify: { ratio: 0.5, materials: ["M_Rock*"] } }, /simplify.materials is \{ "material"/);
         refuses({ source: "a.fbx", textures: { maxSize: 0 } }, /textures.maxSize is a size in pixels, or null/);

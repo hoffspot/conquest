@@ -112,6 +112,9 @@ export const DEFAULTS = Object.freeze({
     // "feet": moved so it stands on the origin (its lowest point at y = 0, centred across);
     // "keep": where it was in Blender
     origin: "keep",
+    // Tangents kept, for its normal maps (MikkTSpace's, as they're baked with); false, left out:
+    // Three.js works them out as it draws, near enough for scenery seen from afar, and smaller
+    tangents: true,
     // Texture coordinates past 0 to 1 (a texture tiled over a wall) brought into it, the textures
     // given the offset and scale that put them back (KHR_texture_transform), so they're quantized
     // with the rest rather than kept as floats
@@ -125,7 +128,8 @@ export const DEFAULTS = Object.freeze({
     stripMaterialExtensions: true,
     // Lower-detail copies: [{ ratio (of vertices kept), error (fraction of its size), materials?
     // ({ "material": ratio }, * and ? wildcards: a ratio of their own for the parts of those
-    // materials, rock simplified further than carved stone) }]
+    // materials, rock simplified further than carved stone), permissive? (cut into cells: edges
+    // where texture coordinates or normals part collapsed too; a lower detail's are by default) }]
     lods: [],
     // The full mesh itself simplified ({ ratio, error, materials? }, as a lower-detail copy's), when
     // even it is more than the game wants; the lower-detail copies' ratios stay shares of what
@@ -404,7 +408,11 @@ export function resolveConfig(raw, file) {
     }
 
     for (const [i, lod] of config.lods.entries()) {
-        unknownKeys(lod, { ratio: 0, error: 0, materials: 0 }, `lods[${i}].`, fail);
+        unknownKeys(lod, { ratio: 0, error: 0, materials: 0, permissive: 0 }, `lods[${i}].`, fail);
+
+        if (lod.permissive !== undefined && typeof lod.permissive !== "boolean") {
+            fail(`lods[${i}].permissive is true or false`);
+        }
 
         if (!(lod.ratio > 0 && lod.ratio < 1)) {
             fail(`lods[${i}].ratio is the share of vertices kept, between 0 and 1`);
@@ -432,7 +440,15 @@ export function resolveConfig(raw, file) {
     checkInvented(config.clips.invent, fail);
 
     if (config.simplify !== null) {
-        unknownKeys(config.simplify, { ratio: 0, error: 0, materials: 0 }, "simplify.", fail);
+        unknownKeys(config.simplify, { ratio: 0, error: 0, materials: 0, permissive: 0 }, "simplify.", fail);
+
+        if (config.simplify.permissive !== undefined && typeof config.simplify.permissive !== "boolean") {
+            fail("simplify.permissive is true or false");
+        }
+
+        if (config.simplify.permissive && !config.cells) {
+            fail("simplify.permissive is for scenery cut into cells (cells)");
+        }
 
         if (!(config.simplify.ratio > 0 && config.simplify.ratio < 1)) {
             fail("simplify.ratio is the share of vertices kept, between 0 and 1");
@@ -465,6 +481,10 @@ export function resolveConfig(raw, file) {
 
     if (typeof config.tiledTexcoords !== "boolean") {
         fail("tiledTexcoords is true or false");
+    }
+
+    if (typeof config.tangents !== "boolean") {
+        fail("tangents is true or false");
     }
 
     return config;

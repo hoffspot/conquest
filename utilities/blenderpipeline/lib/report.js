@@ -219,6 +219,8 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
             ...(blender.droppedMaterials?.length ? { droppedMaterials: blender.droppedMaterials } : {}),
             ...(blender.cells?.length ? { cells: blender.cells } : {}),
             ...(optimized.texcoordsTiled?.length ? { texcoordsTiled: optimized.texcoordsTiled } : {}),
+            ...(optimized.tangentsLeftOut ? { tangentsLeftOut: optimized.tangentsLeftOut } : {}),
+            ...(optimized.seams ? { seamsKept: optimized.seams } : {}),
             ...(optimized.reweighted ? { verticesReweighted: optimized.reweighted } : {}),
             ...(optimized.morphsLeftOut ? { morphTargetsLeftOut: optimized.morphsLeftOut } : {}),
             ...(optimized.retargeted?.length ? { retargeted: optimized.retargeted.map(({ from, bones, hips, scale }) => ({ from, bones, hips, scale })) } : {}),
