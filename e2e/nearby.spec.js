@@ -54,27 +54,33 @@ test("a server found near the one a player knows, listed under it and added with
 
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`http://127.0.0.1:${studio.port}/`);
-    await page.locator("#worldsbutton").click();
+    await page.locator("#multiplayerbutton").click();
+    await page.locator("#mpservers").click();
 
-    const worlds = page.locator("#worlds");
+    const servers = page.locator("#servers");
 
-    await page.locator("#worldsaddress").fill(`127.0.0.1:${studio.port}`);
-    await worlds.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(worlds.locator(`li[data-server="127.0.0.1:${studio.port}"] .name`)).toHaveText("Studio Mac", { timeout: 30000 });
+    await page.locator("#serversaddress").fill(`127.0.0.1:${studio.port}`);
+    await servers.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(servers.locator(`li[data-server="127.0.0.1:${studio.port}"] .name`)).toHaveText("Studio Mac", { timeout: 30000 });
 
-    // (The other, nearby: found by the one known)
-    const near = worlds.locator(`li.nearby[data-nearby="${sams.identity.id}"]`);
+    // (The other, nearby: found by the one known, in Known Servers)
+    const near = servers.locator(`li.nearby[data-nearby="${sams.identity.id}"]`);
 
     await expect(near).toContainText("Sam's Mac");
     await expect(near).toContainText("On the Wi-Fi with Studio Mac · 1 world listed");
     await near.locator("button").click();
 
-    const added = worlds.locator(`li[data-server="127.0.0.1:${sams.port}"]`);
+    const added = servers.locator(`li[data-server="127.0.0.1:${sams.port}"]`);
 
     await expect(added.locator(".name")).toHaveText("Sam's Mac", { timeout: 30000 });
-    await expect(added).toContainText("Version");
-    await expect(worlds.locator("li[data-world]", { hasText: "Riverhold" })).toBeVisible();
+    await expect(added).toContainText("Up · version");
+    await expect(added).toContainText("1 world listed");
     await expect(near).toHaveCount(0);
+
+    // (Its world, among its worlds: Join a World Hosted on a Server)
+    await servers.getByRole("button", { name: "Back" }).click();
+    await page.locator("#mpjoinserver").click();
+    await expect(page.locator("#worlds li[data-world]", { hasText: "Riverhold" })).toBeVisible({ timeout: 30000 });
 
     // (Known by the id it advertised: the one it must prove)
     const known = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")));

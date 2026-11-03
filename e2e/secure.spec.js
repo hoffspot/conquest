@@ -113,7 +113,7 @@ test("from the internet, over TLS alone: a page asked for plainly sent on to htt
     const [place] = server.play.places.values();
 
     expect(place.from).toBe("internet");
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].secure)).toBe(true);
+    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.key === key).secure, `127.0.0.1:${server.port}`)).toBe(true);
 
     // (The management page isn't to be had from there)
     const admin = await page.request.get(`${secure}admin`);

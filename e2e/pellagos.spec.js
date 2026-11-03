@@ -715,61 +715,78 @@ test("the title's About: what the game is and how it's played, scrolled through,
     await expect(page.locator("#about")).toBeHidden();
 });
 
-test("Worlds on servers' Worlds Guide: every way into a world, with examples, its contents and its own pointers taking you to each part; on a phone, nothing wider than the screen; closed, back to the worlds", async ({ page }) => {
+test("Multiplayer: every way to join or host a world in one menu; About Multiplayer explaining each, with pictures of who links to whom and examples, its contents and its own pointers taking you to each part; on a phone, nothing wider than the screen; closed, back to Multiplayer", async ({ page }) => {
     await title(page);
-    await page.locator("#worldsbutton").click();
-    await expect(page.locator("#worlds")).toBeVisible();
 
-    // (Over the worlds, which stay open under it)
-    await page.getByRole("button", { name: "Worlds Guide" }).click();
+    // (One way in from the title: Multiplayer, in place of Join a world and Worlds on servers)
+    await expect(page.locator("#joinbutton")).toHaveCount(0);
+    await expect(page.locator("#worldsbutton")).toHaveCount(0);
+    await page.getByRole("button", { name: "Multiplayer", exact: true }).click();
 
-    const guide = page.locator("#worldsguide");
-    const body = page.locator("#worldsguidebody");
+    const menu = page.locator("#multiplayer");
+
+    await expect(menu).toBeVisible();
+    await expect(menu.locator(".mp-choice .name")).toHaveText(["About Multiplayer", "Join a World on another Device", "Join a World Hosted on a Server", "Known Servers", "Host on this Device", "Host on a Server"]);
+
+    // (Over Multiplayer, which stays open under it)
+    await menu.getByRole("button", { name: /^About Multiplayer/ }).click();
+
+    const guide = page.locator("#mpguide");
+    const body = page.locator("#mpguidebody");
     // (A part at the top of what's read)
     const atTop = (id) => page.locator(`#${id}`).evaluate((section) => Math.abs(section.getBoundingClientRect().top - section.parentElement.getBoundingClientRect().top));
 
     await expect(guide).toBeVisible();
-    await expect(page.locator("#worlds")).toBeVisible();
-    await expect(page.locator("#worldsguidetitle")).toHaveText("Worlds Guide");
-    await expect(page.locator("#worldsguidebody h3")).toHaveText(["Which way in?", "Two kinds of world", "Your characters in a world on a server", "A friend's world, by its code", "Players' worlds on a server", "Invite links", "A server's address", "Servers nearby", "Open worlds", "Short codes", "Keys", "Coming back, and other devices", "Who you come as", "A world of your own on a server", "When it won't join"]);
+    await expect(menu).toBeVisible();
+    await expect(page.locator("#mpguidetitle")).toHaveText("About Multiplayer");
+    await expect(page.locator("#mpguidebody h3")).toHaveText(["Which way?", "Two kinds of world", "Join a World on another Device", "Join a World Hosted on a Server", "Known Servers", "Host on this Device", "Host on a Server", "Your characters in a world on a server", "Coming back, and other devices", "When it won't join", "Running a server"]);
     expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
 
-    // What you've been given, and what to do with it; and examples of each kind of code and link
-    await expect(page.locator(".guide-ways th")).toHaveCount(9);
+    // Pictures of who links to whom, each saying so in words too
+    await expect(page.locator("#mpguidebody .mp-diagram")).toHaveCount(3);
+    await expect(page.locator("#mpguidebody .mp-diagram title")).toHaveText([/^A world on a device: your device holds the world/, /^A world on a server: the server holds the world/, /^Host on a Server, step by step/]);
+
+    // What you have or want, and what to do; and examples of each kind of code and link
+    await expect(page.locator(".guide-ways th")).toHaveCount(8);
     await expect(page.locator(".guide-ways").getByText("KQWX")).toBeVisible();
-    await expect(page.locator("#worldsguidebody .guide-example")).toHaveCount(4);
-    await expect(page.locator("#guide-short .guide-example")).toContainText("7KQM-2XWD");
+    await expect(page.locator("#mpguidebody .guide-example")).toHaveCount(2);
+    await expect(page.locator("#mp-joinserver")).toContainText("7KQM-2XWD");
+    await expect(page.locator("#mp-servers")).toContainText("pellagos.duckdns.org:8480");
 
     // Its contents take you to a part, and so does a part's pointer to another
-    await page.locator('#worldsguide nav [data-to="guide-short"]').click();
-    await expect.poll(() => atTop("guide-short")).toBeLessThan(30);
-    await page.locator('#worldsguide nav [data-to="guide-ways"]').click();
-    await expect.poll(() => atTop("guide-ways")).toBeLessThan(30);
-    await page.locator("#guide-ways").getByRole("button", { name: "Keys" }).click();
-    await expect.poll(() => atTop("guide-key")).toBeLessThan(30);
+    await page.locator('#mpguide nav [data-to="mp-hostserver"]').click();
+    await expect.poll(() => atTop("mp-hostserver")).toBeLessThan(30);
+    await page.locator('#mpguide nav [data-to="mp-ways"]').click();
+    await expect.poll(() => atTop("mp-ways")).toBeLessThan(30);
+    await page.locator("#mp-ways").getByRole("button", { name: "Host here" }).click();
+    await expect.poll(() => atTop("mp-hostdevice")).toBeLessThan(30);
 
-    // Back to the worlds, what it says out of the page
-    await page.locator("#worldsguideclose").click();
+    // Back to Multiplayer, what it says out of the page
+    await page.locator("#mpguideclose").click();
     await expect(guide).toBeHidden();
-    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(menu).toBeVisible();
     await expect(body).toBeEmpty();
 
-    // On a phone: its contents swiped along one row, the table one under the other, and nothing,
-    // the longest link included, wider than the screen
+    // On a phone: its contents swiped along one row, the table one under the other, its pictures
+    // within it, and nothing, the longest link included, wider than the screen
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole("button", { name: "Worlds Guide" }).click();
+    await menu.getByRole("button", { name: /^About Multiplayer/ }).click();
     await expect(guide).toBeVisible();
     expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
     expect(await page.locator(".guide-ways th").first().evaluate((cell) => getComputedStyle(cell).display)).toBe("block");
-    await page.locator('#worldsguide nav [data-to="guide-link"]').click();
-    await expect.poll(() => atTop("guide-link")).toBeLessThan(30);
+    await page.locator('#mpguide nav [data-to="mp-joinserver"]').click();
+    await expect.poll(() => atTop("mp-joinserver")).toBeLessThan(30);
     expect(await body.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
     expect(await guide.evaluate((dialog) => dialog.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+
+    for (const picture of await page.locator("#mpguidebody .mp-diagram").all()) {
+        expect(await picture.evaluate((svg) => svg.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+    }
 
     // (Escape closes the guide alone)
     await page.keyboard.press("Escape");
     await expect(guide).toBeHidden();
-    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(menu).toBeVisible();
 });
 
 // (The pixels it draws counted: at the screen's own, a pixel a pixel, not the half the others

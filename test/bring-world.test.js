@@ -20,6 +20,7 @@ import { addressOf, BRING_FORMAT as GAME_FORMAT, KnownServers, ServerClient, Ser
 import { isGuid } from "../client/js/core/guid.js";
 import { Host } from "../client/js/core/host.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
+import { newPlayerSecret, playerIdOf, proofOf, publicKeyOf } from "../client/js/core/player.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { BRING_FORMAT, BRING_LIMIT } from "../server/manage.js";
 import { WorldServer } from "../server/world-server.js";
@@ -184,7 +185,7 @@ describe("a player's own world brought to a world server", () => {
         assert.equal(await refused(sent({ ...character, saveVersion: SAVE_VERSION + 1 })), "newer");
         assert.equal(await refused(sent(character, { net: NET_VERSION + 1 })), "version");
         assert.match(await refused(Buffer.alloc(BRING_LIMIT + 1)), /^(too-big|status 413)$/);
-        assert.match(await refused(sent(character), null), /^(key|role)$/, "no key makes no worlds");
+        assert.equal(await refused(sent(character), null), "maker", "no key makes no worlds where players may not make them");
         assert.match(await refused(sent(character), someWorld.playerKey), /^(key|role)$/, "nor does a player's key");
         assert.equal(server.worlds.size, before + 1, "nothing left of those refused");
     });
@@ -210,5 +211,31 @@ describe("bringing a world from the game (app/servers.js ServerClient bringWorld
         assert.equal(entered.role, "owner");
         assert.equal(entered.player, brought.player);
         assert.deepEqual(entered.heroes.map(({ slot, name }) => [slot, name]), [[1, "Bram"]]);
+    });
+
+    it("brings one, and makes one, with no key where players may make worlds (anyoneMakes): the player's own identity shown with it, the world counted against them", async () => {
+        const server = await serve();
+        const address = addressOf(`127.0.0.1:${server.port}`);
+        const known = new KnownServers(memory());
+        const secret = newPlayerSecret();
+        const id = playerIdOf(publicKeyOf(secret));
+        const player = (serverId) => proofOf(secret, { server: serverId, name: "Bram" });
+        const client = () => new ServerClient(known.get(address.key) ?? known.remember(address), { servers: known, player });
+
+        await assert.rejects(client().bringWorld(null, { character: solo("Bram") }), (error) => error instanceof ServerRefusal && error.error === "maker");
+        await server.manage.changeSettings({ anyoneMakes: true, madeEach: 2 });
+
+        const brought = await client().bringWorld(null, { character: solo("Bram") });
+
+        assert.equal(server.metaOf(brought.world).maker, id);
+        assert.match(server.metaOf(brought.world).creator, /^Bram \(a player, /);
+        assert.equal(known.get(address.key).worlds[brought.world].role, "owner");
+
+        const made = await client().makeWorld("", { name: "Bram's Second", race: "elf", characters: "visiting", settings: { open: true } });
+
+        assert.equal(server.metaOf(made.world).maker, id);
+        assert.equal(server.metaOf(made.world).settings.open, true);
+        assert.equal(known.get(address.key).worlds[made.world].role, "owner");
+        await assert.rejects(client().makeWorld("", { name: "Bram's Third", race: "human" }), (error) => error instanceof ServerRefusal && error.error === "made-each");
     });
 });

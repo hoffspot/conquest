@@ -11,7 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
-import { addressesOf, addressOf, candidatesOf, homeHost, inviteLink, inviteOf, KnownServers, ServerClient, ServerRefusal, SERVERS_KEY } from "../client/js/app/servers.js";
+import { addressesOf, addressOf, candidatesOf, DEFAULT_SERVERS, homeHost, inviteLink, inviteOf, KnownServers, ServerClient, ServerRefusal, SERVERS_KEY } from "../client/js/app/servers.js";
 import { fingerprintOf, newNonce, verifyIdentity } from "../client/js/core/identity.js";
 import { fingerprintOf as serverFingerprintOf } from "../server/access/identity.js";
 import { WorldServer } from "../server/world-server.js";
@@ -148,6 +148,76 @@ describe("the servers the game remembers (app/servers.js KnownServers)", () => {
         servers.forget(address.key);
         assert.equal(new KnownServers(storage).get(address.key), null);
         assert.ok(storage.kept.has(SERVERS_KEY));
+    });
+
+    it("knows the default server from the first, once: forgotten, it isn't given again, but it can be asked back", () => {
+        const [first] = DEFAULT_SERVERS;
+        const address = addressOf(first);
+
+        assert.deepEqual(address, { host: "pellagos.duckdns.org", port: 8480, secure: true, key: "pellagos.duckdns.org:8480" });
+
+        const storage = memory();
+        const servers = new KnownServers(storage);
+
+        assert.deepEqual(servers.list(), [], "not till it's offered");
+        assert.deepEqual(servers.offerDefaults(), [address.key]);
+        assert.equal(servers.get(address.key).secure, true);
+        assert.equal(servers.isDefault(address.key), true);
+        assert.equal(servers.isDefault("studio-mac.local:8480"), false);
+        assert.deepEqual(servers.missingDefaults(), []);
+        assert.deepEqual(new KnownServers(storage).offerDefaults(), [], "offered once");
+
+        servers.forget(address.key);
+
+        const again = new KnownServers(storage);
+
+        assert.deepEqual(again.offerDefaults(), [], "forgotten, it isn't given again");
+        assert.equal(again.get(address.key), null);
+        assert.deepEqual(
+            again.missingDefaults().map(({ key }) => key),
+            [address.key],
+        );
+        assert.deepEqual(
+            again.restoreDefaults().map(({ key, secure }) => [key, secure]),
+            [[address.key, true]],
+            "but it can be asked back",
+        );
+        assert.ok(new KnownServers(storage).get(address.key));
+
+        // (A game that knew it already, as a player added it: kept as it is)
+        const known = new KnownServers(memory());
+
+        known.remember(address, { name: "Pellagos Home Server" });
+        assert.deepEqual(known.offerDefaults(), []);
+        assert.equal(known.get(address.key).name, "Pellagos Home Server");
+
+        // (None, where a game's given none)
+        assert.deepEqual(new KnownServers(memory(), { defaults: [] }).offerDefaults(), []);
+    });
+});
+
+describe("a world deleted by its owner from the game (app/servers.js ServerClient deleteWorld; main.js's World panel)", () => {
+    it("deletes it with its name typed, everyone in it sent out; refuses a name not its own, and any but its owner; forgets what was held for it", async () => {
+        const { server, address, adminKey } = await serve();
+        const servers = new KnownServers(memory());
+        const client = new ServerClient(servers.remember(address), { servers, timing: QUICK });
+        const made = await client.makeWorld(adminKey, { name: "Ashby", race: "human", seed: 3 });
+        const owner = await client.enter({ world: made.world });
+
+        // (A player in it too, by the players' key: they may not delete it)
+        const elsewhere = new KnownServers(memory());
+        const guest = new ServerClient(elsewhere.remember(address), { servers: elsewhere, timing: QUICK });
+        const entered = await guest.enter({ world: made.world, key: made.playerKey });
+
+        await assert.rejects(guest.deleteWorld(made.world, entered.session, "Ashby"), (error) => error instanceof ServerRefusal && error.error === "role");
+        await assert.rejects(client.deleteWorld(made.world, owner.session, "Ashb"), (error) => error instanceof ServerRefusal && error.error === "confirm" && /Type the world's name, "Ashby"/.test(error.message));
+        assert.ok(servers.get(address.key).worlds[made.world], "kept while it isn't deleted");
+        assert.ok(server.worlds.has(made.world));
+
+        assert.deepEqual(await client.deleteWorld(made.world, owner.session, "Ashby"), { deleted: made.world });
+        assert.equal(server.worlds.has(made.world), false);
+        assert.equal(servers.get(address.key).worlds[made.world], undefined, "what was held for it forgotten");
+        await assert.rejects(guest.enter({ world: made.world }), (error) => error instanceof ServerRefusal && error.error === "no-world");
     });
 });
 

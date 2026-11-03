@@ -8071,6 +8071,202 @@ dialog.worlds input.text.code-entry {
     text-align: left;
 }
 
+/* (The World panel's Delete this world, its owner's: set apart at its foot) */
+.world-delete {
+    margin-top: 18px;
+    padding-top: 2px;
+    border-top: 1px solid var(--field-border);
+}
+
+/* (Multiplayer's invites: the code to scan above its link) */
+#hostserverqr,
+#inviteqr {
+    display: block;
+    margin: 0 auto 8px;
+}
+
+#hostserverlink,
+#invitelink {
+    display: block;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+/* (Known Servers: each server's address under its name, small) */
+.server-list .server .where {
+    color: var(--muted);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.server-list .server .name {
+    font-family: var(--font-display);
+    color: var(--gold-bright);
+    font-size: 17px;
+}
+
+/* Multiplayer (main.js openMultiplayer): its choices, each a card with what it's for; the tabs of
+   Host on a Server; a row of buttons; and About Multiplayer's pictures of who links to whom */
+dialog.multiplayer {
+    width: min(440px, calc(100% - 32px));
+}
+
+.mp-menu {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.mp-choice {
+    appearance: none;
+    display: grid;
+    gap: 2px;
+    text-align: left;
+    font: inherit;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.mp-choice:hover,
+.mp-choice:focus-visible {
+    background: rgba(255, 244, 220, 0.12);
+    border-color: rgba(220, 180, 106, 0.5);
+}
+
+.mp-choice .name {
+    font-family: var(--font-display);
+    color: var(--gold-bright);
+    font-size: 16px;
+}
+
+.mp-choice .about {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.mp-choice.mp-about {
+    border-style: dashed;
+}
+
+/* (A card chosen among others: Host on this Device's who hosts, Host on a Server's server) */
+.character-list .character[aria-pressed="true"] {
+    border-color: var(--gold-bright);
+    box-shadow: inset 0 0 0 1px var(--gold-bright);
+    background: rgba(220, 180, 106, 0.14);
+}
+
+.mp-tabs {
+    display: flex;
+    gap: 6px;
+    margin: 10px 0 4px;
+}
+
+.mp-tab {
+    appearance: none;
+    flex: 1;
+    font: inherit;
+    font-size: 14px;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--field-border);
+    border-radius: 999px;
+    padding: 8px 10px;
+    min-height: 44px;
+    cursor: pointer;
+}
+
+.mp-tab[aria-checked="true"] {
+    color: var(--gold-bright);
+    border-color: var(--gold-bright);
+    background: rgba(220, 180, 106, 0.14);
+}
+
+.mp-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+dialog.worlds .switch.option {
+    margin: 10px 0;
+}
+
+.mp-figure {
+    margin: 12px 0;
+    text-align: center;
+}
+
+.mp-figure figcaption {
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.mp-diagram {
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+    overflow: visible;
+}
+
+.mp-diagram .mp-box {
+    fill: rgba(255, 244, 220, 0.06);
+    stroke: var(--field-border);
+    stroke-width: 1.2;
+}
+
+.mp-diagram .mp-server {
+    stroke: rgba(220, 180, 106, 0.7);
+}
+
+.mp-diagram .mp-world {
+    fill: rgba(220, 180, 106, 0.16);
+}
+
+.mp-diagram .mp-line {
+    stroke: var(--gold-bright);
+    stroke-width: 1.4;
+    fill: none;
+}
+
+.mp-diagram .mp-direct {
+    stroke-dasharray: 4 3;
+}
+
+.mp-diagram .mp-head {
+    fill: var(--gold-bright);
+}
+
+.mp-diagram text {
+    fill: var(--ink);
+    text-anchor: middle;
+    font-family: inherit;
+}
+
+.mp-diagram .mp-label {
+    font-family: var(--font-display);
+    font-size: 12px;
+    fill: var(--gold-bright);
+}
+
+.mp-diagram .mp-small {
+    font-size: 10px;
+    fill: var(--muted);
+}
+
+.mp-diagram .mp-code {
+    font-family: var(--font-display);
+    letter-spacing: 0.15em;
+    fill: var(--gold-bright);
+}
+
 /* The characters kept: one card each (its name, people, weapon, gold, when last played), and,
    to be played, a way to delete it */
 dialog.characters {
@@ -8087,12 +8283,15 @@ dialog.characters {
     overflow-y: auto;
 }
 
-.character-list li {
+.character-list li,
+.title-worlds li {
     display: flex;
     gap: 8px;
 }
 
-.character-list .character {
+/* (The title's worlds on its server: cards as the lists' are) */
+.character-list .character,
+.title-worlds .character {
     appearance: none;
     flex: 1;
     min-width: 0;
@@ -8109,7 +8308,8 @@ dialog.characters {
     cursor: pointer;
 }
 
-.character-list .character:hover {
+.character-list .character:hover,
+.title-worlds .character:hover {
     background: rgba(255, 244, 220, 0.12);
     border-color: rgba(220, 180, 106, 0.5);
 }
@@ -8127,7 +8327,8 @@ dialog.characters {
     align-self: center;
 }
 
-.character-list .name {
+.character-list .name,
+.title-worlds .name {
     font-family: var(--font-display);
     color: var(--gold-bright);
     font-size: 17px;
@@ -8135,7 +8336,9 @@ dialog.characters {
 }
 
 .character-list .about,
-.character-list .when {
+.character-list .when,
+.title-worlds .about,
+.title-worlds .when {
     color: var(--muted);
     font-size: 13px;
 }

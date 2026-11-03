@@ -388,11 +388,12 @@ export class WorldStore {
     /**
      * A new world kept: its name, description, seed and home people (`race`), who made it (a
      * player's id, if one did), whose heroes it keeps (HERO_MODES), a kept world's first heroes
-     * (FIRST_HEROES), and its settings (WORLD_SETTINGS: those not given, their defaults). Refused,
-     * with the reason, if any of it can't be. Not yet saved: it's made from its seed when it's
-     * first played.
+     * (FIRST_HEROES), and its settings (WORLD_SETTINGS: those not given, their defaults); `maker`,
+     * the player id of whoever made it with no creator key (the server's anyoneMakes: counted
+     * against its madeEach and madeMost). Refused, with the reason, if any of it can't be. Not yet
+     * saved: it's made from its seed when it's first played.
      */
-    async create({ name, description = "", seed, race, creator = null, heroes = "kept", firstHero = "new", settings = {} }, { id = newWorldId(), when = new Date() } = {}) {
+    async create({ name, description = "", seed, race, creator = null, maker = null, heroes = "kept", firstHero = "new", settings = {} }, { id = newWorldId(), when = new Date() } = {}) {
         const reasons = [
             typeof name === "string" && name.trim() && name.trim().length <= 60 ? null : "A world needs a name, of 60 characters at most.",
             typeof description === "string" && description.length <= 500 ? null : "A world's description is 500 characters at most.",
@@ -422,6 +423,7 @@ export class WorldStore {
             race,
             created: when.toISOString(),
             creator,
+            ...(maker ? { maker } : {}),
             heroes,
             firstHero,
             settings: { ...defaults, ...settings },

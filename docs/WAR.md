@@ -2908,15 +2908,20 @@ field battle of 60 a side, the player standing aside; sampled each second of the
 
 ### Playing together (M11)
 
-**Opening a world.** In the menu, **Invite others** opens the world to others. It gets a room at
-the relay, with a four-letter code (`server/relay.js`), and shows the code, a link with it in
-(`?join=CODE`), and who's come. **Close the world to others** puts them all out again.
+**Opening a world.** In the menu, **Invite others** opens the world to others; or, from the
+title, **Multiplayer**, **Host on this Device** (a character chosen, and the server it's opened
+through), which plays them and opens it as soon as it's under way. It gets a room at the relay
+(`server/relay.js`) or a world server's broker (`server/broker.js`), with a four-letter code, and
+shows the server, the code, a link with it in (`?join=CODE`, and `&at=` the server where it isn't
+the page's own) with **Copy the link**, **Share…** and its code to scan, and who's come. **Close
+the world to others** puts them all out again.
 
-**Joining.** From the title, **Join a world**: the code, and the saved character (with none, one's
-made first). Its link opens Join a world with the code in it, and is taken out of the page's
-address once read (main.js `start`), as a server's invite is: before 2026-10-25 it stayed there,
-so the page loaded again (or kept to the Home Screen from there) opened that world's Join a world
-every time.
+**Joining.** From the title, **Multiplayer**, **Join a World on another Device**: the code, the
+server it's looked for on (the one the host opened it through: docs/GAME.md, *The title*), and the
+saved character (with none, one's made first). Its link opens it with the code and the server in
+it, and is taken out of the page's address once read (main.js `start`), as a server's invite is:
+before 2026-10-25 it stayed there, so the page loaded again (or kept to the Home Screen from
+there) opened that world's Join a world every time.
 - **Their people:** they come as one of the people they play (`hero.race`, chosen in the character
   maker: human, elf, dark elf, cat folk, lizard folk or orc). So they're at peace or at war with the
   host's player as their peoples are.

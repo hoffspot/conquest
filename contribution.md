@@ -227,6 +227,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - `rm -rf test-results` first, if an earlier run left its pictures and traces there.
 - A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
   `e2e/pellagos.spec.js`). Do the same in new tests, and never wait on the clock.
+- They never reach the game's default world server (`pellagos.duckdns.org`, which every game
+  knows from the first: `client/js/app/servers.js` `DEFAULT_SERVERS`). `playwright.config.js`
+  launches Chromium with `--host-resolver-rules` making its name resolve to nothing, so the game
+  finds it unreachable at once; a test that launches its own (`test.use({ launchOptions })`, as
+  `e2e/broker.spec.js` does) gives the same rule. A test that needs a world server runs its own.
 - Time the tests by how long they took on CI, so its split stays even: once a run's done, its
   ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
   Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit

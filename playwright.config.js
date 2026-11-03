@@ -22,8 +22,10 @@ export default defineConfig({
         // more, and the page laid out the same; a test of the pixels themselves sets its own)
         deviceScaleFactor: 0.5,
         launchOptions: {
-            // WebGL through software rendering on machines without a GPU, such as CI
-            args: ["--enable-unsafe-swiftshader"],
+            // WebGL through software rendering on machines without a GPU, such as CI; and the game's
+            // default world server (app/servers.js DEFAULT_SERVERS) never reached from a test: its
+            // name doesn't resolve, so the game finds it unreachable at once
+            args: ["--enable-unsafe-swiftshader", "--host-resolver-rules=MAP pellagos.duckdns.org ~NOTFOUND"],
             // Set CHROMIUM_PATH to use an already installed Chromium instead of Playwright's download
             ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
         },

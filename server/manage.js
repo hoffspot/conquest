@@ -907,7 +907,7 @@ export class Management {
     /**
      * A player's solo world brought to the server (generated/world_server_plan.md §5, "Bring my
      * world to the server"; reopen.js importSolo), by whoever may make worlds here (`by` and
-     * `creator` as createWorld's), from what readBrought read: a new world with the solo world's
+     * `creator` and `maker` as createWorld's), from what readBrought read: a new world with the solo world's
      * seed, its home people and its war, named `name` (or after its hero), its heroes kept by the
      * world and its first heroes as `firstHero` has them; an owner's key and a player's key, as
      * any world made here has; and whoever brought it its first player, by the owner's key, their
@@ -916,11 +916,11 @@ export class Management {
      * war), left (what was left out of the hero or put right, as the game says it) }. Refused,
      * saying why, if it can't be brought; nothing's left of it then.
      */
-    async bringSolo({ character, name = null, firstHero = "new" } = {}, { by = null, creator = null } = {}) {
+    async bringSolo({ character, name = null, firstHero = "new" } = {}, { by = null, creator = null, maker = null } = {}) {
         let brought;
 
         try {
-            brought = await importSolo(this.server.store, character, { name, creator, firstHero: FIRST_HEROES.includes(firstHero) ? firstHero : "new" });
+            brought = await importSolo(this.server.store, character, { name, creator, maker, firstHero: FIRST_HEROES.includes(firstHero) ? firstHero : "new" });
         } catch (error) {
             throw error.newer ? new Refused(409, "newer", `That character and world were kept by a newer version of the game than this server plays: ${error.message}`) : new Refused(400, "not-a-world", `That world can't be brought to the server: ${error.message}`);
         }
@@ -1224,7 +1224,7 @@ export class Management {
     // What the latest test of reaching the server from elsewhere said, in words
     #testWords(report) {
         if (!report) {
-            return `Not tested from outside yet. On a phone on its cellular data (not this Wi-Fi), ${this.server.internetAddresses().length ? "scan the code below, or " : ""}open the game, add the server by its internet address and use “Test this server”: what it finds comes back here.`;
+            return `Not tested from outside yet. On a phone on its cellular data (not this Wi-Fi), ${this.server.internetAddresses().length ? "scan the code below, or " : ""}open the game, add the server by its internet address in Multiplayer, Known Servers, and use “Test from outside”: what it finds comes back here.`;
         }
 
         const at = `${report.at.slice(0, 10)} ${report.at.slice(11, 16)} (UTC)`;

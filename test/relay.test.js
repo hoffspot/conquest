@@ -101,6 +101,14 @@ function cut(socket) {
 }
 
 describe("the relay (server/relay.js)", () => {
+    it("says it's there when its address is asked for as a page would (server/index.js), for the game to offer it", async () => {
+        const answer = await fetch(`http://localhost:${server.httpServer.address().port}${RELAY_PATH}`);
+
+        assert.equal(answer.status, 426);
+        assert.deepEqual(await answer.json(), { relay: true });
+        assert.equal((await fetch(`http://localhost:${server.httpServer.address().port}/no-such-file.js`)).status, 404, "anything else as it was");
+    });
+
     it("makes room codes of its letters, none taken twice", () => {
         const taken = new Set();
 

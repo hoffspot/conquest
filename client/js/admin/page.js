@@ -319,7 +319,7 @@ function nearbyPanel({ bonjour, nearby }) {
                 ? h("div", { class: "table" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Nearby server"), h("th", {}, "Version"), h("th", {}, "Worlds listed"), h("th", {}, "Where"))), h("tbody", {}, rows)))
                 : h("p", { class: "muted" }, "No other Pellagos servers found near it yet.")
             : null,
-        h("p", { class: "muted small" }, "Players who reach this server see the others it finds, under Worlds on servers, and add them with a tap."),
+        h("p", { class: "muted small" }, "Players who reach this server see the others it finds, in the game's Multiplayer, Known Servers, and add them with a tap."),
     );
 }
 
@@ -1160,7 +1160,7 @@ async function worldKeys(world) {
         if (made?.code) {
             showOnce({
                 title: "A short code",
-                note: `It gives "${labelOf(made.record.key)}", till ${when(made.record.expires)}, ${made.record.uses === 1 ? "once" : `${made.record.uses} times`}. A player types it in Worlds on servers (Enter a code), or follows the link.`,
+                note: `It gives "${labelOf(made.record.key)}", till ${when(made.record.expires)}, ${made.record.uses === 1 ? "once" : `${made.record.uses} times`}. A player types it in Multiplayer, Join a World Hosted on a Server (Enter a short code), or follows the link.`,
                 code: made.code,
                 link: linkTo(world.id, { code: made.code }),
             });
@@ -1665,7 +1665,7 @@ async function renderSettings() {
         const made = await doing(() => call("POST", "/server/creators", { label: issue.elements.label.value.trim() || null }), { status: creatorStatus });
 
         if (made?.key) {
-            showOnce({ title: `A creator key for ${made.creator.label}`, note: "Shown this once. With it they make worlds of their own on this server, from the game (Worlds on servers, Make a world), and own them.", value: made.key });
+            showOnce({ title: `A creator key for ${made.creator.label}`, note: "Shown this once. With it they make worlds of their own on this server, from the game (Multiplayer, Host on a Server), and own them.", value: made.key });
             await renderSettings();
         }
     });
