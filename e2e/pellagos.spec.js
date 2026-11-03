@@ -1235,6 +1235,81 @@ async function keepSix(page) {
     }, KEPT);
 }
 
+// On an iPhone in Safari (its own words for what it is, a touch screen, on its side): the title's
+// word to add the game to the Home Screen, and why (app/homescreen.js)
+test.describe("on an iPhone, in a browser tab", () => {
+    test.use({
+        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1",
+        hasTouch: true,
+        isMobile: true,
+        viewport: { width: 844, height: 390 },
+    });
+
+    // What the title's put the word off till (save.js settings homeScreenAfter), and putting it
+    // back to now
+    const after = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings") ?? "{}").homeScreenAfter ?? 0);
+    const now = (page) => page.evaluate(() => localStorage.setItem("pellagos.settings", JSON.stringify({ ...JSON.parse(localStorage.getItem("pellagos.settings") ?? "{}"), homeScreenAfter: 0 })));
+
+    test("the title suggests adding the game to the Home Screen, and why: its saves kept there, full screen, quicker to start; how; and, with characters kept here, to take them along first. Not now puts it off three days, Don't show again for good", async ({ page }) => {
+        // (One character kept here, to take along)
+        await page.addInitScript((save) => {
+            if (!localStorage.getItem("pellagos.characters")) {
+                localStorage.setItem(`pellagos.${save.id}.save`, JSON.stringify(save));
+                localStorage.setItem("pellagos.characters", JSON.stringify({ ids: [save.id], last: save.id }));
+            }
+        }, KEPT[0]);
+        await title(page);
+
+        const card = page.locator("#homescreen");
+
+        await expect(card).toBeVisible();
+        await expect(card.getByRole("heading")).toHaveText("Play from your Home Screen");
+        await expect(card.locator(".title-home-why li")).toHaveText([/^Your saves are kept\. .*a week of browsing goes by without opening the game/, /^Full screen\./, /^Quicker to start\./]);
+        await expect(card).toContainText("then Add to Home Screen");
+        await expect(page.locator("#homescreendevice")).toHaveText("iPhone");
+        await expect(page.locator("#homescreenexport")).toBeVisible();
+        await expect(page.locator("#homescreenexport")).toContainText("Export all");
+
+        // Not now: gone, and not back on the title for three days
+        await page.locator("#homescreenlater").click();
+        await expect(card).toBeHidden();
+
+        const later = (await after(page)) - Date.now();
+
+        expect(later).toBeGreaterThan(2.9 * 24 * 3600000);
+        expect(later).toBeLessThanOrEqual(3 * 24 * 3600000);
+        await title(page);
+        await expect(page.locator("#continuebutton")).toBeVisible();
+        await expect(card).toBeHidden();
+
+        // Don't show again: for good
+        await now(page);
+        await title(page);
+        await expect(card).toBeVisible();
+        await page.locator("#homescreennever").click();
+        await expect(card).toBeHidden();
+        expect(await after(page)).toBe(Number.MAX_SAFE_INTEGER);
+    });
+
+    test("none of it for a game played from the Home Screen, nor the word to take characters along with none kept", async ({ page }) => {
+        await title(page);
+        await expect(page.locator("#homescreen")).toBeVisible();
+        await expect(page.locator("#homescreenexport")).toBeHidden();
+
+        // (Opened from the Home Screen: Safari's own word for it)
+        await page.addInitScript(() => Object.defineProperty(navigator, "standalone", { value: true }));
+        await title(page);
+        await expect(page.locator("#titlename")).toBeVisible();
+        await expect(page.locator("#homescreen")).toBeHidden();
+    });
+});
+
+test("no word to add the game to the Home Screen on a computer", async ({ page }) => {
+    await title(page);
+    await expect(page.locator("#newbutton")).toBeVisible();
+    await expect(page.locator("#homescreen")).toBeHidden();
+});
+
 test("New character opens at once once the title's been up a while: the new character got ready meanwhile, a step at a time, and shown as they were made; tapped before then, a screen saying they're being made, its bar filling, and Back from it to the title; a game begun from the title lets go of the one got ready", async ({ page }) => {
     test.setTimeout(180000);
 
