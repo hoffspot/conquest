@@ -124,7 +124,7 @@ for (const licensed of [true, false]) {
             test.setTimeout(300000);
 
             if (!licensed) {
-                await page.route(/\.bin(\?|$)/, (route) => route.abort());
+                await page.route("**/models/scenery/**", (route) => (route.request().url().includes(".bin") ? route.abort() : route.continue()));
             }
 
             const errors = await playing(page, "/?play&seed=1");
@@ -143,10 +143,12 @@ for (const licensed of [true, false]) {
             expect(there.standing).toBeLessThan(0.3);
             expect(there.height).toBeGreaterThan(60);
 
+            // (At High, the browser tests' quality: the game's own 42 draw calls and 250,000
+            // triangles, the castle's about 80 and 125,000 more at its bridge's foot)
             if (licensed) {
                 expect(there.drawn.cells).toBeGreaterThan(4);
-                expect(there.calls).toBeLessThan(220);
-                expect(there.triangles).toBeLessThan(400000);
+                expect(there.calls).toBeLessThan(160);
+                expect(there.triangles).toBeLessThan(500000);
             }
 
             // Over the bridge to the keep's doors, on its floor all the way
@@ -180,7 +182,8 @@ for (const licensed of [true, false]) {
             expect(atKeep.height).toBeGreaterThan(78);
 
             if (licensed) {
-                expect(atKeep.calls).toBeLessThan(220);
+                expect(atKeep.calls).toBeLessThan(160);
+                expect(atKeep.triangles).toBeLessThan(550000);
             }
 
             // And back out by the bridge's foot, to its way in in the world: its art let go of

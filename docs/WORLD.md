@@ -764,8 +764,8 @@ What's built so far:
     on a layer only the sun's shadow sees), or by the nearest detail, a draw call a material
     again.
   - Without the licensed models, it draws the walk instead, a block a square.
-  - Measured in a desktop browser at Medium, with the stand-ins casting the shadows: at the gate,
-    about 80 to 140 draw calls and 170,000 to 200,000 triangles, near the game's phone budget
+  - Measured in a desktop browser at Medium, with the stand-ins casting the shadows: along the walk,
+    about 70 to 95 draw calls and 145,000 to 220,000 triangles, near the game's phone budget
     (*Performance*, GAME.md). The textures take 39 MB on the graphics card. The phone's own numbers
     are the lab's to give.
 - **Its own map** (`core/scenery.js`), a place apart from the world, as a dungeon's levels are.
@@ -788,8 +788,12 @@ What's built so far:
     walked.
 - **Its map drawn** (`world/scenery3d.js`) out of doors, under the sky, in the world's sun and fog,
   the world itself hidden.
-  - Its art is the lab's: each cell at its detail by its distance from the camera, blocks of cells
-    far off merged a material each, the shadows cast by a stand-in a block.
+  - Its art is the lab's: each cell at its detail by its distance from the camera (its nearest
+    within 35 m), blocks of 2 by 2 cells far off merged a material each, none past the fog's far
+    edge, the shadows cast by a stand-in a block.
+  - Measured in the browser tests (High), the castle adds 60 to 95 draw calls and 125,000 to
+    205,000 triangles to the game's own 42 and 250,000: 124 draw calls in all at its bridge's foot,
+    136 on the bridge, 129 at the gate, 102 in the court.
   - Its art is got ready at its way in, behind the readying card that gets a dungeon's creatures
     ready (`app/readying.js`): the world stops, and the card says how much of it's downloaded. The
     player goes in once it's read; Go in now goes in sooner, the walk drawn till the art's read.
