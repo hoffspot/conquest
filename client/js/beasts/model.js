@@ -137,6 +137,42 @@ const kingly = (scale, skins = null) =>
         guard: Object.freeze({ hold: "Block", struck: "Block Hit" }),
     });
 
+// A hell's cerberus and Ashmaw (MODELS cerberus, ashmaw): Panchenko Lyudmila's Cerberus (the
+// catalog's beast-cerberus), made 5.09 metres long and 2.21 tall, drawn `length` long, in its
+// `skins`. Its own clips: its three heads snapping (Attack 3, its first snap and the second
+// rising: 0.15 to 1.3 seconds), a lunge (Attack 1, to 1.5 seconds), fire breathed from its middle
+// head (Fire: the flames out from 0.9 to 2.1 seconds) and from all three at once (Fire All: 1.2 to
+// 3.6, each head's mouth breathing, `mouths` and `together`; played from 0.6 to 4.2), its leap
+// (Jump, played in place as it's built: the game carries it over the ground; half as slow again,
+// springing up at 0.3 seconds of its own and coming down at 0.62), and its howl, its tail curled
+// over its back and its heads thrown low (Attack 2, from 0.3 to 3.8: a rally); its flinch, its
+// fall (Death 3), and looking about as it rests (Idle 2). Its fourth attack came through the export
+// broken, and isn't played. Each head's fire from between its jaws: the snout from its head to its
+// jaw's root, the chin to its tongue's tip. Walking at 1.16 m/s and running at 7.4 as it's made
+const hounds = (length, skins) => {
+    const scale = length / 5.09;
+
+    return Object.freeze({
+        asset: "beast-cerberus",
+        skins: Object.freeze(skins),
+        length,
+        made: Object.freeze({ long: 5.09, tall: 2.21 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit 1", dead: "Death 3" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ bite: "Attack 3", lunge: "Attack 1", breath: "Fire", inferno: "Fire All", leap: "Jump", rally: "Attack 2" }),
+        spans: Object.freeze({ bite: Object.freeze([0.15, 1.3]), lunge: Object.freeze([0, 1.5]), inferno: Object.freeze([0.6, 4.2]), rally: Object.freeze([0.3, 3.8]) }),
+        rests: Object.freeze({ look: "Idle 2" }),
+        fire: Object.freeze({ Fire: Object.freeze([0.9, 2.1]), "Fire All": Object.freeze([1.2, 3.6]) }),
+        joints: Object.freeze({ torso: "Spine3", body: "Pelvis", head: "Head", mouth: "Bone_jaw", left: "L_Hand" }),
+        mouth: Object.freeze({ upper: "Bone_jaw", lower: "M_Tongue3", hinge: "Head" }),
+        mouths: Object.freeze([Object.freeze({ upper: "Bone_jaw_L", lower: "L_Tongue3", hinge: "Bone_head_L" }), Object.freeze({ upper: "Bone_jaw_R", lower: "R_Tongue3", hinge: "Bone_head_R" })]),
+        together: Object.freeze(["Fire All"]),
+        pace: +(1.16 * scale).toFixed(2),
+        runPace: +(7.4 * scale).toFixed(2),
+        flinch: 0.6,
+    });
+};
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -152,7 +188,8 @@ const kingly = (scale, skins = null) =>
  * resting (`rests`), each a clip; what it carries in a hand through a way of its own (`carry`, by
  * that way: a boulder, { bone it's held by, from and to (how far through the way, 0 to 1, it's
  * held), radius (metres, as it's made), at ([x, y, z] metres from the bone, as it's made) }); when in a clip it breathes
- * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
+ * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does; its other heads'
+ * mouths too, `mouths`, in the clips `together` names: a cerberus's three); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
  * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
@@ -513,6 +550,13 @@ export const MODELS = Object.freeze({
         runPace: 5.88,
         flinch: 0.5,
     }),
+    // (A hell's cerberus, the Halls of Bone's master (creatures.js): Panchenko Lyudmila's Cerberus,
+    // made 5.09 metres long, as it's drawn, in its own skin or the dark one by its seed. Its hound
+    // moves: hounds(), below)
+    cerberus: hounds(5.09, ["", "dark"]),
+    // (Ashmaw, the Hound Unchained (creatures.js): the cerberus a tenth bigger, always in its ash-grey
+    // skin)
+    ashmaw: hounds(5.6, ["ash"]),
     // (The River of Fire's master (dungeons/themes.js `hell`), the Lord of the Pit's before: the
     // Greater Demon, made 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves
     // played on its skeleton (utilities/blenderpipeline's clips), its wings beating to them:
@@ -1566,10 +1610,13 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         mesh.boundingSphere = sphere;
     }
 
-    // (Its fire, if it breathes any: from its mouth's lips, `mouth`)
+    // (Its fire, if it breathes any: from its mouth's lips, `mouth`; and from its other heads'
+    // mouths, `mouths`, in the clips they breathe together in, `together`: a cerberus's three)
     const joints = Object.fromEntries(Object.entries(model.joints).map(([joint, bone]) => [joint, scene.getObjectByName(bone) ?? scene]));
-    const lips = model.mouth ? Object.fromEntries(Object.entries(model.mouth).map(([part, bone]) => [part, scene.getObjectByName(bone)])) : null;
+    const lipsOf = (mouth) => Object.fromEntries(Object.entries(mouth).map(([part, bone]) => [part, scene.getObjectByName(bone)]));
+    const lips = model.mouth ? lipsOf(model.mouth) : null;
     const breath = lips ? new Breath({ groundAt }) : null;
+    const choir = lips ? (model.mouths ?? []).map((mouth) => ({ lips: lipsOf(mouth), breath: new Breath({ groundAt }), where: { upper: new THREE.Vector3(), lower: new THREE.Vector3(), hinge: new THREE.Vector3() } })) : [];
     const object = new THREE.Group();
     const where = { upper: new THREE.Vector3(), lower: new THREE.Vector3(), hinge: new THREE.Vector3() };
     const [body, ...others] = materials.values();
@@ -1582,6 +1629,10 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
 
     if (breath) {
         object.add(breath.object);
+    }
+
+    for (const head of choir) {
+        object.add(head.breath.object);
     }
 
     if (beam) {
@@ -1687,8 +1738,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
                 }
             }
 
-            // Its fire, out of its mouth while it breathes (where its lips are now)
-            const fire = Boolean(breath) && breathing(model, inputs.attack, lengths, Boolean(inputs.fly?.hover));
+            // Its fire, out of its mouth while it breathes (where its lips are now), and out of its
+            // other heads' too in a clip they breathe together in
+            const aloft = Boolean(inputs.fly?.hover);
+            const fire = Boolean(breath) && breathing(model, inputs.attack, lengths, aloft);
+            const all = fire && choir.length > 0 && (model.together ?? []).includes(clipOf(model, inputs.attack.style, aloft));
 
             if (fire) {
                 object.updateWorldMatrix(true, true);
@@ -1698,6 +1752,16 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
             }
 
             breath?.step(inputs.seen === false && !fire ? 0 : inputs.dt, fire ? where : null);
+
+            for (const head of choir) {
+                if (all) {
+                    head.lips.upper.getWorldPosition(head.where.upper);
+                    head.lips.lower.getWorldPosition(head.where.lower);
+                    head.lips.hinge.getWorldPosition(head.where.hinge);
+                }
+
+                head.breath.step(inputs.seen === false && !all ? 0 : inputs.dt, all ? head.where : null);
+            }
         },
 
         // Where what it carries in its hand is in the world (a boulder: MODELS `carry`), while it's
@@ -1725,6 +1789,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         dispose() {
             unseen.dispose();
             breath?.dispose();
+
+            for (const head of choir) {
+                head.breath.dispose();
+            }
+
             beam?.dispose();
             mixer.stopAllAction();
             mixer.uncacheRoot(scene);

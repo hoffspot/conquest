@@ -10,6 +10,19 @@ import { folkLook } from "../characters/folk.js";
 import { HAIR_COLOURS } from "../characters/skin.js";
 import { createRandom } from "../core/random.js";
 
+// A cerberus's stand-in (LOOKS cerberus, ashmaw): a great hound, built as the black shuck is but
+// longer for its height and heavier in the chest, ruffed, its tail long and spiked-looking, drawn
+// `scale` times its sizes (2.3 metres long and a metre tall) in its `colours`
+const hound = (scale, colours) => ({
+    body: "quadruped",
+    scale: [scale, scale * 1.03],
+    length: 2.3, height: 1, girth: 0.3, width: 0.27, chest: 1.3, haunch: 0.95, neck: 0.34, neckUp: 0.4,
+    head: [0.17, 0.15, 0.19], snout: { length: 0.24, radius: 0.075, taper: 0.6 }, ears: "pointed", legs: 0.09,
+    tail: { length: 1.05, radius: 0.05, lift: -0.3, curl: 0.3, taper: 0.4 }, mane: true,
+    colours,
+    attacks: ["bite", "pounce", "snap", "shake"], rests: ["sit", "lie", "sniff", "howl"],
+});
+
 /** Each creature's look: `body` (the builder: beast.js BUILDERS) and what that builder takes. */
 export const LOOKS = Object.freeze({
     // --- Everywhere near home ---
@@ -716,6 +729,11 @@ export const LOOKS = Object.freeze({
     ashWalker: { body: "humanoid", scale: [1.12, 1.16] },
     hellwalker: { body: "humanoid", scale: [1.12, 1.16] },
     bileWalker: { body: "humanoid", scale: [1.12, 1.16] },
+    // (A hell's cerberus, and Ashmaw, the Hound Unchained, until their own model's read: a great hound
+    // five metres long and more, black-furred and ruffed, its eyes burning (Ashmaw's coat the grey of
+    // ash), one head standing in for three: creatures.js)
+    cerberus: hound(2.2, { fur: 0x1e1a18, belly: 0x2a2420, dark: 0x0c0a08, mane: 0x141010, aura: 0x1a1414, eyes: 0xff4a12, glow: 0xff4a12 }),
+    ashmaw: hound(2.42, { fur: 0x6a645e, belly: 0x7a746c, dark: 0x2a2622, mane: 0x4a4440, aura: 0x5a544e, eyes: 0xff6a1a, glow: 0xff6a1a }),
 });
 
 // A value between two, from the random numbers

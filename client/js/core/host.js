@@ -11301,7 +11301,8 @@ export class Host {
         const def = this.legends.stepOf(id);
 
         if (def?.kind === "place") {
-            const site = def.site ? this.#nearestSite(def.site, thread.at) : null;
+            // (The plan's place of its kind nearest, or its dungeon of a theme's: a hell's way in)
+            const site = def.site ? this.#nearestSite(def.site, thread.at, def.theme ?? null) : null;
 
             // (The place's heart, as it's built: sites.js, the Lantern Company's remains there)
             thread.place = site ? [...(this.world.maps.town?.sites?.heartOf(site) ?? site.at)] : this.#threadSpot(thread.at, def.far ?? [150, 250]);

@@ -448,4 +448,12 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "Vharzul, the first Lord of the Pit, thrown down from its throne by his brother and cast up through a thin place into the world above, the gates below barred to him. Burning between the worlds turned his fire green. He keeps to the Sundered Ring, the broken stones where he came through, and only by night, testing whoever comes for one strong enough to go down and take back his throne. Nearly twice a man's height, his wings spread, he sweeps with burning claws, flings green fire from his hands, throws whoever crowds him with a sweep of his wings and bursts green fire all round him, the ground warning of it first. Worn down, he tears the thin place open behind him, and fiends come through it. Fire harms him little, and no blast moves him.",
         sign: "standing stones split and scorched, and a scar of green glass in the turf between them",
     }),
+    cerberus: Object.freeze({
+        lore: "Every hell keeps a hound in its Halls of Bone: five metres of black-furred dog with three heads, chained at the way down so the dead stay down. Its three heads snap together, it lunges and lays wounds open, one head breathes fire at whoever keeps off, and now and then all three breathe at once, the ground before it burning: the ground warns of it first. No blast moves it, fire harms it little, and it sees in the dark.",
+        sign: "a chain as thick as a man's arm, its links bitten bright, and bones gnawed to splinters",
+    }),
+    ashmaw: Object.freeze({
+        lore: "A hell's hound, broken loose. When the Hollow Choir sang their gate open too wide, it came up out of the Halls of Bone after them, tore their camp apart, and went off into the wilds with its chain's last links still about its necks, its coat gone the grey of ash. It hunts the land round the hell it came from. It bites with three heads, lunges, breathes fire, leaps on whoever keeps off and breathes fire from all three heads at once, the ground warning of both first. Worn down, it throws its heads back and howls, and the dead claw their way up to it. Fire harms it little.",
+        sign: "paw prints as wide as a shield, the grass burnt black round each, and a broken chain's links dropped along the way",
+    }),
 });

@@ -66,6 +66,9 @@ client/models/beasts/orc-king-2.red.bin
 client/models/beasts/orc-warlord-2.bin
 client/models/beasts/orc-reaver-2.bin
 client/models/beasts/kaiju.bin
+client/models/beasts/cerberus-2.bin
+client/models/beasts/cerberus.dark.bin
+client/models/beasts/cerberus.ash.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

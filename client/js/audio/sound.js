@@ -438,6 +438,10 @@ export const CREATURE_VOICES = Object.freeze({
     // (Vharzul the Greenflame, the Pit's first lord: the Lord's voice, lower still, falling as a
     // great beast does)
     vharzul: { family: "troll", rate: 0.71, fall: "deathThudBig" },
+    // (A hell's cerberus: a wolf's voice from a great chest, a little lower than a black shuck's;
+    // falling as a great beast does. Ashmaw's as low as the Moonfang's)
+    cerberus: { family: "wolf", rate: 0.74, fall: "deathThudBig" },
+    ashmaw: { family: "wolf", rate: 0.71, fall: "deathThudBig" },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },
     fiend: { family: "bigCat", rate: 0.74, fall: "deathThudBig" },

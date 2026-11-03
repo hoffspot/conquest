@@ -230,8 +230,21 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(Object.values(high.bonuses).reduce((a, b) => a + b, 0) > Object.values(low.bonuses).reduce((a, b) => a + b, 0));
     });
 
-    it("has three cards in play, the Stone Golem's, the Orc King's and Vharzul the Greenflame's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
-        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing", "vharzul"]);
+    it("has four cards in play, the Stone Golem's, the Orc King's, Vharzul the Greenflame's and Ashmaw's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
+        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing", "vharzul", "ashmaw"]);
+
+        // (Ashmaw: a world's boss, kept where its prints lead from the Hollow Choir's camp, its
+        // thread's second step; its reward a ring hammered from the last link of its chain, a
+        // Cinderburst on it, and gold; what's seen as it falls said)
+        const hound = RARE_CARDS.ashmaw;
+
+        assert.equal(hound.where, "site");
+        assert.deepEqual(hound.requires, { thread: "unchained", step: 1 });
+        assert.deepEqual([THREADS.unchained.steps[1].card, THREADS.unchained.steps[1].here], ["ashmaw", undefined]);
+        assert.equal(hound.gates, undefined);
+        assert.deepEqual([hound.shape.creature, hound.shape.champion, hound.shape.health], ["ashmaw", "boss", 2.6]);
+        assert.deepEqual([UNIQUES[hound.reward.unique].base, UNIQUES[hound.reward.unique].effect], ["ring", "cinderburst"]);
+        assert.ok(hound.last.includes("chain") && hound.word.includes("Ashmaw"));
 
         // (Vharzul: a world's boss, kept at the Sundered Ring itself, his thread's second step, only
         // after dusk; his reward a blade ground from his horn, its witchfire its own, and gold; his
@@ -1407,6 +1420,122 @@ describe("the Exile's Road (rare.js exile, RARE_CARDS vharzul)", () => {
         assert.equal(ada.map, building.maps[0]);
         assert.ok(told(went).some(({ change, id, gold }) => change === "given" && id === HOST_PLAYER && gold === 250));
         assert.ok(!told(went).some(({ change, id }) => change === "given" && id === "bram"), "(only who went in)");
+    });
+});
+
+describe("the Hound Unchained (rare.js unchained, RARE_CARDS ashmaw)", () => {
+    it("begins with a guild ranger's rumour in the settlement nearest a hell's way in; Hollis's notes found at the Choir's camp there; Ashmaw dealt where its prints lead, a world's boss; felled, the Last Link and a purse for each who fought it; word taken back to the ranger, the farms' bounty paid", () => {
+        const { host, ada, bram } = hosted();
+        const plan = host.world.plan;
+        const opener = openerOf(plan, "unchained");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        // (Ada and Bram kept hard to kill at the Choir's camp and after, whoever's about)
+        const hardy = (ms) => {
+            const events = [];
+
+            for (let t = 0; t < ms; t += 250) {
+                Object.assign(ada, { hp: 1e6, maxHp: 1e6 });
+                Object.assign(bram, { hp: 1e6, maxHp: 1e6 });
+                events.push(...run(host, 250));
+            }
+
+            return events;
+        };
+
+        // (Its rumour's there to be told: at the guild in the village or bigger nearest the plan's
+        // first hell's way in, by its ranger (every guild keeps one now), the thread not begun)
+        assert.ok(opener && opener.site.kind === "dungeon" && opener.site.theme === "hell" && GUILD_KINDS.includes(opener.town.kind));
+        assert.equal(opener.site.id, plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme === "hell").map(({ id }) => id).sort()[0]);
+        assert.ok(host.legends.opening("unchained"));
+        assert.equal(host.legends.threads.unchained, undefined);
+        assert.deepEqual(keeperOf("unchained"), { role: "adventurer", calling: "ranger", home: true, post: "guild" });
+
+        const guild = into(host, "guild", opener.town.id);
+        const ranger = guild.folk.find(({ look, role, talk }) => look === "ranger" && (role === "adventurer" || talk === "adventurer"));
+        const other = guild.folk.find(({ look, role, talk }) => look !== "ranger" && (role === "adventurer" || talk === "adventurer"));
+
+        assert.ok(ranger, "a ranger at its guild");
+        assert.ok(talkTo(host, other));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "unchained", step: null } }), { ok: false, reason: "thread" }, "(not one of them while a ranger is there)");
+        assert.ok(talkTo(host, ranger));
+
+        const fill = (text) => text.replace(/\{way\}/g, "west").replace(/\{place\}/g, opener.site.name);
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "unchained", step: null }, fill);
+
+        assert.equal(Object.keys(tree.nodes).filter((node) => /^thread:unchained:\d+$/.test(node)).length, THREADS.unchained.opens.tale.length);
+        assert.ok(tree.nodes["thread:unchained:0"].say[0].includes("west of here") && tree.nodes["thread:unchained:0"].say[0].includes(opener.site.name));
+        assert.ok(tree.nodes["thread:unchained:1"].say[0].includes("Halls of Bone"));
+        assert.ok(tree.nodes["thread:unchained:3"].say[0].includes("Hollis"));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "unchained", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+
+        // The Choir's camp: the hell's way in nearest the guild, its heart
+        const thread = host.legends.threads.unchained;
+        const hell = plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme === "hell").sort((a, b) => Math.hypot(a.at[0] - opener.town.at[0], a.at[1] - opener.town.at[1]) - Math.hypot(b.at[0] - opener.town.at[0], b.at[1] - opener.town.at[1]))[0];
+        const camp = host.world.maps.town.sites.heartOf(hell);
+
+        assert.deepEqual([thread.step, thread.home], [0, opener.town.id]);
+        assert.deepEqual(thread.place, [...camp], "(the hell's way in, where the Choir camped)");
+        assert.equal(host.legends.opening("unchained"), false, "(told once)");
+
+        // Reached: Hollis's notes, and a purse each
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(camp[0]), Math.floor(camp[1])]);
+        put(bram, [Math.floor(camp[0]) + 2, Math.floor(camp[1])]);
+
+        const found = told(hardy(2500));
+
+        assert.equal(thread.step, 1);
+        assert.ok(["ada", "bram"].every((who) => found.some(({ change, id, gold, writing }) => change === "given" && id === (who === "ada" ? HOST_PLAYER : who) && gold === 40 && writing === "hollis")), JSON.stringify(found));
+
+        // Its prints, from the camp out into the wilds to where it is
+        const haunt = thread.place;
+        const [tracks] = threadTracks(host.legends);
+        const far = Math.hypot(haunt[0] - camp[0], haunt[1] - camp[1]);
+
+        assert.ok(far >= 139 && far <= 221, `${far} m`);
+        assert.equal(tracks.creature, "ashmaw");
+        assert.equal(tracks.spoor, THREADS.unchained.steps[1].spoor);
+        assert.equal(host.legends.active, null, "(not dealt till it's come to)");
+
+        // Dealt as Ada comes near where its prints lead: a world's boss, a dungeon master's rank,
+        // named; its leap and its three heads' fire its own, the dead called up as it's worn down
+        put(ada, [Math.floor(haunt[0]) + 30, Math.floor(haunt[1])]);
+        put(bram, [Math.floor(haunt[0]) + 32, Math.floor(haunt[1])]);
+        hardy(1000);
+
+        const active = host.legends.active;
+        const hound = host.battle.actor(active.ids[0]);
+
+        assert.equal(active.card, "ashmaw");
+        assert.equal(hound.name, RARE_CARDS.ashmaw.shape.title);
+        assert.ok(hound.wild.worldBoss && hound.wild.steady && hound.wild.champion === "boss");
+        assert.deepEqual(hound.wild.moves.map(({ id }) => id), ["leap", "inferno"]);
+        assert.deepEqual(hound.wild.rally.map(({ call }) => call.kind), ["skeleton", "draugr"]);
+
+        // Felled, Ada and Bram beside it: each given the Last Link, a Cinderburst on it, and a purse
+        put(bram, [Math.floor(hound.x) - 2, Math.floor(hound.y)]);
+
+        const events = felled(host, ada, hound.id);
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(given.every(({ item, gold: purse }) => item?.unique === "lastLink" && item.id === "ring" && item.effect === "cinderburst" && item.name === "The Last Link" && purse === RARE_CARDS.ashmaw.reward.gold));
+        assert.ok(host.legends.gone.has("ashmaw"));
+        assert.equal(thread.step, 2);
+        assert.equal(thread.town, opener.town.id, "(word taken back to its home)");
+        assert.deepEqual(threadTracks(host.legends), [], "(its prints gone with it)");
+
+        // Word of it taken back to the ranger: the farms' bounty paid, the thread at its end
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, ranger));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "unchained", step: 2 } }).ok, true);
+
+        const ended = told(run(host, 200));
+
+        assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 200));
+        assert.ok(ended.some(({ change }) => change === "done"));
+        assert.ok(thread.done);
     });
 });
 

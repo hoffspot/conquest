@@ -840,8 +840,8 @@ for it. Seen through and struck first, before it springs, it's caught out.
 Now and then, in place of one of the wilds director's cards, something that isn't one of them: a
 card from the world's own deck of rare encounters (`core/rare.js`, the host's `#rare…`; the plan:
 `generated/rare_encounters_plan.md`). The engine's in the game; the cards themselves are designed
-one at a time, each with its thread and its reward. The first is the Stone Golem of Harrowstone
-(*The Stone Golem*, below), besides debug mode's sample.
+one at a time, each with its thread and its reward: the Stone Golem of Harrowstone (*The Stone
+Golem*, below), the Orc King, Vharzul the Greenflame and Ashmaw, besides debug mode's sample.
 - **Two kinds** (`RARE_CARDS` `kind`): a *unique* card comes once in a world and once to a
   character (one who's overcome it never meets it again, in any world: `progress.legends.met`); a
   *recurring* one now and then, at most once every 4 to 6 hours of the world's play (`RARE.recur`).
@@ -1371,6 +1371,77 @@ stand-in, darker, his eyes green (beasts/looks.js). The model viewer shows him u
 mightiest*. The rules two games share changed with him (`NET_VERSION` 200: his rally's words, his
 fire's burning, the *enter* step).
 
+### Ashmaw
+
+The fourth rare card (`RARE_CARDS` `ashmaw`; its thread `unchained`, *The Hound Unchained*), a
+world's boss, once a world (the user: "Import this model of a cerberus I purchased from Fab into
+the project... Set it as the boss of the second level in the hell dungeon and also make it a
+unique encounter out in the wilderness somewhere. Make up a backstory for it being there that
+starts from a rumor in the adventurer's guild").
+
+Every hell keeps a hound in its Halls of Bone: three heads, chained at the way down so the dead
+stay down (creatures.js `cerberus`, the Halls' master: docs/DUNGEONS.md *Hells*). One night the
+Hollow Choir sang their gate open wider than they meant, and one hell's hound bit through its
+chain and came up after them. It tore their camp apart, and went off into the wilds with the last
+links still about its necks, its coat gone the grey of ash: the drovers call it Ashmaw. It hunts
+the land round the hell it came from, flocks and carters and a woodcutter's hut, the grass burnt
+black wherever it sets a foot down. It's drawn from the cerberus's model a tenth bigger, in its ash
+skin (beasts/model.js `ashmaw`: the catalog's `beast-cerberus-skins`, `ash`).
+- **The rumour**: the ranger at the guild in the settlement nearest a hell's way in (the plan's
+  first, `opens` `near` { theme: "hell" }: `openerOf`) tells it (`calling` "ranger"; every guild
+  keeps a ranger for it now, `TALK_CALLINGS`), in four pieces: the Choir's camp at {place}, {way}
+  of there, found torn to rags, a chain bitten through across the way in; the old tale of the
+  hound in the Halls of Bone; what it's taken since, and its name; and Hollis, the guild's best
+  tracker, gone out after it, her dogs come home without her. "I'll go out to the Choir's camp."
+  begins the thread; "Then go by day, and watch for smoke..." ends the talk. Given up, it's the
+  ranger who takes a player back on it (`back`: "About the hound: I'll go after it after all.").
+- **The camp** (its first step, a *place*: the hell's way in nearest the guild, `site` "dungeon",
+  `theme` "hell"): reached, 40 gold to each there and Hollis's notes (writings.js `hollis`, three
+  pages: the camp and the bitten chain; the burnt prints and her dogs turning from them, the hound
+  hunting in circles as if looking for something; and at dusk, smoke and a howl from three throats,
+  "it is not a dumb beast. It doubled back...").
+- **Ashmaw** (its second, the card, kept 140 to 220 m from the camp, on the highest open ground
+  there): its prints lead there from the camp, told as they're come upon ("Paw prints as wide as a
+  shield, the grass burnt black round each, and here and there a link of broken chain..."); dealt
+  as someone comes within 70 m, a dungeon master's rank, two tiers above the land, "Ashmaw, the
+  Hound Unchained" ("A howl from three throats at once rolls over the land..."). As it falls,
+  what's seen (`last`: its heads sinking one after another, the chain cooling, "Somewhere far
+  below, a way down stands unwatched."). Then its reward to each who fought it: the Last Link
+  (`UNIQUES` `lastLink`, a ring hammered from the last link of its chain, its effect Cinderburst:
+  docs/GAME.md *Legendary weapons*) and 850 gold.
+- **The bounty** (the third, a *talk*): back to the ranger at the guild where it was told ("The
+  hound's dead. And I found Hollis's notes."), who pays the bounty the farms got up between them:
+  200 gold, the thread at its end.
+
+How it fights (creatures.js `ashmaw`, weapons.js NATURAL `ashmaw`; a world's boss, its bar across
+the top of the screen; 50 hit points at the first tier, a great hound's, two and a half times as
+many as its card's (`shape` `health` 2.6: 130), four times that as a boss, nearly three tenths of
+every blow turned by its hide; fire harming it half as much, `wards`; never thrown;
+seeing in the dark and further off than most, `sight` 24):
+- **Its jaws and fire**: its three heads snapping together (11 to 17, laying a wound open now and
+  then) or a lunge (12 to 19, 2 m, staggering harder), one at random (`either`); and fire breathed
+  from its middle head at whoever keeps off, 10 m (9 to 14, setting them burning every time:
+  `flame`, as the Dreadthorn's is, from between its jaws: beasts/breath.js).
+- **Its leap** (`moves` `leap`, Jump): every 10 seconds, the first 4 after it sets on anyone, at
+  whoever's 4 to 9 m off, it springs and lands on them (13 to 20, 2.4 m round where it lands,
+  throwing them: `houndLeap`), where it'll land shown on the ground first (`telegraph`).
+- **Its three heads' fire** (`moves` `inferno`, Fire All: creatures.js `HOUND_INFERNO`, the Halls'
+  hound's own too): every 13 seconds, the first 8 after it sets on anyone, at whoever's within 7 m,
+  all three heads breathing at once, each head's own fire (beasts/model.js `mouths`, `together`),
+  the ground before it from 1 to 8 m bursting into flame (14 to 22, fire's, setting nearly
+  everyone it catches burning: `quake` `afflict`), shown on the ground first, drawn as a ring of
+  fire rolling out (spellfx.js quake `inferno`), heard as fire bursts.
+- **Its howl** (`rally`, Attack 2: its tail curled over its back, its heads thrown low): at two
+  thirds of its hit points, then at one third, once each, it howls and the dead claw their way up
+  to it (two or three skeletons, then one or two draugr, two tiers under it), told in words of its
+  own (`told`: "Ashmaw throws back its three heads and howls: the dead claw their way up out of
+  the ground!").
+
+Till its model's read (and where the licensed models aren't, as in CI) it's drawn as a great grey
+hound, one head for three (beasts/looks.js). The model viewer shows it, and the Halls' hound, under
+*For the mightiest*. The rules two games share changed with it (`NET_VERSION` 201: the hounds, the
+ranger's rumour, a place step at a hell's way in).
+
 ### Building a card
 
 The Stone Golem, the Orc King and Vharzul the Greenflame are made of pieces any card can be made of. A card that waits
@@ -1393,7 +1464,9 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    told at a people's border village (`near` { border }: `borderOf`), and the world changed as it's
    taken up (`begins`: `burn`, the village set burning), are the Orc King's. A rumour told by
    another of the folk where they keep (`role`, `post`: a temple's priest), a card kept at the place
-   of the step before (`here`), and a way in to go in by (*enter*, `theme`: a hell's), Vharzul's.
+   of the step before (`here`), and a way in to go in by (*enter*, `theme`: a hell's), Vharzul's. A
+   rumour told near a dungeon of a theme's (`near` { theme }) and a place step at one (`site`
+   "dungeon", `theme`), Ashmaw's.
 3. **Its card** (`RARE_CARDS`): `where` "site", `requires` its thread's card step, its `shape` (a
    `foe`: its `creature`, `champion` rank, `up` tiers, `title`, how much tougher than its kind it
    is, `health`) and its `reward` (a unique,
@@ -1419,7 +1492,8 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    charge to fill (`always`: Kingsplitter's Cleave, Greenbrand's Witchfire).
 
 Then debug mode deals it by its id (*Card and its thread*), and the unit tests (test/rare.test.js
-*the Golem of Harrowstone*, *the Iron Crown*, *the Exile's Road*) show how to follow one through.
+*the Golem of Harrowstone*, *the Iron Crown*, *the Exile's Road*, *the Hound Unchained*) show how
+to follow one through.
 
 ## Adventurers' caches
 

@@ -64,6 +64,8 @@ const PLACES = Object.freeze({
     kaiju: "out of the Rift, against a town by night",
     stoneGolem: "in the hills by the ruins of Harrowstone quarry, once a world",
     vharzul: "at the Sundered Ring by night, once a world",
+    cerberus: "in the hells, chained at the way down from the Halls of Bone",
+    ashmaw: "in the wilds where its tracks lead from a hell's way in, once a world",
 });
 
 // The ants' nests' own, and the hells' (met nowhere else)

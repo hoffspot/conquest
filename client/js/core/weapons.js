@@ -763,6 +763,36 @@ export const NATURAL = Object.freeze({
             ranged({ id: "greenfire", reach: 10, damage: [8, 13], hitAt: 900, duration: 1500, interval: 3400, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "riftFire", speed: 13 }, afflict: { kind: "burn", chance: 0.8 } }),
         ],
     },
+    // (A hell's cerberus, the Halls of Bone's master (creatures.js): up close, its three heads
+    // snapping together (the jaws shut a little over half way through, Attack 3's first snap), or a
+    // lunge, its forelegs thrown forward and its middle head snapping low (nearly half way through,
+    // Attack 1), knocking whoever it catches back a step and laying a wound open; further off, fire
+    // breathed from its middle head, its flames out from 0.9 seconds into its clip (beasts/model.js
+    // MODELS cerberus `fire`), setting whoever it reaches burning. All three heads' fire at once is a
+    // move of its own (creatures.js HOUND_INFERNO))
+    cerberus: {
+        label: "Three jaws and hellfire",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [8, 13], hitAt: 650, duration: 1150, interval: 1700, stagger: 300, reaction: "hack", animation: "bite", afflict: { kind: "bleed", chance: 0.35 } }),
+                melee({ id: "lunge", reach: 2, damage: [9, 14], hitAt: 680, duration: 1500, interval: 1900, stagger: 450, reaction: "pierce", animation: "lunge", afflict: { kind: "bleed", chance: 0.4 } }),
+            ),
+            ranged({ id: "breath", reach: 9, damage: [6, 10], hitAt: 1100, duration: 2500, interval: 6500, stagger: 300, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
+    // (Ashmaw, the Hound Unchained (creatures.js): the Halls' hound's bites, lunge and fire, harder,
+    // its fire setting whoever it reaches burning every time. Its leap and its three heads' fire at
+    // once are moves of its own (creatures.js `moves`))
+    ashmaw: {
+        label: "Three jaws and hellfire",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [11, 17], hitAt: 650, duration: 1150, interval: 1600, stagger: 350, reaction: "hack", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }),
+                melee({ id: "lunge", reach: 2, damage: [12, 19], hitAt: 680, duration: 1500, interval: 1800, stagger: 500, reaction: "pierce", animation: "lunge", afflict: { kind: "bleed", chance: 0.45 } }),
+            ),
+            ranged({ id: "breath", reach: 10, damage: [9, 14], hitAt: 1100, duration: 2500, interval: 6000, stagger: 350, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
+        ],
+    },
     // (The Stone Golem of Harrowstone: creatures.js. Up close, one of its three blows at random, each
     // landing where its model's clip has it: its hammer thrust down over its shoulder (the blow
     // well over half way through, Attack 3), swept round at its side (two fifths of the way,

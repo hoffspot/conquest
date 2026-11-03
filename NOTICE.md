@@ -25,7 +25,8 @@
   with its three other skins; and the Orc, Snake|3D's modular orc from Fab, in three dressings (the
   Orc King, with his two other skins, his champions', the Orc Warlord and the Orc Reaver), his fall
   Mesh2Motion's (CC0); and
-  the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  the Kaiju, HuyKhoi2407's Kaiju from Fab; and the cerberus, Panchenko Lyudmila's Cerberus from Fab, with its
+  two other skins (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
 - **The book's code and assets, in the git history.** The repository began as Last Colony, the
   game from the book *Pro HTML5 Games* by Aditya Ravi Shankar. None of the book's code, images or
   sounds is in the repository now: the last of them went with `aec39bc0`, "Pellagos, part 1:

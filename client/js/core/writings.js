@@ -178,6 +178,39 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (Hollis's notes: the guild's tracker, who went out to the Hollow Choir's camp at a hell's way
+    // in after the hound that broke loose there, Ashmaw (core/rare.js THREADS unchained), found
+    // where she'd been there, her dogs gone home without her)
+    hollis: Object.freeze({
+        title: "Hollis's tracking notes",
+        by: "Hollis, a ranger of the adventurers' guild",
+        found: "In a satchel, scorched, caught on a broken stake of the Hollow Choir's camp at a hell's way in",
+        entries: Object.freeze([
+            {
+                heading: "The first morning",
+                text: [
+                    "The camp's as the drover said: tents in rags, the fire scattered, the Choir's robes everywhere and too few of them with anyone in them. No other beast leaves bites like these. Three mouths to every kill, side by side, as if three dogs shared one meal and never fought over it.",
+                    "The chain lies across the way in, forty links of it at least, each as thick as my wrist. Not broken. Bitten. I can see the teeth marks in the iron, and the last links are gone. It wears them still.",
+                ],
+            },
+            {
+                heading: "The same day, later",
+                text: [
+                    "Prints as wide as a shield, four toes and the claws, sunk deep. Wherever it set a foot down the grass is burnt black, as if the ground were a hearth it walked over. Bran and Tess won't go near them. Grip went a little way and came back whining. I've never known him turn from a scent.",
+                    "It goes the way a hunting dog goes, nose down, wide circles, back on itself. Looking for something. The old tale says the hound keeps the dead down. I wonder what it does when there is no way down to keep.",
+                ],
+            },
+            {
+                heading: "Dusk",
+                hand: "Written fast, the last lines running off the page.",
+                text: [
+                    "Smoke on the rise to the north of the trail, and a sound like three bloodhounds giving tongue at once, only deeper than any hound. The dogs have bolted. Good. Let them go home.",
+                    "If this is found: it is not a dumb beast. It doubled back. It was waiting for me where its prints ran out. Follow them anyway. It can be hurt; I saw it limp where it was burnt by its own chain. Keep off its jaws and out of the way of its fire, and never stand where the ground smoulders before it.",
+                ],
+                signed: "Hollis",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */
