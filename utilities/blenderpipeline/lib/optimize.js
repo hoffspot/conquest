@@ -8,7 +8,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Logger, PropertyType } from "@gltf-transform/core";
 import { KHRTextureTransform } from "@gltf-transform/extensions";
-import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
+import { clearNodeParent, cloneDocument, compactPrimitive, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
 import { inventClip } from "./invent.js";
@@ -406,11 +406,11 @@ export function thinKeys(document, fps) {
 /**
  * A lower-detail copy of every mesh, in the same document: a mesh of its own on a node of its
  * own ("<name>.lod<level>", extras.lod = level), its vertices welded then simplified (`ratio`
- * of them kept, at most `error` of its size astray; `lockBorder`, its open edges kept where they
- * are: a cell's, met by the next cell's), on the same skeleton and materials as the full mesh.
+ * of them kept, at most `error` of its size astray; `seams`, the places where one mesh meets
+ * another kept where they are: seamsOf's), on the same skeleton and materials as the full mesh.
  * Resolves with the meshes made.
  */
-export async function packLod(document, level, { ratio, error = 0.01, materials, lockBorder = false }) {
+export async function packLod(document, level, { ratio, error = 0.01, materials, seams = null }) {
     const root = document.getRoot();
     const made = [];
 
@@ -446,8 +446,7 @@ export async function packLod(document, level, { ratio, error = 0.01, materials,
                 lower.addTarget(lowerTarget);
             }
 
-            weldPrimitive(lower);
-            simplifyPrimitive(lower, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, { ratio, materials }), error, lockBorder });
+            simplifyKeeping(lower, { ratio: ratioOf(primitive, { ratio, materials }), error, seams });
             copy.addPrimitive(lower);
         }
 
@@ -645,14 +644,18 @@ export async function optimize(config, { raw, glb, lodFile }) {
         await writeFile(file, JSON.stringify(walkJson({ ...result.walk, file: undefined })));
     }
 
-    // (Cut into cells: their open edges, where one cell meets the next, kept where they are as
-    // they're simplified, so no gap opens between them)
-    const lockBorder = Boolean(config.cells);
+    // (Cut into cells: where one cell meets the next, and one material another, kept where they
+    // are as they're simplified, so no gap opens between them)
+    const seams = config.cells ? seamsOf(document) : null;
+
+    if (seams) {
+        result.seams = seams.size;
+    }
 
     // Lower-detail copies in this file, beside the full mesh, sharing everything else
     if (config.packLods) {
         for (const [i, lod] of config.lods.entries()) {
-            const meshes = await packLod(document, i + 1, { ...lod, lockBorder });
+            const meshes = await packLod(document, i + 1, { ...lod, seams });
 
             result.lods.push({ packed: true, level: i + 1, ratio: lod.ratio, error: lod.error ?? 0.01, meshes: meshes.map((mesh) => mesh.getName()) });
         }
@@ -675,7 +678,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     // The full mesh itself simplified, when even that's more than the game wants
     if (config.simplify) {
-        simplifyFull(document, { ...config.simplify, lockBorder });
+        simplifyFull(document, { ...config.simplify, seams });
     }
 
     // Checked before it's compressed: the validator can't read meshopt's compression
@@ -684,18 +687,17 @@ export async function optimize(config, { raw, glb, lodFile }) {
     for (const [i, lod] of (original ? config.lods : []).entries()) {
         const copy = cloneDocument(original);
 
-        // (Some materials' parts by ratios of their own: each primitive on its own)
-        if (lod.materials) {
+        // (Some materials' parts by ratios of their own, or seams kept: each primitive on its own)
+        if (lod.materials || seams) {
             for (const mesh of copy.getRoot().listMeshes()) {
                 for (const primitive of mesh.listPrimitives()) {
-                    weldPrimitive(primitive);
-                    simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, lod), error: lod.error ?? 0.01, lockBorder });
+                    simplifyKeeping(primitive, { ratio: ratioOf(primitive, lod), error: lod.error ?? 0.01, seams });
                 }
             }
 
             await copy.transform(prune());
         } else {
-            await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01, lockBorder }), prune());
+            await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01 }), prune());
         }
 
         await compress(copy, config.compress, quantizing);
@@ -766,16 +768,127 @@ export async function optimizeVariant(config, name, { raw, glb }) {
     return { name, glb, ktx2, validation: await validate(await readFile(glb), { ktx2: config.textures.format === "ktx2" }) };
 }
 
-/** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error, materials, lockBorder }. */
-function simplifyFull(document, { ratio, error = 0.01, materials, lockBorder = false }) {
+/** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error, materials, seams }. */
+function simplifyFull(document, { ratio, error = 0.01, materials, seams = null }) {
     for (const node of document.getRoot().listNodes()) {
         if (node.getMesh() && node.getExtras().lod === undefined) {
             for (const primitive of node.getMesh().listPrimitives()) {
-                weldPrimitive(primitive);
-                simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, { ratio, materials }), error, lockBorder });
+                simplifyKeeping(primitive, { ratio: ratioOf(primitive, { ratio, materials }), error, seams });
             }
         }
     }
+}
+
+// A place, to the tenth of a millimetre, as a key
+const placeKey = (array, i) => `${Math.round(array[i] * 1e4)} ${Math.round(array[i + 1] * 1e4)} ${Math.round(array[i + 2] * 1e4)}`;
+
+/**
+ * Where one of a document's full meshes meets another, or a primitive another (where one cell
+ * meets the next, one material another): the places (placeKey's) a vertex of one has and a vertex
+ * of another has too. Found by sorting every vertex by its place, so only those shared are kept.
+ */
+export function seamsOf(document) {
+    const arrays = [];
+
+    for (const node of document.getRoot().listNodes()) {
+        if (node.getMesh() && node.getExtras().lod === undefined) {
+            for (const primitive of node.getMesh().listPrimitives()) {
+                const position = primitive.getAttribute("POSITION");
+
+                if (position) {
+                    arrays.push(position.getArray());
+                }
+            }
+        }
+    }
+
+    const total = arrays.reduce((sum, array) => sum + array.length / 3, 0);
+    const owner = new Uint32Array(total);
+    const quantized = new Int32Array(total * 3);
+    let n = 0;
+
+    for (const [i, array] of arrays.entries()) {
+        for (let v = 0; v < array.length; v += 3, n++) {
+            owner[n] = i;
+            quantized[n * 3] = Math.round(array[v] * 1e4);
+            quantized[n * 3 + 1] = Math.round(array[v + 1] * 1e4);
+            quantized[n * 3 + 2] = Math.round(array[v + 2] * 1e4);
+        }
+    }
+
+    const order = new Uint32Array(total).map((_, i) => i);
+    const same = (a, b) => quantized[a * 3] === quantized[b * 3] && quantized[a * 3 + 1] === quantized[b * 3 + 1] && quantized[a * 3 + 2] === quantized[b * 3 + 2];
+
+    order.sort((a, b) => quantized[a * 3] - quantized[b * 3] || quantized[a * 3 + 1] - quantized[b * 3 + 1] || quantized[a * 3 + 2] - quantized[b * 3 + 2]);
+
+    const seams = new Set();
+
+    for (let i = 0; i < total; ) {
+        let j = i + 1;
+
+        while (j < total && same(order[i], order[j])) {
+            j++;
+        }
+
+        // (More than one mesh or primitive has a vertex here)
+        for (let k = i + 1; k < j; k++) {
+            if (owner[order[k]] !== owner[order[i]]) {
+                const v = order[i];
+
+                seams.add(`${quantized[v * 3]} ${quantized[v * 3 + 1]} ${quantized[v * 3 + 2]}`);
+                break;
+            }
+        }
+
+        i = j;
+    }
+
+    return seams;
+}
+
+/**
+ * A primitive welded and simplified as glTF-Transform's simplifyPrimitive does it, `ratio` of its
+ * triangles kept, at most `error` astray; but with `seams` (seamsOf's), its vertices at those
+ * places locked where they are, and its other edges free to move (meshopt's own LockBorder locks
+ * every open edge, which a building's carving is full of).
+ */
+export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null }) {
+    weldPrimitive(primitive);
+
+    if (!seams) {
+        return simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio, error });
+    }
+
+    if (primitive.getMode() !== 4 || !primitive.getIndices()) {
+        return primitive;
+    }
+
+    const position = primitive.getAttribute("POSITION");
+    const positions = position.getArray();
+    const source = primitive.getIndices();
+    const indices = new Uint32Array(source.getArray());
+    const locks = new Uint8Array(position.getCount());
+
+    for (let v = 0; v < locks.length; v++) {
+        locks[v] = seams.has(placeKey(positions, v * 3)) ? 1 : 0;
+    }
+
+    const target = Math.floor((ratio * indices.length) / 3) * 3;
+    const [kept] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(0), 0, [], locks, target, error, []);
+    primitive.setIndices(source.clone().setArray(kept));
+
+    // (Its old indices let go of, if nothing else has them: the document's root aside)
+    if (source.listParents().length === 1) {
+        source.dispose();
+    }
+
+    compactPrimitive(primitive);
+
+    if (primitive.getAttribute("POSITION").getCount() <= 65534) {
+        primitive.getIndices().setArray(new Uint16Array(primitive.getIndices().getArray()));
+    }
+
+    return primitive;
 }
 
 async function compress(document, how, quantizing = {}) {

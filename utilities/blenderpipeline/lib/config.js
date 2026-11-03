@@ -47,7 +47,7 @@ export const DEFAULTS = Object.freeze({
     dropMaterials: [],
     // Each mesh cut into cells on the ground, { size: metres }, a mesh each ("<mesh>@<i>,<j>"),
     // by where its faces' centres are: the game draws only those in view, each at its own detail;
-    // simplifying (simplify, lods) then keeps the cells' edges where they are, so none part
+    // simplifying (simplify, lods) then keeps where one cell meets the next where it is, so none part
     cells: null,
     // Materials made from texture files, in place of those in the source by these names:
     // { "material": { baseColor, alpha, alphaMap, normal, occlusion, roughness, metallic,
