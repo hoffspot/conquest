@@ -2210,7 +2210,7 @@
         },
         "scenery-bellhaven-far": {
             "tier": "demand",
-            "label": "Bellhaven seen from afar: DmitriyDryzhak's \"White Castle\" in one low detail, for the world round it (client/models/scenery/LICENSE.md)",
+            "label": "Bellhaven seen from afar, in one low detail for the world round it (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
