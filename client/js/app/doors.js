@@ -81,6 +81,18 @@ function shapeOf(world, link, end) {
         };
     }
 
+    if (link.kind === "door" && map.walk) {
+        // A fixed scene's way back out (core/scenery.js: Bellhaven's bridge's foot): its squares'
+        // southern edge, standing on its floor there, facing back in
+        const xs = end.squares.map(([x]) => x);
+        const [x0, x1] = [Math.min(...xs), Math.max(...xs) + 1];
+        const z = Math.max(...end.squares.map(([, y]) => y)) + 1 - 0.12;
+        const base = map.heightAt((x0 + x1) / 2, z - 0.5);
+        const corners = [[x0, base, z], [x1, base, z], [x1, base + 2.5, z], [x0, base + 2.5, z]];
+
+        return { box: [x0 - 0.1, base - 0.1, z - 0.6, x1 + 0.1, base + 2.6, z + 0.6], loop: corners, normal: [0, 0, -1], floor: base };
+    }
+
     if (link.kind === "door") {
         // The inside of a door in the south wall, between its squares
         const xs = end.squares.map(([x]) => x);

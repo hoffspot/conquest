@@ -23,6 +23,8 @@ export class Readying {
     /** The card: the page's #readying (index.html). */
     constructor(root = document) {
         this.card = root.querySelector("#readying");
+        // (What it says it's doing, unless it's told otherwise: the page's)
+        this.note = this.card.querySelector("#readyingnote")?.textContent ?? "";
         this.timers = [];
         this.open = false;
         this.card.querySelector("#readyinggo").addEventListener("click", () => this.#close("go"));
@@ -36,18 +38,24 @@ export class Readying {
     }
 
     /**
-     * Shows the wait for `name` (the place), for its creatures (`kinds`: [{ id, name }]), how far
+     * Shows the wait for `name` (the place, `note` what's being got ready, if not its creatures), for
+     * what it needs (`kinds`: [{ id, name }]: its creatures, a fixed scene's art), how far
      * it's got asked of `progress()` ({ received, bytes, read: the kinds read }) every so often; a
      * moment after it's asked (READYING.grace), so a quick one's never seen. `onClose(how)` once
      * it's closed: "go" (Go in now), "back" (Not now, or Escape), or "ready" (all of it ready:
      * ready()).
      */
-    show({ name, kinds, progress, onClose }) {
+    show({ name, note = null, kinds, progress, onClose }) {
         this.#clear();
         this.open = true;
         this.onClose = onClose;
         this.progress = progress;
         this.card.querySelector("#readyingname").textContent = name;
+
+        if (this.card.querySelector("#readyingnote")) {
+            this.card.querySelector("#readyingnote").textContent = note ?? this.note;
+        }
+
         this.card.querySelector("#readyinglist").replaceChildren(
             ...kinds.map(({ id, name: label }) => {
                 const item = document.createElement("li");

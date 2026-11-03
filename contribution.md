@@ -313,11 +313,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
   them too).
 - Scenery the game walks on, such as a castle, is cut into cells (`cells`): the game draws only the
   cells in view, each at its own detail. Where it can be walked is baked from it (`walk`) into
-  `<name>.walk.json`: the height of each square a body can stand on, in levels where one floor is
-  over another, and the links between them (the README, *Where it can be walked*). It's plain data
-  with no mesh or texture. For a bought scene it's the one thing built from it that goes in this
-  repository; its scrambled model goes in the private one. `lib/walk.js` has unit tests of its own
-  (`test/walk.test.js`), which need no Blender.
+  `<name>.walk.json`, and the same as a module, `<name>.walk.js`: the height of each square a body
+  can stand on, in levels where one floor is over another, and the links between them (the README,
+  *Where it can be walked*). It's plain data with no mesh or texture. For a bought scene it's the
+  one thing built from it that goes in this repository: its module in `client/js/core/scenery/`,
+  where the game's code imports it (Bellhaven's: `core/scenery.js`). Its scrambled model goes in
+  the private one. `lib/walk.js` has unit tests of its own (`test/walk.test.js`), which need no
+  Blender.
 
 ## 3. Making a change
 

@@ -17,9 +17,10 @@ import { hypot } from "./exact.js";
 import { squaresOf } from "./grid.js";
 import { bakeTile, WALK } from "./navigation/bake.js";
 import { loadRecast } from "./navigation/recast.js";
-import { COSTS, OVERWORLD, ROOMS, TILE } from "./navigation/settings.js";
+import { COSTS, OVERWORLD, ROOMS, SCENES, TILE } from "./navigation/settings.js";
 import { squaresInput } from "./navigation/squares.js";
 import { tileInput } from "./navigation/tiles.js";
+import { walkInput } from "./navigation/walk.js";
 import { Steps } from "./steps.js";
 import { WORLD_SIZE } from "./worldplan/plan.js";
 
@@ -85,7 +86,7 @@ export function navigatorOf(map) {
     let navigation = navigators.get(map);
 
     if (!navigation) {
-        navigation = map.ground?.heightAt && map.chunkAt ? new Navigation(recast, map) : squaresNavigation(map);
+        navigation = map.ground?.heightAt && map.chunkAt ? new Navigation(recast, map) : map.walk ? walkNavigation(map) : squaresNavigation(map);
         navigators.set(map, navigation);
     }
 
@@ -137,6 +138,14 @@ export function dropTiles(map, [x0, y0, x1, y1]) {
     }
 }
 
+/**
+ * A mesh of its own for a fixed scene's map (core/scenery.js sceneryMap: settings.js SCENES), baked
+ * from its walk's floors at their heights; a way's points' heights the floor's (its heightAt).
+ */
+export function walkNavigation(map) {
+    return new Navigation(recast, squaresOf(map), { measures: SCENES, input: (tx, ty) => walkInput(map.walk, tx, ty, SCENES), heightAt: (x, y) => map.heightAt(x, y), size: [map.width, map.height] });
+}
+
 /** A mesh of its own for a map of squares (grid.js squaresOf's: settings.js ROOMS). */
 export function squaresNavigation(map) {
     const squares = squaresOf(map);
@@ -161,7 +170,7 @@ export class Navigation {
         this.input = input;
         this.heightAt = heightAt;
         this.size = size;
-        this.keep = measures === OVERWORLD ? KEEP_TILES : KEEP_ROOM_TILES;
+        this.keep = measures.keep ?? (measures === OVERWORLD ? KEEP_TILES : KEEP_ROOM_TILES);
         this.mesh = new recast.NavMesh();
         this.mesh.initTiled(recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS }));
         this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES });
@@ -314,12 +323,12 @@ export class Navigation {
     #unmade = false;
 
     /**
-     * Whether every tile a box of the ground touches is made already (or the mesh is a room's,
-     * small, made as it's walked). Asked before a way's looked for that mustn't make any (a
-     * joined game's forecast of its own hero: core/battle.js fork).
+     * Whether every tile a box of the ground touches is made already (or the mesh is a room's or
+     * a scene's, small, made as it's walked). Asked before a way's looked for that mustn't make
+     * any (a joined game's forecast of its own hero: core/battle.js fork).
      */
     made(x0, y0, x1, y1) {
-        if (this.measures === ROOMS) {
+        if (this.measures !== OVERWORLD) {
             return true;
         }
 

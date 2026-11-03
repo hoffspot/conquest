@@ -636,12 +636,18 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     result.bounds = { rest: boxOf(bounds(document)), ...reach(document) };
 
-    // Where it can be walked, from its triangles as they are before they're simplified
+    // Where it can be walked, from its triangles as they are before they're simplified: as JSON,
+    // and the same as a module a game can import (its default export), so it's there without a
+    // download of its own wherever the game's code runs
     if (config.walk) {
         const file = glb.replace(/\.glb$/, ".walk.json");
 
-        result.walk = { file, ...walkOf(trianglesOf(document), config.walk) };
-        await writeFile(file, JSON.stringify(walkJson({ ...result.walk, file: undefined })));
+        result.walk = { file, module: file.replace(/\.json$/, ".js"), ...walkOf(trianglesOf(document), config.walk) };
+
+        const json = JSON.stringify(walkJson({ ...result.walk, file: undefined, module: undefined }));
+
+        await writeFile(file, json);
+        await writeFile(result.walk.module, `// Where ${path.basename(glb, ".glb")} can be walked, baked by utilities/blenderpipeline (README, *Where it can be walked*)\nexport default ${json};\n`);
     }
 
     // (Cut into cells: where one cell meets the next, and one material another, kept where they

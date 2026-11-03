@@ -47,6 +47,7 @@ import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeo
 import { PIT, sigilGeometry, sigilMaterial, throneParts } from "./pit.js";
 import { blockAt, bonesAt, clutterAt, fallenScene, hashOf, middenGearAt, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
 import { broodIn, cocoonGeometry, eggGeometry, heapGeometry, heapHeightAt, heapOf, larvaGeometry, NEST_LIFE, pupaGeometry, randomOf, rootsUnder, webAround } from "./nestlife.js";
+import { sceneryInterior } from "./scenery3d.js";
 
 // (A portal's veil, the guild's and a hell's: veil.js, which draws a hell's standing in the open too)
 export { VEIL, VEILS } from "./veil.js";
@@ -6146,6 +6147,11 @@ function mergeInPlace(part) {
  * merged), returning it.
  */
 export function* buildingInterior(map) {
+    // (A fixed scene's map: its own art, drawn out of doors, scenery3d.js)
+    if (map.scenery) {
+        return yield* sceneryInterior(map);
+    }
+
     const own = PALETTES[map.people] ? map.people : null;
     let built;
     let lit;

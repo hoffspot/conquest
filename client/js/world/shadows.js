@@ -12,6 +12,13 @@ import * as THREE from "three";
 // Shadows fade from this far out from the map's middle (0) to its edge (1)
 const FADE_FROM = 0.8;
 
+/**
+ * The layer only the sun's shadow sees (view.js enables it on its shadow's camera): what casts a
+ * fixed scene's shadows (world/scenery3d.js: a block of its cells in one mesh), drawn into no
+ * picture but the shadow map's.
+ */
+export const SHADOWS_ONLY = 2;
+
 // Where three.js's shadow code has worked out whether a point is in the map at all (each kind of
 // shadow map's, the sun's the soft one)
 const IN_MAP = "bool frustumTest = inFrustum && shadowCoord.z <= 1.0;";

@@ -456,7 +456,7 @@ export class Minimap {
         }
 
         if (!this.bases.has(map.id)) {
-            this.bases.set(map.id, map.id === "town" ? paint(this.world) : paintInterior(map));
+            this.bases.set(map.id, map.id === "town" ? paint(this.world) : map.walk ? paintWalk(map) : paintInterior(map));
         }
 
         this.base = this.bases.get(map.id);
@@ -937,6 +937,50 @@ function paintInterior(map) {
         context.fillStyle = "rgb(186, 150, 96)";
         context.fillRect(x, y + 0.5, 1, 0.5);
     }
+
+    return image;
+}
+
+/**
+ * Each square's colour on a fixed scene's map (core/scenery.js: Bellhaven's), as RGBA bytes row by
+ * row: its floor's stone, the higher the paler (the court above the ground under the crag), and
+ * where there's none (a wall, a tower, the chasm), dark.
+ */
+export function walkColours(map) {
+    const { width, height, walk } = map;
+    const level = walk.levels[0];
+    const [low, span] = [level.low, Math.max(1, level.high - level.low)];
+    const data = new Uint8ClampedArray(width * height * 4);
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const floor = map.squares.blocked(x, y) ? null : map.heightAt(x + 0.5, y + 0.5);
+            const shade = 1 + 0.05 * jitter(x, y);
+            const colour = floor === null ? INSIDE.wall : WALK_STONE.map((value, k) => value - (1 - (floor - low) / span) * WALK_DEPTH[k]);
+
+            data.set([colour[0] * shade, colour[1] * shade, colour[2] * shade, 255], (y * width + x) * 4);
+        }
+    }
+
+    return data;
+}
+
+// A fixed scene's floor on the minimap: its stone at its highest, and how much darker its lowest
+const WALK_STONE = [214, 206, 188];
+const WALK_DEPTH = [96, 92, 84];
+
+// A fixed scene's map's image (walkColours), a square to SCALE pixels a side
+function paintWalk(map) {
+    const { width, height } = map;
+    const squares = offscreen(width, height);
+
+    squares.getContext("2d").putImageData(new ImageData(walkColours(map), width, height), 0, 0);
+
+    const image = offscreen(width * SCALE, height * SCALE);
+    const context = image.getContext("2d");
+
+    context.imageSmoothingEnabled = false;
+    context.drawImage(squares, 0, 0, width * SCALE, height * SCALE);
 
     return image;
 }

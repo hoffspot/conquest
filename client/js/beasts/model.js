@@ -1067,6 +1067,70 @@ export function readyModels(kinds) {
     };
 }
 
+// The scenes' models read (a fixed scene's art: core/scenery.js SCENERY `model`), by their
+// catalog entries
+const sceneries = new Map();
+
+/**
+ * A scene's model (its catalog entry `asset`: core/scenery.js SCENERY `model`) got ready to draw at
+ * its way in, as readyModels gets creatures': fetched, hurried, then read. Returns { files ({ path,
+ * bytes }), progress() ({ received, bytes, read: [asset] once it's read, failed: its file if it
+ * couldn't be had }), ready (a promise: resolved once it's read, or couldn't be: its stand-in's
+ * drawn then), calm() }; or null if the catalog has no such model, or there's no page to read it
+ * from (a test).
+ */
+export function readyScenery(asset) {
+    const page = globalThis.document?.baseURI ?? globalThis.location?.href;
+    const [file] = ASSETS.models[asset]?.files ?? [];
+    let had = null;
+
+    if (!file || !page) {
+        return null;
+    }
+
+    const ready = (async () => {
+        if (sceneries.has(asset)) {
+            return;
+        }
+
+        if (fetcher) {
+            had = await fetcher.keep(file, "now", { hurry: true });
+        }
+
+        const gltf = await readFile(asset, "now", page);
+
+        if (gltf) {
+            sceneries.set(asset, gltf);
+        }
+    })().catch((error) => console.warn(`Couldn't read the scene ${asset}`, error));
+
+    return {
+        files: [{ path: file.path, bytes: file.bytes }],
+        progress: () => ({
+            received: had || sceneries.has(asset) ? file.bytes : Math.min(file.bytes, fetcher?.received(file) ?? 0),
+            bytes: file.bytes,
+            read: sceneries.has(asset) ? [asset] : [],
+            failed: had === false ? [file.path] : [],
+        }),
+        ready,
+        calm: () => fetcher?.calm(file),
+    };
+}
+
+/** A scene's model, if it's been read (readyScenery: { scene }); or null (its stand-in's drawn). */
+export function sceneryOf(asset) {
+    return sceneries.get(asset) ?? null;
+}
+
+/**
+ * Let go of a scene's model (its map's been left: what it holds is a castle's worth of memory,
+ * kept by the downloader to be read again when it's next gone into).
+ */
+export function forgetScenery(asset) {
+    sceneries.delete(asset);
+    files.delete(asset);
+}
+
 /**
  * The kinds drawn from a model that a place gone into holds (a building, or a site with a way in:
  * core/insides.js), to have them read before the player meets them: a dungeon's foes, once it's

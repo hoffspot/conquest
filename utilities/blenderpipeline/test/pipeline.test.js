@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { after, describe, it } from "node:test";
 import { buildAsset } from "../build.js";
 import { findBlender, HERE } from "../lib/blender.js";
@@ -510,6 +511,9 @@ describe("scenery cut into cells (cells), a material dropped (dropMaterials)", (
 
         assert.deepEqual(report.walk, { ...report.walk, origin: [0, 0], size: [100, 52], links: [], left: { unreached: 16, small: 0 } });
         assert.equal(report.walk.file.endsWith("scenery.walk.json"), true);
+        // (And the same as a module, its default export)
+        assert.equal(report.walk.module.endsWith("scenery.walk.js"), true);
+        assert.deepEqual((await import(pathToFileURL(path.join(out, "scenery.walk.js")).href)).default, JSON.parse(readFileSync(path.join(out, "scenery.walk.json"), "utf8")));
         assert.deepEqual(
             report.walk.levels.map(({ squares, box }) => [squares, box]),
             [[300, [0, 0, 99, 2]]],

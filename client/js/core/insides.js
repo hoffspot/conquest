@@ -29,6 +29,7 @@ import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { TALK_CALLINGS } from "./rare.js";
 import { createRandom } from "./random.js";
+import { SCENERY, sceneryMap, sceneryWays } from "./scenery.js";
 import { ENTERED, GROUND, PLOT, SHOP_LANDMARKS } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
@@ -1314,10 +1315,13 @@ const KINDS = Object.freeze({
     watchtower: { first: "ground", rooms: watchtowerRooms, folk: (building, [ground, top]) => watchFolkOf(building, ground, top) },
     // (A dungeon: its levels the dungeon builder's, those in it the host's)
     dungeon: { first: "level-1", rooms: dungeonRooms, folk: () => [] },
+    // (A place drawn from a fixed scene of its own, Bellhaven's castle: one map, walked as its
+    // walk has it, core/scenery.js; no folk of its own)
+    scenery: { first: "grounds", rooms: null, folk: () => [] },
 });
 
 /** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
-export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "riftTower", "watchtower", "dungeon"]);
+export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "riftTower", "watchtower", "dungeon", "scenery"]);
 
 // What those holding a building not theirs gather by: a temple's altar, a keep's thrones
 const HELD_BY = Object.freeze({ church: "altar", keep: "throne" });
@@ -1439,7 +1443,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", riftTower: "the Tower of Sar Mordal", watchtower: "the watchtower", dungeon: "the dungeon" });
+const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", riftTower: "the Tower of Sar Mordal", watchtower: "the watchtower", dungeon: "the dungeon", scenery: "the castle" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
@@ -1563,7 +1567,7 @@ export class Interiors {
      * place ("Silverbough Tree Hall"). Returns it (null if it has no way in).
      */
     addSite({ site, entrance }) {
-        if (!entrance || !KINDS[entrance.inside]) {
+        if (!entrance || !KINDS[entrance.inside] || (entrance.inside === "scenery" && !SCENERY[entrance.scenery])) {
             return null;
         }
 
@@ -1597,6 +1601,8 @@ export class Interiors {
             folk: [],
             // (A dungeon's: its theme, how strong, and how many times it's been made)
             ...(dungeon ? { theme: site.theme ?? "caves", tier: this.tiers.get(key) ?? (this.world.plan ? dungeonTier(this.world.plan, site) : 1), generation, flights: [], dungeon: null } : {}),
+            // (A scene's: which, core/scenery.js SCENERY)
+            ...(entrance.inside === "scenery" ? { scenery: entrance.scenery } : {}),
         };
         building.door = {
             id: `${key}/door`,
@@ -1659,6 +1665,10 @@ export class Interiors {
             return made;
         }
 
+        if (building.kind === "scenery") {
+            return this.#makeScenery(building);
+        }
+
         const kind = KINDS[building.kind];
         const floors = kind.rooms(building);
         const column = this.placed++;
@@ -1716,6 +1726,28 @@ export class Interiors {
         }
         building.made = true;
         this.order.push(key);
+        this.version++;
+
+        return building;
+    }
+
+    // A scene's map made (core/scenery.js sceneryMap), drawn at its own column of SCENERY_ORIGINS:
+    // its door's inside end where it's come into (its bridge's foot's middle, Bellhaven's) and the
+    // squares that take whoever's on them back out (its southern edge, the road's end outside)
+    #makeScenery(building) {
+        const map = sceneryMap(building.scenery, `${building.key}/${KINDS.scenery.first}`, { name: building.name, building: building.key });
+        const { arrive, facing, out } = sceneryWays(building.scenery);
+
+        // (Nothing in it marked as a plan's floor marks them: no chief, guards or chest of a
+        // place worth finding's, host.js #inside)
+        Object.assign(map, { pieces: [], marks: {}, people: building.people ?? "human" });
+        this.world.maps[map.id] = map;
+        this.byMap.set(map.id, building);
+        building.maps.push(map.id);
+        Object.assign(building.door.ends[1], { squares: out, arrive, facing, pending: false });
+        building.folk = [];
+        building.made = true;
+        this.order.push(building.key);
         this.version++;
 
         return building;

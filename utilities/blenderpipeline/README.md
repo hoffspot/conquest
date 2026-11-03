@@ -205,7 +205,7 @@ error, so a misspelt one isn't silently ignored.
 | `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave); `materials` as a copy's |
 | `tangents` | `true` | Tangents kept for the normal maps (MikkTSpace's, as they're baked with). `false` leaves them out: Three.js works them out as it draws, near enough for scenery seen from afar, and about a seventh smaller (the White Castle's geometry: 29 MB with them, 25 without) |
 | `tiledTexcoords` | `false` | Texture coordinates past 0 to 1 (a texture tiled along a wall) brought into it, each material's textures given the offset and scale that put them back (KHR_texture_transform), so they're quantized as the rest are rather than kept as floats, twice the size. At 16 bits, which they take on the GPU anyway |
-| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` from where it's walked from (*Where it can be walked*, below) |
+| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` (and `<name>.walk.js`) from where it's walked from (*Where it can be walked*, below) |
 | `budgets` | `{}` | Limits it's checked against: `triangles`, `vertices`, `joints`, `drawCalls`, `textureSize`, `textureMegabytes` (on the GPU, with mipmaps), `kilobytes` (the GLB), `clips` (names it must have) |
 
 ## Where it can be walked
@@ -213,7 +213,8 @@ error, so a misspelt one isn't silently ignored.
 For scenery the game walks on (a castle, its courts, its bridge), the pipeline bakes where a body
 can stand and go (`walk`, `lib/walk.js`), from its triangles as they are before they're simplified,
 into `<name>.walk.json`. It's plain data, the height of each square a body can stand on, with no
-mesh or texture.
+mesh or texture. `<name>.walk.js` is the same as a module (its default export), for a game to import
+wherever its code runs, with no download of its own.
 
 1. **Stretches.** The triangles are laid on a grid of 1 m squares, as the game's (`square`). Each
    triangle's stretch over each square, from its lowest there to its highest, is stacked with the
