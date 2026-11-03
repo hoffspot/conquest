@@ -108,7 +108,7 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     // (The link taken out of the page's address once it's read: loaded again, not asked again)
     expect(new URL(guest.url()).search).toBe("");
 
-    await join.getByRole("button", { name: "Join" }).click();
+    await join.getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
 
     // In the guest's copy: themselves, of the elves, by the elves' town; and the host's player
@@ -283,9 +283,10 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     expect(await host.evaluate(() => [...window.pellagos.game.host.players.keys()])).toEqual(["player"]);
 
     // They join again; the host closes the world to others: they're told, at the title
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await join.locator("#joincode").fill(code);
-    await join.getByRole("button", { name: "Join" }).click();
+    await join.getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect.poll(() => host.evaluate(() => window.pellagos.game.host.players.size), { timeout: 30000 }).toBe(2);
 
@@ -297,9 +298,10 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     expect(await host.evaluate(() => [...window.pellagos.game.host.players.keys()])).toEqual(["player"]);
 
     // (No world with that code any more)
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await join.locator("#joincode").fill(code);
-    await join.getByRole("button", { name: "Join" }).click();
+    await join.getByRole("button", { name: "Join", exact: true }).click();
     await expect(join.locator("#joinstatus")).toHaveText("There's no world open with that code.");
 
     await hostContext.close();
@@ -339,7 +341,7 @@ test("a visitor to a world on the host's device is remembered there by their own
 
     // Syl comes in, and walks a little way
     await guest.goto(`/?join=${code}`);
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
 
     const guestId = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].find((id) => id !== "player"));
@@ -385,9 +387,10 @@ test("a visitor to a world on the host's device is remembered there by their own
     expect(remembered.place).toBeTruthy();
 
     // Back: where they left
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await guest.locator("#join").locator("#joincode").fill(code);
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect.poll(async () => host.evaluate((id) => id && window.pellagos.game.battle.actor(id)?.square, await guestId()), { timeout: 60000 }).toEqual(onward);
 
@@ -430,7 +433,7 @@ test("the same character coming into a world on another device takes theirs over
 
     // Syl comes in on the first, and walks a little way
     await first.goto(`/?join=${code}`);
-    await first.locator("#join").getByRole("button", { name: "Join" }).click();
+    await first.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(first);
 
     const guests = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].filter((id) => id !== "player"));
@@ -452,7 +455,7 @@ test("the same character coming into a world on another device takes theirs over
 
     // On the second: Syl taken over, where they stand; the first told, back at the title
     await second.goto(`/?join=${code}`);
-    await second.locator("#join").getByRole("button", { name: "Join" }).click();
+    await second.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(second);
     await expect(second.locator("#banner")).toContainText("Your other session in this world was closed: you carry on here.", { timeout: 30000 });
     await expect(first.locator("#titlenote")).toHaveText("You went into this world on another device, so this one has let go.", { timeout: 30000 });
@@ -510,7 +513,7 @@ test("a guest taken over upstairs in Wenches and Ale from another device starts 
 
     // Ada in on the first: into the tavern and up its stairs
     await first.goto(`/?join=${code}`);
-    await first.locator("#join").getByRole("button", { name: "Join" }).click();
+    await first.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(first);
 
     const map = (page) => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).map);
@@ -526,7 +529,7 @@ test("a guest taken over upstairs in Wenches and Ale from another device starts 
     // On the second: taken over, upstairs, the room shown; the tavern's twelve dressed as it loads,
     // and a while later still no one else's folk
     await second.goto(`/?join=${code}`);
-    await second.locator("#join").getByRole("button", { name: "Join" }).click();
+    await second.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(second);
     await expect(second.locator("#banner")).toContainText("Your other session in this world was closed: you carry on here.", { timeout: 30000 });
 
@@ -608,7 +611,7 @@ test("a guest whose game's reloaded goes straight back into the host's world by 
 
     // Syl joins by the code: where she is kept, written as she plays
     await guest.goto(`/?join=${code}`);
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
 
     const guests = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].filter((id) => id !== "player"));
@@ -688,7 +691,7 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -777,7 +780,7 @@ test("two players make a party: one asks from the party menu, the other says no,
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -922,7 +925,7 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -1056,7 +1059,7 @@ test("a direct message from the Players tab: To Bryn in the host's chat, From th
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -1204,7 +1207,7 @@ test("two players walk about a while: the joined copy's checked against the host
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -1351,7 +1354,7 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     // Wenches and Ale's (no other's door near her), though the world she's sent comes with their
     // plans
     await guest.goto(`/?join=${code}`);
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
 
     // (`fell`: those fallen a while before, by id)
@@ -1476,7 +1479,7 @@ test("two players in a party on the maps: what each had found before is the othe
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
@@ -1599,7 +1602,7 @@ test("a request shared with the party from the journal: in a party, each request
     await invite.getByRole("button", { name: "Back to the game" }).click();
     await guest.goto(`/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
-    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 

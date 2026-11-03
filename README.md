@@ -485,19 +485,22 @@ up. They're all remembered.
 **Playing together.** There are two ways.
 
 - **Worlds on a server.** A world server (a Mac at home, or any computer with Node) keeps worlds
-  that go on being there when everyone's left, and wait for them to come back: the title's
-  **Worlds on servers** adds a server by its address, an invite link or its QR code (or from those
-  found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one,
-  or brings one of their own characters' worlds there (**Bring my world**: its land and its war,
-  with a copy of that character in it, and them its owner). Each world says what it does with its
+  that go on being there when everyone's left, and wait for them to come back. The title's
+  **Multiplayer** has it all: **Known Servers** adds a server by its address, an invite link or
+  its QR code (or from those found nearby on the Wi-Fi) and says which are up (every game knows
+  the default server, `pellagos.duckdns.org:8480`, from the first); **Join a World Hosted on a
+  Server** comes into a world with its invite link, key or short code; **Host on a Server** makes
+  one (with a creator key, or none where the server lets any player make worlds), or brings one
+  of their own characters' worlds there (its land and its war, with a copy of that character in
+  it), and gives its invite link and a short code, them its owner. Each world says what it does with its
   players' characters: **visiting** (they bring their own, kept on their device as they play),
   **copies** (each copied in once, the copy the world's own), or **made here** (one taken home
   leaves it for good); and its owner can take it **offline** for upkeep. A world's **invite link** (its owner's World
   panel, or the management page's **Invite players**) opens the game from the server and takes
   anyone in, a character made first if they have none; a world **open to anyone** needs no link,
-  and the server's own address shows its worlds on the title. Worlds on servers' **Worlds Guide**
-  goes through every way into a world, a friend's own or one on a server, with examples, and what
-  to do when one won't join. **You**, on the title, is the player's own identity, the same on every
+  and the server's own address shows its worlds on the title. **About Multiplayer** goes through
+  every way to join or host a world, a friend's own or one on a server, with pictures of who links
+  to whom, examples, and what to do when one won't join. **You**, on the title, is the player's own identity, the same on every
   server: the name they go by, their player id (a UUID), and their code to carry them to another
   device.
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
@@ -509,9 +512,11 @@ up. They're all remembered.
   ```sh
   curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash
   ```
-- **Your own world, opened to others.** In the menu, **Invite others** gives a code and a link;
-  others choose **Join a world** on the title screen and type the code (or open the link). With a
-  world server added, it can also be listed there for its players to join with a tap. Games
+- **Your own world, opened to others.** Multiplayer's **Host on this Device** (or, playing, the
+  menu's **Invite others**) gives a code, a link to copy, share or scan, and the server it's open
+  through; others choose Multiplayer, **Join a World on another Device**, and type the code,
+  looking on the same server (or open the link). It can also be listed on the server for its
+  players to join with a tap. Games
   connect to each other directly, or through the server when they can't. The world is yours, the
   one who opened it: what others do is done in it, and when you close it to others (or leave),
   they're told, and go back to their title screen.
@@ -564,7 +569,7 @@ npm start
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
 <http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town,
-`&people=elf` for one of another people, or `&quality=low`). `?join=ABCD` opens Join a world with a
+`&people=elf` for one of another people, or `&quality=low`). `?join=ABCD` opens Join a World on another Device with a
 world's code in it.
 
 The server also carries the relay that games playing together talk through (at `/relay`: a

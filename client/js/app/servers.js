@@ -34,6 +34,12 @@ export { addressOf, DEFAULT_PORT, inviteLink, inviteOf };
 export const SERVERS_KEY = "pellagos.servers";
 export const SERVERS_VERSION = 1;
 
+/**
+ * The servers every game knows from the first (KnownServers offerDefaults): each added once, and
+ * not again once it's forgotten, unless it's asked back (Known Servers, Add the default server back).
+ */
+export const DEFAULT_SERVERS = Object.freeze(["https://pellagos.duckdns.org:8480"]);
+
 /** Where a server's API and play socket are, and the play socket's subprotocol (server/api.js, server/play.js). */
 export const API_PATH = "/api/v1";
 export const PLAY_PATH = "/play";
@@ -98,6 +104,10 @@ export const SERVER_REFUSALS = Object.freeze({
     walled: "This page was opened over https, and browsers won't let it reach a server at home over plain http. Open the game from the server instead.",
     identity: "This isn't the server you played on before. Nothing was sent to it. If it should be, follow a fresh invite link from its owner.",
     proof: "That server couldn't prove who it is, so nothing was sent to it.",
+    maker: "Making worlds on that server needs a creator key from its owner, or its admin key on its own Wi-Fi.",
+    unproved: "That server needs your player identity to make a world, and the game couldn't show it: reload the game and try again.",
+    "made-each": "You've made as many worlds on that server as each player may. Ask its owner for a creator key to make more.",
+    "made-most": "Players have made as many worlds on that server as its owner allows. Ask them for a creator key.",
 });
 
 /** A world server's refusal (or sending out): `error` its code (SERVER_REFUSALS), `message` what to show. */
@@ -197,12 +207,15 @@ const decode64 = (text) => new TextDecoder().decode(Uint8Array.from(atob(text.re
 /**
  * The servers a player knows, kept in `storage` (localStorage) under SERVERS_KEY: each by its
  * address's key, { key, host, port, secure, id (pinned), name, seen, maker (a creator or admin
- * key, if they've one), worlds: { [world]: { name, key, ticket, player, role } } }.
+ * key, if they've one), worlds: { [world]: { name, key, ticket, player, role } } }; and which of
+ * `defaults` (DEFAULT_SERVERS) have been offered already (`offered`, by their keys).
  */
 export class KnownServers {
-    constructor(storage = globalThis.localStorage) {
+    constructor(storage = globalThis.localStorage, { defaults = DEFAULT_SERVERS } = {}) {
         this.storage = storage;
         this.servers = new Map();
+        this.defaults = defaults.map((address) => addressOf(address)).filter(Boolean);
+        this.offered = new Set();
 
         try {
             const kept = JSON.parse(storage?.getItem(SERVERS_KEY) ?? "null");
@@ -213,6 +226,10 @@ export class KnownServers {
                         this.servers.set(one.key, { worlds: {}, ...one });
                     }
                 }
+
+                for (const key of Array.isArray(kept.offered) ? kept.offered : []) {
+                    this.offered.add(String(key));
+                }
             }
         } catch {
             // (Not readable: none known)
@@ -221,10 +238,48 @@ export class KnownServers {
 
     #save() {
         try {
-            this.storage?.setItem(SERVERS_KEY, JSON.stringify({ version: SERVERS_VERSION, servers: [...this.servers.values()] }));
+            this.storage?.setItem(SERVERS_KEY, JSON.stringify({ version: SERVERS_VERSION, servers: [...this.servers.values()], offered: [...this.offered] }));
         } catch {
             // (Storage full or refused: known for now, not kept)
         }
+    }
+
+    /**
+     * The default servers not offered before added (each once: a game that's forgotten one isn't
+     * given it again). Returns those added.
+     */
+    offerDefaults() {
+        const added = this.defaults.filter((address) => !this.offered.has(address.key) && !this.servers.has(address.key));
+        const before = this.offered.size;
+
+        for (const address of this.defaults) {
+            this.offered.add(address.key);
+        }
+
+        for (const address of added) {
+            this.servers.set(address.key, { worlds: {}, id: null, name: null, seen: null, ...address });
+        }
+
+        if (added.length || this.offered.size !== before) {
+            this.#save();
+        }
+
+        return added.map(({ key }) => key);
+    }
+
+    /** Whether the server known by `key` is one of the defaults. */
+    isDefault(key) {
+        return this.defaults.some((address) => address.key === key);
+    }
+
+    /** The default servers not known now (forgotten): to offer back. */
+    missingDefaults() {
+        return this.defaults.filter((address) => !this.servers.has(address.key));
+    }
+
+    /** The default servers forgotten, known again. Returns their records. */
+    restoreDefaults() {
+        return this.missingDefaults().map((address) => this.remember(address));
     }
 
     /** Every server known, the one played on last first. */
@@ -661,13 +716,16 @@ export class ServerClient {
     }
 
     /**
-     * A world made, with a creator or admin key (`maker`): { world, name, ownerKey, playerKey }. The
-     * owner's key kept for it, so the one who made it comes in as its owner.
+     * A world made, with a creator or admin key (`maker`); or, with none, on a server that lets
+     * players make worlds (its card's `server.makers`), by the player's own identity's proof:
+     * { world, name, ownerKey, playerKey }. Its `description` and `settings` (server/storage/
+     * worlds.js WORLD_SETTINGS: mostPlayers, listed, open...) as given. The owner's key kept for
+     * it, so the one who made it comes in as its owner.
      */
-    async makeWorld(maker, { name, race, characters = "own", seed } = {}) {
+    async makeWorld(maker, { name, race, characters = "own", seed, description = "", settings = {} } = {}) {
         await this.prove();
 
-        const made = await this.#call("POST", "/worlds", { key: maker, body: { name, race, characters, ...(Number.isSafeInteger(seed) ? { seed } : {}) } });
+        const made = await this.#call("POST", "/worlds", { key: maker || null, body: { name, race, characters, ...(Number.isSafeInteger(seed) ? { seed } : {}), ...(description ? { description } : {}), ...(Object.keys(settings).length ? { settings } : {}), ...(maker ? {} : this.#shown()) } });
 
         this.servers?.keepWorld(this.record.key, made.world, { name: made.name, key: made.ownerKey, playerKey: made.playerKey, role: "owner" });
 
@@ -676,7 +734,8 @@ export class ServerClient {
 
     /**
      * A character's own world brought to the server ("Bring my world to the server": server/
-     * manage.js bringSolo), with a creator or admin key (`maker`): `character` as app/save.js
+     * manage.js bringSolo), with a creator or admin key (`maker`), or none where players may make
+     * worlds (as makeWorld): `character` as app/save.js
      * exportCharacter gives one, the world named `name` (or after them), its first heroes as
      * `firstHero` has them. A world of the server's, with the land and the war of theirs, their
      * hero its first kept hero, and they its owner: { world, name, ownerKey, playerKey, ticket,
@@ -686,7 +745,8 @@ export class ServerClient {
     async bringWorld(maker, { character, name = null, firstHero = "new" }) {
         await this.prove();
 
-        const brought = await this.#call("POST", "/worlds/bring", { key: maker, raw: await packed({ format: BRING_FORMAT, net: NET_VERSION, name, firstHero, character }), timeout: BRING_TIMEOUT });
+        // (With no key, on a server that lets players make worlds, their identity's proof goes with it)
+        const brought = await this.#call("POST", "/worlds/bring", { key: maker || null, raw: await packed({ format: BRING_FORMAT, net: NET_VERSION, name, firstHero, character, ...(maker ? {} : this.#shown()) }), timeout: BRING_TIMEOUT });
 
         this.servers?.keepWorld(this.record.key, brought.world, { name: brought.name, key: brought.ownerKey, playerKey: brought.playerKey, ticket: brought.ticket, player: brought.player, role: "owner" });
 
@@ -721,6 +781,19 @@ export class ServerClient {
         this.servers?.keepWorld(this.record.key, world, { playerKey: made.key });
 
         return made;
+    }
+
+    /**
+     * A world deleted, by its owner (their session), its name typed to confirm it (`confirm`):
+     * everyone in it sent out ("world-deleted"), the server keeping a backup of it. What's held for
+     * it here forgotten. Returns { deleted }. Throws ServerRefusal ("confirm": the name's not its).
+     */
+    async deleteWorld(world, session, confirm) {
+        const deleted = await this.#call("DELETE", `/worlds/${world}`, { session, body: { confirm } });
+
+        this.servers?.forgetWorld(this.record.key, world);
+
+        return deleted;
     }
 
     /** A world's settings changed (its owner's session: `settings`, as server/storage/worlds.js WORLD_SETTINGS has them): its details. */

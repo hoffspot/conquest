@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=fe3e6f0625",
+                    "./js/app/assets.js": "./js/app/assets.js?h=cddb0ed607",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=277d3dbd65",
@@ -67,6 +67,7 @@
                     "./js/app/manifest.js": "./js/app/manifest.js?h=2a0d0bf38a",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=fa7e3b294a",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=e041e0d8e8",
+                    "./js/app/multiplayer.js": "./js/app/multiplayer.js?h=41f9f53ecd",
                     "./js/app/pacing.js": "./js/app/pacing.js?h=5c58080d6e",
                     "./js/app/pack.js": "./js/app/pack.js?h=63256433c2",
                     "./js/app/partypanel.js": "./js/app/partypanel.js?h=7ef5bd6dcc",
@@ -303,7 +304,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=d392dab2a0",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=b62aea734b",
-                    "./js/main.js": "./js/main.js?h=f3b9e8a5dc",
+                    "./js/main.js": "./js/main.js?h=e296785e1d",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ac0b0422df",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -482,7 +483,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=f3b9e8a5dc"></script>
+        <script type="module" src="js/main.js?h=e296785e1d"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -539,8 +540,7 @@
                     <button type="button" id="newbutton" class="button">New character</button>
                     <button type="button" id="savedbutton" class="button">Characters on this device</button>
                     <button type="button" id="localworldsbutton" class="button">Worlds on this device</button>
-                    <button type="button" id="joinbutton" class="button">Join a world</button>
-                    <button type="button" id="worldsbutton" class="button">Worlds on servers</button>
+                    <button type="button" id="multiplayerbutton" class="button">Multiplayer</button>
                 </div>
                 <p class="note" id="savenote" hidden></p>
                 <!-- On an iPhone or iPad in a browser tab: a word to add the game to the Home Screen, and why (app/homescreen.js) -->
@@ -562,7 +562,7 @@
                 <div class="title-server" id="titleserver" hidden>
                     <h2 class="title-server-name lettering" id="titleservername">Worlds on this server</h2>
                     <p class="note" id="titleservernote"></p>
-                    <ul class="title-worlds" id="titleworlds"></ul>
+                    <ul class="title-worlds world-list" id="titleworlds"></ul>
                 </div>
                 <p class="note warning" id="titlenote" role="status" hidden></p>
                 <label class="switch" title="Show how fast the game runs and what it draws">
@@ -767,13 +767,37 @@
             </div>
         </dialog>
 
-        <!-- Joining a world someone else has opened: its code -->
-        <dialog id="join" class="together" aria-labelledby="jointitle">
+        <!-- Multiplayer (main.js openMultiplayer): every way to play in a world with others, a
+             friend's on their own device or one kept on a world server, joined or hosted; and the
+             servers known. Each opens over it, and Back comes back to it -->
+        <dialog id="multiplayer" class="together multiplayer" aria-labelledby="multiplayertitle">
+            <h2 class="lettering" id="multiplayertitle">Multiplayer</h2>
+            <p class="note">Play in a world with others: a friend's, hosted on their own device while they play it, or one kept on a world server, which goes on when everyone's left.</p>
+            <div class="mp-menu">
+                <button type="button" class="mp-choice mp-about" id="mpabout"><span class="name">About Multiplayer</span><span class="about">Every way to join or host a world, with pictures</span></button>
+                <button type="button" class="mp-choice" id="mpjoindevice"><span class="name">Join a World on another Device</span><span class="about">A friend's world, open while they play: the code or link they give you</span></button>
+                <button type="button" class="mp-choice" id="mpjoinserver"><span class="name">Join a World Hosted on a Server</span><span class="about">Worlds kept on a server: invite links, short codes, keys and open worlds</span></button>
+                <button type="button" class="mp-choice" id="mpservers"><span class="name">Known Servers</span><span class="about">The servers this game knows: add one, and see which are up</span></button>
+                <button type="button" class="mp-choice" id="mphostdevice"><span class="name">Host on this Device</span><span class="about">Your own world open to others while you play: a code and a link to send</span></button>
+                <button type="button" class="mp-choice" id="mphostserver"><span class="name">Host on a Server</span><span class="about">Make a world on a server, yours to own, and invite others into it</span></button>
+            </div>
+            <div class="menu">
+                <button type="button" class="button" id="multiplayerback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- Join a World on another Device: a world someone else has opened (Host on this Device,
+             or their game menu's Invite others), by its code, looked for on the server it's open
+             through; and those listed on the servers known -->
+        <dialog id="join" class="together worlds" aria-labelledby="jointitle">
             <form method="dialog" id="joinform">
-                <h2 class="lettering" id="jointitle">Join a world</h2>
-                <p class="note">Someone playing can open their world to others (in its menu: Invite others). Type the code they give you.</p>
+                <h2 class="lettering" id="jointitle">Join a World on another Device</h2>
+                <p class="note">A friend playing can open their world to others: Multiplayer, Host on this Device, or the game menu's Invite others. Type the four-letter code they give you, and look for it on the server they opened it through.</p>
                 <label class="field" for="joincode">Code</label>
                 <input type="text" id="joincode" class="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD" required>
+                <label class="field" for="joinat">Look for it on</label>
+                <select id="joinat"></select>
+                <p class="note" id="joinatabout"></p>
                 <p class="note" id="joinwho"></p>
                 <button type="button" class="button quiet" id="joinchange" hidden>Change who comes</button>
                 <p class="note warning" id="joinstatus" role="status"></p>
@@ -782,6 +806,8 @@
                     <button type="button" class="button" id="joincancel">Back</button>
                 </div>
             </form>
+            <h3 class="worlds-heading" id="joinlistedheading" hidden>Or join one listed on a server</h3>
+            <ul class="character-list world-list" id="joinlisted" hidden></ul>
         </dialog>
 
         <!-- Back into a world after a crash or a reload, or its link lost (app/rejoin.js; main.js
@@ -804,191 +830,327 @@
              each's worlds (those listed, and those a key or ticket's held for), servers added by an
              address, and short codes and invite links; worlds made; servers and tickets carried -->
         <dialog id="worlds" class="together characters worlds" aria-labelledby="worldstitle">
-            <h2 class="lettering" id="worldstitle">Worlds on servers</h2>
-            <p class="note" id="worldsnote">Worlds kept on a server, a Mac at home or a friend's, that go on when you leave and wait for you to come back.</p>
-            <ul class="character-list world-list" id="worldslist"></ul>
+            <h2 class="lettering" id="worldstitle">Join a World Hosted on a Server</h2>
+            <p class="note">Worlds kept on a world server, a Mac at home or a friend's, that go on when everyone's left and wait for you to come back. Each known server's worlds are below it: tap one to go in.</p>
             <form id="worldsaddform" class="worlds-add">
-                <label class="field" for="worldsaddress">Add a server, or paste an invite link</label>
+                <label class="field" for="worldsaddress">Sent an invite link? Paste it here</label>
                 <div class="worlds-row">
-                    <input type="text" id="worldsaddress" class="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="studio-mac.local:8480">
-                    <button type="submit" class="button" id="worldsadd">Add</button>
+                    <input type="text" id="worldsaddress" class="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://…#server=…">
+                    <button type="submit" class="button" id="worldsadd">Go</button>
                 </div>
             </form>
+            <ul class="character-list world-list" id="worldslist"></ul>
+            <p class="note" id="worldsnote">No servers known yet: add one in Known Servers, by its address.</p>
             <p class="note" id="worldswho"></p>
             <button type="button" class="button quiet" id="worldschange" hidden>Change who comes</button>
             <p class="note warning" id="worldsstatus" role="status"></p>
             <div class="menu">
-                <button type="button" class="button quiet" id="worldsguidebutton">Worlds Guide</button>
-                <button type="button" class="button quiet" id="worldscarry">My servers and tickets</button>
+                <button type="button" class="button quiet" id="worldsservers">Known Servers</button>
                 <button type="button" class="button" id="worldsback">Back</button>
             </div>
         </dialog>
 
-        <!-- The Worlds Guide (Worlds on servers' Worlds Guide): every way into a world, a friend's own
-             or one on a server, how each goes, with examples, and what to do when one won't. Laid
-             out as About is -->
-        <dialog id="worldsguide" class="together about worlds-guide" aria-labelledby="worldsguidetitle">
-            <h2 id="worldsguidetitle">Worlds Guide</h2>
+        <!-- Known Servers: the world servers this game knows, each asked how it is (up, its
+             version, how far, what it does), tested, forgotten; servers found near them; one added
+             by its address or an invite link; the default server asked back; and servers and
+             tickets carried to another device -->
+        <dialog id="servers" class="together characters worlds" aria-labelledby="serverstitle">
+            <h2 class="lettering" id="serverstitle">Known Servers</h2>
+            <p class="note">The world servers this game knows, each asked how it is as this opens. A server keeps worlds for players to come and go in, and finds and links players hosting on their own devices with those who join them.</p>
+            <ul class="character-list world-list server-list" id="serverslist"></ul>
+            <p class="note" id="serversnone" hidden>None known: add one below.</p>
+            <button type="button" class="button quiet" id="serversdefault" hidden>Add the default server back</button>
+            <form id="serversaddform" class="worlds-add">
+                <label class="field" for="serversaddress">Add a server by its address, or paste an invite link</label>
+                <div class="worlds-row">
+                    <input type="text" id="serversaddress" class="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="studio-mac.local:8480">
+                    <button type="submit" class="button" id="serversadd">Add</button>
+                </div>
+            </form>
+            <p class="note warning" id="serversstatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button quiet" id="serverscarry">My servers and tickets</button>
+                <button type="button" class="button" id="serversback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- Host on this Device: one of the characters on this device, their world opened to others
+             as soon as it's played, through the server chosen (or one made first) -->
+        <dialog id="hosthere" class="together characters worlds" aria-labelledby="hostheretitle">
+            <h2 class="lettering" id="hostheretitle">Host on this Device</h2>
+            <p class="note">Your own world, opened to others while you play it here. A server finds it for them by its code and links their games to yours: directly where it can, passing on what's said where it can't. It closes when you stop playing.</p>
+            <h3 class="worlds-heading">Who hosts</h3>
+            <ul class="character-list" id="hostherewho"></ul>
+            <label class="field" for="hostherevia">Through which server</label>
+            <select id="hostherevia"></select>
+            <p class="note" id="hosthereviaabout"></p>
+            <p class="note warning" id="hostherestatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="hostherego">Open my world to others</button>
+                <button type="button" class="button" id="hosthereback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- Host on a Server: a known server chosen; a world made there (new, or one from this
+             device brought), its owner the one who made it; then its invite link and a short code
+             to give others, and in -->
+        <dialog id="hostserver" class="together characters worlds" aria-labelledby="hostservertitle">
+            <h2 class="lettering" id="hostservertitle">Host on a Server</h2>
+            <div id="hostserverpick">
+                <p class="note">A world on a server goes on when everyone's left, and waits for you all to come back. You make it, you own it, and you invite whom you like. Choose the server:</p>
+                <ul class="character-list world-list" id="hostserverlist"></ul>
+                <p class="note" id="hostservernone" hidden>No servers known yet: add one in Known Servers first.</p>
+            </div>
+            <form id="hostserverform" hidden>
+                <p class="note" id="hostserverwhere"></p>
+                <div class="mp-tabs" role="radiogroup" aria-label="What to host">
+                    <button type="button" role="radio" class="mp-tab" id="hostservernew" aria-checked="true">A new world</button>
+                    <button type="button" role="radio" class="mp-tab" id="hostserverbring" aria-checked="false">A world from this device</button>
+                </div>
+                <div class="worlds-fields" id="hostserverfields"></div>
+                <div class="menu">
+                    <button type="submit" class="button primary" id="hostservergo">Make the world</button>
+                </div>
+            </form>
+            <div id="hostserverdone" hidden>
+                <p class="note" id="hostserverdonenote"></p>
+                <div class="world-invite">
+                    <img class="world-invite-qr" id="hostserverqr" alt="" width="168" height="168">
+                    <a id="hostserverlink" href="#" target="_blank" rel="noopener"></a>
+                    <p class="note" id="hostserverreach"></p>
+                    <div class="mp-row">
+                        <button type="button" class="button" id="hostservercopy">Copy the link</button>
+                        <button type="button" class="button quiet" id="hostservershare" hidden>Share…</button>
+                        <button type="button" class="button quiet" id="hostservercode">Make a short code</button>
+                    </div>
+                    <p class="code" id="hostservershort" hidden></p>
+                    <p class="note" id="hostservershortnote" hidden>For someone with the game open already: Multiplayer, Join a World Hosted on a Server, then this server's Enter a short code. It works once, for half an hour.</p>
+                </div>
+            </div>
+            <p class="note warning" id="hostserverstatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="hostservergoin" hidden>Go in</button>
+                <button type="button" class="button" id="hostserverback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- About Multiplayer (Multiplayer's first choice): every way to join or host a world, a
+             friend's on their own device or one on a server, how each goes, with pictures of who
+             links to whom, examples, and what to do when one won't. Laid out as About is -->
+        <dialog id="mpguide" class="together about mp-guide" aria-labelledby="mpguidetitle">
+            <h2 id="mpguidetitle">About Multiplayer</h2>
             <nav class="about-contents" aria-label="Contents">
-                <button type="button" data-to="guide-ways">Which way in?</button>
-                <button type="button" data-to="guide-kinds">Two kinds</button>
-                <button type="button" data-to="guide-characters">Your characters</button>
-                <button type="button" data-to="guide-code">A friend's code</button>
-                <button type="button" data-to="guide-listed">Players' worlds</button>
-                <button type="button" data-to="guide-link">Invite links</button>
-                <button type="button" data-to="guide-address">Addresses</button>
-                <button type="button" data-to="guide-nearby">Nearby</button>
-                <button type="button" data-to="guide-open">Open worlds</button>
-                <button type="button" data-to="guide-short">Short codes</button>
-                <button type="button" data-to="guide-key">Keys</button>
-                <button type="button" data-to="guide-back">Coming back</button>
-                <button type="button" data-to="guide-who">Who you come as</button>
-                <button type="button" data-to="guide-own">Your own world</button>
-                <button type="button" data-to="guide-trouble">Won't join?</button>
+                <button type="button" data-to="mp-ways">Which way?</button>
+                <button type="button" data-to="mp-kinds">Two kinds</button>
+                <button type="button" data-to="mp-joindevice">Join a device's</button>
+                <button type="button" data-to="mp-joinserver">Join a server's</button>
+                <button type="button" data-to="mp-servers">Known Servers</button>
+                <button type="button" data-to="mp-hostdevice">Host here</button>
+                <button type="button" data-to="mp-hostserver">Host on a server</button>
+                <button type="button" data-to="mp-characters">Your characters</button>
+                <button type="button" data-to="mp-back">Coming back</button>
+                <button type="button" data-to="mp-trouble">Won't join?</button>
+                <button type="button" data-to="mp-owners">Running a server</button>
             </nav>
-            <div class="about-body" id="worldsguidebody" tabindex="0"></div>
+            <div class="about-body" id="mpguidebody" tabindex="0"></div>
             <!-- (What it says: put into it while it's open, and kept out of the page till then) -->
-            <template id="worldsguidetext">
-                <section id="guide-ways">
-                    <h3>Which way in?</h3>
-                    <p>Find what you've been given, and do what's beside it.</p>
+            <template id="mpguidetext">
+                <section id="mp-ways">
+                    <h3>Which way?</h3>
+                    <p>Find what you have, or what you want, and do what's beside it. Everything here is under <strong>Multiplayer</strong> on the title.</p>
                     <table class="guide-ways">
                         <tbody>
-                            <tr><th scope="row">A four-letter code from a friend, like <code>KQWX</code></th><td>On the title, <strong>Join a world</strong>: type it and <strong>Join</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-code">A friend's code</button>)</span>.</td></tr>
-                            <tr><th scope="row">A link with <code>?join=</code> in it</th><td>Open it: Join a world opens with the code in it. Tap <strong>Join</strong>.</td></tr>
-                            <tr><th scope="row">An invite link with <code>#server=</code> in it, or its square code</th><td>Open it, or scan the code with your phone's camera. Or paste it here, in <strong>Add a server, or paste an invite link</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-link">Invite links</button>)</span>.</td></tr>
-                            <tr><th scope="row">A server's address, like <code>studio-mac.local:8480</code></th><td>Type it in <strong>Add a server</strong> and <strong>Add</strong>, or open it in your browser <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-address">A server's address</button>)</span>.</td></tr>
-                            <tr><th scope="row">A short code of eight letters and numbers, like <code>7KQM-2XWD</code></th><td>Add its server, then its <strong>Enter a code</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-short">Short codes</button>)</span>.</td></tr>
-                            <tr><th scope="row">A long key, like <code>K7Q2M-…</code></th><td>Tap the world in its server's list and paste it <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-key">Keys</button>)</span>.</td></tr>
-                            <tr><th scope="row">Nothing yet, but there's a server at home</th><td>Add any server you know there: the others on its Wi-Fi show as <strong>Nearby</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-nearby">Servers nearby</button>)</span>.</td></tr>
-                            <tr><th scope="row">You've been in before</th><td>Tap your world: it says <strong>You hold a key to it</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-back">Coming back</button>)</span>.</td></tr>
-                            <tr><th scope="row">A new phone or browser</th><td><strong>My servers and tickets</strong> on the old one, carried to the new <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-back">Coming back</button>)</span>.</td></tr>
+                            <tr><th scope="row">A four-letter code from a friend, like <code>KQWX</code></th><td><strong>Join a World on another Device</strong>: type it, and look for it on the server they opened it through <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-joindevice">Join a device's</button>)</span>.</td></tr>
+                            <tr><th scope="row">A link with <code>?join=</code> in it</th><td>Open it: Join a World on another Device opens with the code and the server in it. Tap <strong>Join</strong>.</td></tr>
+                            <tr><th scope="row">An invite link with <code>#server=</code> in it, or its square code</th><td>Open it, or scan the code with your phone's camera. Or paste it in <strong>Join a World Hosted on a Server</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-joinserver">Join a server's</button>)</span>.</td></tr>
+                            <tr><th scope="row">A short code of eight letters and numbers, like <code>7KQM-2XWD</code></th><td><strong>Join a World Hosted on a Server</strong>, the server's <strong>Enter a short code</strong>.</td></tr>
+                            <tr><th scope="row">A server's address, like <code>studio-mac.local:8480</code></th><td><strong>Known Servers</strong>: type it and <strong>Add</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-servers">Known Servers</button>)</span>. Its worlds then show in Join a World Hosted on a Server.</td></tr>
+                            <tr><th scope="row">You want friends in your world, now</th><td><strong>Host on this Device</strong>: choose who hosts, and send the code or link it gives you <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-hostdevice">Host here</button>)</span>.</td></tr>
+                            <tr><th scope="row">You want a world that's there when you're not</th><td><strong>Host on a Server</strong>: make one on a server, and send its invite link <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-hostserver">Host on a server</button>)</span>.</td></tr>
+                            <tr><th scope="row">You've been in before</th><td>Join a World Hosted on a Server: your world says <strong>You hold a key to it</strong>. Tap it <span class="guide-see">(<button type="button" class="guide-to" data-to="mp-back">Coming back</button>)</span>.</td></tr>
                         </tbody>
                     </table>
                 </section>
-                <section id="guide-kinds">
+                <section id="mp-kinds">
                     <h3>Two kinds of world</h3>
                     <ul>
-                        <li><strong>A friend's own world</strong> is the one they're playing, opened to others from their game. It's there while they play it: when they close it to others, or stop, everyone else goes back to the title. You join it with a <strong>four-letter code</strong>, or the link that carries it.</li>
-                        <li><strong>A world on a server</strong> is kept on a world server: a Mac at home, or a friend's. It goes on when everyone's left, saved as it was, and waits for you to come back. You join it with an <strong>invite link</strong>, the <strong>server's address</strong>, a <strong>short code</strong> or a <strong>key</strong>; after that, your game keeps a <strong>ticket</strong> to come back by.</li>
+                        <li><strong>A world on a device</strong> is the one someone's playing, opened to others from their game. It's there while they play it: when they close it to others, or stop, everyone else goes back to the title. You join it with its <strong>four-letter code</strong>, or the link that carries it.</li>
+                        <li><strong>A world on a server</strong> is kept on a world server: a Mac at home, a friend's, or the default server. It goes on when everyone's left, saved as it was, and waits for you to come back. You join it with an <strong>invite link</strong>, a <strong>short code</strong>, a <strong>key</strong>, or a tap if it's <strong>open to anyone</strong>; after that, your game keeps a <strong>ticket</strong> to come back by.</li>
                         <li>Either way, up to <strong>8</strong> play in a world, and up to <strong>4</strong> make a party. Each comes as one of their own people, at peace or at war with the others as their peoples are.</li>
                     </ul>
+                    <figure class="mp-figure">
+                        <svg class="mp-diagram" viewBox="0 0 320 168" role="img" aria-labelledby="mp-kinds-device">
+                            <title id="mp-kinds-device">A world on a device: your device holds the world; a server finds it for your friend by its code, and links your two devices, directly or through itself</title>
+                            <defs>
+                                <marker id="mp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="mp-head"/></marker>
+                            </defs>
+                            <rect class="mp-box mp-world" x="6" y="70" width="104" height="54" rx="8"/>
+                            <text class="mp-label" x="58" y="92">Your device</text>
+                            <text class="mp-small" x="58" y="110">the world's here</text>
+                            <rect class="mp-box" x="210" y="70" width="104" height="54" rx="8"/>
+                            <text class="mp-label" x="262" y="92">Friend's device</text>
+                            <text class="mp-small" x="262" y="110">types the code</text>
+                            <rect class="mp-box mp-server" x="108" y="6" width="104" height="44" rx="8"/>
+                            <text class="mp-label" x="160" y="25">A server</text>
+                            <text class="mp-small" x="160" y="41">finds it by its code</text>
+                            <line class="mp-line" x1="72" y1="70" x2="128" y2="50" marker-end="url(#mp-arrow)"/>
+                            <line class="mp-line" x1="248" y1="70" x2="192" y2="50" marker-end="url(#mp-arrow)"/>
+                            <text class="mp-small mp-code" x="88" y="62">ABCD</text>
+                            <text class="mp-small mp-code" x="232" y="62">ABCD</text>
+                            <line class="mp-line mp-direct" x1="110" y1="108" x2="210" y2="108" marker-start="url(#mp-arrow)" marker-end="url(#mp-arrow)"/>
+                            <text class="mp-small" x="160" y="140">linked directly where they can be;</text>
+                            <text class="mp-small" x="160" y="156">through the server where they can't</text>
+                        </svg>
+                        <figcaption>A world on a device: it's yours, on your device, while you play.</figcaption>
+                    </figure>
+                    <figure class="mp-figure">
+                        <svg class="mp-diagram" viewBox="0 0 320 150" role="img" aria-labelledby="mp-kinds-server">
+                            <title id="mp-kinds-server">A world on a server: the server holds the world, and each player's device links to it</title>
+                            <rect class="mp-box mp-server mp-world" x="104" y="48" width="112" height="56" rx="8"/>
+                            <text class="mp-label" x="160" y="70">World server</text>
+                            <text class="mp-small" x="160" y="88">the world's here</text>
+                            <rect class="mp-box" x="6" y="6" width="84" height="40" rx="8"/>
+                            <text class="mp-label" x="48" y="30">Its owner</text>
+                            <rect class="mp-box" x="6" y="104" width="84" height="40" rx="8"/>
+                            <text class="mp-label" x="48" y="128">A friend</text>
+                            <rect class="mp-box" x="230" y="56" width="84" height="40" rx="8"/>
+                            <text class="mp-label" x="272" y="80">Another</text>
+                            <line class="mp-line" x1="90" y1="34" x2="112" y2="50" marker-end="url(#mp-arrow)"/>
+                            <line class="mp-line" x1="90" y1="116" x2="112" y2="102" marker-end="url(#mp-arrow)"/>
+                            <line class="mp-line" x1="230" y1="76" x2="218" y2="76" marker-end="url(#mp-arrow)"/>
+                        </svg>
+                        <figcaption>A world on a server: it goes on when everyone's left, and waits for you all.</figcaption>
+                    </figure>
                 </section>
-                <section id="guide-characters">
-                    <h3>Your characters in a world on a server</h3>
-                    <p>Each world on a server says what it does with its players' characters, on its card in the lists, and again before you choose who goes in:</p>
-                    <ul>
-                        <li><strong>Visit as your own.</strong> You choose one of the characters on this device, or make a new one. They're yours: what they gain there stays with them, kept as you play, and when you leave they leave with you.</li>
-                        <li><strong>Copies stay here.</strong> A character on this device is copied in, once. The copy is the world's own, shown as <em>Ada · Fernhollow's copy</em>: what it does there never comes back to your Ada, and it can't be taken out again.</li>
-                        <li><strong>Made here.</strong> Characters are made in the world, and belong to it. <strong>Take one home</strong> moves one out to this device for good: it's gone from the world after that.</li>
-                    </ul>
-                    <p>A world can be <strong>offline for upkeep</strong> a while: nobody can come in till its owner brings it back.</p>
-                </section>
-                <section id="guide-code">
-                    <h3>A friend's world, by its code</h3>
-                    <p><strong>The one playing:</strong></p>
-                    <ol>
-                        <li>Open the menu and choose <strong>Invite others</strong>.</li>
-                        <li>The game gives a code of four letters, and a link. Send either, or read the code out.</li>
-                        <li>Playing through a world server, <strong>List it on</strong> the server puts your world on its list too, for anyone there to join with a tap.</li>
-                    </ol>
+                <section id="mp-joindevice">
+                    <h3>Join a World on another Device</h3>
+                    <p>For a friend's world, open while they play it. <strong>The one playing:</strong> Multiplayer, <strong>Host on this Device</strong> (or, already playing, the game menu's <strong>Invite others</strong>). The game gives them a code of four letters, and a link, and says which server it's open through.</p>
                     <p><strong>The one joining:</strong></p>
                     <ol>
-                        <li>On the title, choose <strong>Join a world</strong> (or open the link they sent).</li>
+                        <li>Multiplayer, <strong>Join a World on another Device</strong> (or open the link they sent: it fills everything in).</li>
                         <li>Type the code. Letters only: <code>kqwx</code> is <code>KQWX</code>.</li>
-                        <li>Check who you'll come as (<strong>Change who comes</strong> to pick another of your characters), and <strong>Join</strong>.</li>
+                        <li><strong>Look for it on</strong> the server they opened it through. The code's only known there: it's the one their Invite says (<em>Your world's open to others through Pellagos</em>, say).</li>
+                        <li>Check who you'll come as (<strong>Change who comes</strong> picks another of your characters), and <strong>Join</strong>.</li>
                     </ol>
-                    <p class="guide-example"><strong>Example.</strong> Mara's playing. She opens the menu, <strong>Invite others</strong>, and reads out <code>KQWX</code>. On your title you choose <strong>Join a world</strong>, type <code>KQWX</code> and <strong>Join</strong>: you arrive in her world as your own character, an elf among her humans.</p>
-                    <p>A typed code is looked for where you opened the game from. If it says there's no world open with that code, open the link they sent instead: it says where their world is open.</p>
-                </section>
-                <section id="guide-listed">
-                    <h3>Players' worlds on a server</h3>
-                    <p>A world a player has opened through a server, and listed there, shows under the server here as <strong>A player's world</strong>. Tap <strong>Join it</strong>, and you're asked who comes, as with a code.</p>
+                    <p class="guide-example"><strong>Example.</strong> Mara's playing. She opens Multiplayer, Host on this Device, and it says <em>open to others through Pellagos (the default server)</em>, code <code>KQWX</code>. On your title you choose Multiplayer, Join a World on another Device, type <code>KQWX</code>, look for it on <strong>Pellagos</strong>, and <strong>Join</strong>: you arrive in her world as your own character, an elf among her humans.</p>
+                    <p>Worlds their hosts have listed on a server show below the code, as <strong>Or join one listed on a server</strong>: tap one to join it. Each says how you'll be linked:</p>
                     <ul>
                         <li><strong>linked directly</strong>: your game and theirs talk to each other.</li>
                         <li><strong>on your network</strong>: they're on the same Wi-Fi as you.</li>
                         <li><strong>through the server</strong>: your games can't reach each other, so the server passes what they say between them.</li>
                     </ul>
                 </section>
-                <section id="guide-link">
-                    <h3>Invite links</h3>
-                    <p>A world's owner gets its invite link from the world's menu (<strong>World</strong>, then <strong>Invite link</strong>), with a square code to scan; a server's owner, from its management page. One link does for everyone it's sent to.</p>
-                    <ol>
-                        <li>Open the link, or scan its code with your phone's camera.</li>
-                        <li>The game opens from the server itself, so it's always the server's own version.</li>
-                        <li>The first time, you make a character for the world (or choose one of yours); then you're in.</li>
-                    </ol>
+                <section id="mp-joinserver">
+                    <h3>Join a World Hosted on a Server</h3>
+                    <p>Each server you know is listed, with its worlds under it: those it lists for anyone, those open to anyone, and those you hold a key or ticket for. Tap a world to go in.</p>
+                    <ul>
+                        <li><strong>Open to anyone: tap to join.</strong> No link or key needed.</li>
+                        <li><strong>Needs a key.</strong> Ask its owner for an invite link; or tap it and paste a key they gave you.</li>
+                        <li><strong>You hold a key to it</strong>, or <strong>You own it</strong>: tap it to go back in.</li>
+                        <li><strong>Offline for upkeep</strong>: nobody can come in till its owner brings it back.</li>
+                    </ul>
+                    <p><strong>An invite link</strong> is the easiest. Its owner gets it from the world's menu (<strong>World</strong>, then <strong>Invite link</strong>), with a square code to scan. Open it, or scan it with your phone's camera, or paste it at the top here. The game opens from the server itself, so it's always the server's own version; the first time, you make or choose a character, then you're in.</p>
                     <p class="guide-example"><strong>Example.</strong> <code>https://pellagos.duckdns.org:8480/#server=pellagos.duckdns.org%3A8480&amp;secure=1&amp;world=…&amp;key=…</code> opens the game from that server and takes you into the world it names, with the key it carries. What follows the <code>#</code> stays on your device: it's never sent anywhere.</p>
-                    <p>Pasted into <strong>Add a server, or paste an invite link</strong> here, a link does the same in the page you're on. A link that carries the server's Wi-Fi address (<code>192.168.1.20</code>, say) works at home alone, until the server's open to the internet.</p>
+                    <p><strong>A short code</strong> is eight letters and numbers, easy to say aloud, for someone who has the game open already. The world's owner makes one (the world's menu, <strong>World</strong>, <strong>Make a short code</strong>; or as they make it, in Host on a Server). It works once, for half an hour: tap the server's <strong>Enter a short code</strong>, type <code>7KQM-2XWD</code> (the dash, and capitals, don't matter) and <strong>Enter</strong>.</p>
+                    <p><strong>A key</strong> is long, like <code>K7Q2M-…</code>: an <strong>owner's</strong> (everything), a <strong>trusted</strong> player's (playing, and giving others keys, if the world allows it) or a <strong>player's</strong> (playing). An owner can take a key back, and whoever came by it is sent out.</p>
                 </section>
-                <section id="guide-address">
-                    <h3>A server's address</h3>
-                    <p>Type it in <strong>Add a server</strong> and <strong>Add</strong>. Its card shows how it is, and its worlds under it. <code>:8480</code>, the usual port, can be left off.</p>
+                <section id="mp-servers">
+                    <h3>Known Servers</h3>
+                    <p>The world servers this game knows. Each is asked how it is as the list opens, and says:</p>
+                    <ul>
+                        <li><strong>Up</strong>, with its version and how far away it is (<code>45 ms</code>), how many worlds it lists, whether it <strong>connects players</strong> (for Host on this Device), and whether <strong>anyone may make worlds</strong> on it (for Host on a Server) or only those with a creator key.</li>
+                        <li><strong>Can't be reached</strong>: it's off, its address is wrong, or it isn't open to the internet. <strong>Check again</strong> asks once more.</li>
+                        <li><strong>Another version</strong>: its game and yours differ. <strong>Open the game from this server</strong> always matches it.</li>
+                    </ul>
+                    <p><strong>Adding one.</strong> Type its address and <strong>Add</strong>. <code>:8480</code>, the usual port, can be left off.</p>
                     <ul>
                         <li><code>studio-mac.local</code>: a Mac on your Wi-Fi, by its name.</li>
                         <li><code>192.168.1.20:8480</code>: a computer on your Wi-Fi, by its number.</li>
                         <li><code>pellagos.duckdns.org:8480</code>: a server reached from the internet.</li>
                     </ul>
-                    <p>Or open the address in your browser (<code>http://</code> on its Wi-Fi, <code>https://</code> from the internet): the game opens from the server, and the title shows its worlds under <strong>Worlds on this server</strong>.</p>
-                    <p class="guide-example"><strong>Example.</strong> Your friend's Mac is called Studio. Type <code>studio-mac.local</code>, <strong>Add</strong>: <strong>Studio</strong> appears with its worlds, each saying how to get in.</p>
+                    <p><strong>The default server</strong>, <code>pellagos.duckdns.org:8480</code>, is known to every game from the first, so there's always somewhere to host and meet. <strong>Forget</strong> takes it off your list; <strong>Add the default server back</strong> brings it back.</p>
+                    <p><strong>Nearby</strong>: a server finds the others on its Wi-Fi. Once you know one, those it finds show as <strong>Nearby</strong>: tap one to add it. <strong>Test from outside</strong> tries each of a server's ways in from where you are, and tells its owner how it went. <strong>My servers and tickets</strong> carries every server you know, with your keys and tickets, to another device.</p>
                 </section>
-                <section id="guide-nearby">
-                    <h3>Servers nearby</h3>
-                    <p>A server finds the others on its Wi-Fi. Once you know one, those it finds show here as <strong>Nearby</strong>, with how many worlds each lists: tap one to add it.</p>
+                <section id="mp-hostdevice">
+                    <h3>Host on this Device</h3>
+                    <ol>
+                        <li>Multiplayer, <strong>Host on this Device</strong>.</li>
+                        <li>Choose <strong>who hosts</strong>: one of your characters, in their own world (or a new one, made first).</li>
+                        <li>Choose <strong>which server</strong> it's open through. Any server that connects players will do; your friends look for the code on the same one. The one you chose last is chosen for you next time.</li>
+                        <li><strong>Open my world to others.</strong> The game starts, and says the server, the code, and a link (with <strong>Copy the link</strong>, <strong>Share…</strong> on a phone, and a square code to scan).</li>
+                        <li>Send the code or the link. Whoever comes is shown in the game menu's <strong>Who's here</strong>.</li>
+                    </ol>
+                    <p>It's open as long as you play it: <strong>Close the world to others</strong> (the game menu's Who's here) or stopping closes it, and everyone else goes back to the title. Your world, and what happens in it, stays on your device. A link from a game opened at <code>localhost</code> opens on your device alone, and one from an address at home on your Wi-Fi alone: the game says so.</p>
                 </section>
-                <section id="guide-open">
-                    <h3>Open worlds</h3>
-                    <p>A world its owner has made <strong>open to anyone</strong> says <strong>Open to anyone: tap to join</strong>. Tap it: no link or key needed. Your game's given a ticket like anyone's, to come back by.</p>
+                <section id="mp-hostserver">
+                    <h3>Host on a Server</h3>
+                    <figure class="mp-figure">
+                        <svg class="mp-diagram" viewBox="0 0 320 74" role="img" aria-labelledby="mp-host-steps">
+                            <title id="mp-host-steps">Host on a Server, step by step: choose a server; make the world; send its invite link or a short code; your friends come in</title>
+                            <rect class="mp-box mp-server" x="2" y="10" width="70" height="54" rx="8"/>
+                            <text class="mp-label" x="37" y="33">Choose</text>
+                            <text class="mp-small" x="37" y="50">a server</text>
+                            <rect class="mp-box mp-world" x="84" y="10" width="70" height="54" rx="8"/>
+                            <text class="mp-label" x="119" y="33">Make</text>
+                            <text class="mp-small" x="119" y="50">the world</text>
+                            <rect class="mp-box" x="166" y="10" width="70" height="54" rx="8"/>
+                            <text class="mp-label" x="201" y="33">Send</text>
+                            <text class="mp-small" x="201" y="50">link or code</text>
+                            <rect class="mp-box" x="248" y="10" width="70" height="54" rx="8"/>
+                            <text class="mp-label" x="283" y="33">Friends</text>
+                            <text class="mp-small" x="283" y="50">come in</text>
+                            <line class="mp-line" x1="72" y1="37" x2="82" y2="37" marker-end="url(#mp-arrow)"/>
+                            <line class="mp-line" x1="154" y1="37" x2="164" y2="37" marker-end="url(#mp-arrow)"/>
+                            <line class="mp-line" x1="236" y1="37" x2="246" y2="37" marker-end="url(#mp-arrow)"/>
+                        </svg>
+                    </figure>
+                    <ol>
+                        <li>Multiplayer, <strong>Host on a Server</strong>, and choose one of your known servers. Each says whether <strong>anyone may make worlds</strong> there (each player a few, as its owner allows), or it needs a <strong>creator key</strong> from its owner (or its admin key, on its own Wi-Fi).</li>
+                        <li><strong>A new world</strong>: its name, whose town it starts in, what it does with its players' characters, how many may be in it at once, whether it's <strong>listed</strong> for anyone to see and <strong>open to anyone</strong> to join without a link, and its land's seed if you want a particular one. Or <strong>a world from this device</strong>: one of your characters' own worlds, its land and its war as it stands, with that character in it.</li>
+                        <li><strong>Make the world.</strong> It's yours: you're its owner. The game gives its <strong>invite link</strong> (copy it, share it, or let them scan its code) and, if you like, a <strong>short code</strong> to say aloud.</li>
+                        <li><strong>Go in</strong>, or come back to it any time from Join a World Hosted on a Server. Invite others later from the world's menu: <strong>World</strong>, then <strong>Invite link</strong>, <strong>Make a short code</strong>, or <strong>Open to anyone</strong>.</li>
+                    </ol>
+                    <p>Your owner's key is kept in this game. <strong>My servers and tickets</strong> (Known Servers) carries it to another device: keep that code to yourself.</p>
+                    <p>Done with it? In the world, its menu's <strong>World</strong>, then <strong>Delete this world</strong> at the foot, and type its name: everyone's sent out, and it's gone for good (the server keeps a backup for its owner). On a server where players may make only so many, that's room for another.</p>
                 </section>
-                <section id="guide-short">
-                    <h3>Short codes</h3>
-                    <p>A short code is eight letters and numbers, easy to say aloud or type on a phone, for someone who has the game open already. A world's owner makes one in the world's menu (<strong>World</strong>, then <strong>Make a short code</strong>). It works once, for half an hour.</p>
-                    <p class="guide-example"><strong>Example.</strong> Add the server, then tap its <strong>Enter a code</strong>, type <code>7KQM-2XWD</code> (the dash, and capitals, don't matter) and <strong>Enter</strong>.</p>
+                <section id="mp-characters">
+                    <h3>Your characters in a world on a server</h3>
+                    <p>Each world on a server says what it does with its players' characters, on its card, and again before you choose who goes in:</p>
+                    <ul>
+                        <li><strong>Visit as your own.</strong> You choose one of the characters on this device, or make a new one. They're yours: what they gain there stays with them, kept as you play, and when you leave they leave with you.</li>
+                        <li><strong>Copies stay here.</strong> A character on this device is copied in, once. The copy is the world's own, shown as <em>Ada · Fernhollow's copy</em>: what it does there never comes back to your Ada, and it can't be taken out again.</li>
+                        <li><strong>Made here.</strong> Characters are made in the world, and belong to it. <strong>Take one home</strong> moves one out to this device for good: it's gone from the world after that.</li>
+                    </ul>
+                    <p>Under each list, the game says who you'll come as: the character you played last. <strong>Change who comes</strong> picks another of yours. With none, you make one first.</p>
                 </section>
-                <section id="guide-key">
-                    <h3>Keys</h3>
-                    <p>A world listed on a server that you hold nothing for says <strong>Ask its owner for an invite link</strong>. An invite link is easiest; or its owner can give you a key. Tap the world, paste the key, <strong>Enter</strong>.</p>
-                    <p>A key's an <strong>owner's</strong> (everything), a <strong>trusted</strong> player's (playing, and giving others keys, if the world allows it) or a <strong>player's</strong> (playing). An owner can take a key back, and whoever came by it is sent out.</p>
-                </section>
-                <section id="guide-back">
+                <section id="mp-back">
                     <h3>Coming back, and other devices</h3>
                     <ul>
                         <li>Once you've been in, your game keeps a <strong>ticket</strong> for the world, on that device: the world says <strong>You hold a key to it</strong> (or <strong>You own it</strong>). Tap it to go back in, no link needed.</li>
-                        <li>On another phone or browser, ask the owner for the link again; or, on the old one, choose <strong>My servers and tickets</strong>, copy the code, and paste it into My servers and tickets on the new one: <strong>Take it in</strong>.</li>
-                        <li>That code opens your worlds: keep it to yourself.</li>
-                        <li><strong>You</strong>, on the title, is you as a player: the name you go by and your own player id, the same on every server. Its <strong>Show my code</strong> carries you to another device: there, in You, <strong>Use my code from another device</strong>, and every world that knows you knows you there too, ticket or none. Anyone with your code can play as you: keep it to yourself.</li>
+                        <li>On another phone or browser, ask the owner for the link again; or, on the old one, Known Servers, <strong>My servers and tickets</strong>, copy the code, and paste it into My servers and tickets on the new one: <strong>Take it in</strong>. That code opens your worlds: keep it to yourself.</li>
+                        <li><strong>You</strong>, on the title, is you as a player: the name you go by and your own player id, the same on every server. Its <strong>Show my code</strong> carries you to another device: there, in You, <strong>Use my code from another device</strong>, and every world that knows you knows you there too.</li>
+                        <li>The game falling over, or the page reloaded, in a world: open it again within half an hour and it goes straight back in.</li>
                     </ul>
                 </section>
-                <section id="guide-who">
-                    <h3>Who you come as</h3>
-                    <ul>
-                        <li>Under the list, the game says who you'll come as: the character you played last. <strong>Change who comes</strong> picks another of yours. With none, you make one first.</li>
-                        <li>Going in, the game asks who: what you're offered is as the world says (<button type="button" class="guide-to" data-to="guide-characters">Your characters</button>). A world that says <strong>Visit as your own</strong> lists the characters on this device; <strong>Copies stay here</strong>, your copies there and those you can copy in; <strong>Made here</strong>, yours there, a new one, and <strong>Take one home</strong>.</li>
-                    </ul>
-                </section>
-                <section id="guide-own">
-                    <h3>A world of your own on a server</h3>
-                    <ul>
-                        <li><strong>Make a world</strong>, on a server's card: give the key the server printed when it first started (on its Wi-Fi), or a <strong>creator key</strong> its owner made you; name the world, choose whose town it starts in, and what it does with its players' characters. You're its owner.</li>
-                        <li><strong>Bring my world</strong>, on a server's card: one of your characters' own worlds, its land and its war as it stands, made a world of the server's, with that character in it.</li>
-                        <li>Then invite others from the world's menu: <strong>World</strong>, then <strong>Invite link</strong>, <strong>Make a short code</strong>, or <strong>Open to anyone</strong>.</li>
-                    </ul>
-                </section>
-                <section id="guide-trouble">
+                <section id="mp-trouble">
                     <h3>When it won't join</h3>
                     <ul>
-                        <li><strong>There's no world open with that code</strong>: check the four letters, or open the link they sent <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-code">A friend's code</button>)</span>. A friend's world closes when they stop playing.</li>
+                        <li><strong>There's no world open with that code</strong>: check the four letters, and that you're looking on the server they opened it through (their Invite says which). A friend's world closes when they stop playing.</li>
                         <li><strong>That world's full</strong>: 8 are in it already. Try again when one leaves.</li>
-                        <li><strong>Another version of the game</strong>: a server's card says which is the newer, and offers <strong>Open the game from this server</strong>, which is always its version. A friend's world: whoever has the older one reloads the game.</li>
-                        <li><strong>Open the game from the server</strong>: the game's website can't reach a server at home over the Wi-Fi. That opens the game from the server itself, with your worlds.</li>
+                        <li><strong>Another version of the game</strong>: a server says which is the newer, and offers <strong>Open the game from this server</strong>, which is always its version. A friend's world: whoever has the older one reloads the game.</li>
+                        <li><strong>Can't be reached from this page</strong>: a page opened over https (the game's website) can't reach a server at home over plain http. <strong>Open the game from the server</strong> opens it from the server itself, with your worlds.</li>
                         <li><strong>A short code that's run out</strong>: each works once, for half an hour. Ask for another.</li>
                         <li><strong>A link that's stopped working</strong>: its owner may have replaced it. Ask for the new one. If you've been in before, you come back as ever.</li>
-                        <li><strong>Test this server</strong>, on its card, tries each of its ways in from where you are and says how it went: its owner sees it on their management page. <strong>Forget</strong> takes a server off your list.</li>
+                        <li><strong>A server won't make your world</strong>: it needs a creator key, or you've made as many there as its owner lets each player. Delete one of yours (in it, <strong>World</strong>, <strong>Delete this world</strong>), or ask its owner.</li>
                     </ul>
+                </section>
+                <section id="mp-owners">
+                    <h3>Running a server</h3>
+                    <p>Anyone can run a world server on a computer at home (a Mac first): it keeps worlds, serves the game, and connects players hosting on their own devices. Its management page sets who may make worlds there: <strong>creator keys</strong> for those it's given to, and <strong>Let any player make worlds</strong> (off unless its owner turns it on), with how many each player may make and how many in all. How to run one, open it to the internet and keep its worlds safe is in the project's <code>docs/SERVER.md</code>.</p>
                 </section>
             </template>
             <div class="menu">
-                <button type="button" class="button primary" id="worldsguideclose">Back to worlds</button>
+                <button type="button" class="button primary" id="mpguideclose">Back to Multiplayer</button>
             </div>
         </dialog>
 
@@ -1040,6 +1202,20 @@
                 </label>
                 <h3 class="worlds-heading">Keys</h3>
                 <ul class="character-list" id="worldpanelkeys"></ul>
+                <!-- Deleting it, its owner's alone: its name typed to be sure -->
+                <div class="world-delete" id="worldpaneldeleting" hidden>
+                    <h3 class="worlds-heading">Delete this world</h3>
+                    <p class="note" id="worldpaneldeletenote"></p>
+                    <button type="button" class="button danger" id="worldpaneldelete">Delete this world…</button>
+                    <form id="worldpaneldeleteform" hidden>
+                        <label class="field" for="worldpaneldeletename" id="worldpaneldeletelabel">Type its name to delete it</label>
+                        <input type="text" id="worldpaneldeletename" class="text" autocomplete="off" spellcheck="false">
+                        <div class="menu">
+                            <button type="submit" class="button danger" id="worldpaneldeletego">Delete it for good</button>
+                            <button type="button" class="button" id="worldpaneldeletekeep">Keep it</button>
+                        </div>
+                    </form>
+                </div>
             </div>
             <p class="note warning" id="worldpanelstatus" role="status"></p>
             <div class="menu">
@@ -1177,7 +1353,16 @@
             <h2 id="invitetitle">Invite others</h2>
             <p class="note" id="invitestatus" role="status">Opening your world to others…</p>
             <p class="code" id="invitecode" hidden></p>
-            <p class="note" id="invitehow" hidden>They choose Join a world on the title screen and type the code, or open <a id="invitelink" href="#" target="_blank" rel="noopener"></a>. Each comes as one of the people they play, at peace or at war with yours as your peoples are.</p>
+            <p class="note" id="invitehow" hidden>They choose Multiplayer, then Join a World on another Device, and type the code (looking for it on <span id="inviteon">the same server</span>), or they open the link. Each comes as one of the people they play, at peace or at war with yours as your peoples are.</p>
+            <div class="world-invite" id="inviteshare" hidden>
+                <img class="world-invite-qr" id="inviteqr" alt="" width="168" height="168">
+                <a id="invitelink" href="#" target="_blank" rel="noopener"></a>
+                <p class="note" id="invitereach" hidden></p>
+                <div class="mp-row">
+                    <button type="button" class="button" id="invitecopy">Copy the link</button>
+                    <button type="button" class="button quiet" id="invitesend" hidden>Share…</button>
+                </div>
+            </div>
             <label class="switch option" id="invitelisting" hidden>
                 <span class="text"><span id="invitelistname">List it on the server</span><small>Players there see it among the server's worlds and join it with a tap; off, only those you give the code to come</small></span>
                 <input type="checkbox" id="invitelist" role="switch">
@@ -1225,7 +1410,7 @@
                         <li><strong>Continue</strong> carries on as the character you played last, just where you left them.</li>
                         <li><strong>Characters on this device</strong> keeps up to six. A new character starts in a world of their own.</li>
                         <li><strong>Worlds on this device</strong> keeps up to eight, apart from the characters: each its own land and war. Choose one, then who goes in: what they carry and have grown into goes with them, and each world remembers its own of them (what its folk know of them, where they stand, their requests and followers, where they were).</li>
-                        <li><strong>Join a world</strong> and <strong>Worlds on servers</strong> are for playing with others (Playing together, below).</li>
+                        <li><strong>Multiplayer</strong> is for playing with others (Playing together, below).</li>
                     </ul>
                 </section>
                 <section id="about-move">
@@ -1296,11 +1481,12 @@
                 <section id="about-together">
                     <h3>Playing together</h3>
                     <ul>
-                        <li><strong>Worlds on a server.</strong> A world server keeps worlds that go on when everyone's left. Open an <strong>invite link</strong> from a world's owner (or scan its code): the game opens, you make a character if you have none, and you're in. Opened from the server's own address, the title shows its worlds; one open to anyone joins with a tap.</li>
-                        <li><strong>Your own world.</strong> In the menu, <strong>Invite others</strong> gives a code and a link; friends choose <strong>Join a world</strong> on their title screen and type the code.</li>
+                        <li><strong>Multiplayer</strong>, on the title, has every way to join or host a world with others.</li>
+                        <li><strong>Worlds on a server.</strong> A world server keeps worlds that go on when everyone's left. Open an <strong>invite link</strong> from a world's owner (or scan its code): the game opens, you make a character if you have none, and you're in. Or <strong>Join a World Hosted on a Server</strong>; or make one of your own, <strong>Host on a Server</strong>. Opened from the server's own address, the title shows its worlds; one open to anyone joins with a tap.</li>
+                        <li><strong>Your own world.</strong> <strong>Host on this Device</strong> (or, playing, the menu's <strong>Invite others</strong>) gives a code and a link; friends choose <strong>Join a World on another Device</strong> and type the code.</li>
                         <li>Up to eight play in a world; up to four make a party, with a chat of their own: what any of them brings down near the others counts for them all, and each finds their own loot.</li>
                         <li>Each comes as one of their own people, so you're at peace or at war with each other as your peoples are, unless you're in a party.</li>
-                        <li><strong>Worlds on servers</strong> has a <strong>Worlds Guide</strong>: every way into a world, with examples, and what to do when one won't join.</li>
+                        <li><strong>About Multiplayer</strong> goes through every way to join or host a world, with pictures and examples, and what to do when one won't join.</li>
                     </ul>
                 </section>
                 <section id="about-saving">
