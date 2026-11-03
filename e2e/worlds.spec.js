@@ -322,6 +322,10 @@ test("a world that takes copies: a character on this device copied in once, told
     await expect(ask).toBeHidden();
     await page.keyboard.press("Escape");
     await expect(page.locator("#worlds")).toBeHidden();
+    // (Back to Multiplayer, open under it: closed too)
+    await expect(page.locator("#multiplayer")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#multiplayer")).toBeHidden();
 
     // A world whose characters are its own: a new one, made there, looking as Ada does
     await into(own.world, "Ownby");
@@ -468,7 +472,7 @@ test("a server that proves to be another than the one pinned is sent no key", as
     await theirs.getByRole("button").click();
     await expect(page.locator("#worldsstatus")).toContainText("This isn't the server you played on before", { timeout: 30000 });
     expect(asked).toEqual([]);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].id)).toBe("AAAAA-AAAAA-AAAAA-AAAAA-AAAAA");
+    expect(await page.evaluate((key) => JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.key === key).id, key)).toBe("AAAAA-AAAAA-AAAAA-AAAAA-AAAAA");
 });
 
 test("a newcomer with no character follows a world's invite link: makes a character, told it's for that world, and goes straight in", async ({ page }) => {
@@ -523,7 +527,7 @@ test("the server's own address shows its worlds on the title: one open to anyone
     const access = server.access.world(made.world);
 
     expect(access.players().map(({ via }) => via)).toEqual([access.door().id]);
-    expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].worlds[world].ticket), made.world)).toBe(true);
+    expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.worlds?.[world])?.worlds[world].ticket), made.world)).toBe(true);
 });
 
 test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {
