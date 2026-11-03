@@ -148,7 +148,10 @@ function cellsOf(root) {
     return [...byCell.entries()].map(([name, levels]) => {
         const sorted = levels.sort((a, b) => a[0] - b[0]).map(([, node]) => node);
 
+        // (None drawn till it's chosen: a node's drawn as it's read, and a cell first shown at no
+        // detail, in a block drawn whole, would be left drawn at all of them)
         for (const node of sorted) {
+            node.visible = false;
             node.traverse((part) => {
                 if (part.isMesh) {
                     part.castShadow = true;
