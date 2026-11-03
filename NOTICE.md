@@ -27,7 +27,8 @@
   Mesh2Motion's (CC0); and
   the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, with its
   two other skins; and the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, with its two other skins
-  (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, and its
+  stand-in seen from afar (`client/models/scenery/LICENSE.md`). Don't copy one out of the game or use it in anything else.
 - **The book's code and assets, in the git history.** The repository began as Last Colony, the
   game from the book *Pro HTML5 Games* by Aditya Ravi Shankar. None of the book's code, images or
   sounds is in the repository now: the last of them went with `aec39bc0`, "Pellagos, part 1:

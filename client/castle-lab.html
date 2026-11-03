@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="Castle lab: Bellhaven, the White Castle, drawn as the game draws the world out of doors, walked from its bridge to the keep's doors by the game's camera, with its draw calls, triangles, graphics memory and frame time; its details, texture sizes, shadows and the game's quality levels switched">
+
+        <title>Castle Lab</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <style>
+            :root {
+                --background: #101418;
+                --panel: rgba(23, 29, 35, 0.92);
+                --line: #2d3843;
+                --text: #dce5ee;
+                --muted: #8a99a8;
+                --accent: #e0a24a;
+                --accent-text: #1b1206;
+                --edge: max(12px, env(safe-area-inset-left));
+                --edge-right: max(12px, env(safe-area-inset-right));
+
+                color-scheme: dark;
+                font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            }
+
+            [hidden] {
+                display: none !important;
+            }
+
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: var(--background);
+                color: var(--text);
+                overflow: hidden;
+                -webkit-text-size-adjust: 100%;
+            }
+
+            #view {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                display: block;
+                touch-action: none;
+            }
+
+            .panel {
+                position: fixed;
+                top: max(12px, env(safe-area-inset-top));
+                left: var(--edge);
+                width: min(300px, calc(100% - var(--edge) - var(--edge-right)));
+                max-height: calc(100% - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+                overflow: auto;
+                display: grid;
+                gap: 10px;
+                padding: 12px;
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 12px;
+                box-sizing: border-box;
+            }
+
+            h1 {
+                margin: 0;
+                font-size: 16px;
+            }
+
+            label {
+                display: grid;
+                gap: 4px;
+                color: var(--muted);
+                font-size: 12px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
+
+            .row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: var(--text);
+                text-transform: none;
+                letter-spacing: 0;
+                font-size: 14px;
+            }
+
+            select,
+            button {
+                font: inherit;
+                color: var(--text);
+                background: #171d23;
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 8px 12px;
+                min-height: 40px;
+            }
+
+            button {
+                background: var(--accent);
+                color: var(--accent-text);
+                border-color: var(--accent);
+                font-weight: 600;
+            }
+
+            button:disabled {
+                opacity: 0.6;
+            }
+
+            pre {
+                margin: 0;
+                white-space: pre-wrap;
+                font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+                font-variant-numeric: tabular-nums;
+            }
+
+            #status {
+                color: var(--muted);
+                font-size: 13px;
+            }
+        </style>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+    </head>
+
+    <body>
+        <canvas id="view"></canvas>
+
+        <div class="panel">
+            <h1>Castle lab: Bellhaven</h1>
+            <div id="status">Starting…</div>
+            <pre id="stats"></pre>
+            <label>
+                Quality
+                <select id="quality">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </label>
+            <label>
+                Detail
+                <select id="detail">
+                    <option value="auto">By distance (as the game)</option>
+                    <option value="0">Nearest everywhere</option>
+                    <option value="1">Far everywhere</option>
+                </select>
+            </label>
+            <label>
+                Far off
+                <select id="far">
+                    <option value="blocks">Blocks of cells, merged</option>
+                    <option value="stone">Blocks, the stone all one</option>
+                    <option value="cells">Cell by cell</option>
+                </select>
+            </label>
+            <label>
+                Textures
+                <select id="textures">
+                    <option value="0">As built</option>
+                    <option value="1">Half the size</option>
+                    <option value="2">A quarter</option>
+                </select>
+            </label>
+            <label class="row"><input id="shadows" type="checkbox" checked> Shadows</label>
+            <label>
+                Shadows cast by
+                <select id="casters">
+                    <option value="proxy">One stand-in a block (shadows only)</option>
+                    <option value="nearest">The nearest detail</option>
+                </select>
+            </label>
+            <label>
+                Camera
+                <select id="camera">
+                    <option value="walk">The game's, walking</option>
+                    <option value="free">Free (drag to look round)</option>
+                </select>
+            </label>
+            <label>
+                Camera's distance
+                <input id="distance" type="range" min="8" max="30" value="16">
+            </label>
+            <button id="run" type="button">Walk to the keep and measure</button>
+            <pre id="result"></pre>
+        </div>
+
+        <script type="module" src="js/lab/castle-lab.js"></script>
+    </body>
+</html>
