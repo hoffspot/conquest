@@ -669,16 +669,17 @@ export async function optimize(config, { raw, glb, lodFile }) {
         ...(config.tiledTexcoords ? { quantizeTexcoord: 16 } : {}),
     };
 
-    if (config.tiledTexcoords && config.compress !== "none") {
-        result.texcoordsTiled = tileTexcoords(document);
-    }
-
     // (Lower-detail files are made from the mesh as Blender gave it, as packed ones are)
     const original = config.packLods || !config.lods.length ? null : cloneDocument(document);
 
     // The full mesh itself simplified, when even that's more than the game wants
     if (config.simplify) {
         simplifyFull(document, { ...config.simplify, seams });
+    }
+
+    // (After it's simplified, so every copy's texture coordinates are as made when they're weighed)
+    if (config.tiledTexcoords && config.compress !== "none") {
+        result.texcoordsTiled = tileTexcoords(document);
     }
 
     // (Tangents left out: Three.js works them out as it draws, from how the texture lies)
@@ -712,6 +713,10 @@ export async function optimize(config, { raw, glb, lodFile }) {
             await copy.transform(prune());
         } else {
             await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01 }), prune());
+        }
+
+        if (config.tiledTexcoords && config.compress !== "none") {
+            tileTexcoords(copy);
         }
 
         await compress(copy, config.compress, quantizing);
@@ -871,7 +876,7 @@ export function seamsOf(document) {
 export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null, permissive = false }) {
     weldPrimitive(primitive);
 
-    if (!seams) {
+    if (!seams && !permissive) {
         return simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio, error });
     }
 
@@ -885,12 +890,15 @@ export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null, 
     const indices = new Uint32Array(source.getArray());
     const locks = new Uint8Array(position.getCount());
 
-    for (let v = 0; v < locks.length; v++) {
+    for (let v = 0; seams && v < locks.length; v++) {
         locks[v] = seams.has(placeKey(positions, v * 3)) ? 1 : 0;
     }
 
     const target = Math.floor((ratio * indices.length) / 3) * 3;
-    const [kept] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, new Float32Array(0), 0, [], locks, target, error, permissive ? ["Permissive"] : []);
+    // (Collapsing across a seam, where the texture or the shading would move least: its texture
+    // coordinates and normals weighed as it's simplified)
+    const [attributes, stride, weights] = permissive ? seamAttributes(primitive) : [new Float32Array(0), 0, []];
+    const [kept] = MeshoptSimplifier.simplifyWithAttributes(indices, positions, 3, attributes, stride, weights, locks, target, error, permissive ? ["Permissive"] : []);
 
     // (A small part simplified to nothing, a window's glass, say: kept as it is, rather than left
     // a primitive with no triangles, which meshopt's compression can't write)
@@ -911,6 +919,40 @@ export function simplifyKeeping(primitive, { ratio, error = 0.01, seams = null, 
     }
 
     return primitive;
+}
+
+// How much a texture coordinate moving by its whole span (one tile), and a normal turning right
+// round, weigh against a vertex moving by the mesh's whole size, as a permissive simplify weighs
+// collapsing a seam
+const SEAM_WEIGHTS = { texcoord: 0.5, normal: 0.25 };
+
+// A primitive's texture coordinates and normals, a vertex's after another's ([attributes, stride, weights])
+function seamAttributes(primitive) {
+    const count = primitive.getAttribute("POSITION").getCount();
+    const uv = primitive.getAttribute("TEXCOORD_0");
+    const normal = primitive.getAttribute("NORMAL");
+    const stride = (uv ? 2 : 0) + (normal ? 3 : 0);
+    const attributes = new Float32Array(count * stride);
+    const element = [];
+
+    for (let v = 0; v < count; v++) {
+        let at = v * stride;
+
+        if (uv) {
+            uv.getElement(v, element);
+            attributes[at++] = element[0];
+            attributes[at++] = element[1];
+        }
+
+        if (normal) {
+            normal.getElement(v, element);
+            attributes[at++] = element[0];
+            attributes[at++] = element[1];
+            attributes[at++] = element[2];
+        }
+    }
+
+    return [attributes, stride, [...(uv ? [SEAM_WEIGHTS.texcoord, SEAM_WEIGHTS.texcoord] : []), ...(normal ? [SEAM_WEIGHTS.normal, SEAM_WEIGHTS.normal, SEAM_WEIGHTS.normal] : [])]];
 }
 
 async function compress(document, how, quantizing = {}) {

@@ -718,6 +718,57 @@ Water can't be walked into, but can be seen over, except where it can be waded. 
 about 3 to 5 ms to make in Node,
 its features about 1 ms more, and laying out a settlement 5 to 80 ms more (once).
 
+## Bellhaven, the White Castle (being built)
+
+A place of its own for one quest: the Order of the Bell's mother house, abandoned since they forged
+the blessed silver there (the Bellbound thread). It's a bought scene, DmitriyDryzhak's White Castle
+from Fab (licensed: `client/models/scenery/LICENSE.md`): the castle on its crag, a chasm, and a
+130 m bridge over it. The owner's plan, in order:
+1. **Its own map**, entered by crossing the bridge from a landmark in the world.
+2. **The landmark**, where the castle is seen far off, light enough for the world's budget, until
+   the bridge is crossed and the castle loads, behind a loading screen.
+3. **The keep**, a dungeon behind its doors.
+4. Stairs to a map of its own wherever one floor is over another.
+5. **The quest**: a rumour of its bell ringing again, the climb from the bridge through the courts
+   to the nave, and what the Order sealed there.
+
+What's built so far:
+- **Its model** (`utilities/blenderpipeline`, `private/bellhaven.json`), the artist's whole scene
+  in cells of 40 m.
+  - `scenery-bellhaven` is 18 MB, for its map: 500,932 triangles at its nearest detail and 166,817
+    further off.
+  - `scenery-bellhaven-far` is 1.5 MB, the castle from the world round it: 51,222 triangles in 15
+    draw calls.
+  - Both are fetched only where they're wanted (`tier: "demand"`).
+- **Where it's walked**, `client/models/scenery/bellhaven.walk.json`, baked from the art (the
+  pipeline's README, *Where it can be walked*).
+  - It's one level of 30,027 squares: the ground before the bridge, the bridge (its deck at
+    79.2 m), the gate and the court before the keep.
+  - The keep and its halls aren't reached: their doors are shut in the art.
+  - The wall-walks and the towers aren't reached either: nothing climbs to them, so they're for
+    stairs to an upper map.
+  - `core/walk.js` reads it: a square's floor, a point's square, the way between two squares.
+- **The castle lab** (`castle-lab.html`, `js/lab/castle-lab.js`) draws it as the game draws the
+  world out of doors: the game's quality levels, sun, shadows, fog (55 to 130 m) and camera
+  (35 degrees down).
+  - It walks the game's camera from the bridge to the keep's doors, or looks round freely, showing
+    draw calls, triangles, the graphics card's memory and frame time.
+  - *Walk to the keep and measure* gives the walk's numbers to copy. Opened on a phone, they're
+    that phone's.
+  - It switches the detail (by distance, as the game will, or one everywhere), what's far off
+    (blocks of 3 by 3 cells merged into a mesh a material, or the stone all one material, or cell
+    by cell), the textures' size (as built, half, a quarter: their largest mipmaps left out),
+    shadows, and what casts them.
+  - Shadows can be cast by a stand-in a block (its far detail, one mesh of every material at once,
+    on a layer only the sun's shadow sees), or by the nearest detail, a draw call a material
+    again.
+  - Without the licensed models, it draws the walk instead, a block a square.
+  - Measured in a desktop browser at Medium, with the stand-ins casting the shadows: at the gate,
+    about 80 to 140 draw calls and 170,000 to 200,000 triangles, near the game's phone budget
+    (*Performance*, GAME.md). The textures take 39 MB on the graphics card. The phone's own numbers
+    are the lab's to give.
+
+
 ## Next
 
 The world's first phase is done: the plan, the chunks, the town builder (`core/setpieces/

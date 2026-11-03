@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "7a9b0339a1",
+    release: "fca939bd80",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2532,6 +2532,30 @@ export const ASSETS = Object.freeze({
                     "path": "textures/dungeons/ground-nest-normal.ktx2",
                     "hash": "4a6c49cef2",
                     "bytes": 334198
+                }
+            ]
+        },
+        "scenery-bellhaven": {
+            "tier": "demand",
+            "label": "Bellhaven, the White Castle: its crag, chasm, bridge and castle in cells, for its own map (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/bellhaven.bin",
+                    "hash": "d8ff3b191b",
+                    "bytes": 18506020
+                }
+            ]
+        },
+        "scenery-bellhaven-far": {
+            "tier": "demand",
+            "label": "Bellhaven seen from afar, in one low detail for the world round it (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/bellhaven-far.bin",
+                    "hash": "5146c8a66c",
+                    "bytes": 1497276
                 }
             ]
         }
