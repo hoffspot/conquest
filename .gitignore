@@ -69,6 +69,9 @@ client/models/beasts/kaiju.bin
 client/models/beasts/cerberus-2.bin
 client/models/beasts/cerberus.dark.bin
 client/models/beasts/cerberus.ash.bin
+client/models/beasts/demon-boss.bin
+client/models/beasts/demon-boss.blue.bin
+client/models/beasts/demon-boss.green.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

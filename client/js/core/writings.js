@@ -211,6 +211,36 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (Corbin's confession, given at the shrine on the moor: core/rare.js THREADS bellbound)
+    corbin: Object.freeze({
+        title: "Corbin's confession",
+        by: "Corbin, once of the Magpies",
+        found: "Folded under the silver bell, hung again over the empty pit of the shrine on the moor",
+        entries: Object.freeze([
+            {
+                heading: "The night we came back",
+                text: [
+                    "We took it all. Forty fathoms of silver chain, the candlesticks, the bell off its beam. Aldous was dead, and the Order of the Bell has been dead longer, and who was going to miss it? Wren said she heard something breathing down in the pit as we drew the last of the chain up. We laughed at her.",
+                    "That night the frost came. In high summer, over the whole moor, so thick the cart's wheels froze to the track. We left it there and ran, every one a different way.",
+                ],
+            },
+            {
+                heading: "The morning after",
+                text: [
+                    "Wren, Hob, Tam and little Jory are in the bog below the shrine. I saw them from the ridge. They are white all over, and they all face the same way, towards the shrine, as if something called them back. I didn't go down to them. My fingers have been white since that night, and they won't warm.",
+                ],
+            },
+            {
+                heading: "At the shrine",
+                hand: "In a shaking hand, the ink half frozen on the page.",
+                text: [
+                    "I've brought back what silver I had left, and I've hung the bell again. I don't know the prayers. I don't think they'd matter now: the pit is empty, the chains I didn't sell lie broken at the bottom of it, and the frost goes off across the moor in prints as long as my arm.",
+                    "Aldous would say its name when he'd had a drink. Ashkhar. The Bellbound. He said it was fire once, and the silver's cold put the fire out of it, and it hates the cold now worse than it hates us. If whoever finds this goes after it: it leaps on whoever keeps off, so keep moving, and when the ground whitens round it, get clear. Tell the guild I'm sorry.",
+                ],
+                signed: "Corbin",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */

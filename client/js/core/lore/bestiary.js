@@ -456,4 +456,12 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "A hell's hound, broken loose. When the Hollow Choir sang their gate open too wide, it came up out of the Halls of Bone after them, tore their camp apart, and went off into the wilds with its chain's last links still about its necks, its coat gone the grey of ash. It hunts the land round the hell it came from. It bites with three heads, lunges, breathes fire, leaps on whoever keeps off and breathes fire from all three heads at once, the ground warning of both first. Worn down, it throws its heads back and howls, and the dead claw their way up to it. Fire harms it little.",
         sign: "paw prints as wide as a shield, the grass burnt black round each, and a broken chain's links dropped along the way",
     }),
+    demonBoss: Object.freeze({
+        lore: "The Breach, a hell's first level, is where the thin place first tore open, and a demon holds it: near three metres of horned, clawed brute, its hide the red of a coal. Its cultists and the magma keep about it. It rakes, sweeps and brings its fist down overhead, knocking whoever it catches off their feet. Whoever keeps off it, it leaps on. Now and then it brings both fists down at its feet, and hellfire bursts out all round it: the ground warns of it first. No blast moves it, fire harms it little, and it sees in the dark.",
+        sign: "claw marks scored deep in the rock, and the ground about them scorched black",
+    }),
+    ashkhar: Object.freeze({
+        lore: "A demon of the Breach that came up through a thin place on the moors a hundred years ago. The Order of the Bell bound it under their shrine in chains of blessed silver, and the cold of the silver smothered its fire to frost. When the Magpies stripped the shrine's silver for coin, it woke. Its hide has gone the blue of ice, and frost follows wherever it walks. It rakes and sweeps with frozen claws, and its fist's blow chills and slows. It leaps on whoever keeps off it, and brings its fists down so that frost bursts out all round it, the ground warning of both first. Worn down, it roars, and the moor's restless dead come to it. Cold harms it little.",
+        sign: "prints as long as a man's arm, frost rimed in each though the day is warm, and links of tarnished silver chain",
+    }),
 });

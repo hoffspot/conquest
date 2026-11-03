@@ -15,7 +15,9 @@
 // thread, ironcrown, begun by a guild warrior's rumour of a border village his raiders burned);
 // Vharzul the Greenflame (vharzul: his thread, exile, a temple priest's rumour); Ashmaw, the Hound
 // Unchained (ashmaw: its thread, unchained, a guild ranger's rumour of a hell's hound broken
-// loose); besides debug mode's sample (SAMPLE, its thread and the card that follows it).
+// loose); Ashkhar the Bellbound (ashkhar: its thread, bellbound, a guild rogue's rumour of a
+// moorland shrine stripped of its silver chains); besides debug mode's sample (SAMPLE, its thread
+// and the card that follows it).
 //
 // Pure data and arithmetic, no DOM; a world's host keeps its Legends and drives it with its own
 // random (host.js #rare...), every copy alike.
@@ -146,13 +148,31 @@ export const RARE_CARDS = Object.freeze({
         reward: Object.freeze({ unique: "lastLink", gold: 850 }),
         requires: Object.freeze({ thread: "unchained", step: 1 }),
     }),
+    // (Ashkhar the Bellbound (creatures.js ashkhar): a demon of the Breach, bound under a moorland
+    // shrine a hundred years in chains of blessed silver and loose again since the Magpies stripped
+    // them; a world's boss, once a world, kept where its frosted prints lead from the shrine (its
+    // thread's card step), a rank above a dungeon's master; the moor's restless dead come to its
+    // roar as it's worn down; what's seen as it falls said (`last`); its reward a link of the
+    // Order of the Bell's silver set as an amulet, Bellsilver, and a purse of gold)
+    ashkhar: Object.freeze({
+        id: "ashkhar",
+        title: "Ashkhar the Bellbound",
+        word: "The air turns bitter cold, and frost runs out over the heather towards you. Something huge unfolds from a hollow in the moor, horned and long in the arm, its hide the blue of ice, a broken silver chain hanging from one wrist: Ashkhar the Bellbound.",
+        last: "Ashkhar falls to its knees, and the frost goes out of its hide in a breath of steam, leaving it the red of a dying coal. For a moment it is fire again. Far off over the moor, a bell rings once, and the demon crumbles into ash and cold silver.",
+        kind: "unique",
+        venue: "wilds",
+        where: "site",
+        shape: Object.freeze({ kind: "foe", creature: "ashkhar", champion: "boss", up: 2, title: "Ashkhar the Bellbound", health: 2.7 }),
+        reward: Object.freeze({ unique: "bellsilver", gold: 850 }),
+        requires: Object.freeze({ thread: "bellbound", step: 1 }),
+    }),
 });
 
 /**
  * What a card is in the world (its `shape.kind`):
  * - `foe`: a foe of its own, ranked as a dungeon's are (`champion`: "mini" or "boss"), `up` tiers
  *   above the land, called by its `title`, its hit points its kind's times its `health` (1, but
- *   Vharzul's and Ashmaw's); of `creature`, or, none, what lives there; done once it falls.
+ *   Vharzul's, Ashmaw's and Ashkhar's); of `creature`, or, none, what lives there; done once it falls.
  */
 export const SHAPES = Object.freeze(["foe"]);
 
@@ -198,6 +218,16 @@ export const UNIQUES = Object.freeze({
         base: "ring",
         effect: "cinderburst",
         about: "The last link of the chain that held Ashmaw at the way down from a hell's Halls of Bone, bitten through and hammered shut again into a ring. It's as warm as a hearthstone, always. Now and then a blow its wearer strikes bursts into hellfire round the foe, setting them burning, and those beside them. Found nowhere else.",
+    }),
+    // (Ashkhar's reward: a link of the silver that bound it, set as an amulet, its effect
+    // legendary.js frostbind: now and then a blow its wearer strikes freezing the foe solid, then
+    // slowing them)
+    bellsilver: Object.freeze({
+        id: "bellsilver",
+        name: "Bellsilver",
+        base: "amulet",
+        effect: "frostbind",
+        about: "A link of the blessed silver that bound Ashkhar under the shrine on the moor for a hundred years, a little bell stamped in it, set on a chain of its own. It's as cold as a winter stream, always, and it rings faintly when no one is touching it. Now and then a blow its wearer strikes freezes the foe solid, then leaves them slowed. Found nowhere else.",
     }),
 });
 
@@ -300,8 +330,9 @@ export function cardOf(id) {
  * - `place`: somewhere to go, `far` ([least, most] metres) from where the thread was last (its
  *   encounter, or the place of the step before), on open ground, or the plan's place of a kind
  *   (`site`: "ruined quarry", the nearest; a dungeon of a `theme`, "hell": a hell's way in, the
- *   Hollow Choir's camp there), marked on every player's maps; done once someone comes
- *   within `reach` of it. What's found there is its kind's (core/places.js PLACE_KINDS `scene`:
+ *   Hollow Choir's camp there), or the one its opener's rumour told of (`at` "opener": the shrine
+ *   on the moor the Bellbound's rogue tells of), marked on every player's maps; done once someone
+ *   comes within `reach` of it. What's found there is its kind's (core/places.js PLACE_KINDS `scene`:
  *   setpieces/scenes.js, laid out at its heart), its writing given (`reward.writing`).
  * - `talk`: one of the folk (`role`: roles.js ROLES, a barkeep, a priest...; an adventurer of a
  *   `calling`, at its guild, or, none of that calling left there, any of them) in the settlement
@@ -350,7 +381,7 @@ export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal", "b
  * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step; the
  * Iron Crown's too, its first step a fight; the Exile's Road's, a priest's rumour, its last step a
  * hell's way in gone through; the Hound Unchained's, a ranger's rumour, its first step a hell's way
- * in come to.
+ * in come to; the Bellbound's, a rogue's rumour, its first step the shrine its rumour told of.
  */
 export const THREADS = Object.freeze({
     sampleTrail: Object.freeze({
@@ -523,6 +554,51 @@ export const THREADS = Object.freeze({
                 word: "Ashmaw is dead. Take word of it, and Hollis's notes, to the ranger at the guild in {town}.",
                 ask: "The hound's dead. And I found Hollis's notes.",
                 reply: "Dead? Then the farms can sleep. And Hollis... she wrote it all down to the last, didn't she. That's her: the trail first, herself after. Her dogs are with me; I'll see they're kept. Here: the farms got a bounty up between them when the flocks started going, and the guild's put to it. Someone will have to tell the priests the hound's chain is empty, down there.",
+                reward: Object.freeze({ gold: 200 }),
+            }),
+        ]),
+    }),
+    // (The Bellbound (docs/WILDS.md *Ashkhar the Bellbound*): begun by a guild rogue's rumour in the
+    // settlement nearest a shrine (`near` "shrine": the first of the plan's), of the shrine on the
+    // moor the Order of the Bell built over a demon of the Breach a hundred years ago, bound there in
+    // chains of blessed silver; of the rogue's old crew, the Magpies, who stripped the silver once
+    // the shrine's last keeper was dead, the frost that came that night and the four found frozen in
+    // the bog; and of Corbin, the last of them, gone back to the shrine with what silver he had left.
+    // His confession found at the shrine (a place step at the one the rumour told of, `at`
+    // "opener"); the demon's frosted prints followed out over the moor to Ashkhar (RARE_CARDS
+    // ashkhar); and word of it taken back to the rogue, who pays the Magpies' share and the guild's
+    // bounty)
+    bellbound: Object.freeze({
+        id: "bellbound",
+        title: "The Bellbound",
+        opens: Object.freeze({
+            kind: "talk",
+            role: "adventurer",
+            calling: "rogue",
+            near: "shrine",
+            ask: "You look like you've seen a ghost.",
+            tale: Object.freeze([
+                Object.freeze({ say: "Not a ghost. Worse, maybe. You know the old shrine out on the moor, {way} of here? The shepherds call it the bell shrine. The Order of the Bell built it a hundred years back, over a pit, and there were chains of silver going down into the pit, every link stamped with a little bell.", ask: "Chains? To hold what?" }),
+                Object.freeze({ say: "Brother Aldous kept the shrine till he died last winter, and he'd tell anyone who stopped: a demon came up out of the hells through a thin place on that moor, in his grandfather's day, and the Order bound it under the shrine with blessed silver and prayer. The cold of the silver put its fire out, he said. Everyone took it for an old man's tale.", ask: "And someone took the silver." }),
+                Object.freeze({ say: "My old crew did. The Magpies. Five of them went up the week after Aldous was buried, with crowbars and a cart. Silver's silver, they said. I wasn't with them, and I'd like that known. They drew the chains up and loaded the cart, and that night there was frost over the whole moor, in high summer.", ask: "What became of them?" }),
+                Object.freeze({ say: "Four of them were found in the bog by the shrine, frozen solid, every face turned the same way. Corbin got back to town with his fingers white as ice and wouldn't say a word. Two days ago he took what silver he had left and walked back out towards the shrine. He hasn't come back. Someone has to go and see, before whatever's up there comes down off the moor." }),
+            ]),
+            take: "I'll go up to the shrine.",
+            taken: "Go by day, and take something warm. If Corbin got there, he'll have left word. He always had to have the last word.",
+            leave: "Not for me.",
+            back: Object.freeze({ ask: "About the shrine on the moor: I'll go up there after all.", reply: "Good. There was frost on the guild's windows this morning, and it's no season for it. The shrine's where it was." }),
+        }),
+        steps: Object.freeze([
+            Object.freeze({ kind: "place", at: "opener", site: "shrine", reach: 18, word: "The Magpies stripped the silver chains from the shrine on the moor {way} of {town}, and whatever was bound under it woke. Corbin, the last of them, went back there and hasn't come back. Go to the shrine, and find out what became of him.", reward: Object.freeze({ gold: 40, writing: "corbin" }) }),
+            Object.freeze({ kind: "card", card: "ashkhar", far: Object.freeze([140, 220]), spoor: "Prints as long as a man's arm, frost rimed in each though the day is warm, and here and there a link of tarnished silver: Ashkhar's. They lead off to the {way}.", word: "Corbin's confession names what was bound under the shrine: Ashkhar the Bellbound. Its frosted prints lead away {way} across the moor. Follow them, and put it down before it comes to a village." }),
+            Object.freeze({
+                kind: "talk",
+                role: "adventurer",
+                calling: "rogue",
+                home: true,
+                word: "Ashkhar is dead. Take word of it, and Corbin's confession, to the rogue at the guild in {town}.",
+                ask: "The demon's dead. And I found what Corbin wrote.",
+                reply: "Dead. Good. And Corbin went back to put the silver back, didn't he. The fool. The brave fool. He never could leave a job half done. Here: the Magpies' share, what's left of it, and the guild's bounty with it. Spend it on something that doesn't shine.",
                 reward: Object.freeze({ gold: 200 }),
             }),
         ]),

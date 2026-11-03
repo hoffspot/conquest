@@ -793,6 +793,45 @@ export const NATURAL = Object.freeze({
             ranged({ id: "breath", reach: 10, damage: [9, 14], hitAt: 1100, duration: 2500, interval: 6000, stagger: 350, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
         ],
     },
+    // (The Demon Boss, the Breach's master (creatures.js demonBoss): one of its three blows at
+    // random, each landing where its model's clip has it: its right claw raked across before it (a
+    // little over a second in, Attack 2), laying a wound open; both claws swept round from the side
+    // (a second and a half in, Attack 1), knocking whoever it catches back a step; or its fist
+    // brought down overhead (well over a second in, Attack 3), knocking them off their feet and
+    // setting them burning. Its leap and its hellfire's flare are moves of its own (creatures.js
+    // DEMON_LEAP, DEMON_FLARE))
+    demonBoss: {
+        label: "Burning claws",
+        attacks: [
+            {
+                kind: "melee",
+                reach: 2,
+                either: [
+                    melee({ id: "rake", reach: 2, damage: [8, 13], hitAt: 1050, duration: 1900, interval: 2200, stagger: 350, reaction: "slash", animation: "rake", afflict: { kind: "bleed", chance: 0.35 } }),
+                    melee({ id: "sweep", reach: 2, damage: [7, 12], hitAt: 1150, duration: 2200, interval: 2500, stagger: 500, reaction: "crush", animation: "sweep" }),
+                    melee({ id: "smash", reach: 2, damage: [10, 16], hitAt: 1350, duration: 2100, interval: 2600, stagger: 450, knockdown: 1000, reaction: "crush", animation: "smash", afflict: { kind: "burn", chance: 0.5 } }),
+                ],
+            },
+        ],
+    },
+    // (Ashkhar the Bellbound (creatures.js ashkhar): the Breach demon's three blows, harder, and cold
+    // where its fire was smothered to frost under the Order of the Bell's chains, its fist's blow
+    // chilling whoever it lays low, slowing them. Its leap and its frost's flare are moves of its own
+    // (creatures.js `moves`))
+    ashkhar: {
+        label: "Frozen claws",
+        attacks: [
+            {
+                kind: "melee",
+                reach: 2,
+                either: [
+                    melee({ id: "rake", reach: 2, damage: [10, 16], hitAt: 1050, duration: 1900, interval: 2100, stagger: 400, reaction: "slash", animation: "rake", afflict: { kind: "bleed", chance: 0.4 } }),
+                    melee({ id: "sweep", reach: 2, damage: [9, 15], hitAt: 1150, duration: 2200, interval: 2400, stagger: 550, reaction: "crush", animation: "sweep" }),
+                    melee({ id: "smash", reach: 2, damage: [12, 19], hitAt: 1350, duration: 2100, interval: 2500, stagger: 500, knockdown: 1000, reaction: "crush", animation: "smash", afflict: { kind: "slow", chance: 0.6, look: "frost" } }),
+                ],
+            },
+        ],
+    },
     // (The Stone Golem of Harrowstone: creatures.js. Up close, one of its three blows at random, each
     // landing where its model's clip has it: its hammer thrust down over its shoulder (the blow
     // well over half way through, Attack 3), swept round at its side (two fifths of the way,

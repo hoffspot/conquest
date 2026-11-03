@@ -162,6 +162,8 @@ const ABOUT = {
     vharzul: ["Vharzul the Greenflame", "At the Sundered Ring by night, once a world: the Pit's first lord, cast out; his rare card's foe, a world's boss"],
     cerberus: ["Cerberus", "A hell's Halls of Bone: its master, chained at the way down"],
     ashmaw: ["Ashmaw, the Hound Unchained", "In the wilds where its tracks lead from a hell's way in, once a world: a hell's cerberus broken loose; its rare card's foe, a world's boss"],
+    demonBoss: ["Demon Boss", "A hell's Breach: its master, its cultists and magma about it"],
+    ashkhar: ["Ashkhar the Bellbound", "In the wilds where its frosted prints lead from a moorland shrine, once a world: a Breach demon bound a hundred years and loose again; its rare card's foe, a world's boss"],
     greaterDemon: ["Greater demon", "A hell's River of Fire, by the Hellforge: its master"],
     fiend: ["Fiend", "A hell's every level, in packs: the more of them the deeper down"],
     flayling: ["Flayling", "A hell's Breach, in swarms: raw claws that leave you bleeding"],
@@ -1510,7 +1512,7 @@ const groups = [
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
     ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
-    ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul", "cerberus", "ashmaw"]],
+    ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul", "cerberus", "ashmaw", "demonBoss", "ashkhar"]],
 ];
 
 for (const [label, ids] of groups) {
