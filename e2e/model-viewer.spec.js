@@ -959,6 +959,61 @@ test("and the Orc King, a rare card's foe: the Orc in his finest dressing, his 2
     }
 });
 
+test("and the Cerberus, the Halls of Bone's master and Ashmaw: all 19 of its own clips, its two materials, each of its skins put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-cerberus&clip=Attack%201");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack 1",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Death 1",
+        "Death 2",
+        "Death 3",
+        "Fire",
+        "Fire All",
+        "Hit 1",
+        "Hit 2",
+        "Hit 3",
+        "Idle",
+        "Idle 2",
+        "Jump",
+        "Run",
+        "Strafe Left",
+        "Strafe Right",
+        "Walk",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack 1", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The cerberus");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ bones: 50, materials: 2 });
+    await expect(page.locator("#details")).toContainText("Panchenko Lyudmila's \"Cerberus\", bought on Fab: used with the permission its Standard License gives");
+
+    // (Each of its skins put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Dark", "Ash"]);
+
+    for (const skin of ["dark", "ash"]) {
+        await page.getByLabel("Skin").selectOption(skin);
+        await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
+});
+
+test("a hell's cerberus and Ashmaw as the game draws them: a great hound till the Cerberus is read, then the hound, its heads' bite, its lunge, its fire from one head and from all three, its leap and its howl; the Halls' hound in its own skin or the dark, Ashmaw a tenth bigger in the ash", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=cerberus");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: [], specials: ["bite", "lunge", "breath", "inferno", "leap", "rally"], rests: ["look"] });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["bite", "lunge", "breath", "inferno", "leap", "rally", "look"]));
+    expect(["", "dark"]).toContain(await page.evaluate(() => window.lab.current().skin));
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.21, 1);
+
+    await openViewer(page, "/model-viewer.html?creature=ashmaw");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current().skin)).toBe("ash");
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.43, 1);
+});
+
 test("the orcs on a dungeon's throne as the game draws them: big orcs till their models are read, then the Orc's dressings, their great axes swept, chopped or spun round low, and their rests", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
 

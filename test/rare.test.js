@@ -242,7 +242,7 @@ describe("rare encounters (rare.js)", () => {
         assert.deepEqual(hound.requires, { thread: "unchained", step: 1 });
         assert.deepEqual([THREADS.unchained.steps[1].card, THREADS.unchained.steps[1].here], ["ashmaw", undefined]);
         assert.equal(hound.gates, undefined);
-        assert.deepEqual([hound.shape.creature, hound.shape.champion], ["ashmaw", "boss"]);
+        assert.deepEqual([hound.shape.creature, hound.shape.champion, hound.shape.health], ["ashmaw", "boss", 2.6]);
         assert.deepEqual([UNIQUES[hound.reward.unique].base, UNIQUES[hound.reward.unique].effect], ["ring", "cinderburst"]);
         assert.ok(hound.last.includes("chain") && hound.word.includes("Ashmaw"));
 

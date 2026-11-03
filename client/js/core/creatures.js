@@ -474,10 +474,12 @@ export const CREATURES = Object.freeze({
     // that lands on whoever keeps off, and all three heads breathing fire at once, both shown on the
     // ground before they land (`moves`); and as it's worn down, at two thirds and at one third, its
     // three heads thrown back in a howl, the dead clawing up out of the ground to it (`rally`,
-    // `told`). Fire harms it little; it sees in the dark, and further off than most (`sight`))
+    // `told`). Fire harms it little; it sees in the dark, and further off than most (`sight`). Its
+    // kind's hit points a great hound's: its card makes it two and a half times as tough (rare.js
+    // `health`))
     ashmaw: {
         name: "Ashmaw",
-        hp: 130,
+        hp: 50,
         weapon: "ashmaw",
         speed: 1.25,
         chase: 3.4,

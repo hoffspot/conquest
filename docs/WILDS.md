@@ -1414,8 +1414,9 @@ skin (beasts/model.js `ashmaw`: the catalog's `beast-cerberus-skins`, `ash`).
   200 gold, the thread at its end.
 
 How it fights (creatures.js `ashmaw`, weapons.js NATURAL `ashmaw`; a world's boss, its bar across
-the top of the screen; 130 hit points at the first tier, four times that as a boss, nearly three
-tenths of every blow turned by its hide; fire harming it half as much, `wards`; never thrown;
+the top of the screen; 50 hit points at the first tier, a great hound's, two and a half times as
+many as its card's (`shape` `health` 2.6: 130), four times that as a boss, nearly three tenths of
+every blow turned by its hide; fire harming it half as much, `wards`; never thrown;
 seeing in the dark and further off than most, `sight` 24):
 - **Its jaws and fire**: its three heads snapping together (11 to 17, laying a wound open now and
   then) or a lunge (12 to 19, 2 m, staggering harder), one at random (`either`); and fire breathed

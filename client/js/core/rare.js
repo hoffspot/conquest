@@ -142,7 +142,7 @@ export const RARE_CARDS = Object.freeze({
         kind: "unique",
         venue: "wilds",
         where: "site",
-        shape: Object.freeze({ kind: "foe", creature: "ashmaw", champion: "boss", up: 2, title: "Ashmaw, the Hound Unchained" }),
+        shape: Object.freeze({ kind: "foe", creature: "ashmaw", champion: "boss", up: 2, title: "Ashmaw, the Hound Unchained", health: 2.6 }),
         reward: Object.freeze({ unique: "lastLink", gold: 850 }),
         requires: Object.freeze({ thread: "unchained", step: 1 }),
     }),
@@ -152,7 +152,7 @@ export const RARE_CARDS = Object.freeze({
  * What a card is in the world (its `shape.kind`):
  * - `foe`: a foe of its own, ranked as a dungeon's are (`champion`: "mini" or "boss"), `up` tiers
  *   above the land, called by its `title`, its hit points its kind's times its `health` (1, but
- *   Vharzul's); of `creature`, or, none, what lives there; done once it falls.
+ *   Vharzul's and Ashmaw's); of `creature`, or, none, what lives there; done once it falls.
  */
 export const SHAPES = Object.freeze(["foe"]);
 
