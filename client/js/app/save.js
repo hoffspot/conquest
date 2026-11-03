@@ -154,6 +154,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     shake: true,
     // Full screen while playing (app/fullscreen.js): asked for whenever play starts or carries on
     fullscreen: true,
+    // When the title next suggests adding the game to the Home Screen, on an iPhone or iPad in a
+    // browser tab (app/homescreen.js, ms since 1970): at once, till it's put off ("Not now", "Don't
+    // show again")
+    homeScreenAfter: 0,
     sound: true,
     // How loud each kind of sound is, 0 to 1 (audio/sound.js VOLUME_DEFAULTS), and the scale
     // they're on: volumes saved on another (louder) scale are forgotten, for the defaults

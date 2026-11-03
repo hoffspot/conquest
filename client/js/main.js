@@ -20,10 +20,11 @@ import { ASSETS } from "./app/assets.js";
 import { Backdrop } from "./app/backdrop.js";
 import { Crest } from "./app/crest.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
-import { isInstalledApp, isIOS, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
+import { isInstalledApp, isIOS, isTouchScreen, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
+import { putOff, suggestHomeScreen } from "./app/homescreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { Pointer } from "./app/pointer.js";
@@ -293,6 +294,7 @@ function title() {
     show("title");
     $("#titlenote").hidden = true;
     $("#titleupdate").hidden = !state.updater?.ready;
+    showHomeScreen(kept);
     state.updater?.check();
     continueButton.hidden = !save;
     note.hidden = !save;
@@ -313,6 +315,23 @@ function title() {
 
     readyCreator();
     frontDoor();
+}
+
+// On an iPhone or iPad in a browser tab, the title's word to add the game to the Home Screen, and
+// why (app/homescreen.js), till it's put off: with a word to take the characters kept here along
+// first, if there are any
+function showHomeScreen(kept) {
+    $("#homescreen").hidden = !suggestHomeScreen({ ios: isIOS(), touch: isTouchScreen(), installed: isInstalledApp(), after: settings.homeScreenAfter });
+    $("#homescreenexport").hidden = kept.length === 0;
+    // (An iPad's an iPad, though it says it's a Mac: device.js isIOS)
+    $("#homescreendevice").textContent = /iPad|Macintosh/.test(navigator.userAgent) ? "iPad" : "iPhone";
+}
+
+for (const [id, how] of [["#homescreenlater", "later"], ["#homescreennever", "never"]]) {
+    $(id).addEventListener("click", () => {
+        applySetting("homeScreenAfter", putOff(how));
+        $("#homescreen").hidden = true;
+    });
 }
 
 // The character maker got ready while the title's up, its new character built a little each frame

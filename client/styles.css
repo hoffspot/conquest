@@ -8000,6 +8000,44 @@ dialog.worlds input.text.code-entry {
     margin: 0 0 4px;
 }
 
+/* On an iPhone or iPad in a browser tab: a word to add the game to the Home Screen, why, and how */
+.title-home {
+    margin: 14px 0 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--field-border);
+    background: var(--field);
+    border-radius: 8px;
+    text-align: left;
+}
+
+.title-home-title {
+    font-size: 16px;
+    margin: 0 0 6px;
+    text-align: center;
+}
+
+.title-home-why {
+    margin: 0 0 8px;
+    padding-left: 18px;
+    display: grid;
+    gap: 4px;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--muted);
+}
+
+.title-home .note {
+    margin: 0 0 8px;
+    line-height: 1.35;
+}
+
+.title-home-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 12px;
+}
+
 .title-server .note {
     margin: 0 0 8px;
 }
