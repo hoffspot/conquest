@@ -17,12 +17,12 @@ export const WALK = Object.freeze({
     headroom: 2,
     // How far up or down a body steps from a square to the next (metres)
     climb: 0.8,
-    // Solid stretches nearer than this (metres) are one; and a top nearer than this to the one
-    // over it is a floor if either is
+    // Solid stretches nearer than this (metres) are one
     merge: 0.1,
     // A level of fewer squares than this is left out (a ledge, a sill)
     least: 20,
-    // How much of a square (its share) a floor covers to be stood on: not a sliver at its edge
+    // How much of a square (its share) what may be stood on within a step (climb) of its top
+    // covers, for it to be a floor: not a sliver at its edge, nor a pillar's top
     cover: 0.25,
 });
 
@@ -167,7 +167,7 @@ export function walkOf(triangles, { from, ...options } = {}) {
  * lowest first) }.
  */
 export function floorsOf(triangles, options = {}) {
-    const { square, slope, headroom, merge, cover } = { ...WALK, ...options };
+    const { square, slope, headroom, merge, cover, climb } = { ...WALK, ...options };
 
     // The grid: every square any triangle is over
     const low = [Infinity, Infinity];
@@ -295,10 +295,12 @@ export function floorsOf(triangles, options = {}) {
         order[filled[spanColumn.data[i]]++] = i;
     }
 
-    // Each square's floors: the tops of its solid stretches (each overlapping one taken as one)
-    // that may be stood on, covering enough of it, with room over them
+    // Each square's floors: the tops of its solid stretches (each overlapping one taken as one),
+    // with room over them, where what may be stood on within a step of the top covers enough of
+    // the square (a bridge's end and the court a step under it, in one square, are one floor)
     const floorStarts = new Int32Array(columns + 1);
     const floorHeights = new Column(Float32Array);
+    const least = cover * square * square;
 
     for (let c = 0; c < columns; c++) {
         const ones = Array.from(order.subarray(starts[c], starts[c + 1])).sort((a, b) => spanLow.data[a] - spanLow.data[b]);
@@ -307,25 +309,30 @@ export function floorsOf(triangles, options = {}) {
         for (const i of ones) {
             const [bottom, top, flat, area] = [spanLow.data[i], spanHigh.data[i], spanWalk.data[i], spanArea.data[i]];
             const last = merged.at(-1);
+            const span = last && bottom <= last.top + merge ? last : null;
 
-            if (last && bottom <= last.top + merge) {
-                if (top > last.top + merge) {
-                    [last.flat, last.area] = [flat, area];
-                } else if (top >= last.top - merge) {
-                    last.flat ||= flat;
-                    last.area += area;
-                }
-
-                last.top = Math.max(last.top, top);
+            if (span) {
+                span.top = Math.max(span.top, top);
             } else {
-                merged.push({ bottom, top, flat, area });
+                merged.push({ bottom, top, pieces: [] });
+            }
+
+            if (flat) {
+                (span ?? merged.at(-1)).pieces.push(top, area);
             }
         }
 
         for (const [i, span] of merged.entries()) {
             const over = merged[i + 1];
+            let standing = 0;
 
-            if (span.flat && span.area >= cover * square * square && (!over || over.bottom - span.top >= headroom)) {
+            for (let k = 0; k < span.pieces.length; k += 2) {
+                if (span.pieces[k] >= span.top - climb) {
+                    standing += span.pieces[k + 1];
+                }
+            }
+
+            if (standing >= least && (!over || over.bottom - span.top >= headroom)) {
                 floorHeights.push(span.top);
             }
         }

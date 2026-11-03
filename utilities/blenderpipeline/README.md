@@ -218,8 +218,9 @@ mesh or texture.
    triangle's stretch over each square, from its lowest there to its highest, is stacked with the
    rest, as Recast stacks its spans. Overlapping stretches are one (within `merge`, 0.1 m).
 2. **Floors.** The top of a stretch is a floor if:
-   - what's on top is no steeper than `slope` (38°);
-   - it covers at least `cover` of the square (a quarter), not a sliver along its edge;
+   - what may be stood on (no steeper than `slope`, 38°) within a step (`climb`) of the top covers
+     at least `cover` of the square (a quarter): not a sliver along its edge, nor a pillar's top.
+     A bridge's end and the court a step under it, in one square, are one floor;
    - there's `headroom` over it (2 m).
    A wall's square has none: its top is the wall's.
 3. **Walks.** Floors side by side, no more than `climb` apart (0.8 m), are walked between. What's

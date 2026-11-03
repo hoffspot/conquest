@@ -92,6 +92,18 @@ describe("where scenery can be walked", () => {
         assert.ok(result.links[0].crossings.every(([x, z, ox, oz]) => Math.abs(x - ox) + Math.abs(z - oz) === 1));
     });
 
+    it("a step within a square: a bridge's end 0.4 m over the court it comes to, part of a square, still walked off", () => {
+        // (The deck ends at z 10.2, a fifth of the way into the square from z 10 to 11)
+        const result = walk([quad(0, 0, 4, 10.2, 0.4), box(0, -5, 0, 4, 0.4, 10.2), quad(-10, 10.2, 14, 20, 0)], { from: [2, 0.4, 2] });
+
+        // (Squares counted from the grid's corner, at x -10)
+        assert.deepEqual(result.origin, [-10, 0]);
+        assert.equal(result.levels.length, 1);
+        assert.equal(floorAt(result, 0, 12, 10), 0.4);
+        assert.equal(floorAt(result, 0, 12, 15), 0);
+        assert.equal(floorAt(result, 0, 2, 18), 0);
+    });
+
     it("no room to stand: under a roof lower than a body, and where it's too steep", () => {
         // (A roof 1.5 m up over x 0 to 4; a slope of 60 degrees from x 6 to 8)
         const steep = [6, 0, 0, 6, 0, 10, 8, 3.46, 10, 6, 0, 0, 8, 3.46, 10, 8, 3.46, 0];
