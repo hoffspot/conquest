@@ -120,6 +120,20 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", stripNamespaces: "yes" }, /stripNamespaces is true or false/);
         refuses({ source: "a.fbx", join: { Body: "Body" } }, /join.Body is a list of objects' names/);
         refuses({ source: "a.fbx", join: { Body: [] } }, /join.Body is a list of objects' names/);
+        refuses({ source: "a.fbx", dropMaterials: "M_Rock" }, /dropMaterials is a list of materials' names/);
+        refuses({ source: "a.fbx", dropMaterials: [""] }, /dropMaterials is a list of materials' names/);
+        refuses({ source: "a.fbx", cells: 40 }, /cells is \{ size: metres a side \}/);
+        refuses({ source: "a.fbx", cells: {} }, /cells.size is how many metres a cell is on a side/);
+        refuses({ source: "a.fbx", cells: { size: 0 } }, /cells.size is how many metres a cell is on a side/);
+        refuses({ source: "a.fbx", cells: { size: 40, lods: 2 } }, /unknown setting cells.lods/);
+        refuses({ source: "a.fbx", walk: [1, 0, 1] }, /walk is \{ from: \[x, y, z\], ... \}/);
+        refuses({ source: "a.fbx", walk: {} }, /walk.from is where it's walked from/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0] } }, /walk.from is where it's walked from/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], climb: -1 } }, /walk.climb is a number, 0 or more/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], reach: 3 } }, /unknown setting walk.reach/);
+        refuses({ source: "a.fbx", tiledTexcoords: "yes" }, /tiledTexcoords is true or false/);
+        refuses({ source: "a.fbx", lods: [{ ratio: 0.5, materials: { "M_Rock*": 0 } }] }, /lods\[0\].materials is \{ "material": the share of its vertices kept/);
+        refuses({ source: "a.fbx", simplify: { ratio: 0.5, materials: ["M_Rock*"] } }, /simplify.materials is \{ "material"/);
         refuses({ source: "a.fbx", textures: { maxSize: 0 } }, /textures.maxSize is a size in pixels, or null/);
         refuses({ source: "a.fbx", textures: { atlasSize: null } }, /textures.atlasSize is a size in pixels/);
 
@@ -215,6 +229,20 @@ describe("an asset's config", () => {
         assert.equal(job.passes, null);
         assert.equal(job.stripNamespaces, true);
         assert.deepEqual([job.join, job.materials, job.variants], [{}, {}, {}]);
+        assert.deepEqual([job.dropMaterials, job.cells], [[], null]);
+
+        // (What's dropped and the cells cut, as asked)
+        const castle = blenderJob(resolveConfig({ source: "castle.fbx", dropMaterials: ["M_Rock*"], cells: { size: 40 } }, file), { out: "/tmp/a.glb", report: "/tmp/a.json" });
+
+        assert.deepEqual([castle.dropMaterials, castle.cells], [["M_Rock*"], { size: 40 }]);
+
+        // (Where it's walked, and some materials simplified by ratios of their own: Node's, not Blender's)
+        const walked = resolveConfig({ source: "castle.fbx", walk: { from: [0, 2, -40], climb: 1 }, simplify: { ratio: 0.3, materials: { "M_Rock*": 0.05 } }, tiledTexcoords: true }, file);
+
+        assert.deepEqual(walked.walk, { from: [0, 2, -40], climb: 1 });
+        assert.deepEqual(walked.simplify.materials, { "M_Rock*": 0.05 });
+        assert.equal(walked.tiledTexcoords, true);
+        assert.equal("walk" in blenderJob(walked, { out: "/tmp/a.glb", report: "/tmp/a.json" }), false);
 
         // (Each variant with the file its materials are written into)
         const looks = resolveConfig({ source: "a.fbx", variants: { pale: { materials: { skin: { baseColor: "pale.png" } } } } }, file);

@@ -25,6 +25,10 @@ import traceback
 import bpy
 import numpy as np
 
+# (bpy first: Blender's Python module makes bmesh and mathutils importable)
+import bmesh  # noqa: E402
+from mathutils import Matrix  # noqa: E402
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from atlas import pack  # noqa: E402
@@ -821,6 +825,202 @@ def join_objects(job, meshes):
     REPORT["joined"] = joined
 
     return meshes
+
+
+# --- Left out, and cut into cells ------------------------------------------------------------
+
+
+def faces_of(mesh, what, dtype=np.int32, width=1):
+    """A face attribute of every face of a mesh, as an array (one row a face, if `width`)."""
+    values = np.zeros(len(mesh.polygons) * width, dtype=dtype)
+    mesh.polygons.foreach_get(what, values)
+
+    return values.reshape(-1, width) if width > 1 else values
+
+
+def drop_materials(job, meshes):
+    """The faces of the materials dropMaterials names taken out of every mesh, and those materials
+    off it (a mesh left with no faces, out altogether): the parts of a scene the game makes its own
+    way, or another build carries (a castle's rock, say, built apart from its walls)."""
+    patterns = job.get("dropMaterials") or []
+    dropped = {}
+
+    if not patterns:
+        REPORT["droppedMaterials"] = []
+        return meshes
+
+    named = {slot.material.name for thing in meshes for slot in thing.material_slots if slot.material}
+    unmatched = [pattern for pattern in patterns if not any(matches(name, [pattern]) for name in named)]
+
+    if unmatched:
+        raise PipelineError(f"dropMaterials: no mesh exported has a material called {', '.join(unmatched)} (they have: {', '.join(sorted(named)) or 'none'})")
+
+    kept = []
+
+    for thing in meshes:
+        slots = [i for i, slot in enumerate(thing.material_slots) if slot.material and matches(slot.material.name, patterns)]
+
+        if not slots:
+            kept.append(thing)
+            continue
+
+        indices = faces_of(thing.data, "material_index")
+        gone = np.isin(indices, slots)
+
+        for i in slots:
+            name = thing.material_slots[i].material.name
+            dropped[name] = dropped.get(name, 0) + int(np.count_nonzero(indices == i))
+
+        if gone.all():
+            note(f"{thing.name} left out: all its faces are of materials dropped (dropMaterials)")
+            bpy.data.objects.remove(thing)
+            continue
+
+        if gone.any():
+            bm = bmesh.new()
+            bm.from_mesh(thing.data)
+            bm.faces.ensure_lookup_table()
+            bmesh.ops.delete(bm, geom=[bm.faces[i] for i in np.flatnonzero(gone).tolist()], context="FACES")
+            bm.to_mesh(thing.data)
+            bm.free()
+
+        # (The highest first, so the others keep their places: Blender moves the faces' indices
+        # down past a slot taken out)
+        for i in sorted(slots, reverse=True):
+            thing.data.materials.pop(index=i)
+
+        kept.append(thing)
+
+    for mesh in [mesh for mesh in bpy.data.meshes if mesh.users == 0]:
+        bpy.data.meshes.remove(mesh)
+
+    REPORT["droppedMaterials"] = [{"material": name, "faces": faces} for name, faces in sorted(dropped.items())]
+    note(f"materials dropped: {', '.join(f'{name} ({faces} faces)' for name, faces in sorted(dropped.items()))}")
+
+    return kept
+
+
+def cell_of(centres, size):
+    """The cells face centres (Blender's x, y, z) are in: squares `size` metres on a side on the
+    ground, numbered along the game's x (Blender's x) and its z (Blender's -y)."""
+    return np.stack([np.floor(centres[:, 0] / size), np.floor(-centres[:, 1] / size)], axis=1).astype(np.int64)
+
+
+def cut_into_cells(job, meshes):
+    """Each mesh cut into cells (`cells.size` metres on a side, on the ground) by where its faces'
+    centres are, each cell a mesh of its own, "<mesh>@<i>,<j>", with its materials: the game draws
+    only the cells in view, and each nearby or far off at its own detail (a castle, a walled
+    town). Its modifiers are applied first, and its place in the world put into its vertices, so
+    the cells are the world's squares."""
+    spec = job.get("cells")
+    REPORT["cells"] = []
+
+    if not spec:
+        return meshes
+
+    size = spec["size"]
+    result = []
+
+    for thing in meshes:
+        if thing.find_armature() or any(modifier.type == "ARMATURE" for modifier in thing.modifiers):
+            raise PipelineError(f"cells: {thing.name} is moved by an armature: cells are for what stands still (buildings, walls, rock)")
+
+        # Its modifiers applied, as the export would, and its mesh its own
+        if job["applyModifiers"] and thing.modifiers:
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            thing.data = bpy.data.meshes.new_from_object(thing.evaluated_get(depsgraph), preserve_all_data_layers=True, depsgraph=depsgraph)
+            thing.modifiers.clear()
+        elif thing.data.users > 1:
+            thing.data = thing.data.copy()
+
+        # Where it is in the world, put into its vertices (its children kept where they are)
+        for child in thing.children:
+            world = child.matrix_world.copy()
+            child.parent = None
+            child.matrix_world = world
+
+        world = thing.matrix_world.copy()
+        thing.parent = None
+        thing.data.transform(world)
+        thing.matrix_world = Matrix.Identity(4)
+
+        mesh = thing.data
+        cells, ordinal = np.unique(cell_of(faces_of(mesh, "center", np.float32, 3), size), axis=0, return_inverse=True)
+        name = thing.name
+
+        # (In one cell: named for it all the same)
+        if len(cells) <= 1:
+            cell = cells[0].tolist() if len(cells) else [0, 0]
+            rename(thing, f"{name}@{cell[0]},{cell[1]}", bpy.data.objects)
+            rename(mesh, thing.name, bpy.data.meshes)
+            REPORT["cells"].append({"mesh": name, "cells": [{"name": thing.name, "cell": cell, "faces": len(mesh.polygons)}]})
+            result.append(thing)
+            continue
+
+        # Blender separates a mesh by material in one go: each face's cell made its material for
+        # it, its own material kept aside and put back after
+        materials = list(mesh.materials)
+        kept_aside = mesh.attributes.new("pellagos_material", "INT", "FACE")
+        kept_aside.data.foreach_set("value", faces_of(mesh, "material_index"))
+
+        while len(mesh.materials) < len(cells):
+            mesh.materials.append(None)
+
+        mesh.polygons.foreach_set("material_index", ordinal.astype(np.int32).ravel())
+        mesh.update()
+
+        deselect_all()
+        thing.hide_viewport = False
+        thing.hide_set(False)
+        thing.select_set(True)
+        bpy.context.view_layer.objects.active = thing
+        bpy.context.scene.tool_settings.mesh_select_mode = (False, False, True)
+
+        with bpy.context.temp_override(active_object=thing, object=thing, selected_objects=[thing], selected_editable_objects=[thing]):
+            bpy.ops.object.mode_set(mode="EDIT")
+            bpy.ops.mesh.select_all(action="SELECT")
+            bpy.ops.mesh.separate(type="MATERIAL")
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+        parts = [part for part in bpy.context.view_layer.objects if part.select_get() and part.type == "MESH"]
+        made = []
+
+        for part in parts:
+            piece = part.data
+            own = piece.attributes.get("pellagos_material")
+            values = np.zeros(len(piece.polygons), dtype=np.int32)
+            own.data.foreach_get("value", values)
+            cell = cell_of(faces_of(piece, "center", np.float32, 3)[:1], size)[0].tolist()
+
+            piece.materials.clear()
+
+            for material in materials:
+                piece.materials.append(material)
+
+            piece.polygons.foreach_set("material_index", values)
+            piece.attributes.remove(piece.attributes.get("pellagos_material"))
+            piece.update()
+            made.append((cell, part))
+
+        made.sort(key=lambda pair: pair[0])
+
+        # (Named once all are made: a cell's name may be another's for now)
+        for i, (cell, part) in enumerate(made):
+            part.name = f"pellagos-cell-{i}"
+
+        for cell, part in made:
+            cell_name = f"{name}@{cell[0]},{cell[1]}"
+            rename(part, cell_name, bpy.data.objects)
+            rename(part.data, cell_name, bpy.data.meshes)
+            result.append(part)
+
+        REPORT["cells"].append({"mesh": name, "cells": [{"name": part.name, "cell": cell, "faces": len(part.data.polygons)} for cell, part in made]})
+
+    if REPORT["cells"]:
+        counts = "; ".join(f"{entry['mesh']} ({len(entry['cells'])})" for entry in REPORT["cells"])
+        note(f"cut into cells of {size:g} m: {counts}")
+
+    return result
 
 
 # --- Materials -------------------------------------------------------------------------------
@@ -1810,7 +2010,9 @@ def run(job):
 
     apply_materials(job)
     meshes, armature = pick_objects(job, scene)
+    meshes = drop_materials(job, meshes)
     meshes = join_objects(job, meshes)
+    meshes = cut_into_cells(job, meshes)
     missing = missing_images(meshes)
 
     if missing:

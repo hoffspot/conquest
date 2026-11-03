@@ -4,9 +4,10 @@
 // speed to how fast the creature moves); redundant keyframes, duplicates and anything unused are
 // taken out; it's validated, lower-detail copies are made, and it's compressed.
 
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Logger, PropertyType } from "@gltf-transform/core";
+import { KHRTextureTransform } from "@gltf-transform/extensions";
 import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
@@ -15,6 +16,7 @@ import { encodeTextures } from "./ktx2.js";
 import { retargetClips } from "./retarget.js";
 import { moveDocument, scaleDocument } from "./transform.js";
 import { validate } from "./validate.js";
+import { trianglesOf, walkJson, walkOf } from "./walk.js";
 
 // Material extensions kept (Three.js's standard material draws them); the rest are left out
 const KEPT_MATERIAL_EXTENSIONS = new Set(["KHR_materials_emissive_strength", "KHR_materials_unlit"]);
@@ -404,10 +406,11 @@ export function thinKeys(document, fps) {
 /**
  * A lower-detail copy of every mesh, in the same document: a mesh of its own on a node of its
  * own ("<name>.lod<level>", extras.lod = level), its vertices welded then simplified (`ratio`
- * of them kept, at most `error` of its size astray), on the same skeleton and materials as the
- * full mesh. Resolves with the meshes made.
+ * of them kept, at most `error` of its size astray; `lockBorder`, its open edges kept where they
+ * are: a cell's, met by the next cell's), on the same skeleton and materials as the full mesh.
+ * Resolves with the meshes made.
  */
-export async function packLod(document, level, { ratio, error = 0.01 }) {
+export async function packLod(document, level, { ratio, error = 0.01, materials, lockBorder = false }) {
     const root = document.getRoot();
     const made = [];
 
@@ -444,7 +447,7 @@ export async function packLod(document, level, { ratio, error = 0.01 }) {
             }
 
             weldPrimitive(lower);
-            simplifyPrimitive(lower, { simplifier: MeshoptSimplifier, ratio, error });
+            simplifyPrimitive(lower, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, { ratio, materials }), error, lockBorder });
             copy.addPrimitive(lower);
         }
 
@@ -470,6 +473,14 @@ export async function packLod(document, level, { ratio, error = 0.01 }) {
     }
 
     return made;
+}
+
+/** The share of a primitive's vertices simplifying keeps: its material's own (`materials`), or `ratio`. */
+export function ratioOf(primitive, { ratio, materials = {} }) {
+    const name = primitive.getMaterial()?.getName() ?? "";
+    const own = Object.entries(materials).find(([pattern]) => wildcard(pattern, name));
+
+    return own ? own[1] : ratio;
 }
 
 /**
@@ -626,13 +637,37 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     result.bounds = { rest: boxOf(bounds(document)), ...reach(document) };
 
+    // Where it can be walked, from its triangles as they are before they're simplified
+    if (config.walk) {
+        const file = glb.replace(/\.glb$/, ".walk.json");
+
+        result.walk = { file, ...walkOf(trianglesOf(document), config.walk) };
+        await writeFile(file, JSON.stringify(walkJson({ ...result.walk, file: undefined })));
+    }
+
+    // (Cut into cells: their open edges, where one cell meets the next, kept where they are as
+    // they're simplified, so no gap opens between them)
+    const lockBorder = Boolean(config.cells);
+
     // Lower-detail copies in this file, beside the full mesh, sharing everything else
     if (config.packLods) {
         for (const [i, lod] of config.lods.entries()) {
-            const meshes = await packLod(document, i + 1, lod);
+            const meshes = await packLod(document, i + 1, { ...lod, lockBorder });
 
             result.lods.push({ packed: true, level: i + 1, ratio: lod.ratio, error: lod.error ?? 0.01, meshes: meshes.map((mesh) => mesh.getName()) });
         }
+    }
+
+    // (Cut into cells, all of it quantized on one grid, so where one cell meets the next is the
+    // same point in both; its texture coordinates past 0 to 1 brought into it, so they're
+    // quantized as the rest are. Both at 16 bits: what 14 or 12 would take anyway)
+    const quantizing = {
+        ...(config.cells ? { quantizationVolume: "scene", quantizePosition: 16 } : {}),
+        ...(config.tiledTexcoords ? { quantizeTexcoord: 16 } : {}),
+    };
+
+    if (config.tiledTexcoords && config.compress !== "none") {
+        result.texcoordsTiled = tileTexcoords(document);
     }
 
     // (Lower-detail files are made from the mesh as Blender gave it, as packed ones are)
@@ -640,7 +675,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     // The full mesh itself simplified, when even that's more than the game wants
     if (config.simplify) {
-        simplifyFull(document, config.simplify);
+        simplifyFull(document, { ...config.simplify, lockBorder });
     }
 
     // Checked before it's compressed: the validator can't read meshopt's compression
@@ -649,13 +684,26 @@ export async function optimize(config, { raw, glb, lodFile }) {
     for (const [i, lod] of (original ? config.lods : []).entries()) {
         const copy = cloneDocument(original);
 
-        await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01 }), prune());
-        await compress(copy, config.compress);
+        // (Some materials' parts by ratios of their own: each primitive on its own)
+        if (lod.materials) {
+            for (const mesh of copy.getRoot().listMeshes()) {
+                for (const primitive of mesh.listPrimitives()) {
+                    weldPrimitive(primitive);
+                    simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, lod), error: lod.error ?? 0.01, lockBorder });
+                }
+            }
+
+            await copy.transform(prune());
+        } else {
+            await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01, lockBorder }), prune());
+        }
+
+        await compress(copy, config.compress, quantizing);
         await io.write(lodFile(i + 1), copy);
         result.lods.push({ file: lodFile(i + 1), ratio: lod.ratio, error: lod.error ?? 0.01 });
     }
 
-    await compress(document, config.compress);
+    await compress(document, config.compress, quantizing);
     await io.write(glb, document);
     result.finalValidation = await validate(await readFile(glb), { ignore: config.compress === "meshopt" ? MESHOPT_IGNORED : [], ktx2: config.textures.format === "ktx2" });
 
@@ -718,24 +766,117 @@ export async function optimizeVariant(config, name, { raw, glb }) {
     return { name, glb, ktx2, validation: await validate(await readFile(glb), { ktx2: config.textures.format === "ktx2" }) };
 }
 
-/** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error }. */
-function simplifyFull(document, { ratio, error = 0.01 }) {
+/** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error, materials, lockBorder }. */
+function simplifyFull(document, { ratio, error = 0.01, materials, lockBorder = false }) {
     for (const node of document.getRoot().listNodes()) {
         if (node.getMesh() && node.getExtras().lod === undefined) {
             for (const primitive of node.getMesh().listPrimitives()) {
                 weldPrimitive(primitive);
-                simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio, error });
+                simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio: ratioOf(primitive, { ratio, materials }), error, lockBorder });
             }
         }
     }
 }
 
-async function compress(document, how) {
+async function compress(document, how, quantizing = {}) {
     if (how === "meshopt") {
-        await document.transform(meshopt({ encoder: MeshoptEncoder }));
+        await document.transform(meshopt({ encoder: MeshoptEncoder, ...quantizing }));
     } else if (how === "quantize") {
-        await document.transform(reorder({ encoder: MeshoptEncoder }), quantize());
+        await document.transform(reorder({ encoder: MeshoptEncoder }), quantize(quantizing));
     }
+}
+
+/**
+ * Texture coordinates past 0 to 1 (a texture tiled over a wall) brought into it, each material's
+ * on its own, its textures given the offset and scale that put them back (KHR_texture_transform):
+ * glTF-Transform quantizes only those within it, and keeps the rest as floats, twice the size.
+ * Returns the materials whose were.
+ */
+function tileTexcoords(document) {
+    const root = document.getRoot();
+    const done = [];
+    const byMaterial = new Map();
+
+    for (const mesh of root.listMeshes()) {
+        for (const primitive of mesh.listPrimitives()) {
+            const material = primitive.getMaterial();
+            const uv = primitive.getAttribute("TEXCOORD_0");
+
+            // (Only where every texture reads the first set: a second set would need its own)
+            if (material && uv && !primitive.getAttribute("TEXCOORD_1")) {
+                byMaterial.set(material, [...(byMaterial.get(material) ?? []), uv]);
+            }
+        }
+    }
+
+    for (const [material, coordinates] of byMaterial) {
+        const low = [Infinity, Infinity];
+        const high = [-Infinity, -Infinity];
+
+        for (const uv of new Set(coordinates)) {
+            const [min, max] = [uv.getMin([]), uv.getMax([])];
+
+            for (const axis of [0, 1]) {
+                low[axis] = Math.min(low[axis], min[axis]);
+                high[axis] = Math.max(high[axis], max[axis]);
+            }
+        }
+
+        if (low.every((value) => value >= 0) && high.every((value) => value <= 1)) {
+            continue;
+        }
+
+        // (Whole units off, so a tile's still where it was; and a span of at least one)
+        const offset = low.map((value) => Math.floor(value));
+        const scale = high.map((value, axis) => Math.max(1, Math.ceil(value - offset[axis])));
+        const infos = textureInfosOf(material);
+
+        // (A texture with its own transform already, or another material's texture coordinates
+        // shared with this one: left as they are)
+        if (!infos.length || infos.some((info) => info.getExtension("KHR_texture_transform"))) {
+            continue;
+        }
+
+        const users = new Set(coordinates.flatMap((uv) => uv.listParents().filter((parent) => parent.propertyType === PropertyType.PRIMITIVE)));
+
+        if ([...users].some((primitive) => primitive.getMaterial() !== material)) {
+            continue;
+        }
+
+        for (const uv of new Set(coordinates)) {
+            const array = uv.getArray();
+
+            for (let i = 0; i < array.length; i += 2) {
+                array[i] = (array[i] - offset[0]) / scale[0];
+                array[i + 1] = (array[i + 1] - offset[1]) / scale[1];
+            }
+
+            uv.setArray(array);
+        }
+
+        const transforms = document.createExtension(KHRTextureTransform);
+
+        for (const info of infos) {
+            info.setExtension("KHR_texture_transform", transforms.createTransform().setOffset(offset).setScale(scale));
+        }
+
+        done.push({ material: material.getName(), offset, scale });
+    }
+
+    return done;
+}
+
+// A material's textures' infos (how each is read): colour, normals, occlusion, metal and roughness, glow
+function textureInfosOf(material) {
+    return [
+        [material.getBaseColorTexture(), material.getBaseColorTextureInfo()],
+        [material.getNormalTexture(), material.getNormalTextureInfo()],
+        [material.getOcclusionTexture(), material.getOcclusionTextureInfo()],
+        [material.getMetallicRoughnessTexture(), material.getMetallicRoughnessTextureInfo()],
+        [material.getEmissiveTexture(), material.getEmissiveTextureInfo()],
+    ]
+        .filter(([texture, info]) => texture && info)
+        .map(([, info]) => info);
 }
 
 function boxOf(box) {

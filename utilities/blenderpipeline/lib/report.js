@@ -189,6 +189,19 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
         bounds: optimized.bounds,
         lods,
         ...(looks.length ? { variants: looks } : {}),
+        // (Where it can be walked: its levels and the links between them, not every square's height)
+        ...(optimized.walk
+            ? {
+                  walk: {
+                      file: relative(optimized.walk.file),
+                      origin: optimized.walk.origin,
+                      size: optimized.walk.size,
+                      levels: optimized.walk.levels.map(({ squares, low, high, box }) => ({ squares, low, high, box })),
+                      links: optimized.walk.links.map(({ from, to, crossings }) => ({ from, to, crossings: crossings.length })),
+                      left: optimized.walk.left,
+                  },
+              }
+            : {}),
         exported: {
             objects: blender.objects,
             armature: blender.armature ?? null,
@@ -203,6 +216,9 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
             ktx2: optimized.ktx2 ?? [],
             ...(blender.madeMaterials?.length ? { materialsFromTextures: blender.madeMaterials } : {}),
             ...(blender.joined?.length ? { joined: blender.joined } : {}),
+            ...(blender.droppedMaterials?.length ? { droppedMaterials: blender.droppedMaterials } : {}),
+            ...(blender.cells?.length ? { cells: blender.cells } : {}),
+            ...(optimized.texcoordsTiled?.length ? { texcoordsTiled: optimized.texcoordsTiled } : {}),
             ...(optimized.reweighted ? { verticesReweighted: optimized.reweighted } : {}),
             ...(optimized.morphsLeftOut ? { morphTargetsLeftOut: optimized.morphsLeftOut } : {}),
             ...(optimized.retargeted?.length ? { retargeted: optimized.retargeted.map(({ from, bones, hips, scale }) => ({ from, bones, hips, scale })) } : {}),
