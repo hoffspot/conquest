@@ -1412,7 +1412,13 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     expect(joined.crowded, JSON.stringify(joined)).toBeGreaterThan(0);
     expect(joined.mustering).toBeLessThan(11000);
 
-    await guest.waitForTimeout(1500);
+    // (A second and a half on by the game's own clock, the one the marshal looks by: a frame moves
+    // it a tenth of a second at most (game.js #frame), so on a machine drawing a frame or two a
+    // second, as a loaded runner was, a second and a half by the wall was 0.3 s of it, not even
+    // one of the marshal's looks)
+    const looked = await guest.evaluate(() => window.pellagos.game.clock);
+
+    await guest.waitForFunction((from) => window.pellagos.game.clock >= from + 1.5, looked, { timeout: 60000, polling: 250 });
     expect(
         await guest.evaluate((ids) => ids.filter((id) => window.pellagos.game.battle.actor(id) && !window.pellagos.game.battle.actor(id).dead && !window.pellagos.game.avatars.has(id)), joined.near.unseen),
         JSON.stringify(joined),

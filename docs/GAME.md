@@ -5831,6 +5831,18 @@ it.
      headers' lettering, so it's a little smaller, the smaller the narrower the screen (16 to 22
      pixels), each header on one line on a phone 360 pixels wide or more; on a narrower one, or
      for a long name, over two even lines.
+   - **On an iPhone or iPad, in a browser tab** (Safari, or Chrome, which is Safari underneath:
+     `device.js` `isIOS`, a touch screen, not opened from the Home Screen, `isInstalledApp`), a
+     card under its buttons suggests playing from the Home Screen, and why (index.html
+     `#homescreen`, app/homescreen.js): **your saves are kept** (in a tab, iOS deletes everything
+     a site keeps, the characters and worlds saved on the device too, after seven days of
+     browsing without opening it; on the Home Screen it doesn't), **full screen** (no browser bars
+     over the game) and **quicker to start** (what it's downloaded stays downloaded); then how
+     (Share, under ⋯ in Safari on newer iPhones, then Add to Home Screen) and, with characters
+     kept on the device, to take them along first (Export all, then Import from a file there: the
+     Home Screen game keeps its own, apart from the tab's). **Not now** puts it off three days and
+     **Don't show again** for good (the setting `homeScreenAfter`: `HOME_SCREEN`). About's
+     *Saving* says the same.
    - **About**, at the bottom, opens what the game is and how it's played, in a dialog that
      scrolls (index.html `#about`): the game, starting, getting about, fighting, magic, gear and
      gold, towns and folk, the world and its war, your party, playing together, saving, the keys,
