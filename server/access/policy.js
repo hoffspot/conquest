@@ -37,6 +37,10 @@ export const REFUSED = Object.freeze({
     home: "That can only be done from home: the Mac itself or its Wi-Fi.",
     role: "You may not do that in this world.",
     busy: "Too many newcomers have come into this world lately: try again in an hour or so.",
+    maker: "Making worlds here needs a creator key from the server's owner, or its admin key on its own Wi-Fi.",
+    unproved: "Making a world here needs your player identity, and the game couldn't show it: reload the game and try again.",
+    "made-each": "You've made as many worlds here as each player may. Ask the server's owner for a creator key to make more.",
+    "made-most": "Players have made as many worlds here as the server's owner allows. Ask them for a creator key.",
 });
 
 // The actions that are a world's owner's (or the server's admin's), and a trusted player's if the world allows it

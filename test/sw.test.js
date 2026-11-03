@@ -354,6 +354,16 @@ describe("service worker", () => {
         assert.deepEqual(worker.kept(BOOT), [full(address(["/models/jmi/chest.glb", "a chest"]))]);
     });
 
+    it("leaves a world server's API and the relay's address to the server: never kept, never given from a copy", async () => {
+        const worker = loadServiceWorker({ files: { "/api/v1/status": "{}", "/relay": "{}" } });
+
+        assert.equal(await worker.request("/api/v1/status"), undefined);
+        assert.equal(await worker.request("/api/v1/worlds"), undefined);
+        assert.equal(await worker.request("/relay"), undefined);
+        assert.deepEqual(worker.requests, [], "the browser asks the server itself");
+        assert.notEqual(await worker.request("/relays.js"), undefined, "a file named like it is the game's as ever");
+    });
+
     it("leaves a part of a file (a range, as the downloader asks for) to the server", async () => {
         const worker = loadServiceWorker({ files: { "/models/dragon.glb": "a dragon" } });
         const url = address(["/models/dragon.glb", "a dragon"]);

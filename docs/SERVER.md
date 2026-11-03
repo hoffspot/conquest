@@ -46,7 +46,8 @@ answered from the internet. Its tabs:
 - **New world.** Its name, seed and home people, what it does with its players' characters
   (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
-  makes worlds of their own here, and owns them. First among the settings is **the server's
+  makes worlds of their own here, and owns them. Among the settings, **Let any player make worlds**
+  (below, *Players making worlds*). First among the settings is **the server's
   name** as players see it: "Pellagos Home Server", say, rather than "Tom's Mac mini". Left
   empty, it's the computer's own. Changed, it's the name at once wherever it's shown: the game's
   lists of servers and its **Invite others** ("Your world's open to others through Pellagos
@@ -124,7 +125,7 @@ says which on each world's card and tells players plainly before they choose who
 - **Changed only while nobody's in it**: offline (below) or set aside. Characters a world keeps
   stay on the server if it's switched to visiting, and are there again if it's switched back;
   copies already in it stay copies.
-- **Made** with a rule (the game's Make a world, the management page's New world: `characters`),
+- **Made** with a rule (the game's Host on a Server, the management page's New world: `characters`),
   or without one, as kept by the world, made there.
 - **What a world takes of a character brought to it** (visiting, or copied in): who they are and
   what they carry (their look, their own id, what they've grown into, their gear and gold). What
@@ -197,10 +198,13 @@ A world with nobody in it waits 2 minutes, then it's saved and **set aside**: it
 until someone comes in. Two worlds run at once by default (the page says how many the computer can
 take); a third waits its turn. While anyone's in a world, the computer is kept awake.
 
-Players add the server in the game's **Worlds on servers** (by its address, from an invite link or
-QR code, or from the servers found nearby on the Wi-Fi), then come into a world with its key or
-code, or make one with a creator key or the admin key, or bring one of their own (below). Opening
-the game from the server's own address adds it by itself (Getting people in, below).
+Players add the server in the game's **Multiplayer**, **Known Servers** (by its address, from an
+invite link or QR code, or from the servers found nearby on the Wi-Fi), then come into a world in
+**Join a World Hosted on a Server** with its key or short code, or make one in **Host on a Server**
+with a creator key or the admin key (or none, where the server lets any player make worlds:
+below), or bring one of their own there (below). Opening the game from the server's own address
+adds it by itself (Getting people in, below). Every game knows one server from the first, the
+default server (`https://pellagos.duckdns.org:8480`): Known Servers can forget it, and add it back.
 
 ## Getting people in
 
@@ -217,7 +221,8 @@ says so.
 | --- | --- |
 | Invite people into a world | The management page's **Worlds**, the world's **Invite players**: copy the link and send it, or let them scan its code. One link does for everyone you send it to. |
 | Have a world anyone can drop into | The world's **Settings**, **Open to anyone** (below). Whoever opens the server's address sees it, and joins it with a tap. |
-| Let a friend run a world of their own | **Settings**, **Creator keys**: make one and send it. In the game's **Worlds on servers** they **Make a world**, or bring one they've played alone (**Bring my world**), and own it. |
+| Let a friend run a world of their own | **Settings**, **Creator keys**: make one and send it. In the game's **Multiplayer**, **Host on a Server**, they make a world, or bring one they've played alone (**A world from this device**), and own it. |
+| Let anyone make worlds of their own | **Settings**, **Let any player make worlds here**, and how many each and in all (*Players making worlds*, below). |
 | Stop a link that's gone too far | The world's **Invite players**, **Replace the link**. The old one lets nobody else in. Everyone who came by it keeps their place, and comes back as before. |
 | Keep someone out | The world's **Players**: **Send out**, or **Ban**. |
 
@@ -228,8 +233,9 @@ In the game, in the world: the menu's **World**, or **World** at the top of the 
 - **Invite link**: the world's link, copied at once, with its code to scan, **Share…** on a phone,
   and **Replace the link**. It's the same link the management page gives.
 - **Open to anyone**: the switch (below).
-- **Make a short code**: for someone who has the game open already, typed on the Worlds screen
-  (**Enter a code**). It works once, for half an hour.
+- **Make a short code**: for someone who has the game open already, typed in Multiplayer, Join a
+  World Hosted on a Server (the server's **Enter a short code**). It works once, for half an hour.
+  Host on a Server makes one too, as the world's made.
 
 In the menu, with anyone else in the world: **Pause for everyone**. The world stops for all in it,
 each told who paused it, till you resume; if your link drops meanwhile, it goes on for the others.
@@ -243,11 +249,12 @@ page hidden (its rule **Stopped while its one player's page is hidden**, on unle
 | An invite link | Open it, or scan its code. The game opens from the server. The first time, you make a character for the world, then you're in. |
 | Only the server's address (`pellagos.duckdns.org:8480`) | Open it in a browser: `https://` from the internet, `http://` on its Wi-Fi. The title shows the worlds on it. One open to anyone, tap and you're in; any other, ask its owner for the link. |
 | Been in before | Open the server's address again (or the link): your world's on the title. Tap it. Your game keeps a ticket, on that device. |
-| A new phone or browser | Ask the world's owner for the link again. Or, on the old one, Worlds on servers, **My servers and tickets**, and bring the code to the new one. |
-| A short code | Worlds on servers, the server's **Enter a code**. |
+| A new phone or browser | Ask the world's owner for the link again. Or, on the old one, Multiplayer, Known Servers, **My servers and tickets**, and bring the code to the new one. |
+| A short code | Multiplayer, Join a World Hosted on a Server, the server's **Enter a short code**. |
 
-The game's **Worlds Guide** (on its Worlds on servers screen) tells players all of this, with
-examples of each kind of link, address and code, and what to do when a world won't join.
+The game's **About Multiplayer** (Multiplayer, on the title) tells players all of this, with
+pictures of who links to whom, examples of each kind of link, address and code, and what to do
+when a world won't join.
 
 ### Open worlds
 
@@ -273,7 +280,7 @@ internet panel):
    its address (CGNAT), **Tailscale Funnel**, which needs Tailscale installed and signed in.
 2. **The router.** The server asks it to let players in (PCP, NAT-PMP or UPnP). If the router
    won't, the page says which port to forward by hand.
-3. **Tested from outside.** The game's **Test this server**, from a phone on its mobile data,
+3. **Tested from outside.** The game's **Test from outside** (Multiplayer, Known Servers), from a phone on its mobile data,
    tries every way in and tells the page how it went.
 
 **Close to the internet** stops answering it at once.
@@ -281,8 +288,8 @@ internet panel):
 ## Bringing your own world
 
 Each world a player plays in alone is kept on their device (docs/GAME.md, "Characters and worlds
-on this device"): its land (its seed), and the war going on in it. **Bring my world**, on the
-server's card in the game's **Worlds on servers**, makes one of those a world of the server's. The
+on this device"): its land (its seed), and the war going on in it. **Host on a Server**, **A world
+from this device**, in the game's Multiplayer, makes one of those a world of the server's. The
 game says how, as it goes:
 
 1. **Which world, as whom.** Each world on that device is listed with each of their characters
@@ -291,7 +298,8 @@ game says how, as it goes:
    and imported here first (Characters on this device, Import from a file): their world comes
    with them.
 2. **A key that makes worlds here:** the admin key (on the server's Wi-Fi alone), or a creator key
-   its owner made for them (Settings, Creator keys).
+   its owner made for them (Settings, Creator keys); or none, where the server lets any player
+   make worlds (*Players making worlds*, below).
 3. **Its name** (the world's, to start with), and whether others make new characters
    there (made here) or may copy one of theirs in (copied in).
 
@@ -311,10 +319,35 @@ than the server plays (it updates itself overnight, or **Update** does now); or 
 sent. (`POST /api/v1/worlds/bring`, the game's `ServerClient.bringWorld`: server/manage.js
 `bringSolo`, server/reopen.js `importSolo`.)
 
+## Players making worlds
+
+**Settings › Let any player make worlds here** (`anyoneMakes`, off unless it's turned on): any
+player may make a world here from the game (Multiplayer, Host on a Server: a new one, or one of
+theirs brought), with no creator key, and own it, as whoever makes one with a key does.
+
+- **Known by their own identity.** The game shows the player's identity's proof with it (signed
+  for this server, fresh, good once: *Worlds and who comes in*), and the world's kept with their
+  player id (`maker` in its `world.json`); its journal and the management page say who made it
+  ("Wren (a player, 1f0c…)").
+- **How many.** Each player makes **How many worlds each player may make that way** (`madeEach`,
+  1 unless it's set) and all players together **How many in all** (`madeMost`, 20), counted from
+  the worlds kept: one deleted (the management page) is room for another. One address makes 3 an
+  hour at most (server/api.js `MADE_PER_HOUR`). Worlds made with a creator key or the admin key
+  are never counted.
+- **Said to the game**: the server's card says so (`server.makers`: how many each, and how many
+  more in all), and the game's Known Servers and Host on a Server say which servers let anyone
+  make worlds. Turned off, the game asks for a creator key, as ever: "Making worlds here needs a
+  creator key from the server's owner" (`maker`); else, when one can't be made, why (`unproved`,
+  `made-each`, `made-most`, `wait`: server/access/policy.js `REFUSED`).
+
 ## Players' own worlds
 
-A player who opens their own game's world to others (the game's **Invite others**) can list it on
-the server (its **broker**), and others join it point to point (WebRTC). When their games can't
+A player who opens their own game's world to others (the game's **Host on this Device**, or its
+menu's **Invite others**) through the server (its **broker**: the game says which server, and the
+player may choose another) can list it there, and others join it point to point (WebRTC), looking
+for its code on the same server (**Join a World on another Device**). The server takes the game's
+calls from its own pages and the game's website (GitHub Pages) alone: a game opened from another
+server's page plays on it from its own page (Known Servers, **Open the game from this server**). When their games can't
 connect directly, the server relays them, about 2 KB/s for each player who's joined. The
 **broker** and **relaying** settings turn either off.
 
@@ -515,7 +548,7 @@ left as it is by a restore, gone when it's deleted; server/storage/crashes.js), 
 | What | What to do |
 | --- | --- |
 | Players on the Wi-Fi can't reach it | macOS's firewall: allow "node" (System Settings › Network › Firewall). Use the address on the Overview, not `localhost` |
-| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Worlds on servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does |
+| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Multiplayer, Known Servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does |
 | It's not in the game's Nearby list | Bonjour is off, or macOS refused Local Network (the page says so). Add it by address |
 | "The data folder … is at version N, written by Pellagos server X" | A newer server wrote it. Use that version or later, or restore the backup made before the upgrade |
 | A world "can't be carried on" | None of its saves read, or it was saved by a version of the game older than this one can bring forward. Restore a backup, or **Start it afresh** (its Backups tab): its land made again from its seed, its war and heroes kept |

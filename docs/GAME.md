@@ -5766,12 +5766,62 @@ it.
      pixels). It's in the page itself, so it's fetched as the page is read.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
-   a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has
-   opened (its code: docs/WAR.md M11) or one on a server (**Worlds on servers**); and the debug
-   mode switch.
+   a world (**Worlds on this device**, up to eight) and who goes in; play with others
+   (**Multiplayer**, below); and the debug mode switch.
+   - **Multiplayer** (index.html `#multiplayer`, main.js `openMultiplayer`; app/multiplayer.js)
+     gathers every way to play in a world with others, each opening over it and coming back to it:
+     - **About Multiplayer** (`#mpguide`, laid out as About is): which way for what you have or
+       want, the two kinds of world, each of the five below step by step, your characters in a
+       world on a server, coming back on another device, what to do when one won't join, and
+       running a server; with pictures of who links to whom (inline SVG, `.mp-diagram`, each with
+       its words as its title) and examples of each kind of code and link.
+     - **Join a World on another Device** (`#join`): a friend's world opened from their game
+       (docs/WAR.md M11), by its four-letter code, **looked for on** the server it's open through
+       (a choice of servers, below); and the worlds their hosts have listed on the servers known,
+       each joined with a tap (its code put in, looked for where it's listed).
+     - **Join a World Hosted on a Server** (`#worlds`): each known server's worlds (those it
+       lists, those open to anyone, and those a key or ticket's held for here), an invite link
+       pasted, **Enter a short code** on a server, a key for a world; who comes.
+     - **Known Servers** (`#servers`): every server known, asked how it is as it opens: up (its
+       version, how far, the worlds it lists, whether it connects players and how many players'
+       worlds are open, and whether anyone may make worlds there), still being asked, can't be
+       reached, another version, can't be reached from this page (https to a server at home), or
+       taking the game from its own page alone; **Check again**, **Test from outside**, **Open the
+       game from this server**, **Forget**; those found **Nearby**; a server added by its address
+       or an invite link; **Add the default server back**; and **My servers and tickets**.
+     - **Host on this Device** (`#hosthere`): who hosts (one of the characters kept, or a new
+       one) and **through which server**; then the character's played (or made, or their world
+       chosen, first), and as soon as it's under way their world's opened to others through that
+       server (main.js `hostIfAsked`, within ten minutes of asking), its Invite showing the server,
+       the code, and the link with **Copy the link**, **Share…** and its code to scan; and, where
+       the page is at `localhost` or an address at home, that the link opens there alone
+       (app/multiplayer.js `linkReach`).
+     - **Host on a Server** (`#hostserver`): a known server chosen (each saying whether anyone may
+       make worlds there or it needs a creator key); **a new world** (its name, what it's about,
+       whose town, its characters, most players, listed, open to anyone, and its seed) or **a world
+       from this device** (as Bring my world: which, as whom, its name, others' characters, its
+       rules set once it's there); the key that makes worlds, if it needs one; then its **invite
+       link** (copied, shared, scanned), a **short code** if asked for, and **Go in**.
+   - **The default server**, `https://pellagos.duckdns.org:8480` (app/servers.js
+     `DEFAULT_SERVERS`), is known to every game from the first, added once (`offerDefaults`):
+     forgotten, it isn't added again, but Known Servers offers it back. The browser tests never
+     reach it (playwright.config.js: its name doesn't resolve there).
+   - **The title's worlds on its server** (the game opened from a world server: `#titleworlds`,
+     main.js `frontDoor`) are cards, as Multiplayer's lists' are: each world's name, what it does
+     with its players' characters, who's playing, and how to go in.
+   - **A server's API is never kept by the service worker** (sw.js `LIVE`: `/api/…` and `/relay`),
+     so how a server is, and the worlds it lists, are always as it says now.
+   - **Which server a world's opened through, and a code's looked for on** (app/multiplayer.js
+     `relayChoices`): the relay in the page's address (`?relay=`); the page's own world server; the
+     page's own relay (`npm start`'s: server/index.js answers a page asking for `/relay` with 426,
+     main.js `pageRelay`; never asked from a world server's page or GitHub Pages); then each known
+     server, those that can't connect players greyed with why. Chosen: the one chosen last
+     (`pellagos.relay`), if it can be; else the first of those, the default server before other
+     known ones. The game menu's Invite others opens through the same choice; a world kept open
+     across a reload goes back through the server it was open through.
    - **The headers** of what its buttons open (**Make your character**, **Characters on this
-     device**, **Worlds on this device**, **Join a world**, **Worlds on servers**, **You** and
-     **About Pellagos**), and of its worlds on a server, are in the title's own lettering: the
+     device**, **Worlds on this device**, **Multiplayer**, its windows, **You** and **About
+     Pellagos**), and of its worlds on a server, are in the title's own lettering: the
      crest's Cinzel Decorative (styles.css `.lettering`). It's half as wide again as the other
      headers' lettering, so it's a little smaller, the smaller the narrower the screen (16 to 22
      pixels), each header on one line on a phone 360 pixels wide or more; on a narrower one, or

@@ -6,7 +6,7 @@ import { expect, test } from "./fixtures.js";
 
 // Players' own worlds through a world server's broker (generated/world_server_plan.md §8.3, §9.6,
 // §15 S7), in two browsers at once on the server's own page: a world opened from the game's menu
-// through the server, listed on it, and joined from the Worlds screen point to point (WebRTC, on
+// through the server, listed on it, and joined from Multiplayer point to point (WebRTC, on
 // loopback); its listing taken down when it's closed. And a host whose browser can't be reached
 // directly (no ICE candidate gets through): joined relayed by the server, and hidden from the list
 // once the server no longer relays. (The broker's expiry, caps and refusals: test/broker.test.js.)
@@ -15,10 +15,11 @@ import { expect, test } from "./fixtures.js";
 test.setTimeout(420000);
 test.describe.configure({ mode: "default" });
 
-// (WebRTC's host candidates as plain addresses, not mDNS names a container can't resolve)
+// (WebRTC's host candidates as plain addresses, not mDNS names a container can't resolve; and, as
+// playwright.config.js has it, the game's default server never reached)
 test.use({
     launchOptions: {
-        args: ["--enable-unsafe-swiftshader", "--disable-features=WebRtcHideLocalIpsWithMdns"],
+        args: ["--enable-unsafe-swiftshader", "--disable-features=WebRtcHideLocalIpsWithMdns", "--host-resolver-rules=MAP pellagos.duckdns.org ~NOTFOUND"],
         ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}),
     },
 });
@@ -102,7 +103,7 @@ async function opened(host) {
     return [invite, await invite.locator("#invitecode").textContent()];
 }
 
-test("a player's own world through the server's broker: listed on it, joined from the Worlds screen point to point; its listing gone when it's closed", async ({ ownBrowser: browser }) => {
+test("a player's own world through the server's broker: listed on it, joined from Multiplayer's Join a World on another Device point to point; its listing gone when it's closed", async ({ ownBrowser: browser }) => {
     const host = await (await browser.newContext()).newPage();
     const guest = await (await browser.newContext()).newPage();
 
@@ -118,13 +119,13 @@ test("a player's own world through the server's broker: listed on it, joined fro
     await expect.poll(() => server.broker.listings.get(code)?.said.visibility).toBe("listed");
     await invite.getByRole("button", { name: "Back to the game" }).click();
 
-    // The elf finds it on the server's Worlds screen, and joins it
+    // The elf finds it listed on the server (Multiplayer, Join a World on another Device: the
+    // game opened from the server knows it), and joins it, looking for it where it's listed
     await guest.goto(`${base}/`);
-    await guest.locator("#worldsbutton").click();
-    await guest.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await guest.locator("#worlds").getByRole("button", { name: "Add", exact: true }).click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
 
-    const listed = guest.locator(`#worlds li.player-world[data-listing="${code}"]`);
+    const listed = guest.locator(`#joinlisted li.player-world[data-listing="${code}"]`);
 
     await expect(listed).toContainText("A player's world", { timeout: 30000 });
     // (Said as the host's reachability check found it: on loopback, its own address, private or not)
@@ -134,6 +135,8 @@ test("a player's own world through the server's broker: listed on it, joined fro
     const join = guest.locator("#join");
 
     await expect(join.locator("#joincode")).toHaveValue(code);
+    await expect(join.locator("#joinat")).toHaveValue("at");
+    await expect(join.locator("#joinat option:checked")).toContainText("where it's listed");
     await join.getByRole("button", { name: "Join" }).click();
     await playing(guest);
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("direct");

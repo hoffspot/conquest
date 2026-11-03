@@ -7,7 +7,7 @@ import { fakeTailscale } from "../test/fake-tailscale.js";
 import { expect, test } from "./fixtures.js";
 
 // Reaching a server from the game (generated/world_server_plan.md §9.3, §9.5, §15 S6e), in a
-// browser: Test this server, from the game's own Worlds screen and from the management page's code
+// browser: Test from outside, from the game's Known Servers and from the management page's code
 // (#test), trying the server's internet address (Tailscale Funnel's here, a Tailscale of the tests'
 // own, its name brought to the server's tunnel as Tailscale would) and telling the server, whose
 // page then says so; and a page opened over https that can't reach a server at home over plain
@@ -38,7 +38,7 @@ test.afterAll(async () => {
     await Promise.all(folders.map((folder) => rm(folder, { recursive: true, force: true })));
 });
 
-test("Test this server: the game tries the server's internet address and tells it, from its Worlds screen and from the page's code; the management page says so", async ({ page }) => {
+test("Test from outside: the game tries the server's internet address and tells it, from Known Servers and from the page's code; the management page says so", async ({ page }) => {
     const server = await serve({ funnel: { run: fakeTailscale() }, tunnelPort: 0 }, { internet: true, funnel: true });
 
     await expect.poll(() => server.funnel.state().url, { timeout: 20000 }).toBe(FUNNEL);
@@ -49,23 +49,25 @@ test("Test this server: the game tries the server's internet address and tells i
         throw error;
     });
     await page.goto(`http://127.0.0.1:${server.port}/`);
-    await page.locator("#worldsbutton").click();
+    await page.locator("#multiplayerbutton").click();
+    await page.locator("#mpservers").click();
 
-    const worlds = page.locator("#worlds");
-    const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
+    const servers = page.locator("#servers");
+    const row = servers.locator(`li[data-server="127.0.0.1:${server.port}"]`);
 
-    await page.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add", exact: true }).click();
-    await expect(row).toContainText("Version", { timeout: 30000 });
-    await row.getByRole("button", { name: "Test this server" }).click();
-    await expect(page.locator("#worldsstatus")).toContainText(`Tested: reached at ${FUNNEL} (`, { timeout: 30000 });
-    await expect(page.locator("#worldsstatus")).toContainText("Its owner sees this on its management page. This device seems to be on the server's own network");
+    await page.locator("#serversaddress").fill(`127.0.0.1:${server.port}`);
+    await servers.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(row).toContainText("Up · version", { timeout: 30000 });
+    await row.getByRole("button", { name: "Test from outside" }).click();
+    await expect(page.locator("#serversstatus")).toContainText(`Tested: reached at ${FUNNEL} (`, { timeout: 30000 });
+    await expect(page.locator("#serversstatus")).toContainText("Its owner sees this on its management page. This device seems to be on the server's own network");
     expect(server.reports[0].results[0]).toMatchObject({ address: FUNNEL, ok: true });
 
-    // (The management page's code: the game opened afresh at #test, testing its own server at once)
+    // (The management page's code: the game opened afresh at #test, Known Servers testing its own server at once)
     await page.goto("about:blank");
     await page.goto(`http://127.0.0.1:${server.port}/#test`);
-    await expect(page.locator("#worldsstatus")).toContainText(`Tested: reached at ${FUNNEL} (`, { timeout: 30000 });
+    await expect(page.locator("#servers")).toBeVisible({ timeout: 60000 });
+    await expect(page.locator("#serversstatus")).toContainText(`Tested: reached at ${FUNNEL} (`, { timeout: 30000 });
     expect(server.reports.length).toBe(2);
     expect(page.url()).not.toContain("#test");
 
@@ -100,7 +102,8 @@ test("a page opened over https that can't reach a server at home over plain http
         );
     });
     await page.goto(`https://127.0.0.1:${server.port}/`);
-    await page.locator("#worldsbutton").click();
+    await page.locator("#multiplayerbutton").click();
+    await page.locator("#mpjoinserver").click();
 
     const row = page.locator('#worlds li[data-server="10.255.255.1:8480"]');
 

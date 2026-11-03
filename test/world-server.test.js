@@ -17,6 +17,7 @@ import { NET_VERSION } from "../client/js/core/netplay.js";
 import { newPlayerSecret, playerIdOf, proofOf, publicKeyOf } from "../client/js/core/player.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { verifyIdentity } from "../server/access/identity.js";
+import { MADE_PER_HOUR } from "../server/api.js";
 import { newToken } from "../server/access/tokens.js";
 import { guard, hostsOf, originsOf, Refusal } from "../server/guards.js";
 import { PLAY_LIMITS, PLAY_PROTOCOL } from "../server/play.js";
@@ -524,6 +525,95 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal((await server.call("GET", `/worlds/${world.world}/keys`, { auth: `Bearer ${guest.json.session}` })).status, 403);
         assert.equal((await server.call("POST", "/worlds", { auth: `Bearer ${guest.json.session}`, body: { name: "Mine", race: "elf" } })).status, 403, "only creators and the admin make worlds");
         assert.equal((await server.call("POST", "/enter", { body: { world: "nosuchwrld", key: fresh.json.key } })).json.error, "no-world");
+    });
+});
+
+describe("players making worlds with no creator key (the server's anyoneMakes, madeEach and madeMost: api.js makerOf)", () => {
+    // A player's own identity, and a fresh proof of it for `server` (each is good once)
+    const playerFor = (server) => {
+        const secret = newPlayerSecret();
+        let shown = 0;
+
+        return { id: playerIdOf(publicKeyOf(secret)), proof: () => proofOf(secret, { server: server.identity.id, name: `Wren ${(shown += 1)}` }) };
+    };
+    const make = (server, body) => server.call("POST", "/worlds", { body: { name: "Mine", race: "elf", seed: 5, ...body } });
+
+    it("refuses anyone with no key while it's off, and says so on its card", async () => {
+        const server = await serve();
+        const wren = playerFor(server);
+
+        assert.equal((await server.call("GET", "/status")).json.server.makers, null);
+
+        const refused = await make(server, { player: wren.proof() });
+
+        assert.equal(refused.status, 403);
+        assert.equal(refused.json.error, "maker");
+        assert.equal(server.worlds.size, 0);
+    });
+
+    it("lets each player make madeEach worlds, all players madeMost, by their own identity: theirs to own, its maker kept, its settings as asked; what's left on its card", async () => {
+        const server = await serve({ anyoneMakes: true, madeEach: 1, madeMost: 2 });
+        const [wren, ash, bryn] = [playerFor(server), playerFor(server), playerFor(server)];
+
+        assert.deepEqual((await server.call("GET", "/status")).json.server.makers, { each: 1, left: 2 });
+
+        // (No identity shown: nobody to count it against)
+        const unproved = await make(server, {});
+
+        assert.equal(unproved.status, 401);
+        assert.equal(unproved.json.error, "unproved");
+
+        const first = await make(server, { name: "Wren's Hollow", player: wren.proof(), settings: { listed: true, mostPlayers: 4 } });
+
+        assert.equal(first.status, 200, JSON.stringify(first.json));
+        assert.match(first.json.ownerKey, /^[0-9A-Z]{4}/);
+
+        const meta = server.metaOf(first.json.world);
+
+        assert.equal(meta.maker, wren.id);
+        assert.match(meta.creator, new RegExp(`^Wren 1 \\(a player, ${wren.id}\\)$`));
+        assert.equal(meta.settings.listed, true);
+        assert.equal(meta.settings.mostPlayers, 4);
+        assert.equal((await server.call("POST", "/enter", { body: { world: first.json.world, key: first.json.ownerKey } })).json.role, "owner", "theirs to own");
+        assert.deepEqual((await server.call("GET", "/status")).json.server.makers, { each: 1, left: 1 });
+
+        const again = await make(server, { player: wren.proof() });
+
+        assert.equal(again.status, 409);
+        assert.equal(again.json.error, "made-each");
+        assert.equal((await make(server, { player: ash.proof() })).status, 200);
+        assert.deepEqual((await server.call("GET", "/status")).json.server.makers, { each: 1, left: 0 });
+
+        const full = await make(server, { player: bryn.proof() });
+
+        assert.equal(full.status, 409);
+        assert.equal(full.json.error, "made-most");
+
+        // (A creator's key makes worlds as ever, uncounted)
+        const creator = (await server.manage.issueCreator("Sam")).key;
+
+        assert.equal((await server.call("POST", "/worlds", { auth: `Key ${creator}`, body: { name: "Sam's", race: "human", seed: 3 } })).status, 200);
+        assert.equal(server.worlds.size, 3);
+    });
+
+    it("refuses a proof shown before, one for another server, and more than MADE_PER_HOUR from one address in an hour", async () => {
+        const server = await serve({ anyoneMakes: true, madeEach: 10, madeMost: 50 });
+        const wren = playerFor(server);
+        const proof = wren.proof();
+
+        assert.equal((await make(server, { player: proof })).status, 200);
+        assert.equal((await make(server, { player: proof })).json.error, "unproved", "a proof's good once");
+        assert.equal((await make(server, { player: proofOf(newPlayerSecret(), { server: "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ", name: "Wren" }) })).json.error, "unproved", "nor for another server");
+
+        for (let made = 1; made < MADE_PER_HOUR; made += 1) {
+            assert.equal((await make(server, { player: wren.proof() })).status, 200);
+        }
+
+        const busy = await make(server, { player: wren.proof() });
+
+        assert.equal(busy.status, 429);
+        assert.equal(busy.json.error, "wait");
+        assert.equal(server.worlds.size, MADE_PER_HOUR);
     });
 });
 

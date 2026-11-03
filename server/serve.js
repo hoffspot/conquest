@@ -206,7 +206,7 @@ console.log(`Worlds kept: ${server.worlds.size}`);
 
 if (server.adminKey) {
     console.log(`\nIts admin key, shown this once (keep it safe; it manages the server from the Wi-Fi, and makes worlds from the game):\n\n    ${server.adminKey}\n`);
-    console.log(`Make a world on the management page (http://localhost:${adminPort}, New world), or in the game: open it from http://localhost:${port}, then Worlds on servers, add this server (localhost:${port}) and Make a world.\n`);
+    console.log(`Make a world on the management page (http://localhost:${adminPort}, New world), or in the game: open it from http://localhost:${port}, then Multiplayer, Known Servers, add this server (localhost:${port}), and Host on a Server.\n`);
 }
 
 // (What Bonjour says, said here as it changes: shown on the Wi-Fi, or refused and why)

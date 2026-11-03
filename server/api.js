@@ -5,7 +5,8 @@
 //
 //   GET    /status                          the server's card: its id, versions, addresses (home and
 //                                           internet), where the caller seems to be (you), listed worlds
-//                                           (and those open to anyone, `open`)
+//                                           (and those open to anyone, `open`), and whether players may
+//                                           make worlds with no creator key (`server.makers`)
 //   POST   /reachability {results}          what a game found reaching it from elsewhere ("Test this
 //                                           server"): kept for the management page (manage.js report)
 //   GET    /health                          "ok", or "slow" if any world's steps are
@@ -16,10 +17,13 @@
 //                                           proof (client/js/core/player.js), known by it from then on
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
-//   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
+//   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key; or, the server's
+//                                           anyoneMakes on, a player with none, by their identity's proof,
+//                                           `player`: makerOf): { world, ownerKey, playerKey }
 //   POST   /worlds/import (a world's file)  a world brought in from an export (manage.js importWorld; a creator key or the admin key)
 //   POST   /worlds/bring (a character's world)   a player's solo world brought to the server (manage.js bringSolo; a
-//                                           creator key or the admin key): { world, name, ownerKey, playerKey, ticket, player, hero, turn, left }
+//                                           creator key or the admin key, or a player as POST /worlds, their proof
+//                                           in what's sent): { world, name, ownerKey, playerKey, ticket, player, hero, turn, left }
 //   GET    /worlds/:id/keys                 its keys (owners)
 //   POST   /worlds/:id/keys {label, role, expires?, uses?}            a key made: { key, record }
 //   DELETE /worlds/:id/keys/:key            a key revoked (its players' sockets closed, "key-revoked")
@@ -103,6 +107,9 @@ export const STATUS_PER_MINUTE = 60;
 export const REPORTS_PER_MINUTE = 6;
 export const CRASHES_PER_MINUTE = 6;
 
+/** How many worlds one address may make an hour with no creator key (the server's anyoneMakes setting). */
+export const MADE_PER_HOUR = 3;
+
 /** The header every server-management call carries, and what it says (admin.js: a page on another site can't send it unasked). */
 export const MANAGE_HEADER = "x-pellagos";
 export const MANAGE_VALUE = "manage";
@@ -115,7 +122,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429 });
+const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -144,6 +151,7 @@ export function apiHandler(server, { mac = false } = {}) {
     const status = new Rate(STATUS_PER_MINUTE);
     const reports = new Rate(REPORTS_PER_MINUTE);
     const crashes = new Rate(CRASHES_PER_MINUTE);
+    const made = new Rate(MADE_PER_HOUR, { per: 3600000 });
 
     // A player's own identity, from the proof they showed coming into a world ({ id, name }:
     // client/js/core/player.js playerOfProof), if it proves it: signed for this server, fresh, and
@@ -179,6 +187,49 @@ export function apiHandler(server, { mac = false } = {}) {
 
         return policy.identify({ world, session, key, ticket, address: request.address, from: request.from }).principal;
     };
+
+    // Whoever may make a world: the admin or a creator, by their key; or, with no key and the
+    // server's anyoneMakes setting on, a player, by their own identity's proof (`proof`: { id, name }
+    // given back, the world theirs, counted against them), so long as they've made fewer than its
+    // madeEach here, players fewer than its madeMost, and their address fewer than MADE_PER_HOUR
+    // this hour. Else refused, saying why
+    const makerOf = (request, principal, proof) => {
+        if (policy.allows(principal, "world.create").yes) {
+            return null;
+        }
+
+        if (principal.kind !== "anyone" || !server.settings.get("anyoneMakes")) {
+            const why = principal.kind === "anyone" ? "maker" : policy.allows(principal, "world.create").why;
+
+            policy.on("refused", { why, address: request.address });
+            throw refuse(why);
+        }
+
+        const who = identityOf(proof);
+
+        if (!who) {
+            throw refuse("unproved");
+        }
+
+        const { all, by } = server.madeByPlayers();
+
+        if ((by.get(who.id) ?? 0) >= server.settings.get("madeEach")) {
+            throw refuse("made-each");
+        }
+
+        if (all >= server.settings.get("madeMost")) {
+            throw refuse("made-most");
+        }
+
+        if (!made.allow(request.address)) {
+            throw refuse("wait", { message: "Too many worlds have been made from here lately: try again in an hour or so." });
+        }
+
+        return who;
+    };
+
+    // How a world's maker is named in its journal and on the management page: a player by the name they go by, and their id
+    const makerWords = (maker) => `${maker.name ?? "a player"} (a player, ${maker.id})`;
 
     // Who did it, as the journals say it
     const byOf = (principal) => (principal.kind === "admin" ? (principal.from === "mac" ? "the admin, on the server's computer" : "the admin") : principal.admin ? "the admin" : (principal.player?.id ?? "an owner"));
@@ -313,6 +364,8 @@ export function apiHandler(server, { mac = false } = {}) {
                     net: NET_VERSION,
                     play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL },
                     broker: server.broker && server.settings.get("broker") !== false ? { path: BROKER_PATH, protocol: BROKER_PROTOCOL, relaying: server.settings.get("relaying") !== false } : null,
+                    // (Players may make worlds here with no creator key: each this many, and how many more in all)
+                    makers: server.settings.get("anyoneMakes") ? { each: server.settings.get("madeEach"), left: Math.max(0, server.settings.get("madeMost") - server.madeByPlayers().all) } : null,
                 },
                 addresses: [...server.addresses(), ...server.internetAddresses()],
                 you: { address: request.address, from: request.from, home: atHome },
@@ -377,31 +430,27 @@ export function apiHandler(server, { mac = false } = {}) {
         }],
         ["POST", /^\/worlds$/, async (request, body) => {
             const principal = principalOf(request, { body });
-            const allowed = policy.allows(principal, "world.create");
-
-            if (!allowed.yes) {
-                policy.on("refused", { why: allowed.why, address: request.address });
-                throw refuse(allowed.why);
-            }
 
             if (!RACE[body.race]) {
                 throw new Refusal(400, "bad-request", `There's no people called ${JSON.stringify(body.race)}.`);
             }
 
+            const maker = makerOf(request, principal, credentials(request, body).proof);
+
             try {
-                return await server.createWorld({ ...body, seed: Number.isSafeInteger(body.seed) ? body.seed : randomInt(2 ** 31) }, { creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) });
+                return await server.createWorld({ ...body, seed: Number.isSafeInteger(body.seed) ? body.seed : randomInt(2 ** 31) }, maker ? { creator: makerWords(maker), maker: maker.id } : { creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) });
             } catch (error) {
                 throw new Refusal(400, "bad-request", error.message);
             }
         }],
         // (A character and their world, as the game sends them, not JSON: up to BRING_LIMIT)
+        // (Whoever brings it with no creator key shows their own identity's proof in it: `player`)
         ["POST", /^\/worlds\/bring$/, { raw: BRING_LIMIT }, async (request, bytes) => {
             const principal = principalOf(request, { body: {} });
             const allowed = policy.allows(principal, "world.create");
 
-            if (!allowed.yes) {
-                policy.on("refused", { why: allowed.why, address: request.address });
-                throw refuse(allowed.why);
+            if (!allowed.yes && !(principal.kind === "anyone" && server.settings.get("anyoneMakes"))) {
+                makerOf(request, principal, null);
             }
 
             const brought = await doing(async () => manage.readBrought(bytes));
@@ -411,7 +460,9 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw refuse("version", { message: "That server plays another version of the game than yours: open the game from the server itself.", net: NET_VERSION, version: SERVER_VERSION });
             }
 
-            return doing(() => manage.bringSolo(brought, { by: byOf(principal), creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) }));
+            const maker = allowed.yes ? null : makerOf(request, principal, credentials(request, brought).proof);
+
+            return doing(() => manage.bringSolo(brought, maker ? { by: makerWords(maker), creator: makerWords(maker), maker: maker.id } : { by: byOf(principal), creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) }));
         }],
         // (The file as it's sent, not JSON: a world's export, up to IMPORT_LIMIT)
         ["POST", /^\/worlds\/import$/, { raw: IMPORT_LIMIT }, async (request, bytes) => {

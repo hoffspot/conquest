@@ -88,26 +88,26 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await ready(owner, save("Brand", "human", "sword"));
     await ready(guest, save("Syl", "elf", "bow"));
 
-    // The owner adds the server by its address, and makes a world with the server's admin key
+    // The owner hosts on the server (the game opened from it knows it: Multiplayer, Host on a
+    // Server), making a world with the server's admin key; given its invite link, goes in
     await owner.goto(`${base}/`);
-    await owner.locator("#worldsbutton").click();
+    await owner.locator("#multiplayerbutton").click();
+    await owner.locator("#mphostserver").click();
 
-    const worlds = owner.locator("#worlds");
+    const host = owner.locator("#hostserver");
+    const choice = host.locator(`#hostserverlist li[data-server="127.0.0.1:${server.port}"]`);
 
-    await owner.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add", exact: true }).click();
-
-    const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
-
-    await expect(row).toContainText("Version", { timeout: 30000 });
-    await row.getByRole("button", { name: "Make a world" }).click();
+    await expect(choice).toContainText("Makes worlds for those with a creator key", { timeout: 30000 });
+    await choice.getByRole("button").click();
+    await host.locator("#hostserverkey").fill(server.adminKey);
+    await host.locator("#hostservername").fill("Thornwick");
+    await host.locator("#hostservercharacters").selectOption("own");
+    await host.getByRole("button", { name: "Make the world" }).click();
+    await expect(host.locator("#hostserverdonenote")).toContainText("Thornwick is on", { timeout: 60000 });
+    await expect(host.locator("#hostserverlink")).toHaveText(/#server=.*&world=[a-z0-9]{10}&key=/);
+    await host.getByRole("button", { name: "Go in" }).click();
 
     const ask = owner.locator("#worldask");
-
-    await ask.locator("#worldaskmaker").fill(server.adminKey);
-    await ask.locator("#worldaskname").fill("Thornwick");
-    await ask.locator("#worldaskcharacters").selectOption("own");
-    await ask.getByRole("button", { name: "Make it" }).click();
 
     // (A world whose characters are its own, and the owner's first time in: a new one, looking as Brand does)
     await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Thornwick?", { timeout: 60000 });
@@ -123,7 +123,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     expect(server.metaOf(world).name).toBe("Thornwick");
 
     // The server's pinned: the owner's game knows its id
-    expect(await owner.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].id)).toBe(server.identity.id);
+    expect(await owner.evaluate((key) => JSON.parse(localStorage.getItem("pellagos.servers")).servers.find((one) => one.key === key).id, `127.0.0.1:${server.port}`)).toBe(server.identity.id);
 
     // The World panel from the party menu too, playing alone (its World button), and back to the
     // game from it; the world held for no one while it's open
@@ -211,8 +211,9 @@ test("a world made on a server and shared by an invite link: both play in it, le
         ["#battlecamswitch", true],
     ]);
 
-    // The guest comes back from the Worlds screen: the world they hold a ticket for, and their hero kept there
-    await guest.locator("#worldsbutton").click();
+    // The guest comes back from Multiplayer, Join a World Hosted on a Server: the world they hold a ticket for, and their hero kept there
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoinserver").click();
 
     const theirs = guest.locator(`#worlds li[data-world="${world}"]`);
 
@@ -267,7 +268,8 @@ test("a world that takes copies: a character on this device copied in once, told
 
     const ask = page.locator("#worldask");
     const into = async (world, name) => {
-        await page.locator("#worldsbutton").click();
+        await page.locator("#multiplayerbutton").click();
+        await page.locator("#mpjoinserver").click();
         await page.locator(`#worlds li[data-world="${world}"]`).getByRole("button").click();
         await expect(ask.locator("#worldasktitle")).toHaveText(`Who goes into ${name}?`, { timeout: 60000 });
     };
@@ -352,54 +354,51 @@ test("a world that takes copies: a character on this device copied in once, told
     expect(await server.worlds.get(own.world).heroes.list(ownPlayer)).toEqual([]);
 });
 
-test("a world on this device brought to a server (Bring my world) with a character who's been in it: told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its owner going in as that character", async ({ page }) => {
+test("a world on this device brought to a server (Host on a Server, a world from this device) with a character who's been in it: told what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its invite link given, its owner going in as that character", async ({ page }) => {
     await ready(page, save("Wren", "human", "sword"));
 
     const before = server.worlds.size;
 
     await page.goto(`${base}/`);
-    await page.locator("#worldsbutton").click();
+    await page.locator("#multiplayerbutton").click();
+    await page.locator("#mphostserver").click();
 
-    const worlds = page.locator("#worlds");
+    // The server chosen (the game opened from it knows it), and a world from this device: each
+    // with who's been in it, and what comes with it
+    const host = page.locator("#hostserver");
+    const choice = host.locator(`#hostserverlist li[data-server="127.0.0.1:${server.port}"]`);
 
-    await page.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(choice).toContainText("Makes worlds for those with a creator key", { timeout: 30000 });
+    await choice.getByRole("button").click();
+    await host.getByRole("radio", { name: "A world from this device" }).click();
+    await expect(host.getByRole("radio", { name: "A world from this device" })).toHaveAttribute("aria-checked", "true");
+    await expect(host.locator("#hostserverwhich option")).toHaveText([/^Wren's world, as Wren/]);
+    await expect(host.locator(".world-help")).toContainText("a copy of the character with it, kept there as your first character");
+    await expect(host.locator("#hostservername")).toHaveValue("Wren's world");
 
-    const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
-
-    await expect(row).toContainText("Version", { timeout: 30000 });
-    await row.getByRole("button", { name: "Bring my world" }).click();
-
-    // The worlds on this device, each with who's been in it, and how it works
-    const ask = page.locator("#worldask");
-
-    await expect(ask.locator("#worldasktitle")).toHaveText("Bring my world to the server");
-    await expect(ask.locator("#worldasknote")).toContainText("Each world on this device has its own land");
-    await expect(ask.locator(".world-help").first().locator("li")).toHaveCount(4);
-    await expect(ask.locator(".world-help").nth(1)).toContainText("To bring one from another device or browser, export the character there while they're in it");
-    await ask.getByRole("button", { name: /^Wren's world, as Wren/ }).click();
-
-    // What comes with it, and the key that makes worlds: one that doesn't, refused, saying which will
-    await expect(ask.locator("#worldasktitle")).toHaveText(/^Bring Wren's world to /);
-    await expect(ask.locator(".world-help").first()).toContainText("A copy of Wren, with all they carry, know and have found there, kept by the world as your first character there");
-    await expect(ask.locator("#worldaskname")).toHaveValue("Wren's world");
-    await ask.locator("#worldaskmaker").fill("NOT-A-KEY");
-    await ask.getByRole("button", { name: "Bring it to the server" }).click();
-    await expect(ask.locator("#worldaskstatus")).toContainText("That key doesn't make worlds on");
+    // The key that makes worlds: one that doesn't, refused, saying which will
+    await host.locator("#hostserverkey").fill("NOT-A-KEY");
+    await host.getByRole("button", { name: "Bring it to the server" }).click();
+    await expect(host.locator("#hostserverstatus")).toContainText("That key doesn't make worlds on");
     expect(server.worlds.size).toBe(before);
 
-    await ask.locator("#worldaskmaker").fill(server.adminKey);
-    await ask.locator("#worldaskname").fill("Wren's Vale");
-    await ask.getByRole("button", { name: "Bring it to the server" }).click();
+    await host.locator("#hostserverkey").fill(server.adminKey);
+    await host.locator("#hostservername").fill("Wren's Vale");
+    await host.getByRole("button", { name: "Bring it to the server" }).click();
 
-    // Brought: said what came of it, and in, as its owner, to Wren
-    await expect(ask.locator("#worldasktitle")).toHaveText(/^Wren's Vale is on /, { timeout: 120000 });
-    await expect(ask.locator("#worldasknote")).toContainText("You're its owner, and Wren is kept there for you.");
+    // Brought: said what came of it, its invite link given, and in, as its owner, to Wren
+    await expect(host.locator("#hostserverdonenote")).toContainText("Wren's Vale is on", { timeout: 120000 });
+    await expect(host.locator("#hostserverdonenote")).toContainText("you're its owner. Wren's Vale came with its land");
+    await expect(host.locator("#hostserverdonenote")).toContainText("Wren is kept there for you.");
+    await expect(host.locator("#hostserverlink")).toHaveText(/#server=.*&world=[a-z0-9]{10}&key=/);
 
     const world = [...server.worlds.keys()].find((id) => server.metaOf(id).name === "Wren's Vale");
 
     expect(server.metaOf(world)).toMatchObject({ seed: 777, race: "human", heroes: "kept" });
-    await ask.getByRole("button", { name: "Go in" }).click();
+    await host.getByRole("button", { name: "Go in" }).click();
+
+    const ask = page.locator("#worldask");
+
     await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Wren's Vale?", { timeout: 60000 });
     // (A copy of theirs, the world's own: their Wren stays on this device as they are)
     await expect(ask.getByRole("button", { name: /^Wren · Wren's Vale's copy/ })).toBeVisible();
@@ -439,7 +438,8 @@ test("a server that proves to be another than the one pinned is sent no key", as
     });
 
     await page.goto(`${base}/`);
-    await page.locator("#worldsbutton").click();
+    await page.locator("#multiplayerbutton").click();
+    await page.locator("#mpjoinserver").click();
 
     const theirs = page.locator(`#worlds li[data-world="${made.world}"]`);
 

@@ -159,13 +159,14 @@ export class SoloError extends Error {
  * forward and made one this version plays as a character file is (character-file.js salvage). A
  * new world is kept in `store` for it: its seed, its home people the hero's (as the game made it),
  * its war carried on, and the rest from the seed, as a solo game's is each time it's loaded;
- * made by `creator`, named `name` (or after the hero), its first heroes as `firstHero` has them.
+ * made by `creator` (and `maker`, a player making it with no creator key: store.create), named
+ * `name` (or after the hero), its first heroes as `firstHero` has them.
  * Its hero isn't kept yet: they're kept for whoever brought it, once they're one of its players
  * (manage.js bringSolo). Throws SoloError, saying why, if it can't be brought. Returns { stored,
  * kept (the hero, as a world keeps one), left (what was left out or put right, as salvage says),
  * turn (its war's, or null for a new war) }.
  */
-export async function importSolo(store, exported, { name = null, creator = null, firstHero = "new", id, build = buildWorld, when = () => new Date() } = {}) {
+export async function importSolo(store, exported, { name = null, creator = null, maker = null, firstHero = "new", id, build = buildWorld, when = () => new Date() } = {}) {
     let imported;
     let left;
 
@@ -193,7 +194,7 @@ export async function importSolo(store, exported, { name = null, creator = null,
     let stored;
 
     try {
-        stored = await store.create({ name: String(name ?? "").trim() || `${hero.name}'s world`.slice(0, 60), seed: imported.save.seed, race: hero.race, creator, heroes: "kept", firstHero }, { ...(id ? { id } : {}), when: when() });
+        stored = await store.create({ name: String(name ?? "").trim() || `${hero.name}'s world`.slice(0, 60), seed: imported.save.seed, race: hero.race, creator, maker, heroes: "kept", firstHero }, { ...(id ? { id } : {}), when: when() });
     } catch (error) {
         throw new SoloError(error.message);
     }

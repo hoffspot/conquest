@@ -283,7 +283,8 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     expect(await host.evaluate(() => [...window.pellagos.game.host.players.keys()])).toEqual(["player"]);
 
     // They join again; the host closes the world to others: they're told, at the title
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await join.locator("#joincode").fill(code);
     await join.getByRole("button", { name: "Join" }).click();
     await playing(guest);
@@ -297,7 +298,8 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     expect(await host.evaluate(() => [...window.pellagos.game.host.players.keys()])).toEqual(["player"]);
 
     // (No world with that code any more)
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await join.locator("#joincode").fill(code);
     await join.getByRole("button", { name: "Join" }).click();
     await expect(join.locator("#joinstatus")).toHaveText("There's no world open with that code.");
@@ -385,7 +387,8 @@ test("a visitor to a world on the host's device is remembered there by their own
     expect(remembered.place).toBeTruthy();
 
     // Back: where they left
-    await guest.locator("#joinbutton").click();
+    await guest.locator("#multiplayerbutton").click();
+    await guest.locator("#mpjoindevice").click();
     await guest.locator("#join").locator("#joincode").fill(code);
     await guest.locator("#join").getByRole("button", { name: "Join" }).click();
     await playing(guest);

@@ -301,7 +301,7 @@ export class WorldServer {
      * A world made (as the server's admin or a creator asks: `creator` names them, for its
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
      */
-    async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null } = {}) {
+    async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null, maker = null } = {}) {
         if (characters !== null && !CHARACTER_RULES.includes(characters)) {
             throw new Error(`A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
         }
@@ -309,7 +309,25 @@ export class WorldServer {
         // (Its character rule, if it's given one, as the heroes mode and first-hero rule it stands for)
         const modes = characters ? RULE_MODES[characters] : { heroes, firstHero };
 
-        return this.adopt(await this.store.create({ name, description, seed, race, creator, ...modes, settings }), { creator });
+        return this.adopt(await this.store.create({ name, description, seed, race, creator, maker, ...modes, settings }), { creator });
+    }
+
+    /**
+     * The worlds players have made here with no creator key (the anyoneMakes setting), by whom:
+     * { all (how many in all), by (player id => how many) }.
+     */
+    madeByPlayers() {
+        const by = new Map();
+
+        for (const id of this.worlds.keys()) {
+            const maker = this.metaOf(id)?.maker;
+
+            if (maker) {
+                by.set(maker, (by.get(maker) ?? 0) + 1);
+            }
+        }
+
+        return { all: [...by.values()].reduce((sum, count) => sum + count, 0), by };
     }
 
     /**

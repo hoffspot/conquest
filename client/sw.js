@@ -139,12 +139,16 @@ self.addEventListener("message", (event) => {
     }
 });
 
+// What's never kept nor given from a copy: a world server's API, and the relay's address (main.js pageRelay)
+const LIVE = /^\/(api\/|relay$)/;
+
 self.addEventListener("fetch", (event) => {
     const request = event.request;
     const url = new URL(request.url);
 
-    // Only handle the game's own files (not other sites)
-    if (request.method !== "GET" || url.origin !== self.location.origin) {
+    // Only handle the game's own files (not other sites); a world server's API (how it is, its
+    // worlds) and the relay's address are the server's to answer as they are now, never a copy
+    if (request.method !== "GET" || url.origin !== self.location.origin || LIVE.test(url.pathname)) {
         return;
     }
 

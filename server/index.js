@@ -8,17 +8,30 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { attachRelay } from "./relay.js";
+import { attachRelay, RELAY_PATH } from "./relay.js";
 import { createStaticHandler } from "./static.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
 /**
- * Create (but don't start) the HTTP server, with the relay on it.
+ * Create (but don't start) the HTTP server, with the relay on it. The relay's address asked for as
+ * a page would ask (not to be joined: no WebSocket) says it's there (426, { relay: true }), so the
+ * game offers it among the servers to host and join by (client/js/main.js pageRelay): a page from
+ * GitHub Pages, or a world server's, has none.
  * @returns {{httpServer: http.Server, relay: object, close: () => Promise<void>}}
  */
 export function createServer({ clientDirectory = CLIENT_DIRECTORY } = {}) {
-    const httpServer = http.createServer(createStaticHandler(clientDirectory));
+    const statics = createStaticHandler(clientDirectory);
+    const httpServer = http.createServer((request, response) => {
+        if (URL.canParse(request.url, "http://relay") && new URL(request.url, "http://relay").pathname === RELAY_PATH) {
+            response.writeHead(426, { "Content-Type": "application/json", "Cache-Control": "no-store", Upgrade: "websocket" });
+            response.end(JSON.stringify({ relay: true }));
+
+            return;
+        }
+
+        statics(request, response);
+    });
     const relay = attachRelay(httpServer);
     const close = () => new Promise((resolve) => {
         relay.close();

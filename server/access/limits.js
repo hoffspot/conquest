@@ -73,10 +73,14 @@ export class Counts {
     }
 }
 
-/** At most `perMinute` messages a minute from each who sends them (a bucket of them, filling again as the minute goes). */
+/**
+ * At most `perMinute` messages a minute from each who sends them (a bucket of them, filling again
+ * as the minute goes); or, `per` another span (ms), that many in each such span.
+ */
 export class Rate {
-    constructor(perMinute, { clock = Date.now } = {}) {
+    constructor(perMinute, { clock = Date.now, per = 60000 } = {}) {
         this.perMinute = perMinute;
+        this.per = per;
         this.clock = clock;
         this.buckets = new Map();
     }
@@ -86,7 +90,7 @@ export class Rate {
         const now = this.clock();
         const bucket = this.buckets.get(key) ?? { left: this.perMinute, at: now };
 
-        bucket.left = Math.min(this.perMinute, bucket.left + ((now - bucket.at) * this.perMinute) / 60000);
+        bucket.left = Math.min(this.perMinute, bucket.left + ((now - bucket.at) * this.perMinute) / this.per);
         bucket.at = now;
         this.buckets.set(key, bucket);
 
