@@ -7,6 +7,10 @@ import { expect, test } from "./fixtures.js";
 // under the sky, each cell at its detail; walked over its bridge, and left, its art let go of.
 // The game exposes itself as window.pellagos ({ game, session, fetcher, ... }), which these tests use.
 
+// (No service worker: it would fetch the licensed models round what the page is kept from, in the
+// test without them, models.spec.js's way)
+test.use({ serviceWorkers: "block" });
+
 // Open the game and wait for it to be playing (as pellagos.spec.js's)
 async function playing(page, address) {
     const errors = [];
@@ -56,24 +60,30 @@ const tapIn = (page) =>
         return { key: building.key, door: building.door.id, running: game.running, card: !document.querySelector("#readying").hidden || game.readyingAt !== null };
     });
 
-// Played on till the player's in the castle's map and its inside's built
+// Played on till the player's in the castle's map and its inside's shown (the readying card
+// closed itself once the art was read, and sent them through): what's there if they aren't
 const inside = (page) =>
-    page.waitForFunction(
-        () => {
-            const { game } = window.pellagos;
-            const player = game.battle.actor("player");
+    page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const start = performance.now();
+        const shown = () => player.map === "site:bellhaven/grounds" && game.mapId === player.map && Boolean(game.interiors.get(player.map)?.object.visible);
 
-            if (game.running) {
-                game.stop();
+        while (!shown() && performance.now() - start < 150000) {
+            // (The card's open meanwhile: the world stopped till it's closed)
+            if (!game.readyingAt) {
+                if (game.running) {
+                    game.stop();
+                }
+
+                game.advance(0.1, { render: false });
             }
 
-            game.advance(0.1);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
 
-            return player.map === "site:bellhaven/grounds" && game.interiors.get(player.map)?.object.visible;
-        },
-        null,
-        { timeout: 120000, polling: 100 },
-    );
+        return { shown: shown(), map: player.map, mapId: game.mapId, order: player.order?.type ?? null, readying: Boolean(game.readyingAt), built: Boolean(game.interiors.get("site:bellhaven/grounds")) };
+    });
 
 // What's drawn and how, in the castle: lit as out of doors, the world hidden, the player standing on
 // its floor, the cells and blocks drawn, draw calls and triangles
@@ -124,7 +134,7 @@ for (const licensed of [true, false]) {
             expect(tapped.running).toBe(false);
             await expect(page.locator("#readyingname")).toHaveText("Bellhaven");
             await expect(page.locator("#readyingnote")).toContainText("castle");
-            await inside(page);
+            expect(await inside(page)).toMatchObject({ shown: true });
 
             const there = await looked(page);
 

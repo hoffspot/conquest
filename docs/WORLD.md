@@ -740,8 +740,9 @@ What's built so far:
   - `scenery-bellhaven-far` is 1.5 MB, the castle from the world round it: 51,222 triangles in 15
     draw calls.
   - Both are fetched only where they're wanted (`tier: "demand"`).
-- **Where it's walked**, `client/models/scenery/bellhaven.walk.json`, baked from the art (the
-  pipeline's README, *Where it can be walked*).
+- **Where it's walked**, `client/js/core/scenery/bellhaven.walk.js`, baked from the art (the
+  pipeline's README, *Where it can be walked*): a module, so the game's code has it wherever it
+  runs (the page, a world server, the tests), with no download of its own.
   - It's one level of 30,027 squares: the ground before the bridge, the bridge (its deck at
     79.2 m), the gate and the court before the keep.
   - The keep and its halls aren't reached: their doors are shut in the art.
@@ -767,6 +768,40 @@ What's built so far:
     about 80 to 140 draw calls and 170,000 to 200,000 triangles, near the game's phone budget
     (*Performance*, GAME.md). The textures take 39 MB on the graphics card. The phone's own numbers
     are the lab's to give.
+- **Its own map** (`core/scenery.js`), a place apart from the world, as a dungeon's levels are.
+  - It's a site's inside (`core/insides.js`, the kind `scenery`), so its way in is among the
+    world's links. It's made the first time it's wanted, kept in a snapshot in the order it was
+    made, and drawn at its own column, beyond every other inside (`SCENERY_ORIGINS`).
+  - Its squares are the walk's. A square with a floor is walked on; one without (a wall, a tower,
+    the chasm) is blocked, and blocks sight. Every square is raised (`core/battle.js`): no blow is
+    struck between a ledge's top and its foot.
+  - Its floor's height eases from one square to the next (`heightOn`), counting only the squares a
+    step from it, so whoever walks it doesn't jolt up and down, and a ledge stays a ledge.
+  - You come in at the middle of its bridge's foot, a court at 67 m with stairs down either side
+    to the ground under the crag, facing the castle across the chasm. You go out by the court's
+    southern edge, back to its way in in the world.
+  - Its navigation is baked from its floors (`core/navigation/walk.js`, `SCENES`): each square two
+    triangles at its own height, in the overworld's voxels, the walk's step its climb. Recast's own
+    ledge filter is left off, the walk having judged where a body can stand: on a stair that fans
+    out sideways, it took every square for a ledge. Every one of the walk's 30,027 squares is on
+    the mesh, and the whole of it bakes in under a second on a desktop, a tile at a time as it's
+    walked.
+- **Its map drawn** (`world/scenery3d.js`) out of doors, under the sky, in the world's sun and fog,
+  the world itself hidden.
+  - Its art is the lab's: each cell at its detail by its distance from the camera, blocks of cells
+    far off merged a material each, the shadows cast by a stand-in a block.
+  - Its art is got ready at its way in, behind the readying card that gets a dungeon's creatures
+    ready (`app/readying.js`): the world stops, and the card says how much of it's downloaded. The
+    player goes in once it's read; Go in now goes in sooner, the walk drawn till the art's read.
+  - Someone who comes in without the wait (brought by their party, or a game carried on in it)
+    sees the walk till its art's read: it's asked for once the map's shown.
+  - Its art is let go of once its map's left, a castle's worth of memory, to be read again from
+    what the downloader keeps the next time it's gone into.
+  - Without the licensed models, it draws the walk, a block a square, as the lab does.
+  - The minimap paints it from the walk (`app/minimap.js`), and its way out glows on the court's
+    southern edge (`app/doors.js`).
+  - Its way in isn't in the world yet: the landmark sets it there. Its tests set it down by hand
+    (`test/scenery.test.js`, `e2e/bellhaven.spec.js`).
 
 
 ## Next
