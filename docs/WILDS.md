@@ -841,7 +841,8 @@ Now and then, in place of one of the wilds director's cards, something that isn'
 card from the world's own deck of rare encounters (`core/rare.js`, the host's `#rare…`; the plan:
 `generated/rare_encounters_plan.md`). The engine's in the game; the cards themselves are designed
 one at a time, each with its thread and its reward: the Stone Golem of Harrowstone (*The Stone
-Golem*, below), the Orc King, Vharzul the Greenflame and Ashmaw, besides debug mode's sample.
+Golem*, below), the Orc King, Vharzul the Greenflame, Ashmaw and Ashkhar the Bellbound, besides
+debug mode's sample.
 - **Two kinds** (`RARE_CARDS` `kind`): a *unique* card comes once in a world and once to a
   character (one who's overcome it never meets it again, in any world: `progress.legends.met`); a
   *recurring* one now and then, at most once every 4 to 6 hours of the world's play (`RARE.recur`).
@@ -1442,6 +1443,81 @@ hound, one head for three (beasts/looks.js). The model viewer shows it, and the 
 *For the mightiest*. The rules two games share changed with it (`NET_VERSION` 201: the hounds, the
 ranger's rumour, a place step at a hell's way in).
 
+### Ashkhar the Bellbound
+
+The fifth rare card (`RARE_CARDS` `ashkhar`; its thread `bellbound`, *The Bellbound*), a world's
+boss, once a world (the user: "Import this model of a DemonBoss I purchased from Fab into the
+project... Set it as the boss of the first level in the hell dungeon and also make it a unique
+encounter out in the wilderness somewhere. Make up a backstory for it being there that starts from
+a rumor in the adventurer's guild", "Use the Red skin for the Hell dungeon and blue skin or
+whatever other skin for the wilds").
+
+A demon holds every hell's Breach, where the thin place first tore open (creatures.js `demonBoss`,
+the Breach's master: docs/DUNGEONS.md *Hells*). A hundred years ago one of them came up through a
+thin place on the moors, and the Order of the Bell bound it in a pit under a shrine they built
+over it, in chains of blessed silver, every link stamped with a little bell; the cold of the silver
+put its fire out. The shrine's last keeper, Brother Aldous, died last winter, and the Magpies, a
+crew of thieves, stripped its silver. That night frost came over the whole moor in high summer,
+and the demon walked out of the pit with a broken chain on its wrist, its hide gone the blue of
+ice. It's drawn from the Demon Boss's model a fifth bigger than it's made, in its blue skin
+(beasts/model.js `ashkhar`: the catalog's `beast-demon-boss-skins`, `blue`).
+- **The rumour**: the rogue at the guild in the settlement nearest a shrine (the plan's first,
+  `opens` `near` "shrine": `openerOf`) tells it (`calling` "rogue"; every guild keeps a rogue for
+  it now, `TALK_CALLINGS`), asked "You look like you've seen a ghost.", in four pieces: the old
+  shrine on the moor, {way} of there, built over a pit with silver chains going down into it; what
+  Brother Aldous told of the demon bound there; the rogue's old crew, the Magpies, drawing the chains
+  up the week after he was buried, and the frost that came that night; four of them found frozen in
+  the bog, and Corbin, the last of them, gone back out to the shrine with what silver he had left.
+  "I'll go up to the shrine." begins the thread; "Go by day, and take something warm..." ends the
+  talk. Given up, it's the rogue who takes a player back on it (`back`: "About the shrine on the
+  moor: I'll go up there after all.").
+- **The shrine** (its first step, a *place*: the shrine the rumour told of, `at` "opener", `site`
+  "shrine"): reached, 40 gold to each there and Corbin's confession (writings.js `corbin`, three
+  pages: the night they took the silver and the frost came; the four in the bog, all facing the
+  shrine; and at the shrine, the bell hung again over the empty pit, the demon's name, and how to
+  fight it: "it leaps on whoever keeps off, so keep moving, and when the ground whitens round it,
+  get clear.").
+- **Ashkhar** (its second, the card, kept 140 to 220 m from the shrine, on the highest open ground
+  there): its prints lead there from the shrine, told as they're come upon ("Prints as long as a
+  man's arm, frost rimed in each though the day is warm..."); dealt as someone comes within 70 m,
+  a dungeon master's rank, two tiers above the land, "Ashkhar the Bellbound" ("The air turns
+  bitter cold, and frost runs out over the heather towards you..."). As it falls, what's seen
+  (`last`: the frost going out of its hide, fire for a moment again, a bell ringing once far off
+  over the moor). Then its reward to each who fought it: Bellsilver (`UNIQUES` `bellsilver`, an
+  amulet of a link of the silver that bound it, its effect Frostbind: docs/GAME.md *Legendary
+  weapons*) and 850 gold.
+- **The bounty** (the third, a *talk*): back to the rogue at the guild where it was told ("The
+  demon's dead. And I found what Corbin wrote."), who pays the Magpies' share and the guild's
+  bounty: 200 gold, the thread at its end.
+
+How it fights (creatures.js `ashkhar`, weapons.js NATURAL `ashkhar`; a world's boss, its bar across
+the top of the screen; 48 hit points at the first tier, 2.7 times as many as its card's (`shape`
+`health`: 130), four times that as a boss, a quarter of every blow turned by its hide; cold
+harming it half as much, `wards` `water`; never thrown; seeing in the dark and further off than
+most, `sight` 24):
+- **Its claws**: its right claw raked across before it (10 to 16, laying a wound open now and
+  then), both swept round from the side (9 to 15, staggering harder) or its fist brought down
+  overhead (12 to 19, knocking whoever it catches off their feet, chilling and slowing them now
+  and then), one at random (`either`), each when its model's clip has it land.
+- **Its leap** (`moves` `leap`, Leap: creatures.js `DEMON_LEAP`, the Breach's demon's too): every
+  9.5 seconds, the first 4 after it sets on anyone, at whoever's 4 to 9 m off, it springs and lands
+  on them (13 to 20, 2.4 m round where it lands, throwing them: `demonLeap`), where it'll land
+  shown on the ground first (`telegraph`).
+- **Its frost** (`moves` `frostflare`, Rage: `DEMON_FLARE`, cold where the Breach's demon's is
+  fire): every 13 seconds, the first 7 after it sets on anyone, at whoever's within 4.5 m, its arms
+  thrown up and its fists brought down at its feet, frost bursting out 4.2 m all round it (12 to
+  18, water's, slowing nearly everyone it catches: `quake` `afflict`), shown on the ground first,
+  drawn as a pale ring of frost rolling out (spellfx.js quake `frost`), heard as ice cracks.
+- **Its roar** (`rally`, Rage): at two thirds of its hit points, then at one third, once each, it
+  roars and the moor's restless dead come to it (two wraiths, then two or three ghosts, two tiers
+  under it), told in words of its own (`told`: "Ashkhar the Bellbound throws back its horns and
+  roars, and the moor's restless dead come to it!").
+
+Till its model's read (and where the licensed models aren't, as in CI) it's drawn as a lean horned
+brute half as tall again as a man, grey-blue as ice (beasts/looks.js). The model viewer shows it,
+and the Breach's demon, under *For the mightiest*. The rules two games share changed with it
+(`NET_VERSION` 202: the demons, the rogue's rumour, a place step at the one its rumour told of).
+
 ### Building a card
 
 The Stone Golem, the Orc King and Vharzul the Greenflame are made of pieces any card can be made of. A card that waits
@@ -1466,7 +1542,8 @@ somewhere of its own, with a rumour to begin it and a quest to follow, is these,
    another of the folk where they keep (`role`, `post`: a temple's priest), a card kept at the place
    of the step before (`here`), and a way in to go in by (*enter*, `theme`: a hell's), Vharzul's. A
    rumour told near a dungeon of a theme's (`near` { theme }) and a place step at one (`site`
-   "dungeon", `theme`), Ashmaw's.
+   "dungeon", `theme`), Ashmaw's. A place step at the very place its rumour told of (`at`
+   "opener": one of many of its kind, a shrine), Ashkhar's.
 3. **Its card** (`RARE_CARDS`): `where` "site", `requires` its thread's card step, its `shape` (a
    `foe`: its `creature`, `champion` rank, `up` tiers, `title`, how much tougher than its kind it
    is, `health`) and its `reward` (a unique,

@@ -538,3 +538,30 @@ in this repository, but in the private one the game's builds fetch it from
 (`docs/LICENSED_MODELS.md`).
 
 Don't copy it out of this game or use it in anything else.
+
+## demon-boss.bin, demon-boss.blue.bin, demon-boss.green.bin
+
+**DemonBoss**, by **Panchenko Lyudmila** (its Unreal Engine files: its skeletal mesh, its textures
+in three skins and its 19 animations, exported from Unreal Engine by this repository's owner, the
+template's own clips left out), bought on **Fab** by this repository's owner under **Fab's
+Standard License**: the Demon Boss, the Breach's master in a hell (red) and a world's boss out in
+the wilds (blue).
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/demon-boss.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its horned body, 18,859 triangles with two lower details packed in (8,485 and
+3,768); its one material, its textures (colour, normal, and occlusion with roughness; its glow) as
+KTX2; and all 19 of its own clips: three blows of its claws, a leap and a flurry, a roar, three
+flinches, two deaths, two idles, walking forward and back, running upright and on all fours,
+sidestepping either way and turning round; and a leap cut from the start of the leap and flurry,
+played in place with one of the deaths (the game carries it over the ground). Its other two skins,
+blue and green, are its colour, normals, roughness and glow alone (`demon-boss.blue.bin`,
+`demon-boss.green.bin`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.

@@ -127,6 +127,8 @@ export const PARTS = Object.freeze({
     fireGland: { label: "Fire gland", worth: 30, icon: "gland", tint: "#ff8010" },
     // (A cerberus's: a fang as long as a dagger, still warm)
     hellFang: { label: "Hellhound fang", worth: 45, icon: "fang", tint: "#ff4a1a" },
+    // (A demon of the Breach's: a horn as long as a forearm, ridged and bone-pale)
+    demonHorn: { label: "Demon's horn", worth: 50, icon: "tusk", tint: "#d8ccb4" },
     dragonScale: { label: "Drake scale", worth: 60, icon: "scale", tint: "#6e1812" },
     dragonFang: { label: "Drake fang", worth: 90, icon: "fang", tint: "#f0e4c8" },
     dragonHeart: { label: "Drake's heart", worth: 250, icon: "heart", tint: "#c02010" },
@@ -273,6 +275,11 @@ export const SPOILS = Object.freeze({
     // ashmaw)
     cerberus: { gold: [30, 70], items: [{ id: "hellFang", chance: 0.9, count: [1, 2] }, { id: "fireGland", chance: 0.6 }, { id: "boneDust", chance: 0.5, count: [1, 2] }, { id: "soulShard", chance: 0.3 }] },
     ashmaw: { gold: [70, 140], items: [{ id: "hellFang", chance: 0.95, count: [2, 3] }, { id: "fireGland", chance: 0.8, count: [1, 2] }, { id: "soulShard", chance: 0.5 }] },
+    // (The Demon Boss, the Breach's master: its horns, its fire's glands, the cult's offerings and
+    // the obsidian it walks on; Ashkhar's horns, more of them, and the frost at its heart, its
+    // reward besides: core/rare.js RARE_CARDS ashkhar)
+    demonBoss: { gold: [35, 80], items: [{ id: "demonHorn", chance: 0.9, count: [1, 2] }, { id: "fireGland", chance: 0.5 }, { id: "obsidian", chance: 0.5, count: [1, 2] }, { id: "cultSigil", chance: 0.4, count: [1, 2] }, { id: "soulShard", chance: 0.3 }] },
+    ashkhar: { gold: [70, 140], items: [{ id: "demonHorn", chance: 0.95, count: [2, 3] }, { id: "frostHeart", chance: 0.6 }, { id: "soulShard", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)
     flayling: { gold: [2, 8], items: [{ id: "boneDust", chance: 0.3 }, { id: "cultSigil", chance: 0.15 }] },

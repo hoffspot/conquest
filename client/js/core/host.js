@@ -11301,8 +11301,10 @@ export class Host {
         const def = this.legends.stepOf(id);
 
         if (def?.kind === "place") {
-            // (The plan's place of its kind nearest, or its dungeon of a theme's: a hell's way in)
-            const site = def.site ? this.#nearestSite(def.site, thread.at, def.theme ?? null) : null;
+            // (The plan's place of its kind nearest, or its dungeon of a theme's: a hell's way in;
+            // or the one its opener's rumour told of, `at` "opener": the Bellbound's shrine)
+            const opener = def.at === "opener" ? openerOf(this.world.plan, id) : null;
+            const site = opener ? opener.site : def.site ? this.#nearestSite(def.site, thread.at, def.theme ?? null) : null;
 
             // (The place's heart, as it's built: sites.js, the Lantern Company's remains there)
             thread.place = site ? [...(this.world.maps.town?.sites?.heartOf(site) ?? site.at)] : this.#threadSpot(thread.at, def.far ?? [150, 250]);

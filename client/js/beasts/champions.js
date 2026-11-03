@@ -74,9 +74,10 @@ export const REGALIA = Object.freeze({
     crawler: { tint: 0xa8a098, scale: 1.05 },
     matriarch: { tint: 0x8a7a90, scale: 1.3, glow: 1.3 },
     // A hell's, its levels' masters burnt and blackened by it, horned, their eyes burning: the
-    // Breach Priest hooded, the Hound of the Halls' eyes burning, the Forge Demon's too, the
+    // Demon of the Breach's eyes burning, the Hound of the Halls' too, the Forge Demon's too, the
     // Gatekeeper helmed; and the lord of the Pit, horned already, its eyes burning brightest. Its
-    // mini-bosses the same way, the less (the Bone Lord's bones scorched)
+    // mini-bosses the same way, the less (the Breach Priest hooded, the Bone Lord's bones scorched)
+    breachDemon: { glow: 1.4 },
     breachPriest: { wear: ["darkHood"], tint: 0xc07060, glow: 1.4 },
     hound: { glow: 1.4 },
     boneLord: { tint: 0xa08070, glow: 1.4 },

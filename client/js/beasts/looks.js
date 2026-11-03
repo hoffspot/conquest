@@ -734,6 +734,10 @@ export const LOOKS = Object.freeze({
     // ash), one head standing in for three: creatures.js)
     cerberus: hound(2.2, { fur: 0x1e1a18, belly: 0x2a2420, dark: 0x0c0a08, mane: 0x141010, aura: 0x1a1414, eyes: 0xff4a12, glow: 0xff4a12 }),
     ashmaw: hound(2.42, { fur: 0x6a645e, belly: 0x7a746c, dark: 0x2a2622, mane: 0x4a4440, aura: 0x5a544e, eyes: 0xff6a1a, glow: 0xff6a1a }),
+    // (The Demon Boss, the Breach's master, and Ashkhar the Bellbound, until their own model's read:
+    // lean horned brutes half as tall again as a man and more, long in the arm: creatures.js)
+    demonBoss: { body: "humanoid", scale: [1.55, 1.6] },
+    ashkhar: { body: "humanoid", scale: [1.68, 1.72] },
 });
 
 // A value between two, from the random numbers
@@ -942,6 +946,30 @@ const BRUTES = {
         slit: true,
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (The Demon Boss, standing in for its own model: a fiend's lean frame, bigger, its skin the red
+    // of a coal seamed with black, its eyes burning, horned and tusked, in a loincloth and bracers)
+    demonBoss: {
+        macro: { gender: 1, muscle: [0.85, 0.95], weight: [0.25, 0.4], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.9, 1], underbite: [0.4, 0.7], jawWidth: [0.5, 0.7], headSquare: [0.2, 0.4], eyeSize: [-0.5, -0.2], earPoint: [0.9, 1], earSize: [0.4, 0.7], armLength: [0.9, 1], handSize: [0.9, 1], footSize: [0.7, 0.9], neck: [0.7, 0.9], shoulders: [0.7, 0.9], belly: [0, 0.1] },
+        skin: { tones: ["#7a1c12", "#6a1810", "#862216"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.4, 0.7], warpaint: "#100606" },
+        irises: ["#ffd040", "#ffb020"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["bracers"], ["tusks"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (Ashkhar the Bellbound, standing in for its own model: the Breach's demon bigger, its skin the
+    // grey-blue of a frozen pool seamed with black, its eyes the pale blue of ice)
+    ashkhar: {
+        macro: { gender: 1, muscle: [0.9, 1], weight: [0.25, 0.4], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.9, 1], underbite: [0.4, 0.7], jawWidth: [0.5, 0.7], headSquare: [0.2, 0.4], eyeSize: [-0.5, -0.2], earPoint: [0.9, 1], earSize: [0.4, 0.7], armLength: [0.9, 1], handSize: [0.9, 1], footSize: [0.7, 0.9], neck: [0.7, 0.9], shoulders: [0.7, 0.9], belly: [0, 0.1] },
+        skin: { tones: ["#3e5a74", "#36506a", "#46647e"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.4, 0.7], warpaint: "#060a10" },
+        irises: ["#9ae0ff", "#c8f0ff"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.white },
+        wear: [["loincloth"], ["bracers"], ["tusks"], ["orcHelm"]],
         walk: "orc",
     },
     // (A hell's flayed, standing in for their own models: gaunt, long in the arm, skinned, the

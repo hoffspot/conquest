@@ -442,6 +442,10 @@ export const CREATURE_VOICES = Object.freeze({
     // falling as a great beast does. Ashmaw's as low as the Moonfang's)
     cerberus: { family: "wolf", rate: 0.74, fall: "deathThudBig" },
     ashmaw: { family: "wolf", rate: 0.71, fall: "deathThudBig" },
+    // (The Demon Boss, the Breach's master: a big cat's snarl and roar, lower than a fiend's; Ashkhar
+    // the Bellbound's lower still; both falling as a great beast does)
+    demonBoss: { family: "bigCat", rate: 0.72, fall: "deathThudBig" },
+    ashkhar: { family: "bigCat", rate: 0.71, fall: "deathThudBig" },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },
     fiend: { family: "bigCat", rate: 0.74, fall: "deathThudBig" },

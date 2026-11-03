@@ -1014,6 +1014,61 @@ test("a hell's cerberus and Ashmaw as the game draws them: a great hound till th
     expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.43, 1);
 });
 
+test("and the Demon Boss, the Breach's master and Ashkhar the Bellbound: all 19 of its own clips and the leap cut from its fifth attack, its one material, each of its skins put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-demon-boss&clip=Attack%202");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack 1",
+        "Attack 2",
+        "Attack 3",
+        "Attack 5",
+        "Death 1",
+        "Death 2",
+        "Hit 1",
+        "Hit 2",
+        "Hit 3",
+        "Idle",
+        "Idle 2",
+        "Rage",
+        "Run",
+        "Run 2",
+        "Strafe Left",
+        "Strafe Right",
+        "Turn 180",
+        "Walk",
+        "Walk Back",
+        "Leap",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack 2", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Demon Boss");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ materials: 1 });
+    await expect(page.locator("#details")).toContainText("Panchenko Lyudmila's \"DemonBoss\", bought on Fab: used with the permission its Standard License gives");
+
+    // (Each of its skins put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Blue", "Green"]);
+
+    for (const skin of ["blue", "green"]) {
+        await page.getByLabel("Skin").selectOption(skin);
+        await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
+});
+
+test("the Demon Boss and Ashkhar the Bellbound as the game draws them: a horned brute till the DemonBoss is read, then the demon, its rake, sweep and fist, its leap, its flare and its rage; the Breach's demon in its own red skin a tenth bigger than it's made, Ashkhar a fifth bigger in the blue", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=demonBoss");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: [], specials: ["rake", "sweep", "smash", "leap", "flare", "rally"], rests: ["look"], skin: "" });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["rake", "sweep", "smash", "leap", "flare", "rally", "look"]));
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.83, 1);
+
+    await openViewer(page, "/model-viewer.html?creature=ashkhar");
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current().skin)).toBe("blue");
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(3.08, 1);
+});
+
 test("the orcs on a dungeon's throne as the game draws them: big orcs till their models are read, then the Orc's dressings, their great axes swept, chopped or spun round low, and their rests", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
 

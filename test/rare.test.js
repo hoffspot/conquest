@@ -230,8 +230,21 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(Object.values(high.bonuses).reduce((a, b) => a + b, 0) > Object.values(low.bonuses).reduce((a, b) => a + b, 0));
     });
 
-    it("has four cards in play, the Stone Golem's, the Orc King's, Vharzul the Greenflame's and Ashmaw's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
-        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing", "vharzul", "ashmaw"]);
+    it("has five cards in play, the Stone Golem's, the Orc King's, Vharzul the Greenflame's, Ashmaw's and Ashkhar the Bellbound's, each kept at a site and never dealt from a deck; and the sample debug mode deals: a foe of what lives there, a unique its reward", () => {
+        assert.deepEqual(Object.keys(RARE_CARDS), ["stoneGolem", "orcKing", "vharzul", "ashmaw", "ashkhar"]);
+
+        // (Ashkhar the Bellbound: a world's boss, kept where its frosted prints lead from the shrine
+        // it was bound under, its thread's second step; its reward an amulet of the silver that bound
+        // it, a Frostbind on it, and gold; what's seen as it falls said)
+        const bellbound = RARE_CARDS.ashkhar;
+
+        assert.equal(bellbound.where, "site");
+        assert.deepEqual(bellbound.requires, { thread: "bellbound", step: 1 });
+        assert.deepEqual([THREADS.bellbound.steps[1].card, THREADS.bellbound.steps[1].here], ["ashkhar", undefined]);
+        assert.equal(bellbound.gates, undefined);
+        assert.deepEqual([bellbound.shape.creature, bellbound.shape.champion, bellbound.shape.health], ["ashkhar", "boss", 2.7]);
+        assert.deepEqual([UNIQUES[bellbound.reward.unique].base, UNIQUES[bellbound.reward.unique].effect], ["amulet", "frostbind"]);
+        assert.ok(bellbound.last.includes("bell") && bellbound.word.includes("Ashkhar"));
 
         // (Ashmaw: a world's boss, kept where its prints lead from the Hollow Choir's camp, its
         // thread's second step; its reward a ring hammered from the last link of its chain, a
@@ -1530,6 +1543,122 @@ describe("the Hound Unchained (rare.js unchained, RARE_CARDS ashmaw)", () => {
         into(host, "guild", opener.town.id);
         assert.ok(talkTo(host, ranger));
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "unchained", step: 2 } }).ok, true);
+
+        const ended = told(run(host, 200));
+
+        assert.ok(ended.some(({ change, gold: bounty }) => change === "given" && bounty === 200));
+        assert.ok(ended.some(({ change }) => change === "done"));
+        assert.ok(thread.done);
+    });
+});
+
+describe("the Bellbound (rare.js bellbound, RARE_CARDS ashkhar)", () => {
+    it("begins with a guild rogue's rumour in the settlement nearest a shrine; Corbin's confession found at the shrine it told of; Ashkhar dealt where its frosted prints lead, a world's boss; felled, Bellsilver and a purse for each who fought it; word taken back to the rogue, the Magpies' share paid", () => {
+        const { host, ada, bram } = hosted();
+        const plan = host.world.plan;
+        const opener = openerOf(plan, "bellbound");
+        const told = (events) => events.filter(({ type }) => type === "thread");
+        // (Ada and Bram kept hard to kill at the shrine and after, whoever's about)
+        const hardy = (ms) => {
+            const events = [];
+
+            for (let t = 0; t < ms; t += 250) {
+                Object.assign(ada, { hp: 1e6, maxHp: 1e6 });
+                Object.assign(bram, { hp: 1e6, maxHp: 1e6 });
+                events.push(...run(host, 250));
+            }
+
+            return events;
+        };
+
+        // (Its rumour's there to be told: at the guild in the village or bigger nearest the plan's
+        // first shrine, by its rogue (every guild keeps one now), the thread not begun)
+        assert.ok(opener && opener.site.kind === "shrine" && GUILD_KINDS.includes(opener.town.kind));
+        assert.equal(opener.site.id, plan.sites.filter(({ kind }) => kind === "shrine").map(({ id }) => id).sort()[0]);
+        assert.ok(host.legends.opening("bellbound"));
+        assert.equal(host.legends.threads.bellbound, undefined);
+        assert.deepEqual(keeperOf("bellbound"), { role: "adventurer", calling: "rogue", home: true, post: "guild" });
+
+        const guild = into(host, "guild", opener.town.id);
+        const rogue = guild.folk.find(({ look, role, talk }) => look === "rogue" && (role === "adventurer" || talk === "adventurer"));
+        const other = guild.folk.find(({ look, role, talk }) => look !== "rogue" && (role === "adventurer" || talk === "adventurer"));
+
+        assert.ok(rogue, "a rogue at its guild");
+        assert.ok(talkTo(host, other));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "bellbound", step: null } }), { ok: false, reason: "thread" }, "(not one of them while a rogue is there)");
+        assert.ok(talkTo(host, rogue));
+
+        const fill = (text) => text.replace(/\{way\}/g, "west").replace(/\{place\}/g, "the shrine");
+        const tree = threadTalk({ start: "greet", nodes: { greet: { say: "Well met.", choices: [] } } }, { thread: "bellbound", step: null }, fill);
+
+        assert.equal(Object.keys(tree.nodes).filter((node) => /^thread:bellbound:\d+$/.test(node)).length, THREADS.bellbound.opens.tale.length);
+        assert.ok(tree.nodes["thread:bellbound:0"].say[0].includes("west of here") && tree.nodes["thread:bellbound:0"].say[0].includes("Order of the Bell"));
+        assert.ok(tree.nodes["thread:bellbound:2"].say[0].includes("Magpies"));
+        assert.ok(tree.nodes["thread:bellbound:3"].say[0].includes("Corbin"));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "bellbound", step: null } }).ok, true);
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+
+        // The shrine its rumour told of (not whichever's nearest the guild: there are many), its heart
+        const thread = host.legends.threads.bellbound;
+        const shrine = host.world.maps.town.sites.heartOf(opener.site) ?? opener.site.at;
+
+        assert.deepEqual([thread.step, thread.home], [0, opener.town.id]);
+        assert.deepEqual(thread.place, [...shrine], "(the shrine on the moor the rogue told of)");
+        assert.equal(host.legends.opening("bellbound"), false, "(told once)");
+
+        // Reached: Corbin's confession, and a purse each
+        Object.assign(ada, { map: "town" });
+        put(ada, [Math.floor(shrine[0]), Math.floor(shrine[1])]);
+        put(bram, [Math.floor(shrine[0]) + 2, Math.floor(shrine[1])]);
+
+        const found = told(hardy(2500));
+
+        assert.equal(thread.step, 1);
+        assert.ok(["ada", "bram"].every((who) => found.some(({ change, id, gold, writing }) => change === "given" && id === (who === "ada" ? HOST_PLAYER : who) && gold === 40 && writing === "corbin")), JSON.stringify(found));
+
+        // Its prints, from the shrine out over the moor to where it is
+        const haunt = thread.place;
+        const [tracks] = threadTracks(host.legends);
+        const far = Math.hypot(haunt[0] - shrine[0], haunt[1] - shrine[1]);
+
+        assert.ok(far >= 139 && far <= 221, `${far} m`);
+        assert.equal(tracks.creature, "ashkhar");
+        assert.equal(tracks.spoor, THREADS.bellbound.steps[1].spoor);
+        assert.equal(host.legends.active, null, "(not dealt till it's come to)");
+
+        // Dealt as Ada comes near where its prints lead: a world's boss, a dungeon master's rank,
+        // named; its leap and its frost its own, the moor's dead called up as it's worn down
+        put(ada, [Math.floor(haunt[0]) + 30, Math.floor(haunt[1])]);
+        put(bram, [Math.floor(haunt[0]) + 32, Math.floor(haunt[1])]);
+        hardy(1000);
+
+        const active = host.legends.active;
+        const demon = host.battle.actor(active.ids[0]);
+
+        assert.equal(active.card, "ashkhar");
+        assert.equal(demon.name, RARE_CARDS.ashkhar.shape.title);
+        assert.ok(demon.wild.worldBoss && demon.wild.steady && demon.wild.champion === "boss");
+        assert.deepEqual(demon.wild.moves.map(({ id }) => id), ["leap", "frostflare"]);
+        assert.deepEqual(demon.wild.rally.map(({ call }) => call.kind), ["wraith", "ghost"]);
+
+        // Felled, Ada and Bram beside it: each given Bellsilver, a Frostbind on it, and a purse
+        put(bram, [Math.floor(demon.x) - 2, Math.floor(demon.y)]);
+
+        const events = felled(host, ada, demon.id);
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(given.every(({ item, gold: purse }) => item?.unique === "bellsilver" && item.id === "amulet" && item.effect === "frostbind" && item.name === "Bellsilver" && purse === RARE_CARDS.ashkhar.reward.gold));
+        assert.ok(host.legends.gone.has("ashkhar"));
+        assert.equal(thread.step, 2);
+        assert.equal(thread.town, opener.town.id, "(word taken back to its home)");
+        assert.deepEqual(threadTracks(host.legends), [], "(its prints gone with it)");
+
+        // Word of it taken back to the rogue: the Magpies' share and the guild's bounty paid, the
+        // thread at its end
+        into(host, "guild", opener.town.id);
+        assert.ok(talkTo(host, rogue));
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "bellbound", step: 2 } }).ok, true);
 
         const ended = told(run(host, 200));
 
