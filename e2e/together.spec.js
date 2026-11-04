@@ -44,6 +44,16 @@ async function playing(page) {
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
 }
 
+// A page's world no longer drawn, its game going on as ever, for a test that looks at nothing drawn
+// (the menus, the chat, what's said). Without a GPU, drawing is most of every frame: two games
+// drawing side by side make 3 or 4 frames a second each, and each click waits on a frame or two,
+// where undrawn they make 20
+async function undrawn(page) {
+    await page.evaluate(() => {
+        window.pellagos.game.view.renderer.render = () => {};
+    });
+}
+
 // How often a joined game's been sent the world again for anything but falling too far behind the
 // host to catch up (core/netplay.js PACE.tooFar: as after a long load): its copy gone astray, or
 // its link dropped
@@ -1046,6 +1056,7 @@ test("a direct message from the Players tab: To Bryn in the host's chat, From th
     await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
     await host.goto("/?play&seed=2");
     await playing(host);
+    await undrawn(host);
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();
 
@@ -1061,6 +1072,7 @@ test("a direct message from the Players tab: To Bryn in the host's chat, From th
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
     await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
     await playing(guest);
+    await undrawn(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
     // The host messages Bryn from the Players tab: the Chat, To Bryn, ready to type

@@ -227,6 +227,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - `rm -rf test-results` first, if an earlier run left its pictures and traces there.
 - A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
   `e2e/pellagos.spec.js`). Do the same in new tests, and never wait on the clock.
+- A test whose games must run on (two players, say) but that looks at nothing drawn (menus, chat,
+  what's said) stops their drawing once they're playing (`undrawn` in `e2e/together.spec.js`).
+  Without a GPU, drawing is most of every frame, and every click waits on a frame or two: undrawn,
+  the direct message test there went from about 290 seconds to 100.
 - They never reach the game's default world server (`pellagos.duckdns.org`, which every game
   knows from the first: `client/js/app/servers.js` `DEFAULT_SERVERS`). `playwright.config.js`
   launches Chromium with `--host-resolver-rules` making its name resolve to nothing, so the game
