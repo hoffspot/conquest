@@ -104,7 +104,11 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
 - **Trees on a slope need a forest's floor under them.** Woods on a steep hill over the ground's
   own rock, and the near world's cliff faces, read as bare rock with trees stuck on. Where a hill
   is wooded, its ground's a forest's floor (`ground.js` `FOREST_FLOOR`) and no cliff faces are
-  drawn (`kits/cliffs.js`), near and far alike.
+  drawn (`kits/cliffs.js`), near and far alike. Go by how steep the land is as it's set, read
+  round each point, not by how steep its hill was meant to be: by Bellhaven's chasm, its walls
+  carried out past its edges made a steep slope where it had no hill, and its own open ground
+  inside its edges was as steep, both rock with trees on them till its woods went by the land's
+  slope (`woodsAt`). Map it (where rock shows and trees grow) before taking pictures.
 - **Take pictures with the game's own draw distance.** Drawn out to 3 km, the near world drew
   the scene's near copy over the far land in front of it: from behind, a hill seemed to cut
   through Bellhaven, and its back walls, hidden in the game behind its crags, showed. The
@@ -121,6 +125,8 @@ Scripts in `scripts/`, run from the repository's root:
   or none of it. Run it on the far and phone builds. The goal is none touching nothing.
 - `open.mjs [scene]`: the map of its terrain: open (the land's and the trees'), kept, standing.
   Within the walls must be closed.
+- `rockmap.mjs [seed] [step]`: where the land round it shows rock as the far land draws it though
+  trees grow there ("R"). The goal is none.
 - `farland.mjs <seed>`: the land as the far land reads it, at 1, 8, 16 and 32 m, against the
   scene's terrain: how far it pokes through where kept, how far it falls under at the open edge.
 - `where.mjs <from> <to>`: where each world puts it, and how much the land rises and falls round

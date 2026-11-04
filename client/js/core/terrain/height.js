@@ -328,9 +328,14 @@ function scenesOf(plan, layers) {
         });
 }
 
+// How far either way the land's read for how steep it's set round a scene (woodsAt: metres)
+const WOODS_SLOPE = 4;
+
 /**
  * How thick trees grow at least at a point of the world (metres): as thick as woods on the hill a
- * scene set into the land has raised past its edges (scenes.js woodsOn), else 0, the land's own.
+ * scene set into the land has raised past its edges, and where the land's steep round it and on
+ * its own open ground (scenes.js woodsOn: how steep read `WOODS_SLOPE` metres either way), else 0,
+ * the land's own.
  */
 export function woodsAt(plan, x, y) {
     const layers = layersOf(plan);
@@ -341,7 +346,9 @@ export function woodsAt(plan, x, y) {
         const [sx, sy] = [x - scene.at[0], y - scene.at[1]];
 
         if (scene.hill && sx * sx + sy * sy < scene.reach * scene.reach) {
-            return woodsOn(scene, x, y, lieOf(plan, x, y, layers));
+            const slopeAt = () => Math.hypot(landHeight(plan, x + WOODS_SLOPE, y) - landHeight(plan, x - WOODS_SLOPE, y), landHeight(plan, x, y + WOODS_SLOPE) - landHeight(plan, x, y - WOODS_SLOPE)) / (2 * WOODS_SLOPE);
+
+            return woodsOn(scene, x, y, lieOf(plan, x, y, layers), slopeAt);
         }
     }
 

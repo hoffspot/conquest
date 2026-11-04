@@ -338,6 +338,51 @@ describe("a scene set into the land (terrain/scenes.js): Bellhaven", () => {
         assert.equal(woodsAt(plan, ...toWorld(placed, ...scene.middle)), 0);
         assert.equal(woodsAt(bare, best.x, best.y), 0);
 
+        // (Carried in from its edges over its own open ground, fading; none where its own terrain's
+        // kept or anything of it stands)
+        const [bx] = toScene(placed, best.x, best.y);
+        let carried = 0;
+
+        for (let sz = z0 + 1; sz < z0 + settings.hill.inward; sz += 2) {
+            for (let sx = bx - 40; sx <= bx + 40; sx += 4) {
+                const [x, y] = toWorld(placed, sx, sz);
+                const woods = woodsAt(plan, x, y);
+
+                assert.ok(woods <= settings.hill.woods, `${woods}`);
+
+                if (!within(scene, sx, sz)) {
+                    continue;
+                }
+
+                if (!growsAt(placed, x, y)) {
+                    assert.equal(woods, 0, `${sx}, ${sz}`);
+                } else if (woods > 0) {
+                    carried++;
+                }
+            }
+        }
+
+        assert.ok(carried > 5, `${carried}`);
+
+        // (Wherever trees grow round it, in its band and on its own open ground, and the land's
+        // set steep enough to show rock, it's a forest's floor: by its chasm, where its walls run
+        // out past its edges, too)
+        const slope = (x, y) => Math.hypot(landHeight(plan, x + 4, y) - landHeight(plan, x - 4, y), landHeight(plan, x, y + 4) - landHeight(plan, x, y - 4)) / 8;
+        let steep = 0;
+
+        for (let sz = z0 - settings.band; sz <= scene.box[3] + settings.band; sz += 12) {
+            for (let sx = x0 - settings.band; sx <= x1 + settings.band; sx += 12) {
+                const [x, y] = toWorld(placed, sx, sz);
+
+                if (growsAt(placed, x, y) && slope(x, y) > settings.hill.wooded[1] + 0.05) {
+                    steep++;
+                    assert.ok(woodsAt(plan, x, y) > settings.hill.woods * 0.4, `${sx}, ${sz}: ${slope(x, y).toFixed(2)} steep, ${woodsAt(plan, x, y)} woods`);
+                }
+            }
+        }
+
+        assert.ok(steep > 20, `${steep}`);
+
         // (More trees there than its land's own, as thick as woods: the far land's, as the near
         // world's are)
         const trees = (of) => gatherTrees(of, { x: best.x, z: best.y, reach: 40 }).length / TREE_FLOATS;

@@ -50,10 +50,11 @@ import { CELL, CELLS, WATER } from "../worldplan/terrain.js";
  * Its `hill`: where its edge stands far over the land's own lie (or under it), the band past it is
  * as wide as keeps the land no steeper than `slope` (rise over run, at its steepest), up to `most`
  * metres, its trees as thick as `woods` at least (core/overworld.js FLORA's: a forest, thicker than
- * a jungle) where it's steep (woodsOn: `wooded`); it stops `clear` metres short of a road's or a
- * water's cell, a site, a camp or a settlement (hillOf: each as wide as `cell`, `site` and `camp`
- * say, a settlement its own radius), read every `every` metres round its box, and widens or
- * narrows along its edges by no more than `turn` metres a metre.
+ * a jungle) where it's steep (woodsOn: `wooded`), and on its own open ground `inward` metres in
+ * from its edges, fading; it stops `clear` metres short of a road's or a water's cell, a site, a
+ * camp or a settlement (hillOf: each as wide as `cell`, `site` and `camp` say, a settlement its
+ * own radius), read every `every` metres round its box, and widens or narrows along its edges by
+ * no more than `turn` metres a metre.
  */
 export const SCENES = Object.freeze({
     bellhaven: Object.freeze({
@@ -67,7 +68,7 @@ export const SCENES = Object.freeze({
         band: 96,
         way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }),
         path: Object.freeze([28, -40]),
-        hill: Object.freeze({ slope: 0.7, most: 420, woods: 1.5, wooded: Object.freeze([0.25, 0.6]), clear: 40, every: 16, turn: 1, cell: 24, site: 48, camp: 32 }),
+        hill: Object.freeze({ slope: 0.7, most: 420, woods: 1.5, wooded: Object.freeze([0.25, 0.6]), inward: 60, clear: 40, every: 16, turn: 1, cell: 24, site: 48, camp: 32 }),
     }),
 });
 
@@ -677,22 +678,57 @@ function pastOf(placed, x, y, lie) {
 
 /**
  * How thick trees grow at least at a point of the world (metres) on a scene's hill (`placed`:
- * scenesIn's, with its `hill`), given the land's own lie there (`lie`): as thick as its `woods`
- * where the land falls (or rises) steeply from its edges to the land's own (SCENES hill `wooded`:
- * from as steep as its first, rise over run, to its second at its steepest), thinning out over the
- * last of it to its foot; 0 elsewhere, on its road's end and the level land round it.
+ * scenesIn's, with its `hill`), given the land's own lie there (`lie`) and, if it's known, how
+ * steep the land's set there (`slopeAt`: a function, rise over run): as thick as its `woods` where
+ * the land falls (or rises) steeply from its edges to the land's own, or is steep there all the
+ * same, as by its chasm's walls carried out past its edges (SCENES hill `wooded`: from as steep as
+ * its first to its second), thinning out over the last of its band to its foot; on its own open
+ * ground, where the land's drawn in its terrain's place, as thick where it's steep there, and its
+ * hill's woods carried in from its edges (SCENES hill `inward`); 0 elsewhere, on its road's end and
+ * the level land round it.
  */
-export function woodsOn(placed, x, y, lie) {
+export function woodsOn(placed, x, y, lie, slopeAt = null) {
     const settings = SCENES[placed.scene.id];
-    const past = settings.hill && placed.hill ? pastOf(placed, x, y, lie) : null;
+
+    if (!settings.hill || !placed.hill) {
+        return 0;
+    }
+
+    const { scene } = placed;
+    const [sx, sz] = toScene(placed, x, y);
+    const { woods, wooded } = settings.hill;
+
+    if (onItsRoad(scene, sx, sz)) {
+        return 0;
+    }
+
+    // (On its own ground where the land's drawn in its place and trees grow: as thick where it's
+    // steep, and in from its edges its hill's woods at its nearest edge carried in, fading out
+    // over `inward` metres)
+    if (within(scene, sx, sz)) {
+        if (!openOn(scene, sx, sz)) {
+            return 0;
+        }
+
+        const [x0, z0, x1, z1] = scene.box;
+        const sides = [[sx - x0, x0 - 1, sz], [x1 - sx, x1 + 1, sz], [sz - z0, sx, z0 - 1], [z1 - sz, sx, z1 + 1]];
+        const [inward, ex, ez] = sides.reduce((nearest, side) => (side[0] < nearest[0] ? side : nearest));
+        const carried = inward < settings.hill.inward ? woodsOn(placed, ...toWorld(placed, ex, ez), lie) * (1 - smoothstep(0, settings.hill.inward, inward)) : 0;
+
+        return Math.max(carried, slopeAt ? woods * smoothstep(wooded[0], wooded[1], slopeAt()) : 0);
+    }
+
+    const past = pastOf(placed, x, y, lie);
 
     if (!past || past.out >= past.band) {
         return 0;
     }
 
+    // (As steep as its band is at its steepest, or as the land's set there, the steeper)
     const steepest = (STEEPEST * Math.abs(past.edge - lie)) / past.band;
+    const steep = smoothstep(wooded[0], wooded[1], steepest);
 
-    return settings.hill.woods * smoothstep(settings.hill.wooded[0], settings.hill.wooded[1], steepest) * (1 - smoothstep(past.band * 0.85, past.band, past.out));
+    return woods * Math.max(steep, steep < 1 && slopeAt ? smoothstep(wooded[0], wooded[1], slopeAt()) : 0) * (1 - smoothstep(past.band * 0.85, past.band, past.out));
 }
 
 /**
@@ -793,6 +829,20 @@ export function onItsRoad(scene, sx, sz) {
     return Boolean(settings.path) && Math.abs(sx - settings.approach[0]) < settings.path[0] && sz > settings.path[1] && sz <= settings.ridge[1];
 }
 
+// Whether a point of a scene (its own metres) is on its open ground: its own terrain drawn as the
+// land there, nothing of it standing near (terrainOf `open`)
+function openOn(scene, sx, sz) {
+    const { ground } = scene;
+
+    if (!ground) {
+        return false;
+    }
+
+    const [px, pz] = [Math.floor((sx - ground.origin[0]) / ground.square), Math.floor((sz - ground.origin[1]) / ground.square)];
+
+    return px >= 0 && pz >= 0 && px < ground.size[0] && pz < ground.size[1] && ground.open[pz * ground.size[0] + px] === 1;
+}
+
 /**
  * Whether trees and the land's own things may stand at a point of the world (metres) a scene's set
  * into (`placed`: placedOf's): where its own terrain's drawn as the land, nothing of it standing
@@ -810,13 +860,5 @@ export function growsAt(placed, x, y) {
         return true;
     }
 
-    const { ground } = scene;
-
-    if (!ground) {
-        return false;
-    }
-
-    const [px, pz] = [Math.floor((sx - ground.origin[0]) / ground.square), Math.floor((sz - ground.origin[1]) / ground.square)];
-
-    return px >= 0 && pz >= 0 && px < ground.size[0] && pz < ground.size[1] && ground.open[pz * ground.size[0] + px] === 1;
+    return openOn(scene, sx, sz);
 }

@@ -857,8 +857,12 @@ What's built so far:
       edges by no more than a metre a metre, so the land between never runs to gullies. The world
       is close round it: its hill reaches 96 to 250 m in most of them.
     - Its hill is a forest (`woodsOn`, `height.js` `woodsAt`): where the land falls from its crags
-      at a slope of 0.25 or more, trees grow at least 1.5 times as thick as the woods' (a jungle's
-      is 1.2), thinning out over the last of it to its foot. Near and far alike
+      at a slope of 0.25 or more, or is that steep all the same (read 4 m either way: by its
+      chasm's walls, carried out past its edges), trees grow at least 1.5 times as thick as the
+      woods' (a jungle's is 1.2), thinning out over the last of it to its foot. On its own open
+      ground (where the land's drawn in its terrain's place) they grow as thick where it's steep,
+      and its hill's woods are carried in 60 m from its edges, fading; never on its road's end.
+      Near and far alike
       (`core/overworld.js`, `world/far/trees.js`), on its cliffs too, which no one climbs. Its
       ground there is a forest's floor, however steep (`world/ground.js` `FOREST_FLOOR`, a texture
       of it over the hill), a little darker and browner, with no rock and no cliff faces drawn
