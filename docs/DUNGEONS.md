@@ -536,7 +536,7 @@ dungeon's way in (`wild: false`), and there's one a world.
   with its castle's wall and floor (the kit's `wall` and `floor` parts' pictures, `setKitPicture`
   in `world/dungeons3d.js`), its stone a little cooler than the pack has it, as white as the
   castle's outside under the torches. All of it cut away with the rock while the camera's over the
-  roof. The kit's fetched when a player comes to the keep's doors. Without the licensed models,
+  roof, its columns drawn solid where they're cut. The kit's fetched when a player comes to the keep's doors. Without the licensed models,
   none of it: the pale stone it's drawn in meanwhile, its own pillars.
 - **Its things** (`world/dungeondressing.js` `CLUTTER.keep`): shields and stools in its halls,
   barrels and crates in its stores, lanterns and candles in its library, bones and coffins in its
