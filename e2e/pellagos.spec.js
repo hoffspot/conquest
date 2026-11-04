@@ -18543,7 +18543,21 @@ test("Vharzul the Greenflame dealt before the player by night: drawn from the Lo
     });
 
     expect(dealt).toMatchObject({ ok: true, card: "vharzul" });
-    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.wild?.creature === "vharzul").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    // (Kept up while he fights them as his model's read: a skill ranked up with use puts their hit
+    // points back to their own (host.js #outfit), and slain they'd rise far off, beyond his leash)
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+
+                Object.assign(game.battle.actor(game.me), { hp: 50000, maxHp: 50000 });
+
+                return Boolean(game.avatars.get(game.battle.actors.find((actor) => actor.wild?.creature === "vharzul").id)?.model);
+            },
+            { seconds: 120, realTime: true },
+        ),
+    ).toBe(true);
     await expect(page.locator("#bossbar .name")).toHaveText("Vharzul the Greenflame");
     expect(
         await page.evaluate(() => {
@@ -18560,6 +18574,7 @@ test("Vharzul the Greenflame dealt before the player by night: drawn from the Lo
         const me = game.battle.actor(game.me);
         const lord = game.battle.actors.find((actor) => actor.wild?.creature === "vharzul");
 
+        Object.assign(me, { hp: 50000, maxHp: 50000 });
         game.host.battle.place(lord.id, "town", [Math.floor(me.x), Math.floor(me.y + 3)]);
         Object.assign(lord, { facing: Math.PI, readyAt: 0, attack: null, movesAt: { wing: Infinity, flare: game.battle.time } });
     });
