@@ -156,6 +156,29 @@ async function playUntil(page, done, { seconds = 30, realTime = false } = {}) {
     return page.evaluate(done);
 }
 
+// What the downloader's doing (app/fetcher.js), for a test waiting on a model to say why it hasn't
+// come: why nothing's fetched (its holds), what it's fetching and how far, what's queued and how
+// wanted (PRIORITY: 0 now, 1 soon, 2 later), its rate and throughput (KB/s), and the files it's
+// had and given up on and the bytes it's fetched
+async function downloading(page) {
+    return page.evaluate(() => {
+        const { fetcher } = window.pellagos;
+        const { quiet, current, rate, throughput, done, failed, fetched } = fetcher.status;
+        const name = (path) => path.split("/").pop();
+
+        return JSON.stringify({
+            quiet,
+            current: current && `${name(current.path)} ${current.received}/${current.bytes}`,
+            queued: fetcher.queue.map(({ path, priority }) => `${name(path)}:${priority}`),
+            rate: Math.round(rate / 1024),
+            throughput: throughput === null ? null : Math.round(throughput / 1024),
+            done,
+            failed,
+            fetched,
+        });
+    });
+}
+
 // The first message the player's been told lately that `pattern` matches, or null: read from those
 // kept for the journal (journal.js keepMessage), not the banner, which another told just after
 // takes over (as a battle's turns are told), so a look between the two would miss it
@@ -18081,17 +18104,21 @@ test("a werewolves' den neared: the Moonfang's model and its werewolves' (one fi
     expect(den.dark).toBe(false);
     expect(den.before).toEqual([false, false]);
     // (In real time, as a player plays it: the downloader keeps to a rate in real time, and a
-    // player takes minutes to walk the kilometre)
-    expect(await playUntil(page, () => Boolean(window.modelOf("moonfang") && window.modelOf("werewolf")), { seconds: 60, realTime: true })).toBe(true);
+    // player takes minutes to walk the kilometre. Not read, the failure says which is and what the
+    // downloader's doing: why they haven't come)
+    const read = await playUntil(page, () => Boolean(window.modelOf("moonfang") && window.modelOf("werewolf")), { seconds: 60, realTime: true });
+    const which = () => JSON.stringify({ moonfang: Boolean(window.modelOf("moonfang")), werewolf: Boolean(window.modelOf("werewolf")) });
 
-    const read = await page.evaluate(async (id) => {
+    expect(read, read ? undefined : `read: ${await page.evaluate(which)}; the downloader: ${await downloading(page)}`).toBe(true);
+
+    const model = await page.evaluate(async (id) => {
         const { keptModels } = await import("/js/beasts/model.js");
         const gltf = window.modelOf("moonfang");
 
         return { same: gltf === window.modelOf("werewolf"), skins: Object.keys(gltf.skins).sort(), kept: keptModels().models, out: window.pellagos.game.host.lairs.has(id) };
     }, den.id);
 
-    expect(read).toEqual({ same: true, skins: ["ash", "dusk", "moonfang", "russet"], kept: 1, out: false });
+    expect(model).toEqual({ same: true, skins: ["ash", "dusk", "moonfang", "russet"], kept: 1, out: false });
 });
 
 test("out in the woods far from home by night, where werewolves are met: the werewolf's model read before one is", async ({ page }) => {
@@ -18138,7 +18165,10 @@ test("out in the woods far from home by night, where werewolves are met: the wer
         return Boolean(window.modelOf("werewolf"));
     };
 
-    expect(await playUntil(page, read, { seconds: 60, realTime: true })).toBe(true);
+    const done = await playUntil(page, read, { seconds: 60, realTime: true });
+
+    // (Not read, the failure says what the downloader's doing: why it hasn't come)
+    expect(done, done ? undefined : `the downloader: ${await downloading(page)}`).toBe(true);
     expect(await page.evaluate(() => window.met)).toBe(false);
 });
 
