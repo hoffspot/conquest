@@ -100,7 +100,8 @@ function onRun({ side, at }, along, out) {
  * The kit's placements for a level of Bellhaven's keep (its map: plan, pieces, dungeon's lights
  * and rooms; `tall`, its halls' height, metres): what dungeons3d.js furnish sets out (each `fit`
  * in its piece's own metres, across, up and out from the wall, before it's turned), each cut away
- * with the rock while the camera's over the roof (`cut`).
+ * with the rock while the camera's over the roof (`cut`; a column "solid" there, its insides drawn as
+ * cut stone: dungeons3d.js propMaterial).
  */
 export function kitPlacements(map, { tall }) {
     const placements = [];
@@ -154,7 +155,7 @@ export function kitPlacements(map, { tall }) {
 
     // (The castle's Gothic column in each pillar's place)
     for (const piece of map.pieces.filter(({ kind }) => kind === "pillar")) {
-        placements.push({ model: KEEP_KIT.column, x: piece.x + piece.w / 2, z: piece.y + piece.h / 2, turn: 0, fit: [KIT.wide, tall - KIT.under, KIT.wide], tint: KIT.tint, cut: true });
+        placements.push({ model: KEEP_KIT.column, x: piece.x + piece.w / 2, z: piece.y + piece.h / 2, turn: 0, fit: [KIT.wide, tall - KIT.under, KIT.wide], tint: KIT.tint, cut: "solid" });
     }
 
     // (The bell, over the bell chamber's altar: its realm's last room)

@@ -59,7 +59,7 @@ describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
 
                 for (const each of placements) {
                     assert.ok(!rock(map, each.x, each.z), `${seed}/${k}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)} on the rock`);
-                    assert.equal(each.cut, true);
+                    assert.equal(each.cut, each.model === KEEP_KIT.column ? "solid" : true);
                     assert.ok(Object.values(KEEP_KIT).includes(each.model));
                 }
 

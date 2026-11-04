@@ -444,15 +444,15 @@ const METAL = 0.3;
 // and how metal it is, and whether it glows or can be seen through (glass, a flame), as its own
 // material has it. Never cut away, but for what stands as tall as the walls (`cut`: Bellhaven's
 // keep's columns and pilasters, world/keepkit.js), cut away with the rock while the camera's over
-// the roof (DUNGEON_CUT): its insides, seen where it's cut, drawn as its stone cut through (CUT_CAP
-// of its colour), not hollow
+// the roof (DUNGEON_CUT); one whose mesh is closed all round (`cut` "solid": the keep's columns)
+// drawn solid where it's cut, its insides the dark of cut stone (CUT_CAP, linear), not hollow
 const propMaterials = new Map();
 
-// How dark a cut prop's insides are drawn, of its own colour (propMaterial `cut`)
-const CUT_CAP = 0.3;
+// The colour a solid cut prop's insides are drawn, where it's cut (propMaterial `cut` "solid")
+const CUT_CAP = "vec3(0.11, 0.105, 0.1)";
 
 function propMaterial(name, part, source, tint, cut = false) {
-    const key = `${name}|${part}|${tint ?? ""}${cut ? "|cut" : ""}`;
+    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}`;
 
     if (propMaterials.has(key)) {
         return propMaterials.get(key);
@@ -470,7 +470,7 @@ function propMaterial(name, part, source, tint, cut = false) {
         opacity: source.opacity ?? 1,
         depthWrite: !source.transparent,
         alphaTest: source.alphaTest ?? 0,
-        side: cut ? THREE.DoubleSide : THREE.FrontSide,
+        side: cut === "solid" ? THREE.DoubleSide : THREE.FrontSide,
     });
 
     result.name = `prop-${name}`;
@@ -484,12 +484,12 @@ function propMaterial(name, part, source, tint, cut = false) {
             shader.fragmentShader = shader.fragmentShader
                 .replace("#include <common>", "#include <common>\nuniform float dungeonCutLow;\nuniform float dungeonCutTop;")
                 .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;")
-                .replace("#include <dithering_fragment>", `#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(diffuseColor.rgb * ${CUT_CAP.toFixed(2)}, gl_FragColor.a);`);
+                .replace("#include <dithering_fragment>", cut === "solid" ? `#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(${CUT_CAP}, gl_FragColor.a);` : "#include <dithering_fragment>");
         }
 
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => `dungeon-prop${cut ? "-cut" : ""}`;
+    result.customProgramCacheKey = () => `dungeon-prop${cut === "solid" ? "-solid" : cut ? "-cut" : ""}`;
     propMaterials.set(key, result);
 
     return result;
@@ -543,7 +543,9 @@ const _corner = new THREE.Vector3();
  * (radians round its own x, before that: a shield leant back),
  * size (its longest side, metres; or `scale`: times its own size, a number or one for each side;
  * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
- * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said) }]), each
+ * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said), cut
+ * (cut away with the rock while the camera's over the roof; "solid", drawn solid where it is:
+ * propMaterial) }]), each
  * model's copies in each tile of the level (the rock's, CAVERNS) drawn at once (instanced, one for
  * each of its materials), so what's out of sight or of a light's reach isn't drawn; added to
  * `group` once they're all read (`read`: how, loadProp). What isn't read (not in the catalog, not
@@ -591,7 +593,7 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         matrix.premultiply(new THREE.Matrix4().makeTranslation(x - (box.min.x + box.max.x) / 2, y - box.min.y, z - (box.min.z + box.max.z) / 2));
         tops.set(placement, y + box.max.y - box.min.y);
 
-        const key = `${placement.model}|${tint ?? ""}|${cut ? "cut|" : ""}${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
+        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
 
         if (!lots.has(key)) {
             lots.set(key, { name: placement.model, prop, tint, cut, matrices: [], shadow: false });
