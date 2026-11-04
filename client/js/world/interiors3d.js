@@ -40,7 +40,8 @@ import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { VEIL, veilShader } from "./veil.js";
 import { CAVERNS, cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
-import { Blocks, DUNGEON_CUT, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
+import { Blocks, DUNGEON_CUT, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial, setKitPicture } from "./dungeons3d.js";
+import { KEEP_KIT, KIT_PICTURES, kitPlacements } from "./keepkit.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
 import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeometry, ribPaths, veinsOn } from "./flesh.js";
@@ -3755,7 +3756,7 @@ const DUNGEON_LOOKS = Object.freeze({
     "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x2a1c26, ground: 0x161016, air: { background: 0x0a0404, fog: [7, 26], mist: [0.1, 0.9] }, wet: true, throne: "lord", statues: "dread", sigils: true },
     // (Bellhaven's keep (core/dungeons/themes.js keep): its castle's white stone, dressed, its
     // halls high, its floors' flags pale)
-    keep: { walls: "stone-old", tall: 6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0xd6d0c2, ground: 0xcac2b2 },
+    keep: { walls: "stone-old", tall: 6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0xdcdfe5, ground: 0xb9bbbf, kit: "keep" },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -3799,6 +3800,36 @@ function floorAround(blocks, map, holes) {
             blocks.box(from, -0.1, z0, w, 0, z1);
         }
     }
+}
+
+// Bellhaven's keep's level (world/keepkit.js) once its kit's read: its walls and floor drawn with
+// its castle's own wall and floor (the kit's pieces' pictures, KIT_PICTURES), and its own pillars put
+// away for its castle's columns; without the kit (no licensed models), as it was
+async function kitDressed(object) {
+    const [wall, floor, column] = await Promise.all([KEEP_KIT.wall, KEEP_KIT.floor, KEEP_KIT.column].map((name) => Promise.resolve(loadProp(name)).catch(() => null)));
+    const pictureOf = (prop) => {
+        const source = prop?.parts[0]?.source;
+
+        return source?.map && source.normalMap ? { colour: source.map, normal: source.normalMap } : null;
+    };
+    const drawn = { walls: null, floor: null };
+
+    for (const [kind, prop, picture] of [["walls", wall, KIT_PICTURES.wall], ["floor", floor, KIT_PICTURES.floor]]) {
+        const read = pictureOf(prop);
+
+        if (read) {
+            setKitPicture(picture.name, { ...read, metres: picture.metres, mean: picture.mean });
+            drawn[kind] = picture.name;
+        }
+    }
+
+    object.traverse((node) => {
+        if (node.isMesh && drawn[node.name] && node.material?.userData?.rock) {
+            node.material = rockMaterial(drawn[node.name], { wet: node.material.userData.rock.wet, cut: node.material.userData.rock.cut });
+        } else if (node.isMesh && node.name === "pillars" && column) {
+            node.visible = false;
+        }
+    });
 }
 
 // A level's walls of dressed stone (`blocks`: dungeons3d.js's, metres; `tall` metres high): each
@@ -4646,7 +4677,7 @@ function dungeon(map) {
 
     // (What's drawn with the pictures as boxes: a temple's walls, floor and vault, a hideout's
     // timbers)
-    const [walls, floor, timber] = [new Blocks(), new Blocks(), new Blocks()];
+    const [walls, floor, timber, pillars] = [new Blocks(), new Blocks(), new Blocks(), new Blocks()];
 
     // (A hell's: its ways down portals, standing on the floor, not stairs going down through it)
     const portals = Boolean(map.dungeon?.portals);
@@ -4819,7 +4850,9 @@ function dungeon(map) {
                 break;
             }
             case "pillar":
-                stonePillar(walls, x / M, z / M, look.tall ?? shell.low);
+                // (Bellhaven's keep's in a mesh of their own, put away once its castle's columns are
+                // in: world/keepkit.js)
+                stonePillar(look.kit ? pillars : walls, x / M, z / M, look.tall ?? shell.low);
                 break;
             case "tomb":
                 if (hashOf(piece.x, piece.y, 11) < 0.45) {
@@ -4991,7 +5024,13 @@ function dungeon(map) {
         }
     }
 
-    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls", { wet: Boolean(look.wet) }), floor.mesh(look.underfoot, look.ground ?? null, "floor", { wet: Boolean(look.wet) }), timber.mesh("timber", 0x8a7a66, "timbers"), look.sigils ? sigilsDrawn(map) : null, pools.length ? poolsDrawn(pools, look) : null, lakes?.regions.length ? lakesDrawn(lakes) : null, basins.length ? basinsDrawn(basins, mouths) : null, bloodDrawn(at("blood"))].filter(Boolean);
+    // (Bellhaven's keep's own castle's pieces set about it, world/keepkit.js: put in with the rest of
+    // what's scanned, buildingInterior's furnish)
+    if (look.kit) {
+        props.push(...kitPlacements(map, look));
+    }
+
+    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls", { wet: Boolean(look.wet) }), floor.mesh(look.underfoot, look.ground ?? null, "floor", { wet: Boolean(look.wet) }), timber.mesh("timber", 0x8a7a66, "timbers"), pillars.mesh(look.picture, look.tint ?? null, "pillars"), look.sigils ? sigilsDrawn(map) : null, pools.length ? poolsDrawn(pools, look) : null, lakes?.regions.length ? lakesDrawn(lakes) : null, basins.length ? basinsDrawn(basins, mouths) : null, bloodDrawn(at("blood"))].filter(Boolean);
 
     // (What's set about a piece and come out over the rock left out: a lantern by a bedroll in a
     // corner)
@@ -5005,7 +5044,7 @@ function dungeon(map) {
     // (Where a hell's heart beats and its Hellforge is, heard from there: audio/ambience.js)
     const middle = (piece) => (piece ? { x: piece.x + piece.w / 2, z: piece.y + piece.h / 2 } : null);
 
-    return { solid, moving: [], flames, lights, hearth: null, heart: middle(at("heart")[0]), forge: middle(at("forge")[0]), ceiling: roof / M, shell: shell && rockShell(map, look, shell, life), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
+    return { solid, moving: [], flames, lights, hearth: null, heart: middle(at("heart")[0]), forge: middle(at("forge")[0]), ceiling: roof / M, shell: shell && rockShell(map, look, shell, life), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles), kit: look.kit ?? null };
 }
 
 // The four ways round a square (x, y), and whether a square of a level's plan is open floor with
@@ -6238,9 +6277,13 @@ export function* buildingInterior(map) {
         object.add(each);
     }
 
-    // (A dungeon's scanned furniture, added once its models are read: dungeons3d.js)
+    // (A dungeon's scanned furniture, added once its models are read: dungeons3d.js; Bellhaven's
+    // keep's castle's pieces among them, and its walls and floor its castle's once they are; when,
+    // `furnished`)
     if (built.props?.length) {
-        furnish(object, built.props).catch((error) => console.warn("Couldn't furnish", map.id, error));
+        object.userData.furnished = furnish(object, built.props)
+            .then(() => built.kit && kitDressed(object))
+            .catch((error) => console.warn("Couldn't furnish", map.id, error));
     }
 
     const animated = new THREE.Group();

@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "805f64cf66",
+    release: "3b70e440a7",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2558,6 +2558,41 @@ export const ASSETS = Object.freeze({
                     "bytes": 2333756
                 }
             ]
+        },
+        "dungeon-prop-bellhaven-keep": {
+            "tier": "demand",
+            "label": "Bellhaven's keep's insides: its castle's Gothic column, pilaster, cornice, tracery window and bell, and its wall and floor (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/bellhaven-keep.bin",
+                    "hash": "f97c043db4",
+                    "bytes": 3218836
+                }
+            ],
+            "pieces": {
+                "bellhaven-keep-column": [
+                    "column"
+                ],
+                "bellhaven-keep-pilaster": [
+                    "pilaster"
+                ],
+                "bellhaven-keep-cornice": [
+                    "cornice"
+                ],
+                "bellhaven-keep-window": [
+                    "window"
+                ],
+                "bellhaven-keep-bell": [
+                    "bell"
+                ],
+                "bellhaven-keep-wall": [
+                    "wall"
+                ],
+                "bellhaven-keep-floor": [
+                    "floor"
+                ]
+            }
         }
     },
 });

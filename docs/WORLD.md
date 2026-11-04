@@ -833,6 +833,8 @@ What's built so far:
     outside end).
   - The castle's art is kept while anyone's in its keep, for coming back out to: let go of once
     they've left the castle's map.
+  - Its insides drawn with its castle's own parts and stone (`world/keepkit.js`, docs/DUNGEONS.md
+    *Bellhaven's keep*), their kit fetched while its court's crossed (`app/game.js` `#showMap`).
 - **Set into the world** (`core/terrain/scenes.js`), one a world, as the volcano's crater is cut
   into it.
   - Where: laid out last in the world's plan (`worldplan/settle.js` `BELLHAVEN`), on the flattest

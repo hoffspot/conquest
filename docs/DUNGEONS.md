@@ -525,6 +525,19 @@ dungeon's way in (`wild: false`), and there's one a world.
   Every flight of stairs down on a floor goes down through the floor (`floorAround`: the head of
   the stair come up by, and on the top floor the stair down out too), each drawn from its own
   landing (`flight`).
+- **In its castle's own stone** (`world/keepkit.js`), with the licensed models: a kit of the White
+  Castle's parts (`dungeon-prop-bellhaven-keep`, a part a node; `client/models/scenery/LICENSE.md`)
+  set about each floor as its plan has it (`kitPlacements`, from the level's map alone). Along
+  every straight run of wall by open floor (`wallRuns`) its cornice under the vault, the run's
+  whole length in pieces no longer than 4 m, and its pilasters between, every 4 m at most, none by
+  a run's end or a torch; in walls 9 m long or more, a tracery window in every other bay; the
+  castle's Gothic column wherever a pillar stands, as tall as the hall (its own pillars put away
+  once the column's in); and its bell hung over the bell chamber's altar. Its walls and floor drawn
+  with its castle's wall and floor (the kit's `wall` and `floor` parts' pictures, `setKitPicture`
+  in `world/dungeons3d.js`), its stone a little cooler than the pack has it, as white as the
+  castle's outside under the torches. All of it cut away with the rock while the camera's over the
+  roof. The kit's fetched when a player comes to the keep's doors. Without the licensed models,
+  none of it: the pale stone it's drawn in meanwhile, its own pillars.
 - **Its things** (`world/dungeondressing.js` `CLUTTER.keep`): shields and stools in its halls,
   barrels and crates in its stores, lanterns and candles in its library, bones and coffins in its
   undercroft and tombs.
