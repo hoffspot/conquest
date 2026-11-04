@@ -444,8 +444,12 @@ const METAL = 0.3;
 // and how metal it is, and whether it glows or can be seen through (glass, a flame), as its own
 // material has it. Never cut away, but for what stands as tall as the walls (`cut`: Bellhaven's
 // keep's columns and pilasters, world/keepkit.js), cut away with the rock while the camera's over
-// the roof (DUNGEON_CUT)
+// the roof (DUNGEON_CUT): its insides, seen where it's cut, drawn as its stone cut through (CUT_CAP
+// of its colour), not hollow
 const propMaterials = new Map();
+
+// How dark a cut prop's insides are drawn, of its own colour (propMaterial `cut`)
+const CUT_CAP = 0.3;
 
 function propMaterial(name, part, source, tint, cut = false) {
     const key = `${name}|${part}|${tint ?? ""}${cut ? "|cut" : ""}`;
@@ -466,6 +470,7 @@ function propMaterial(name, part, source, tint, cut = false) {
         opacity: source.opacity ?? 1,
         depthWrite: !source.transparent,
         alphaTest: source.alphaTest ?? 0,
+        side: cut ? THREE.DoubleSide : THREE.FrontSide,
     });
 
     result.name = `prop-${name}`;
@@ -478,7 +483,8 @@ function propMaterial(name, part, source, tint, cut = false) {
             Object.assign(shader.uniforms, { dungeonCutLow: DUNGEON_CUT.low, dungeonCutTop: DUNGEON_CUT.top });
             shader.fragmentShader = shader.fragmentShader
                 .replace("#include <common>", "#include <common>\nuniform float dungeonCutLow;\nuniform float dungeonCutTop;")
-                .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;");
+                .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;")
+                .replace("#include <dithering_fragment>", `#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(diffuseColor.rgb * ${CUT_CAP.toFixed(2)}, gl_FragColor.a);`);
         }
 
         roomLit(shader);

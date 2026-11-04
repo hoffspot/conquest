@@ -42,7 +42,7 @@ export const KIT_PICTURES = Object.freeze({
  * its foot `hang` under the vault. Its stone (all but the bell) drawn a little cooler than the pack
  * has it (`tint`), as white as the castle's outside under the torches' warm light.
  */
-export const KIT = Object.freeze({ cornice: 1.2, deep: 0.5, stretch: 4, every: 4, corner: 1, torch: 0.9, windows: 9, window: 1.2, high: 0.72, under: 0, wide: 0.9, bell: 2.8, hang: 3.4, tint: 0xd8deea });
+export const KIT = Object.freeze({ cornice: 1.2, deep: 0.5, stretch: 4, every: 4, corner: 1, torch: 0.9, windows: 9, window: 1.2, high: 0.72, under: 0, wide: 0.9, bell: 2.8, hang: 3.4, tint: 0xc4cde0 });
 
 // The four ways a wall can face into a room: the step from the open square to the rock beside it,
 // and which way something set against it faces (radians, as furnish turns it: 0 is +z, south)
