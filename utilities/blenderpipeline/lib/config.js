@@ -446,9 +446,6 @@ export function resolveConfig(raw, file) {
             fail("simplify.permissive is true or false");
         }
 
-        if (config.simplify.permissive && !config.cells) {
-            fail("simplify.permissive is for scenery cut into cells (cells)");
-        }
 
         if (!(config.simplify.ratio > 0 && config.simplify.ratio < 1)) {
             fail("simplify.ratio is the share of vertices kept, between 0 and 1");
