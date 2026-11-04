@@ -41,6 +41,15 @@ export const OVERWORLD = Object.freeze({ tile: TILE, cell: CELL, cellHeight: CEL
 export const ROOMS = Object.freeze({ tile: 32, cell: 0.1, cellHeight: 0.1, radius: 0.3, height: 2, climb: 0.2, border: 0.6, simplify: 0.5, island: 0.5, merge: 2 });
 
 /**
+ * A fixed scene's map (core/scenery.js: Bellhaven's castle, its bridge and courts), baked from its
+ * walk's floors, each square at its own height: in the overworld's voxels, its step the walk's
+ * (0.8 m: a floor no further than that from the next is walked onto it), its ledges the walk's
+ * (`ledges`: no ledge filtered out by Recast, bake.js), and every one of its tiles kept once made
+ * (`keep`: a scene's a few hundred metres across, 132 tiles of Bellhaven's).
+ */
+export const SCENES = Object.freeze({ tile: TILE, cell: CELL, cellHeight: 0.1, radius: AGENT.radius, height: AGENT.height, climb: 0.8, border: BORDER, simplify: 1.3, island: 2, merge: 10, keep: 256, ledges: false });
+
+/**
  * How each kind of ground is walked (Recast's area ids, kept in the mesh's polygons): 0 is none
  * (not walked at all). COSTS are how far a metre of each counts for, finding a way.
  */

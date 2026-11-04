@@ -29,7 +29,7 @@ import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/fol
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, wantModel } from "../beasts/model.js";
+import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
@@ -49,6 +49,7 @@ import { denOf, densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
+import { SCENERY } from "../core/scenery.js";
 import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
@@ -508,6 +509,10 @@ const ACTS = {
 
 // Going through a door or up the stairs, the screen comes up from black this fast (s)
 const FADE_IN = 0.45;
+
+// What the wait at a fixed scene's way in says it's doing (app/readying.js): getting its art
+// ready, a castle's worth, so it's never walked half drawn
+const SCENERY_NOTE = "Getting the castle ready, so you don't walk into it half drawn.";
 
 // How long the screen takes to come up from black after a sleep (s)
 const SLEEP_FADE = 2.4;
@@ -1931,10 +1936,10 @@ export class Game {
         if (!this.groundsOf.has(key)) {
             const map = this.world.maps?.[mapId];
             const [ox, oz] = this.originOf(mapId);
-            const most = map?.width - 0.01;
+            const [across, down] = [map?.width - 0.01, map?.height - 0.01];
             const heightAt = bare && map?.ground?.heightAt ? (x, y) => map.ground.heightAt(x, y) : map?.heightAt && ((x, y) => map.heightAt(x, y));
 
-            this.groundsOf.set(key, heightAt ? (x, z) => heightAt(Math.min(most, Math.max(0, x - ox)), Math.min(most, Math.max(0, z - oz))) : null);
+            this.groundsOf.set(key, heightAt ? (x, z) => heightAt(Math.min(across, Math.max(0, x - ox)), Math.min(down, Math.max(0, z - oz))) : null);
         }
 
         return this.groundsOf.get(key);
@@ -2883,7 +2888,7 @@ export class Game {
     // (inside, in a room or two, all of them: a turn of the camera sees any of them)
     #sending(unsent, every = SENDING.every) {
         const camera = this.view.camera;
-        const outside = !this.interiors.has(this.mapId);
+        const outside = !this.#indoorsOn(this.mapId);
         let sent = 0;
 
         camera.updateMatrixWorld();
@@ -4219,6 +4224,11 @@ export class Game {
     // beams), or the ground (the world's: core/terrain/ground.js; flat at 0 indoors)
     #standsAt(mapId, x, y) {
         const map = this.world.maps?.[mapId];
+
+        // (A fixed scene's map: its walk's floor, eased from square to square: core/scenery.js)
+        if (map?.walk) {
+            return map.heightAt(Math.min(map.width - 0.01, Math.max(0, x)), Math.min(map.height - 0.01, Math.max(0, y)));
+        }
 
         if (!map?.chunk) {
             return 0;
@@ -9437,7 +9447,7 @@ export class Game {
     // doors, as it did before they went in
     #arrive(actor) {
         const position = this.avatars.get(this.me).object.position;
-        const indoors = this.interiors.has(actor.map);
+        const indoors = this.#indoorsOn(actor.map);
         let pitch = this.cameraFollow?.pitch;
 
         // (A zoom being eased in let go of: the distance's the room's, or the one kept for outside;
@@ -9820,7 +9830,7 @@ export class Game {
                     // land there: one already flying about, if there is one)
                     const { x, z } = avatar.object.position;
                     const mine = this.avatars.get(this.me)?.object.position;
-                    const near = mine && me.map === actor.map && !this.interiors.get(actor.map) && Math.hypot(x - mine.x, z - mine.z) < ARRIVE_WITHIN;
+                    const near = mine && me.map === actor.map && !this.#indoorsOn(actor.map) && Math.hypot(x - mine.x, z - mine.z) < ARRIVE_WITHIN;
 
                     if (avatar.winged && near && !actor.dead) {
                         avatar.arrive({ from: this.flyers?.takeAloft(avatar.id, [x, z]) ?? null, ground: this.#groundOn(actor.map, x, z) });
@@ -13399,9 +13409,19 @@ export class Game {
         return this.world.maps?.[mapId]?.sound ?? mapId;
     }
 
-    // Show one map (the town, or a floor inside), lit for being out or in, and nothing of the others
+    // Whether a map's indoors: a building's floor, or a dungeon's level (not the world, nor a fixed
+    // scene's map, world/scenery3d.js: built as an inside is, but out of doors, under the sky)
+    #indoorsOn(mapId) {
+        const interior = this.interiors.get(mapId);
+
+        return Boolean(interior) && !interior.outdoors;
+    }
+
+    // Show one map (the town, or a floor inside, or a fixed scene's), lit for being out or in, and
+    // nothing of the others
     #showMap(mapId) {
         const interior = this.interiors.get(mapId) ?? null;
+        const indoors = Boolean(interior) && !interior.outdoors;
 
         // (Spells on a map left gone, not those where they've come to on this one: carried
         // across it by magic; and the view's lamps lent to their flashes only out of doors)
@@ -13410,7 +13430,7 @@ export class Game {
                 this.spellFx.clear();
             }
 
-            this.spellFx.lit = !interior;
+            this.spellFx.lit = !indoors;
         }
 
         this.mapId = mapId;
@@ -13433,15 +13453,20 @@ export class Game {
 
         for (const [id, each] of this.interiors) {
             each.object.visible = id === mapId;
+
+            // (A fixed scene left: its art let go of, a castle's worth of memory)
+            if (id !== mapId) {
+                each.leave?.();
+            }
         }
 
-        this.view.setIndoors(interior);
+        this.view.setIndoors(indoors ? interior : null);
         this.view.setOccluders(interior ? null : this.occluders);
         // (The motes in the air gone at once through the door: the next place's own drift in; and
         // no soil trickling till a while after coming in)
         this.motes?.cut();
         this.trickles?.reset();
-        this.#setGround(interior ? null : this.groundOf(mapId));
+        this.#setGround(indoors ? null : this.groundOf(mapId));
         this.minimap?.setMap(this.world.maps[mapId]);
 
         // The tavern's music inside, heard through the floor upstairs; the town's out; and the
@@ -13450,7 +13475,7 @@ export class Game {
         this.sound?.setHearth(interior?.hearth ?? null);
 
         if (this.running) {
-            this.sound?.setAmbient(!interior);
+            this.sound?.setAmbient(!indoors);
         }
 
         this.#hearAround(0, { now: true });
@@ -13473,7 +13498,12 @@ export class Game {
         const interior = this.interiors.get(this.mapId);
         const player = this.battle.actor(this.me);
 
-        if (interior) {
+        // (A fixed scene's map: its cells each at their detail from where the camera is, its art put
+        // in once it's read)
+        if (interior?.outdoors) {
+            interior.update(dt, this.clock);
+            interior.seenFrom(this.view.camera.position);
+        } else if (interior) {
             const at = this.avatars.get(this.me).object.position;
 
             cutFor(interior.map, at, this.view.camera.position);
@@ -17779,12 +17809,25 @@ export class Game {
         const player = this.battle.actor(this.me);
         const building = player?.map === "town" ? this.world.interiors?.buildings.get(door.link.building) : null;
         const kinds = modelsInside(building).filter((kind) => !modelOf(kind));
+        // (A fixed scene's art, a castle's worth: got ready before it's gone into, as its creatures
+        // are, and with them)
+        const asset = building?.kind === "scenery" ? SCENERY[building.scenery]?.model : null;
+        const scene = asset && !sceneryOf(asset) ? readyScenery(asset) : null;
 
-        if (!kinds.length) {
+        if (!kinds.length && !scene) {
             return false;
         }
 
-        const readying = readyModels(kinds);
+        const parts = [kinds.length ? readyModels(kinds) : null, scene].filter(Boolean);
+        const readying = {
+            kinds: parts[0].kinds ?? [],
+            progress: () =>
+                parts
+                    .map((part) => part.progress())
+                    .reduce((sum, now) => ({ received: sum.received + now.received, bytes: sum.bytes + now.bytes, read: [...sum.read, ...now.read], failed: [...sum.failed, ...now.failed] }), { received: 0, bytes: 0, read: [], failed: [] }),
+            ready: Promise.all(parts.map(({ ready }) => ready)),
+            calm: () => parts.forEach((part) => part.calm()),
+        };
         const waiting = { kinds: readying.kinds };
 
         this.readyingAt = waiting;
@@ -17792,7 +17835,8 @@ export class Game {
         this.pause();
         this.readyCard.show({
             name: building.name,
-            kinds: readying.kinds.map((id) => ({ id, name: CREATURES[id]?.name ?? id })),
+            note: scene ? SCENERY_NOTE : null,
+            kinds: [...(scene ? [{ id: asset, name: building.name }] : []), ...readying.kinds.map((id) => ({ id, name: CREATURES[id]?.name ?? id }))],
             progress: readying.progress,
             onClose: (how) => {
                 if (this.readyingAt === waiting) {

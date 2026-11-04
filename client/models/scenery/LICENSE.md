@@ -22,8 +22,8 @@ Each is scrambled as the game serves it, with whose it is in its glTF asset's `c
 aren't in this repository, but in the private one the game's builds fetch them from
 (`docs/LICENSED_MODELS.md`).
 
-`bellhaven.walk.json`, beside them in this repository, is where the castle can be walked, baked
-from it (`utilities/blenderpipeline`, README *Where it can be walked*): the height of each square
-a body can stand on, no mesh or texture.
+`client/js/core/scenery/bellhaven.walk.js`, in this repository, is where the castle can be walked,
+baked from it (`utilities/blenderpipeline`, README *Where it can be walked*): the height of each
+square a body can stand on, no mesh or texture.
 
 Don't copy them out of this game or use them in anything else.
