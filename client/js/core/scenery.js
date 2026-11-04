@@ -23,7 +23,11 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * they face, and the way back out (`out`: [x0, z0, x1, z1], the scene's metres: its floor's
  * squares in that box). Bellhaven's way in is the slope of earth that rises to its bridge's near
  * end, at 67 m, the ground falling away either side of it to the land under the crag: come in on
- * it, facing the castle across the chasm, and out by its foot, the road's end in the world.
+ * it, facing the castle across the chasm, and out by its foot, the road's end in the world. And its keep
+ * (`keep`), a dungeon of its own (core/dungeons/themes.js `theme`), gone into by its doors off its
+ * court: the doorway's squares (`squares`: [x0, z0, x1, z1], the scene's metres), where whoever
+ * comes back out of it stands and the way they face (`arrive`, `facing`), and the doors' face
+ * (`door`: how far north it is, its width and height, metres), facing the court.
  */
 export const SCENERY = Object.freeze({
     bellhaven: Object.freeze({
@@ -35,6 +39,7 @@ export const SCENERY = Object.freeze({
         arrive: [0, 64],
         facing: FACING.n,
         out: [-20, 75, 20, 77],
+        keep: Object.freeze({ theme: "keep", name: "the Keep of Bellhaven", squares: [-1, -142, 1, -140], arrive: [-0.5, -137.5], facing: FACING.s, door: Object.freeze({ z: -142, width: 2, height: 3.6 }) }),
     }),
 });
 
@@ -147,4 +152,56 @@ export function sceneryWays(scenery) {
     }
 
     return { arrive: squareIn(scenery, arrive), facing, out };
+}
+
+/**
+ * A scene's keep's site (SCENERY `keep`): not one the plan lays out, but the scene's site's own, a
+ * dungeon's as the plan's are ({ id: its scene's site's and `-keep`, kind, theme, at: where its
+ * scene's set in the world, seed, name, `parent`: its scene's site's id }), so whatever keeps
+ * dungeons by their sites (host.js) keeps it too. Null for a site whose scene has no keep.
+ */
+export function keepSiteOf(site) {
+    const keep = site?.scenery ? SCENERY[site.scenery]?.keep : null;
+
+    return keep ? { id: `${site.id}-keep`, kind: "dungeon", theme: keep.theme, at: site.at, seed: ((site.seed ?? 1) * 31 + 7) % 2147483647, name: keep.name, parent: site.id } : null;
+}
+
+/**
+ * A scene's keep's way in (SCENERY `keep`), on its map: its doorway's squares (those with a floor,
+ * row by row), where whoever comes back out of it stands and the way they face, its theme and
+ * name, and its doors' face in the map's own metres ({ x, z, width, height, floor }: the floor's
+ * height before them), facing the court; or null for a scene with no keep.
+ */
+export function sceneryKeep(scenery) {
+    const keep = SCENERY[scenery]?.keep;
+
+    if (!keep) {
+        return null;
+    }
+
+    const walk = walkOf(scenery);
+    const [x0, z0, x1, z1] = keep.squares;
+    const [ax, ay] = squareIn(scenery, [x0, z0]);
+    const [bx, by] = squareIn(scenery, [x1, z1]);
+    const squares = [];
+
+    for (let y = ay; y < by; y++) {
+        for (let x = ax; x < bx; x++) {
+            if (floorAt(walk, 0, x, y) !== null) {
+                squares.push([x, y]);
+            }
+        }
+    }
+
+    const [, fz] = squareIn(scenery, [0, keep.door.z]);
+    const middle = (ax + bx) / 2;
+
+    return {
+        theme: keep.theme,
+        name: keep.name,
+        squares,
+        arrive: squareIn(scenery, keep.arrive),
+        facing: keep.facing,
+        door: { x: middle, z: fz, width: keep.door.width, height: keep.door.height, floor: heightOn(walk, middle, fz + 0.5) },
+    };
 }

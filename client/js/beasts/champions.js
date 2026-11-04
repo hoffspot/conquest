@@ -96,6 +96,23 @@ export const REGALIA = Object.freeze({
     pitPriest: { wear: ["darkHood"], tint: 0xa05050 },
     doomedKnight: { tint: 0x907070 },
     herald: { glow: 1.4 },
+    // Bellhaven's keep's: the Order's dead, pale as its stone, its masters' eyes burning brightest
+    // (the Castellan, the Grey Abbess, the Hollow Abbot), the cult's in their black hoods, the
+    // Stone Sentinel greyer and bigger than the golems of the wild
+    fallenKnight: { tint: 0xcfc8b8 },
+    guardCaptain: { tint: 0xd8d0be },
+    castellan: { tint: 0xc8c0b0, glow: 1.4 },
+    greySister: { tint: 0xc8ccd4, glow: 1.2 },
+    madBrother: { wear: ["darkHood"] },
+    abbess: { tint: 0xbcc0c8, scale: 1.12, glow: 1.5 },
+    librarian: { glow: 1.3 },
+    scrollKeeper: { wear: ["darkHood"] },
+    sentinel: { tint: 0xd0ccc4, scale: 1.1, glow: 1.2 },
+    bellRinger: { tint: 0xc8c0b0, glow: 1.2 },
+    towerWraith: { scale: 1.08, glow: 1.3 },
+    hollowAbbot: { tint: 0xd8d0c0, glow: 1.6 },
+    bellwarden: { tint: 0xd0c8b8, scale: 1.15, glow: 1.5 },
+    greyLord: { scale: 1.15, glow: 1.6 },
 });
 
 /**

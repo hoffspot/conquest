@@ -243,6 +243,69 @@ for (const licensed of [true, false]) {
                 expect(atKeep.triangles).toBeLessThan(550000);
             }
 
+            // Into its keep (core/dungeons/themes.js keep), stepped into its doorway off the court:
+            // its creatures got ready behind the card, its first floor shown, a dungeon's, indoors,
+            // its stairs up and its doors out glowing to tap; the castle's art kept meanwhile
+            const keep = await page.evaluate(async () => {
+                const { game } = window.pellagos;
+                const { sceneryKeep } = await import("/js/core/scenery.js");
+                const player = game.battle.actor("player");
+                const site = game.world.plan.sites.find(({ scenery }) => scenery === "bellhaven");
+                const building = game.world.interiors.buildings.get(`site:${site.id}-keep`);
+                const [x, y] = sceneryKeep("bellhaven").squares.at(-1);
+
+                game.host.command("player", { type: "move", to: [x, y], run: false });
+
+                for (let k = 0; k < 400 && player.map !== building.door.ends[1].map && !game.readyingAt; k++) {
+                    game.advance(0.1, { render: k % 10 === 0 });
+                }
+
+                return { key: building.key, door: building.door.id, map: building.door.ends[1].map, made: building.made, levels: building.maps.length, card: Boolean(game.readyingAt) || player.map === building.door.ends[1].map };
+            });
+
+            expect(keep).toMatchObject({ made: true, levels: 4, card: true });
+            expect(await inside(page, keep.map)).toMatchObject({ shown: true });
+
+            const floor = await page.evaluate(([id, castle]) => {
+                const { game, session } = window.pellagos;
+                const map = game.world.maps[id];
+                const building = game.world.interiors.of(id);
+
+                game.advance(0.1);
+
+                return {
+                    indoors: Boolean(session.view.indoors),
+                    look: map.look,
+                    level: map.dungeon?.level,
+                    name: map.name,
+                    // (Its doors out, and its stair up, there to tap)
+                    doors: game.doors.targets.filter(({ map: on, link }) => on === id && link.building === building.key).map(({ link }) => (link.kind === "door" ? "doors" : "stair")).sort(),
+                    castle: game.interiors.get(castle)?.art ?? false,
+                    calls: session.view.renderer.info.render.calls,
+                };
+            }, [keep.map, tapped.map]);
+
+            expect(floor).toMatchObject({ indoors: true, look: "keep", level: 0, doors: ["doors", "stair"], castle: licensed, name: "The Keep of Bellhaven: the Great Hall" });
+            expect(floor.calls).toBeLessThan(250);
+
+            // Back out by its doors, to before them on the castle's court, its art there still
+            const out = await page.evaluate(async ([door, castle]) => {
+                const { game } = window.pellagos;
+                const player = game.battle.actor("player");
+
+                game.host.command("player", { type: "enter", link: door, run: true });
+
+                for (let k = 0; k < 1200 && player.map !== castle; k++) {
+                    game.advance(0.1, { render: false });
+                }
+
+                game.advance(0.1);
+
+                return { map: player.map, art: game.interiors.get(castle)?.art ?? false, indoors: Boolean(window.pellagos.session.view.indoors) };
+            }, [keep.door, tapped.map]);
+
+            expect(out).toEqual({ map: tapped.map, art: licensed, indoors: false });
+
             // And back out by the bridge's foot, to its way in in the world: its art let go of
             const left = await page.evaluate(async ([door, id]) => {
                 const { game } = window.pellagos;

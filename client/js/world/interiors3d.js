@@ -3753,6 +3753,9 @@ const DUNGEON_LOOKS = Object.freeze({
     "hell-bone": { rock: "stone-old", shell: "flesh", picture: "earth-nest", underfoot: "ground-dug", rubble: "rock", tint: 0x5a1e1c, ground: 0x221614, air: { background: 0x120606, fog: [9, 34], mist: [0.08, 1] }, carried: { colour: 0xdcd2c4, intensity: 2.2, distance: 8, up: 1.2 }, veins: true, wet: true, ribs: true },
     "hell-fire": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x3c3230, ground: 0x2e2422, air: { background: 0x1e0804, fog: [12, 40], mist: [0.05, 1.4] }, carried: { colour: 0xffa060, intensity: 2.6, distance: 8, up: 1.2 }, motes: "embers", lakes: true, embers: true },
     "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x2a1c26, ground: 0x161016, air: { background: 0x0a0404, fog: [7, 26], mist: [0.1, 0.9] }, wet: true, throne: "lord", statues: "dread", sigils: true },
+    // (Bellhaven's keep (core/dungeons/themes.js keep): its castle's white stone, dressed, its
+    // halls high, its floors' flags pale)
+    keep: { walls: "stone-old", tall: 6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0xd6d0c2, ground: 0xcac2b2 },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -3764,22 +3767,38 @@ const FLIGHT = Object.freeze({ steps: 6, rise: 0.32, deep: 2.6 });
 const SHORING = Object.freeze({ widest: 6, every: 4, tall: 2.5 });
 
 // A level's floor (`blocks`: dungeons3d.js's, metres), all but where a flight of stairs goes down
-// through it (`hole`: its plan's piece, or none)
-function floorAround(blocks, map, hole) {
+// through it (`holes`: its plan's pieces, none or more: a keep's top floor has two, the head of the
+// stair come up by and the stair down out)
+function floorAround(blocks, map, holes) {
     const [w, h] = [map.width + 1, map.height + 1];
 
-    if (!hole) {
+    if (!holes.length) {
         blocks.box(-1, -0.1, -1, w, 0, h);
 
         return;
     }
 
-    const [x0, z0, x1, z1] = [hole.x, hole.y, hole.x + hole.w, hole.y + hole.h];
+    // (Row by row between the holes' edges: each band of rows the floor's whole across, or broken
+    // where a hole's in it)
+    const edges = [...new Set([-1, h, ...holes.flatMap((hole) => [hole.y, hole.y + hole.h])])].sort((a, b) => a - b);
 
-    blocks.box(-1, -0.1, -1, w, 0, z0);
-    blocks.box(-1, -0.1, z1, w, 0, h);
-    blocks.box(-1, -0.1, z0, x0, 0, z1);
-    blocks.box(x1, -0.1, z0, w, 0, z1);
+    for (let k = 0; k + 1 < edges.length; k++) {
+        const [z0, z1] = [edges[k], edges[k + 1]];
+        const cuts = holes.filter((hole) => hole.y < z1 && hole.y + hole.h > z0).sort((a, b) => a.x - b.x);
+        let from = -1;
+
+        for (const hole of cuts) {
+            if (hole.x > from) {
+                blocks.box(from, -0.1, z0, hole.x, 0, z1);
+            }
+
+            from = Math.max(from, hole.x + hole.w);
+        }
+
+        if (from < w) {
+            blocks.box(from, -0.1, z0, w, 0, z1);
+        }
+    }
 }
 
 // A level's walls of dressed stone (`blocks`: dungeons3d.js's, metres; `tall` metres high): each
@@ -3817,7 +3836,10 @@ function dressedWalls(blocks, map, { tall }) {
 // goes on into at its far end (in front of the rock by `inset` metres), and going down, the stone
 // either side of it and beyond it under the floor
 function flight(solid, map, piece, stuff, { down, inset }) {
-    const landing = map.marks[down ? ">" : "<"] ?? [];
+    // (Its own landing, beside it: a level may have two flights the same way, a keep's top floor)
+    const marked = map.marks[down ? ">" : "<"] ?? [];
+    const beside = marked.filter(([x, y]) => x >= piece.x - 1 && x <= piece.x + piece.w && y >= piece.y - 1 && y <= piece.y + piece.h);
+    const landing = beside.length ? beside : marked;
     const mean = (k) => landing.reduce((sum, square) => sum + square[k] + 0.5, 0) / Math.max(1, landing.length);
     const [lx, ly] = landing.length ? [mean(0), mean(1)] : [map.width / 2, map.height / 2];
     const [px, py] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
@@ -4630,7 +4652,7 @@ function dungeon(map) {
     const portals = Boolean(map.dungeon?.portals);
 
     if (!shell) {
-        floorAround(floor, map, portals ? null : at("stairs-down")[0]);
+        floorAround(floor, map, portals ? [] : at("stairs-down"));
     }
 
     if (look.walls) {

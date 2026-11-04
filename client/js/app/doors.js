@@ -81,6 +81,16 @@ function shapeOf(world, link, end) {
         };
     }
 
+    if (link.kind === "door" && map.walk && end.door) {
+        // A scene's keep's doors (core/scenery.js sceneryKeep: Bellhaven's, off its court), their
+        // face where its doorway ends, facing the court, standing on its floor there
+        const { x, z, width, height, floor } = end.door;
+        const [x0, x1, face] = [x - width / 2, x + width / 2, z + 0.12];
+        const corners = [[x0, floor, face], [x1, floor, face], [x1, floor + height, face], [x0, floor + height, face]];
+
+        return { box: [x0 - 0.1, floor - 0.1, face - 0.6, x1 + 0.1, floor + height + 0.1, face + 0.6], loop: corners, normal: [0, 0, 1], floor };
+    }
+
     if (link.kind === "door" && map.walk) {
         // A fixed scene's way back out (core/scenery.js: the foot of the slope up to Bellhaven's
         // bridge): its squares' southern edge, standing on its floor there, facing back in

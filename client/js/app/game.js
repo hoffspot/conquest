@@ -161,6 +161,7 @@ import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { linkAt as interiorLinkAt } from "../core/interiors.js";
+import { THEMES } from "../core/dungeons/themes.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
@@ -6627,7 +6628,10 @@ export class Game {
             this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "Its master is"} slain, and the hoard it kept lies unlocked.${hell ? " The way out beyond it opens." : ""}`, 4);
             this.sound?.play("wake");
         } else if (change === "floor") {
-            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "This level's master is"} slain, and the portal down is open.`, 4);
+            // (A keep's floor's warden: its stair up, core/dungeons/themes.js `rises`)
+            const way = THEMES[building?.theme]?.rises ? "stair up" : "portal down";
+
+            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "This level's master is"} slain, and the ${way} is open.`, 4);
             this.sound?.play("wake");
         } else if (change === "cleared") {
             this.hud.message(`${called} is cleared. Something new will stir in it once everyone's left.`, 4);
@@ -13470,11 +13474,14 @@ export class Game {
             }
         }
 
+        // (A scene's keep gone into, core/insides.js: its scene's art kept for coming back out)
+        const into = this.world.interiors?.of(mapId) ?? null;
+
         for (const [id, each] of this.interiors) {
             each.object.visible = id === mapId;
 
             // (A fixed scene left: its art let go of, a castle's worth of memory)
-            if (id !== mapId) {
+            if (id !== mapId && !(into?.scene && this.world.interiors.of(id)?.key === into.scene)) {
                 each.leave?.();
             }
         }
@@ -17830,7 +17837,9 @@ export class Game {
     // longer hurried). Returns whether it's waiting.
     #readyAtDoor(door, run) {
         const player = this.battle.actor(this.me);
-        const building = player?.map === "town" ? this.world.interiors?.buildings.get(door.link.building) : null;
+        // (Going in from outside it: from the world, or from a scene's map into its keep, core/insides.js)
+        const linked = this.world.interiors?.buildings.get(door.link.building) ?? null;
+        const building = player && linked && door.link.ends?.[0]?.map === player.map ? linked : null;
         const kinds = modelsInside(building).filter((kind) => !modelOf(kind));
         // (A fixed scene's art, a castle's worth: got ready before it's gone into, as its creatures
         // are, and with them)
@@ -17889,11 +17898,14 @@ export class Game {
     // scenes.js): gone in as if its door had been tapped, behind its readying card (#order). Once
     // for each time they step onto it, not while they're already making for a way in.
     #stepIn(mine) {
-        const found = mine && !mine.dead && mine.map === "town" ? interiorLinkAt(this.battle.links, "town", [Math.floor(mine.x), Math.floor(mine.y)]) : null;
-        const scene = found && this.world.interiors?.buildings.get(found.link.building)?.kind === "scenery" ? found.link : null;
+        // (Onto a scene's way in from the world, or on its map into its keep's doorway: core/insides.js)
+        const map = mine && !mine.dead ? mine.map : null;
+        const found = map === "town" || this.world.maps[map]?.walk ? interiorLinkAt(this.battle.links, map, [Math.floor(mine.x), Math.floor(mine.y)]) : null;
+        const building = found ? this.world.interiors?.buildings.get(found.link.building) : null;
+        const scene = building && (map === "town" ? building.kind === "scenery" : Boolean(building.scene) && found.link.ends[0].map === map) ? found.link : null;
 
         if (scene && this.steppedIn !== scene.id && mine.order?.type !== "enter" && this.readyingAt === null) {
-            const door = this.doors.targets.find((each) => each.map === "town" && each.link.id === scene.id);
+            const door = this.doors.targets.find((each) => each.map === map && each.link.id === scene.id);
 
             if (door) {
                 this.#order({ door }, { clientX: 0, clientY: 0, run: false, time: performance.now(), from: "step" });

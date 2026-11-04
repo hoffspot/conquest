@@ -29,7 +29,7 @@ import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
 import { TALK_CALLINGS } from "./rare.js";
 import { createRandom } from "./random.js";
-import { SCENERY, sceneryMap, sceneryWays } from "./scenery.js";
+import { keepSiteOf, SCENERY, sceneryKeep, sceneryMap, sceneryWays } from "./scenery.js";
 import { ENTERED, GROUND, PLOT, SHOP_LANDMARKS } from "./setpieces/pieces.js";
 import { onWalk } from "./setpieces/town.js";
 import { cos, hypot, sin } from "./exact.js";
@@ -1291,6 +1291,12 @@ export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, 
  */
 export const HELL_ORIGINS = Object.freeze({ x: 26000, step: 120, across: 10, row: 600 });
 
+/**
+ * Where a scene's keep's levels are drawn (core/scenery.js SCENERY `keep`: Bellhaven's, its theme
+ * never a wild dungeon's), beyond the hells', its floors `step` apart: one a world.
+ */
+export const KEEP_ORIGINS = Object.freeze({ x: 30000, step: 120, across: 1, row: 600 });
+
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
     tavern: { first: "taproom", rooms: tavernRooms, folk: (building, [taproom, upstairs]) => tavernFolkOf(building, taproom, upstairs) },
@@ -1618,7 +1624,62 @@ export class Interiors {
         this.world.links.push(building.door);
         this.version++;
 
+        if (entrance.inside === "scenery" && SCENERY[entrance.scenery].keep) {
+            this.#addKeep(building, site);
+        }
+
         return building;
+    }
+
+    // A scene's keep (core/scenery.js SCENERY `keep`: Bellhaven's), a dungeon of its own, its
+    // floors made the first time they're wanted, as a dungeon's: gone into by its doors off the
+    // scene's court, on the scene's map, whoever comes back out of it standing before them; kept by
+    // the key `site:${its site's id}` (scenery.js keepSiteOf: the scene's site's, and `-keep`)
+    #addKeep(scene, site) {
+        const keep = sceneryKeep(scene.scenery);
+        const own = keepSiteOf(site);
+        const key = `site:${own.id}`;
+        const generation = this.generations.get(key) ?? 0;
+        const inside = dungeonLevel(key, generation, 0);
+        const building = {
+            key,
+            kind: "dungeon",
+            name: capital(keep.name),
+            piece: { id: own.id, name: "dungeon" },
+            tavern: null,
+            patron: null,
+            place: "site",
+            site: own.id,
+            siteKind: "dungeon",
+            people: "human",
+            seed: own.seed,
+            at: scene.at,
+            // (Its way in from the world is the scene's: where anyone in it is, out there, host.js
+            // #whereIs)
+            entrance: scene.entrance,
+            scene: scene.key,
+            made: false,
+            maps: [],
+            folk: [],
+            theme: own.theme,
+            tier: this.tiers.get(key) ?? (this.world.plan ? dungeonTier(this.world.plan, own) : 1),
+            generation,
+            flights: [],
+            dungeon: null,
+        };
+        building.door = {
+            id: `${key}/door`,
+            kind: "door",
+            building: key,
+            ends: [
+                { map: `${scene.key}/${KINDS.scenery.first}`, squares: keep.squares, arrive: keep.arrive, facing: keep.facing, door: keep.door },
+                { map: inside, squares: [], arrive: null, facing: FACING.n, pending: true },
+            ],
+        };
+        this.buildings.set(key, building);
+        this.byMap.set(inside, building);
+        this.world.links.push(building.door);
+        this.version++;
     }
 
     /** The building a map's in (or null for the world outside). */
@@ -1764,8 +1825,9 @@ export class Interiors {
         const { key } = building;
         const floors = dungeonRooms(building);
         const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
-        const column = Math.max(0, number - 1);
-        const block = THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
+        const keep = Boolean(building.scene);
+        const column = keep ? 0 : Math.max(0, number - 1);
+        const block = keep ? KEEP_ORIGINS : THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
         const origin = [block.x + (column % block.across) * block.step, Math.floor(column / block.across) * block.row];
         const maps = floors.map((floor, k) => {
             const map = readPlan(dungeonLevel(key, building.generation, k), floor.name, floor.rows, { ground: floor.ground });
@@ -1816,7 +1878,7 @@ export class Interiors {
                     { map: maps[k + 1].id, squares: below.entry.squares.map((square) => [...square]), arrive: [...below.entry.arrive], facing: below.entry.facing },
                     { map: maps[k].id, squares: above.down.squares.map((square) => [...square]), arrive: [...above.down.arrive], facing: above.down.facing },
                 ],
-                ...sealOf(k, "warden", "sealed"),
+                ...sealOf(k, "warden", THEMES[building.theme]?.portals ? "sealed" : "barred"),
             };
         });
 

@@ -486,6 +486,51 @@ heard in any of them: another world's.
   too, a violet circle with a crescent moon round about the camp, till the camp's found
   (docs/GAME.md *Rumours of places*). Far off, it's only hearsay, and isn't written.
 
+## Bellhaven's keep
+
+The keep of Bellhaven, the White Castle (docs/WORLD.md, *Bellhaven*): the Order of the Bell's
+mother house, a dungeon of its own behind the keep's doors off the castle's court
+(`core/scenery.js` `SCENERY.bellhaven.keep`). Its theme, `keep`, is never dealt to a wild
+dungeon's way in (`wild: false`), and there's one a world.
+
+- **Four floors, going up** (`levels: 4`, `rises: true`): each level's way on is a stair up (`^`,
+  its landing `<`), dug into the wall of its room furthest in, and the next floor's come into at
+  the head of a stair down (`V`, its landing `>`) at the middle of its south edge (`place.js`).
+  The first floor's come into by the keep's doors. The builder doesn't otherwise care which way
+  its levels go.
+- **Each floor its own** (`realms`, as a hell's are; its look, `keep`, the same on all four):
+  1. **The Great Hall** (`axial`): its garrison fallen at their posts and risen (skeletons, draugr
+     and skeletons, looters of the cult, rats, bats, wraiths); its pillared hall, armoury, guard
+     hall, chapel, undercroft and guardrooms. Its warden, **the Castellan of Bellhaven** (a
+     draugr, skeletons about him).
+  2. **The Cloister** (`accretion`): the brothers' cells, refectory, stores and kitchens, haunted
+     by those who kept them (ghosts, skeletons, wisps, rats, cultists, wraiths). Its warden, **the
+     Grey Abbess** (a wraith, ghosts about her).
+  3. **The Library** (`axial`): its scriptorium, stacks, chapter house, reliquary and studies,
+     where the cult that came after the Order searches its shelves (cultists, ghosts, wisps,
+     skeletons, rats, wraiths). Its warden, **the Stone Sentinel** (a stone golem, cultists about
+     it).
+  4. **The Belfry** (`axial`): the bell-ringers' hall, the knights' hall, the tower, bats under
+     the bell (bats, draugr and skeletons, ghosts, wraiths, rats, wisps). Its master in the bell
+     chamber, before his hoard at its head: **the Hollow Abbot** (a wight lord), **the Bellwarden**
+     (a draugr) or **the Grey Lord of Bellhaven** (a wraith).
+- **Each warden bars its floor's stair up** till it falls (its flight's `seal`, refused as
+  `barred`: "The stair up is barred, and its warden still stands somewhere on this floor."), as a
+  hell's level's master seals its portal down. "The stair up is open" once it's slain.
+- **Out from the top**: beyond its master, a stair down out of the keep (`exit`), sealed till he
+  falls, back to before its doors on the castle's court.
+- **Its tier** is its land's, or its finders' (in it, or by its doors), as any dungeon's.
+- **Drawn** (`world/interiors3d.js` `DUNGEON_LOOKS.keep`) in dressed stone as the ancient temple
+  is, pale as its castle's: halls 6 m high, the camera's 30° pose under the vault all through.
+  Every flight of stairs down on a floor goes down through the floor (`floorAround`: the head of
+  the stair come up by, and on the top floor the stair down out too), each drawn from its own
+  landing (`flight`).
+- **Its things** (`world/dungeondressing.js` `CLUTTER.keep`): shields and stools in its halls,
+  barrels and crates in its stores, lanterns and candles in its library, bones and coffins in its
+  undercroft and tombs.
+- **Its champions' looks** (`beasts/champions.js`): the Order's dead pale as its stone, its masters'
+  eyes burning brightest, the cult's hooded.
+
 ## How a level's made
 
 ```
@@ -645,7 +690,9 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   made again), read from its plan rows as any building's floor is. The levels sit well away from
   every other inside (`DUNGEON_ORIGINS`: a column of them for each dungeon, from x 20000; a hell's
   in a block of their own, `HELL_ORIGINS`, from x 26000, its rows 600 m apart for its four
-  levels). A hell's level is named for its realm: "The Burning Pit: the Halls of Bone".
+  levels; Bellhaven's keep's, `KEEP_ORIGINS`, from x 30000). A hell's level is named for its
+  realm: "The Burning Pit: the Halls of Bone"; the keep's too: "The Keep of Bellhaven: the
+  Cloister".
 - **Joined by stairs**: a flight for each level but the bottom (`building.flights`), from the
   stairs down on one level to the stairs up on the next, each end where one comes off it, facing
   into the level.
