@@ -65,6 +65,7 @@ import { PALISADE } from "../core/war/armies.js";
 import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
+import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
@@ -364,6 +365,18 @@ const DRAG_TILT = 60;
 // Q and E turn the camera round the player, as a drag does, this fast (radians a second, times
 // how far a drag turns it: Game options); R swings it round behind them (recentre)
 const KEY_TURN = 2;
+
+// A game controller's right stick turns the camera round the player this fast, pushed all the
+// way over (radians a second), and tilts it this fast (degrees a second), times its speed (Game
+// options, Controller); what's in front of the player to act on (padFront) is looked for again
+// this often (ms), within this far of them (metres: someone to talk to, a foe, anything else)
+const PAD_TURN = 2.6;
+const PAD_TILT = 70;
+const PAD_PICK_MS = 120;
+const PAD_REACH = Object.freeze({ talk: 5, foe: 10, thing: 5, portal: 8 });
+
+// What Cross does to each kind of thing in front of the player, said beside it
+const PAD_WORDS = Object.freeze({ talk: "Talk", trade: "Trade", attack: "Fight", drop: "Pick up", door: "Go through", portal: "The portal", table: "The war table", lectern: "Read", sign: "Read", shrine: "Pray" });
 
 // A dungeon's level's camera, its tilt and distance the space's (world/view.js DUNGEON_VIEW):
 // the player's own tilt or zoom kept on them as a nudge while it's as open or as tight as where
@@ -2222,7 +2235,11 @@ export class Game {
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
         this.spellFx = new SpellFx(this.effects, view.scene, { lights: [] });
         this.spellFx.camera = view.camera;
-        this.spellFx.onShake = (amount) => (this.shaking = this.cameraSettings.shake ? Math.max(this.shaking, amount) : 0);
+        this.spellFx.onShake = (amount) => {
+            // (A game controller rumbles with it, Camera shake on or off: app/padplay.js)
+            this.onShake?.(amount);
+            this.shaking = this.cameraSettings.shake ? Math.max(this.shaking, amount) : 0;
+        };
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
         this.spellFx.warm();
         // (A legendary weapon in hand: its effect's look about it, world/legendaries.js)
@@ -2989,13 +3006,18 @@ export class Game {
         this.listeners = [];
         this.#unaim();
 
-        // (Q or E held: let go of, as its key's let go of unheard)
+        // (Q or E held: let go of, as its key's let go of unheard; and a controller's stick, or a
+        // wheel opened from it)
         this.turnKeys.clear();
 
-        if (this.keyTurning) {
+        if (this.keyTurning || this.padTurning) {
             this.keyTurning = false;
+            this.padTurning = false;
             this.cameraFollow?.release();
         }
+
+        this.padPointer = null;
+        this.padBar(0);
 
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
@@ -7688,7 +7710,7 @@ export class Game {
         } else if (!way && this.keyTurning) {
             this.keyTurning = false;
 
-            if (![...this.pointers.values()].some((pointer) => pointer.drag)) {
+            if (!this.padTurning && ![...this.pointers.values()].some((pointer) => pointer.drag)) {
                 this.cameraFollow.release();
             }
         }
@@ -7720,7 +7742,7 @@ export class Game {
         camera.distance += (pose.distance - camera.distance) * at;
 
         // (Tilted by hand, or zoomed: the nudge, where they are)
-        if (follow.held || this.keyTurning) {
+        if (follow.held || this.keyTurning || this.padTurning) {
             camera.nudge = follow.pitch - camera.pitch;
             camera.share = space.share;
         }
@@ -15682,6 +15704,409 @@ export class Game {
         }
     }
 
+    // --- A game controller (app/padplay.js reads it each frame, and asks the game through these) ---
+
+    /**
+     * The panel open over the world (talk, the Pack, the Journal, the Spellbook, the Party panel,
+     * a fate's card or a book), whose buttons a controller works, not the world: a book or a
+     * fate's card over all, then the Pack (shopping, over the talk), then the rest. Null if none is.
+     */
+    get padPanel() {
+        return [this.reader, this.fate, this.pack, this.talk, this.journal, this.spellbook, this.partyPanel].find((panel) => panel?.open)?.panel ?? null;
+    }
+
+    /**
+     * The left stick, read each frame: how far it's pushed forward and to the right (each -1 to 1,
+     * its dead zone already off), and whether to walk rather than run (app/steering.js `pad`).
+     */
+    padMove(forward, right, walk = false) {
+        if (forward || right) {
+            this.#wake();
+        }
+
+        this.steering?.pad(forward, right, { walk });
+    }
+
+    /**
+     * The right stick, read each frame: the camera turned round the player (`x`: pushed right, it
+     * looks further right) and tilted (`y`: pushed down, it looks further down), as a drag does,
+     * by `speed` (Game options, Controller) over `dt` seconds, either way turned round if asked;
+     * let go, it swings back round behind them as they walk, as after a drag.
+     */
+    padLook(x, y, dt, { speed = 1, invertX = false, invertY = false } = {}) {
+        const follow = this.cameraFollow;
+
+        if (!follow) {
+            return;
+        }
+
+        const turning = Boolean(x || y);
+
+        if (turning && !this.padTurning) {
+            this.padTurning = true;
+            this.#wake();
+            follow.grab();
+        } else if (!turning && this.padTurning) {
+            this.padTurning = false;
+
+            if (!this.keyTurning && ![...this.pointers.values()].some((pointer) => pointer.drag)) {
+                follow.release();
+            }
+        }
+
+        if (turning && dt) {
+            follow.turn(-x * (invertX ? -1 : 1) * PAD_TURN * speed * dt, y * (invertY ? -1 : 1) * PAD_TILT * speed * dt, this.view.lowestPitch());
+        }
+    }
+
+    /** Zoomed in or out from a controller (`factor`: under 1, in), as the zoom buttons do. */
+    padZoom(factor) {
+        this.#wake();
+        this.view.zoomSmoothly(factor);
+    }
+
+    /** Stop (Circle): going somewhere, or after someone, the player stops where they are (#halt). */
+    padStop() {
+        this.#wake();
+
+        return this.#halt();
+    }
+
+    /**
+     * Let go of the foe locked on (Circle held), as a tap on its icon in the enemies list does;
+     * with none locked, the player just stops going after them.
+     */
+    padUnlock() {
+        const player = this.battle.actor(this.me);
+
+        this.#wake();
+
+        if (!player || player.dead) {
+            return;
+        }
+
+        if (player.lock) {
+            this.#command({ type: "unlock" });
+            this.hud.message("Let go of the foe", 1.2);
+        } else {
+            this.#halt();
+        }
+    }
+
+    /** How much of their health the player has (0 to 1; 0 dead or not there). */
+    padHealth() {
+        const player = this.battle.actor(this.me);
+
+        return player && !player.dead && player.maxHp ? player.hp / player.maxHp : 0;
+    }
+
+    /**
+     * What's in front of the player to act on, for a controller's Cross (app/gamepad.js
+     * pickInFront): someone to talk to or trade with, or a foe to fight; something dropped to pick
+     * up, or a chest; a door or stairs facing them; the guild's portal, the war table, a lectern,
+     * a sign on a trail or a shrine. Looked for again every PAD_PICK_MS, the one picked kept while
+     * it's nearly as good as any, so the pick doesn't flicker. { kind, words, x, y, z (where it is
+     * in the world, its top), and what it is } or null. In front means the way the camera looks
+     * over the ground, as the left stick's forward is.
+     */
+    padFront(now = performance.now()) {
+        if (this.padPicked && now - this.padPicked.at < PAD_PICK_MS) {
+            return this.padPicked.pick;
+        }
+
+        const pick = this.#padPick(this.padPicked?.pick?.key ?? null);
+
+        this.padPicked = { at: now, pick };
+
+        return pick;
+    }
+
+    #padPick(kept) {
+        const player = this.battle.actor(this.me);
+        const look = this.#steerable();
+
+        if (!player || player.dead || look === null) {
+            return null;
+        }
+
+        const map = this.world.maps?.[player.map];
+        const [ox, oz] = this.originOf(player.map);
+        const things = [];
+
+        // (People: whoever a tap would talk to, trade with or fight, as #whoIsAt finds them, a
+        // body of their own or one of a crowd's figures)
+        for (const actor of this.battle.actors) {
+            if (actor === player || actor.dead || actor.map !== player.map) {
+                continue;
+            }
+
+            const enemy = this.battle.hostile(actor, player);
+            const talks = actor.neutral || actor.kind === "soldier" || actor.kind === "player" || (actor.kind === "follower" && this.host.followers.get(actor.id)?.leader === this.me);
+
+            if (!enemy && !talks) {
+                continue;
+            }
+
+            const fights = enemy || this.host.invader(actor.id);
+
+            things.push({ key: `actor:${actor.id}`, x: actor.x, z: actor.y, reach: fights ? PAD_REACH.foe : PAD_REACH.talk, kind: fights ? "attack" : actor.kind === "player" ? "trade" : "talk", actor });
+        }
+
+        // (Things dropped, chests among them, where they're drawn)
+        for (const [id, { object, chest }] of this.drops?.drawn ?? []) {
+            things.push({ key: `drop:${id}`, x: object.position.x - ox, z: object.position.z - oz, reach: PAD_REACH.thing, kind: "drop", drop: id, chest: Boolean(chest), top: object.position.y + 1 });
+        }
+
+        // (Doors and stairs, only those the player stands before, not behind)
+        const at = new THREE.Vector3();
+
+        for (const door of this.doors?.targets ?? []) {
+            if (door.map !== player.map) {
+                continue;
+            }
+
+            door.box.getCenter(at);
+
+            if (door.face.distanceToPoint(new THREE.Vector3(ox + player.x, at.y, oz + player.y)) <= 0) {
+                continue;
+            }
+
+            things.push({ key: `door:${door.link.id}:${door.end ?? ""}`, x: at.x - ox, z: at.z - oz, reach: PAD_REACH.thing, kind: "door", door, top: door.box.max.y });
+        }
+
+        const portal = portalOn(map);
+        const table = warTableOn(map);
+        const writing = writingOn(map);
+
+        if (portal) {
+            things.push({ key: "portal", x: portal.x + portal.w / 2 - 0.5, z: portal.y + portal.h / 2, reach: PAD_REACH.portal, kind: "portal", portal, height: 2.9 });
+        }
+
+        if (table) {
+            things.push({ key: "table", x: table.x + table.w / 2, z: table.y + table.h / 2, reach: PAD_REACH.thing, kind: "table", table, height: 1.1 });
+        }
+
+        if (writing) {
+            const { x, y, w, h } = writing.piece;
+
+            things.push({ key: "lectern", x: x + w / 2, z: y + h / 2, reach: PAD_REACH.thing, kind: "lectern", lectern: writing, height: 1.3 });
+        }
+
+        // (In town: the signs on its trails that are up, and its shrines)
+        if (player.map === "town" && this.world.plan) {
+            for (const id of this.trailSigns?.shown?.keys() ?? []) {
+                const found = signOf(this.world.plan, id);
+
+                if (found) {
+                    things.push({ key: `sign:${id}`, x: found.sign.at[0], z: found.sign.at[1], reach: PAD_REACH.thing, kind: "sign", sign: id, height: 1.6 });
+                }
+            }
+
+            for (const { site, at: [x, z] } of shrinesOf(this.world.plan)) {
+                things.push({ key: `shrine:${site.id}`, x, z, reach: PAD_REACH.thing, kind: "shrine", shrine: site.id, height: 1.6 });
+            }
+        }
+
+        const pick = pickInFront(things, { x: player.x, z: player.y, facing: look, kept });
+
+        return pick ? { ...pick, words: pick.chest ? "Open" : (PAD_WORDS[pick.kind] ?? "") } : null;
+    }
+
+    /**
+     * Where what's in front of the player (padFront) is on the screen, to mark it there: over a
+     * person's head, or over the top of anything else (client pixels), or null off the screen.
+     */
+    padScreen(pick) {
+        if (!pick) {
+            return null;
+        }
+
+        const avatar = pick.actor ? this.avatars.get(pick.actor.id) : null;
+
+        if (avatar) {
+            return this.view.toScreen(avatar.point(1.05));
+        }
+
+        const [ox, oz] = this.originOf(this.mapId);
+        const [x, z] = [ox + pick.x, oz + pick.z];
+        const y = pick.top ?? this.#groundOn(this.mapId, x, z) + (pick.height ?? (pick.actor ? 1.9 : 1.4));
+
+        return this.view.toScreen(new THREE.Vector3(x, y + 0.3, z));
+    }
+
+    /**
+     * Cross: what's in front of the player (padFront) done, as a tap on it does (talked to, traded
+     * with, fought, picked up, gone through, used, read or prayed at, walking up to it first if
+     * it's further off); with nothing there, the foe they're set on gone after, running. Whether
+     * there was anything to do.
+     */
+    padDo() {
+        const pick = this.padFront(Infinity);
+        const target = this.#target();
+        const how = { clientX: 0, clientY: 0, run: false, time: performance.now(), from: "pad" };
+
+        this.#wake();
+
+        if (pick?.kind === "talk") {
+            this.#talkTo(pick.actor);
+        } else if (pick?.kind === "trade") {
+            this.#tradeWith(pick.actor);
+        } else if (pick?.kind === "attack") {
+            this.#order({ enemy: pick.actor }, { ...how, run: true });
+        } else if (pick?.kind === "drop") {
+            this.#pickUp(pick.drop);
+        } else if (pick) {
+            this.#order({ [pick.kind]: pick[pick.kind] }, how);
+        } else if (target) {
+            this.#order({ enemy: target }, { ...how, run: true });
+        } else {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * A wheel opened from a controller: the player's own (`whose` "own": Square held), or that of
+     * whoever they're set on, or else of whoever's in front of them ("theirs": Triangle held: a
+     * foe's, a soldier's to provoke, one of their own followers', or anyone else's to heal). It
+     * opens round them on the screen, as a finger held there opens it; its slices are picked with
+     * the right stick (padWheelAim) and it's put away as the button's let go (padWheelShut).
+     * Whether it opened.
+     */
+    padWheel(whose) {
+        const player = this.battle.actor(this.me);
+
+        if (!this.running || !player || player.dead || this.wheel?.open) {
+            return false;
+        }
+
+        let [actor, kind] = [player, "self"];
+
+        if (whose === "theirs") {
+            const front = this.padFront(Infinity)?.actor ?? null;
+
+            actor = this.#target() ?? front;
+
+            if (!actor) {
+                this.hud.message("Set on someone first, or stand before them", 1.6);
+                this.sound?.play("denied");
+
+                return false;
+            }
+
+            const enemy = this.battle.hostile(actor, player);
+            const provokes = actor.kind === "soldier" && !enemy && this.host.canFight(player, actor);
+
+            kind = enemy ? "enemy" : provokes ? "provoke" : this.#ownUnit(actor.id) ? "unit" : "ally";
+        }
+
+        const avatar = this.avatars.get(actor.id);
+        const [ox, oz] = this.originOf(actor.map);
+        const point = this.view.toScreen(avatar ? avatar.point(0.5) : new THREE.Vector3(ox + actor.x, this.#groundOn(actor.map, ox + actor.x, oz + actor.y) + 0.9, oz + actor.y));
+        const [x, y] = point ? [point.x, point.y] : [innerWidth / 2, innerHeight / 2];
+
+        this.padPointer = { x, y, baseX: x, baseY: y, latched: false, wheel: { originX: x, originY: y, target: kind === "self" ? "self" : actor.id, kind, side: 0, refused: null, done: false, mouse: false } };
+        this.#showWheel(this.padPointer.wheel, x, y);
+        this.sound?.play("wheel");
+
+        return true;
+    }
+
+    /**
+     * The right stick, while a wheel's open from a controller: pushed well over (app/gamepad.js
+     * PICKED) towards a slice, it's tried, as a finger flicked into it is; South turns the wheel
+     * over, in the same place, and the stick has to come back to the middle before it picks again.
+     * (`stick`: as app/gamepad.js stickAt gives it.)
+     */
+    padWheelAim(stick) {
+        const pointer = this.padPointer;
+        const open = pointer?.wheel;
+
+        if (!open || open.done || !this.wheel?.open) {
+            return;
+        }
+
+        if (pointer.latched) {
+            if (stick.far >= 0.3) {
+                return;
+            }
+
+            pointer.latched = false;
+        }
+
+        const side = open.side;
+
+        // (Pushed as far as PICKED, it's as far out as a flick that picks)
+        pointer.x = open.originX + (stick.x * FLICK) / PICKED;
+        pointer.y = open.originY + (stick.y * FLICK) / PICKED;
+        this.#steerWheel(pointer);
+
+        if (open.side !== side) {
+            open.originX = pointer.baseX;
+            open.originY = pointer.baseY;
+            pointer.latched = true;
+            this.#showWheel(open, open.originX, open.originY);
+        }
+
+        if (open.done) {
+            this.padPointer = null;
+        }
+    }
+
+    /** The button holding a wheel open from a controller let go: put away, if nothing was picked. */
+    padWheelShut() {
+        const pointer = this.padPointer;
+
+        this.padPointer = null;
+
+        if (pointer?.wheel && !pointer.wheel.done) {
+            this.#closeWheel();
+        }
+    }
+
+    /**
+     * An Action Bar held up from a controller (its trigger held: `bar` 1 or 2; 0, let go): shown
+     * even out of a fight, turned to that bar as the swap does, and back to the one shown before
+     * once every trigger's let go.
+     */
+    padBar(bar) {
+        const held = bar === 1 || bar === 2;
+
+        this.padBarHeld = held;
+
+        if (held && this.quickPage !== bar - 1) {
+            this.padBarFrom ??= this.quickPage;
+            this.swapQuick();
+        } else if (!held && this.padBarFrom !== null && this.padBarFrom !== undefined) {
+            if (this.quickPage !== this.padBarFrom) {
+                this.swapQuick();
+            }
+
+            this.padBarFrom = null;
+        }
+    }
+
+    /** An Action Bar slot used from a controller (its bar's trigger held, then the slot's button). */
+    padSlot(slot) {
+        this.#wake();
+
+        if (!this.quickBar?.up || slot >= this.quickShown) {
+            return false;
+        }
+
+        this.quick(slot);
+
+        return true;
+    }
+
+    /** A slot's spell turned to the next or last of its school from a controller (`way`: "up" or "down"). */
+    padFlick(slot, way) {
+        if (this.quickBar?.up && slot < this.quickShown) {
+            this.flickQuick(slot, way);
+        }
+    }
+
     /**
      * A tap or click at a point on the screen (client pixels), at `time` (ms, as performance.now()):
      * set on the enemy there (where the player stands: tapped twice in quick succession, or
@@ -16875,7 +17300,7 @@ export class Game {
             this.fightUntil = this.clock + QUICK_LINGER;
         }
 
-        this.quickBar.raise(alive && (this.quickAlways || this.clock < this.fightUntil));
+        this.quickBar.raise(alive && (this.quickAlways || this.padBarHeld || this.clock < this.fightUntil));
 
         // (A Prismatic chain's next spell rolled in, up, where it's come in place of another)
         const { keys, chain } = this.#quickKeys();

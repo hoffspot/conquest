@@ -232,6 +232,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   launches Chromium with `--host-resolver-rules` making its name resolve to nothing, so the game
   finds it unreachable at once; a test that launches its own (`test.use({ launchOptions })`, as
   `e2e/broker.spec.js` does) gives the same rule. A test that needs a world server runs its own.
+- A test can't pair a game controller: `e2e/controller.spec.js` gives the page a stand-in
+  (`standIn`: `navigator.getGamepads` replaced before the page loads, its buttons and sticks set
+  by the test). The game reads it once a frame, so a press is held till it's been read, not for a
+  set time. Do the same in a new test of the controller.
 - Time the tests by how long they took on CI, so its split stays even: once a run's done, its
   ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
   Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit

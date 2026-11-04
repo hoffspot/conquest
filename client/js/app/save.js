@@ -165,6 +165,23 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     environmentVolume: 0.4,
     musicVolume: 0.35,
     volumeScale: 2,
+    // The windows' and the HUD's text and buttons, larger for a television or a big screen across
+    // the room: "normal", "large" or "larger"
+    textSize: "normal",
+    // A game controller (app/padplay.js): whether it rumbles, and how hard (0.25 to 1); how fast
+    // its right stick turns the camera (times), and whether either way's turned round; its
+    // sticks' dead zone (a share of their reach); Cross and Circle swapped; the symbols its
+    // buttons are shown with (app/gamepad.js SYMBOL_NAMES); and the buttons set otherwise than
+    // they come (app/gamepad.js bindingsOf: { action: button })
+    padRumble: true,
+    padStrength: 1,
+    padSpeed: 1,
+    padInvertX: false,
+    padInvertY: false,
+    padDeadZone: 0.15,
+    padSwap: false,
+    padSymbols: "auto",
+    padBindings: Object.freeze({}),
 });
 
 /**
