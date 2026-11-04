@@ -508,6 +508,8 @@ export const THEMES = {
         rises: true,
         exit: true,
         hoard: "head",
+        // (High in its tower: open air round its walls, a balcony or two out into it: air.js)
+        air: { balconies: 2 },
         style: "dungeon-ancient",
         ground: GROUND.courtyard,
         sound: "keep",

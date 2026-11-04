@@ -110,6 +110,10 @@ export const PLAN_KEY = Object.freeze({
     "~": { kind: "lava", blocks: true, joins: true },
     "&": { kind: "blood", joins: true },
     "@": { kind: "heart", blocks: true, joins: true },
+    // (A dungeon's floor high in a tower, Bellhaven's keep's: the open air round its walls, seen
+    // across and never stood on, and the parapet along a balcony's edge, seen over: dungeons/air.js)
+    _: { kind: "air", blocks: true },
+    "=": { kind: "parapet", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in
