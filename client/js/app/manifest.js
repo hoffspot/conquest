@@ -358,7 +358,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/grassmap.js", 15921, "638da6f67d"],
             ["js/world/ground.js", 80411, "daa3d0d423"],
             ["js/world/interiors3d.js", 315124, "2a16ea7874"],
-            ["js/world/landmark3d.js", 14568, "72ae28cbb0"],
+            ["js/world/landmark3d.js", 14878, "5afe3b6924"],
             ["js/world/landmarkdress.js", 28488, "58c54dc693"],
             ["js/world/lava.js", 28771, "a80182570c"],
             ["js/world/layout-worker.js", 357, "90ed655817"],

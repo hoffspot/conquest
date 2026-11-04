@@ -204,7 +204,11 @@ uniform float sceneSunk;`,
             .invert();
         const heights = gltf ? heightsOf(objects[0], scene.box, terrain) : null;
         const uniforms = heights && dressUniforms(heights, sceneFromWorld);
-        const ground = gltf && terrain.size ? this.#groundOf(placed, sceneFromWorld, heights && contactFor(placed, heights)) : null;
+        const contact = heights && contactFor(placed, heights);
+        // (A ground material of its own for each copy: one material drawn in both passes, its
+        // lights and its haze changed between them, drew its terrain past the near world as a pale
+        // sheet the land and its rocks showed through)
+        const grounds = objects.map(() => (gltf && terrain.size ? this.#groundOf(placed, sceneFromWorld, contact) : null));
         // (Each of its art's materials once, darkened at its feet, not faded with the near world)
         const footedOf = new Map();
         const own = (material) => {
@@ -218,7 +222,7 @@ uniform float sceneSunk;`,
         objects.forEach((object, k) => {
             object.traverse((part) => {
                 if (part.isMesh && [part.material].flat().some((material) => terrain.has(material?.name))) {
-                    part.material = ground;
+                    part.material = grounds[k];
                     part.castShadow = false;
                     part.receiveShadow = false;
 
