@@ -79,9 +79,15 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
         }
 
         // Where someone can stand: not under anything too low, not on a ledge's edge, and
-        // stepping up no more than they can climb
+        // stepping up no more than they can climb (a scene's ledges its walk's, settings.js
+        // SCENES `ledges`: Recast's filter takes a stair that fans out sideways for one, its
+        // squares' neighbours further apart than a step between them all)
         filterLowHangingWalkableObstacles(context, s.walkableClimb, heightfield);
-        filterLedgeSpans(context, s.walkableHeight, s.walkableClimb, heightfield);
+
+        if (measures.ledges !== false) {
+            filterLedgeSpans(context, s.walkableHeight, s.walkableClimb, heightfield);
+        }
+
         filterWalkableLowHeightSpans(context, s.walkableHeight, heightfield);
 
         const compact = allocCompactHeightfield();

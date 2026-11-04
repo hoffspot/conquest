@@ -5178,7 +5178,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     // The folk: seven in the taproom, seen, without name plates; the patrons rest (raising their
     // tankards, drinking, laughing); tapping one doesn't set the player on them
-    const folk = await page.evaluate(() => {
+    const folk = await page.evaluate(async () => {
         const { game, session } = window.pellagos;
         const here = game.battle.actors.filter((actor) => actor.neutral && actor.map === "taproom");
         const acted = new Set();
@@ -5193,6 +5193,15 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
                     acted.add(name);
                 }
             }
+        }
+
+        // (Each shown once its shaders are made and its pictures sent, a few a frame, as play
+        // draws them: frames drawn till they are, the page's events let in between them, so a
+        // slow machine's shaders get made in their own time. A frame was once too few: main,
+        // after #627, a runner's motion share)
+        for (let k = 0; k < 200 && !here.every(({ id }) => game.avatars.get(id).object.visible); k++) {
+            game.advance(0.05);
+            await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
         const drinker = game.avatars.get("drinker");

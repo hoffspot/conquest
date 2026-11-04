@@ -13,15 +13,16 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { filesOf } from "../app/catalog.js";
-import { floorAt, placeOf, readWalk, squareOf, walkBetween } from "../core/walk.js";
+import { walkOf } from "../core/scenery.js";
+import { floorAt, placeOf, squareOf, walkBetween } from "../core/walk.js";
 import { loadGltf, readKtx2With } from "../world/art/engine/models.js";
 import { SKY_COLOURS } from "../world/sky.js";
 import { SUN_FROM } from "../world/sun.js";
 import { QUALITY } from "../world/view.js";
 
-// The castle: its catalog entry, its walk, and where its walk goes (the bridge's near end, the
-// keep's doors: metres, as built)
-export const CASTLE = Object.freeze({ entry: "scenery-bellhaven", file: "bellhaven.bin", walk: "models/scenery/bellhaven.walk.json", from: [0, 40], to: [-0.5, -140] });
+// The castle: its catalog entry, its scene (core/scenery.js: its walk), and where its walk goes
+// (the bridge's near end, the keep's doors: metres, as built)
+export const CASTLE = Object.freeze({ entry: "scenery-bellhaven", file: "bellhaven.bin", scenery: "bellhaven", from: [0, 40], to: [-0.5, -140] });
 
 // As the game draws out of doors (world/view.js OUTDOORS, app/camera.js PITCH, LANDSCAPE_FOV):
 // fog from 55 to 130 m, nothing drawn past 160; the sun; the camera 35 degrees down, 36 tall
@@ -121,14 +122,9 @@ const state = {
 
 // --- Reading it -----------------------------------------------------------------------------
 
+// (Its walk, as the game has it: core/scenery/bellhaven.walk.js)
 async function loadWalk() {
-    const response = await fetch(new URL(CASTLE.walk, document.baseURI));
-
-    if (!response.ok) {
-        throw new Error(`the castle's walk isn't there (${response.status})`);
-    }
-
-    return readWalk(await response.json());
+    return walkOf(CASTLE.scenery);
 }
 
 /**
@@ -152,7 +148,10 @@ function cellsOf(root) {
     return [...byCell.entries()].map(([name, levels]) => {
         const sorted = levels.sort((a, b) => a[0] - b[0]).map(([, node]) => node);
 
+        // (None drawn till it's chosen: a node's drawn as it's read, and a cell first shown at no
+        // detail, in a block drawn whole, would be left drawn at all of them)
         for (const node of sorted) {
+            node.visible = false;
             node.traverse((part) => {
                 if (part.isMesh) {
                     part.castShadow = true;

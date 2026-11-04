@@ -194,6 +194,7 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
             ? {
                   walk: {
                       file: relative(optimized.walk.file),
+                      module: relative(optimized.walk.module),
                       origin: optimized.walk.origin,
                       size: optimized.walk.size,
                       levels: optimized.walk.levels.map(({ squares, low, high, box }) => ({ squares, low, high, box })),

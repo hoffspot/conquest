@@ -29,7 +29,7 @@ import { FAR_FIELDS } from "./ground.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
-import { fadeShadowEdges, snapToTexels, stepShadows } from "./shadows.js";
+import { fadeShadowEdges, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
 import { CUTAWAY } from "./town3d.js";
@@ -574,6 +574,8 @@ export class View {
         this.sun.shadow.bias = -0.0005;
         this.sun.shadow.normalBias = 0.03;
         Object.assign(this.sun.shadow.camera, { left: -SHADOW_REACH, right: SHADOW_REACH, top: SHADOW_REACH, bottom: -SHADOW_REACH, near: 1, far: 120 });
+        // (And what casts only shadows: a fixed scene's stand-ins, scenery3d.js)
+        this.sun.shadow.camera.layers.enable(SHADOWS_ONLY);
         this.scene.add(this.sun, this.sun.target);
 
         // The lamps, out until the player goes in: { light }; and the room they're in, null out of

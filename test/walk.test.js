@@ -1,8 +1,8 @@
 // core/walk.js: a fixed scene's walk, as the model pipeline bakes it (a castle's), read back:
 // its squares' floors, where a point is, and the way between two squares.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import BELLHAVEN from "../client/js/core/scenery/bellhaven.walk.js";
 import { floorAt, NONE, placeOf, readWalk, squareOf, walkBetween } from "../client/js/core/walk.js";
 
 // A walk as the pipeline writes it: a level 6 by 4 from (-3, 10), a wall down x 2 with a gap at z
@@ -56,8 +56,8 @@ describe("a fixed scene's walk", () => {
         assert.equal(way.length, 12);
     });
 
-    it("Bellhaven's (client/models/scenery/bellhaven.walk.json): one level, its bridge's near end joined to the keep's doors, the deck at 79.2 m", () => {
-        const castle = readWalk(JSON.parse(readFileSync(new URL("../client/models/scenery/bellhaven.walk.json", import.meta.url), "utf8")));
+    it("Bellhaven's (client/js/core/scenery/bellhaven.walk.js): one level, its bridge's near end joined to the keep's doors, the deck at 79.2 m", () => {
+        const castle = readWalk(BELLHAVEN);
         const way = walkBetween(castle, 0, squareOf(castle, [0, 40]), squareOf(castle, [-0.5, -140]));
 
         assert.deepEqual(
