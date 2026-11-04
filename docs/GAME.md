@@ -5632,6 +5632,95 @@ range", "Out of range in the dark", "Something's in the way") flashes red too, n
 nothing starts cooling down. The game plays on while it's open; a second finger (a pinch) closes
 it.
 
+### A game controller (app/gamepad.js, app/padplay.js, app/padkeys.js)
+
+A PS5 controller (DualSense) paired over Bluetooth plays the whole game, as does any controller
+the browser reads with its standard layout (an Xbox controller, a Switch Pro, an 8BitDo). It
+works on an iPhone or iPad (iOS 14.5 or later) and a Mac in Safari, and in Chrome on Android,
+Windows and a Mac. The browser never says a button's pressed: the controller's read once a frame
+(`navigator.getGamepads()`) and the frames set side by side (`PadReader`: pressed, held for the
+Action Bar's 500 ms, let go, and the sticks with a round dead zone taken off, 15% as it comes).
+It's seen only once a button's pressed with the page in front, as the browser keeps it hidden till
+then. Nothing's pretended to be a key or a tap, and nothing new crosses the wire in a world with
+others: the controller gives the orders keys and touch give, through the game's own ways in
+(`Game` `padMove`, `padLook`, `padDo` and the rest).
+
+**In the world.** The left stick walks and runs (steering.js `pad`, a third source beside the keys
+and the thumb stick: past seven tenths, running, as the stick does; L3 switches to walking). The
+right stick turns and tilts the camera round the player as a drag does (2.6 radians and 70 degrees
+a second at full tilt, times the Camera speed set), letting it go to swing back behind them as
+they walk. The buttons, as they come (`ACTIONS`; each can be set otherwise):
+
+| Button | Does |
+|---|---|
+| ✕ Cross | Do what's in front: talk, trade, fight, pick up, open, go through, read, pray. With nothing there, go after the foe set on |
+| ○ Circle | Stop. Held: let go of the foe locked on |
+| □ Square | The Pack. Held: their own wheel |
+| △ Triangle | The Party panel. Held: the wheel of whoever they're set on, or else of whoever's in front |
+| R1, L1 | The next and last foe, nearest first (as Tab and Shift+Tab) |
+| D-pad ← → | The next and last in the enemies list (as X and Z) |
+| D-pad ↑ ↓ | Zoom in and out |
+| L3, R3 | Walk or run; the camera back behind them |
+| R2, L2 held | Action Bar 1 or 2 on □ △ ○ ✕ and D-pad ← →, slots 1 to 6 (`BAR_SLOTS`) |
+| Options | The menu |
+| Create | The world map. Held: the ring of panels |
+
+What's in front (`Game` `padFront`, gamepad.js `pickInFront`) is looked for every 120 ms among
+whoever a tap would talk to, trade with or fight (a body of their own or a crowd's figure), things
+dropped and chests, doors and stairs the player stands before, the guild's portal, the war table, a
+lectern, the town's trail signs and its shrines: the nearest within reach (5 metres; a foe 10, the
+portal 8) within 60 degrees either side of the way the camera looks over the ground, or within
+arm's length (1.5 metres) any way, its angle off counting as much as its distance; the one picked
+last stays picked while it's no more than a quarter further than the best, so it doesn't flicker.
+It's marked over it with the symbol of the button that does it and what it'd do ("✕ Talk"), and
+Cross does it as a tap on it would (`#order`, `#talkTo`, `#tradeWith`, `#pickUp`).
+
+A wheel held open (□ or △ held), or the ring of panels (Create held: the world map, Journal,
+Spellbook, Party chat, Party and Pack, clockwise from the top), has its slice picked by either
+stick pushed well towards it (six tenths of the way, `PICKED`): the thumb holding the button can't
+work the stick beside it, so the other one does too. A wheel's South turns it over in place, and
+the stick has to come back to the middle before it picks again. With a bar's trigger held, the bar
+comes up even out of a fight, turned to that bar as the swap does (and back as it's let go), each
+slot showing its button; a slot held, either stick flicked up or down turns its spell, as a flick
+of a finger does.
+
+**In a window** (a dialog, a panel over the world, the title or the character maker), the D-pad or
+the left stick goes from button to button by where they sit on the screen (gamepad.js
+`nearestThatWay`: the nearest that way, sideways distance counting twice), within the window in
+front alone; ✕ presses (a switch flips, a choice turns to the next, a field's typed in), ○ goes
+back as Escape does (a dialog's own `cancel` told first, so the menu goes back a page), L1 and R1
+turn its tabs (a book's pages), ← → move a slider or turn a choice, the right stick scrolls, and □
+does what a long press does (an item's wheel in the Pack). On the world map, the left stick moves
+over it and the right stick zooms it (`WorldMap` `pan`), the D-pad still going between its buttons. The button in focus is ringed in gold
+and the window's prompts stand at the foot of the screen ("✕ Choose ○ Back L1 R1 Tabs"), raised
+over the window as a popover. With **Swap ✕ and ○** on (Game options), they're the other way round
+everywhere.
+
+**Typing** (padkeys.js). A world's four-letter code is picked a letter at a time (`CodePicker`:
+↑ ↓ the letter, ← → the next); anything else is typed on the game's own keyboard (`PadKeyboard`,
+over the foot of the screen: ✕ types, □ deletes, △ a space, L1 Shift, R1 done, ○ closes, what's
+typed kept). To the party, ready lines stand over its keys (`READY_LINES`: "On my way", "Help!"
+and the rest), sent the moment one's chosen.
+
+**The page knows** (`body[data-pad="on"]`) from the controller's first press till a touch, a click
+or a key on a keyboard: only then are its rings, marks and prompts shown, and the Action Bar's
+keys its buttons. **Sound** can't start from a controller's press, as the browser doesn't take one
+as the player touching the page: it's tried anyway, and if the game's still silent the player's
+told, at most once a minute, to tap the screen once. **Rumble** (Chrome, and Safari on a Mac; not
+an iPhone or iPad), on unless turned off, at the strength set: a slow heartbeat (two beats) every
+1.1 s while the player's under a quarter of their health, and a deep thud as the camera's shaken
+by a slam or a landing near them (a boss's blow, a boulder, a Behemoth's step: `Game` `onShake`,
+Camera shake on or off). **Taken out** mid-game (a flat battery, Bluetooth lost), the game pauses
+and says so.
+
+**Game options, Controls, Controller** shows the controller seen (or how to pair one) and sets
+its rumble and strength, the camera's speed and either way turned round, the sticks' dead zone,
+✕ and ○ swapped, the symbols shown (matching the controller by its name, or PlayStation, Xbox or
+Nintendo's), and each action's button: chosen, then the button pressed (or held, to set it held),
+whatever had that button taking the action's old one (`rebind`), and **Every button as it came**.
+**Text size** (Graphics) grows the windows, the HUD's buttons and words, the keyboard and the
+prompts (CSS `zoom`: 1.15 Large, 1.35 Larger, for a TV), never the game's view.
+
 ## The screens (main.js)
 
 1. **Loading.** The loader (app/loader.js) downloads everything listed in `app/manifest.js`
