@@ -39,7 +39,8 @@ export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "r
  * blocks, squares }: place.js lavaRim), lit
  * (how its rooms are lit: by torches on their walls, one more in the way in's room and the
  * arena's; or "glow", by colonies of glowing fungus on their walls, each room's look's `glows`,
- * torches only where its look has them) }.
+ * torches only where its look has them), rises (its levels going up, not down: each level's way on
+ * a stair up, the next come into at the head of a stair down, place.js: a keep's) }.
  */
 export const THEMES = {
     caves: {
@@ -484,6 +485,165 @@ export const THEMES = {
         },
         get minis() {
             return this.realms.flatMap(({ minis, warden }) => [...minis, { ...warden, weight: 1 }]);
+        },
+        get rooms() {
+            return Object.assign({}, ...this.realms.map(({ rooms }) => rooms));
+        },
+    },
+    // (Bellhaven's keep (core/scenery.js SCENERY.bellhaven `keep`): the Order of the Bell's
+    // mother house, gone into by its keep's doors off its court, never dealt to a wild dungeon's
+    // way in. Four floors, going up (`rises`: each level's way on a stair up, the next come into
+    // at the head of a stair down), each its own (`realms`): its great hall, where its garrison
+    // fell at their posts and lie there still; its cloister, the brothers' cells, refectory and
+    // stores, haunted by those who kept them; its library and chapter house, where the cult that
+    // came after them searches its shelves; and its belfry under the bell, where the last of the
+    // Order's masters keeps the tower. A warden on each floor below the belfry bars its stair up
+    // till it falls; from beyond its last master's hall a stair down, out to the keep's doors)
+    keep: {
+        id: "keep",
+        name: "a castle keep",
+        layout: "axial",
+        wild: false,
+        levels: 4,
+        rises: true,
+        exit: true,
+        hoard: "head",
+        style: "dungeon-ancient",
+        ground: GROUND.courtyard,
+        sound: "keep",
+        names: { forms: ["the Keep of {place}"], adj: ["White"], place: ["Bellhaven"] },
+        realms: [
+            {
+                id: "hall",
+                name: "the Great Hall",
+                look: "keep",
+                layout: "axial",
+                packs: [
+                    { id: "garrison", creatures: ["skeleton"], size: [3, 5], weight: 4 },
+                    { id: "knights", creatures: ["draugr", "skeleton"], size: [2, 3], weight: 2 },
+                    { id: "looters", creatures: ["cultist"], size: [2, 3], weight: 1 },
+                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
+                    { id: "bats", creatures: ["bats"], size: [2, 3], weight: 1 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+                ],
+                minis: [
+                    { id: "fallenKnight", creature: "draugr", title: "Fallen knight of the Bell", weight: 2 },
+                    { id: "guardCaptain", creature: "skeleton", title: "Captain of the guard", weight: 1 },
+                ],
+                warden: { id: "castellan", creature: "draugr", title: "the Castellan of Bellhaven", guard: ["skeleton"] },
+                rooms: {
+                    vestibule: [{ id: "doors", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [2, 2], at: "wall", mirror: true }, { char: "m", count: [0, 1], at: "corner" }], torches: [2, 2] }],
+                    hypostyle: [{ id: "greatHall", props: [{ char: "I", count: [6, 16], at: "rows" }, { char: "Y", count: [0, 1], at: "head" }, { char: "T", count: [1, 2], at: "open", size: [2, 1] }, { char: "j", count: [0, 2], at: "open" }, { char: "i", count: [0, 2], at: "open" }], torches: [2, 4] }],
+                    gallery: [{ id: "armoury", props: [{ char: "R", count: [2, 6], at: "sides", size: [2, 1] }, { char: "n", count: [1, 2], at: "wall", mirror: true }, { char: "%", count: [0, 2], at: "corner" }, { char: "i", count: [0, 1], at: "open" }], torches: [2, 2] }],
+                    rotunda: [{ id: "guardHall", props: [{ char: "Z", count: [1, 1], at: "centre" }, { char: "I", count: [4, 6], at: "wall", mirror: true }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [0, 2], at: "wall" }], torches: [2, 4] }],
+                    chapel: [{ id: "chapel", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 2], at: "corner", mirror: true }, { char: "v", count: [1, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    shrine: [{ id: "shrine", props: [{ char: "s", count: [1, 1], at: "wall" }, { char: "k", count: [1, 2], at: "corner" }, { char: "v", count: [0, 1], at: "wall" }], torches: [1, 1] }],
+                    ossuary: [{ id: "undercroft", props: [{ char: "t", count: [1, 3], at: "wall", size: [2, 1] }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [1, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
+                    cell: [{ id: "guardroom", props: [{ char: "u", count: [1, 2], at: "wall" }, { char: "o", count: [0, 1], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }, { char: "i", count: [0, 1], at: "open" }], torches: [0, 1] }],
+                    stairhall: [{ id: "stairhall", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [0, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                },
+            },
+            {
+                id: "cloister",
+                name: "the Cloister",
+                look: "keep",
+                layout: "accretion",
+                packs: [
+                    { id: "brothers", creatures: ["ghost"], size: [2, 3], weight: 3 },
+                    { id: "fallen", creatures: ["skeleton"], size: [3, 4], weight: 2 },
+                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 2 },
+                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
+                    { id: "cult", creatures: ["cultist"], size: [2, 4], weight: 1 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+                ],
+                minis: [
+                    { id: "greySister", creature: "ghost", title: "the Grey Sister", weight: 2 },
+                    { id: "madBrother", creature: "cultist", title: "the Mad Brother", weight: 1 },
+                ],
+                warden: { id: "abbess", creature: "wraith", title: "the Grey Abbess", guard: ["ghost"] },
+                rooms: {
+                    gate: [{ id: "cloisterGate", props: [{ char: "Z", count: [1, 2], at: "wall" }, { char: "v", count: [1, 2], at: "wall" }, { char: "d", count: [0, 2], at: "wall" }], torches: [1, 2] }],
+                    hall: [
+                        { id: "refectory", weight: 2, props: [{ char: "T", count: [2, 4], at: "open", size: [2, 1] }, { char: "o", count: [0, 2], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [2, 3] },
+                        { id: "walk", weight: 1, props: [{ char: "I", count: [4, 8], at: "open" }, { char: "v", count: [0, 2], at: "wall" }, { char: "m", count: [0, 1], at: "corner" }], torches: [1, 2] },
+                    ],
+                    quarters: [{ id: "cells", props: [{ char: "u", count: [2, 4], at: "wall" }, { char: "o", count: [0, 2], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }, { char: "i", count: [0, 1], at: "open" }], torches: [0, 1] }],
+                    store: [{ id: "stores", props: [{ char: "K", count: [2, 4], at: "wall" }, { char: "%", count: [1, 3], at: "corner" }, { char: "e", count: [0, 2], at: "wall" }, { char: "d", count: [0, 2], at: "wall" }], torches: [0, 1] }],
+                    den: [{ id: "kitchen", props: [{ char: "X", count: [1, 2], at: "wall" }, { char: "K", count: [1, 2], at: "corner" }, { char: "d", count: [1, 2], at: "wall" }, { char: "m", count: [0, 1], at: "open" }], torches: [1, 1] }],
+                    any: [{ id: "cloisterRoom", props: [{ char: "d", count: [1, 2], at: "wall" }, { char: "m", count: [0, 1], at: "corner" }], torches: [1, 1] }],
+                },
+            },
+            {
+                id: "library",
+                name: "the Library",
+                look: "keep",
+                layout: "axial",
+                packs: [
+                    { id: "seekers", creatures: ["cultist"], size: [2, 4], weight: 3 },
+                    { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 2 },
+                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 1 },
+                    { id: "dead", creatures: ["skeleton"], size: [3, 4], weight: 1 },
+                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
+                ],
+                minis: [
+                    { id: "librarian", creature: "wraith", title: "the Librarian", weight: 1 },
+                    { id: "scrollKeeper", creature: "cultist", title: "Keeper of the scrolls", weight: 2 },
+                ],
+                warden: { id: "sentinel", creature: "stoneGolem", title: "the Stone Sentinel", guard: ["cultist"] },
+                rooms: {
+                    vestibule: [{ id: "landing", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "v", count: [0, 2], at: "wall" }], torches: [2, 2] }],
+                    hypostyle: [{ id: "scriptorium", props: [{ char: "I", count: [6, 12], at: "rows" }, { char: "T", count: [2, 4], at: "open", size: [2, 1] }, { char: "e", count: [2, 4], at: "wall" }, { char: "k", count: [0, 2], at: "open" }], torches: [2, 4] }],
+                    gallery: [{ id: "stacks", props: [{ char: "e", count: [4, 8], at: "sides", size: [2, 1] }, { char: "T", count: [0, 1], at: "open", size: [2, 1] }, { char: "k", count: [1, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    rotunda: [{ id: "chapterHouse", props: [{ char: "Z", count: [1, 1], at: "centre" }, { char: "I", count: [4, 6], at: "wall", mirror: true }, { char: "o", count: [0, 2], at: "wall" }], torches: [2, 4] }],
+                    chapel: [{ id: "reliquary", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 2], at: "corner", mirror: true }, { char: "v", count: [1, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    shrine: [{ id: "shrine", props: [{ char: "s", count: [1, 1], at: "wall" }, { char: "k", count: [1, 2], at: "corner" }, { char: "e", count: [0, 1], at: "wall" }], torches: [1, 1] }],
+                    ossuary: [{ id: "tombs", props: [{ char: "t", count: [2, 4], at: "wall", size: [2, 1] }, { char: "k", count: [1, 2], at: "corner" }, { char: "j", count: [0, 2], at: "open" }], torches: [0, 1] }],
+                    cell: [{ id: "study", props: [{ char: "T", count: [1, 1], at: "open", size: [2, 1] }, { char: "e", count: [1, 2], at: "wall" }, { char: "k", count: [0, 1], at: "corner" }, { char: "d", count: [0, 1], at: "wall" }], torches: [0, 1] }],
+                    stairhall: [{ id: "stairhall", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "e", count: [0, 2], at: "wall" }], torches: [2, 2] }],
+                },
+            },
+            {
+                id: "belfry",
+                name: "the Belfry",
+                look: "keep",
+                layout: "axial",
+                packs: [
+                    { id: "bats", creatures: ["bats"], size: [2, 4], weight: 2 },
+                    { id: "knights", creatures: ["draugr", "skeleton"], size: [2, 3], weight: 3 },
+                    { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 1 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
+                    { id: "rats", creatures: ["rat"], size: [3, 4], weight: 1 },
+                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 1 },
+                ],
+                minis: [
+                    { id: "bellRinger", creature: "draugr", title: "the Bell-ringer", weight: 2 },
+                    { id: "towerWraith", creature: "wraith", title: "the Wraith of the Tower", weight: 1 },
+                ],
+                rooms: {
+                    vestibule: [{ id: "landing", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [0, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    hypostyle: [{ id: "ringersHall", props: [{ char: "I", count: [6, 14], at: "rows" }, { char: "m", count: [0, 2], at: "open" }, { char: "j", count: [0, 2], at: "open" }], torches: [2, 4] }],
+                    gallery: [{ id: "knightsHall", props: [{ char: "Z", count: [4, 6], at: "sides" }, { char: "v", count: [1, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    rotunda: [{ id: "tower", props: [{ char: "Z", count: [1, 1], at: "centre" }, { char: "I", count: [4, 6], at: "wall", mirror: true }, { char: "m", count: [0, 2], at: "open" }], torches: [2, 4] }],
+                    chapel: [{ id: "chapel", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 2], at: "corner", mirror: true }, { char: "v", count: [1, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    shrine: [{ id: "shrine", props: [{ char: "s", count: [1, 1], at: "wall" }, { char: "k", count: [1, 2], at: "corner" }], torches: [1, 1] }],
+                    ossuary: [{ id: "tombs", props: [{ char: "t", count: [1, 3], at: "wall", size: [2, 1] }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [1, 2], at: "open" }], torches: [0, 1] }],
+                    cell: [{ id: "cell", props: [{ char: "u", count: [0, 1], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }, { char: "m", count: [0, 1], at: "open" }], torches: [0, 1] }],
+                    stairhall: [{ id: "stairhall", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }], torches: [2, 2] }],
+                    arena: [{ id: "bellChamber", props: [{ char: "I", count: [6, 10], at: "rows" }, { char: "a", count: [1, 1], at: "head", size: [2, 1] }, { char: "y", count: [2, 2], at: "open", mirror: true }, { char: "k", count: [2, 4], at: "corner", mirror: true }, { char: "v", count: [2, 4], at: "wall", mirror: true }], torches: [2, 4] }],
+                },
+            },
+        ],
+        bosses: [
+            { id: "hollowAbbot", creature: "wightLord", title: "the Hollow Abbot", weight: 3, guard: ["draugr", "skeleton"] },
+            { id: "bellwarden", creature: "draugr", title: "the Bellwarden", weight: 2, guard: ["skeleton"] },
+            { id: "greyLord", creature: "wraith", title: "the Grey Lord of Bellhaven", weight: 1, guard: ["ghost"] },
+        ],
+        get packs() {
+            return this.realms.flatMap(({ id, packs }) => packs.map((pack) => ({ ...pack, id: `${id}-${pack.id}` })));
+        },
+        get minis() {
+            return this.realms.flatMap(({ minis, warden }) => [...minis, ...(warden ? [{ ...warden, weight: 1 }] : [])]);
         },
         get rooms() {
             return Object.assign({}, ...this.realms.map(({ rooms }) => rooms));

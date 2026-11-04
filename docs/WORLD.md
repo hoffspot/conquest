@@ -756,7 +756,8 @@ What's built so far:
   runs (the page, a world server, the tests), with no download of its own.
   - It's one level of 30,027 squares: the ground before the bridge, the bridge (its deck at
     79.2 m), the gate and the court before the keep.
-  - The keep and its halls aren't reached: their doors are shut in the art.
+  - The keep's halls aren't in it: their doors are shut in the art. The keep is a dungeon of its
+    own behind them (below).
   - The wall-walks and the towers aren't reached either: nothing climbs to them, so they're for
     stairs to an upper map.
   - `core/walk.js` reads it: a square's floor, a point's square, the way between two squares.
@@ -815,6 +816,23 @@ What's built so far:
   - Without the licensed models, it draws the walk, a block a square, as the lab does.
   - The minimap paints it from the walk (`app/minimap.js`), and its way out glows across the
     slope's foot (`app/doors.js`).
+- **Its keep**, a dungeon of its own behind the keep's doors off its court (docs/DUNGEONS.md,
+  *Bellhaven's keep*): four floors going up, its theme never a wild dungeon's.
+  - Its way in (`core/scenery.js` `SCENERY.bellhaven.keep`, `sceneryKeep`): the doorway, 2 m wide,
+    at the head of the steps up from the court (the scene's -1 to 1 m across, -142 to -140 m in,
+    81.4 m up). Stepping into it goes in, as stepping onto Bellhaven's way in does; or its doors
+    glow to tap (`app/doors.js`), their face across the doorway's end. Whoever comes out stands
+    on the steps before them, facing the court.
+  - It's a site's of its own (`keepSiteOf`: `bellhaven-1-keep`, its `parent` Bellhaven's), though
+    the plan lays none out: added with its castle's (`core/insides.js` `#addKeep`), kept and made
+    again by the host as any dungeon is (`host.js` `#keeps`), its first floor woken as anyone
+    comes within 45 m of its doors on the castle's map (`#byWayIn`). Its floors are drawn at a
+    column of their own (`KEEP_ORIGINS`).
+  - Its creatures are got ready at its doors behind the readying card, as a dungeon's are at its
+    way in in the world (`app/game.js` `#readyAtDoor`: whenever a door's gone into from its
+    outside end).
+  - The castle's art is kept while anyone's in its keep, for coming back out to: let go of once
+    they've left the castle's map.
 - **Set into the world** (`core/terrain/scenes.js`), one a world, as the volcano's crater is cut
   into it.
   - Where: laid out last in the world's plan (`worldplan/settle.js` `BELLHAVEN`), on the flattest

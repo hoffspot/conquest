@@ -182,8 +182,11 @@ export function fillLevel(dug, rooms, links, plan) {
     const slack = (most) => (theme.tiered === false ? Infinity : most);
 
     // The way in: the front door on the south edge, or the foot of stairs up (`^`, three squares
-    // long, and its landing `<`); the way up to them kept clear, and where anyone coming in stands
+    // long, and its landing `<`); in a dungeon whose levels go up (`rises`: a keep's), the head of
+    // stairs down (`V`, and its landing `>`) come up by. The way up to them kept clear, and where
+    // anyone coming in stands
     const entry = { squares: [], arrive: null, facing: Math.PI };
+    const [back, landing] = theme.rises ? ["V", ">"] : ["^", "<"];
 
     if (index === 0) {
         level.put(ex, ey, "D");
@@ -192,12 +195,12 @@ export function fillLevel(dug, rooms, links, plan) {
         entry.arrive = [ex, ey - 5];
     } else {
         for (let y = ey - 3; y <= ey - 1; y++) {
-            level.put(ex, y, "^");
-            level.put(ex + 1, y, "^");
+            level.put(ex, y, back);
+            level.put(ex + 1, y, back);
         }
 
-        level.put(ex, ey - 4, "<");
-        level.put(ex + 1, ey - 4, "<");
+        level.put(ex, ey - 4, landing);
+        level.put(ex + 1, ey - 4, landing);
         entry.squares = [[ex, ey - 4], [ex + 1, ey - 4]];
         entry.arrive = [ex, ey - 6];
     }
@@ -251,12 +254,13 @@ export function fillLevel(dug, rooms, links, plan) {
         return false;
     };
 
-    // --- The stairs down (every level but the bottom), in the room furthest in ---
+    // --- The stairs down (every level but the bottom), in the room furthest in: up, in a
+    // dungeon whose levels go up (`rises`) ---
 
     let down = null;
 
     if (index < plan.levels - 1) {
-        down = stairsDown(level, room.get(goal), far, putProp);
+        down = stairsDown(level, room.get(goal), far, putProp, theme.rises ? UP : DOWN);
 
         if (down) {
             far = level.distances(start);
@@ -675,10 +679,15 @@ function openestFirst(level, room) {
     return (a, b) => clearOfRock(open, b) - clearOfRock(open, a) || Math.max(Math.abs(a[0] - room.centre[0]), Math.abs(a[1] - room.centre[1])) - Math.max(Math.abs(b[0] - room.centre[0]), Math.abs(b[1] - room.centre[1])) || a[1] - b[1] || a[0] - b[0];
 }
 
-// The stairs down: three squares long and two wide (`V`), dug into the wall of the room furthest
-// in where they'll go, their landing (`>`) before them, deepest first; where anyone coming up them
-// stands, two steps off the landing, facing away. { squares, arrive, facing }, or null
-function stairsDown(level, goal, far, putProp) {
+// Which way a level's way on goes: stairs down (`V`) and their landing (`>`), or up (`^`, `<`)
+const DOWN = Object.freeze({ block: "V", landing: ">" });
+const UP = Object.freeze({ block: "^", landing: "<" });
+
+// The stairs down (or up: `way`, DOWN or UP): three squares long and two wide, dug into the wall of
+// the room furthest in where they'll go, their landing before them, deepest first; where anyone
+// coming up (or down) them stands, two steps off the landing, facing away. { squares, arrive,
+// facing }, or null
+function stairsDown(level, goal, far, putProp, way = DOWN) {
     const { grid } = level;
     const found = [];
 
@@ -713,9 +722,9 @@ function stairsDown(level, goal, far, putProp) {
             grid.dig(u, v, goal.id);
         }
 
-        if (putProp(one.block, "V")) {
+        if (putProp(one.block, way.block)) {
             for (const [u, v] of one.landing) {
-                level.put(u, v, ">");
+                level.put(u, v, way.landing);
                 level.reserve(u, v);
             }
 

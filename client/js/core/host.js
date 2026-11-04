@@ -51,6 +51,7 @@ import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
+import { keepSiteOf } from "./scenery.js";
 import { readPlan } from "./interiors.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
@@ -980,6 +981,7 @@ export const REFUSALS = Object.freeze({
     unwanted: "There's nothing there auto-snag's set to take.",
     locked: "It's locked fast, and its guardians still hold the place.",
     sealed: "The portal won't let you through while this level's master still stands.",
+    barred: "The stair up is barred, and its warden still stands somewhere on this floor.",
     throne: "The way out stays shut while the lord of this place still stands.",
     riteDay: "The portal stands cold and dark: whatever the cult calls through it, it calls after nightfall.",
     rite: "The cult's rite holds the portal shut while its keepers still stand.",
@@ -9930,7 +9932,32 @@ export class Host {
     }
 
     #siteOf(id) {
-        return this.world.plan.sites.find((site) => site.id === id);
+        return this.world.plan.sites.find((site) => site.id === id) ?? this.#keeps().find((site) => site.id === id);
+    }
+
+    // The keeps of the scenes set into the world (core/scenery.js keepSiteOf: Bellhaven's), each
+    // a dungeon's site of its own, though the plan lays none out; once a world
+    #keeps() {
+        this.keepSites ??= this.world.plan.sites.map(keepSiteOf).filter(Boolean);
+
+        return this.keepSites;
+    }
+
+    // Whether anyone's within `reach` of a dungeon's way in: in the world by its way in (`places`,
+    // where the players are there); or, a keep's (#keeps), on its scene's map by its doors
+    #byWayIn(site, places, reach) {
+        if (!site.parent) {
+            return places.some(([x, y]) => hypot(x - site.at[0], y - site.at[1]) < reach);
+        }
+
+        return [...this.players.values()].some((player) => this.#byKeepDoors(this.battle.actor(player.id), site, reach));
+    }
+
+    // Whether someone (an actor) stands within `reach` of a keep's doors (#keeps), on its scene's map
+    #byKeepDoors(actor, site, reach) {
+        const [outside] = this.world.interiors?.buildings.get(`site:${site.id}`)?.door.ends ?? [];
+
+        return Boolean(outside && actor && !actor.dead) && actor.map === outside.map && hypot(actor.x - outside.arrive[0], actor.y - outside.arrive[1]) < reach;
     }
 
     // One of a rite's keepers fallen (RITES: a hell's way in's): once none of them stands, the rite's
@@ -13025,12 +13052,12 @@ export class Host {
             }
         }
 
-        for (const site of this.world.plan.sites) {
+        for (const site of [...this.world.plan.sites, ...this.#keeps()]) {
             if (site.kind !== "dungeon") {
                 continue;
             }
 
-            const within = (reach) => places.some(([x, y]) => hypot(x - site.at[0], y - site.at[1]) < reach);
+            const within = (reach) => this.#byWayIn(site, places, reach);
             const near = within(DELVES.near);
             const levels = on.get(site.id) ?? new Set();
             let delve = this.dungeons.get(site.id);
@@ -13093,7 +13120,7 @@ export class Host {
         const finders = [...this.players.values()].filter((player) => {
             const actor = this.battle.actor(player.id);
 
-            return actor && !actor.dead && (building.maps.includes(actor.map) || (actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near));
+            return actor && !actor.dead && (building.maps.includes(actor.map) || (site.parent ? this.#byKeepDoors(actor, site, DELVES.near) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near));
         });
 
         delve.tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))));
@@ -13110,7 +13137,7 @@ export class Host {
         // (Against the side of the players on it or the level above, or by its way in, its boss and
         // mini-bosses tougher, more of each pack and each of them tougher too: strength.js; the
         // more of a pack beside those its plan has, by them)
-        const side = this.#sideOn([map, building.maps[k - 1]].filter(Boolean), k === 0 ? site.at : null, DELVES.near);
+        const side = this.#sideOn([map, building.maps[k - 1]].filter(Boolean), k === 0 && !site.parent ? site.at : null, DELVES.near);
         const scale = side ? scalingOf(side.opposition) : null;
 
         for (const pack of level.packs) {
@@ -16532,7 +16559,9 @@ export class Host {
         if (!interiors.buildings.has(key)) {
             // (A place worth finding gone into, `site:` its id: set down, its way in with it;
             // else a settlement's building, the settlement laid out)
-            const site = key.startsWith("site:") ? this.#siteOf(key.slice(5)) : null;
+            const found = key.startsWith("site:") ? this.#siteOf(key.slice(5)) : null;
+            // (A keep's, set down with its scene's: #keeps)
+            const site = found?.parent ? this.#siteOf(found.parent) : found;
             const place = site ? null : this.world.plan?.places.find(({ id }) => id === key.slice(0, key.indexOf(":")));
 
             if (site) {

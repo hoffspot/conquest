@@ -275,6 +275,25 @@ export const CLUTTER = {
         altar: [["candles", 3], ["vessels", 2], ["skulls", 2]],
         any: [["skulls", 2], ["bones", 2], ["vessels", 2], ["candles", 1]],
     },
+    // (Bellhaven's keep (core/dungeons/themes.js keep): what its garrison and its brothers left
+    // where they fell, their shields and stools in its halls, the stores' barrels and crates, the
+    // library's lanterns and candles, the dead's bones in its undercroft and tombs)
+    keep: {
+        greatHall: [["shield", 2], ["stool", 2], ["bones", 2], ["lantern", 1]],
+        armoury: [["shield", 3], ["staves", 2], ["crate", 2]],
+        guardroom: [["stool", 2], ["shield", 1], ["bucket", 1], ["bones", 1]],
+        undercroft: [["bones", 3], ["skulls", 2], ["coffin", 1], ["candles", 1]],
+        refectory: [["stool", 3], ["jars", 2], ["pot", 2], ["vessels", 1]],
+        cells: [["stool", 2], ["chest", 1], ["candles", 1], ["jars", 1]],
+        stores: [["barrel", 3], ["crate", 3], ["jars", 2], ["basket", 1]],
+        kitchen: [["pot", 3], ["cauldron", 1], ["firewood", 2], ["bucket", 1], ["jars", 1]],
+        scriptorium: [["candles", 3], ["lantern", 2], ["stool", 2], ["vessels", 1]],
+        stacks: [["candles", 2], ["lantern", 2], ["stool", 1]],
+        study: [["candles", 2], ["lantern", 1], ["chest", 1]],
+        tombs: [["skulls", 2], ["bones", 2], ["candles", 2], ["coffin", 1]],
+        bellChamber: [["candles", 3], ["vessels", 2], ["bones", 2], ["skulls", 1]],
+        any: [["candles", 2], ["vessels", 2], ["bones", 1], ["stool", 1], ["shield", 1]],
+    },
 };
 
 /** What's left against a wall at a square (metres: its middle; `wall`, `rough`), for a theme's room's look. */
@@ -518,6 +537,7 @@ const STREWN = {
     "hell-bone": [[BONES, 4], [STONES, 1]],
     "hell-fire": [[STONES, 3], [ROCKS, 3], [BONES, 1]],
     "hell-pit": [[STONES, 2], [BONES, 2], [ROCKS, 1]],
+    keep: [[STONES, 2], [BONES, 1]],
 };
 
 /** Small things along a level's walls to walk over: stones, bark, a branch; by theme, at a square. */

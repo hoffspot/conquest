@@ -15,7 +15,7 @@ import { PLAN_KEY } from "../core/interiors.js";
 const $ = (selector) => document.querySelector(selector);
 
 // How each theme's ground and rock look from above
-const GROUNDS = { caves: ["#5d5447", "#17130f"], hideout: ["#6b5a43", "#1a140e"], ancient: ["#7a766c", "#15140f"], nest: ["#6e4c34", "#1a110a"], hell: ["#5a3a32", "#140806"] };
+const GROUNDS = { caves: ["#5d5447", "#17130f"], hideout: ["#6b5a43", "#1a140e"], ancient: ["#7a766c", "#15140f"], nest: ["#6e4c34", "#1a110a"], hell: ["#5a3a32", "#140806"], keep: ["#bdb7a9", "#15140f"] };
 
 // Each room's part, tinted
 const ROLES = { entry: ["#46c46a", "the way in"], stairs: ["#5b8cff", "stairs down"], arena: ["#ff4b3a", "the boss's arena"], mini: ["#ff9f1a", "a mini-boss's room"], warden: ["#d83c9a", "a hell's level's boss's room"], pack: ["#c9b28a", "a pack's room"], quiet: [null, "an empty room"] };
@@ -418,10 +418,10 @@ function count() {
     $("#name").textContent = dungeon.name;
     $("#counts").replaceChildren(
         ...[
-            `${THEMES[dungeon.theme].name}, ${dungeon.levels.length} level${dungeon.levels.length > 1 ? "s" : ""} deep, tier ${dungeon.tier}; made in ${state.took.toFixed(0)} ms`,
+            `${THEMES[dungeon.theme].name}, ${dungeon.levels.length} level${dungeon.levels.length > 1 ? "s" : ""} ${THEMES[dungeon.theme].rises ? "high" : "deep"}, tier ${dungeon.tier}; made in ${state.took.toFixed(0)} ms`,
             `level ${level.index + 1}: ${level.width} × ${level.height} metres, ${level.rooms.length} rooms, ${level.rows.join("").replace(/#/g, "").length} m² to walk, ${level.loops} loop${level.loops === 1 ? "" : "s"}${level.attempt ? `, dug ${level.attempt + 1} times` : ""}`,
             `the way through: ${level.path.length} rooms`,
-            boss ? `the boss: ${boss.title} (${boss.foes[0].creature}, tier ${boss.foes[0].tier}) and ${boss.foes.length - 1} more` : `stairs down to level ${level.index + 2}`,
+            boss ? `the boss: ${boss.title} (${boss.foes[0].creature}, tier ${boss.foes[0].tier}) and ${boss.foes.length - 1} more` : `stairs ${THEMES[dungeon.theme].rises ? "up" : "down"} to level ${level.index + 2}`,
             minis.length ? `mini-bosses: ${minis.map(({ title, foes: [mini] }) => `${title} (tier ${mini.tier})`).join(", ")}` : "no mini-boss on this level",
             `${level.packs.filter(({ role }) => role === "pack").length} packs, ${foes.length} foes in all: ${[...kinds].map(([creature, n]) => `${n} ${creature}`).join(", ")}`,
             `${level.chests.filter(({ kind }) => kind === "small").length} small chests${level.chests.some(({ kind }) => kind === "hoard") ? " and the boss's hoard" : ""}${level.chests.some(({ kind }) => kind === "remains") ? `; ${level.chests.filter(({ kind }) => kind === "remains").length} of the fallen to search` : ""}`,
