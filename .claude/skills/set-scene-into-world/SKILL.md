@@ -116,7 +116,8 @@ Scripts in `scripts/`, run from the repository's root:
   `npm run build:manifest`). Take at least these, at `DPR=2` for the owner: from its road, from its
   way in looking left and right along the crag, from each side, from behind, from above, from
   700 m, and into its chasm from its rim. `HIDE=castle` shows the land alone, `HIDE=land` the
-  scene alone, `HIDE="landmark mist"` all but that part of its dressing, `HIDE="far:landmark
+  scene alone, `HIDE="landmark mist"` all but that part of its dressing (or anything of it whose
+  material's so named: `HIDE="landmark ground"`, all but its own terrain), `HIDE="far:landmark
   boulders"` all but those drawn with the far land.
 - `faces.mjs <glb>`: its broad plain faces, to be dressed. `materials.mjs <glb> [box]`: each
   material's triangles in the model and in a box of it.

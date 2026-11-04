@@ -72,10 +72,10 @@ const SHOTS = JSON.parse(process.env.SHOTS ?? JSON.stringify([
             } else if (hide === "castle") {
                 for (const group of [game.setIn.far, game.setIn.near]) { group.visible = false; hidden.push(group); }
             } else if (hide) {
-                // (What of it is named so: "landmark mist", "landmark scree", "landmark boulders", "landmark dressing")
+                // (What of it, or whose material, is named so: "landmark mist", "landmark scree", "landmark boulders", "landmark dressing", "landmark ground")
                 // ("far:" or "near:" before it: only what's drawn with the far land, or the near world)
                 const [pass, name] = /^(far|near):/.test(hide) ? hide.split(/:(.*)/) : [null, hide];
-                for (const group of [game.setIn.far, game.setIn.near].filter((each) => !pass || each === game.setIn[pass])) { group.traverse((part) => { if (part.name.startsWith(name) && part.visible) { part.visible = false; hidden.push(part); } }); }
+                for (const group of [game.setIn.far, game.setIn.near].filter((each) => !pass || each === game.setIn[pass])) { group.traverse((part) => { if ((part.name.startsWith(name) || [part.material].flat().some((material) => material?.name?.startsWith(name))) && part.visible) { part.visible = false; hidden.push(part); } }); }
             }
             view.render();
             setTimeout(() => hidden.forEach((each) => (each.visible = true)), 2000);
