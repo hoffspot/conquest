@@ -37,6 +37,8 @@ import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FO
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { ACTIONS as PAD_ACTIONS, asTheyCome, bindingsOf, bindingWords, rebind, SYMBOL_NAMES } from "./app/gamepad.js";
+import { PadPlay } from "./app/padplay.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -89,6 +91,19 @@ const fetcher = new Fetcher();
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
 const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, pageRelay: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false, hostAs: null, hostAfter: null, hostOn: null, deleting: null };
+
+// A game controller (app/padplay.js): read every frame once one's seen, working the game, its
+// windows and the title as touch and keys do
+const padPlay = new PadPlay({
+    settings,
+    game: () => state.game,
+    pause: () => pause(),
+    openWorldMap: () => openWorldMap(),
+    worldMap: () => state.worldMap,
+    sound: () => state.session?.sound ?? null,
+    message: (text, seconds) => state.game?.hud.message(text, seconds),
+    onSeen: () => showController(),
+});
 
 window.pellagos = {
     get game() {
@@ -1309,6 +1324,7 @@ function pause() {
 
 function resume() {
     $("#menu").close();
+    padPlay.stopListening();
     fullScreen.play();
 
     // (A pause for everyone over: their world going again for all; a world server's let go of as
@@ -1374,7 +1390,8 @@ const MENU_PAGES = {
     actions: { page: "#menuactions", title: "actionstitle", focus: "#wheelsbutton", up: "options", from: "#actionsbutton" },
     graphics: { page: "#menugraphics", title: "graphicstitle", focus: "#qualityslider", up: "options", from: "#graphicsbutton" },
     sound: { page: "#menusound", title: "soundtitle", focus: "#soundswitch", up: "options", from: "#soundbutton" },
-    controls: { page: "#menucontrols", title: "controlstitle", focus: "#stickswitch", up: "options", from: "#controlsbutton" },
+    controls: { page: "#menucontrols", title: "controlstitle", focus: "#controllerbutton", up: "options", from: "#controlsbutton" },
+    controller: { page: "#menucontroller", title: "controllertitle", focus: "#padrumbleswitch", up: "controls", from: "#controllerbutton" },
     camera: { page: "#menucamera", title: "cameratitle", focus: "#followswitch", up: "options", from: "#camerabutton" },
     gameplay: { page: "#menugameplay", title: "gameplaytitle", focus: "#snagswitch", up: "options", from: "#gameplaybutton" },
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
@@ -1395,6 +1412,12 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
 
     menuShown = page;
     $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page].title);
+
+    // (A controller's button being listened for, given up as its page is left)
+    if (page !== "controller") {
+        padPlay.stopListening();
+    }
+
     $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
     $(focus).focus();
 
@@ -5527,6 +5550,125 @@ $("#qualityslider").addEventListener("change", (event) => {
 $("#adaptiveswitch").addEventListener("change", (event) => applySetting("adaptive", event.target.checked));
 $("#soundswitch").addEventListener("change", (event) => applySetting("sound", event.target.checked));
 
+// Text size: as it comes, large, or larger for a television across the room
+const TEXT_SIZES = ["normal", "large", "larger"];
+const TEXT_SIZE_NAMES = Object.freeze({ normal: "As it comes", large: "Large", larger: "Larger, for a TV" });
+
+$("#textsizeslider").value = String(Math.max(0, TEXT_SIZES.indexOf(settings.textSize)));
+$("#textsizename").textContent = TEXT_SIZE_NAMES[settings.textSize] ?? TEXT_SIZE_NAMES.normal;
+$("#textsizeslider").addEventListener("input", (event) => ($("#textsizename").textContent = TEXT_SIZE_NAMES[TEXT_SIZES[Number(event.target.value)]]));
+$("#textsizeslider").addEventListener("change", (event) => applySetting("textSize", TEXT_SIZES[Number(event.target.value)] ?? "normal"));
+applyTextSize();
+
+// A game controller's page (Game options, Controls, Controller: app/padplay.js): the controller
+// seen, its switches and sliders, the symbols its buttons are shown with, and which button does
+// what, each set by choosing it and pressing the button for it
+const PAD_UNSEEN = $("#padseen").textContent;
+const PAD_SYMBOL_KINDS = Object.keys(SYMBOL_NAMES);
+const padRows = new Map();
+
+// A controller's name as the browser gives it, without its maker's numbers
+const padName = (id) => id.replace(/^[0-9a-f]{4}-[0-9a-f]{4}-/i, "").replace(/\s*\(.*$/, "").trim() || "A controller";
+
+function showController() {
+    const seen = padPlay.seen;
+    const percent = (share) => `${Math.round(share * 100)}%`;
+
+    $("#padseen").textContent = seen ? `${padName(seen.id)}: ready.${padPlay.rumbles ? "" : " This browser can't make it rumble."}` : PAD_UNSEEN;
+    $("#padrumbleswitch").checked = settings.padRumble;
+    $("#padrumbleswitch").disabled = Boolean(seen) && !padPlay.rumbles;
+    $("#padstrengthslider").value = String(Math.round(settings.padStrength * 100));
+    $("#padstrengthname").textContent = percent(settings.padStrength);
+    $("#padspeedslider").value = String(Math.round(settings.padSpeed * 100));
+    $("#padspeedname").textContent = percent(settings.padSpeed);
+    $("#paddeadslider").value = String(Math.round(settings.padDeadZone * 100));
+    $("#paddeadname").textContent = percent(settings.padDeadZone);
+    $("#padinvertxswitch").checked = settings.padInvertX;
+    $("#padinvertyswitch").checked = settings.padInvertY;
+    $("#padswapswitch").checked = settings.padSwap;
+    $("#padsymbolsname").textContent = SYMBOL_NAMES[settings.padSymbols] ?? SYMBOL_NAMES.auto;
+    showPadButtons();
+}
+
+// Each action, and the button that does it (or, `listening`, a word that one's being waited for)
+function showPadButtons(listening = null) {
+    const bindings = bindingsOf(settings.padBindings);
+    const kind = padPlay.symbols;
+
+    for (const action of PAD_ACTIONS) {
+        let row = padRows.get(action.id);
+
+        if (!row) {
+            row = document.createElement("button");
+            row.type = "button";
+            row.className = "padbind";
+            row.dataset.action = action.id;
+            row.append(Object.assign(document.createElement("span"), { className: "padbind-name", textContent: action.name }), Object.assign(document.createElement("span"), { className: "padbind-key" }));
+            row.addEventListener("click", () => setPadButton(action));
+            $("#padbindings").append(row);
+            padRows.set(action.id, row);
+        }
+
+        row.classList.toggle("listening", listening === action.id);
+        row.lastChild.textContent = listening === action.id ? "Press a button…" : bindingWords(bindings[action.id], kind);
+    }
+
+    $("#padreset").disabled = asTheyCome(bindings);
+}
+
+function setPadButton(action) {
+    if (!padPlay.seen) {
+        $("#padseen").textContent = "Press any button on your controller first, so the game can see it.";
+
+        return;
+    }
+
+    showPadButtons(action.id);
+    padPlay.listen(
+        (binding) => {
+            if (binding) {
+                applySetting("padBindings", rebind(bindingsOf(settings.padBindings), action.id, binding));
+            }
+
+            showPadButtons();
+        },
+        { bar: Boolean(action.bar) },
+    );
+}
+
+$("#controllerbutton").addEventListener("click", () => {
+    menuPage("controller");
+    showController();
+});
+$("#padrumbleswitch").addEventListener("change", (event) => {
+    applySetting("padRumble", event.target.checked);
+    padPlay.tryRumble();
+});
+$("#padstrengthslider").addEventListener("input", (event) => ($("#padstrengthname").textContent = `${event.target.value}%`));
+$("#padstrengthslider").addEventListener("change", (event) => {
+    applySetting("padStrength", Number(event.target.value) / 100);
+    padPlay.tryRumble();
+});
+$("#padspeedslider").addEventListener("input", (event) => ($("#padspeedname").textContent = `${event.target.value}%`));
+$("#padspeedslider").addEventListener("change", (event) => applySetting("padSpeed", Number(event.target.value) / 100));
+$("#paddeadslider").addEventListener("input", (event) => ($("#paddeadname").textContent = `${event.target.value}%`));
+$("#paddeadslider").addEventListener("change", (event) => applySetting("padDeadZone", Number(event.target.value) / 100));
+$("#padinvertxswitch").addEventListener("change", (event) => applySetting("padInvertX", event.target.checked));
+$("#padinvertyswitch").addEventListener("change", (event) => applySetting("padInvertY", event.target.checked));
+$("#padswapswitch").addEventListener("change", (event) => applySetting("padSwap", event.target.checked));
+$("#padsymbolsbutton").addEventListener("click", () => {
+    const next = PAD_SYMBOL_KINDS[(PAD_SYMBOL_KINDS.indexOf(settings.padSymbols) + 1) % PAD_SYMBOL_KINDS.length];
+
+    applySetting("padSymbols", next);
+    showController();
+});
+$("#padreset").addEventListener("click", () => {
+    applySetting("padBindings", {});
+    showPadButtons();
+});
+showController();
+padPlay.start();
+
 // How loud each kind of sound is: as the slider moves, and remembered when let go. Moving the
 // effects or environment slider plays a little of it (the music is playing anyway)
 const PREVIEWS = { effects: "slash", environment: "bird" };
@@ -5711,8 +5853,21 @@ function applySetting(key, value) {
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
         showVolumes(value);
+    } else if (key === "textSize") {
+        applyTextSize();
+    } else if (key.startsWith("pad")) {
+        // (The controller's own: read by app/padplay.js as they are, each frame)
     } else {
         applyViewSettings();
+    }
+}
+
+// The windows' and HUD's text larger, for a television (Game options, Graphics: Text size)
+function applyTextSize() {
+    if (settings.textSize === "large" || settings.textSize === "larger") {
+        document.body.dataset.text = settings.textSize;
+    } else {
+        delete document.body.dataset.text;
     }
 }
 

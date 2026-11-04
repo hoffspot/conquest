@@ -361,6 +361,22 @@ export class QuickBar {
         }
     }
 
+    /**
+     * Each slot's key shown as a game controller's button (`symbols`, by index: its trigger held,
+     * app/padplay.js), or, given null, as the number key that uses it again.
+     */
+    padKeys(symbols) {
+        this.element.classList.toggle("pad", Boolean(symbols));
+        this.slots.forEach((slot, index) => {
+            const key = slot.querySelector(".quick-key");
+            const shown = symbols?.[index] ?? String(index + 1);
+
+            if (key && key.textContent !== shown) {
+                key.textContent = shown;
+            }
+        });
+    }
+
     /** Let go of every slot's press, nothing used (the bar put away, the game not listening, the page hidden). */
     release() {
         clearTimeout(this.baring);

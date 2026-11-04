@@ -1,5 +1,6 @@
 // Steering the player with held input rather than by tapping where to go: W, A, S, D (or the arrow
-// keys) on a keyboard, and a thumb stick on a touch screen. Both come out as the order the swipe up
+// keys) on a keyboard, a thumb stick on a touch screen, and a game controller's left stick
+// (app/padplay.js: `pad`). Both come out as the order the swipe up
 // from the player already gives — straight ahead the way they're pointed (core/battle.js, "ahead") —
 // given again as that way turns and stopped when the input's let go. So held input asks nothing new
 // of the core: no held keys cross the wire, only the way they add up to.
@@ -44,7 +45,7 @@ export const HELD_REACH = 30;
 // pointing anywhere at all, and how far over counts as asking to run (of its reach)
 const REACH = 56;
 const DEADZONE = 10;
-const RUN_AT = 0.7;
+export const RUN_AT = 0.7;
 
 // Out of breath (the battle has a runner with no stamina left walk: battle.js #move, "exhausted"),
 // held input walks on till this share of their stamina is back, and only then runs again. Asked to
@@ -69,6 +70,7 @@ export class Steering {
     #shift = false;
     #winded = false;
     #stick = null;
+    #pad = null;
     #sent = null;
     #frame = 0;
     #listeners = [];
@@ -119,7 +121,24 @@ export class Steering {
 
     /** Whether anything's being held now (the hint can go once it is). */
     get steering() {
-        return this.#keys.size > 0 || this.#stick !== null;
+        return this.#keys.size > 0 || this.#stick !== null || this.#pad !== null;
+    }
+
+    /**
+     * A game controller's left stick, read each frame (app/padplay.js): how far it's pushed
+     * forward (up the stick) and to the right, each -1 to 1, its dead zone already taken off, and
+     * whether to walk rather than run (its walk button). Pushed most of the way over (RUN_AT) it
+     * runs, as the thumb stick does. Let go (all nought), the player stops.
+     */
+    pad(forward, right, { walk = false } = {}) {
+        const far = Math.hypot(forward, right);
+        const was = this.#pad;
+
+        this.#pad = far > 0 ? { forward, right, run: far > RUN_AT && !walk } : null;
+
+        if (this.#pad || was) {
+            this.#work();
+        }
     }
 
     /**
@@ -140,6 +159,7 @@ export class Steering {
 
         this.#keys.clear();
         this.#shift = false;
+        this.#pad = null;
         this.#letGoOfStick();
 
         if (was) {
@@ -156,6 +176,7 @@ export class Steering {
         this.#keys.clear();
         this.#shift = false;
         this.#winded = false;
+        this.#pad = null;
         this.#letGoOfStick();
 
         for (const [target, type, listener, options] of this.#listeners) {
@@ -341,6 +362,8 @@ export class Steering {
             forward = this.#stick.forward;
             right = this.#stick.right;
             run = this.#stick.far > RUN_AT;
+        } else if (this.#pad) {
+            ({ forward, right, run } = this.#pad);
         } else if (this.#keys.size > 0) {
             for (const code of this.#keys) {
                 const [ahead, side] = KEYS.get(code);

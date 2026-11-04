@@ -546,6 +546,17 @@ export class WorldMap {
         this.#zoomAt(factor, width / 2, height / 2);
     }
 
+    /**
+     * Move over the map by so many pixels across and down the screen (a game controller's stick:
+     * app/padplay.js), as a drag the other way does.
+     */
+    pan(across, down) {
+        this.view.x += across * this.view.scale;
+        this.view.z += down * this.view.scale;
+        this.#clamp();
+        this.redraw();
+    }
+
     /** Come back to where the player is. */
     centre() {
         if (this.player) {
