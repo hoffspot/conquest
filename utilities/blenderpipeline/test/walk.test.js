@@ -3,7 +3,7 @@
 // too low to stand under.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { floorAt, NONE, readWalk, walkJson, walkOf } from "../lib/walk.js";
+import { floorAt, NONE, readWalk, surfaceOf, walkJson, walkOf } from "../lib/walk.js";
 
 // Two triangles facing up, from (x0, z0) to (x1, z1) at height y
 const quad = (x0, z0, x1, z1, y) => [x0, y, z0, x0, y, z1, x1, y, z1, x0, y, z0, x1, y, z1, x1, y, z0];
@@ -156,6 +156,26 @@ describe("where scenery can be walked", () => {
 
         assert.equal(typeof json.under.heights, "string");
         assert.deepEqual(readWalk(json).under, { ...under, heights: new Int16Array(under.heights), top: new Int16Array(under.top) });
+    });
+
+    it("the highest of a surface over each patch, on a grid of its own or one given: a terrain's top, and what stands on it", () => {
+        // (Ground sloping up from 0 to 10 m along x, 0 to 20 m; a block 3 m high standing on it
+        // from x 12.5 to 15.5; patches 4 m a side)
+        const ground = new Float32Array([0, 0, 0, 0, 0, 8, 20, 10, 8, 0, 0, 0, 20, 10, 8, 20, 10, 0]);
+        const top = surfaceOf(ground, 4, "highest");
+        const at = (surface, x, z) => surface.heights[z * surface.size[0] + x] / 100;
+
+        assert.deepEqual([top.square, top.origin, top.size], [4, [0, 0], [5, 2]]);
+        // (Each patch's highest: its far side's)
+        assert.deepEqual([0, 1, 2, 3, 4].map((x) => at(top, x, 0)), [2, 4, 6, 8, 10]);
+
+        const block = new Float32Array(box(12.5, 6, 0, 15.5, 9, 8).flat());
+        const over = surfaceOf(block, 4, "highest", top);
+
+        assert.deepEqual([over.origin, over.size], [top.origin, top.size]);
+        assert.deepEqual([0, 1, 2, 3, 4].map((x) => over.heights[x]), [NONE, NONE, NONE, 900, NONE]);
+        // (The lowest of it, on its own grid, as underOf has it)
+        assert.equal(surfaceOf(block, 4).heights[0], 600);
     });
 
     it("says what's wrong: nowhere to walk from; nothing to walk on", () => {

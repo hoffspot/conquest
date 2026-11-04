@@ -461,7 +461,7 @@ describe("scenery cut into cells (cells), a material dropped (dropMaterials)", (
         const out = path.join(work, name);
 
         writeFileSync(from, await (await createIO()).writeBinary(sceneryDocument()));
-        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Ro*"], cells: { size: 40 }, textures: { bake: "never" }, lods: [{ ratio: 0.2, error: 0.05 }], packLods: true, compress: "none", walk: { from: [1, 0, 1], under: 10 }, budgets: { drawCalls: 4 }, ...more }));
+        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Ro*"], cells: { size: 40 }, textures: { bake: "never" }, lods: [{ ratio: 0.2, error: 0.05 }], packLods: true, compress: "none", walk: { from: [1, 0, 1], under: 10, ground: { materials: ["Stone"], square: 10 } }, budgets: { drawCalls: 4 }, ...more }));
 
         const { report } = await buildAsset(loadConfig(file), { blender, out, log: () => {} });
         const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
@@ -513,6 +513,10 @@ describe("scenery cut into cells (cells), a material dropped (dropMaterials)", (
         // (What's under it, on a grid of 10 m: the wall's row, and the tower's four patches,
         // nothing between them)
         assert.deepEqual(report.walk.under, { square: 10, origin: [0, 0], size: [10, 6], low: -0.29 });
+        // (The top of its ground, its Stone taken for its terrain: every patch the wall and the
+        // tower are over; nothing else stands on it)
+        assert.deepEqual(report.walk.ground, { materials: ["Stone"], square: 10, origin: [0, 0], size: [10, 6], patches: 14 });
+        assert.ok(walk.ground.over.every((height) => height === NONE));
         assert.deepEqual(
             [...walk.under.heights.keys()].filter((i) => walk.under.heights[i] !== NONE),
             [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 45, 46, 55, 56],

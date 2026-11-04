@@ -30,7 +30,7 @@ export const WALK = Object.freeze({
 export const NONE = -32768;
 
 /** Every triangle of a document's meshes (not their lower details), where it is in the scene: 9 numbers each. */
-export function trianglesOf(document) {
+export function trianglesOf(document, { materials = null, except = null } = {}) {
     const out = [];
     const point = new Vector3();
 
@@ -44,8 +44,11 @@ export function trianglesOf(document) {
         const matrix = new Matrix4().fromArray(node.getWorldMatrix());
 
         for (const primitive of mesh.listPrimitives()) {
-            // (Triangles only: lines and points are walked through)
-            if (primitive.getMode() !== 4) {
+            // (Triangles only: lines and points are walked through; and only those of the
+            // materials asked for, if any are, or but those left out)
+            const material = primitive.getMaterial()?.getName();
+
+            if (primitive.getMode() !== 4 || (materials && !materials.includes(material)) || (except && except.includes(material))) {
                 continue;
             }
 
@@ -120,7 +123,7 @@ function clip(points, axis, at, keep) {
  * other) }], left: { unreached, small } (floors no walk from `from` reaches; levels too small to
  * keep) }.
  */
-export function walkOf(triangles, { from, under = null, ...options } = {}) {
+export function walkOf(triangles, { from, under = null, ground: _ground = null, ...options } = {}) {
     const { square, climb, least } = { ...WALK, ...options };
 
     if (!Array.isArray(from) || from.length !== 3 || !from.every(Number.isFinite)) {
@@ -194,6 +197,17 @@ export function walkOf(triangles, { from, under = null, ...options } = {}) {
  * core/scenery.js).
  */
 export function underOf(triangles, square) {
+    return surfaceOf(triangles, square, "lowest");
+}
+
+/**
+ * The lowest or highest (`which`) of scenery's surfaces over each patch of a grid (`square` metres
+ * a side, from a corner on the grid, as far as the triangles go; or `grid`'s origin and size):
+ * { square, origin, size, heights (cm, NONE over a patch no triangle's over) }. underOf's lowest;
+ * the top of a scene's ground, its terrain's triangles alone, highest.
+ */
+export function surfaceOf(triangles, square, which = "lowest", grid = null) {
+    const highest = which === "highest";
     const low = [Infinity, Infinity];
     const high = [-Infinity, -Infinity];
 
@@ -204,10 +218,11 @@ export function underOf(triangles, square) {
         high[1] = Math.max(high[1], triangles[i + 2]);
     }
 
-    const origin = [Math.floor(low[0] / square) * square, Math.floor(low[1] / square) * square];
-    const width = Math.max(1, Math.ceil((high[0] - origin[0]) / square));
-    const depth = Math.max(1, Math.ceil((high[1] - origin[1]) / square));
-    const lowest = new Float32Array(width * depth).fill(Infinity);
+    // (On a grid of its own, as far as the triangles go; or on one given, { origin, size })
+    const origin = grid ? grid.origin : [Math.floor(low[0] / square) * square, Math.floor(low[1] / square) * square];
+    const width = grid ? grid.size[0] : Math.max(1, Math.ceil((high[0] - origin[0]) / square));
+    const depth = grid ? grid.size[1] : Math.max(1, Math.ceil((high[1] - origin[1]) / square));
+    const lowest = new Float32Array(width * depth).fill(highest ? -Infinity : Infinity);
 
     for (let t = 0; t < triangles.length; t += 9) {
         const points = Array.from(triangles.subarray(t, t + 9));
@@ -231,7 +246,7 @@ export function underOf(triangles, square) {
                 piece = piece.length ? clip(piece, 2, near + square, -1) : piece;
 
                 for (let i = 1; i < piece.length; i += 3) {
-                    lowest[z * width + x] = Math.min(lowest[z * width + x], piece[i]);
+                    lowest[z * width + x] = highest ? Math.max(lowest[z * width + x], piece[i]) : Math.min(lowest[z * width + x], piece[i]);
                 }
             }
         }
@@ -580,6 +595,7 @@ export function walkJson(walk) {
         ...walk,
         levels: walk.levels.map(({ heights, ...level }) => ({ ...level, heights: base64(heights) })),
         ...(walk.under ? { under: { ...walk.under, heights: base64(walk.under.heights), ...(walk.under.top ? { top: base64(walk.under.top) } : {}) } } : {}),
+        ...(walk.ground ? { ground: { ...walk.ground, heights: base64(walk.ground.heights), over: base64(walk.ground.over) } } : {}),
     };
 }
 
@@ -596,6 +612,7 @@ export function readWalk(json) {
         ...json,
         levels: json.levels.map(({ heights, ...level }) => ({ ...level, heights: int16(heights) })),
         ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights), ...(json.under.top ? { top: int16(json.under.top) } : {}) } } : {}),
+        ...(json.ground ? { ground: { ...json.ground, heights: int16(json.ground.heights), over: int16(json.ground.over) } } : {}),
     };
 }
 

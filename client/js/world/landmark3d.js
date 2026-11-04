@@ -5,27 +5,37 @@
 // within `read` of it, and kept; seen from as far as the far land reaches. Drawn twice, as the
 // volcano is (view.js setHorizon): with the far land (its camera reaching to the horizon, cut where
 // the near world's ends) and with the near world. Not faded out with the near world (world/fog.js):
-// it goes on into the far land, as the ground does. Without the art (a build without the licensed
-// models), a stand-in: the top of its ground over each patch (scenes.js), stone grey. Only for the
-// eye: the rules have its walk and the land.
+// it goes on into the far land, as the ground does. Its own terrain (scenes.js `ground`) is drawn as
+// the world's ground is (ground.js groundMaterial: its grass, its rock, the land's colours there),
+// all of it, so all that stands on it (its crag's rocks, its castle) stands on the ground it was
+// made on; on the open ground leading up to it and round it (scenes.js `open`), it's sunk under
+// the world's land, which is drawn there with its trees, and its grass. Without the art (a build
+// without the licensed models), a stand-in: the top of its ground over each patch but the open
+// (scenes.js), stone grey. Only for the eye: the rules have its walk and the land.
 
 import * as THREE from "three";
 import { readyScenery, sceneryOf } from "../beasts/model.js";
 import { SCENERY } from "../core/scenery.js";
 import { scenesIn } from "../core/terrain/height.js";
+import { groundMaterial } from "./ground.js";
 
 /**
  * How near the player comes before the art's read (metres from the scene's middle: as far as the
- * far land reaches at High, and more), and the stand-in's colour (sRGB).
+ * far land reaches at High, and more), the stand-in's colour (sRGB), and how far under the world's
+ * land a scene's own terrain's sunk on the open ground (metres: under it wherever the land's laid
+ * along it there, scenes.js, as its far model has it, within a metre or two).
  */
-export const LANDMARK = Object.freeze({ read: 2600, stone: 0x8a8580 });
+export const LANDMARK = Object.freeze({ read: 2600, stone: 0x8a8580, sunk: 4 });
 
 // A scene's stand-in: the top of its ground over each patch of what's under it (scenes.js sceneOf
-// `top`: its highest floor there, or round it), in the scene's own metres
+// `top`: its highest floor there, or round it); or, where it has its own terrain, the top of what
+// stands on it (`ground.over`), or of its terrain, but on the open ground, where the world's land
+// is (in the scene's own metres)
 function standIn(scene) {
-    const { square, origin, size } = scene.walk.under;
+    const { square, origin, size } = scene.ground ?? scene.walk.under;
     const [width, depth] = size;
-    const top = scene.top;
+    const { ground } = scene;
+    const top = ground ? Float32Array.from(ground.over, (over, k) => (ground.open[k] ? NaN : Number.isNaN(over) ? (ground.has[k] ? ground.top[k] : NaN) : over)) : scene.top;
     const positions = [];
     const corner = (x, z) => [origin[0] + (x + 0.5) * square, top[z * width + x], origin[1] + (z + 0.5) * square];
 
@@ -59,7 +69,15 @@ function standIn(scene) {
  * dispose().
  */
 export class Landmarks {
-    constructor(plan) {
+    /**
+     * @param {object} plan - The world plan.
+     * @param {object} [options]
+     * @param {THREE.Texture} [options.land] - The lands' colours (ground.js landColours), as the
+     *     world's ground has them: its own terrain's drawn with them.
+     */
+    constructor(plan, { land = null } = {}) {
+        this.land = land;
+        this.grounds = [];
         this.far = new THREE.Group();
         this.near = new THREE.Group();
         this.far.name = "landmarks";
@@ -111,15 +129,81 @@ export class Landmarks {
         }
     }
 
-    // A scene drawn: a copy for each of the far land and the near world, from its middle
+    // A scene's own terrain's material: the world's ground's (its grass, its rock, the land's colours
+    // where it is), sunk LANDMARK.sunk metres under the world's land on the open ground (scenes.js
+    // `open`, read between its patches, where its points are in the scene)
+    #groundOf(placed) {
+        const { scene, at, base, facing } = placed;
+        const { origin, square, size, open } = scene.ground;
+        const mask = new THREE.DataTexture(Uint8Array.from(open, (on) => on * 255), size[0], size[1], THREE.RedFormat, THREE.UnsignedByteType);
+        // (From the world to the scene's own metres: its middle at its spot, turned to face its road)
+        const sceneFromWorld = new THREE.Matrix4()
+            .makeRotationY(facing)
+            .setPosition(at[0], base, at[1])
+            .multiply(new THREE.Matrix4().makeTranslation(-scene.middle[0], 0, -scene.middle[1]))
+            .invert();
+        const material = groundMaterial({ land: this.land });
+        const own = material.onBeforeCompile;
+        const key = material.customProgramCacheKey;
+
+        mask.magFilter = THREE.LinearFilter;
+        mask.minFilter = THREE.LinearFilter;
+        mask.needsUpdate = true;
+        material.name = "landmark ground";
+        material.onBeforeCompile = (shader, renderer) => {
+            own.call(material, shader, renderer);
+            Object.assign(shader.uniforms, {
+                sceneOpen: { value: mask },
+                sceneOpenArea: { value: new THREE.Vector4(origin[0], origin[1], size[0] * square, size[1] * square) },
+                sceneFromWorld: { value: sceneFromWorld },
+                sceneSunk: { value: LANDMARK.sunk },
+            });
+            shader.vertexShader = shader.vertexShader
+                .replace(
+                    "#include <common>",
+                    `#include <common>
+uniform sampler2D sceneOpen;
+uniform vec4 sceneOpenArea;
+uniform mat4 sceneFromWorld;
+uniform float sceneSunk;`,
+                )
+                .replace(
+                    "#include <begin_vertex>",
+                    `#include <begin_vertex>
+{
+    vec2 sceneAt = (sceneFromWorld * modelMatrix * vec4(transformed, 1.0)).xz;
+    float sunk = textureLod(sceneOpen, (sceneAt - sceneOpenArea.xy) / sceneOpenArea.zw, 0.0).r * sceneSunk;
+
+    transformed += inverse(mat3(modelMatrix)) * vec3(0.0, -sunk, 0.0);
+}`,
+                );
+        };
+        material.customProgramCacheKey = () => `${key.call(material)}+landmark`;
+        this.grounds.push({ material, mask });
+
+        return material;
+    }
+
+    // A scene drawn: a copy for each of the far land and the near world, from its middle; its own
+    // terrain drawn as the world's ground is (scenes.js `ground`)
     #draw(each, make, gltf) {
         const { scene } = each.placed;
+        const terrain = new Set(scene.ground?.materials ?? []);
+        const ground = gltf && terrain.size ? this.#groundOf(each.placed) : null;
 
         for (const group of [each.far, each.near]) {
             const object = make(gltf);
 
             object.position.set(-scene.middle[0], 0, -scene.middle[1]);
             object.traverse((part) => {
+                if (part.isMesh && [part.material].flat().some((material) => terrain.has(material?.name))) {
+                    part.material = ground;
+                    part.castShadow = false;
+                    part.receiveShadow = false;
+
+                    return;
+                }
+
                 if (part.isMesh) {
                     part.castShadow = false;
                     part.receiveShadow = false;
@@ -144,6 +228,11 @@ export class Landmarks {
 
     dispose() {
         this.disposed = true;
+
+        for (const { material, mask } of this.grounds) {
+            material.dispose();
+            mask.dispose();
+        }
 
         for (const { far, near } of this.scenes) {
             for (const group of [far, near]) {

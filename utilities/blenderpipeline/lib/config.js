@@ -135,6 +135,10 @@ export const DEFAULTS = Object.freeze({
     // even it is more than the game wants; the lower-detail copies' ratios stay shares of what
     // Blender gave
     simplify: null,
+    // Rocks that touch nothing set down on what's under them, or left out (lib/seat.js): {
+    // materials: [names, * and ? wildcards], gap (metres: nearer than this, it touches), drop
+    // (metres: the farthest one's set down; past that, it's left out) }, after it's simplified
+    seat: null,
     // Where it can be walked, baked from its triangles (lib/walk.js) into <name>.walk.json: {
     // from: [x, y, z] (where it's walked from), square, slope, headroom, climb, least, cover, merge
     // } (README.md, *Where it can be walked*)
@@ -159,7 +163,7 @@ const MAPS = { baseColor: "colour", alphaMap: "grey", normal: "normal", occlusio
 const MAP_KEYS = { file: 0, channel: 0, scale: 0, invert: 0, flipGreen: 0 };
 const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
-const WALK_KEYS = { from: 0, square: 0, slope: 0, headroom: 0, climb: 0, least: 0, cover: 0, merge: 0, under: 0 };
+const WALK_KEYS = { from: 0, square: 0, slope: 0, headroom: 0, climb: 0, least: 0, cover: 0, merge: 0, under: 0, ground: 0 };
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
 
 /**
@@ -454,6 +458,20 @@ export function resolveConfig(raw, file) {
         checkRatios(config.simplify.materials, "simplify.materials", fail);
     }
 
+    if (config.seat !== null) {
+        unknownKeys(config.seat, { materials: 0, gap: 0, drop: 0 }, "seat.", fail);
+
+        if (!(Array.isArray(config.seat.materials) && config.seat.materials.length && config.seat.materials.every((name) => typeof name === "string" && name))) {
+            fail('seat.materials is [its rocks\' material names, * and ? wildcards]: "seat": { "materials": ["M_Rock*"] }');
+        }
+
+        for (const [key, least] of [["gap", 0], ["drop", 0]]) {
+            if (key in config.seat && !(typeof config.seat[key] === "number" && config.seat[key] >= least && (key !== "gap" || config.seat[key] > 0))) {
+                fail(`seat.${key} is metres: ${key === "gap" ? "more than 0" : "0 or more"}`);
+            }
+        }
+    }
+
     if (config.walk !== null) {
         if (typeof config.walk !== "object" || Array.isArray(config.walk)) {
             fail("walk is { from: [x, y, z], ... } (or null: not baked)");
@@ -465,7 +483,11 @@ export function resolveConfig(raw, file) {
             fail("walk.from is where it's walked from: [x, y, z], in metres, as built");
         }
 
-        for (const key of Object.keys(WALK_KEYS).filter((key) => key !== "from" && key in config.walk)) {
+        if ("ground" in config.walk && !(config.walk.ground && Array.isArray(config.walk.ground.materials) && config.walk.ground.materials.length && config.walk.ground.materials.every((name) => typeof name === "string") && typeof config.walk.ground.square === "number" && config.walk.ground.square > 0)) {
+            fail('walk.ground is { "materials": [its terrain\'s material names], "square": metres }');
+        }
+
+        for (const key of Object.keys(WALK_KEYS).filter((key) => key !== "from" && key !== "ground" && key in config.walk)) {
             if (!(typeof config.walk[key] === "number" && config.walk[key] >= 0)) {
                 fail(`walk.${key} is a number, 0 or more`);
             }

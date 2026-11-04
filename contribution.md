@@ -316,13 +316,17 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
   `<name>.walk.json`, and the same as a module, `<name>.walk.js`: the height of each square a body
   can stand on, in levels where one floor is over another, and the links between them (the README,
   *Where it can be walked*). With `"under"`, it also has the lowest of the scene and the top of its
-  ground over each patch of a coarser grid, which the game lays the world's land under and up to
-  where it sets the scene into the world (`core/terrain/scenes.js`). It's plain data with no mesh or
-  texture. For a bought scene it's the
-  one thing built from it that goes in this repository: its module in `client/js/core/scenery/`,
-  where the game's code imports it (Bellhaven's: `core/scenery.js`). Its scrambled model goes in
-  the private one. `lib/walk.js` has unit tests of its own (`test/walk.test.js`), which need no
-  Blender.
+  ground over each patch of a coarser grid; with `"ground"`, the top of its own terrain and of all
+  that stands on it. The game lays the world's land along and under those where it sets the scene
+  into the world (`core/terrain/scenes.js`). It's plain data with no mesh or texture. For a bought
+  scene it's the one thing built from it that goes in this repository: its module in
+  `client/js/core/scenery/`, where the game's code imports it (Bellhaven's: `core/scenery.js`). Its
+  scrambled model goes in the private one. `lib/walk.js` has unit tests of its own
+  (`test/walk.test.js`), which need no Blender.
+- A scene's rocks that touch nothing are set down on what's under them, or left out (`seat`, the
+  README's *Rocks that touch nothing*), after it's simplified: no rock hangs in the air in the
+  game. `lib/seat.js` has unit tests of its own (`test/seat.test.js`), which need no Blender. The
+  skill `.claude/skills/set-scene-into-world` says how a scene's set into the world and checked.
 
 ## 3. Making a change
 

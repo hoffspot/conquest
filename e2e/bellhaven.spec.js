@@ -54,18 +54,25 @@ const stepIn = (page) =>
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
-        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
+        // (Its own terrain drawn as the world's ground is, so all on it stands on it)
+        let ground = false;
+
+        game.setIn?.far.traverse((part) => {
+            ground ||= part.isMesh && part.visible && part.material?.name === "landmark ground";
+        });
+
+        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
 
         // (Onto its way in: the nearest of its squares)
         const [to] = [...outside.squares].sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
 
         game.host.command("player", { type: "move", to });
 
-        for (let k = 0; k < 200 && game.readyingAt === null && player.map === "town"; k++) {
+        for (let k = 0; k < 200 && !game.readyingAt && player.map === "town"; k++) {
             game.advance(0.05);
         }
 
-        return { key: building.key, map: `${building.key}/grounds`, door: building.door.id, running: game.running, card: !document.querySelector("#readying").hidden || game.readyingAt !== null, ...seen };
+        return { key: building.key, map: `${building.key}/grounds`, door: building.door.id, running: game.running, card: Boolean(game.readyingAt), named: document.querySelector("#readyingname").textContent, ...seen };
     });
 
 // Played on till the player's in the castle's map (`id`) and its inside's shown (the readying
@@ -138,14 +145,13 @@ for (const licensed of [true, false]) {
             const errors = await playing(page, "/?play&seed=1");
             const tapped = await stepIn(page);
 
-            // (Seen from its road's end: its far model, or its stand-in; its way in open, the rest
-            // of it stood on)
-            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", open: true, stood: true });
+            // (Seen from its road's end: its far model, its own terrain drawn as the world's ground,
+            // or its stand-in; its way in open, the rest of it stood on)
+            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", ground: licensed, open: true, stood: true });
 
             // (Stepped onto: the world stopped while its art's got ready, the card up, saying what
             // it's for)
-            expect(tapped).toMatchObject({ running: false, card: true });
-            await expect(page.locator("#readyingname")).toHaveText("Bellhaven");
+            expect(tapped).toMatchObject({ running: false, card: true, named: "Bellhaven" });
             await expect(page.locator("#readyingnote")).toContainText("castle");
             expect(await inside(page, tapped.map)).toMatchObject({ shown: true });
 

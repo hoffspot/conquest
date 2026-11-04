@@ -736,10 +736,12 @@ from Fab (licensed: `client/models/scenery/LICENSE.md`): the castle on its crag,
 What's built so far:
 - **Its model** (`utilities/blenderpipeline`, `private/bellhaven.json`), the artist's whole scene
   in cells of 40 m.
-  - `scenery-bellhaven` is 18 MB, for its map: 500,932 triangles at its nearest detail and 166,817
+  - `scenery-bellhaven` is 18 MB, for its map: 500,745 triangles at its nearest detail and 166,820
     further off.
-  - `scenery-bellhaven-far` is 1.5 MB, the castle from the world round it: 51,222 triangles in 15
-    draw calls.
+  - `scenery-bellhaven-far` is 1.7 MB, the castle from the world round it: 84,180 triangles in 15
+    draw calls, its rocks and its terrain kept at 3% and 8% (the rest at 1.5%).
+  - Its rocks that touched nothing are set down or left out (the pipeline's `seat`): 8 set down
+    and 60 left out of the 542 in its map's build; none in the far one.
   - Both are fetched only where they're wanted (`tier: "demand"`).
 - **Where it's walked**, `client/js/core/scenery/bellhaven.walk.js`, baked from the art (the
   pipeline's README, *Where it can be walked*): a module, so the game's code has it wherever it
@@ -816,15 +818,22 @@ What's built so far:
     the first 16 worlds it's 9 to 58 m.
   - It faces the nearest road, and its own trail comes up from there to its road's end
     (`core/trails.js`).
-  - The land's laid under it (`landHeight`), from what's under the scene, baked with its walk
-    (`under`: the lowest of it and the top of its ground over each 4 m patch).
+  - The land's laid along it and under it (`landHeight`), from what's under the scene, baked with
+    its walk: `under`, the lowest of it and the top of its ground over each 4 m patch; and
+    `ground`, the top of its own terrain (`M_Ground`) and of all that stands on it over each 2 m.
     - Its own 0 is set by its road's end, the end of the ridge of earth that rises to the bridge's
       near end: that stands 20 m over the land's own lie there.
-    - Where it stands, the land lies a metre under the lowest of it round each point (8 m each
-      way, so the far land, read every 8 m, never comes up through it either).
-    - Toward its edges (60 m), the land rises to meet the top of its ground, or its own lie where
-      that's higher: its edges sit on the land, and the land runs on into its outlying ground.
-    - Past them, it eases to its own lie over 96 m.
+    - On the open ground leading up to it and round it (its terrain, or nothing of it, 6 m or more
+      from all that stands on it, reached from its edges: never within its walls), the land's laid
+      along its terrain, 10 cm under it. Its terrain's sunk under the land there, and the land's
+      trees and things grow on it.
+    - Round all that stands on it (its crag, its rocks, its castle), its own terrain's kept and the
+      land laid along it for 4 m in from the open, then eased down under it over 12 m to a metre
+      under the lowest of it round each point (8 m each way). The far land, read every 8 m or
+      more, then never comes up through it.
+    - Where it has no terrain of its own but something stands (its castle over the chasm), the
+      land's laid under it the same way.
+    - Past its edges, it eases to its own lie over 96 m.
     - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
     - `TERRAIN_VERSION` 12, and `NET_VERSION` 203: a game from before has another world.
   - Its squares are all it stands on but its way in (`core/sites.js`): blocked, and blocking
@@ -834,9 +843,18 @@ What's built so far:
   - Drawn in the world (`world/landmark3d.js`): its far model, read once the player's within
     2.6 km, where the land has it, turned to face its road. It's drawn twice, as the volcano is:
     with the far land and with the near world. It isn't faded out with the near world (`NO_NEAR_
-    FADE`): it goes on into the far land, as the ground does. Without the licensed models, a stand-in:
-    the top of its ground over each patch, stone grey.
-  - The trees, near and far, keep off all it stands on.
+    FADE`): it goes on into the far land, as the ground does.
+    - Its own terrain's drawn as the world's ground is (`ground.js` `groundMaterial`: the grass,
+      the rock on what's steep, the land's colours there), all of it, so its crag's rocks and its
+      castle stand on the ground they were made on, and none of them off it. On the open ground
+      it's sunk 4 m, under the land.
+    - Its far model keeps more of its rocks and its terrain than of the rest (3% and 8% of their
+      triangles, 1.5% of the castle's): with fewer, the rocks and the crag they're set into parted,
+      and the rocks looked stuck on its cliffs.
+    - Without the licensed models, a stand-in: the top of all that stands on it and of its kept
+      terrain, over each patch, stone grey.
+  - The trees, near and far, grow on the open ground leading up to it and round it, never within
+    its walls, on its road's end or up its ridge; and keep off all else it stands on.
 
 
 ## Next

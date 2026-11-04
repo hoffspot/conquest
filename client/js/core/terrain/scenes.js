@@ -13,6 +13,13 @@
 //   into its outlying ground.
 // - Past its edges, the land eases from there to its own lie (within `band`).
 // - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
+// - Where its walk has its own terrain (`ground`: the top of its terrain's own triangles, and what
+//   stands on it), the world's land is drawn in its terrain's place on the open ground leading up
+//   to it and round it, where nothing of it stands near (world/landmark3d.js cuts its terrain away
+//   there): laid along its top, and eased out from its edges to the land's own lie; its trees and
+//   the land's things grow there (growsAt). Its own terrain's kept round all that stands on it (its
+//   crag, its rocks, its castle): what it has standing there stands on the ground it was made on,
+//   none of it off it, and the land's laid along it at its edge with the open, then under it.
 //
 // Plain data and arithmetic (+ - * /, floor and square roots): the same in every browser and
 // worker, wherever and whenever it's asked.
@@ -33,19 +40,23 @@ import { floorAt, NONE, readWalk, squareOf } from "../walk.js";
  * its near edge's middle, 88 m south of the bridge's middle. Its way in (`way`) is on the pad
  * there, at its near edge: the squares within `across` metres of the approach and `deep` metres in
  * from its edge are stepped onto to go in; they come back out `out` metres out from its edge, on
- * the pad; the door's glow is `height` metres high, across the way in.
+ * the pad; the door's glow is `height` metres high, across the way in. Where its own terrain's
+ * drawn as the land, `path` ([across, from]) is the way from its road's end up to its ridge, kept
+ * clear of trees: within `across` metres of the approach, from `from` (its z, metres) to the ridge.
  */
 export const SCENES = Object.freeze({
-    bellhaven: Object.freeze({ walk: BELLHAVEN, approach: Object.freeze([0, 88]), ridge: Object.freeze([0, 75]), pad: 8, rise: 20, margin: 1, ring: 80, band: 96, way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }) }),
+    bellhaven: Object.freeze({ walk: BELLHAVEN, approach: Object.freeze([0, 88]), ridge: Object.freeze([0, 75]), pad: 8, rise: 20, margin: 1, ring: 80, band: 96, way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }), path: Object.freeze([28, -40]) }),
 });
 
 /**
  * How far into the pad its sides and its inner end ease to the land round them (metres), and how
  * far under the ridge's floor it's laid (metres: the ground drawn just under the floor drawn on it);
  * and how far over the top of the scene's ground the land's laid at its edges (`over`, metres: its
- * ragged edge and what hangs from it buried, the land and its ground meeting in its ring).
+ * ragged edge and what hangs from it buried, the land and its ground meeting in its ring); and how
+ * far under the top of its own terrain the land's laid, where it's drawn in its place (`terrain`,
+ * metres: under its floors, its rocks' feet, where they're at the terrain's own height).
  */
-const PAD = Object.freeze({ ease: 6, under: 0.05, over: 1.5 });
+const PAD = Object.freeze({ ease: 6, under: 0.05, over: 1.5, terrain: 0.1 });
 
 // Each scene worked out once: its ground's patches, filled and lowered, its box, its middle
 const MADE = new Map();
@@ -99,13 +110,152 @@ function filledIn(grid, [width, depth], pick) {
 const LOWEST_ROUND = 2;
 
 /**
+ * How far round what stands on a scene's terrain (its castle, its bridge, its rocks, its walls) its
+ * own terrain's kept, and the open left of trees and the land's own things (patches of its
+ * terrain's grid, each way).
+ */
+const KEEP_OPEN = Object.freeze({ standing: 3 });
+
+/**
+ * Where a scene's own terrain's kept, how far in from its edge with the open the land's laid along
+ * it (`from`, patches: where its edge is cut, the two meet), and over how many more it eases down
+ * under it (`ease`, patches), to the lowest of the scene round it, as under all else of it: the far
+ * land, read every 8 m or more, never comes up through it there.
+ */
+const KEPT = Object.freeze({ from: 2, ease: 6 });
+
+// A scene's terrain, as its walk has it (`ground`: the top of its own terrain's triangles over each
+// patch, and the highest of all else, `over`): `top` (metres, each patch's; where it has none, its
+// neighbours'), `has` (1 where it has some, else 0), `bare` (1 where it has none but something else
+// stands there, its castle on no ground of its own, else 0: read between patches, how much of a
+// point the land's laid under it rather than along its terrain), `open` (1 where nothing stands on
+// it nor near, reached from its edges without crossing any of that: its terrain, or where it has
+// nothing at all, as at its box's corners; its terrain's cut away there and the land drawn in its
+// place, and trees grow there, on the land leading up to it and round it, never within its walls),
+// `deep` (where its terrain's kept, how far the land's laid under it: 0 at its edge with the open,
+// to 1, under all else of it there), and `over` (metres, the highest of what stands on it; NaN where nothing does)
+function terrainOf(walk) {
+    const { square, origin, size, heights, over, materials } = walk.ground;
+    const [width, depth] = size;
+    const has = Float32Array.from(heights, (h) => (h === NONE ? 0 : 1));
+    const bare = Float32Array.from(heights, (h, k) => (h === NONE && over[k] !== NONE ? 1 : 0));
+    const highest = filledIn(Float32Array.from(heights, (h) => (h === NONE ? NaN : h / 100)), size, (round) => round.reduce((sum, h) => sum + h, 0) / round.length);
+    // (Its height at each patch's middle: the highest of it over the patch, less half its rise
+    // across the patch each way, as its neighbours have it; on a slope the highest is at the
+    // patch's upper edge, and read between middles would stand the land over it)
+    const at = (x, z) => highest[Math.min(depth - 1, Math.max(0, z)) * width + Math.min(width - 1, Math.max(0, x))];
+    const top = highest.map((h, k) => {
+        const [x, z] = [k % width, Math.floor(k / width)];
+
+        return h - (Math.abs(at(x + 1, z) - at(x - 1, z)) + Math.abs(at(x, z + 1) - at(x, z - 1))) / 4;
+    });
+    const closed = new Uint8Array(width * depth);
+    const shut = (px, pz, round) => {
+        for (let dz = -round; dz <= round; dz++) {
+            for (let dx = -round; dx <= round; dx++) {
+                const [x, z] = [px + dx, pz + dz];
+
+                if (x >= 0 && z >= 0 && x < width && z < depth) {
+                    closed[z * width + x] = 1;
+                }
+            }
+        }
+    };
+
+    for (let k = 0; k < width * depth; k++) {
+        if (over[k] !== NONE) {
+            shut(k % width, Math.floor(k / width), KEEP_OPEN.standing);
+        }
+    }
+
+    // (Open only out from its edges, never past what stands on it: nothing grows within its
+    // walls, in its courts or on its crag's enclosed ground, only on the land leading up to it and
+    // round it)
+    const open = new Uint8Array(width * depth);
+    const queue = [];
+    const visit = (x, z) => {
+        const k = z * width + x;
+
+        if (x >= 0 && z >= 0 && x < width && z < depth && !open[k] && !closed[k]) {
+            open[k] = 1;
+            queue.push(k);
+        }
+    };
+
+    for (let x = 0; x < width; x++) {
+        visit(x, 0);
+        visit(x, depth - 1);
+    }
+
+    for (let z = 0; z < depth; z++) {
+        visit(0, z);
+        visit(width - 1, z);
+    }
+
+    for (let next = 0; next < queue.length; next++) {
+        const [x, z] = [queue[next] % width, Math.floor(queue[next] / width)];
+
+        visit(x + 1, z);
+        visit(x - 1, z);
+        visit(x, z + 1);
+        visit(x, z - 1);
+    }
+
+    // (How far each patch is from the open, in patches, each way and across: its terrain kept
+    // there, the land laid under it from KEPT.from in)
+    const far = new Float32Array(width * depth).fill(Infinity);
+    const near = [];
+
+    for (let k = 0; k < width * depth; k++) {
+        if (open[k]) {
+            far[k] = 0;
+            near.push(k);
+        }
+    }
+
+    for (let next = 0; next < near.length; next++) {
+        const [x, z] = [near[next] % width, Math.floor(near[next] / width)];
+
+        for (let dz = -1; dz <= 1; dz++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const [nx, nz] = [x + dx, z + dz];
+                const k = nz * width + nx;
+
+                if (nx >= 0 && nz >= 0 && nx < width && nz < depth && far[k] === Infinity) {
+                    far[k] = far[near[next]] + 1;
+                    near.push(k);
+                }
+            }
+        }
+    }
+
+    const deep = far.map((steps) => smoothstep(KEPT.from, KEPT.from + KEPT.ease, steps));
+
+    return { materials, square, origin, size, top, has, bare, open, deep, over: Float32Array.from(over, (h) => (h === NONE ? NaN : h / 100)) };
+}
+
+// A grid ({ origin, square, size }) read at a point (the scene's own metres), between its patches'
+// middles, kept within it
+function sample({ origin, square, size }, values, sx, sz) {
+    const [width, depth] = size;
+    const u = Math.min(width - 1, Math.max(0, (sx - origin[0]) / square - 0.5));
+    const v = Math.min(depth - 1, Math.max(0, (sz - origin[1]) / square - 0.5));
+    const [i, j] = [Math.min(width - 2, Math.floor(u)), Math.min(depth - 2, Math.floor(v))];
+    const [tu, tv] = [u - i, v - j];
+    const k = j * width + i;
+
+    return (values[k] * (1 - tu) + values[k + 1] * tu) * (1 - tv) + (values[k + width] * (1 - tu) + values[k + width + 1] * tu) * tv;
+}
+
+/**
  * A scene as it's set into the land: its id, walk (read), `box` ([x0, z0, x1, z1]: its patches'
  * extent, the scene's metres), `middle` ([x, z]), `reach` (from its middle to its box's corners,
  * metres), `ridge` (the height of the floor its road's end is level with, metres), `low` (a
  * Float32Array, metres: each patch's height the land's laid under, the lowest of it there or round
  * it, LOWEST_ROUND patches each way, so the land between patches never comes up through it either)
- * and `top` (each patch's highest floor, metres: the top of its ground, where the land meets it at
- * its edges; where it has none, its neighbours').
+ * `top` (each patch's highest floor, metres: the top of its ground, where the land meets it at
+ * its edges; where it has none, its neighbours'), and `ground`, its own terrain, where its walk has
+ * it (terrainOf: the world's land drawn in its place, laid along its top).
  */
 export function sceneOf(id) {
     if (!MADE.has(id)) {
@@ -139,6 +289,7 @@ export function sceneOf(id) {
         const box = [origin[0], origin[1], origin[0] + width * square, origin[1] + depth * square];
         const middle = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
         const [rx, rz] = squareOf(walk, ridge);
+        const ground = walk.ground ? terrainOf(walk) : null;
 
         MADE.set(id, {
             id,
@@ -147,10 +298,11 @@ export function sceneOf(id) {
             size,
             box,
             middle,
-            reach: Math.sqrt((box[2] - middle[0]) ** 2 + (box[3] - middle[1]) ** 2),
+            reach: Math.sqrt((box[2] - middle[0]) * (box[2] - middle[0]) + (box[3] - middle[1]) * (box[3] - middle[1])),
             ridge: floorAt(walk, 0, rx, rz),
             low,
             top,
+            ground,
         });
     }
 
@@ -216,13 +368,35 @@ function readAt(scene, grid, sx, sz) {
 // easing to the rest at its sides and its inner end.
 function landUnder(scene, settings, sx, sz) {
     const under = readAt(scene, scene.low, sx, sz) - settings.margin;
+
+    // (Its own terrain drawn as the land: the land along its top, on where it has nothing at all;
+    // under all else where it has none, its castle's floors and the like, and under its terrain
+    // where that's kept, in from its edge with the open)
+    if (scene.ground) {
+        const { ground } = scene;
+        const top = sample(ground, ground.top, sx, sz) - PAD.terrain;
+        const land = top + (Math.min(top, under) - top) * Math.max(sample(ground, ground.bare, sx, sz), sample(ground, ground.deep, sx, sz));
+        const pad = padOf(settings, sx, sz);
+        const level = scene.ridge - PAD.under;
+        const laid = pad > 0 ? land + (level - land) * pad : land;
+
+        return { under: laid, edge: laid, terrain: true };
+    }
+
     const edge = readAt(scene, scene.top, sx, sz) + PAD.over;
-    const across = 1 - smoothstep(settings.pad, settings.pad + PAD.ease, Math.abs(sx - settings.approach[0]));
-    const along = smoothstep(settings.ridge[1] - PAD.ease, settings.ridge[1], sz);
-    const pad = across * along;
+    const pad = padOf(settings, sx, sz);
     const level = scene.ridge - PAD.under;
 
     return pad > 0 ? { under: under + (level - under) * pad, edge: edge + (level - edge) * pad } : { under, edge };
+}
+
+// How much of a point of a scene (its own metres) is its road's end's pad: 1 on it, easing to 0 at
+// its sides and its inner end
+function padOf(settings, sx, sz) {
+    const across = 1 - smoothstep(settings.pad, settings.pad + PAD.ease, Math.abs(sx - settings.approach[0]));
+    const along = smoothstep(settings.ridge[1] - PAD.ease, settings.ridge[1], sz);
+
+    return across * along;
 }
 
 /**
@@ -251,8 +425,13 @@ export function setIn(placed, x, y, lie) {
     const [cx, cz] = [Math.min(x1, Math.max(x0, sx)), Math.min(z1, Math.max(z0, sz))];
     const land = landUnder(scene, settings, cx, cz);
     // (At its edges, the top of its ground, or the land's own lie where that's higher)
-    const edge = Math.max(base + land.edge, lie);
+    const edge = land.terrain ? base + land.edge : Math.max(base + land.edge, lie);
     const [ex, ez] = [sx - cx, sz - cz];
+
+    // (Where it stands, its own terrain the land's: the land along it, to its edges)
+    if (ex === 0 && ez === 0 && land.terrain) {
+        return base + land.under;
+    }
 
     // (Where it stands: under it, rising toward its edges to meet them)
     if (ex === 0 && ez === 0) {
@@ -316,4 +495,39 @@ export function standsOn(placed, x, y) {
     const [sx, sz] = toScene(placed, x + 0.5, y + 0.5);
 
     return within(placed.scene, sx, sz) && !onWayIn(placed, x, y);
+}
+
+/**
+ * Whether trees and the land's own things may stand at a point of the world (metres) a scene's set
+ * into (`placed`: placedOf's): where its own terrain's drawn as the land, nothing of it standing
+ * near (terrainOf `open`); and out past it, but for along its road's end; not on the rest of it.
+ */
+export function growsAt(placed, x, y) {
+    const { scene } = placed;
+    const settings = SCENES[scene.id];
+    const [sx, sz] = toScene(placed, x, y);
+
+    // (Its road's end kept clear, on out past its edge)
+    if (Math.abs(sx - settings.approach[0]) < settings.pad + PAD.ease + 4 && sz > settings.ridge[1] - 10 && sz < scene.box[3] + 30) {
+        return false;
+    }
+
+    // (And its way up from there to its ridge)
+    if (settings.path && Math.abs(sx - settings.approach[0]) < settings.path[0] && sz > settings.path[1] && sz <= settings.ridge[1]) {
+        return false;
+    }
+
+    if (!within(scene, sx, sz)) {
+        return true;
+    }
+
+    const { ground } = scene;
+
+    if (!ground) {
+        return false;
+    }
+
+    const [px, pz] = [Math.floor((sx - ground.origin[0]) / ground.square), Math.floor((sz - ground.origin[1]) / ground.square)];
+
+    return px >= 0 && pz >= 0 && px < ground.size[0] && pz < ground.size[1] && ground.open[pz * ground.size[0] + px] === 1;
 }

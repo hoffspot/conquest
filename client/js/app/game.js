@@ -1585,6 +1585,14 @@ export class Game {
         this.listeners = [];
         this.onDeath = () => {};
 
+        /**
+         * What the readying card's getting ready before a way in's gone through ({ kinds }), or
+         * null while it's not up (#readyAtDoor); and the scene's way in the player last stood on
+         * (#stepIn: gone in once for each time they step onto it).
+         */
+        this.readyingAt = null;
+        this.steppedIn = null;
+
         /** The map the player is on, the one shown (world.maps), and the game's clock (s). */
         this.mapId = "town";
         this.clock = 0;
@@ -1839,7 +1847,7 @@ export class Game {
 
         // (And Bellhaven's castle on its crag, set into the land: world/landmark3d.js)
         if (!this.setIn) {
-            this.setIn = new Landmarks(this.world.plan);
+            this.setIn = new Landmarks(this.world.plan, { land: this.chunks.land });
             this.view.setHorizon(this.setIn);
         }
 

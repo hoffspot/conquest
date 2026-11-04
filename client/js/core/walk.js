@@ -21,13 +21,16 @@ function int16(base64) {
 /**
  * A walk read from its JSON: each level's heights (base64, little-endian Int16, centimetres) as an
  * Int16Array; and what's under it (`under`, where it was baked: the lowest of the scene over each
- * patch of a coarser grid, { square, origin, size, heights }, NONE where nothing's over one) the same.
+ * patch of a coarser grid, { square, origin, size, heights, top }, NONE where nothing's over one)
+ * and its own terrain (`ground`: the top of its terrain's own triangles over each patch of a grid
+ * of its own, `heights`, and the highest of all else, `over`) the same.
  */
 export function readWalk(json) {
     return {
         ...json,
         levels: json.levels.map(({ heights, ...level }) => ({ ...level, heights: int16(heights) })),
-        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights) } } : {}),
+        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights), ...(json.under.top ? { top: int16(json.under.top) } : {}) } } : {}),
+        ...(json.ground ? { ground: { ...json.ground, heights: int16(json.ground.heights), over: int16(json.ground.over) } } : {}),
     };
 }
 

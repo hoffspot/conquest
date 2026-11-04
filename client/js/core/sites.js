@@ -23,7 +23,7 @@ import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, tower
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
-import { placedOf, SCENES, standsOn, wayInOf } from "./terrain/scenes.js";
+import { growsAt, placedOf, SCENES, standsOn, wayInOf } from "./terrain/scenes.js";
 
 // The humans' own (plots across and deep): their castle, a hill citadel laid out by citadel.js
 // (as wide as its glacis round its moat, at the most), and the rest as their landmarks are built
@@ -328,7 +328,9 @@ export class Sites {
 
                 this.scenes.push(set);
                 this.set.set(site.id, set);
-                Object.assign(this.clearings.get(site.id), { at: site.at, radius: set.radius + SITE_MARGIN });
+                // (Its clearing just its way in's: trees and the land's things grow on its own
+                // terrain where none of it stands, growsAt)
+                Object.assign(this.clearings.get(site.id), { at: site.at, radius: 0 });
                 continue;
             }
 
@@ -479,6 +481,32 @@ export class Sites {
         }
 
         return null;
+    }
+
+    /**
+     * Whether trees and the land's own things may stand on a square (metres): anywhere but on a
+     * scene set into the land, but for where its own terrain's drawn as the land and none of it
+     * stands near (terrain/scenes.js growsAt).
+     */
+    growsAt(x, y) {
+        for (const { placed } of this.scenes) {
+            const [dx, dy] = [x + 0.5 - placed.at[0], y + 0.5 - placed.at[1]];
+            const reach = placed.scene.reach + 40;
+
+            if (dx * dx + dy * dy < reach * reach && !growsAt(placed, x + 0.5, y + 0.5)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Whether a square's blocked only by a scene set into the land's own terrain (squareAt), open
+     * for trees and the land's things (growsAt): stood on by no one, but grown on.
+     */
+    openOn(x, y) {
+        return this.scenes.some(({ placed }) => standsOn(placed, x, y)) && this.growsAt(x, y) && !this.bySquare.has(y * WORLD_SIZE + x);
     }
 
     /**
