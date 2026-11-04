@@ -327,7 +327,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/drops3d.js", 20726, "654d62911a"],
             ["js/world/dungeondressing.js", 38931, "d32c4d9df1"],
             ["js/world/dungeonpictures.js", 1374, "4d99e37871"],
-            ["js/world/dungeons3d.js", 29593, "348247eaf1"],
+            ["js/world/dungeons3d.js", 29702, "4f998dad43"],
             ["js/world/effects.js", 68304, "357e5e174d"],
             ["js/world/environment.js", 5675, "c97f06487c"],
             ["js/world/falls.js", 12180, "ca63a754b9"],

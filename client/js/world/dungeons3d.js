@@ -345,7 +345,8 @@ export class Blocks {
  * The scanned models a dungeon's rooms are furnished with (scripts/build-props.js: Poly Haven's,
  * CC0), by name, as the catalog (app/assets.js) lists them: each its file's entry (`asset`,
  * downloaded only once a dungeon's wanted) and, for one of a set's pieces (three candleholders in
- * one file, a heap of rocks), its nodes in that file (`nodes`; null for the whole file).
+ * one file, a heap of rocks), its nodes in that file (`nodes`; null for the whole file). And the
+ * licensed kit Bellhaven's keep's drawn with, its castle's pieces (world/keepkit.js), the same way.
  */
 export const DUNGEON_PROPS = Object.freeze(
     Object.fromEntries(
