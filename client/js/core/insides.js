@@ -1732,8 +1732,8 @@ export class Interiors {
     }
 
     // A scene's map made (core/scenery.js sceneryMap), drawn at its own column of SCENERY_ORIGINS:
-    // its door's inside end where it's come into (its bridge's foot's middle, Bellhaven's) and the
-    // squares that take whoever's on them back out (its southern edge, the road's end outside)
+    // its door's inside end where it's come into (the slope up to Bellhaven's bridge) and the
+    // squares that take whoever's on them back out (the slope's foot, the road's end outside)
     #makeScenery(building) {
         const map = sceneryMap(building.scenery, `${building.key}/${KINDS.scenery.first}`, { name: building.name, building: building.key });
         const { arrive, facing, out } = sceneryWays(building.scenery);

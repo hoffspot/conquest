@@ -21,9 +21,9 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * catalog (client/models/assets.json: drawn there, and seen from the world round it), its column
  * of SCENERY_ORIGINS, where one comes in (`arrive`: the scene's own metres, [x, z]) and the way
  * they face, and the way back out (`out`: [x0, z0, x1, z1], the scene's metres: its floor's
- * squares in that box). Bellhaven's way in is its bridge's foot, a court at 67 m with stairs down
- * either side to the ground below the crag: come in at its middle, facing the castle across the
- * chasm, and out by its southern edge, the road's end in the world.
+ * squares in that box). Bellhaven's way in is the slope of earth that rises to its bridge's near
+ * end, at 67 m, the ground falling away either side of it to the land under the crag: come in on
+ * it, facing the castle across the chasm, and out by its foot, the road's end in the world.
  */
 export const SCENERY = Object.freeze({
     bellhaven: Object.freeze({

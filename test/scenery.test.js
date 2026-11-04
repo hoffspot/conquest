@@ -145,7 +145,7 @@ describe("a fixed scene's map (core/scenery.js): Bellhaven's", () => {
         const middle = (at) => squareIn("bellhaven", at).map((v) => v + 0.5);
 
         assert.ok(reaches(middle(KEEP_DOORS)), "over the bridge to the keep's doors");
-        assert.ok(reaches(middle([-120, 60])), "down the stairs to the ground under the crag, west");
+        assert.ok(reaches(middle([-120, 60])), "down to the ground under the crag, west");
         assert.ok(reaches(middle([120, 60])), "and east");
 
         let [floors, on] = [0, 0];

@@ -82,8 +82,8 @@ function shapeOf(world, link, end) {
     }
 
     if (link.kind === "door" && map.walk) {
-        // A fixed scene's way back out (core/scenery.js: Bellhaven's bridge's foot): its squares'
-        // southern edge, standing on its floor there, facing back in
+        // A fixed scene's way back out (core/scenery.js: the foot of the slope up to Bellhaven's
+        // bridge): its squares' southern edge, standing on its floor there, facing back in
         const xs = end.squares.map(([x]) => x);
         const [x0, x1] = [Math.min(...xs), Math.max(...xs) + 1];
         const z = Math.max(...end.squares.map(([, y]) => y)) + 1 - 0.12;

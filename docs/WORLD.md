@@ -777,13 +777,13 @@ What's built so far:
     struck between a ledge's top and its foot.
   - Its floor's height eases from one square to the next (`heightOn`), counting only the squares a
     step from it, so whoever walks it doesn't jolt up and down, and a ledge stays a ledge.
-  - You come in at the middle of its bridge's foot, a court at 67 m with stairs down either side
-    to the ground under the crag, facing the castle across the chasm. You go out by the court's
-    southern edge, back to its way in in the world.
+  - You come in on the slope of earth that rises to its bridge's near end, at 67 m, facing the
+    castle across the chasm, the ground falling away either side of it to the land under the
+    crag. You go out by the slope's foot, back to its way in in the world.
   - Its navigation is baked from its floors (`core/navigation/walk.js`, `SCENES`): each square two
     triangles at its own height, in the overworld's voxels, the walk's step its climb. Recast's own
-    ledge filter is left off, the walk having judged where a body can stand: on a stair that fans
-    out sideways, it took every square for a ledge. Every one of the walk's 30,027 squares is on
+    ledge filter is left off, the walk having judged where a body can stand: on the ground's steep
+    fall either side of the slope, fanning out sideways, it took every square for a ledge. Every one of the walk's 30,027 squares is on
     the mesh, and the whole of it bakes in under a second on a desktop, a tile at a time as it's
     walked.
 - **Its map drawn** (`world/scenery3d.js`) out of doors, under the sky, in the world's sun and fog,
@@ -802,8 +802,8 @@ What's built so far:
   - Its art is let go of once its map's left, a castle's worth of memory, to be read again from
     what the downloader keeps the next time it's gone into.
   - Without the licensed models, it draws the walk, a block a square, as the lab does.
-  - The minimap paints it from the walk (`app/minimap.js`), and its way out glows on the court's
-    southern edge (`app/doors.js`).
+  - The minimap paints it from the walk (`app/minimap.js`), and its way out glows across the
+    slope's foot (`app/doors.js`).
   - Its way in isn't in the world yet: the landmark sets it there. Its tests set it down by hand
     (`test/scenery.test.js`, `e2e/bellhaven.spec.js`).
 
