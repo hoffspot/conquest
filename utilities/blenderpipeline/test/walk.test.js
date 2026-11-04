@@ -130,6 +130,27 @@ describe("where scenery can be walked", () => {
         assert.deepEqual(readWalk(json), { ...result, levels: result.levels.map((level) => ({ ...level, heights: new Int16Array(level.heights) })) });
     });
 
+    it("what's under it, on a coarser grid: the lowest surface over each patch (a chasm's floor under its bridge), none where nothing's over one", () => {
+        // (Ground either side of a chasm 30 m deep, a bridge over it, and a shelf off by itself,
+        // 2 m up; the patches 5 m a side)
+        const parts = [quad(0, 0, 10, 10, 0), quad(20, 0, 30, 10, 0), quad(10, 4, 20, 6, 0), quad(10, 0, 20, 10, -30), quad(40, 0, 45, 5, 2)];
+        const result = walk(parts, { from: [1, 0, 1], under: 5 });
+        const { under } = result;
+        const at = (x, z) => under.heights[z * under.size[0] + x];
+
+        assert.deepEqual([under.square, under.origin, under.size], [5, [0, 0], [9, 2]]);
+        assert.deepEqual([0, 1, 2, 3, 4, 5].map((x) => at(x, 0)), [0, 0, -3000, -3000, 0, 0]);
+        assert.equal(at(6, 0), NONE, "the ground ends at the edge of x 30: the patch from there isn't under it");
+        assert.equal(at(8, 0), 200);
+        assert.equal(at(8, 1), NONE);
+        assert.equal(walk(parts, { from: [1, 0, 1] }).under, undefined, "only where it's asked for");
+
+        const json = JSON.parse(JSON.stringify(walkJson(result)));
+
+        assert.equal(typeof json.under.heights, "string");
+        assert.deepEqual(readWalk(json).under, { ...under, heights: new Int16Array(under.heights) });
+    });
+
     it("says what's wrong: nowhere to walk from; nothing to walk on", () => {
         assert.throws(() => walk([quad(0, 0, 10, 10, 0)], { from: [50, 0, 50] }), /walk.from \(50, 0, 50\): there's no floor there/);
         assert.throws(() => walk([quad(0, 0, 10, 10, 0)], {}), /walk.from is where it's walked from/);

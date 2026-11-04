@@ -131,6 +131,7 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", walk: { from: [1, 0] } }, /walk.from is where it's walked from/);
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], climb: -1 } }, /walk.climb is a number, 0 or more/);
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], reach: 3 } }, /unknown setting walk.reach/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], under: "4" } }, /walk.under is a number, 0 or more/);
         refuses({ source: "a.fbx", tiledTexcoords: "yes" }, /tiledTexcoords is true or false/);
         refuses({ source: "a.fbx", tangents: 0 }, /tangents is true or false/);
         refuses({ source: "a.fbx", lods: [{ ratio: 0.5, permissive: "yes" }] }, /lods\[0\].permissive is true or false/);

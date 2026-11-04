@@ -120,7 +120,7 @@ function clip(points, axis, at, keep) {
  * other) }], left: { unreached, small } (floors no walk from `from` reaches; levels too small to
  * keep) }.
  */
-export function walkOf(triangles, { from, ...options } = {}) {
+export function walkOf(triangles, { from, under = null, ...options } = {}) {
     const { square, climb, least } = { ...WALK, ...options };
 
     if (!Array.isArray(from) || from.length !== 3 || !from.every(Number.isFinite)) {
@@ -157,7 +157,65 @@ export function walkOf(triangles, { from, ...options } = {}) {
         }
     };
 
-    return walkFrom({ from, square, least, origin, width, depth, floorStarts, heightOf, columnOf, nodes, besideOf });
+    const walk = walkFrom({ from, square, least, origin, width, depth, floorStarts, heightOf, columnOf, nodes, besideOf });
+
+    return under ? { ...walk, under: underOf(triangles, under) } : walk;
+}
+
+/**
+ * The lowest of scenery's surfaces over each patch of a coarser grid (`square` metres a side,
+ * from the same corner as the walk's, as far as the triangles go): { square, origin: [x, z],
+ * size: [along x, along z], heights: Int16Array (cm, NONE over a patch no triangle's over; row by
+ * row along z, each along x) }. Under a castle on its crag that's the crag's own ground, the chasm's
+ * floor, the land round it, whatever stands on them: what a world's own land can be laid just under,
+ * where the scene's set into it, so the land is hidden and the scene stands on it (the game's
+ * core/scenery.js).
+ */
+export function underOf(triangles, square) {
+    const low = [Infinity, Infinity];
+    const high = [-Infinity, -Infinity];
+
+    for (let i = 0; i < triangles.length; i += 3) {
+        low[0] = Math.min(low[0], triangles[i]);
+        high[0] = Math.max(high[0], triangles[i]);
+        low[1] = Math.min(low[1], triangles[i + 2]);
+        high[1] = Math.max(high[1], triangles[i + 2]);
+    }
+
+    const origin = [Math.floor(low[0] / square) * square, Math.floor(low[1] / square) * square];
+    const width = Math.max(1, Math.ceil((high[0] - origin[0]) / square));
+    const depth = Math.max(1, Math.ceil((high[1] - origin[1]) / square));
+    const lowest = new Float32Array(width * depth).fill(Infinity);
+
+    for (let t = 0; t < triangles.length; t += 9) {
+        const points = Array.from(triangles.subarray(t, t + 9));
+        // (The patches it's over: one it only touches at an edge isn't one)
+        const span = (at, axis, count) => {
+            const first = Math.floor((Math.min(points[axis], points[axis + 3], points[axis + 6]) - at) / square);
+            const last = Math.ceil((Math.max(points[axis], points[axis + 3], points[axis + 6]) - at) / square) - 1;
+
+            return [Math.max(0, first), Math.min(count - 1, Math.max(first, last))];
+        };
+        const [x0, x1] = span(origin[0], 0, width);
+        const [z0, z1] = span(origin[1], 2, depth);
+
+        for (let z = z0; z <= z1; z++) {
+            for (let x = x0; x <= x1; x++) {
+                const [left, near] = [origin[0] + x * square, origin[1] + z * square];
+                let piece = clip(points, 0, left, 1);
+
+                piece = piece.length ? clip(piece, 0, left + square, -1) : piece;
+                piece = piece.length ? clip(piece, 2, near, 1) : piece;
+                piece = piece.length ? clip(piece, 2, near + square, -1) : piece;
+
+                for (let i = 1; i < piece.length; i += 3) {
+                    lowest[z * width + x] = Math.min(lowest[z * width + x], piece[i]);
+                }
+            }
+        }
+    }
+
+    return { square, origin, size: [width, depth], heights: Int16Array.from(lowest, (y) => (Number.isFinite(y) ? Math.max(-32767, Math.min(32767, Math.round(y * 100))) : NONE)) };
 }
 
 /**
@@ -491,23 +549,31 @@ function walkFrom({ from, square, least, origin, width, depth, floorStarts, heig
     };
 }
 
-/** A walk as JSON can carry it: each level's heights in base64 (little-endian Int16). */
+// Int16 heights as JSON carries them: base64, little-endian
+const base64 = (heights) => Buffer.from(heights.buffer, heights.byteOffset, heights.byteLength).toString("base64");
+
+/** A walk as JSON can carry it: each level's heights in base64 (little-endian Int16), and what's under it's. */
 export function walkJson(walk) {
     return {
         ...walk,
-        levels: walk.levels.map(({ heights, ...level }) => ({ ...level, heights: Buffer.from(heights.buffer, heights.byteOffset, heights.byteLength).toString("base64") })),
+        levels: walk.levels.map(({ heights, ...level }) => ({ ...level, heights: base64(heights) })),
+        ...(walk.under ? { under: { ...walk.under, heights: base64(walk.under.heights) } } : {}),
     };
 }
+
+// Int16 heights read back from their base64
+const int16 = (text) => {
+    const bytes = Buffer.from(text, "base64");
+
+    return new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+};
 
 /** A walk read back from its JSON. */
 export function readWalk(json) {
     return {
         ...json,
-        levels: json.levels.map(({ heights, ...level }) => {
-            const bytes = Buffer.from(heights, "base64");
-
-            return { ...level, heights: new Int16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)) };
-        }),
+        levels: json.levels.map(({ heights, ...level }) => ({ ...level, heights: int16(heights) })),
+        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights) } } : {}),
     };
 }
 

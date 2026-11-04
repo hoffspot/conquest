@@ -115,6 +115,13 @@ export function checkBudgets(glb, budgets) {
 
 const relative = (file) => path.relative(HERE, file).split(path.sep).join("/");
 
+// The lowest of a grid's heights (cm, as the walk keeps them) in metres; null if it has none
+const lowestOf = (heights) => {
+    const kept = Array.from(heights).filter((height) => height !== -32768);
+
+    return kept.length ? Math.min(...kept) / 100 : null;
+};
+
 /** The report on a built asset, from what each stage did and the GLB read back. */
 export async function makeReport(config, { blender, optimized, glb, variants = [] }) {
     const file = await inspectGlb(glb);
@@ -200,6 +207,16 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
                       levels: optimized.walk.levels.map(({ squares, low, high, box }) => ({ squares, low, high, box })),
                       links: optimized.walk.links.map(({ from, to, crossings }) => ({ from, to, crossings: crossings.length })),
                       left: optimized.walk.left,
+                      ...(optimized.walk.under
+                          ? {
+                                under: {
+                                    square: optimized.walk.under.square,
+                                    origin: optimized.walk.under.origin,
+                                    size: optimized.walk.under.size,
+                                    low: lowestOf(optimized.walk.under.heights),
+                                },
+                            }
+                          : {}),
                   },
               }
             : {}),

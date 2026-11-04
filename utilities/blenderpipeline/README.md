@@ -205,7 +205,7 @@ error, so a misspelt one isn't silently ignored.
 | `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave); `materials` as a copy's |
 | `tangents` | `true` | Tangents kept for the normal maps (MikkTSpace's, as they're baked with). `false` leaves them out: Three.js works them out as it draws, near enough for scenery seen from afar, and about a seventh smaller (the White Castle's geometry: 29 MB with them, 25 without) |
 | `tiledTexcoords` | `false` | Texture coordinates past 0 to 1 (a texture tiled along a wall) brought into it, each material's textures given the offset and scale that put them back (KHR_texture_transform), so they're quantized as the rest are rather than kept as floats, twice the size. At 16 bits, which they take on the GPU anyway |
-| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` (and `<name>.walk.js`) from where it's walked from (*Where it can be walked*, below) |
+| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` (and `<name>.walk.js`) from where it's walked from; `"under": 4`, the lowest of it over each 4 m patch too (*Where it can be walked*, below) |
 | `budgets` | `{}` | Limits it's checked against: `triangles`, `vertices`, `joints`, `drawCalls`, `textureSize`, `textureMegabytes` (on the GPU, with mipmaps), `kilobytes` (the GLB), `clips` (names it must have) |
 
 ## Where it can be walked
@@ -236,6 +236,11 @@ wherever its code runs, with no download of its own.
    - where a walk crosses from one level to another is a link (its stairs, for the game to put
      between maps);
    - a level of fewer than `least` squares (20) is left out (`left.small`: a sill, a ledge).
+5. **Under it** (`under`, a patch's side in metres; left out, none). The lowest of its surfaces
+   over each patch of a coarser grid, from the same corner, as far as its triangles go: under a
+   castle on its crag, the crag's ground, the chasm's floor and the land round them. A game that
+   sets the scene into its world lays its own land just under that, so the scene stands on the
+   land and the land doesn't show through it.
 
 The file is `{ square, origin: [x, z], size: [along x, along z], from, levels: [{ squares, low,
 high, box, heights }], links: [{ from, to, crossings }], left }`:
@@ -243,9 +248,11 @@ high, box, heights }], links: [{ from, to, crossings }], left }`:
 - `heights` are its floors' heights in centimetres, a little-endian Int16Array in base64, row by
   row along z and each row along x, `-32768` where it has no floor.
 - `crossings` are `[x, z, x, z]`: a square of one level, beside a square of the other.
+- `under`, where it's asked for, is `{ square, origin, size, heights }`: each patch's lowest
+  surface in centimetres, as the levels' heights are, `-32768` where nothing's over it.
 
 `readWalk` and `floorAt` (`lib/walk.js`) read it back. The report gives each level's squares,
-heights and box, and how many crossings each link has (`walk`).
+heights and box, how many crossings each link has, and the grid under it and its lowest (`walk`).
 
 For a bought scene, the walk is the one thing built from it that goes in the game's repository (its
 scrambled model goes in the private one). Players without the licensed models can walk it all the

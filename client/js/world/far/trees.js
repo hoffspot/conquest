@@ -14,6 +14,7 @@ import { FLORA } from "../../core/overworld.js";
 import { createRandom } from "../../core/random.js";
 import { HOME_TREES, TREE_KINDS } from "../../core/setpieces/pieces.js";
 import { heightAt, SLOPE } from "../../core/terrain/height.js";
+import { sceneOf } from "../../core/terrain/scenes.js";
 import { CELL, CELLS, CHUNK, WATER } from "../../core/worldplan/plan.js";
 import { BIOMES, RACES } from "../../core/worldplan/races.js";
 import { canopyTint } from "../canopy.js";
@@ -77,7 +78,8 @@ export function gatherTrees(plan, { x, z, reach, from = 0, town = null }) {
     const out = [];
     const clearings = [
         ...plan.places.map(({ at, radius }) => ({ at, radius: radius + CLEAR_OF_PLACES })),
-        ...plan.sites.map(({ at }) => ({ at, radius: 40 + CLEAR_OF_PLACES })),
+        // (A scene set into the land keeps them off all it stands on: core/terrain/scenes.js)
+        ...plan.sites.map((site) => ({ at: site.at, radius: (site.scenery ? sceneOf(site.scenery).reach : 40) + CLEAR_OF_PLACES })),
     ].filter(({ at, radius }) => Math.hypot(at[0] - x, at[1] - z) < reach + radius);
     const [c0, c1] = [Math.max(0, Math.floor((x - reach) / CHUNK)), Math.min(CELLS * (CELL / CHUNK) - 1, Math.floor((x + reach) / CHUNK))];
     const [r0, r1] = [Math.max(0, Math.floor((z - reach) / CHUNK)), Math.min(CELLS * (CELL / CHUNK) - 1, Math.floor((z + reach) / CHUNK))];

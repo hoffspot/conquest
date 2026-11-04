@@ -16,7 +16,7 @@ import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
 import { metresOf } from "../terrain/curve.js";
 import { stillWaterAt } from "../terrain/height.js";
 import { runningIn, watersOf } from "../terrain/waters.js";
-import { cos, hypot, pow, sin } from "../exact.js";
+import { atan2, cos, hypot, pow, sin } from "../exact.js";
 
 /**
  * The kinds of settlement: how many each people has, how far (cells) they keep from others (two
@@ -177,6 +177,20 @@ export const SUNDERED_RING = Object.freeze({ id: "sundered-ring-1", kind: "sunde
  * distances a `wider` share looser. None, if nowhere will do. Its people the land's, if anyone's.
  */
 export const LANDMARKS = Object.freeze([RUINED_QUARRY, SUNDERED_RING]);
+
+/**
+ * Bellhaven, the Order of the Bell's mother house, abandoned (core/scenery.js: a fixed scene of its
+ * own, DmitriyDryzhak's White Castle, gone into from its road's end): one a world, set into the
+ * land (terrain/scenes.js), its castle on its crag seen far off. Laid out after the LANDMARKS, from
+ * numbers of its own (`numbers`), much as one of them is (`hills`, `biomes`, `from`, `to`, `guild`;
+ * `strict`: how many rounds look only on the land it'd rather be on, up in the hills, and in the
+ * first on one of its `biomes` too; `wider`: how much looser each round after those its distances
+ * are), but on the flattest land there's room on: no road or water within
+ * `room` cells of its middle (the land round it's reshaped that far), no site or camp within
+ * `stand` cells, `clear` cells beyond every settlement's edge; and a road within `road` metres, for
+ * its own to come up from. It faces the nearest road: its road comes up to it from there.
+ */
+export const BELLHAVEN = Object.freeze({ id: "bellhaven-1", kind: "bellhaven", name: "Bellhaven", scenery: "bellhaven", numbers: Object.freeze([79, 53]), hills: Object.freeze([0.45, 0.8]), biomes: Object.freeze(["woods", "meadow", "heath", "farmland", "tundra", "savannah", "darkwood", "elfwood"]), from: 2400, to: 4800, guild: 1400, room: 11, stand: 8, clear: 10, road: 900, strict: 2, wider: 1.2 });
 
 // The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
 const GUILDED = Object.freeze(["village", "town", "city", "capital"]);
@@ -766,6 +780,10 @@ export function settleLand(land, seed) {
         sites.push(...landmarkOf(landmark, land, places, sites, camps, createRandom(seed * landmark.numbers[0] + landmark.numbers[1])));
     }
 
+    // (And Bellhaven after them, the same way, from numbers of its own: nothing laid out before
+    // moves for it)
+    sites.push(...bellhavenOf(land, road, places, sites, camps, createRandom(seed * BELLHAVEN.numbers[0] + BELLHAVEN.numbers[1])));
+
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
 
@@ -1226,6 +1244,116 @@ function landmarkOf(landmark, land, places, sites, camps, random) {
             }
 
             return [{ id, kind, race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed() }];
+        }
+    }
+
+    return [];
+}
+
+// Bellhaven (BELLHAVEN): of the cells with room for all it stands on and a road near enough, as
+// near the nearest start as it should be and a settlement with a guild, the one whose land's
+// flattest round it (the plan's heights within `stand` cells, highest to lowest: the land's set
+// under it from its road's end, and the less it rises and falls the less it's reshaped), the first
+// of those as flat; on the land it'd rather be on if anywhere will do (`hills`, `biomes`), and
+// each round after the first `strict` its distances a `wider` share looser. Facing the nearest
+// road (radians, 0 toward +y). None, if nowhere will do
+function bellhavenOf(land, road, places, sites, camps, random) {
+    const { biome, water, territory, height } = land;
+    const { id, kind, name, scenery, hills, biomes, from, to, guild, room, stand, clear, road: roadReach, strict } = BELLHAVEN;
+    const starts = places.filter(({ start }) => start).map(({ at }) => at);
+    const towns = places.filter(({ kind: each }) => GUILDED.includes(each));
+    const reach = Math.ceil(roadReach / CELL);
+    // (The land it'd rather be on: up in the hills, and in the first round on one of its lands too)
+    const rather = (k, round) => height[k] >= hills[0] && height[k] <= hills[1] && (round > 0 || biomes.includes(BIOMES[biome[k]].id));
+    const metres = Float64Array.from(height, (h) => metresOf(h));
+    // (No road or water within `room` cells)
+    const roomy = (x, y) => {
+        for (let dy = -room; dy <= room; dy++) {
+            for (let dx = -room; dx <= room; dx++) {
+                const k = cellIndex(x + dx, y + dy);
+
+                if (dx * dx + dy * dy <= room * room && (k < 0 || water[k] || road[k])) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    };
+    // (The nearest road cell's middle within `road` metres, or null)
+    const nearestRoad = (x, y) => {
+        let best = null;
+
+        for (let dy = -reach; dy <= reach; dy++) {
+            for (let dx = -reach; dx <= reach; dx++) {
+                const k = cellIndex(x + dx, y + dy);
+                const far = hypot(dx, dy) * CELL;
+
+                if (k >= 0 && road[k] && far <= roadReach && (!best || far < best.far)) {
+                    best = { far, at: centre(x + dx, y + dy) };
+                }
+            }
+        }
+
+        return best;
+    };
+    // (How far its land rises and falls within `stand` cells, metres)
+    const spread = (x, y) => {
+        let [low, high] = [Infinity, -Infinity];
+
+        for (let dy = -stand; dy <= stand; dy++) {
+            for (let dx = -stand; dx <= stand; dx++) {
+                if (dx * dx + dy * dy <= stand * stand) {
+                    const m = metres[cellIndex(x + dx, y + dy)];
+
+                    [low, high] = [Math.min(low, m), Math.max(high, m)];
+                }
+            }
+        }
+
+        return high - low;
+    };
+
+    for (let round = 0, loose = 1; round < 6; round++, loose *= round > strict ? BELLHAVEN.wider : 1) {
+        let best = null;
+
+        for (let y = room + 1; y < CELLS - room - 1; y++) {
+            for (let x = room + 1; x < CELLS - room - 1; x++) {
+                const at = cellIndex(x, y);
+                const spot = centre(x, y);
+
+                if (water[at] || biome[at] === BIOME.beach || (round < strict && !rather(at, round))) {
+                    continue;
+                }
+
+                const home = starts.length ? Math.min(...starts.map(([sx, sy]) => hypot(sx - spot[0], sy - spot[1]))) : from;
+
+                if (home < from / loose || home > to * loose || !towns.some(({ at: [tx, ty] }) => hypot(tx - spot[0], ty - spot[1]) <= guild * loose)) {
+                    continue;
+                }
+
+                if (!clearOf(places, [x, y], clear) || sites.some((site) => apart(site.cell, [x, y]) < stand) || camps.some((camp) => apart(camp.cell, [x, y]) < stand) || !roomy(x, y)) {
+                    continue;
+                }
+
+                const flat = spread(x, y);
+
+                if (best && flat >= best.flat) {
+                    continue;
+                }
+
+                const near = nearestRoad(x, y);
+
+                if (near) {
+                    best = { cell: [x, y], at, spot, flat, facing: atan2(near.at[0] - spot[0], near.at[1] - spot[1]) };
+                }
+            }
+        }
+
+        if (best) {
+            const { cell, at, spot, facing } = best;
+
+            return [{ id, kind, race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed(), scenery, facing }];
         }
     }
 

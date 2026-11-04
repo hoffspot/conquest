@@ -152,6 +152,7 @@ import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
 import { Silhouettes } from "../world/far/silhouettes.js";
 import { Volcano } from "../world/far/volcano.js";
+import { Landmarks } from "../world/landmark3d.js";
 import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
@@ -1835,9 +1836,16 @@ export class Game {
             this.view.setHorizon(this.volcano);
         }
 
+        // (And Bellhaven's castle on its crag, set into the land: world/landmark3d.js)
+        if (!this.setIn) {
+            this.setIn = new Landmarks(this.world.plan);
+            this.view.setHorizon(this.setIn);
+        }
+
         this.far.update(x, z);
         this.silhouettes.update(x, z, this.world.maps.town?.sites?.set);
         this.volcano.update(this.clock);
+        this.setIn.update(x, z);
     }
 
     // How the world looks round the player at (x, z) (metres), `dt` seconds on (world/look.js: the
@@ -3073,7 +3081,7 @@ export class Game {
         this.far?.dispose();
         this.view.setFar(null);
 
-        for (const thing of [this.volcano, this.silhouettes]) {
+        for (const thing of [this.volcano, this.silhouettes, this.setIn]) {
             if (thing) {
                 this.view.setHorizon(thing, false);
                 thing.dispose();

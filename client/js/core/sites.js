@@ -23,6 +23,7 @@ import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, tower
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
 import { atan2, cos, hypot, PI, sin } from "./exact.js";
 import { heightAt, HEIGHT_STEP } from "./terrain/height.js";
+import { placedOf, SCENES, standsOn, wayInOf } from "./terrain/scenes.js";
 
 // The humans' own (plots across and deep): their castle, a hill citadel laid out by citadel.js
 // (as wide as its glacis round its moat, at the most), and the rest as their landmarks are built
@@ -249,6 +250,33 @@ export function restingOf(plan, site) {
 }
 
 /**
+ * A scene set into the land (a site with a `scenery`: worldplan/settle.js BELLHAVEN; its land
+ * terrain/scenes.js's), as the sites set down are: where the plan has it, facing its road, no
+ * pieces of its own (its art's drawn by itself: world/landmark3d.js), its squares those it stands
+ * on (`placed`: standsOn), its way in at its road's end (scenes.js wayInOf: into its own map,
+ * insides.js "scenery"), its heart its middle; how far it reaches from there (`radius`, metres).
+ */
+function sceneSet(site) {
+    const placed = placedOf(site);
+    const way = wayInOf(placed);
+
+    return {
+        site,
+        x: site.at[0],
+        y: site.at[1],
+        facing: site.facing,
+        w: 0,
+        h: 0,
+        pieces: [],
+        squares: new Set(),
+        radius: placed.scene.reach,
+        heart: site.at,
+        placed,
+        entrance: { inside: "scenery", scenery: site.scenery, outside: way.outside, front: way.front, facing: way.facing, door: way.door },
+    };
+}
+
+/**
  * The sites that are built, each set down in the world the first time a chunk near it's made
  * (`settle`), as the settlements are laid out: { site, x, y (its middle, metres), facing, w, h
  * (plots), pieces ([{ ...piece, x, y (metres, in the world), site (its id) }]), squares (Set of
@@ -287,11 +315,22 @@ export class Sites {
         this.rims = new Set();
         this.cleared = [];
         this.clearings = new Map();
+        // (The scenes set into the land, set down at once where the plan has them: terrain/scenes.js)
+        this.scenes = [];
 
         for (const site of plan.sites) {
             const size = siteSize(site);
 
             this.clearings.set(site.id, { at: site.at, radius: clearing });
+
+            if (site.scenery && SCENES[site.scenery]) {
+                const set = sceneSet(site);
+
+                this.scenes.push(set);
+                this.set.set(site.id, set);
+                Object.assign(this.clearings.get(site.id), { at: site.at, radius: set.radius + SITE_MARGIN });
+                continue;
+            }
 
             if (!size) {
                 continue;
@@ -428,7 +467,18 @@ export class Sites {
     squareAt(x, y) {
         const k = y * WORLD_SIZE + x;
 
-        return this.bySquare.has(k) ? { blocked: 1, opaque: 1, paved: this.paved.has(k) } : null;
+        if (this.bySquare.has(k)) {
+            return { blocked: 1, opaque: 1, paved: this.paved.has(k) };
+        }
+
+        // (A scene set into the land: all it stands on but its way in)
+        for (const { placed } of this.scenes) {
+            if (standsOn(placed, x, y)) {
+                return { blocked: 1, opaque: 1, paved: false };
+            }
+        }
+
+        return null;
     }
 
     /**

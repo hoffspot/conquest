@@ -13,6 +13,8 @@
 //   that only the valleys and passes can be walked; mesas stepped in terraces in the badlands;
 //   the volcano's crater. Each kind of land's roughness is itself read between cells with the same
 //   B-spline, so one blends into the next over a hundred metres or so.
+// - Bellhaven's castle on its crag, a fixed scene set into the land (scenes.js): the land laid just
+//   under it, up to its edges where they're higher than the land round it.
 // - The water: the land carved down under lakes and the sea (to meet the shore as the overworld
 //   has it: waters.js), and a channel for each river, its surface only ever running down, with
 //   banks just above it.
@@ -23,12 +25,13 @@
 import { cos, sin, TAU } from "../exact.js";
 import { metresOf } from "./curve.js";
 import { simplex } from "./simplex.js";
+import { baseOf, placedOf, reachOf, setIn } from "./scenes.js";
 import { setLandOf, watersOf } from "./waters.js";
 import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 11;
+export const TERRAIN_VERSION = 12;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -278,12 +281,23 @@ export function stillOf(plan, x, y) {
 
 /**
  * The lie of the land and its roughness at a point (metres), before any water's carved into it
- * (metres, not rounded); the volcano's crater cut into it.
+ * (metres, not rounded); the volcano's crater cut into it, and the scenes set into it.
  */
 export function landHeight(plan, x, y) {
     const layers = layersOf(plan);
     const [dx, dy] = [x - layers.volcano[0], y - layers.volcano[1]];
     const d2 = (dx * dx + dy * dy) / (CRATER.radius * CRATER.radius);
+
+    layers.scenes ??= scenesOf(plan, layers);
+
+    // (A scene set into the land: the land laid under it, and eased out from its edges)
+    for (const scene of layers.scenes) {
+        const [sx, sy] = [x - scene.at[0], y - scene.at[1]];
+
+        if (sx * sx + sy * sy < scene.reach * scene.reach) {
+            return setIn(scene, x, y, lieOf(plan, x, y, layers));
+        }
+    }
 
     if (d2 < 1) {
         // (A bowl under the rim, wherever the cone stands higher: at its edge the cone's own
@@ -297,6 +311,31 @@ export function landHeight(plan, x, y) {
     }
 
     return lieOf(plan, x, y, layers);
+}
+
+// The scenes set into a plan's land (its sites with a `scenery`: worldplan/settle.js BELLHAVEN),
+// each placed (scenes.js placedOf) with how high its own ground stands (`base`) and how far from
+// its middle it reaches (`reach`); none for a land being laid out, with no sites yet
+function scenesOf(plan, layers) {
+    return (plan.sites ?? [])
+        .filter((site) => site.scenery)
+        .map((site) => {
+            const placed = placedOf(site);
+
+            return { ...placed, base: baseOf(placed, (x, y) => lieOf(plan, x, y, layers)), reach: reachOf(placed) };
+        });
+}
+
+/**
+ * The scenes set into a plan's land (scenes.js): each { scene, at, facing, cos, sin, base (how
+ * high its own 0 stands in the world, metres), reach }, for drawing it where the land has it.
+ */
+export function scenesIn(plan) {
+    const layers = layersOf(plan);
+
+    layers.scenes ??= scenesOf(plan, layers);
+
+    return layers.scenes;
 }
 
 /** The volcano's crater: its middle ([x, y] metres; none: null) and its rim's height (metres). */

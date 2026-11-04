@@ -159,7 +159,7 @@ const MAPS = { baseColor: "colour", alphaMap: "grey", normal: "normal", occlusio
 const MAP_KEYS = { file: 0, channel: 0, scale: 0, invert: 0, flipGreen: 0 };
 const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
-const WALK_KEYS = { from: 0, square: 0, slope: 0, headroom: 0, climb: 0, least: 0, cover: 0, merge: 0 };
+const WALK_KEYS = { from: 0, square: 0, slope: 0, headroom: 0, climb: 0, least: 0, cover: 0, merge: 0, under: 0 };
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
 
 /**

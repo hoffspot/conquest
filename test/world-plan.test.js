@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, HELLS, landAt, layOutWorld, openGround, planWorld, RACES, REACH, RIFT_TOWER, ROAD, RUINED_QUARRY, SETTLEMENTS, SITES, SUNDERED_RING, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
+import { BELLHAVEN, BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, HELLS, landAt, layOutWorld, openGround, planWorld, RACES, REACH, RIFT_TOWER, ROAD, RUINED_QUARRY, SETTLEMENTS, SITES, SUNDERED_RING, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
 import { metresOf } from "../client/js/core/terrain/curve.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
@@ -269,7 +269,7 @@ describe("the world plan (worldplan/plan.js)", () => {
         for (const [seed, plan] of plans) {
             const lairs = plan.sites.filter(({ kind }) => kind === "dreadthorn's lair");
             const drake = plan.sites.find(({ kind }) => kind === "dragon's lair");
-            const after = plan.sites.filter(({ kind, theme }) => kind === "werewolf's den" || theme === "hell" || kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring").length;
+            const after = plan.sites.filter(({ kind, theme }) => kind === "werewolf's den" || theme === "hell" || kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring" || kind === "bellhaven").length;
             const [least, most] = DREADTHORN_LAIRS.count;
 
             assert.ok(lairs.length >= least && lairs.length <= most, `seed ${seed}: ${lairs.length}`);
@@ -298,7 +298,7 @@ describe("the world plan (worldplan/plan.js)", () => {
         for (const [seed, plan] of plans) {
             const dens = plan.sites.filter(({ kind }) => kind === "werewolf's den");
             const lairs = plan.sites.filter(({ kind }) => kind.endsWith("lair") || kind === "werewolf's den");
-            const after = plan.sites.filter(({ kind, theme }) => theme === "hell" || kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring").length;
+            const after = plan.sites.filter(({ kind, theme }) => theme === "hell" || kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring" || kind === "bellhaven").length;
             const [least, most] = WEREWOLF_DENS.count;
 
             assert.ok(dens.length >= least && dens.length <= most, `seed ${seed}: ${dens.length}`);
@@ -335,7 +335,7 @@ describe("the world plan (worldplan/plan.js)", () => {
             const hells = plan.sites.filter(({ theme }) => theme === "hell");
             const lairs = plan.sites.filter(({ kind }) => kind.endsWith("lair") || kind === "werewolf's den");
             const starts = plan.places.filter(({ start }) => start).map(({ at: spot }) => spot);
-            const towers = plan.sites.filter(({ kind }) => kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring").length;
+            const towers = plan.sites.filter(({ kind }) => kind === "rift tower" || kind === "ruined quarry" || kind === "sundered ring" || kind === "bellhaven").length;
             const [least, most] = HELLS.count;
 
             assert.ok(hells.length >= least && hells.length <= most, `seed ${seed}: ${hells.length}`);
@@ -372,7 +372,7 @@ describe("the world plan (worldplan/plan.js)", () => {
             const [tower] = towers;
             const cell = at(...tower.cell);
 
-            const landmarks = plan.sites.filter(({ kind }) => kind === "ruined quarry" || kind === "sundered ring").length;
+            const landmarks = plan.sites.filter(({ kind }) => kind === "ruined quarry" || kind === "sundered ring" || kind === "bellhaven").length;
 
             assert.equal(plan.sites.at(-1 - landmarks), tower, "laid out last but the landmarks");
             assert.deepEqual([tower.id, tower.name, tower.race], ["rift-tower-1", RIFT_TOWER.name, null]);
@@ -393,7 +393,7 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.ok(bare.length >= plans.size / 2, `${bare.length} of ${plans.size}`);
     });
 
-    it("puts the ruins of Harrowstone quarry up in the hills, one a world, well out from the nearest start and near a settlement with a guild, clear of the other sites and far from the great lairs, the dens, the hells and the tower, last of all but the Sundered Ring", () => {
+    it("puts the ruins of Harrowstone quarry up in the hills, one a world, well out from the nearest start and near a settlement with a guild, clear of the other sites and far from the great lairs, the dens, the hells and the tower, last of all but the Sundered Ring and Bellhaven", () => {
         for (const [seed, plan] of plans) {
             const ruins = plan.sites.filter(({ kind }) => kind === "ruined quarry");
             const kept = plan.sites.filter(({ kind, theme }) => kind.endsWith("lair") || kind === "werewolf's den" || theme === "hell" || kind === "rift tower");
@@ -404,7 +404,9 @@ describe("the world plan (worldplan/plan.js)", () => {
             const [quarry] = ruins;
             const cell = at(...quarry.cell);
 
-            assert.equal(plan.sites.at(plan.sites.at(-1).kind === "sundered ring" ? -2 : -1), quarry, "laid out last but the Sundered Ring");
+            const later = plan.sites.filter(({ kind }) => kind === "sundered ring" || kind === "bellhaven").length;
+
+            assert.equal(plan.sites.at(-1 - later), quarry, "laid out last but the Sundered Ring and Bellhaven");
             assert.deepEqual([quarry.id, quarry.kind, quarry.name], ["ruined-quarry-1", "ruined quarry", RUINED_QUARRY.name]);
             assert.equal(plan.water[cell], 0, "on dry land");
 
@@ -429,7 +431,7 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.ok(hills.length >= plans.size * 0.7, `${hills.length} of ${plans.size}`);
     });
 
-    it("puts the Sundered Ring out in the wild lands the thin places are, one a world, well out from the nearest start and near a settlement with a temple, clear of the other sites and far from the great lairs, the dens, the hells, the tower and Harrowstone, last of all", () => {
+    it("puts the Sundered Ring out in the wild lands the thin places are, one a world, well out from the nearest start and near a settlement with a temple, clear of the other sites and far from the great lairs, the dens, the hells, the tower and Harrowstone, last of all but Bellhaven", () => {
         for (const [seed, plan] of plans) {
             const rings = plan.sites.filter(({ kind }) => kind === "sundered ring");
             const kept = plan.sites.filter(({ kind, theme }) => kind.endsWith("lair") || kind === "werewolf's den" || theme === "hell" || kind === "rift tower" || kind === "ruined quarry");
@@ -439,7 +441,7 @@ describe("the world plan (worldplan/plan.js)", () => {
 
             const [ring] = rings;
 
-            assert.equal(plan.sites.at(-1), ring, "laid out last");
+            assert.equal(plan.sites.at(plan.sites.at(-1).kind === "bellhaven" ? -2 : -1), ring, "laid out last but Bellhaven");
             assert.deepEqual([ring.id, ring.kind, ring.name], ["sundered-ring-1", "sundered ring", SUNDERED_RING.name]);
             assert.equal(plan.water[at(...ring.cell)], 0, "on dry land");
 
@@ -455,9 +457,58 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
 
         // (Mostly on the lands the thin places are)
-        const thin = [...plans.values()].filter((plan) => SUNDERED_RING.biomes.includes(BIOMES[plan.biome[at(...plan.sites.at(-1).cell)]].id));
+        const thin = [...plans.values()].filter((plan) => SUNDERED_RING.biomes.includes(BIOMES[plan.biome[at(...plan.sites.find(({ kind }) => kind === "sundered ring").cell)]].id));
 
         assert.ok(thin.length >= plans.size * 0.7, `${thin.length} of ${plans.size}`);
+    });
+
+    it("puts Bellhaven where there's room for all it stands on, one a world, last of all: no road or water near, clear of the sites, the camps and the settlements, a road near enough for its own, facing the nearest; mostly up in the hills", () => {
+        for (const [seed, plan] of plans) {
+            const found = plan.sites.filter(({ scenery }) => scenery);
+
+            assert.equal(found.length, 1, `seed ${seed}`);
+
+            const [castle] = found;
+            const [cx, cy] = castle.cell;
+
+            assert.equal(plan.sites.at(-1), castle, "laid out last");
+            assert.deepEqual([castle.id, castle.kind, castle.name, castle.scenery], ["bellhaven-1", "bellhaven", "Bellhaven", "bellhaven"]);
+
+            // (No road or water within its room: the land round it's reshaped that far)
+            for (let dy = -BELLHAVEN.room; dy <= BELLHAVEN.room; dy++) {
+                for (let dx = -BELLHAVEN.room; dx <= BELLHAVEN.room; dx++) {
+                    if (dx * dx + dy * dy <= BELLHAVEN.room * BELLHAVEN.room) {
+                        assert.equal(plan.water[at(cx + dx, cy + dy)] || plan.road[at(cx + dx, cy + dy)], 0, `seed ${seed}: ${dx}, ${dy}`);
+                    }
+                }
+            }
+
+            assert.ok([...plan.sites, ...plan.camps].every((other) => other === castle || Math.hypot(other.cell[0] - cx, other.cell[1] - cy) >= BELLHAVEN.stand), `seed ${seed}: clear of the sites and camps`);
+            assert.ok(plan.places.every((place) => Math.hypot(place.cell[0] - cx, place.cell[1] - cy) >= place.radius / CELL + BELLHAVEN.clear), `seed ${seed}: clear of the settlements`);
+
+            // (Facing the nearest road cell, within its reach)
+            let nearest = null;
+
+            for (let k = 0; k < CELLS * CELLS; k++) {
+                const far = Math.hypot((k % CELLS) - cx, Math.floor(k / CELLS) - cy) * CELL;
+
+                if (plan.road[k] && (!nearest || far < nearest.far)) {
+                    nearest = { far, cell: [k % CELLS, Math.floor(k / CELLS)] };
+                }
+            }
+
+            assert.ok(nearest.far <= BELLHAVEN.road, `seed ${seed}: ${Math.round(nearest.far)} m from a road`);
+            assert.ok(Math.abs(Math.sin(castle.facing) - Math.sin(Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy))) < 0.2 && Math.abs(Math.cos(castle.facing) - Math.cos(Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy))) < 0.2, `seed ${seed}: facing its road`);
+        }
+
+        // (Mostly up in the hills)
+        const hills = [...plans.values()].filter((plan) => {
+            const height = plan.height[at(...plan.sites.at(-1).cell)];
+
+            return height >= BELLHAVEN.hills[0] && height <= BELLHAVEN.hills[1];
+        });
+
+        assert.ok(hills.length >= plans.size / 2, `${hills.length} of ${plans.size}`);
     });
 
     it("puts ruins, caves, shrines, stones, towers, castles and each people's own buildings between the settlements", () => {
