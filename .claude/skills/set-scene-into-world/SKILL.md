@@ -89,7 +89,9 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
   plane was inside the wall. Ray onto the wall from just off it, not from far out, where a rock
   in front is hit first.
 - **A material drawn with both the far land and the near world must be two**: the boulders'
-  one material, its lights changed between the two passes, drew them black.
+  one material, its lights changed between the two passes, drew them black; the scene's terrain's
+  one ground material drew it, past the near world, as a pale sheet the castle and the land
+  showed through (from behind and to one side of Bellhaven). Give each copy its own.
 - **Darken the ground only under what stands on it**: the darkening under every overhang and
   the bridge left the crag's ground in shade black. Take the lowest of what's over the ground,
   and keep it to about half of the world's darkening.
@@ -97,7 +99,9 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
   the scene's near copy over the far land in front of it: from behind, a hill seemed to cut
   through Bellhaven, and its back walls, hidden in the game behind its crags, showed. The
   pictures had to be taken again. `shots.cjs` keeps the game's 160 m now (`NEAR_FAR` to change
-  it, only to look at the near copy).
+  it, only to look at the near copy). Keep the camera near where the player stands, too: the far
+  land has a hole 112 m round the player for the near world's ground, which is drawn only 160 m
+  from the camera, so a camera 60 m off and 90 m up sees the sky through the land's edge.
 
 ## Checking it
 

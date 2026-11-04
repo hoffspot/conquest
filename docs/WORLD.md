@@ -861,7 +861,8 @@ What's built so far:
     - Its own terrain's drawn as the world's ground is (`ground.js` `groundMaterial`: the grass,
       the rock on what's steep, the land's colours there), all of it, so its crag's rocks and its
       castle stand on the ground they were made on, and none of them off it. On the open ground
-      it's sunk 4 m, under the land.
+      it's sunk 4 m, under the land. Each of its two copies has a ground material of its own: one
+      material drawn in both passes drew it, past the near world, as a pale sheet.
     - Its far model keeps more of its rocks and its terrain than of the rest (3% and 8% of their
       triangles, 1.5% of the castle's): with fewer, the rocks and the crag they're set into parted,
       and the rocks looked stuck on its cliffs.

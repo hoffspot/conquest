@@ -66,11 +66,23 @@ const stepIn = (page) =>
             feet += part.isMesh && "LANDMARK_FEET_ON" in (part.material?.defines ?? {}) ? 1 : 0;
         });
 
-        for (const group of [game.setIn?.far, game.setIn?.near]) {
-            group?.traverse((part) => part.isMesh && part.name.startsWith("landmark ") && part.name !== "landmark stand-in" && dressing.add(part.name));
+        // (Its terrain's ground materials, the far land's and the near world's: never one in both,
+        // or the far one's drawn as a pale sheet)
+        const grounds = [new Set(), new Set()];
+
+        for (const [k, group] of [game.setIn?.far, game.setIn?.near].entries()) {
+            group?.traverse((part) => {
+                if (part.isMesh && part.name.startsWith("landmark ") && part.name !== "landmark stand-in") {
+                    dressing.add(part.name);
+                }
+
+                if (part.isMesh && part.material?.name === "landmark ground") {
+                    grounds[k].add(part.material);
+                }
+            });
         }
 
-        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, contact, feet: feet > 0, dressing: [...dressing].sort(), dressed: game.setIn?.scenes[0]?.dressing ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
+        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, contact, feet: feet > 0, grounds: { far: grounds[0].size, near: grounds[1].size, shared: [...grounds[0]].filter((material) => grounds[1].has(material)).length }, dressing: [...dressing].sort(), dressed: game.setIn?.scenes[0]?.dressing ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
 
         // (Onto its way in: the nearest of its squares)
         const [to] = [...outside.squares].sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
@@ -160,6 +172,8 @@ for (const licensed of [true, false]) {
             // (Dressed with its art: its boulders and scree along its crag's foot, its chasm's mist;
             // its stand-in isn't)
             expect(tapped.dressing).toEqual(licensed ? ["landmark boulders", "landmark mist", "landmark scree"] : []);
+            // (Its terrain's ground a material of its own in each pass)
+            expect(tapped.grounds).toEqual(licensed ? { far: 1, near: 1, shared: 0 } : { far: 0, near: 0, shared: 0 });
 
             if (licensed) {
                 expect(tapped.dressed.mist).toBeGreaterThan(50);
