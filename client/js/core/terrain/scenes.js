@@ -11,7 +11,10 @@
 //   (its highest floor: its walk's `under.top`), a little over it at the very edge, or to its own
 //   lie where that's higher: the scene's ragged edges buried, and the land round it running on
 //   into its outlying ground.
-// - Past its edges, the land eases from there to its own lie (within `band`).
+// - Past its edges, the land eases from there to its own lie (within `band`). Where its edge stands
+//   high over that, as Bellhaven's crags do behind it, the land eases down over more (its `hill`):
+//   a hill no steeper than trees grow on and a body climbs, wooded (woodsOn), that stops short of
+//   the roads, the waters, the sites, the camps and the settlements round it (hillOf).
 // - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
 // - Where its walk has its own terrain (`ground`: the top of its terrain's own triangles, and what
 //   stands on it), the world's land is drawn in its terrain's place on the open ground leading up
@@ -27,6 +30,7 @@
 import BELLHAVEN from "../scenery/bellhaven.walk.js";
 import { cos, sin } from "../exact.js";
 import { floorAt, NONE, readWalk, squareOf } from "../walk.js";
+import { CELL, CELLS, WATER } from "../worldplan/terrain.js";
 
 /**
  * Each scene as it's set into the land, by id: its walk (core/scenery.js SCENERY's); `approach`,
@@ -43,10 +47,47 @@ import { floorAt, NONE, readWalk, squareOf } from "../walk.js";
  * the pad; the door's glow is `height` metres high, across the way in. Where its own terrain's
  * drawn as the land, `path` ([across, from]) is the way from its road's end up to its ridge, kept
  * clear of trees: within `across` metres of the approach, from `from` (its z, metres) to the ridge.
+ * Its `hill`: where its edge stands far over the land's own lie (or under it), the band past it is
+ * as wide as keeps the land no steeper than `slope` (rise over run, at its steepest), up to `most`
+ * metres, its trees as thick as `woods` at least (core/overworld.js FLORA's: a forest, thicker than
+ * a jungle) where it's steep (woodsOn: `wooded`); it stops `clear` metres short of a road's or a
+ * water's cell, a site, a camp or a settlement (hillOf: each as wide as `cell`, `site` and `camp`
+ * say, a settlement its own radius), read every `every` metres round its box, and widens or
+ * narrows along its edges by no more than `turn` metres a metre.
  */
 export const SCENES = Object.freeze({
-    bellhaven: Object.freeze({ walk: BELLHAVEN, approach: Object.freeze([0, 88]), ridge: Object.freeze([0, 75]), pad: 8, rise: 20, margin: 1, ring: 80, band: 96, way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }), path: Object.freeze([28, -40]) }),
+    bellhaven: Object.freeze({
+        walk: BELLHAVEN,
+        approach: Object.freeze([0, 88]),
+        ridge: Object.freeze([0, 75]),
+        pad: 8,
+        rise: 20,
+        margin: 1,
+        ring: 80,
+        band: 96,
+        way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }),
+        path: Object.freeze([28, -40]),
+        hill: Object.freeze({ slope: 0.7, most: 420, woods: 1.5, wooded: Object.freeze([0.25, 0.6]), clear: 40, every: 16, turn: 1, cell: 24, site: 48, camp: 32 }),
+    }),
 });
+
+/** How much steeper than its mean a band's at its steepest, eased as it is (smoothstep's). */
+const STEEPEST = 1.5;
+
+/**
+ * How steep a scene's hill is at its steepest (rise over run), eased down `drop` metres (or up,
+ * less than 0) over as much `room` past its edge (metres) as it has, no less than its band nor
+ * more than its hill's `most` (SCENES): Bellhaven's (worldplan/settle.js backedOf).
+ */
+export function hillSlope(drop, room, id = "bellhaven") {
+    const settings = SCENES[id];
+    const fall = STEEPEST * Math.abs(drop);
+    const wanted = fall / settings.hill.slope;
+    // (As bandOf has it)
+    const band = wanted <= settings.band ? settings.band : Math.min(wanted, Math.max(settings.band, Math.min(settings.hill.most, room)));
+
+    return fall / band;
+}
 
 /**
  * How far into the pad its sides and its inner end ease to the land round them (metres), and how
@@ -410,8 +451,249 @@ export function baseOf(placed, lie) {
     return lie(x, y) + settings.rise - placed.scene.ridge;
 }
 
-/** How far from its middle a scene set into the land changes it (metres). */
-export const reachOf = (placed) => placed.scene.reach + SCENES[placed.scene.id].band;
+/** How far from its middle a scene set into the land changes it (metres): its hill's too. */
+export const reachOf = (placed) => placed.scene.reach + Math.max(SCENES[placed.scene.id].band, SCENES[placed.scene.id].hill?.most ?? 0);
+
+/**
+ * What a scene's hill stops short of round a spot (`at`, [x, y] metres), within `reach` metres and
+ * a little more (hillOf's `near`: [x, y, radius], metres): each cell of the plan's `road`, `water`
+ * and what `running` has running (terrain/waters.js runningIn), each of its `sites` but `own`, each
+ * of its `camps` and its `places` (settlements, their radius theirs). The same for the plan being
+ * laid out (worldplan/settle.js backedOf) and the land laid out from it (terrain/height.js).
+ */
+export function aroundOf({ road, water, running, sites = [], camps = [], places = [] }, at, reach, own = null, id = "bellhaven") {
+    const { hill } = SCENES[id];
+    const near = [];
+    const [ax, ay] = at;
+    const far = reach + CELL * 2;
+    const [i0, i1] = [Math.max(0, Math.floor((ax - far) / CELL)), Math.min(CELLS - 1, Math.floor((ax + far) / CELL))];
+    const [j0, j1] = [Math.max(0, Math.floor((ay - far) / CELL)), Math.min(CELLS - 1, Math.floor((ay + far) / CELL))];
+
+    for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+            const k = j * CELLS + i;
+
+            if (road[k] || water[k] !== WATER.none || running[k]) {
+                near.push([(i + 0.5) * CELL, (j + 0.5) * CELL, hill.cell]);
+            }
+        }
+    }
+
+    const by = ([x, y], radius) => (x - ax) * (x - ax) + (y - ay) * (y - ay) < (far + radius) * (far + radius);
+
+    for (const site of sites) {
+        if (site !== own && site.id !== own?.id && by(site.at, hill.site)) {
+            near.push([site.at[0], site.at[1], hill.site]);
+        }
+    }
+
+    for (const camp of camps) {
+        if (by(camp.at, hill.camp)) {
+            near.push([camp.at[0], camp.at[1], hill.camp]);
+        }
+    }
+
+    for (const place of places) {
+        if (by(place.at, place.radius)) {
+            near.push([place.at[0], place.at[1], place.radius]);
+        }
+    }
+
+    return near;
+}
+
+// A point of a scene's edge (its own metres, on its box) as how far round its box it is (metres):
+// along its back from its first corner, then up its right side, back along its front, and down
+// its left side
+function roundOf(scene, sx, sz) {
+    const [x0, z0, x1, z1] = scene.box;
+    const [width, depth] = [x1 - x0, z1 - z0];
+
+    if (sz <= z0) {
+        return sx - x0;
+    }
+
+    if (sx >= x1) {
+        return width + (sz - z0);
+    }
+
+    if (sz >= z1) {
+        return width + depth + (x1 - sx);
+    }
+
+    return 2 * width + depth + (z1 - sz);
+}
+
+/**
+ * How far out past its edges a scene's hill may reach (`placed`: placedOf's), round its box (a
+ * Float32Array, metres, one each SCENES `hill.every` metres from roundOf's 0): its `most`, but
+ * `clear` short of each thing round it (`near`: [x, y, radius], the world's metres: a road's or a
+ * water's cell, a site, a camp, a settlement), never less than its `band`, and widening or
+ * narrowing along its edges by no more than `turn` metres a metre. Null for a scene with no hill.
+ */
+export function hillOf(placed, near) {
+    const settings = SCENES[placed.scene.id];
+    const { hill } = settings;
+
+    if (!hill) {
+        return null;
+    }
+
+    const { scene } = placed;
+    const [x0, z0, x1, z1] = scene.box;
+    const count = Math.ceil((2 * (x1 - x0 + z1 - z0)) / hill.every);
+    const most = new Float32Array(count).fill(hill.most);
+
+    for (const [x, y, radius] of near) {
+        const [sx, sz] = toScene(placed, x, y);
+        const [cx, cz] = [Math.min(x1, Math.max(x0, sx)), Math.min(z1, Math.max(z0, sz))];
+        const out = Math.sqrt((sx - cx) * (sx - cx) + (sz - cz) * (sz - cz)) - radius - hill.clear;
+
+        if (out >= hill.most) {
+            continue;
+        }
+
+        // (Its stretch of the edges, and as far either way as it's wide)
+        const at = Math.round(roundOf(scene, cx, cz) / hill.every);
+        const spread = Math.ceil((radius + hill.clear) / hill.every) + 1;
+
+        for (let k = at - spread; k <= at + spread; k++) {
+            const i = ((k % count) + count) % count;
+
+            most[i] = Math.min(most[i], Math.max(settings.band, out));
+        }
+    }
+
+    // (No faster along its edges than `turn` a metre, round them twice each way)
+    for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < count; i++) {
+            most[i] = Math.min(most[i], most[(i + count - 1) % count] + hill.every * hill.turn);
+        }
+
+        for (let i = count - 1; i >= 0; i--) {
+            most[i] = Math.min(most[i], most[(i + 1) % count] + hill.every * hill.turn);
+        }
+    }
+
+    return most;
+}
+
+// A point of a scene's edge `round` metres round its box (roundOf's other way): [x, z] (its own
+// metres) and the way out from it there ([x, z])
+function edgeAt(scene, round) {
+    const [x0, z0, x1, z1] = scene.box;
+    const [width, depth] = [x1 - x0, z1 - z0];
+
+    if (round < width) {
+        return [x0 + round, z0, 0, -1];
+    }
+
+    if (round < width + depth) {
+        return [x1, z0 + (round - width), 1, 0];
+    }
+
+    if (round < 2 * width + depth) {
+        return [x1 - (round - width - depth), z1, 0, 1];
+    }
+
+    return [x0, z1 - (round - 2 * width - depth), -1, 0];
+}
+
+/**
+ * How steep a scene's hill would be at its steepest round it (rise over run), set into the land so
+ * (`placed`: placedOf's, with its `base`), given what's round it (`near`: aroundOf's) and the
+ * land's own lie (`lie(x, y)`, metres): at each stretch of its edges (hillOf's), from its edge
+ * there to the land at its hill's foot.
+ */
+export function steepestOf(placed, near, lie) {
+    const settings = SCENES[placed.scene.id];
+    const most = hillOf(placed, near);
+
+    if (!most) {
+        return 0;
+    }
+
+    const { scene, base } = placed;
+    let steepest = 0;
+
+    for (let k = 0; k < most.length; k++) {
+        const [cx, cz, ox, oz] = edgeAt(scene, k * settings.hill.every);
+        const land = landUnder(scene, settings, cx, cz);
+        const own = lie(...toWorld(placed, cx + ox * most[k], cz + oz * most[k]));
+        const edge = land.terrain ? base + land.edge : Math.max(base + land.edge, own);
+
+        steepest = Math.max(steepest, hillSlope(edge - own, most[k], scene.id));
+    }
+
+    return steepest;
+}
+
+// How far out past a point of its edge (cx, cz: the scene's own metres) the land eases from the
+// edge's height there (`edge`, metres) to its own lie (`lie`): its band, or where the edge stands
+// far over the lie or under it, as far as keeps it no steeper than its hill's slope, as far as its
+// hill may reach there (hillOf: `placed.hill`)
+function bandOf(placed, settings, cx, cz, edge, lie) {
+    const { hill } = settings;
+
+    if (!hill || !placed.hill) {
+        return settings.band;
+    }
+
+    const wanted = (STEEPEST * Math.abs(edge - lie)) / hill.slope;
+
+    if (wanted <= settings.band) {
+        return settings.band;
+    }
+
+    const count = placed.hill.length;
+    const along = roundOf(placed.scene, cx, cz) / hill.every;
+    const k = Math.floor(along);
+    const t = along - k;
+    const most = placed.hill[k % count] * (1 - t) + placed.hill[(k + 1) % count] * t;
+
+    return Math.min(wanted, Math.max(settings.band, most));
+}
+
+// A point of the world past a scene's edges (metres): its edge's point (cx, cz: the scene's own
+// metres), how high the land is laid there (`edge`, metres), how far out it is (`out`, metres) and
+// how far the land eases from there to its own lie (`lie`: bandOf); null within its box
+function pastOf(placed, x, y, lie) {
+    const { scene, base } = placed;
+    const settings = SCENES[scene.id];
+    const [sx, sz] = toScene(placed, x, y);
+    const [x0, z0, x1, z1] = scene.box;
+    const [cx, cz] = [Math.min(x1, Math.max(x0, sx)), Math.min(z1, Math.max(z0, sz))];
+
+    if (cx === sx && cz === sz) {
+        return null;
+    }
+
+    const land = landUnder(scene, settings, cx, cz);
+    // (At its edges, the top of its ground, or the land's own lie where that's higher)
+    const edge = land.terrain ? base + land.edge : Math.max(base + land.edge, lie);
+
+    return { cx, cz, edge, out: Math.sqrt((sx - cx) * (sx - cx) + (sz - cz) * (sz - cz)), band: bandOf(placed, settings, cx, cz, edge, lie) };
+}
+
+/**
+ * How thick trees grow at least at a point of the world (metres) on a scene's hill (`placed`:
+ * scenesIn's, with its `hill`), given the land's own lie there (`lie`): as thick as its `woods`
+ * where the land falls (or rises) steeply from its edges to the land's own (SCENES hill `wooded`:
+ * from as steep as its first, rise over run, to its second at its steepest), thinning out over the
+ * last of it to its foot; 0 elsewhere, on its road's end and the level land round it.
+ */
+export function woodsOn(placed, x, y, lie) {
+    const settings = SCENES[placed.scene.id];
+    const past = settings.hill && placed.hill ? pastOf(placed, x, y, lie) : null;
+
+    if (!past || past.out >= past.band) {
+        return 0;
+    }
+
+    const steepest = (STEEPEST * Math.abs(past.edge - lie)) / past.band;
+
+    return settings.hill.woods * smoothstep(settings.hill.wooded[0], settings.hill.wooded[1], steepest) * (1 - smoothstep(past.band * 0.85, past.band, past.out));
+}
 
 /**
  * The land's height at a point of the world (metres) with a scene set into it (`placed`, with its
@@ -441,8 +723,8 @@ export function setIn(placed, x, y, lie) {
         return under + (Math.max(under, edge) - under) * (1 - smoothstep(0, settings.ring, inward));
     }
 
-    // (Past its edges: from its edge to the land's own lie)
-    return edge + (lie - edge) * smoothstep(0, settings.band, Math.sqrt(ex * ex + ez * ez));
+    // (Past its edges: from its edge to the land's own lie, over its band, or its hill)
+    return edge + (lie - edge) * smoothstep(0, bandOf(placed, settings, cx, cz, edge, lie), Math.sqrt(ex * ex + ez * ez));
 }
 
 /**

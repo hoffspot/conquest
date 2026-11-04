@@ -15,6 +15,7 @@ import { BIOME, BIOMES, FACTIONS, RACES, SITES, WORKS } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
 import { metresOf } from "../terrain/curve.js";
 import { landHeight, stillWaterAt } from "../terrain/height.js";
+import { aroundOf, baseOf, placedOf, reachOf, steepestOf } from "../terrain/scenes.js";
 import { runningIn, watersOf } from "../terrain/waters.js";
 import { atan2, cos, hypot, pow, sin, TAU } from "../exact.js";
 
@@ -193,7 +194,9 @@ export const LANDMARKS = Object.freeze([RUINED_QUARRY, SUNDERED_RING]);
  * woods: of `turns` ways round, the one where the land rises most behind it, and is most wooded
  * there (`out` metres behind its middle, `spread` radians either side: a rise of `rise` metres
  * weighs as much as all of it in `woods`, and its front toward its nearest road as `road` of
- * that); its road comes up to its front from there.
+ * that), and where the hill its crags are eased down to the land over is gentlest at its
+ * steepest (terrain/scenes.js SCENES `hill`, steepestOf: as steep as `steep`, rise over run,
+ * weighs as much as all its woods against it); its road comes up to its front from there.
  */
 export const BELLHAVEN = Object.freeze({
     id: "bellhaven-1",
@@ -213,7 +216,7 @@ export const BELLHAVEN = Object.freeze({
     strict: 2,
     wider: 1.2,
     land: Object.freeze({ flattest: 160, round: Object.freeze([0, 90, 180, 270]), points: 12, most: 60 }),
-    back: Object.freeze({ turns: 24, out: Object.freeze([350, 600, 900]), spread: 0.3, rise: 80, woods: Object.freeze(["woods", "darkwood", "elfwood", "jungle"]), road: 0.2 }),
+    back: Object.freeze({ turns: 24, out: Object.freeze([350, 600, 900]), spread: 0.3, rise: 80, woods: Object.freeze(["woods", "darkwood", "elfwood", "jungle"]), road: 0.2, steep: 1 }),
 });
 
 // The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
@@ -1412,7 +1415,7 @@ function bellhavenOf(land, view, road, places, sites, camps, random) {
     }
 
     const { cell, at, spot, facing: toRoad } = chosen;
-    const facing = backedOf(land, view, spot, toRoad).facing;
+    const facing = backedOf(land, view, spot, toRoad, { road, places, sites, camps }).facing;
 
     return [{ id, kind, race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed(), scenery, facing }];
 }
@@ -1421,17 +1424,30 @@ function bellhavenOf(land, view, road, places, sites, camps, random) {
  * How Bellhaven's turned at a spot (`spot`, [x, y] metres; `toRoad`, the way to its nearest road,
  * radians, 0 toward +y) so its back's to the hills or the woods (BELLHAVEN.back): of its `turns`
  * ways, the one that weighs most, { facing, ways: [{ facing, rise (metres: how far the land behind
- * it is over its own, on the average), woods (the share of it in woods), weight }] }.
+ * it is over its own, on the average), woods (the share of it in woods), steep (how steep its hill
+ * round it would be at its steepest, rise over run: steepestOf; 0 without `around`), weight }] }.
+ * `around`: the roads, the places, the sites and the camps round it, for what its hill stops short
+ * of (terrain/scenes.js aroundOf).
  */
-export function backedOf(land, view, [x, y], toRoad) {
-    const { turns, out, spread, rise: risen, woods: wooded, road } = BELLHAVEN.back;
+export function backedOf(land, view, [x, y], toRoad, around = null) {
+    const { turns, out, spread, rise: risen, woods: wooded, road, steep: steeply } = BELLHAVEN.back;
     const own = landHeight(view, x, y);
     const ways = [];
+    const lie = (px, py) => landHeight(view, px, py);
+    const site = { scenery: BELLHAVEN.scenery, at: [x, y], facing: 0 };
+    const near = around ? aroundOf({ road: around.road, water: land.water, running: runningIn(land), sites: around.sites, camps: around.camps, places: around.places }, [x, y], reachOf(placedOf(site))) : null;
 
     for (let t = 0; t < turns; t++) {
         const facing = (t * TAU) / turns - TAU / 2;
         const back = facing + TAU / 2;
-        let [rise, woods, count] = [0, 0, 0];
+        let [rise, woods, count, steep] = [0, 0, 0, 0];
+
+        // (Its hill round it: its own 0 set by its road's end, turned so, as the land has it)
+        if (near) {
+            const placed = placedOf({ ...site, facing });
+
+            steep = steepestOf({ ...placed, base: baseOf(placed, lie) }, near, lie);
+        }
 
         for (const r of out) {
             for (const side of [-spread, 0, spread]) {
@@ -1445,7 +1461,7 @@ export function backedOf(land, view, [x, y], toRoad) {
         }
 
         [rise, woods] = [rise / count, woods / count];
-        ways.push({ facing, rise, woods, weight: rise / risen + woods + road * cos(facing - toRoad) });
+        ways.push({ facing, rise, woods, steep, weight: rise / risen + woods + road * cos(facing - toRoad) - steep / steeply });
     }
 
     const best = ways.reduce((most, way) => (way.weight > most.weight ? way : most));

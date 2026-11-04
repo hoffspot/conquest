@@ -250,7 +250,7 @@ function latticeAt(x, y) {
  * the lattice a step (each a yield: a chunk all cliff is 25 to 30 ms of work); how many triangles
  * it made, at the end.
  */
-export function* cliffsInto(mesher, chunk, heightsOf, landAt) {
+export function* cliffsInto(mesher, chunk, heightsOf, landAt, wooded = null) {
     const { step } = CLIFFS;
     const cells = CHUNK / step;
     const corners = cells + 1;
@@ -281,8 +281,11 @@ export function* cliffsInto(mesher, chunk, heightsOf, landAt) {
             const k = (j + 1) * span + i + 1;
             const here = lattice[k];
 
-            points[j * corners + i] = { ...here, at: [here.world[0] - x0, here.world[1], here.world[2] - y0], normal: normalAt(lattice[k + 1].world, lattice[k - 1].world, lattice[k + span].world, lattice[k - span].world) };
-            any ||= here.cliff > 0.02;
+            // (None under a forest, a scene's wooded hill: `wooded`, ground.js forestFloorAt)
+            const cliff = wooded ? here.cliff * (1 - Math.min(1, Math.max(0, (wooded(here.x, here.y) - 0.3) / 0.4))) : here.cliff;
+
+            points[j * corners + i] = { ...here, cliff, at: [here.world[0] - x0, here.world[1], here.world[2] - y0], normal: normalAt(lattice[k + 1].world, lattice[k - 1].world, lattice[k + span].world, lattice[k - span].world) };
+            any ||= cliff > 0.02;
         }
     }
 

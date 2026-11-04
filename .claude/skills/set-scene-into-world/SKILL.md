@@ -95,6 +95,16 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
 - **Darken the ground only under what stands on it**: the darkening under every overhang and
   the bridge left the crag's ground in shade black. Take the lowest of what's over the ground,
   and keep it to about half of the world's darkening.
+- **Measure the room round a scene before promising the land a gentle slope.** Bellhaven's
+  crags stand 110 to 180 m over the land behind them, and a slope trees grow on wants 300 m or
+  more to fall over; but the plan puts roads, streams, sites, camps and settlements within 100 to
+  250 m of its edges in every world. Its hill takes the room there is (`hillOf`, short of each of
+  them), and it's turned to where its hill's gentlest (`backedOf`, `steepestOf`). Don't let a
+  hill's reach change quickly along the edges: the land between makes gullies.
+- **Trees on a slope need a forest's floor under them.** Woods on a steep hill over the ground's
+  own rock, and the near world's cliff faces, read as bare rock with trees stuck on. Where a hill
+  is wooded, its ground's a forest's floor (`ground.js` `FOREST_FLOOR`) and no cliff faces are
+  drawn (`kits/cliffs.js`), near and far alike.
 - **Take pictures with the game's own draw distance.** Drawn out to 3 km, the near world drew
   the scene's near copy over the far land in front of it: from behind, a hill seemed to cut
   through Bellhaven, and its back walls, hidden in the game behind its crags, showed. The

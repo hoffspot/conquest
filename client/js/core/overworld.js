@@ -43,7 +43,7 @@ import { cliffsOff, featuresOf } from "./wilds.js";
 import { archesOf, archSquares, roomOf } from "./arches.js";
 import { AQUEDUCTS, aqueductsOf, pierSquares } from "./aqueducts.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
-import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt } from "./terrain/height.js";
+import { SLOPE_CLASS, stillLevelAt, stillOf, stillWaterAt, woodsAt } from "./terrain/height.js";
 import { FORD_WAY, WADE, wadeable, watersOf } from "./terrain/waters.js";
 import { rounded, wayOver } from "./terrain/ways.js";
 import { FLATS, flatSpot } from "./terrain/flats.js";
@@ -2261,15 +2261,18 @@ export class Overworld {
         const clearings = this.#clearingsNear(x0, y0);
         const [tx0, ty0] = [stamp.at[0] - CLEAR_OF_TOWN, stamp.at[1] - CLEAR_OF_TOWN];
         const [tx1, ty1] = [stamp.at[0] + stamp.width + CLEAR_OF_TOWN, stamp.at[1] + stamp.height + CLEAR_OF_TOWN];
-        const clear = (x, y) => {
+        // (On a hill a scene set into the land's raised, its trees on its cliffs too: blocked
+        // only by how steep they are, and no one climbs them; terrain/scenes.js woodsOn)
+        const clear = (x, y, hill = false) => {
             for (let dy = -TREE_CLEAR - 1; dy <= TREE_CLEAR; dy++) {
                 for (let dx = -TREE_CLEAR - 1; dx <= TREE_CLEAR; dx++) {
                     const [sx, sy] = [x + dx, y + dy];
                     const within = sx >= x0 && sy >= y0 && sx < x0 + CHUNK && sy < y0 + CHUNK;
                     const k = (sy - y0) * CHUNK + (sx - x0);
+                    const steep = hill && within && chunk.slopes[k] === SLOPE_CLASS.cliff && !chunk.built[k];
 
                     // (A scene set into the land's own terrain stood on by no one, but grown on: sites.js openOn)
-                    if (!inside(sx, sy) || !this.sites.growsAt(sx, sy) || (within ? (blocked[k] && !this.sites.openOn(sx, sy)) || chunk.water[k] || chunk.ground[k] === GROUND.road || chunk.bridge[k] : this.#busy(sx, sy) && !this.sites.openOn(sx, sy))) {
+                    if (!inside(sx, sy) || !this.sites.growsAt(sx, sy) || (within ? (blocked[k] && !steep && !this.sites.openOn(sx, sy)) || chunk.water[k] || chunk.ground[k] === GROUND.road || chunk.bridge[k] : this.#busy(sx, sy) && !this.sites.openOn(sx, sy))) {
                         return false;
                     }
                 }
@@ -2316,12 +2319,15 @@ export class Overworld {
                 const y = Math.min(y0 + CHUNK - 1, Math.max(y0 + 1, Math.round(y0 + (gy + random.next()) * TREE_GRID)));
                 const [chance, pick, size, turn] = [random.next(), random.next(), random.range(0.85, 1.3), random.next() * Math.PI * 2];
                 const flora = FLORA[this.biomeAt(x, y)];
+                // (As thick as woods, at least, on a hill a scene set into the land's raised:
+                // terrain/height.js woodsAt, as the far land's trees have it, world/far/trees.js)
+                const woods = woodsAt(plan, x, y);
 
-                if (chance >= (flora.density * TREE_GRID * TREE_GRID) / 100) {
+                if (chance >= (Math.max(flora.density, woods) * TREE_GRID * TREE_GRID) / 100) {
                     continue;
                 }
 
-                if (inTown(x, y) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) || nearLone(lone, x, y) || !clear(x, y)) {
+                if (inTown(x, y) || clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) || nearLone(lone, x, y) || !clear(x, y, woods > 0)) {
                     continue;
                 }
 

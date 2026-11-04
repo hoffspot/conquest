@@ -13,7 +13,7 @@ import { LONE_TREES, loneTreesNear, nearLone } from "../../core/lonetrees.js";
 import { FLORA } from "../../core/overworld.js";
 import { createRandom } from "../../core/random.js";
 import { HOME_TREES, TREE_KINDS } from "../../core/setpieces/pieces.js";
-import { heightAt, SLOPE } from "../../core/terrain/height.js";
+import { heightAt, SLOPE, woodsAt } from "../../core/terrain/height.js";
 import { growsAt, placedOf } from "../../core/terrain/scenes.js";
 import { CELL, CELLS, CHUNK, WATER } from "../../core/worldplan/plan.js";
 import { BIOMES, RACES } from "../../core/worldplan/races.js";
@@ -132,8 +132,11 @@ export function gatherTrees(plan, { x, z, reach, from = 0, town = null }) {
                     const cell = cellAt(ty) * CELLS + cellAt(tx);
                     const flora = FLORA[BIOMES[plan.biome[cell]].id];
                     const distance = Math.hypot(tx - x, ty - z);
+                    // (As thick as woods, at least, on a hill a scene set into the land's raised,
+                    // as the overworld plants them: core/terrain/height.js woodsAt)
+                    const woods = distance > reach || distance < from ? 0 : woodsAt(plan, tx, ty);
 
-                    if (chance >= (flora.density * GRID * GRID) / 100 || distance > reach || distance < from || plan.water[cell] === WATER.sea || plan.water[cell] === WATER.lake) {
+                    if (chance >= (Math.max(flora.density, woods) * GRID * GRID) / 100 || distance > reach || distance < from || plan.water[cell] === WATER.sea || plan.water[cell] === WATER.lake) {
                         continue;
                     }
 
@@ -143,11 +146,12 @@ export function gatherTrees(plan, { x, z, reach, from = 0, town = null }) {
 
                     // (Not where the land's too steep to climb: the overworld keeps the squares
                     // round a tree clear of its cliffs, and the slope across the four metres round
-                    // it is never steeper than the steepest of them)
+                    // it is never steeper than the steepest of them; but on a scene's hill, where
+                    // it plants them on its cliffs too)
                     const [nw, ne, sw, se] = [heightAt(plan, tx - 2, ty - 2), heightAt(plan, tx + 2, ty - 2), heightAt(plan, tx - 2, ty + 2), heightAt(plan, tx + 2, ty + 2)];
                     const [east, south] = [(ne - nw + se - sw) / 8, (sw - nw + se - ne) / 8];
 
-                    if (east * east + south * south >= SLOPE.cliff * SLOPE.cliff) {
+                    if (woods === 0 && east * east + south * south >= SLOPE.cliff * SLOPE.cliff) {
                         continue;
                     }
 

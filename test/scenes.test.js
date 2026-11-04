@@ -4,8 +4,10 @@
 // again past its band; its way in at its road's end, the rest of it stood on.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { heightAt, landHeight, scenesIn } from "../client/js/core/terrain/height.js";
-import { growsAt, onWayIn, placedOf, SCENES, sceneOf, standsOn, toScene, toWorld, wayInOf, within } from "../client/js/core/terrain/scenes.js";
+import { heightAt, landHeight, scenesIn, woodsAt } from "../client/js/core/terrain/height.js";
+import { aroundOf, growsAt, hillOf, onWayIn, placedOf, SCENES, sceneOf, standsOn, steepestOf, toScene, toWorld, wayInOf, within } from "../client/js/core/terrain/scenes.js";
+import { runningIn } from "../client/js/core/terrain/waters.js";
+import { gatherTrees, TREE_FLOATS } from "../client/js/world/far/trees.js";
 import { floorAt } from "../client/js/core/walk.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 
@@ -132,8 +134,8 @@ describe("a scene set into the land (terrain/scenes.js): Bellhaven", () => {
                 assert.ok(at(0) - placed.base < Math.max(...tops) && at(0) - placed.base > Math.min(...tops) - 0.5, `${sx}, ${sz}: ${at(0) - placed.base} by ${tops}`);
             }
 
-            // (Past its band, the land's own)
-            assert.ok(Math.abs(at(settings.band + 1) - own(settings.band + 1)) < 1e-6, `${sx}, ${sz}`);
+            // (Past its band, or its hill, at its widest, the land's own)
+            assert.ok(Math.abs(at(settings.hill.most + 1) - own(settings.hill.most + 1)) < 1e-6, `${sx}, ${sz}`);
 
             for (let d = -2; d < settings.band; d += 0.5) {
                 steepest = Math.max(steepest, Math.abs(at(d + 0.5) - at(d)) / 0.5);
@@ -248,6 +250,100 @@ describe("a scene set into the land (terrain/scenes.js): Bellhaven", () => {
         assert.ok(standsOn(placed, ...toWorld(placed, ...scene.middle).map(Math.floor)));
         assert.ok(standsOn(placed, ...toWorld(placed, settings.approach[0], scene.box[3] - settings.way.deep - 3).map(Math.floor)));
         assert.ok(!standsOn(placed, ...toWorld(placed, scene.box[2] + 3, scene.middle[1]).map(Math.floor)));
+    });
+
+    it("eases its crags down to the land behind and beside it over a hill, as wide as there's room for, gentler than its band", () => {
+        const [x0, z0, x1, z1] = scene.box;
+        const steepness = (band) => {
+            let steepest = 0;
+
+            // (Across its back, out from its edge as far as its hill may reach)
+            for (let k = 0; k <= 8; k++) {
+                const sx = x0 + ((x1 - x0) * k) / 8;
+                let last = null;
+
+                for (let d = 0; d <= settings.hill.most; d += 4) {
+                    const h = band(sx, z0 - d);
+
+                    steepest = last === null ? steepest : Math.max(steepest, Math.abs(h - last) / 4);
+                    last = h;
+                }
+            }
+
+            return steepest;
+        };
+        const hill = steepness((sx, sz) => landHeight(plan, ...toWorld(placed, sx, sz)));
+        // (The same, eased over its band alone, as it was)
+        const banded = { ...plan, sites: plan.sites.map((site) => ({ ...site })) };
+        const [flat] = scenesIn(banded);
+
+        flat.hill = null;
+
+        const band = steepness((sx, sz) => landHeight(banded, ...toWorld(flat, sx, sz)));
+
+        assert.ok(hill < band * 0.95, `${hill.toFixed(2)} by its hill, ${band.toFixed(2)} by its band`);
+        // (Its hill's reach, round its box: never less than its band, nor more than its most, and
+        // gently changing along its edges)
+        assert.equal(placed.hill.length, Math.ceil((2 * (x1 - x0 + z1 - z0)) / settings.hill.every));
+        assert.ok(placed.hill.every((most) => most >= settings.band && most <= settings.hill.most));
+        assert.ok(placed.hill.some((most) => most > settings.band));
+        assert.ok(placed.hill.every((most, k) => Math.abs(most - placed.hill[(k + 1) % placed.hill.length]) <= settings.hill.every * settings.hill.turn + 1e-3));
+        // (As steep as steepestOf, the plan's reckoning, says)
+        const near = aroundOf({ ...plan, running: runningIn(plan) }, placed.at, placed.reach, plan.sites.find(({ scenery }) => scenery));
+
+        const reckoned = steepestOf(placed, near, (x, y) => landHeight(bare, x, y));
+
+        assert.ok(Math.abs(reckoned - hill) < hill * 0.35, `${reckoned.toFixed(2)} by the plan, ${hill.toFixed(2)} by the land`);
+    });
+
+    it("stops its hill short of the roads, the waters, the sites, the camps and the settlements round it", () => {
+        const site = plan.sites.find(({ scenery }) => scenery);
+        const near = aroundOf({ ...plan, running: runningIn(plan) }, placed.at, placed.reach, site);
+        const [x0, z0, x1, z1] = scene.box;
+        let past = 0;
+
+        assert.ok(near.length > 20, `${near.length}`);
+        assert.deepEqual(hillOf(placed, near), placed.hill);
+
+        for (const [x, y, radius] of near) {
+            const [sx, sz] = toScene(placed, x, y);
+            const out = Math.hypot(sx - Math.min(x1, Math.max(x0, sx)), sz - Math.min(z1, Math.max(z0, sz)));
+
+            // (Past its band, the land there its own: its hill stopped short of it)
+            if (out - radius > settings.band) {
+                past++;
+                assert.ok(Math.abs(landHeight(plan, x, y) - landHeight(bare, x, y)) < 1e-6, `${Math.round(sx)}, ${Math.round(sz)}: ${out.toFixed(0)} out`);
+            }
+        }
+
+        assert.ok(past > 10, `${past}`);
+    });
+
+    it("grows woods on its hill, near and far alike, and none of them past it", () => {
+        const [x0, z0, x1] = scene.box;
+        // (The middle of its hill behind it, where it's widest)
+        let best = null;
+
+        for (let k = 0; k <= 8; k++) {
+            const sx = x0 + ((x1 - x0) * k) / 8;
+            const [x, y] = toWorld(placed, sx, z0 - 60);
+            const woods = woodsAt(plan, x, y);
+
+            best = !best || woods > best.woods ? { x, y, woods } : best;
+        }
+
+        assert.ok(best.woods > SCENES.bellhaven.hill.woods / 2, `${best.woods}`);
+        // (Nothing far off, nor on its own land, nor where nothing's set in)
+        assert.equal(woodsAt(plan, ...toWorld(placed, scene.middle[0], z0 - settings.hill.most - 40)), 0);
+        assert.equal(woodsAt(plan, ...toWorld(placed, ...scene.middle)), 0);
+        assert.equal(woodsAt(bare, best.x, best.y), 0);
+
+        // (More trees there than its land's own, as thick as woods: the far land's, as the near
+        // world's are)
+        const trees = (of) => gatherTrees(of, { x: best.x, z: best.y, reach: 40 }).length / TREE_FLOATS;
+
+        assert.ok(trees(plan) > trees(bare), `${trees(plan)} on its hill, ${trees(bare)} with nothing set in`);
+        assert.ok(trees(plan) > 30, `${trees(plan)}`);
     });
 
     it("is the ground the world stands on: heightAt has it too, the same every time", () => {

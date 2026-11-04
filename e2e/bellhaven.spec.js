@@ -35,6 +35,7 @@ const stepIn = (page) =>
     page.evaluate(async () => {
         const { game } = window.pellagos;
         const { squaresOf } = await import("/js/core/grid.js");
+        const { FOREST_FLOOR } = await import("/js/world/ground.js");
         const site = game.world.plan.sites.find(({ scenery }) => scenery === "bellhaven");
         const building = game.world.interiors.buildings.get(`site:${site.id}`);
         const [outside] = building.door.ends;
@@ -82,7 +83,11 @@ const stepIn = (page) =>
             });
         }
 
-        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, contact, feet: feet > 0, grounds: { far: grounds[0].size, near: grounds[1].size, shared: [...grounds[0]].filter((material) => grounds[1].has(material)).length }, dressing: [...dressing].sort(), dressed: game.setIn?.scenes[0]?.dressing ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
+        // (Its hill's woods on a forest's floor, the world's ground's, from the plan, with its art or
+        // without: ground.js FOREST_FLOOR)
+        const floor = FOREST_FLOOR.map.value?.image;
+        const forest = Boolean(floor && floor.width > 1 && floor.data.some((share) => share === 255));
+        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, forest, ground, contact, feet: feet > 0, grounds: { far: grounds[0].size, near: grounds[1].size, shared: [...grounds[0]].filter((material) => grounds[1].has(material)).length }, dressing: [...dressing].sort(), dressed: game.setIn?.scenes[0]?.dressing ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
 
         // (Onto its way in: the nearest of its squares)
         const [to] = [...outside.squares].sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
@@ -167,8 +172,9 @@ for (const licensed of [true, false]) {
             const tapped = await stepIn(page);
 
             // (Seen from its road's end: its far model, its own terrain drawn as the world's ground,
-            // darkened round what stands on it, or its stand-in; its way in open, the rest of it stood on)
-            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", ground: licensed, contact: licensed, feet: licensed, open: true, stood: true });
+            // darkened round what stands on it, or its stand-in; its hill's forest floor either way;
+            // its way in open, the rest of it stood on)
+            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", forest: true, ground: licensed, contact: licensed, feet: licensed, open: true, stood: true });
             // (Dressed with its art: its boulders and scree along its crag's foot, its chasm's mist;
             // its stand-in isn't)
             expect(tapped.dressing).toEqual(licensed ? ["landmark boulders", "landmark mist", "landmark scree"] : []);
