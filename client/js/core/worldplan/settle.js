@@ -189,9 +189,32 @@ export const LANDMARKS = Object.freeze([RUINED_QUARRY, SUNDERED_RING]);
  * room on: no road or water within
  * `room` cells of its middle (the land round it's reshaped that far), no site or camp within
  * `stand` cells, `clear` cells beyond every settlement's edge; and a road within `road` metres, for
- * its own to come up from. It faces the nearest road: its road comes up to it from there.
+ * its own to come up from. It's turned (`back`) so its plain back walls are to the hills or the
+ * woods: of `turns` ways round, the one where the land rises most behind it, and is most wooded
+ * there (`out` metres behind its middle, `spread` radians either side: a rise of `rise` metres
+ * weighs as much as all of it in `woods`, and its front toward its nearest road as `road` of
+ * that); its road comes up to its front from there.
  */
-export const BELLHAVEN = Object.freeze({ id: "bellhaven-1", kind: "bellhaven", name: "Bellhaven", scenery: "bellhaven", numbers: Object.freeze([79, 53]), hills: Object.freeze([0.45, 0.8]), biomes: Object.freeze(["woods", "meadow", "heath", "farmland", "tundra", "savannah", "darkwood", "elfwood"]), from: 1800, to: 6000, guild: 2600, room: 11, stand: 8, clear: 10, road: 900, strict: 2, wider: 1.2, land: Object.freeze({ flattest: 160, round: Object.freeze([0, 90, 180, 270]), points: 12, most: 60 }) });
+export const BELLHAVEN = Object.freeze({
+    id: "bellhaven-1",
+    kind: "bellhaven",
+    name: "Bellhaven",
+    scenery: "bellhaven",
+    numbers: Object.freeze([79, 53]),
+    hills: Object.freeze([0.45, 0.8]),
+    biomes: Object.freeze(["woods", "meadow", "heath", "farmland", "tundra", "savannah", "darkwood", "elfwood"]),
+    from: 1800,
+    to: 6000,
+    guild: 2600,
+    room: 11,
+    stand: 8,
+    clear: 10,
+    road: 900,
+    strict: 2,
+    wider: 1.2,
+    land: Object.freeze({ flattest: 160, round: Object.freeze([0, 90, 180, 270]), points: 12, most: 60 }),
+    back: Object.freeze({ turns: 24, out: Object.freeze([350, 600, 900]), spread: 0.3, rise: 80, woods: Object.freeze(["woods", "darkwood", "elfwood", "jungle"]), road: 0.2 }),
+});
 
 // The kinds of settlement with an adventurers' guild (setpieces/town.js: a village or bigger)
 const GUILDED = Object.freeze(["village", "town", "city", "capital"]);
@@ -1260,8 +1283,8 @@ function landmarkOf(landmark, land, places, sites, camps, random) {
 // ring), the first of those as flat; on the land it'd rather be on if anywhere there's flat enough
 // (`hills`, `biomes`; rising and falling no more than `most` metres), and each round after the
 // first `strict` its distances a `wider` share looser, till one is flat enough (or the flattest of
-// all the rounds, if none is). Facing the nearest road (radians, 0 toward +y). None, if nowhere
-// will do
+// all the rounds, if none is). Turned with its back to the hills or the woods (`back`: backedOf),
+// its front toward its road as far as that allows (radians, 0 toward +y). None, if nowhere will do
 function bellhavenOf(land, view, road, places, sites, camps, random) {
     const { biome, water, territory, height } = land;
     const { id, kind, name, scenery, hills, biomes, from, to, guild, room, stand, clear, road: roadReach, strict } = BELLHAVEN;
@@ -1388,9 +1411,46 @@ function bellhavenOf(land, view, road, places, sites, camps, random) {
         return [];
     }
 
-    const { cell, at, spot, facing } = chosen;
+    const { cell, at, spot, facing: toRoad } = chosen;
+    const facing = backedOf(land, view, spot, toRoad).facing;
 
     return [{ id, kind, race: territory[at] ? RACES[territory[at] - 1].id : null, name, cell, at: spot, seed: random.seed(), scenery, facing }];
+}
+
+/**
+ * How Bellhaven's turned at a spot (`spot`, [x, y] metres; `toRoad`, the way to its nearest road,
+ * radians, 0 toward +y) so its back's to the hills or the woods (BELLHAVEN.back): of its `turns`
+ * ways, the one that weighs most, { facing, ways: [{ facing, rise (metres: how far the land behind
+ * it is over its own, on the average), woods (the share of it in woods), weight }] }.
+ */
+export function backedOf(land, view, [x, y], toRoad) {
+    const { turns, out, spread, rise: risen, woods: wooded, road } = BELLHAVEN.back;
+    const own = landHeight(view, x, y);
+    const ways = [];
+
+    for (let t = 0; t < turns; t++) {
+        const facing = (t * TAU) / turns - TAU / 2;
+        const back = facing + TAU / 2;
+        let [rise, woods, count] = [0, 0, 0];
+
+        for (const r of out) {
+            for (const side of [-spread, 0, spread]) {
+                const [bx, by] = [x + r * sin(back + side), y + r * cos(back + side)];
+                const k = cellIndex(Math.floor(bx / CELL), Math.floor(by / CELL));
+
+                rise += landHeight(view, bx, by) - own;
+                woods += k >= 0 && wooded.includes(BIOMES[land.biome[k]].id) ? 1 : 0;
+                count++;
+            }
+        }
+
+        [rise, woods] = [rise / count, woods / count];
+        ways.push({ facing, rise, woods, weight: rise / risen + woods + road * cos(facing - toRoad) });
+    }
+
+    const best = ways.reduce((most, way) => (way.weight > most.weight ? way : most));
+
+    return { facing: best.facing, ways };
 }
 
 // The dungeons' ways in (DUNGEON_SITES): darts thrown at the land, each kept where it's dry land,

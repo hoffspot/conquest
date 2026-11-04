@@ -39,6 +39,33 @@ export function wildcard(pattern, name) {
     return new RegExp(`^${source}$`).test(name);
 }
 
+/**
+ * Duplicates made one (dedup), but the materials `apart` names (* and ? wildcards): each kept
+ * apart from the same material of another name, its own, so simplify's `materials` can give it a
+ * share of its own (a scene's own parts set onto it, a copy of its material each). Their textures
+ * are still shared.
+ */
+export async function dedupKeeping(document, apart = []) {
+    const kept = document
+        .getRoot()
+        .listMaterials()
+        .filter((material) => apart.some((pattern) => wildcard(pattern, material.getName())));
+
+    // (A mark of its own while dedup looks: the same but for its name, it's not the same)
+    for (const material of kept) {
+        material.setExtras({ ...material.getExtras(), apart: material.getName() });
+    }
+
+    await document.transform(dedup());
+
+    for (const material of kept) {
+        const extras = { ...material.getExtras() };
+
+        delete extras.apart;
+        material.setExtras(extras);
+    }
+}
+
 // (-0 made 0, as JSON writes it)
 export const round = (value, places = 4) => (typeof value === "number" ? Number(value.toFixed(places)) + 0 : Array.isArray(value) ? value.map((v) => round(v, places)) : value);
 
@@ -604,7 +631,8 @@ export async function optimize(config, { raw, glb, lodFile }) {
         result.keyframesThinned = thinKeys(document, config.clips.fps);
     }
 
-    await document.transform(dedup(), join({ keepMeshes: true }), resample({ tolerance: config.resample }), prune(), unpartition());
+    await dedupKeeping(document, config.apart);
+    await document.transform(join({ keepMeshes: true }), resample({ tolerance: config.resample }), prune(), unpartition());
 
     if (root.listTextures().length < textures) {
         result.texturesMadeFactors = textures - root.listTextures().length;

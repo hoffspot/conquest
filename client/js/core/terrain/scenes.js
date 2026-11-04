@@ -498,22 +498,29 @@ export function standsOn(placed, x, y) {
 }
 
 /**
+ * Whether a point of a scene (its own metres) is on its road's end, on out past its edge, or on its
+ * way up from there to its ridge (SCENES `path`): kept clear of what grows, and what's strewn.
+ */
+export function onItsRoad(scene, sx, sz) {
+    const settings = SCENES[scene.id];
+
+    if (Math.abs(sx - settings.approach[0]) < settings.pad + PAD.ease + 4 && sz > settings.ridge[1] - 10 && sz < scene.box[3] + 30) {
+        return true;
+    }
+
+    return Boolean(settings.path) && Math.abs(sx - settings.approach[0]) < settings.path[0] && sz > settings.path[1] && sz <= settings.ridge[1];
+}
+
+/**
  * Whether trees and the land's own things may stand at a point of the world (metres) a scene's set
  * into (`placed`: placedOf's): where its own terrain's drawn as the land, nothing of it standing
  * near (terrainOf `open`); and out past it, but for along its road's end; not on the rest of it.
  */
 export function growsAt(placed, x, y) {
     const { scene } = placed;
-    const settings = SCENES[scene.id];
     const [sx, sz] = toScene(placed, x, y);
 
-    // (Its road's end kept clear, on out past its edge)
-    if (Math.abs(sx - settings.approach[0]) < settings.pad + PAD.ease + 4 && sz > settings.ridge[1] - 10 && sz < scene.box[3] + 30) {
-        return false;
-    }
-
-    // (And its way up from there to its ridge)
-    if (settings.path && Math.abs(sx - settings.approach[0]) < settings.path[0] && sz > settings.path[1] && sz <= settings.ridge[1]) {
+    if (onItsRoad(scene, sx, sz)) {
         return false;
     }
 

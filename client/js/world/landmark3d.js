@@ -18,6 +18,7 @@ import { readyScenery, sceneryOf } from "../beasts/model.js";
 import { SCENERY } from "../core/scenery.js";
 import { scenesIn } from "../core/terrain/height.js";
 import { groundMaterial } from "./ground.js";
+import { contactFor, DRESS, dressUniforms, footed, heightsOf, landOf, mistOf, screeOf } from "./landmarkdress.js";
 
 /**
  * How near the player comes before the art's read (metres from the scene's middle: as far as the
@@ -76,8 +77,10 @@ export class Landmarks {
      *     world's ground has them: its own terrain's drawn with them.
      */
     constructor(plan, { land = null } = {}) {
+        this.plan = plan;
         this.land = land;
         this.grounds = [];
+        this.dressed = [];
         this.far = new THREE.Group();
         this.near = new THREE.Group();
         this.far.name = "landmarks";
@@ -130,19 +133,13 @@ export class Landmarks {
     }
 
     // A scene's own terrain's material: the world's ground's (its grass, its rock, the land's colours
-    // where it is), sunk LANDMARK.sunk metres under the world's land on the open ground (scenes.js
-    // `open`, read between its patches, where its points are in the scene)
-    #groundOf(placed) {
-        const { scene, at, base, facing } = placed;
-        const { origin, square, size, open } = scene.ground;
+    // where it is, darkened round what stands on it: `contact`, landmarkdress.js contactFor), sunk
+    // LANDMARK.sunk metres under the world's land on the open ground (scenes.js `open`, read between
+    // its patches, where its points are in the scene: `sceneFromWorld`)
+    #groundOf(placed, sceneFromWorld, contact) {
+        const { origin, square, size, open } = placed.scene.ground;
         const mask = new THREE.DataTexture(Uint8Array.from(open, (on) => on * 255), size[0], size[1], THREE.RedFormat, THREE.UnsignedByteType);
-        // (From the world to the scene's own metres: its middle at its spot, turned to face its road)
-        const sceneFromWorld = new THREE.Matrix4()
-            .makeRotationY(facing)
-            .setPosition(at[0], base, at[1])
-            .multiply(new THREE.Matrix4().makeTranslation(-scene.middle[0], 0, -scene.middle[1]))
-            .invert();
-        const material = groundMaterial({ land: this.land });
+        const material = groundMaterial({ land: this.land, contact });
         const own = material.onBeforeCompile;
         const key = material.customProgramCacheKey;
 
@@ -185,16 +182,40 @@ uniform float sceneSunk;`,
     }
 
     // A scene drawn: a copy for each of the far land and the near world, from its middle; its own
-    // terrain drawn as the world's ground is (scenes.js `ground`)
+    // terrain drawn as the world's ground is (scenes.js `ground`). With its art, its dressing
+    // (landmarkdress.js): the heights of what's drawn, its ground darkened round what stands on
+    // it, its rocks and walls at their feet, boulders and scree along its crag's foot, mist in its
+    // chasm
     #draw(each, make, gltf) {
-        const { scene } = each.placed;
+        const { placed } = each;
+        const { scene, at, base, facing } = placed;
         const terrain = new Set(scene.ground?.materials ?? []);
-        const ground = gltf && terrain.size ? this.#groundOf(each.placed) : null;
+        const objects = [make(gltf), make(gltf)];
 
-        for (const group of [each.far, each.near]) {
-            const object = make(gltf);
-
+        for (const object of objects) {
             object.position.set(-scene.middle[0], 0, -scene.middle[1]);
+        }
+
+        // (From the world to the scene's own metres: its middle at its spot, turned to face its road)
+        const sceneFromWorld = new THREE.Matrix4()
+            .makeRotationY(facing)
+            .setPosition(at[0], base, at[1])
+            .multiply(new THREE.Matrix4().makeTranslation(-scene.middle[0], 0, -scene.middle[1]))
+            .invert();
+        const heights = gltf ? heightsOf(objects[0], scene.box, terrain) : null;
+        const uniforms = heights && dressUniforms(heights, sceneFromWorld);
+        const ground = gltf && terrain.size ? this.#groundOf(placed, sceneFromWorld, heights && contactFor(placed, heights)) : null;
+        // (Each of its art's materials once, darkened at its feet, not faded with the near world)
+        const footedOf = new Map();
+        const own = (material) => {
+            if (!footedOf.has(material)) {
+                footedOf.set(material, footed(material, DRESS.rocks.test(material.name) ? "rock" : "wall", uniforms));
+            }
+
+            return footedOf.get(material);
+        };
+
+        objects.forEach((object, k) => {
             object.traverse((part) => {
                 if (part.isMesh && [part.material].flat().some((material) => terrain.has(material?.name))) {
                     part.material = ground;
@@ -209,29 +230,79 @@ uniform float sceneSunk;`,
                     part.receiveShadow = false;
                     part.frustumCulled = true;
 
-                    // (Not faded out where the near world is, before its camera stops: it goes on
-                    // into the far land, as the ground does, world/fog.js)
-                    for (const material of [part.material].flat()) {
-                        if (!("NO_NEAR_FADE" in (material.defines ?? {}))) {
-                            material.defines = { ...material.defines, NO_NEAR_FADE: "" };
-                            material.needsUpdate = true;
+                    if (uniforms) {
+                        part.material = Array.isArray(part.material) ? part.material.map(own) : own(part.material);
+                    } else {
+                        // (Not faded out where the near world is, before its camera stops: it goes on
+                        // into the far land, as the ground does, world/fog.js)
+                        for (const material of [part.material].flat()) {
+                            if (!("NO_NEAR_FADE" in (material.defines ?? {}))) {
+                                material.defines = { ...material.defines, NO_NEAR_FADE: "" };
+                                material.needsUpdate = true;
+                            }
                         }
                     }
                 }
             });
             object.updateMatrixWorld(true);
-            group.add(object);
+            [each.far, each.near][k].add(object);
+        });
+
+        if (heights) {
+            this.#dress(each, heights, uniforms, [...footedOf.values()]);
         }
 
         each.drawn = gltf ? "art" : "stand-in";
+    }
+
+    // A scene's dressing (landmarkdress.js) put with its art, in its own metres: its mist, drawn by
+    // how far off each puff is, with the one or the other; its boulders with both; its scree with
+    // the near world
+    #dress(each, heights, uniforms, materials) {
+        const { placed } = each;
+        const { scene } = placed;
+        const seed = (Math.imul(Math.round(placed.at[0]), 73856093) ^ Math.imul(Math.round(placed.at[1]), 19349663)) >>> 0;
+        const mist = mistOf(scene.id, heights, uniforms, seed);
+        const scree = screeOf(placed, heights, landOf(this.plan), seed);
+        const [far, near] = [new THREE.Group(), new THREE.Group()];
+
+        for (const group of [far, near]) {
+            group.name = "landmark dressing";
+            group.position.set(-scene.middle[0], 0, -scene.middle[1]);
+        }
+
+        if (mist) {
+            far.add(mist.far);
+            near.add(mist.near);
+        }
+
+        if (scree) {
+            far.add(scree.far);
+            near.add(scree.near);
+        }
+
+        each.far.add(far);
+        each.near.add(near);
+        each.dressing = { mist: mist?.puffs ?? 0, boulders: scree?.boulders ?? 0 };
+        this.dressed.push({ uniforms, materials, mist, scree });
     }
 
     dispose() {
         this.disposed = true;
 
         for (const { material, mask } of this.grounds) {
+            material.userData.contact?.dispose();
             material.dispose();
             mask.dispose();
+        }
+
+        for (const { uniforms, materials, mist, scree } of this.dressed) {
+            uniforms.landmarkHeights.value.dispose();
+            materials.forEach((material) => material.dispose());
+            mist?.geometry.dispose();
+            mist?.far.material.dispose();
+            mist?.near.material.dispose();
+            scree?.geometries.forEach((geometry) => geometry.dispose());
         }
 
         for (const { far, near } of this.scenes) {

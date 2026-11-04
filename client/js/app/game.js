@@ -13728,10 +13728,14 @@ export class Game {
                 }
                 case "guard": {
                     // (Standing on guard a while (battle.js #onGuard: the Orc King's): its guard held
-                    // up (beast.js actions.guard); told to whoever it's after, and how to get round it)
+                    // up (beast.js actions.guard); told to whoever it's after, and how to get round it.
+                    // Drawn as its people-shaped stand-in, its model not read yet, its `guard` is how
+                    // far its weapon's guard is up (characters/actions.js), a number: none held up)
                     const actor = battle.actor(event.id);
 
-                    avatar.actions.guard?.({ seconds: (event.until - battle.time) / 1000 });
+                    if (typeof avatar.actions.guard === "function") {
+                        avatar.actions.guard({ seconds: (event.until - battle.time) / 1000 });
+                    }
 
                     if (event.target === this.me) {
                         this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} stands on guard: strike from the side or behind!`, 2.5);

@@ -738,8 +738,16 @@ What's built so far:
   in cells of 40 m.
   - `scenery-bellhaven` is 18 MB, for its map: 500,745 triangles at its nearest detail and 166,820
     further off.
-  - `scenery-bellhaven-far` is 1.7 MB, the castle from the world round it: 84,180 triangles in 15
-    draw calls, its rocks and its terrain kept at 3% and 8% (the rest at 1.5%).
+  - `scenery-bellhaven-far` is 2.3 MB, the castle from the world round it: 121,026 triangles in
+    19 draw calls. Its rocks and its terrain are kept at 3% and 8%, its bridge's piers at 8%, the
+    rest at 1.5%. At 1.5% the piers were stacks of white spikes in the chasm.
+    - It's built from the artist's scene with its plain back walls dressed with the castle's own
+      parts (`private/bellhaven-far.json`, from the `.blend` the skill *set-scene-into-world*'s
+      `dress.py` makes): 115 of them, buttresses with their pinnacles and lancets between them
+      along the low block's back and sides, pilasters, two tiers of lancets and cornices on the
+      towers, and tall lancets in the recess between, dark panes behind their tracery.
+    - The parts' materials are copies of the castle's (`M_Dress_*`), kept apart from them (the
+      pipeline's `apart`) so they're kept at 20% (cornices 8%) where the castle's at 1.5%.
   - Its rocks that touched nothing are set down or left out (the pipeline's `seat`): 8 set down
     and 60 left out of the 542 in its map's build; none in the far one.
   - Both are fetched only where they're wanted (`tier: "demand"`).
@@ -816,8 +824,13 @@ What's built so far:
   - It looks up in the hills first, then anywhere, till the land itself (its ridges and roughness
     too, `landHeight`, at 37 points out to 270 m) rises and falls no more than 60 m round it. In
     the first 16 worlds it's 9 to 58 m.
-  - It faces the nearest road, and its own trail comes up from there to its road's end
-    (`core/trails.js`).
+  - It's turned with its plain back walls to the hills or the woods (`backedOf`): of 24 ways round,
+    the one where the land behind it (350, 600 and 900 m back, a little either side) rises most
+    over its own and is most wooded, a rise of 80 m weighing as much as woods all round, and its
+    front toward its nearest road a fifth as much. Its own trail comes up from that road to its
+    road's end (`core/trails.js`).
+    - In worlds 1 to 8 its front is 30 to 153 degrees off its road. In 7 of them the land behind
+      it is higher, more wooded, or both.
   - The land's laid along it and under it (`landHeight`), from what's under the scene, baked with
     its walk: `under`, the lowest of it and the top of its ground over each 4 m patch; and
     `ground`, the top of its own terrain (`M_Ground`) and of all that stands on it over each 2 m.
@@ -835,7 +848,8 @@ What's built so far:
       land's laid under it the same way.
     - Past its edges, it eases to its own lie over 96 m.
     - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
-    - `TERRAIN_VERSION` 12, and `NET_VERSION` 203: a game from before has another world.
+    - `TERRAIN_VERSION` 13, and `NET_VERSION` 204, since it was turned: a game from before has
+      another world.
   - Its squares are all it stands on but its way in (`core/sites.js`): blocked, and blocking
     sight. Its way in is the 6 m of the pad at its near edge, stepped onto, or its glow tapped, to
     go in (`app/game.js`), behind the readying card. They come back out on the pad.
@@ -853,6 +867,27 @@ What's built so far:
       and the rocks looked stuck on its cliffs.
     - Without the licensed models, a stand-in: the top of all that stands on it and of its kept
       terrain, over each patch, stone grey.
+    - Dressed (`world/landmarkdress.js`), from the heights of its art as it's drawn, read each
+      metre: the top of its terrain, of its terrain and rocks, of all of it, and the lowest of
+      what isn't its terrain.
+      - Shadow at the feet of what stands on its ground. Its ground's darkened round it as the
+        world's is round its rocks (`ground.js` `contactOf`), at most 55% as much, so its crag's
+        ground in shade isn't black. Not under what hangs over it 1.5 m or more up, its bridge or
+        an overhang.
+      - Its rocks and walls are darkened by 45% at their feet, over 3 m up from the terrain
+        they're in (rocks) or the terrain or rock they stand on (walls), but not where they face
+        up.
+      - Boulders and scree of our own rocks (`kits/rocks.js`) along its crag's foot, within 10 m
+        of its rocks. They lie on the world's land round it, or on its own bare terrain, never on
+        its road: 90 boulders, 0.9 to 2.8 m, drawn with the far land and the near world, and 110
+        heaps of 4 to 9 stones with the near world.
+      - Mist lying in its chasm: 120 soft puffs, 22 to 40 m across, 1 to 11 m over its floor and
+        lower walls, drifting to and fro along it. They're faded where they meet the ground, near
+        the eye and at the chasm's ends, and lit by the sky's light. None on low quality.
+      - Each puff's drawn with the near world within 70 m of the eye, with the far land past
+        110 m, and with both a little between, so it's never drawn twice over.
+      - The boulders drawn with each have a material of their own: one material between the two
+        lit them black.
   - The trees, near and far, grow on the open ground leading up to it and round it, never within
     its walls, on its road's end or up its ridge; and keep off all else it stands on.
 

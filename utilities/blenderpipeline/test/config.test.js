@@ -122,6 +122,8 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", join: { Body: [] } }, /join.Body is a list of objects' names/);
         refuses({ source: "a.fbx", dropMaterials: "M_Rock" }, /dropMaterials is a list of materials' names/);
         refuses({ source: "a.fbx", dropMaterials: [""] }, /dropMaterials is a list of materials' names/);
+        refuses({ source: "a.fbx", apart: "M_Dress*" }, /apart is a list of materials' names/);
+        refuses({ source: "a.fbx", apart: [1] }, /apart is a list of materials' names/);
         refuses({ source: "a.fbx", cells: 40 }, /cells is \{ size: metres a side \}/);
         refuses({ source: "a.fbx", cells: {} }, /cells.size is how many metres a cell is on a side/);
         refuses({ source: "a.fbx", cells: { size: 0 } }, /cells.size is how many metres a cell is on a side/);
