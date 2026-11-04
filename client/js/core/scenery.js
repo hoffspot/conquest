@@ -9,6 +9,7 @@ import BELLHAVEN from "./scenery/bellhaven.walk.js";
 import { FACING } from "./interiors.js";
 import { GROUND } from "./setpieces/pieces.js";
 import { floorAt, readWalk, squareOf } from "./walk.js";
+import { toWorld } from "./terrain/scenes.js";
 
 /**
  * Where each scene's map is drawn in the 3D world: beyond the sealed rooms' (rare.js VAULT), a
@@ -204,4 +205,33 @@ export function sceneryKeep(scenery) {
         facing: keep.facing,
         door: { x: middle, z: fz, width: keep.door.width, height: keep.door.height, floor: heightOn(walk, middle, fz + 0.5) },
     };
+}
+
+/**
+ * How far apart a scene's keep's floors stand (metres): each over the one under it by as much as
+ * its halls are high (world/interiors3d.js DUNGEON_LOOKS keep `tall`, its vault on top).
+ */
+export const KEEP_STOREY = 6.4;
+
+/**
+ * Where a floor of a scene's keep stands in the world (`placed`: core/terrain/height.js scenesIn's,
+ * the scene set into the land; `level`: how many floors up, 0 the first; `entry`: where its own way
+ * in is, [x, y] of its plan's squares, its doors on the first floor and the head of its stair up
+ * from the one under on the others; `origin`: its map's corner, [x, z] metres): its way in at the
+ * keep's doors, each floor KEEP_STOREY over the one under. { offset: [dx, dy, dz] (a point of its
+ * map's, metres, plus this is where it is over the land: world/view.js's outlook), at: [x, z] (the
+ * world's metres there) }; or null for a scene with no keep.
+ */
+export function keepOutlook(placed, { level, entry, origin }) {
+    const keep = SCENERY[placed.scene.id]?.keep;
+
+    if (!keep) {
+        return null;
+    }
+
+    const [x0, , x1] = keep.squares;
+    const at = toWorld(placed, (x0 + x1) / 2, keep.door.z);
+    const floor = sceneryKeep(placed.scene.id).door.floor;
+
+    return { offset: [at[0] - (origin[0] + entry[0]), placed.base + floor + level * KEEP_STOREY, at[1] - (origin[1] + entry[1])], at };
 }

@@ -23,6 +23,8 @@ function floorsOf(seed) {
 }
 
 const rock = (map, x, z) => (map.plan[Math.floor(z)]?.[Math.floor(x)] ?? "#") === "#";
+// (Or the open air round its walls, or a balcony's parapet: core/dungeons/air.js)
+const air = (map, x, z) => ["_", "="].includes(map.plan[Math.floor(z)]?.[Math.floor(x)]);
 
 describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
     it("is a kit in the catalog, licensed, fetched only where it's wanted, its pieces each a node of it, its wall's and floor's pictures measured from the pack's own", () => {
@@ -59,6 +61,7 @@ describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
 
                 for (const each of placements) {
                     assert.ok(!rock(map, each.x, each.z), `${seed}/${k}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)} on the rock`);
+                    assert.ok(!air(map, each.x, each.z), `${seed}/${k}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)} in the air`);
                     assert.equal(each.cut, each.model === KEEP_KIT.column ? "solid" : true);
                     assert.ok(Object.values(KEEP_KIT).includes(each.model));
                 }

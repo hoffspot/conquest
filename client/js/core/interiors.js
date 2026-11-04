@@ -112,7 +112,7 @@ export const PLAN_KEY = Object.freeze({
     "@": { kind: "heart", blocks: true, joins: true },
     // (A dungeon's floor high in a tower, Bellhaven's keep's: the open air round its walls, seen
     // across and never stood on, and the parapet along a balcony's edge, seen over: dungeons/air.js)
-    _: { kind: "air", blocks: true },
+    _: { kind: "air", blocks: true, joins: true },
     "=": { kind: "parapet", blocks: true, joins: true },
 });
 

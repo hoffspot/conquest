@@ -1845,7 +1845,7 @@ export class Interiors {
                 // (What the art and the minimap want of the level: its theme, how deep, its torches
                 // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
                 // is drawn about each)
-                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}) },
+                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, balconies: floor.level.balconies ?? [], lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}) },
             });
 
             return map;

@@ -11,6 +11,8 @@
 // Pure: the placements (dungeons3d.js furnish's) from the level's map alone, the same wherever
 // it's drawn.
 
+import { airy } from "../core/dungeons/air.js";
+
 /** The kit's model in the catalog, and each of its pieces' names as dungeons3d.js DUNGEON_PROPS has them. */
 export const KEEP_KIT = Object.freeze({
     asset: "dungeon-prop-bellhaven-keep",
@@ -53,11 +55,14 @@ const SIDES = Object.freeze([
     { dx: 1, dy: 0, turn: -Math.PI / 2 },
 ]);
 
-// Whether a square of a level's plan is its rock (or off its edge)
+// Whether a square of a level's plan is its rock (or off its edge); and its floor, not its rock nor
+// the open air round it nor a balcony's parapet (core/dungeons/air.js)
 const rockAt = (map, x, y) => x < 0 || y < 0 || x >= map.width || y >= map.height || map.plan[y][x] === "#";
+const floorAt = (map, x, y) => !rockAt(map, x, y) && !airy(map.plan[y][x]);
 
 /**
- * Every straight run of a level's wall by open floor (its rock's face, a square's edge each):
+ * Every straight run of a level's wall by its floor (its rock's face, a square's edge each; not its
+ * outer faces, to the open air):
  * [{ side (SIDES'), from, to (along it: x for a north or south wall, y for an east or west one,
  * squares, `to` exclusive), at (across: the face's line, metres) }].
  */
@@ -73,7 +78,7 @@ export function wallRuns(map) {
 
             for (let k = 0; k <= length; k++) {
                 const [x, y] = along ? [k, line] : [line, k];
-                const face = k < length && !rockAt(map, x, y) && rockAt(map, x + side.dx, y + side.dy);
+                const face = k < length && floorAt(map, x, y) && rockAt(map, x + side.dx, y + side.dy);
 
                 if (face && from === null) {
                     from = k;

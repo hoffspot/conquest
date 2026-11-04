@@ -14,7 +14,8 @@ import { HOST_PLAYER, Host, REFUSALS } from "../client/js/core/host.js";
 import { KEEP_ORIGINS } from "../client/js/core/insides.js";
 import { routeBetween } from "../client/js/core/interiors.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { keepSiteOf, SCENERY, sceneryKeep, squareIn } from "../client/js/core/scenery.js";
+import { KEEP_STOREY, keepOutlook, keepSiteOf, SCENERY, sceneryKeep, squareIn } from "../client/js/core/scenery.js";
+import { placedOf, toWorld } from "../client/js/core/terrain/scenes.js";
 import { BIOMES } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -250,5 +251,24 @@ describe("Bellhaven's keep gone into by its doors off its court (core/insides.js
         assert.deepEqual(made.maps, keep.maps);
         assert.equal(mine.map, keep.maps[1]);
         assert.deepEqual(again.maps[keep.maps[1]].rows ?? again.maps[keep.maps[1]].plan, world.maps[keep.maps[1]].rows ?? world.maps[keep.maps[1]].plan);
+    });
+    it("stands each floor over the land where its keep does, its way in at the keep's doors, each floor a storey over the one under (core/scenery.js keepOutlook)", () => {
+        const placed = { ...placedOf({ scenery: "bellhaven", at: [1200, 3400], facing: 0.7 }), base: 140 };
+        const [x0, , x1] = SCENERY.bellhaven.keep.squares;
+        const doors = toWorld(placed, (x0 + x1) / 2, SCENERY.bellhaven.keep.door.z);
+        const floor = sceneryKeep("bellhaven").door.floor;
+
+        for (const level of [0, 1, 3]) {
+            const [origin, entry] = [[30000, 600 * level], [31.5, 66.5]];
+            const { offset, at } = keepOutlook(placed, { level, entry, origin });
+
+            // (Its way in, on its own map, is the keep's doors in the world, as high as their floor and a storey a floor)
+            assert.deepEqual(at, doors);
+            assert.ok(Math.abs(origin[0] + entry[0] + offset[0] - doors[0]) < 1e-9);
+            assert.ok(Math.abs(origin[1] + entry[1] + offset[2] - doors[1]) < 1e-9);
+            assert.ok(Math.abs(offset[1] - (140 + floor + level * KEEP_STOREY)) < 1e-9);
+        }
+
+        assert.equal(keepOutlook({ ...placed, scene: { ...placed.scene, id: "nowhere" } }, { level: 0, entry: [0, 0], origin: [0, 0] }), null);
     });
 });

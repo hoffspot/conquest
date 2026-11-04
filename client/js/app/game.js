@@ -49,7 +49,7 @@ import { denOf, densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
-import { SCENERY } from "../core/scenery.js";
+import { keepOutlook, SCENERY } from "../core/scenery.js";
 import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
@@ -102,7 +102,7 @@ import { MARKER_NAMES, MARKERS, markersOf, withMarker } from "../core/markers.js
 import { MARGIN as WAY_MARGIN, navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
-import { heightAt as landHeightAt } from "../core/terrain/height.js";
+import { heightAt as landHeightAt, scenesIn } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
 import { nextOf, sigilSpell } from "../core/prismatic.js";
@@ -13379,6 +13379,9 @@ export class Game {
     *#furnishing(visit, mapId) {
         const interior = yield* buildingInterior(this.world.maps[mapId]);
 
+        // (A floor of a scene's keep high over the land, open air round it: where it stands, looked
+        // out from)
+        interior.outlook = this.world.maps[mapId].marks?._ ? this.#outlookOf(mapId) : null;
         interior.object.visible = this.mapId === mapId;
         this.view.scene.add(interior.object);
         this.interiors.set(mapId, interior);
@@ -13518,6 +13521,18 @@ export class Game {
         }
     }
 
+    // Where a floor of a scene's keep stands over the land (core/scenery.js keepOutlook: its way in
+    // at the keep's doors, each floor over the one under), for the sky and the land to be seen past
+    // its walls from there (view.js outlook); null if it's no keep's
+    #outlookOf(mapId) {
+        const map = this.world.maps[mapId];
+        const building = this.world.interiors?.of(mapId) ?? null;
+        const level = building?.dungeon?.levels?.[map?.dungeon?.level];
+        const placed = level ? scenesIn(this.world.plan).find(({ scene }) => SCENERY[scene.id]?.keep?.theme === building.theme) : null;
+
+        return placed ? keepOutlook(placed, { level: map.dungeon.level, entry: level.entry.arrive, origin: map.origin }) : null;
+    }
+
     // The trees whose leaves can be heard: the town's, and those of the world drawn round it
     #hearTrees() {
         this.sound?.setTrees([...this.townTrees, ...(this.chunks?.trees() ?? [])]);
@@ -13538,6 +13553,12 @@ export class Game {
             interior.seenFrom(this.view.camera.position);
         } else if (interior) {
             const at = this.avatars.get(this.me).object.position;
+
+            // (A floor high over the land looked out from: the land, what's built on it and the
+            // castle round it drawn about where it stands)
+            if (interior.outlook && this.chunks) {
+                this.#farLand(...interior.outlook.at);
+            }
 
             cutFor(interior.map, at, this.view.camera.position);
             interior.seenFrom(this.view.camera.position);
