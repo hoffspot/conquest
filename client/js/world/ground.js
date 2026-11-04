@@ -16,6 +16,8 @@ import { CHUNK, VERGE } from "../core/overworld.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { allAtOnce } from "../core/steps.js";
 import { BIOMES, CELL, CELLS, WORLD_SIZE } from "../core/worldplan/plan.js";
+import { scenesIn, woodsAt } from "../core/terrain/height.js";
+import { SCENES } from "../core/terrain/scenes.js";
 import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
@@ -132,6 +134,79 @@ export const GROUND_GUSTS = Object.freeze({ paler: 0.3 });
  */
 export const FIELDS_AFAR = Object.freeze({ hedges: 300, baulks: 250, hedge: "#28401c" });
 export const FAR_FIELDS = { value: 1 };
+
+/**
+ * Where a scene set into the land has wooded the hill round it (core/terrain/scenes.js woodsOn,
+ * height.js woodsAt): its ground there a forest's floor, however steep, its rock all hidden under
+ * it, a little darker and browner (`shade`, as much as `amount`) as the shade of the trees makes
+ * it; read every `square` metres over the hill (setForestFloor), all of it the forest's floor
+ * where its woods are `full` of their most or more. None till a world's set.
+ */
+export const FOREST_FLOOR = Object.freeze({ map: { value: null }, area: { value: new THREE.Vector4(0, 0, 1, 1) }, square: 12, full: 0.4, shade: Object.freeze([0.72, 0.8, 0.6]), amount: 0.5 });
+
+/**
+ * A world's forest floor (FOREST_FLOOR): read from its plan (core/terrain/height.js woodsAt) over
+ * each scene set into its land with a hill, the first's; or none.
+ */
+export function setForestFloor(plan) {
+    const old = FOREST_FLOOR.map.value;
+    const [placed] = plan ? scenesIn(plan).filter(({ hill }) => hill) : [];
+
+    if (!placed) {
+        FOREST_FLOOR.map.value = noContact();
+        FOREST_FLOOR.area.value.set(0, 0, 1, 1);
+    } else {
+        const { square, full } = FOREST_FLOOR;
+        const most = SCENES[placed.scene.id].hill.woods * full;
+        const count = Math.ceil((2 * placed.reach) / square);
+        const [x0, y0] = [placed.at[0] - (count * square) / 2, placed.at[1] - (count * square) / 2];
+        const data = new Uint8Array(count * count);
+
+        for (let j = 0; j < count; j++) {
+            for (let i = 0; i < count; i++) {
+                data[j * count + i] = Math.round(255 * Math.min(1, woodsAt(plan, x0 + (i + 0.5) * square, y0 + (j + 0.5) * square) / most));
+            }
+        }
+
+        const texture = new THREE.DataTexture(data, count, count, THREE.RedFormat, THREE.UnsignedByteType);
+
+        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+        FOREST_FLOOR.map.value = texture;
+        FOREST_FLOOR.area.value.set(x0, y0, count * square, count * square);
+    }
+
+    if (old && old !== FOREST_FLOOR.map.value && old !== noContact()) {
+        old.dispose();
+    }
+}
+
+/**
+ * How much a point of the world (metres) is a forest's floor (FOREST_FLOOR: 0 to 1), as the
+ * ground's drawn there: read between its texels, as the shader reads it.
+ */
+export function forestFloorAt(x, y) {
+    const texture = FOREST_FLOOR.map.value;
+    const { x: ax, y: ay, z: width, w: depth } = FOREST_FLOOR.area.value;
+
+    if (!texture || texture === noContact()) {
+        return 0;
+    }
+
+    const { data, width: count } = texture.image;
+    const [u, v] = [((x - ax) / width) * count - 0.5, ((y - ay) / depth) * count - 0.5];
+
+    if (u < 0 || v < 0 || u > count - 1 || v > count - 1) {
+        return 0;
+    }
+
+    const [i, j] = [Math.min(count - 2, Math.floor(u)), Math.min(count - 2, Math.floor(v))];
+    const [tu, tv] = [u - i, v - j];
+    const k = j * count + i;
+
+    return ((data[k] * (1 - tu) + data[k + 1] * tu) * (1 - tv) + (data[k + count] * (1 - tu) + data[k + count + 1] * tu) * tv) / 255;
+}
 
 /**
  * The ground a hill citadel keeps clear round it (core/sites.js clearedAt), as the fields seen from
@@ -867,7 +942,20 @@ ivec2 farmSize() {
 float farmAt(ivec2 cell) {
     return texelFetch(markMaps, ivec3(cell, 2), 0).r;
 }`;
-    const farFunctions = (patch) => `// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
+    const forestShade = FOREST_FLOOR.shade.map((v) => v.toFixed(3)).join(", ");
+
+    FOREST_FLOOR.map.value ??= noContact();
+
+    const farFunctions = (patch) => `// A forest's floor where a scene set into the land has wooded its hill (FOREST_FLOOR: 0 to 1)
+uniform sampler2D forestFloorMap;
+uniform vec4 forestFloorArea;
+float forestFloorAt(vec2 at) {
+    vec2 within = (at - forestFloorArea.xy) / forestFloorArea.zw;
+
+    return within.x < 0.0 || within.y < 0.0 || within.x > 1.0 || within.y > 1.0 ? 0.0 : textureLod(forestFloorMap, within, 0.0).r;
+}
+
+// Up high (ALPINE): how far up into the rock a point so many metres up is (0 to 1), and how much
 // snow lies on it (the up of its slope, the land there), the lines wandering with a patch's noise
 // (0 to 1)
 float alpineAt(float height, float wander) {
@@ -923,6 +1011,10 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
     grass = grassAfar(grass, landAt, 0.47, dry, lush, bare, alpine, 1.0);
     grass *= ${(0.82 + 0.45 * meanVariation).toFixed(4)};
     float steep = 1.0 - smoothstep(${ROCK_FROM.all.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, ${ROCK_FROM.start.toFixed(2)} + rockShift + ${ALPINE.by.toFixed(2)} * alpine, up.y);
+    // (Under a scene's woods, a forest's floor however steep: FOREST_FLOOR)
+    float forest = forestFloorAt(at);
+    steep *= 1.0 - forest;
+    grass = mix(grass, grass * vec3(${forestShade}), forest * ${FOREST_FLOOR.amount.toFixed(2)});
     vec3 rock = tileMean(${tile(TILE.rock)});
     rock = mix(rock, rock * land.rgb / max(0.2, dot(land.rgb, vec3(0.3333))), land.a * 0.35);
     vec3 ground = mix(grass, rock * ${(0.85 + 0.3 * meanVariation).toFixed(4)}, steep);
@@ -968,6 +1060,8 @@ vec3 farGround(vec2 at, vec3 up, float height, float rockShift) {
             farFieldsOn: FAR_FIELDS,
             fieldsClear: FIELDS_CLEAR,
             snowColour: { value: new THREE.Color(ALPINE.colour) },
+            forestFloorMap: FOREST_FLOOR.map,
+            forestFloorArea: FOREST_FLOOR.area,
             groundGustTime: TREE_WIND.time,
             ...(water ? { groundWater: { value: water.texture }, groundWaterArea: { value: new THREE.Vector4(...water.area) }, causticMap: { value: causticTexture() }, groundTime: TREE_WIND.time, groundDetail: WATER_DETAIL } : {}),
             ...(far ? { farHole: far.hole, farInner: far.inner } : {}),
@@ -1191,6 +1285,10 @@ float waterDepth = waterHere.a * 255.0 / ${FIELD.depth.toFixed(1)};
 
 steep *= max(smoothstep(-0.3, 0.6, -waterIn), smoothstep(${ROCK_FROM.sheer.toFixed(2)}, ${(ROCK_FROM.sheer - 0.15).toFixed(2)}, vUp.y));
 #endif
+// (Under a scene's woods, a forest's floor however steep, shaded by them: FOREST_FLOOR)
+float forest = forestFloorAt(vGround);
+steep *= 1.0 - forest;
+ground = mix(ground, ground * vec3(${forestShade}), forest * ${FOREST_FLOOR.amount.toFixed(2)});
 if (steep > 0.0) {
     vec2 across = abs(vUp.x) > abs(vUp.z) ? vec2(vGround.y, vHeight) : vec2(vGround.x, vHeight);
     // (Each read at two scales, the larger turned, so the texture's repeats don't show)

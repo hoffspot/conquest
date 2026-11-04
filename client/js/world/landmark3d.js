@@ -17,7 +17,7 @@ import * as THREE from "three";
 import { readyScenery, sceneryOf } from "../beasts/model.js";
 import { SCENERY } from "../core/scenery.js";
 import { scenesIn } from "../core/terrain/height.js";
-import { groundMaterial } from "./ground.js";
+import { groundMaterial, setForestFloor } from "./ground.js";
 import { contactFor, DRESS, dressUniforms, footed, heightsOf, landOf, mistOf, screeOf } from "./landmarkdress.js";
 
 /**
@@ -78,6 +78,8 @@ export class Landmarks {
      */
     constructor(plan, { land = null } = {}) {
         this.plan = plan;
+        // (The forest's floor under the woods on its hill, the world's ground's: ground.js)
+        setForestFloor(plan);
         this.land = land;
         this.grounds = [];
         this.dressed = [];

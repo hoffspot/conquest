@@ -25,13 +25,13 @@
 import { cos, sin, TAU } from "../exact.js";
 import { metresOf } from "./curve.js";
 import { simplex } from "./simplex.js";
-import { baseOf, placedOf, reachOf, setIn } from "./scenes.js";
+import { aroundOf, baseOf, hillOf, placedOf, reachOf, setIn, woodsOn } from "./scenes.js";
 import { setLandOf, watersOf } from "./waters.js";
 import { BIOME, BIOMES } from "../worldplan/races.js";
 import { CELL, CELLS, MOUNTAIN, WATER, WORLD_SIZE } from "../worldplan/terrain.js";
 
 /** Bumped whenever the ground a seed makes changes (players playing together must agree on it). */
-export const TERRAIN_VERSION = 13;
+export const TERRAIN_VERSION = 14;
 
 /** Heights are whole multiples of this (metres). */
 export const HEIGHT_STEP = 1 / 1024;
@@ -314,16 +314,49 @@ export function landHeight(plan, x, y) {
 }
 
 // The scenes set into a plan's land (its sites with a `scenery`: worldplan/settle.js BELLHAVEN),
-// each placed (scenes.js placedOf) with how high its own ground stands (`base`) and how far from
-// its middle it reaches (`reach`); none for a land being laid out, with no sites yet
+// each placed (scenes.js placedOf) with how high its own ground stands (`base`), how far from its
+// middle it reaches (`reach`), and how far out its hill may reach round it (`hill`: scenes.js
+// hillOf, short of what's round it); none for a land being laid out, with no sites yet
 function scenesOf(plan, layers) {
     return (plan.sites ?? [])
         .filter((site) => site.scenery)
         .map((site) => {
             const placed = placedOf(site);
+            const reach = reachOf(placed);
 
-            return { ...placed, base: baseOf(placed, (x, y) => lieOf(plan, x, y, layers)), reach: reachOf(placed) };
+            return { ...placed, base: baseOf(placed, (x, y) => lieOf(plan, x, y, layers)), reach, hill: hillOf(placed, aroundOf({ ...plan, running: layers.waters.running }, site.at, reach, site)) };
         });
+}
+
+// How far either way the land's read for how steep it's set round a scene (woodsAt: metres)
+const WOODS_SLOPE = 4;
+
+/**
+ * How thick trees grow at least at a point of the world (metres): as thick as woods on the hill a
+ * scene set into the land has raised past its edges, and where the land's steep round it and on
+ * its own open ground (scenes.js woodsOn: how steep read `WOODS_SLOPE` metres either way), else 0,
+ * the land's own.
+ */
+export function woodsAt(plan, x, y) {
+    const layers = layersOf(plan);
+
+    layers.scenes ??= scenesOf(plan, layers);
+
+    for (const scene of layers.scenes) {
+        const [sx, sy] = [x - scene.at[0], y - scene.at[1]];
+
+        if (scene.hill && sx * sx + sy * sy < scene.reach * scene.reach) {
+            const slopeAt = () => {
+                const [across, along] = [landHeight(plan, x + WOODS_SLOPE, y) - landHeight(plan, x - WOODS_SLOPE, y), landHeight(plan, x, y + WOODS_SLOPE) - landHeight(plan, x, y - WOODS_SLOPE)];
+
+                return Math.sqrt(across * across + along * along) / (2 * WOODS_SLOPE);
+            };
+
+            return woodsOn(scene, x, y, lieOf(plan, x, y, layers), slopeAt);
+        }
+    }
+
+    return 0;
 }
 
 /**

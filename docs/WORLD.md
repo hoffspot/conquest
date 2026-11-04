@@ -827,10 +827,12 @@ What's built so far:
   - It's turned with its plain back walls to the hills or the woods (`backedOf`): of 24 ways round,
     the one where the land behind it (350, 600 and 900 m back, a little either side) rises most
     over its own and is most wooded, a rise of 80 m weighing as much as woods all round, and its
-    front toward its nearest road a fifth as much. Its own trail comes up from that road to its
-    road's end (`core/trails.js`).
-    - In worlds 1 to 8 its front is 30 to 153 degrees off its road. In 7 of them the land behind
-      it is higher, more wooded, or both.
+    front toward its nearest road a fifth as much; and where the hill its crags are eased down to
+    the land over (below) is gentlest, a slope of 1 (rise over run, at its steepest) weighing as
+    much as woods all round against it (`terrain/scenes.js` `steepestOf`, reckoned as the land
+    will lay it). Its own trail comes up from that road to its road's end (`core/trails.js`).
+    - In worlds 1 to 8 its hill is 1 to 1.6 at its steepest; in three it backs onto land higher
+      than its crags, its hills' own slopes. In world 1 the land behind it was 2.4 before.
   - The land's laid along it and under it (`landHeight`), from what's under the scene, baked with
     its walk: `under`, the lowest of it and the top of its ground over each 4 m patch; and
     `ground`, the top of its own terrain (`M_Ground`) and of all that stands on it over each 2 m.
@@ -846,9 +848,27 @@ What's built so far:
       more, then never comes up through it.
     - Where it has no terrain of its own but something stands (its castle over the chasm), the
       land's laid under it the same way.
-    - Past its edges, it eases to its own lie over 96 m.
+    - Past its edges, it eases to its own lie over 96 m; or, where its edge stands far over the
+      lie or under it (its crags, 110 to 180 m over the land behind them), over a hill as wide as
+      keeps it to a slope of 0.7 at its steepest, up to 420 m (`hillOf`, `bandOf`). Its hill stops
+      40 m short of each road's, river's, stream's, lake's or the sea's cell, each site (48 m
+      round), each camp (32 m) and each settlement (its radius) round it (`aroundOf`, the same for
+      the plan and the land), read every 16 m round its box and widening or narrowing along its
+      edges by no more than a metre a metre, so the land between never runs to gullies. The world
+      is close round it: its hill reaches 96 to 250 m in most of them.
+    - Its hill is a forest (`woodsOn`, `height.js` `woodsAt`): where the land falls from its crags
+      at a slope of 0.25 or more, or is that steep all the same (read 4 m either way: by its
+      chasm's walls, carried out past its edges), trees grow at least 1.5 times as thick as the
+      woods' (a jungle's is 1.2), thinning out over the last of it to its foot. On its own open
+      ground (where the land's drawn in its terrain's place) they grow as thick where it's steep,
+      and its hill's woods are carried in 60 m from its edges, fading; never on its road's end.
+      Near and far alike
+      (`core/overworld.js`, `world/far/trees.js`), on its cliffs too, which no one climbs. Its
+      ground there is a forest's floor, however steep (`world/ground.js` `FOREST_FLOOR`, a texture
+      of it over the hill), a little darker and browner, with no rock and no cliff faces drawn
+      (`kits/cliffs.js`).
     - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
-    - `TERRAIN_VERSION` 13, and `NET_VERSION` 204, since it was turned: a game from before has
+    - `TERRAIN_VERSION` 14, and `NET_VERSION` 205, since its hill was laid: a game from before has
       another world.
   - Its squares are all it stands on but its way in (`core/sites.js`): blocked, and blocking
     sight. Its way in is the 6 m of the pad at its near edge, stepped onto, or its glow tapped, to

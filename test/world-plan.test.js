@@ -501,19 +501,27 @@ describe("the world plan (worldplan/plan.js)", () => {
 
             assert.ok(nearest.far <= BELLHAVEN.road, `seed ${seed}: ${Math.round(nearest.far)} m from a road`);
 
-            // (Its back to the hills or the woods: the way it's turned the one of its turns that
-            // weighs most, its back's land weighing more than its front's)
-            const { facing, ways } = backedOf(plan, plan, castle.at, Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy));
+            // (Its back to the hills or the woods, and where its hill's gentlest: the way it's
+            // turned the one of its turns that weighs most, its back weighing more than its front;
+            // weighed on the land as it was laid out, before Bellhaven was set into it, with what's
+            // round it that its hill stops short of)
+            const before = { ...plan, sites: plan.sites.filter((site) => site !== castle) };
+            const around = { road: plan.road, places: plan.places, sites: before.sites, camps: plan.camps };
+            const { facing, ways } = backedOf(plan, before, castle.at, Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy), around);
             const chosen = ways.find((way) => way.facing === facing);
             const front = ways.find((way) => Math.abs(Math.cos(way.facing - facing) + 1) < 1e-9);
+            const backed = (way) => way.rise / BELLHAVEN.back.rise + way.woods - way.steep / BELLHAVEN.back.steep;
 
             assert.equal(castle.facing, facing, `seed ${seed}`);
             assert.ok(ways.every((way) => way.weight <= chosen.weight), `seed ${seed}`);
-            assert.ok(chosen.rise / BELLHAVEN.back.rise + chosen.woods > front.rise / BELLHAVEN.back.rise + front.woods - BELLHAVEN.back.road * 2, `seed ${seed}: its back to the hills or the woods`);
-            backs.push(chosen.rise / BELLHAVEN.back.rise + chosen.woods - (front.rise / BELLHAVEN.back.rise + front.woods));
+            assert.ok(backed(chosen) > backed(front) - BELLHAVEN.back.road * 2, `seed ${seed}: its back to the hills or the woods, its hill gentle`);
+            // (Its hill no steeper than most of the ways it could have been turned)
+            assert.ok(ways.filter((way) => way.steep < chosen.steep).length <= ways.length / 2, `seed ${seed}: ${chosen.steep.toFixed(2)} of ${ways.map((way) => way.steep.toFixed(2))}`);
+            backs.push(backed(chosen) - backed(front));
         }
 
-        // (In most worlds, its back's land rises more or is more wooded than its front's)
+        // (In most worlds, its back weighs more than its front: its land higher, more wooded, its
+        // hill gentler)
         assert.ok(backs.filter((more) => more >= 0).length >= backs.length * 0.6, `${backs.map((more) => more.toFixed(2))}`);
 
         // (Mostly up in the hills)

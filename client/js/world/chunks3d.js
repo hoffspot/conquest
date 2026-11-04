@@ -38,7 +38,7 @@ import { bushMesh } from "./art/kits/bushes.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { fordParts, fordsMesh } from "./art/kits/fords.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
-import { disposeChunkGround, disposeGrass, drawnHeight, FIELDS_CLEAR, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
+import { disposeChunkGround, disposeGrass, drawnHeight, FIELDS_CLEAR, forestFloorAt, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { grassLooks } from "./grassmap.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
@@ -1015,7 +1015,8 @@ export class Chunks {
                 }
             }
 
-            yield* cliffsInto(cliffs, chunk, (ncx, ncy) => ground.chunk(ncx, ncy).heights, landAt);
+            // (None where a scene's hill is wooded: its ground's a forest's floor there, ground.js)
+            yield* cliffsInto(cliffs, chunk, (ncx, ncy) => ground.chunk(ncx, ncy).heights, landAt, forestFloorAt);
 
             if (cliffs.count) {
                 drawn.cliffs = cliffMesh(cliffs, [chunk.x0, chunk.y0]);
