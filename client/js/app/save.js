@@ -182,6 +182,12 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     padSwap: false,
     padSymbols: "auto",
     padBindings: Object.freeze({}),
+    // The keys and mouse buttons set otherwise than they come (app/keys.js keysChanged: { action:
+    // [main, spare] }); the handheld whose preset was chosen (app/handhelds.js HANDHELDS), if one
+    // was; and whether the player's been told once that there are presets for handhelds
+    keyBindings: Object.freeze({}),
+    handheld: null,
+    handheldOffered: false,
 });
 
 /**

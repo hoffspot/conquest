@@ -1,11 +1,12 @@
 // Steering the player with held input rather than by tapping where to go: W, A, S, D (or the arrow
-// keys) on a keyboard, a thumb stick on a touch screen, and a game controller's left stick
+// keys, or whichever the player's set: app/keys.js) on a keyboard, or a mouse button set to one, a
+// thumb stick on a touch screen, and a game controller's left stick
 // (app/padplay.js: `pad`). Both come out as the order the swipe up
 // from the player already gives — straight ahead the way they're pointed (core/battle.js, "ahead") —
 // given again as that way turns and stopped when the input's let go. So held input asks nothing new
 // of the core: no held keys cross the wire, only the way they add up to.
 //
-// Held keys run, as in most games, and Shift held along with them walks (the stick runs pushed
+// Held keys run, as in most games, and Shift (the walk key) held along with them walks (the stick runs pushed
 // most of the way over). Out of breath, held input walks on the way it's held till enough of it is
 // back, then runs again (RUN_AGAIN).
 //
@@ -28,6 +29,7 @@
 // for the debug log.
 
 import { BARE_MS } from "./press.js";
+import { heldBy, keysOf } from "./keys.js";
 
 // How far the way has to turn before the order's given again (radians, about 7 degrees), and how
 // often it's given again anyway while the input's held (ms), in case they stopped short of where
@@ -53,17 +55,15 @@ export const RUN_AT = 0.7;
 // stutter between the two, "Out of breath" said each time
 export const RUN_AGAIN = 0.25;
 
-// Which way each key means, against the camera: [forward, right]
-const KEYS = new Map([
-    ["KeyW", [1, 0]],
-    ["KeyS", [-1, 0]],
-    ["KeyA", [0, -1]],
-    ["KeyD", [0, 1]],
-    ["ArrowUp", [1, 0]],
-    ["ArrowDown", [-1, 0]],
-    ["ArrowLeft", [0, -1]],
-    ["ArrowRight", [0, 1]],
+// Which way each way's keys mean, against the camera: [forward, right]; and the keys as they come,
+// for one not told the player's
+const WAYS = new Map([
+    ["forward", [1, 0]],
+    ["back", [-1, 0]],
+    ["left", [0, -1]],
+    ["right", [0, 1]],
 ]);
+const AS_THEY_COME = keysOf();
 
 export class Steering {
     #keys = new Set();
@@ -90,6 +90,8 @@ export class Steering {
      * @param {(lost: { ms: number, how: string }) => void} [how.lost] - Told of a thumb let go
      *   of as lost (its lift never heard): how long it was held, and how it was found ("again":
      *   another thumb down on the stick; "bare": every finger off the screen).
+     * @param {() => object} [how.keys] - The keys as the player's set them (app/keys.js keysOf):
+     *   which go each way, and which walks; as they come if not told.
      */
     constructor(how) {
         this.#how = how;
@@ -153,6 +155,14 @@ export class Steering {
         }
     }
 
+    /**
+     * A mouse button set to a way, or to walk (app/keys.js: "Mouse2" and so on), pressed or let go
+     * of: as a key held is.
+     */
+    mouse(key, down) {
+        this.#key({ code: key, target: null, preventDefault() {} }, down);
+    }
+
     /** Let go of everything and stop, as a menu opening or the page losing its keys does. */
     release() {
         const was = this.steering;
@@ -199,7 +209,10 @@ export class Steering {
         // (Typing a name somewhere isn't walking; nor is a shortcut with a modifier held)
         const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
 
-        if (typing || event.ctrlKey || event.metaKey || event.altKey) {
+        const held = heldBy(this.#how.keys?.() ?? AS_THEY_COME, event.code);
+
+        // (A modifier held is a shortcut, not walking: unless it's the walk key itself)
+        if (typing || event.metaKey || ((event.ctrlKey || event.altKey) && !held.length)) {
             if (down) {
                 this.release();
             }
@@ -207,10 +220,11 @@ export class Steering {
             return;
         }
 
-        // Held keys run; Shift held alongside a way walks instead, without being a way of its own
-        if (event.key === "Shift") {
+        // Held keys run; the walk key (Shift, as it comes) held alongside a way walks instead,
+        // without being a way of its own
+        if (held.includes("walk")) {
             this.#shift = down;
-        } else if (KEYS.has(event.code)) {
+        } else if (held.some((id) => WAYS.has(id))) {
             if (down) {
                 this.#keys.add(event.code);
             } else {
@@ -366,13 +380,15 @@ export class Steering {
             ({ forward, right, run } = this.#pad);
         } else if (this.#keys.size > 0) {
             for (const code of this.#keys) {
-                const [ahead, side] = KEYS.get(code);
+                for (const id of heldBy(this.#how.keys?.() ?? AS_THEY_COME, code)) {
+                    const [ahead, side] = WAYS.get(id) ?? [0, 0];
 
-                forward += ahead;
-                right += side;
+                    forward += ahead;
+                    right += side;
+                }
             }
 
-            // Running, unless Shift's held
+            // Running, unless the walk key's held
             run = !this.#shift;
         } else {
             return null;

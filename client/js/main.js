@@ -37,8 +37,10 @@ import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FO
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
-import { ACTIONS as PAD_ACTIONS, asTheyCome, bindingsOf, bindingWords, rebind, SYMBOL_NAMES } from "./app/gamepad.js";
+import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
 import { PadPlay } from "./app/padplay.js";
+import { actionFor, GROUPS, KEY_ACTIONS, keyMap, keyOf as keyPressed, keysAsCame, keysChanged, keysOf, keyWords, mouseOf, setKey } from "./app/keys.js";
+import { guessHandheld, handheldOf, HANDHELDS, presetOf, stepsOf } from "./app/handhelds.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -90,7 +92,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, pageRelay: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false, hostAs: null, hostAfter: null, hostOn: null, deleting: null };
+const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, readyCreator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, pageRelay: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false, hostAs: null, hostAfter: null, hostOn: null, deleting: null, ringKey: null, binding: null };
 
 // A game controller (app/padplay.js): read every frame once one's seen, working the game, its
 // windows and the title as touch and keys do
@@ -102,7 +104,12 @@ const padPlay = new PadPlay({
     worldMap: () => state.worldMap,
     sound: () => state.session?.sound ?? null,
     message: (text, seconds) => state.game?.hud.message(text, seconds),
-    onSeen: () => showController(),
+    onSeen: () => {
+        showController();
+        offerHandheld();
+    },
+    // (Back, over the world: as the menu's key, whatever it's set to: what's open put away, or the menu)
+    back: () => state.game?.keyBack() || pause(),
 });
 
 window.pellagos = {
@@ -1113,6 +1120,7 @@ function underway(game) {
     game.underway.then(() => {
         if (state.game === game) {
             window.pellagos.playing = true;
+            offerHandheld();
         }
     });
 }
@@ -1255,6 +1263,7 @@ async function playing(save, { world, place, war }) {
     game.refuseInvites = settings.refuseInvites;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
+    game.keys = keysOf(settings.keyBindings);
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
@@ -1324,7 +1333,7 @@ function pause() {
 
 function resume() {
     $("#menu").close();
-    padPlay.stopListening();
+    stopBinding();
     fullScreen.play();
 
     // (A pause for everyone over: their world going again for all; a world server's let go of as
@@ -1390,8 +1399,10 @@ const MENU_PAGES = {
     actions: { page: "#menuactions", title: "actionstitle", focus: "#wheelsbutton", up: "options", from: "#actionsbutton" },
     graphics: { page: "#menugraphics", title: "graphicstitle", focus: "#qualityslider", up: "options", from: "#graphicsbutton" },
     sound: { page: "#menusound", title: "soundtitle", focus: "#soundswitch", up: "options", from: "#soundbutton" },
-    controls: { page: "#menucontrols", title: "controlstitle", focus: "#controllerbutton", up: "options", from: "#controlsbutton" },
+    controls: { page: "#menucontrols", title: "controlstitle", focus: "#bindingsbutton", up: "options", from: "#controlsbutton" },
     controller: { page: "#menucontroller", title: "controllertitle", focus: "#padrumbleswitch", up: "controls", from: "#controllerbutton" },
+    bindings: { page: "#menubindings", title: "bindingstitle", focus: "#handheldsbutton", up: "controls", from: "#bindingsbutton" },
+    handhelds: { page: "#menuhandhelds", title: "handheldstitle", focus: "#handheldlist button", up: "bindings", from: "#handheldsbutton" },
     camera: { page: "#menucamera", title: "cameratitle", focus: "#followswitch", up: "options", from: "#camerabutton" },
     gameplay: { page: "#menugameplay", title: "gameplaytitle", focus: "#snagswitch", up: "options", from: "#gameplaybutton" },
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
@@ -1413,12 +1424,12 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
     menuShown = page;
     $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page].title);
 
-    // (A controller's button being listened for, given up as its page is left)
-    if (page !== "controller") {
-        padPlay.stopListening();
+    // (A key or button being listened for, given up as its page is left)
+    if (page !== "bindings") {
+        stopBinding();
     }
 
-    $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
+    $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log" || page === "bindings");
     $(focus).focus();
 
     // (What auto-snag takes, told under its switch; the players blocked, under theirs and on their page)
@@ -3053,6 +3064,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.refuseInvites = settings.refuseInvites;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
+    game.keys = keysOf(settings.keyBindings);
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
@@ -5561,11 +5573,10 @@ $("#textsizeslider").addEventListener("change", (event) => applySetting("textSiz
 applyTextSize();
 
 // A game controller's page (Game options, Controls, Controller: app/padplay.js): the controller
-// seen, its switches and sliders, the symbols its buttons are shown with, and which button does
-// what, each set by choosing it and pressing the button for it
+// seen, its switches and sliders, and the symbols its buttons are shown with (which button does
+// what: the Bindings page, showBindings)
 const PAD_UNSEEN = $("#padseen").textContent;
 const PAD_SYMBOL_KINDS = Object.keys(SYMBOL_NAMES);
-const padRows = new Map();
 
 // A controller's name as the browser gives it, without its maker's numbers
 const padName = (id) => id.replace(/^[0-9a-f]{4}-[0-9a-f]{4}-/i, "").replace(/\s*\(.*$/, "").trim() || "A controller";
@@ -5587,53 +5598,7 @@ function showController() {
     $("#padinvertyswitch").checked = settings.padInvertY;
     $("#padswapswitch").checked = settings.padSwap;
     $("#padsymbolsname").textContent = SYMBOL_NAMES[settings.padSymbols] ?? SYMBOL_NAMES.auto;
-    showPadButtons();
-}
-
-// Each action, and the button that does it (or, `listening`, a word that one's being waited for)
-function showPadButtons(listening = null) {
-    const bindings = bindingsOf(settings.padBindings);
-    const kind = padPlay.symbols;
-
-    for (const action of PAD_ACTIONS) {
-        let row = padRows.get(action.id);
-
-        if (!row) {
-            row = document.createElement("button");
-            row.type = "button";
-            row.className = "padbind";
-            row.dataset.action = action.id;
-            row.append(Object.assign(document.createElement("span"), { className: "padbind-name", textContent: action.name }), Object.assign(document.createElement("span"), { className: "padbind-key" }));
-            row.addEventListener("click", () => setPadButton(action));
-            $("#padbindings").append(row);
-            padRows.set(action.id, row);
-        }
-
-        row.classList.toggle("listening", listening === action.id);
-        row.lastChild.textContent = listening === action.id ? "Press a button…" : bindingWords(bindings[action.id], kind);
-    }
-
-    $("#padreset").disabled = asTheyCome(bindings);
-}
-
-function setPadButton(action) {
-    if (!padPlay.seen) {
-        $("#padseen").textContent = "Press any button on your controller first, so the game can see it.";
-
-        return;
-    }
-
-    showPadButtons(action.id);
-    padPlay.listen(
-        (binding) => {
-            if (binding) {
-                applySetting("padBindings", rebind(bindingsOf(settings.padBindings), action.id, binding));
-            }
-
-            showPadButtons();
-        },
-        { bar: Boolean(action.bar) },
-    );
+    showBindings();
 }
 
 $("#controllerbutton").addEventListener("click", () => {
@@ -5662,11 +5627,433 @@ $("#padsymbolsbutton").addEventListener("click", () => {
     applySetting("padSymbols", next);
     showController();
 });
-$("#padreset").addEventListener("click", () => {
-    applySetting("padBindings", {});
-    showPadButtons();
+$("#padbindingsbutton").addEventListener("click", () => {
+    menuPage("bindings");
+    showBindings();
 });
+
+// --- Bindings (Game options, Controls): every action, its two keys (or mouse buttons) and its
+// controller button (app/keys.js, app/gamepad.js), each set by choosing it and pressing it ---
+
+// The rows: the keys' actions in their groups, a controller's bars among the Action Bar's
+const BIND_ROWS = (() => {
+    const rows = KEY_ACTIONS.map((one) => ({ id: one.id, name: one.name, group: one.group, keys: true, pad: PAD_ACTIONS.find((action) => action.id === one.id) ?? null }));
+
+    rows.splice(rows.findIndex((row) => row.group === "bar"), 0, ...PAD_ACTIONS.filter((action) => action.bar).map((action) => ({ id: action.id, name: action.name, group: "bar", keys: false, pad: action })));
+
+    return rows;
+})();
+const bindRows = new Map();
+
+// What's being listened for: an action, and which of its boxes (0 its key, 1 its spare, "pad" its
+// controller button, null whichever's pressed); whether every key's been let go of since it was
+// asked (the one that chose it isn't taken for the answer); and when a mouse button was last taken
+// (the browser's own for it, its menu or going back a page, kept from happening just after)
+let mouseTaken = -Infinity;
+const keysDown = new Set();
+
+// What the keyboard in hand prints on each key, where the browser says (app/keys.js keyWords)
+let keyLayout = null;
+
+navigator.keyboard
+    ?.getLayoutMap?.()
+    .then((layout) => {
+        keyLayout = layout;
+        showBindings();
+        showKeyHints();
+    })
+    .catch(() => {});
+
+const keyName = (key) => keyWords(key, keyLayout);
+
+function showBindings() {
+    const keys = keysOf(settings.keyBindings);
+    const pads = bindingsOf(settings.padBindings);
+    const kind = padPlay.symbols;
+    const bar = `${bindingWords(pads.bar1, kind) || "—"}/${bindingWords(pads.bar2, kind) || "—"}`;
+    let group = null;
+
+    // (Each column named, over them all)
+    if (!$("#bindings").children.length) {
+        const head = Object.assign(document.createElement("div"), { className: "bind bind-head" });
+
+        head.setAttribute("aria-hidden", "true");
+        head.append(...["Action", "Key", "Spare", "Controller"].map((text) => Object.assign(document.createElement("span"), { textContent: text })));
+        $("#bindings").append(head);
+    }
+
+    for (const row of BIND_ROWS) {
+        let element = bindRows.get(row.id);
+
+        if (!element) {
+            if (row.group !== group) {
+                $("#bindings").append(Object.assign(document.createElement("h3"), { className: "options-heading bind-group", textContent: GROUPS.find((each) => each.id === row.group)?.name ?? "" }));
+            }
+
+            element = bindRow(row);
+            $("#bindings").append(element);
+            bindRows.set(row.id, element);
+        }
+
+        group = row.group;
+
+        const listening = state.binding?.id === row.id ? state.binding.slot : undefined;
+        const [main, spare, pad] = element.querySelectorAll(".bind-slot");
+
+        element.classList.toggle("listening", listening !== undefined);
+        element.querySelector(".bind-listen").hidden = listening === undefined;
+        element.querySelector(".bind-clear").hidden = listening === undefined || listening === null;
+        element.querySelector(".bind-ask").textContent = listening === "pad" ? "Press a button…" : listening === null ? (row.keys && row.pad ? "Press a key, click or button…" : row.keys ? "Press a key or click…" : "Press a button…") : "Press a key or click…";
+
+        main.textContent = row.keys ? keyName(keys[row.id][0]) || "—" : "";
+        spare.textContent = row.keys ? keyName(keys[row.id][1]) || "—" : "";
+        main.classList.toggle("at", listening === 0);
+        spare.classList.toggle("at", listening === 1);
+        pad.classList.toggle("at", listening === "pad");
+
+        // (The Action Bar's slots on a controller: always these, with a bar's trigger held)
+        const slot = /^slot([1-6])$/.exec(row.id);
+
+        pad.textContent = row.pad ? bindingWords(pads[row.id], kind) || "—" : slot ? `${bar} + ${symbolOf(BAR_SLOTS[Number(slot[1]) - 1], kind)}` : "";
+    }
+
+    $("#bindreset").disabled = keysAsCame(keys) && asTheyCome(pads);
+    showHandheld();
+}
+
+// An action's row: its name (chosen, whichever's pressed next sets it), its key and spare, and its
+// controller button (each chosen, only that one); while it's listened for, what to press, and
+// clearing or giving up
+function bindRow(row) {
+    const element = document.createElement("div");
+    const slot = (which, label, on) => {
+        const button = Object.assign(document.createElement("button"), { type: "button", className: "bind-slot" });
+
+        button.dataset.slot = String(which);
+        button.setAttribute("aria-label", `${row.name}: ${label}`);
+        button.disabled = !on;
+        button.addEventListener("click", () => bindListen(row, which));
+
+        return button;
+    };
+    const listen = document.createElement("span");
+    const clear = Object.assign(document.createElement("button"), { type: "button", className: "button quiet bind-clear", textContent: "Clear" });
+    const cancel = Object.assign(document.createElement("button"), { type: "button", className: "button quiet bind-cancel", textContent: "Cancel" });
+    const name = Object.assign(document.createElement("button"), { type: "button", className: "bind-name", textContent: row.name });
+
+    element.className = "bind";
+    element.dataset.action = row.id;
+    name.addEventListener("click", () => bindListen(row, null));
+    clear.addEventListener("click", () => bindClear());
+    cancel.addEventListener("click", () => stopBinding());
+    listen.className = "bind-listen";
+    listen.hidden = true;
+    listen.append(Object.assign(document.createElement("span"), { className: "bind-ask" }), clear, cancel);
+    element.append(name, slot(0, "key", row.keys), slot(1, "spare key", row.keys), slot("pad", "controller button", Boolean(row.pad)), listen);
+
+    return element;
+}
+
+// Listen for what's pressed next for an action (`slot`: as `state.binding` keeps it); a controller's
+// button too, if it can have one and is seen. Given up after a while, or another's chosen
+function bindListen(row, slot) {
+    stopBinding();
+
+    const token = {};
+    const pad = row.pad && (slot === "pad" || slot === null) && padPlay.seen;
+
+    state.binding = { id: row.id, row, slot, token, armed: keysDown.size === 0, timer: setTimeout(() => state.binding?.token === token && stopBinding(), BIND_WAIT) };
+
+    if (slot === "pad" && !padPlay.seen) {
+        $("#bindtold").textContent = "Press any button on your controller first, so the game can see it.";
+    } else if (pad) {
+        padPlay.listen((button) => state.binding?.token === token && heardPad(button), { bar: Boolean(row.pad.bar), ms: BIND_WAIT });
+    }
+
+    showBindings();
+}
+
+// How long a key, click or button's waited for (ms)
+const BIND_WAIT = 10000;
+
+function stopBinding() {
+    if (!state.binding) {
+        return;
+    }
+
+    clearTimeout(state.binding.timer);
+    state.binding = null;
+    padPlay.stopListening();
+    showBindings();
+}
+
+// A key or mouse button heard for the action listened for: set in its box (the key's, whichever
+// was chosen with the name), taken from whatever had it, and said
+function heardKey(key) {
+    const { id, row, slot } = state.binding;
+
+    if (!row.keys || slot === "pad") {
+        return;
+    }
+
+    const { keys, taken } = setKey(keysOf(settings.keyBindings), id, slot === 1 ? 1 : 0, key);
+
+    stopBinding();
+    applySetting("keyBindings", keysChanged(keys));
+    tellTaken(taken.map((each) => each.id));
+    showBindings();
+}
+
+// A controller's button heard for the action listened for (null: none in time)
+function heardPad(button) {
+    const { id } = state.binding;
+
+    stopBinding();
+
+    if (!button) {
+        return;
+    }
+
+    const before = bindingsOf(settings.padBindings);
+    const after = rebind(before, id, button);
+
+    applySetting("padBindings", after);
+    tellTaken(takenFrom(before, after));
+    showBindings();
+}
+
+// The box chosen cleared: no key, or no button
+function bindClear() {
+    const { id, slot } = state.binding ?? {};
+
+    stopBinding();
+
+    if (slot === "pad") {
+        applySetting("padBindings", rebind(bindingsOf(settings.padBindings), id, ""));
+    } else if (slot === 0 || slot === 1) {
+        applySetting("keyBindings", keysChanged(setKey(keysOf(settings.keyBindings), id, slot, null).keys));
+    }
+
+    tellTaken([]);
+    showBindings();
+}
+
+// The actions something was taken from, said, so each can be given another
+function tellTaken(ids) {
+    const names = [...new Set(ids)].map((id) => BIND_ROWS.find((row) => row.id === id)?.name).filter(Boolean);
+
+    $("#bindtold").textContent = names.length ? `Taken from ${names.join(" and ")}: choose it to give it another.` : "";
+}
+
+// Keys and mouse buttons, while one's listened for: set, not done (Escape too: it's set, not
+// taken for going back). A modifier pressed alone is set as it's let go of (held with another
+// key, it's part of it)
+window.addEventListener(
+    "keydown",
+    (event) => {
+        keysDown.add(event.code);
+
+        if (!state.binding) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!state.binding.armed || event.repeat) {
+            return;
+        }
+
+        if (/^(Shift|Control|Alt)(Left|Right)$/.test(event.code)) {
+            state.binding.modifier = event.code;
+
+            return;
+        }
+
+        const key = keyPressed(event);
+
+        if (key) {
+            heardKey(key);
+        }
+    },
+    { capture: true },
+);
+window.addEventListener(
+    "keyup",
+    (event) => {
+        keysDown.delete(event.code);
+
+        if (!state.binding) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!state.binding.armed) {
+            state.binding.armed = keysDown.size === 0;
+        } else if (state.binding.modifier === event.code) {
+            heardKey(keyPressed({ code: event.code }));
+        }
+    },
+    { capture: true },
+);
+window.addEventListener("blur", () => keysDown.clear());
+window.addEventListener(
+    "mousedown",
+    (event) => {
+        const key = mouseOf(event.button);
+
+        if (state.binding && key) {
+            event.preventDefault();
+            event.stopPropagation();
+            mouseTaken = performance.now();
+            heardKey(key);
+        } else if (state.binding && event.button === 0 && !event.target.closest?.(".bind")) {
+            // (A click anywhere but the actions' rows: given up)
+            stopBinding();
+        }
+    },
+    { capture: true },
+);
+
+for (const type of ["mouseup", "auxclick", "contextmenu"]) {
+    window.addEventListener(
+        type,
+        (event) => {
+            if (mouseOf(event.button) && (state.binding || performance.now() - mouseTaken < 1000)) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        },
+        { capture: true },
+    );
+}
+
+$("#bindingsbutton").addEventListener("click", () => {
+    menuPage("bindings");
+    showBindings();
+});
+$("#bindreset").addEventListener("click", () => {
+    stopBinding();
+    applySetting("keyBindings", {});
+    applySetting("padBindings", {});
+    tellTaken([]);
+    showBindings();
+});
+
+// --- Handheld presets (app/handhelds.js) ---
+
+// The handheld chosen (and its back buttons' steps, the keys as they're set now), or, none chosen,
+// the one this looks like, if it looks like one
+function showHandheld() {
+    const one = handheldOf(settings.handheld);
+    const keys = keysOf(settings.keyBindings);
+
+    $("#handheldname").textContent = one?.name ?? "None chosen";
+    $("#handheldguide").hidden = !one;
+
+    if (one) {
+        $("#handheldguidetitle").textContent = one.mouse ? "Playing in FPS mode" : `Its back buttons, in ${one.software}`;
+        $("#handheldsteps").replaceChildren(...stepsOf(one.id, (action) => keyName(keys[action]?.[one.mouse ? 1 : 0])).map((step) => Object.assign(document.createElement("li"), { textContent: step })));
+    }
+
+    const guess = one ? null : handheldGuess();
+
+    $("#handheldguess").hidden = !guess;
+    $("#handheldguess").textContent = guess === "handheld" ? "This looks like a handheld gaming PC: choose yours under Handheld presets." : guess ? `This looks like a ${handheldOf(guess).name}: its preset's under Handheld presets.` : "";
+}
+
+// Which handheld this looks like (app/handhelds.js guessHandheld), or null
+const handheldGuess = () => guessHandheld({ padId: padPlay.seen?.id ?? "", width: screen.width, height: screen.height, ratio: devicePixelRatio, touch: navigator.maxTouchPoints > 0 });
+
+// Told once, playing on what looks like a handheld, that there's a preset for it
+function offerHandheld() {
+    const guess = settings.handheld || settings.handheldOffered || !state.game?.running ? null : handheldGuess();
+
+    if (guess) {
+        applySetting("handheldOffered", true);
+        state.game.hud.message(`${guess === "handheld" ? "Playing on a handheld" : `Playing on a ${handheldOf(guess).name}`}? Game options, Controls, Bindings has a preset for it.`, 6);
+    }
+}
+
+function showHandhelds() {
+    const list = $("#handheldlist");
+
+    if (!list.children.length) {
+        for (const one of [...HANDHELDS, { id: null, name: "None", software: null }]) {
+            const button = Object.assign(document.createElement("button"), { type: "button", className: "option-link handheld" });
+
+            button.dataset.handheld = one.id ?? "";
+            button.append(Object.assign(document.createElement("span"), { className: "text", textContent: one.name }));
+            button.firstChild.append(Object.assign(document.createElement("small"), { textContent: one.id ? (one.mouse ? "The right controller a mouse, the left sending keys" : `${one.backs.length} back buttons, set in ${one.software}`) : "No preset: the keys and buttons stay as they are" }));
+            button.addEventListener("click", () => chooseHandheld(one.id));
+            list.append(button);
+        }
+    }
+
+    for (const button of list.children) {
+        button.setAttribute("aria-pressed", String((button.dataset.handheld || null) === (settings.handheld ?? null)));
+    }
+}
+
+// A handheld's preset chosen: its back buttons' actions given keys (if they've none), the mouse's
+// in FPS mode, its sticks' dead zone and text size; then back to the bindings, its steps shown.
+// None: only the choice let go of (the keys and buttons as they are)
+function chooseHandheld(id) {
+    const preset = id ? presetOf(id, keysOf(settings.keyBindings)) : null;
+    const taken = [];
+
+    if (preset) {
+        let keys = keysOf(settings.keyBindings);
+
+        for (const { id: action, slot, key } of preset.keys) {
+            const set = setKey(keys, action, slot, key);
+
+            keys = set.keys;
+            taken.push(...set.taken.map((each) => each.id));
+        }
+
+        applySetting("keyBindings", keysChanged(keys));
+        applySetting("padDeadZone", preset.deadZone);
+        applySetting("textSize", preset.textSize);
+        $("#textsizeslider").value = String(Math.max(0, TEXT_SIZES.indexOf(settings.textSize)));
+        $("#textsizename").textContent = TEXT_SIZE_NAMES[settings.textSize] ?? TEXT_SIZE_NAMES.normal;
+    }
+
+    applySetting("handheld", id ?? null);
+    menuPage("bindings");
+    tellTaken(taken);
+    showController();
+}
+
+$("#handheldsbutton").addEventListener("click", () => {
+    showHandhelds();
+    menuPage("handhelds");
+});
+
+// The keys named where the game says what they do (the hint, the stick's and the camera's notes),
+// as they're set
+function showKeyHints() {
+    const keys = keysOf(settings.keyBindings);
+
+    for (const element of document.querySelectorAll("[data-keys]")) {
+        element.textContent = element.dataset.keys
+            .split(",")
+            .map((id) => keyName(keys[id]?.[0] ?? keys[id]?.[1]) || "none")
+            .join(", ");
+    }
+
+    // (A button's title: what it is, and its key, if it has one)
+    for (const element of document.querySelectorAll("[data-keys-title]")) {
+        const key = keyName(keys[element.dataset.keysTitle]?.[0] ?? keys[element.dataset.keysTitle]?.[1]);
+
+        element.title = `${element.getAttribute("aria-label")}${key ? ` (${key})` : ""}`;
+    }
+}
+
 showController();
+showKeyHints();
 padPlay.start();
 
 // How loud each kind of sound is: as the slider moves, and remembered when let go. Moving the
@@ -5725,21 +6112,71 @@ $("#menu").addEventListener("cancel", (event) => {
 $("#zoomin").addEventListener("click", () => state.session?.view.zoomSmoothly(0.8));
 $("#zoomout").addEventListener("click", () => state.session?.view.zoomSmoothly(1.25));
 
-document.addEventListener("keydown", (event) => {
-    if (document.body.dataset.screen !== "hud" || $("#menu").open) {
+// The menu's key (Escape, as it comes) and the world map's (M), as the player's set them
+// (app/keys.js), and the ring of panels' (O) held; a mouse button set to one of them too. The
+// game's own keys are the game's (game.js #keyed), which takes the menu's first to back out of
+// what's open
+function keyed(key, event, down = true) {
+    if (document.body.dataset.screen !== "hud" || !key) {
         return;
     }
 
-    if (event.key === "Escape" && !$("#worldmap").open) {
-        pause();
-    } else if ((event.key === "m" || event.key === "M") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLInputElement)) {
+    const id = actionFor(keyMap(keysOf(settings.keyBindings), ["world"]), key);
+
+    if (!down) {
+        state.ringKey = null;
+        padPlay.keyRing(null);
+
+        return;
+    }
+
+    if ($("#menu").open) {
+        // (Escape goes back a page as the browser has it: another key set to the menu, as Escape)
+        if (id === "menu" && key !== "Escape") {
+            event.preventDefault();
+            menuBack();
+        }
+
+        return;
+    }
+
+    const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+
+    if (id === "menu") {
+        if ($("#worldmap").open) {
+            // (Escape closes the map as the browser has it; another key set to the menu, as Escape)
+            if (key !== "Escape") {
+                event.preventDefault();
+                closeWorldMap();
+            }
+        } else {
+            // (The key taken: else the browser takes the Escape that opened the menu for closing it)
+            event.preventDefault();
+            pause();
+        }
+    } else if (id === "map" && !event.repeat && !typing) {
         if ($("#worldmap").open) {
             closeWorldMap();
         } else {
             openWorldMap();
         }
+    } else if (id === "panels" && !event.repeat && !typing && !$("#worldmap").open && state.game?.running) {
+        // (Held open by the key where it sits, whatever else is held with it)
+        state.ringKey = event.code ?? key;
+        padPlay.keyRing(state.game);
+    }
+}
+
+document.addEventListener("keydown", (event) => keyed(keyPressed(event), event));
+document.addEventListener("keyup", (event) => event.code === state.ringKey && keyed(state.ringKey, event, false));
+document.addEventListener("mousedown", (event) => {
+    const key = mouseOf(event.button);
+
+    if (key && state.game?.running && !$("#menu").open) {
+        keyed(key, event);
     }
 });
+document.addEventListener("mouseup", (event) => mouseOf(event.button) === state.ringKey && keyed(state.ringKey, event, false));
 
 window.addEventListener("resize", () => state.session?.view.resize());
 
@@ -5809,6 +6246,12 @@ function applySetting(key, value) {
         $("#debugswitch").checked = value;
     } else if (key === "debugFolded") {
         // Nothing more to do: the overlay folds itself
+    } else if (key === "keyBindings") {
+        if (state.game) {
+            state.game.keys = keysOf(value);
+        }
+
+        showKeyHints();
     } else if (key === "squares") {
         state.game?.showSquares(value);
     } else if (key === "navigation") {

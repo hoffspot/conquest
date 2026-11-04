@@ -5,7 +5,7 @@
 // letters, and rumble.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ACTIONS, actionsOf, asTheyCome, BAR_SLOTS, barHeld, BINDABLE, bindingsOf, bindingWords, BUTTONS, buttonsOf, DEAD_ZONE, heartDue, HEART, HOLD_MS, keyLetter, KEY_ROWS, nearestThatWay, PadReader, pickInFront, rebind, rumbleAt, sliceOf, stepLetter, stickAt, symbolOf, symbolsFor } from "../client/js/app/gamepad.js";
+import { ACTIONS, actionsOf, asTheyCome, BAR_SLOTS, barHeld, BINDABLE, bindingsOf, bindingWords, BUTTONS, buttonsOf, DEAD_ZONE, heartDue, HEART, HOLD_MS, keyLetter, KEY_ROWS, nearestThatWay, PadReader, pickInFront, rebind, rumbleAt, sliceOf, stepLetter, stickAt, symbolOf, symbolsFor, takenFrom } from "../client/js/app/gamepad.js";
 
 // A controller's readings with these buttons down (names; a trigger's by how far it's pulled) and
 // its sticks where they're put
@@ -151,12 +151,25 @@ describe("what each button does", () => {
 });
 
 describe("setting a button", () => {
-    it("gives the button to the action, and its old one to whatever had it", () => {
-        const bindings = rebind(bindingsOf(), "do", "r1");
+    it("gives the button to the action, and takes it from whatever had it, which is left with none (and said)", () => {
+        const before = bindingsOf();
+        const bindings = rebind(before, "do", "r1");
 
         assert.equal(bindings.do, "r1");
-        assert.equal(bindings.nextFoe, "cross");
+        assert.equal(bindings.nextFoe, "");
+        assert.deepEqual(takenFrom(before, bindings), ["nextFoe"]);
+        assert.equal(buttonsOf(bindings).cross.tap, null);
+        assert.equal(buttonsOf(bindings).r1.tap, "do");
         assert.ok(!asTheyCome(bindings));
+    });
+
+    it("can leave an action with no button, kept as none", () => {
+        const bindings = rebind(bindingsOf(), "zoomIn", "");
+
+        assert.equal(bindings.zoomIn, "");
+        assert.equal(bindingsOf({ zoomIn: "" }).zoomIn, "");
+        assert.equal(buttonsOf(bindings).up.tap, null);
+        assert.equal(bindingWords(bindings.zoomIn), "");
     });
 
     it("can set an action to a button held", () => {
@@ -174,11 +187,18 @@ describe("setting a button", () => {
         assert.ok(!BINDABLE.includes("ps"));
     });
 
-    it("gives a bar a button alone, swapped with an action that had it held", () => {
-        const bindings = rebind(bindingsOf(), "selfWheel", "r2");
+    it("takes a bar's trigger from it whole, and gives a bar a button alone, taking it tapped and held", () => {
+        const wheel = rebind(bindingsOf(), "selfWheel", "r2");
 
-        assert.equal(bindings.selfWheel, "r2");
-        assert.equal(bindings.bar1, "square");
+        assert.equal(wheel.selfWheel, "r2");
+        assert.equal(wheel.bar1, "");
+
+        const bar = rebind(bindingsOf(), "bar1", "square");
+
+        assert.equal(bar.bar1, "square");
+        assert.equal(bar.pack, "");
+        assert.equal(bar.selfWheel, "");
+        assert.equal(buttonsOf(bar).square.bar, "bar1");
     });
 
     it("reads what's kept, leaving anything unknown as it comes", () => {
