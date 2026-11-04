@@ -22,7 +22,7 @@ import { QUALITY } from "../world/view.js";
 
 // The castle: its catalog entry, its scene (core/scenery.js: its walk), and where its walk goes
 // (the bridge's near end, the keep's doors: metres, as built)
-export const CASTLE = Object.freeze({ entry: "scenery-bellhaven", file: "bellhaven.bin", scenery: "bellhaven", from: [0, 40], to: [-0.5, -140] });
+export const CASTLE = Object.freeze({ entry: "scenery-bellhaven", file: "bellhaven-2.bin", scenery: "bellhaven", from: [0, 40], to: [-0.5, -140] });
 
 // As the game draws out of doors (world/view.js OUTDOORS, app/camera.js PITCH, LANDSCAPE_FOV):
 // fog from 55 to 130 m, nothing drawn past 160; the sun; the camera 35 degrees down, 36 tall

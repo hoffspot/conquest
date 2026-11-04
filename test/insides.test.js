@@ -18,7 +18,7 @@ const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
 const { TALK_CALLINGS } = await import("../client/js/core/rare.js");
-const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
+const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_INSIDES, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { crosses, squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -454,8 +454,9 @@ describe("the buildings (insides.js Interiors)", () => {
             }
         }
 
-        // Nothing that can't be gone into
-        assert.ok([...interiors.buildings.values()].every(({ kind }) => ENTERABLE.includes(kind)));
+        // Nothing that can't be gone into (but the sites' insides the world sets down at once:
+        // Bellhaven's way in, core/sites.js)
+        assert.ok([...interiors.buildings.values()].every(({ kind, key }) => ENTERABLE.includes(kind) || (key.startsWith("site:") && SITE_INSIDES.includes(kind))));
     });
 
     it("makes a building's floors and folk the first time they're wanted, once, each building somewhere of its own", () => {

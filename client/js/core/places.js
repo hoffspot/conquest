@@ -75,6 +75,9 @@ export const PLACE_KINDS = Object.freeze({
     // met there by night as its rare card's foe: core/rare.js; those who came before him burnt at
     // its heart, its `scene`)
     "sundered ring": { size: "medium", icon: "stones", holds: [], scene: "challengers" },
+    // (Bellhaven: the Order of the Bell's mother house, abandoned; its castle on its crag a fixed
+    // scene of its own, set into the land, gone into at its road's end: core/scenery.js)
+    bellhaven: { size: "large", icon: "ruinedCastle", holds: [] },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)

@@ -153,12 +153,14 @@ import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
 import { Silhouettes } from "../world/far/silhouettes.js";
 import { Volcano } from "../world/far/volcano.js";
+import { Landmarks } from "../world/landmark3d.js";
 import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
+import { linkAt as interiorLinkAt } from "../core/interiors.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
@@ -1596,6 +1598,14 @@ export class Game {
         this.listeners = [];
         this.onDeath = () => {};
 
+        /**
+         * What the readying card's getting ready before a way in's gone through ({ kinds }), or
+         * null while it's not up (#readyAtDoor); and the scene's way in the player last stood on
+         * (#stepIn: gone in once for each time they step onto it).
+         */
+        this.readyingAt = null;
+        this.steppedIn = null;
+
         /** The map the player is on, the one shown (world.maps), and the game's clock (s). */
         this.mapId = "town";
         this.clock = 0;
@@ -1848,9 +1858,16 @@ export class Game {
             this.view.setHorizon(this.volcano);
         }
 
+        // (And Bellhaven's castle on its crag, set into the land: world/landmark3d.js)
+        if (!this.setIn) {
+            this.setIn = new Landmarks(this.world.plan, { land: this.chunks.land });
+            this.view.setHorizon(this.setIn);
+        }
+
         this.far.update(x, z);
         this.silhouettes.update(x, z, this.world.maps.town?.sites?.set);
         this.volcano.update(this.clock);
+        this.setIn.update(x, z);
     }
 
     // How the world looks round the player at (x, z) (metres), `dt` seconds on (world/look.js: the
@@ -3095,7 +3112,7 @@ export class Game {
         this.far?.dispose();
         this.view.setFar(null);
 
-        for (const thing of [this.volcano, this.silhouettes]) {
+        for (const thing of [this.volcano, this.silhouettes, this.setIn]) {
             if (thing) {
                 this.view.setHorizon(thing, false);
                 thing.dispose();
@@ -3745,6 +3762,8 @@ export class Game {
         if (mine && mine.map !== this.mapId && this.avatars.has(this.me)) {
             this.#arrive(mine);
         }
+
+        this.#stepIn(mine);
 
         // (The prints on the ground fading by the clock, seen only out in the world)
         if (this.tracks) {
@@ -17862,6 +17881,24 @@ export class Game {
 
     // A way in that wouldn't let the player through: why, said (a hell's portal sealed, or cold by
     // day; a thread's lock)
+    // A scene's way in stepped onto in the world (Bellhaven's, at its road's end: core/terrain/
+    // scenes.js): gone in as if its door had been tapped, behind its readying card (#order). Once
+    // for each time they step onto it, not while they're already making for a way in.
+    #stepIn(mine) {
+        const found = mine && !mine.dead && mine.map === "town" ? interiorLinkAt(this.battle.links, "town", [Math.floor(mine.x), Math.floor(mine.y)]) : null;
+        const scene = found && this.world.interiors?.buildings.get(found.link.building)?.kind === "scenery" ? found.link : null;
+
+        if (scene && this.steppedIn !== scene.id && mine.order?.type !== "enter" && this.readyingAt === null) {
+            const door = this.doors.targets.find((each) => each.map === "town" && each.link.id === scene.id);
+
+            if (door) {
+                this.#order({ door }, { clientX: 0, clientY: 0, run: false, time: performance.now(), from: "step" });
+            }
+        }
+
+        this.steppedIn = scene?.id ?? null;
+    }
+
     #doorRefused(result) {
         if (!result?.ok && result?.reason) {
             this.hud.message(REFUSALS[result.reason] ?? "There's no way through there.", 3);

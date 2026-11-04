@@ -205,7 +205,8 @@ error, so a misspelt one isn't silently ignored.
 | `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave); `materials` as a copy's |
 | `tangents` | `true` | Tangents kept for the normal maps (MikkTSpace's, as they're baked with). `false` leaves them out: Three.js works them out as it draws, near enough for scenery seen from afar, and about a seventh smaller (the White Castle's geometry: 29 MB with them, 25 without) |
 | `tiledTexcoords` | `false` | Texture coordinates past 0 to 1 (a texture tiled along a wall) brought into it, each material's textures given the offset and scale that put them back (KHR_texture_transform), so they're quantized as the rest are rather than kept as floats, twice the size. At 16 bits, which they take on the GPU anyway |
-| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` (and `<name>.walk.js`) from where it's walked from (*Where it can be walked*, below) |
+| `seat` | `null` | `{ "materials": ["M_Rock*"], "gap": 1, "drop": 3 }`: rocks that touch nothing set down or left out, after it's simplified (*Rocks that touch nothing*, below) |
+| `walk` | `null` | `{ "from": [0, 2, -40] }`: where it can be walked, baked into `<name>.walk.json` (and `<name>.walk.js`) from where it's walked from; `"under": 4`, the lowest of it over each 4 m patch too; `"ground": { "materials": ["M_Ground"], "square": 2 }`, the top of its terrain and of what stands on it (*Where it can be walked*, below) |
 | `budgets` | `{}` | Limits it's checked against: `triangles`, `vertices`, `joints`, `drawCalls`, `textureSize`, `textureMegabytes` (on the GPU, with mipmaps), `kilobytes` (the GLB), `clips` (names it must have) |
 
 ## Where it can be walked
@@ -236,6 +237,21 @@ wherever its code runs, with no download of its own.
    - where a walk crosses from one level to another is a link (its stairs, for the game to put
      between maps);
    - a level of fewer than `least` squares (20) is left out (`left.small`: a sill, a ledge).
+5. **Under it** (`under`, a patch's side in metres; left out, none). The lowest of its surfaces
+   over each patch of a coarser grid, from the same corner, as far as its triangles go: under a
+   castle on its crag, the crag's ground, the chasm's floor and the land round them. A game that
+   sets the scene into its world lays its own land just under that, so the scene stands on the
+   land and the land doesn't show through it. With it, the top of its ground over each patch
+   (`top`: the highest floor there, reached or not), for the world's land to meet at its edges.
+6. **Its terrain** (`ground`: `{ "materials": [its terrain's material names], "square": metres }`;
+   left out, none). The top of the scene's own terrain, those materials' triangles alone, over each
+   patch of a grid of its own (`heights`), and the highest of everything else over the same
+   patches (`over`: what stands on it, a castle, a bridge, rocks). A game that sets the scene into
+   its world lays its own land along that terrain where nothing stands near, and grows its trees
+   there; and draws the scene's terrain with its own ground's look, so what stands on it stays on
+   the ground it was made on. A far-off copy that keeps few of its rocks' and its terrain's
+   triangles parts them (the cliffs' rocks look stuck on): keep more of those two (`simplify`
+   `materials`) than of the rest.
 
 The file is `{ square, origin: [x, z], size: [along x, along z], from, levels: [{ squares, low,
 high, box, heights }], links: [{ from, to, crossings }], left }`:
@@ -243,13 +259,31 @@ high, box, heights }], links: [{ from, to, crossings }], left }`:
 - `heights` are its floors' heights in centimetres, a little-endian Int16Array in base64, row by
   row along z and each row along x, `-32768` where it has no floor.
 - `crossings` are `[x, z, x, z]`: a square of one level, beside a square of the other.
+- `under`, where it's asked for, is `{ square, origin, size, heights, top }`: each patch's lowest
+  surface and its highest floor in centimetres, as the levels' heights are, `-32768` where
+  nothing's over it (or no floor is).
+- `ground`, where it's asked for, is `{ materials, square, origin, size, heights, over }`: the top
+  of its terrain over each patch, and the highest of all else, the same way.
 
 `readWalk` and `floorAt` (`lib/walk.js`) read it back. The report gives each level's squares,
-heights and box, and how many crossings each link has (`walk`).
+heights and box, how many crossings each link has, and the grid under it and its lowest (`walk`).
 
 For a bought scene, the walk is the one thing built from it that goes in the game's repository (its
 scrambled model goes in the private one). Players without the licensed models can walk it all the
 same.
+
+## Rocks that touch nothing
+
+A scene's art can have rocks hanging in the air: the artist's own (a floating crag's debris), or
+made by simplifying it, which keeps a rock's own shape apart from the cliff it was set into. With
+`seat`, after it's simplified (the full meshes and each lower detail packed beside them, each among
+its own: what's drawn), each of its rocks (its pieces of those materials, the triangles joined by
+the points they share or have at one place: one cut across cells is one rock) is grounded if
+anything not a rock (its terrain, its castle) comes within `gap` metres of it (1), or a grounded
+rock does. The rest, in clusters of those touching, are moved straight down together onto what's
+under them where that's `drop` metres (3) or less, set 10 cm into it, and left out where it isn't.
+The report says how many it set down and left out. Bellhaven: of the phone build's 750 rocks, 62
+touched nothing.
 
 ## Materials from textures
 

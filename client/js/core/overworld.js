@@ -2268,7 +2268,8 @@ export class Overworld {
                     const within = sx >= x0 && sy >= y0 && sx < x0 + CHUNK && sy < y0 + CHUNK;
                     const k = (sy - y0) * CHUNK + (sx - x0);
 
-                    if (!inside(sx, sy) || (within ? blocked[k] || chunk.water[k] || chunk.ground[k] === GROUND.road || chunk.bridge[k] : this.#busy(sx, sy))) {
+                    // (A scene set into the land's own terrain stood on by no one, but grown on: sites.js openOn)
+                    if (!inside(sx, sy) || !this.sites.growsAt(sx, sy) || (within ? (blocked[k] && !this.sites.openOn(sx, sy)) || chunk.water[k] || chunk.ground[k] === GROUND.road || chunk.bridge[k] : this.#busy(sx, sy) && !this.sites.openOn(sx, sy))) {
                         return false;
                     }
                 }
@@ -2370,7 +2371,7 @@ export class Overworld {
 
             const settlement = this.settlements.at(x, y);
 
-            return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius);
+            return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius) && this.sites.growsAt(x, y);
         };
         // (Rock falls from the land's own cliffs, as it lies before anything's built: asking for
         // them sets nothing down in the chunks round it, as their ground would)

@@ -6,20 +6,31 @@
 // A square no floor of a level is on, in its heights
 export const NONE = -32768;
 
-/** A walk read from its JSON: each level's heights (base64, little-endian Int16, centimetres) as an Int16Array. */
+// Heights (base64, little-endian Int16, centimetres) as an Int16Array
+function int16(base64) {
+    const text = atob(base64);
+    const bytes = new Uint8Array(text.length);
+
+    for (let i = 0; i < text.length; i++) {
+        bytes[i] = text.charCodeAt(i);
+    }
+
+    return new Int16Array(bytes.buffer);
+}
+
+/**
+ * A walk read from its JSON: each level's heights (base64, little-endian Int16, centimetres) as an
+ * Int16Array; and what's under it (`under`, where it was baked: the lowest of the scene over each
+ * patch of a coarser grid, { square, origin, size, heights, top }, NONE where nothing's over one)
+ * and its own terrain (`ground`: the top of its terrain's own triangles over each patch of a grid
+ * of its own, `heights`, and the highest of all else, `over`) the same.
+ */
 export function readWalk(json) {
     return {
         ...json,
-        levels: json.levels.map(({ heights, ...level }) => {
-            const text = atob(heights);
-            const bytes = new Uint8Array(text.length);
-
-            for (let i = 0; i < text.length; i++) {
-                bytes[i] = text.charCodeAt(i);
-            }
-
-            return { ...level, heights: new Int16Array(bytes.buffer) };
-        }),
+        levels: json.levels.map(({ heights, ...level }) => ({ ...level, heights: int16(heights) })),
+        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights), ...(json.under.top ? { top: int16(json.under.top) } : {}) } } : {}),
+        ...(json.ground ? { ground: { ...json.ground, heights: int16(json.ground.heights), over: int16(json.ground.over) } } : {}),
     };
 }
 

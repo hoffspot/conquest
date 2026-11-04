@@ -13,7 +13,7 @@ import { findBlender, HERE } from "../lib/blender.js";
 import { loadConfig, loadConfigs } from "../lib/config.js";
 import { createIO } from "../lib/gltf.js";
 import { decodeImage } from "../lib/ktx2.js";
-import { floorAt, readWalk } from "../lib/walk.js";
+import { floorAt, NONE, readWalk } from "../lib/walk.js";
 import { figureDocument, sceneryDocument } from "./helpers.js";
 
 const blender = findBlender();
@@ -461,7 +461,7 @@ describe("scenery cut into cells (cells), a material dropped (dropMaterials)", (
         const out = path.join(work, name);
 
         writeFileSync(from, await (await createIO()).writeBinary(sceneryDocument()));
-        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Ro*"], cells: { size: 40 }, textures: { bake: "never" }, lods: [{ ratio: 0.2, error: 0.05 }], packLods: true, compress: "none", walk: { from: [1, 0, 1] }, budgets: { drawCalls: 4 }, ...more }));
+        writeFileSync(file, JSON.stringify({ source: from, dropMaterials: ["Ro*"], cells: { size: 40 }, textures: { bake: "never" }, lods: [{ ratio: 0.2, error: 0.05 }], packLods: true, compress: "none", walk: { from: [1, 0, 1], under: 10, ground: { materials: ["Stone"], square: 10 } }, budgets: { drawCalls: 4 }, ...more }));
 
         const { report } = await buildAsset(loadConfig(file), { blender, out, log: () => {} });
         const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
@@ -504,12 +504,23 @@ describe("scenery cut into cells (cells), a material dropped (dropMaterials)", (
         assert.ok(report.budgets.every((budget) => budget.ok));
     });
 
-    it("bakes where it can be walked: along the wall, all one level, the tower's top out of reach", async () => {
+    it("bakes where it can be walked: along the wall, all one level, the tower's top out of reach; and what's under it", async () => {
         scenery ??= cut();
         const { report, out } = await scenery;
         const walk = readWalk(JSON.parse(readFileSync(path.join(out, "scenery.walk.json"), "utf8")));
 
         assert.deepEqual(report.walk, { ...report.walk, origin: [0, 0], size: [100, 52], links: [], left: { unreached: 16, small: 0 } });
+        // (What's under it, on a grid of 10 m: the wall's row, and the tower's four patches,
+        // nothing between them)
+        assert.deepEqual(report.walk.under, { square: 10, origin: [0, 0], size: [10, 6], low: -0.29 });
+        // (The top of its ground, its Stone taken for its terrain: every patch the wall and the
+        // tower are over; nothing else stands on it)
+        assert.deepEqual(report.walk.ground, { materials: ["Stone"], square: 10, origin: [0, 0], size: [10, 6], patches: 14 });
+        assert.ok(walk.ground.over.every((height) => height === NONE));
+        assert.deepEqual(
+            [...walk.under.heights.keys()].filter((i) => walk.under.heights[i] !== NONE),
+            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 45, 46, 55, 56],
+        );
         assert.equal(report.walk.file.endsWith("scenery.walk.json"), true);
         // (And the same as a module, its default export)
         assert.equal(report.walk.module.endsWith("scenery.walk.js"), true);

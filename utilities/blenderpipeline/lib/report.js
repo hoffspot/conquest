@@ -115,6 +115,13 @@ export function checkBudgets(glb, budgets) {
 
 const relative = (file) => path.relative(HERE, file).split(path.sep).join("/");
 
+// The lowest of a grid's heights (cm, as the walk keeps them) in metres; null if it has none
+const lowestOf = (heights) => {
+    const kept = Array.from(heights).filter((height) => height !== -32768);
+
+    return kept.length ? Math.min(...kept) / 100 : null;
+};
+
 /** The report on a built asset, from what each stage did and the GLB read back. */
 export async function makeReport(config, { blender, optimized, glb, variants = [] }) {
     const file = await inspectGlb(glb);
@@ -189,6 +196,8 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
         bounds: optimized.bounds,
         lods,
         ...(looks.length ? { variants: looks } : {}),
+        // (Its rocks that touched nothing, as drawn: set down, or left out)
+        ...(optimized.seated ? { seated: { ...optimized.seated, most: round(optimized.seated.most, 2) } } : {}),
         // (Where it can be walked: its levels and the links between them, not every square's height)
         ...(optimized.walk
             ? {
@@ -200,6 +209,27 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
                       levels: optimized.walk.levels.map(({ squares, low, high, box }) => ({ squares, low, high, box })),
                       links: optimized.walk.links.map(({ from, to, crossings }) => ({ from, to, crossings: crossings.length })),
                       left: optimized.walk.left,
+                      ...(optimized.walk.under
+                          ? {
+                                under: {
+                                    square: optimized.walk.under.square,
+                                    origin: optimized.walk.under.origin,
+                                    size: optimized.walk.under.size,
+                                    low: lowestOf(optimized.walk.under.heights),
+                                },
+                            }
+                          : {}),
+                      ...(optimized.walk.ground
+                          ? {
+                                ground: {
+                                    materials: optimized.walk.ground.materials,
+                                    square: optimized.walk.ground.square,
+                                    origin: optimized.walk.ground.origin,
+                                    size: optimized.walk.ground.size,
+                                    patches: Array.from(optimized.walk.ground.heights).filter((height) => height !== -32768).length,
+                                },
+                            }
+                          : {}),
                   },
               }
             : {}),
@@ -277,6 +307,12 @@ export function summarize(report) {
 
     for (const lod of report.lods) {
         lines.push(lod.packed ? `  lower detail ${lod.level} (in the GLB): ${lod.triangles} triangles` : `  ${lod.file}: ${lod.triangles} triangles, ${lod.kilobytes} KB`);
+    }
+
+    if (report.seated) {
+        const { pieces, set, left, most } = report.seated;
+
+        lines.push(`  ${pieces} rock${pieces === 1 ? "" : "s"}: ${set} touching nothing set down${set ? ` (${most} m at most)` : ""}, ${left} left out`);
     }
 
     for (const variant of report.variants ?? []) {

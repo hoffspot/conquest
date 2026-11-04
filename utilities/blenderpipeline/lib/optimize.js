@@ -14,9 +14,10 @@ import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
 import { inventClip } from "./invent.js";
 import { encodeTextures } from "./ktx2.js";
 import { retargetClips } from "./retarget.js";
+import { seat } from "./seat.js";
 import { moveDocument, scaleDocument } from "./transform.js";
 import { validate } from "./validate.js";
-import { trianglesOf, walkJson, walkOf } from "./walk.js";
+import { surfaceOf, trianglesOf, walkJson, walkOf } from "./walk.js";
 
 // Material extensions kept (Three.js's standard material draws them); the rest are left out
 const KEPT_MATERIAL_EXTENSIONS = new Set(["KHR_materials_emissive_strength", "KHR_materials_unlit"]);
@@ -474,6 +475,11 @@ export async function packLod(document, level, { ratio, error = 0.01, materials,
     return made;
 }
 
+// How a model's rocks are seated (config `seat`): lib/seat.js's options, its materials by name
+function seatingOf({ materials, gap, drop }) {
+    return { gap, drop, rock: (primitive) => materials.some((pattern) => wildcard(pattern, primitive.getMaterial()?.getName() ?? "")) };
+}
+
 /** The share of a primitive's vertices simplifying keeps: its material's own (`materials`), or `ratio`. */
 export function ratioOf(primitive, { ratio, materials = {} }) {
     const name = primitive.getMaterial()?.getName() ?? "";
@@ -644,6 +650,19 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
         result.walk = { file, module: file.replace(/\.json$/, ".js"), ...walkOf(trianglesOf(document), config.walk) };
 
+        // (And the top of its ground, its terrain's own triangles, where a game lays its own land
+        // in their place: walk.ground)
+        if (config.walk.ground) {
+            const { materials, square } = config.walk.ground;
+
+            const ground = surfaceOf(trianglesOf(document, { materials }), square, "highest");
+            // (And the highest of all else over each of its patches: what stands on it, its castle,
+            // its bridge, its rocks; NONE where nothing does)
+            const over = surfaceOf(trianglesOf(document, { except: materials }), square, "highest", ground).heights;
+
+            result.walk.ground = { materials, ...ground, over };
+        }
+
         const json = JSON.stringify(walkJson({ ...result.walk, file: undefined, module: undefined }));
 
         await writeFile(file, json);
@@ -683,6 +702,12 @@ export async function optimize(config, { raw, glb, lodFile }) {
         simplifyFull(document, { ...config.simplify, seams });
     }
 
+    // (Its rocks that touch nothing, as it's drawn, the full meshes and each lower detail packed
+    // beside them: set down, or left out)
+    if (config.seat) {
+        result.seated = seat(document, seatingOf(config.seat));
+    }
+
     // (After it's simplified, so every copy's texture coordinates are as made when they're weighed)
     if (config.tiledTexcoords && config.compress !== "none") {
         result.texcoordsTiled = tileTexcoords(document);
@@ -719,6 +744,10 @@ export async function optimize(config, { raw, glb, lodFile }) {
             await copy.transform(prune());
         } else {
             await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01 }), prune());
+        }
+
+        if (config.seat) {
+            seat(copy, seatingOf(config.seat));
         }
 
         if (config.tiledTexcoords && config.compress !== "none") {

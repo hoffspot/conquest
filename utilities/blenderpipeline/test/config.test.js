@@ -131,6 +131,14 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", walk: { from: [1, 0] } }, /walk.from is where it's walked from/);
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], climb: -1 } }, /walk.climb is a number, 0 or more/);
         refuses({ source: "a.fbx", walk: { from: [1, 0, 1], reach: 3 } }, /unknown setting walk.reach/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], under: "4" } }, /walk.under is a number, 0 or more/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], ground: { materials: [], square: 2 } } }, /walk.ground is/);
+        refuses({ source: "a.fbx", walk: { from: [1, 0, 1], ground: { materials: ["Ground"] } } }, /walk.ground is/);
+        // (Rocks seated: their materials named, and their gap and drop in metres)
+        refuses({ source: "a.fbx", seat: {} }, /seat.materials is/);
+        refuses({ source: "a.fbx", seat: { materials: ["M_Rock*"], gap: 0 } }, /seat.gap is metres/);
+        refuses({ source: "a.fbx", seat: { materials: ["M_Rock*"], drop: -1 } }, /seat.drop is metres/);
+        refuses({ source: "a.fbx", seat: { materials: ["M_Rock*"], fall: 3 } }, /seat.fall/);
         refuses({ source: "a.fbx", tiledTexcoords: "yes" }, /tiledTexcoords is true or false/);
         refuses({ source: "a.fbx", tangents: 0 }, /tangents is true or false/);
         refuses({ source: "a.fbx", lods: [{ ratio: 0.5, permissive: "yes" }] }, /lods\[0\].permissive is true or false/);

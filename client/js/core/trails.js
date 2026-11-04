@@ -17,12 +17,13 @@ import { GRADE, ROAD, STAIRS } from "./terrain/ground.js";
 import { wayOver, rounded } from "./terrain/ways.js";
 import { wadeable, watersOf } from "./terrain/waters.js";
 import { heightAt, stillLevelAt } from "./terrain/height.js";
+import { placedOf, SCENES, toWorld } from "./terrain/scenes.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { layoutNeutral, neutralSize } from "./setpieces/neutral.js";
 import { LAIR_KINDS } from "./places.js";
 import { PLOT } from "./setpieces/pieces.js";
 import { CUT_EASE, cutOf, isNeutral, LIE, restingOf } from "./sites.js";
-import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
+import { BELLHAVEN, CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
 
 /**
  * Trails: how high the land must be (the plan's height) for a site there to have one, how far from
@@ -43,6 +44,21 @@ const WORKED = WORKS.map(({ kind }) => kind);
 // its shoulders reach, so every chunk whose ground it levels has it from the first)
 const MARGIN = TRAILS.half + ROAD.most + 2;
 
+// Where a scene set into the land (terrain/scenes.js: Bellhaven) has its trail come up to: out on
+// its road's end, just past the square its way in brings them out on (metres past its edge)
+const SCENE_END = 6;
+
+// A scene's trail's end ([x, y], metres), or null for a site that isn't one
+function sceneEnd(site) {
+    if (!site.scenery || !SCENES[site.scenery]) {
+        return null;
+    }
+
+    const placed = placedOf(site);
+
+    return toWorld(placed, SCENES[site.scenery].approach[0], placed.scene.box[3] + SCENE_END);
+}
+
 export class Trails {
     /**
      * @param {object} plan - The world plan.
@@ -59,37 +75,41 @@ export class Trails {
         // site reached already if that's nearer (so trails branch from each other, rather than
         // two running side by side from one road to sites near each other)
         const byTown = (x, y) => keepOut.every(([x0, y0, x1, y1]) => x < x0 - TRAILS.byTown || y < y0 - TRAILS.byTown || x >= x1 + TRAILS.byTown || y >= y1 + TRAILS.byTown);
+        // (And a scene set into the land, Bellhaven, from the road nearest its road's end, as far
+        // off as it was laid out to have one: worldplan/settle.js BELLHAVEN)
         const sites = plan.sites
-            .filter(({ kind, cell: [cx, cy] }) => (TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height) || WORKED.includes(kind))
-            .map((site) => ({ site, road: nearestOn(lines, site.at, WORKED.includes(site.kind) ? byTown : null) }))
+            .filter(({ kind, cell: [cx, cy], scenery }) => (TRAIL_SITES.includes(kind) && plan.height[cy * CELLS + cx] >= TRAILS.height) || WORKED.includes(kind) || (scenery && SCENES[scenery]))
+            .map((site) => ({ site, end: sceneEnd(site) ?? site.at }))
+            .map((each) => ({ ...each, road: nearestOn(lines, each.end, WORKED.includes(each.site.kind) ? byTown : null) }))
             .filter(({ road }) => road)
-            .map((each) => ({ ...each, gap: hypot(each.road[0] - each.site.at[0], each.road[1] - each.site.at[1]) }))
+            .map((each) => ({ ...each, gap: hypot(each.road[0] - each.end[0], each.road[1] - each.end[1]) }))
             .sort((a, b) => a.gap - b.gap || (a.site.id < b.site.id ? -1 : 1));
         const reached = [];
 
         this.facings = new Map();
 
-        for (const { site, road, gap } of sites) {
-            const branch = reached.reduce((best, at) => (hypot(at[0] - site.at[0], at[1] - site.at[1]) < hypot(best[0] - site.at[0], best[1] - site.at[1]) ? at : best), road);
+        for (const { site, end, road, gap } of sites) {
+            const branch = reached.reduce((best, at) => (hypot(at[0] - end[0], at[1] - end[1]) < hypot(best[0] - end[0], best[1] - end[1]) ? at : best), road);
             const from = branch === road ? road : [...branch];
-            const length = hypot(from[0] - site.at[0], from[1] - site.at[1]);
+            const length = hypot(from[0] - end[0], from[1] - end[1]);
 
-            if (gap > TRAILS.reach || length < CELL) {
+            if (gap > (site.scenery ? BELLHAVEN.road : TRAILS.reach) || length < CELL) {
                 continue;
             }
 
             // (The site, where it rests, facing down the hill it's cut into or else the way its
             // trail comes from, the trail ending before its front, or where it's cut into a hill,
             // past the banks of the floor dug in front of it, where that's level with the hill;
-            // trails branching from it start there too)
+            // trails branching from it start there too. A scene's, at its road's end, facing as
+            // the plan has it)
             const rest = restingOf(plan, site);
             const [sx, sy] = rest.at;
-            const facing = rest.facing ?? atan2(from[0] - sx, from[1] - sy);
+            const facing = site.scenery ? site.facing : (rest.facing ?? atan2(from[0] - sx, from[1] - sy));
             const depth = (neutralSize(site)?.[1] ?? 0) * PLOT;
             const laid = rest.form === "hillside" ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
             const cut = cutOf(laid, rest.slope);
             const ahead = cut ? Math.max(depth / 2 + TRAILS.front, laid.cut.y + 2 * cut + CUT_EASE - depth / 2) : depth / 2 + TRAILS.front;
-            const to = [sx + sin(facing) * ahead, sy + cos(facing) * ahead];
+            const to = site.scenery ? end : [sx + sin(facing) * ahead, sy + cos(facing) * ahead];
 
             // (No trail branches from a works': it's only its convoys' way to the road, and no
             // other trail moves for it)
@@ -114,15 +134,25 @@ export class Trails {
         // (Where each rests worked out only for those that might be near a trail: the watchtowers
         // no one keeps, on the highest ground, are seldom on the way)
         const near = (at, far) => this.all.some(({ box: [x0, y0, x1, y1] }) => at[0] + far > x0 && at[0] - far < x1 && at[1] + far > y0 && at[1] - far < y1);
-        const rooms = plan.sites
-            .filter((site) => isNeutral(site) && !LIE[site.kind] && near(site.at, 120))
-            .map((site) => {
-                const [halfW, halfD] = neutralSize(site).map((plots) => (plots * PLOT) / 2 + TRAILS.clear);
-                const facing = this.facings.get(site.id);
-                const [x, y] = restingOf(plan, site).at;
+        const rooms = [
+            ...plan.sites
+                .filter((site) => isNeutral(site) && !LIE[site.kind] && near(site.at, 120))
+                .map((site) => {
+                    const [halfW, halfD] = neutralSize(site).map((plots) => (plots * PLOT) / 2 + TRAILS.clear);
+                    const facing = this.facings.get(site.id);
+                    const [x, y] = restingOf(plan, site).at;
 
-                return facing === undefined ? [x, y, null, hypot(halfW, halfD)] : [x, y, facing, halfW, halfD];
-            });
+                    return facing === undefined ? [x, y, null, hypot(halfW, halfD)] : [x, y, facing, halfW, halfD];
+                }),
+            // (A scene set into the land: all it stands on, turned as it is)
+            ...plan.sites
+                .filter((site) => site.scenery && SCENES[site.scenery])
+                .map((site) => {
+                    const [x0, z0, x1, z1] = placedOf(site).scene.box;
+
+                    return [site.at[0], site.at[1], site.facing, (x1 - x0) / 2 + TRAILS.clear, (z1 - z0) / 2 + TRAILS.clear];
+                }),
+        ];
 
         for (const trail of this.all) {
             const [x0, y0, x1, y1] = trail.box;
