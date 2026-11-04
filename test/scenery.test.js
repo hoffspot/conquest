@@ -15,6 +15,8 @@ import { SCENES } from "../client/js/core/navigation/settings.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { heightOn, SCENERY, SCENERY_ORIGINS, sceneryMap, sceneryOrigin, sceneryWays, squareIn, STEP, walkOf } from "../client/js/core/scenery.js";
 import { floorAt } from "../client/js/core/walk.js";
+import { placesOf } from "../client/js/core/places.js";
+import { toScene, toWorld } from "../client/js/core/terrain/scenes.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const KEEP_DOORS = [-0.5, -140];
@@ -43,17 +45,9 @@ function until(host, me, done, most = 120000) {
     return false;
 }
 
-// Bellhaven's way in set down by hand by the world's start (its landmark puts it in the world
-// later: docs/WORLD.md), a few squares east of where the player starts, its door facing them
-function wayIn(world) {
-    const squares = squaresOf(world.maps.town);
-    const [sx, sy] = world.start.at.map(Math.floor);
-    const open = (x, y) => !squares.blocked(x, y);
-    const [x, y] = [...Array(30).keys()].map((k) => [sx + 3 + k, sy]).find(([ax, ay]) => open(ax, ay) && open(ax + 1, ay) && open(ax + 2, ay));
-    const entrance = { inside: "scenery", scenery: "bellhaven", outside: [x, y], front: [[x + 1, y]], facing: FACING.w, door: { x: x + 2, z: y + 0.5, facing: FACING.w, width: 2, height: 3, floor: 0 } };
-
-    return world.interiors.addSite({ site: { id: "bellhaven", kind: "bellhaven", name: "Bellhaven" }, entrance });
-}
+// Bellhaven's way in, as the world sets it down at its road's end (worldplan/settle.js BELLHAVEN,
+// core/sites.js, core/terrain/scenes.js): its building, a site's inside
+const wayIn = (world) => world.interiors.buildings.get(`site:${world.plan.sites.find(({ scenery }) => scenery === "bellhaven").id}`);
 
 describe("a fixed scene's map (core/scenery.js): Bellhaven's", () => {
     const map = sceneryMap("bellhaven", "site:bellhaven/grounds");
@@ -165,7 +159,7 @@ describe("a fixed scene's map (core/scenery.js): Bellhaven's", () => {
     });
 });
 
-describe("a fixed scene's map gone into (insides.js: Bellhaven's, its way in set down by hand)", () => {
+describe("a fixed scene's map gone into (insides.js: Bellhaven's, its way in where the world sets it down)", () => {
     let world;
     let host;
     let me;
@@ -192,7 +186,7 @@ describe("a fixed scene's map gone into (insides.js: Bellhaven's, its way in set
         world.interiors.make(building.key);
         grounds = world.maps[building.maps[0]];
 
-        assert.deepEqual(building.maps, ["site:bellhaven/grounds"]);
+        assert.deepEqual(building.maps, ["site:bellhaven-1/grounds"]);
         assert.equal(grounds.scenery, "bellhaven");
         assert.equal(grounds.name, "Bellhaven");
         assert.equal(world.interiors.of(grounds.id), building);
@@ -201,6 +195,33 @@ describe("a fixed scene's map gone into (insides.js: Bellhaven's, its way in set
 
         assert.deepEqual(building.door.ends[1], { map: grounds.id, squares: out, arrive, facing, pending: false });
         assert.ok(world.interiors.order.includes(building.key));
+    });
+
+    it("is set down in the world where its plan has it: all it stands on blocked but its way in at its road's end, which its trail comes up to", () => {
+        const land = world.maps.town;
+        const squares = squaresOf(land);
+        const site = world.plan.sites.find(({ scenery }) => scenery === "bellhaven");
+        const set = land.sites.set.get(site.id);
+        const [outside] = building.door.ends;
+        const { box, middle } = set.placed.scene;
+
+        assert.deepEqual(building.entrance.front, outside.squares);
+        assert.ok(outside.squares.every(([x, y]) => !squares.blocked(x, y)), "its way in open");
+        assert.ok(!squares.blocked(...outside.arrive), "and where they come out");
+        assert.ok(squares.blocked(...site.at.map(Math.floor)) && squares.opaque(...site.at.map(Math.floor)), "its middle stood on");
+
+        for (const [sx, sz] of [[box[0] + 2, middle[1]], [box[2] - 2, middle[1]], [middle[0], box[1] + 2], [middle[0] + 20, box[3] - 2]]) {
+            assert.ok(squares.blocked(...toWorld(set.placed, sx, sz).map(Math.floor)), `${sx}, ${sz}`);
+        }
+
+        // (Its trail up from the nearest road to its road's end)
+        const trail = land.trails.all.find((each) => each.site === site.id);
+        const points = land.trails.find(trail);
+        const [ex, ez] = toScene(set.placed, ...points.at(-1));
+
+        assert.ok(Math.abs(ex) < 1 && ez > box[3] && ez < box[3] + 10, `${ex}, ${ez}`);
+        // (On the map as a place no one keeps)
+        assert.equal(placesOf(world.plan).find(({ id }) => id === site.id)?.icon, "ruinedCastle");
     });
 
     it("is gone into by its way in, walked over its bridge to the keep's doors, and gone out of by its bridge's foot, back to where its way in is", () => {

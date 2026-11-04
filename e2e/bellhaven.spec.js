@@ -1,10 +1,11 @@
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { expect, test } from "./fixtures.js";
 
-// Bellhaven (core/scenery.js, world/scenery3d.js, docs/WORLD.md): a fixed scene's own map, gone
-// into from a way in out in the world (set down by hand here, by the start: its landmark sets it in
-// the world later), its art got ready at its door behind the readying card, drawn out of doors
-// under the sky, each cell at its detail; walked over its bridge, and left, its art let go of.
+// Bellhaven (core/scenery.js, core/terrain/scenes.js, world/landmark3d.js, world/scenery3d.js,
+// docs/WORLD.md): set into the world, its castle seen from its road's end; a fixed scene's own map,
+// gone into by stepping onto its way in there, its art got ready behind the readying card, drawn
+// out of doors under the sky, each cell at its detail; walked over its bridge, and left, its art
+// let go of.
 // The game exposes itself as window.pellagos ({ game, session, fetcher, ... }), which these tests use.
 
 // (No service worker: it would fetch the licensed models round what the page is kept from, in the
@@ -27,47 +28,54 @@ async function playing(page, address) {
     return errors;
 }
 
-// Its way in set down by the start, the player before it, and its door tapped: the readying card's
-// state at once, and the castle's door
-const tapIn = (page) =>
+// The player brought to its road's end, before its way in, the world made round them till its
+// castle's far model's drawn there (or its stand-in, without the licensed models); then stepped
+// onto its way in: the readying card's state at once, and the castle's door
+const stepIn = (page) =>
     page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const { FACING } = await import("/js/core/interiors.js");
+        const { game } = window.pellagos;
         const { squaresOf } = await import("/js/core/grid.js");
+        const site = game.world.plan.sites.find(({ scenery }) => scenery === "bellhaven");
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [outside] = building.door.ends;
         const player = game.battle.actor("player");
         const squares = squaresOf(game.world.maps.town);
-        const [sx, sy] = [Math.floor(player.x), Math.floor(player.y)];
-        const open = (x, y) => !squares.blocked(x, y);
-        const [x, y] = [...Array(30).keys()].map((k) => [sx + 3 + k, sy]).find(([ax, ay]) => open(ax, ay) && open(ax + 1, ay) && open(ax + 2, ay));
-        const entrance = { inside: "scenery", scenery: "bellhaven", outside: [x, y], front: [[x + 1, y]], facing: FACING.w, door: { x: x + 2, z: y + 0.5, facing: FACING.w, width: 2, height: 3, floor: 0 } };
-        const building = game.world.interiors.addSite({ site: { id: "bellhaven", kind: "bellhaven", name: "Bellhaven" }, entrance });
+        const [x, y] = outside.arrive;
 
         game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        Object.assign(player, { hp: 1e6, maxHp: 1e6, x: x + 0.5, y: y + 0.5, path: [], order: null, progress: null, facing: FACING.e });
+        Object.assign(game.battle.actor("orc") ?? {}, { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6, x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null, facing: site.facing + Math.PI });
 
-        for (let k = 0; k < 10; k++) {
+        // (The world made round them, and the castle seen from its road's end)
+        const start = performance.now();
+
+        while (performance.now() - start < 90000 && !(game.setIn?.scenes[0]?.drawn && game.mapId === "town")) {
+            game.advance(0.05);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+
+        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
+
+        // (Onto its way in: the nearest of its squares)
+        const [to] = [...outside.squares].sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
+
+        game.host.command("player", { type: "move", to });
+
+        for (let k = 0; k < 200 && game.readyingAt === null && player.map === "town"; k++) {
             game.advance(0.05);
         }
 
-        game.doors.sync();
-
-        const target = game.doors.targets.find((each) => each.map === "town" && each.link.id === building.door.id);
-        const spot = session.view.toScreen(target.box.getCenter(target.box.min.clone()));
-
-        game.tap(spot.x, spot.y);
-
-        return { key: building.key, door: building.door.id, running: game.running, card: !document.querySelector("#readying").hidden || game.readyingAt !== null };
+        return { key: building.key, map: `${building.key}/grounds`, door: building.door.id, running: game.running, card: !document.querySelector("#readying").hidden || game.readyingAt !== null, ...seen };
     });
 
-// Played on till the player's in the castle's map and its inside's shown (the readying card
-// closed itself once the art was read, and sent them through): what's there if they aren't
-const inside = (page) =>
-    page.evaluate(async () => {
+// Played on till the player's in the castle's map (`id`) and its inside's shown (the readying
+// card closed itself once the art was read, and sent them through): what's there if they aren't
+const inside = (page, id) =>
+    page.evaluate(async (id) => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
         const start = performance.now();
-        const shown = () => player.map === "site:bellhaven/grounds" && game.mapId === player.map && Boolean(game.interiors.get(player.map)?.object.visible);
+        const shown = () => player.map === id && game.mapId === player.map && Boolean(game.interiors.get(player.map)?.object.visible);
 
         while (!shown() && performance.now() - start < 150000) {
             // (The card's open meanwhile: the world stopped till it's closed)
@@ -82,8 +90,8 @@ const inside = (page) =>
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
-        return { shown: shown(), map: player.map, mapId: game.mapId, order: player.order?.type ?? null, readying: Boolean(game.readyingAt), built: Boolean(game.interiors.get("site:bellhaven/grounds")) };
-    });
+        return { shown: shown(), map: player.map, mapId: game.mapId, order: player.order?.type ?? null, readying: Boolean(game.readyingAt), built: Boolean(game.interiors.get(id)) };
+    }, id);
 
 // What's drawn and how, in the castle: lit as out of doors, the world hidden, the player standing on
 // its floor, the cells and blocks drawn, draw calls and triangles
@@ -117,8 +125,8 @@ const looked = (page) =>
 for (const licensed of [true, false]) {
     test(
         licensed
-            ? "Bellhaven's way in tapped: its art got ready behind the readying card, the world stopped; gone into once it's read, drawn out of doors in its cells, a phone's draw calls; walked over its bridge to the keep's doors on its floor; left by its bridge's foot, its art let go of"
-            : "Bellhaven without the licensed models: gone into all the same, its walk drawn in their place, walked and left",
+            ? "Bellhaven seen from its road's end, its way in stepped onto: its art got ready behind the readying card, the world stopped; gone into once it's read, drawn out of doors in its cells, a phone's draw calls; walked over its bridge to the keep's doors on its floor; left by its bridge's foot, its art let go of"
+            : "Bellhaven without the licensed models: its stand-in seen from its road's end, gone into all the same, its walk drawn in their place, walked and left",
         async ({ page }) => {
             test.skip(licensed && !licensedModelsHere(), LEFT_OUT);
             test.setTimeout(300000);
@@ -128,13 +136,18 @@ for (const licensed of [true, false]) {
             }
 
             const errors = await playing(page, "/?play&seed=1");
-            const tapped = await tapIn(page);
+            const tapped = await stepIn(page);
 
-            // (The world stopped while its art's got ready: the card up, saying what it's for)
-            expect(tapped.running).toBe(false);
+            // (Seen from its road's end: its far model, or its stand-in; its way in open, the rest
+            // of it stood on)
+            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", open: true, stood: true });
+
+            // (Stepped onto: the world stopped while its art's got ready, the card up, saying what
+            // it's for)
+            expect(tapped).toMatchObject({ running: false, card: true });
             await expect(page.locator("#readyingname")).toHaveText("Bellhaven");
             await expect(page.locator("#readyingnote")).toContainText("castle");
-            expect(await inside(page)).toMatchObject({ shown: true });
+            expect(await inside(page, tapped.map)).toMatchObject({ shown: true });
 
             const there = await looked(page);
 
@@ -174,7 +187,7 @@ for (const licensed of [true, false]) {
                 return { there: Math.hypot(player.x - doors[0] - 0.5, player.y - doors[1] - 0.5) <= 2, off, map: player.map };
             });
 
-            expect(walked).toMatchObject({ there: true, map: "site:bellhaven/grounds" });
+            expect(walked).toMatchObject({ there: true, map: tapped.map });
             expect(walked.off).toBeLessThan(0.5);
 
             const atKeep = await looked(page);
@@ -187,7 +200,7 @@ for (const licensed of [true, false]) {
             }
 
             // And back out by the bridge's foot, to its way in in the world: its art let go of
-            const left = await page.evaluate(async ([door]) => {
+            const left = await page.evaluate(async ([door, id]) => {
                 const { game } = window.pellagos;
                 const { sceneryOf } = await import("/js/beasts/model.js");
                 const player = game.battle.actor("player");
@@ -200,10 +213,10 @@ for (const licensed of [true, false]) {
 
                 game.advance(0.1);
 
-                const interior = game.interiors.get("site:bellhaven/grounds");
+                const interior = game.interiors.get(id);
 
                 return { map: player.map, indoors: window.pellagos.session.view.indoors, town: game.town.object.visible, art: interior?.art ?? false, read: Boolean(sceneryOf("scenery-bellhaven")) };
-            }, [tapped.door]);
+            }, [tapped.door, tapped.map]);
 
             expect(left).toEqual({ map: "town", indoors: false, town: true, art: false, read: false });
             expect(errors).toEqual([]);

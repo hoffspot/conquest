@@ -4,15 +4,15 @@
 // where the land has it, turned to face its road, standing on its own ground. Read once the player's
 // within `read` of it, and kept; seen from as far as the far land reaches. Drawn twice, as the
 // volcano is (view.js setHorizon): with the far land (its camera reaching to the horizon, cut where
-// the near world's ends) and with the near world. Without the art (a build without the licensed
-// models), a stand-in: its walk's ground over each patch (the highest of its floors there, or else
-// the lowest of the scene), stone grey. Only for the eye: the rules have its walk and the land.
+// the near world's ends) and with the near world. Not faded out with the near world (world/fog.js):
+// it goes on into the far land, as the ground does. Without the art (a build without the licensed
+// models), a stand-in: the top of its ground over each patch (scenes.js), stone grey. Only for the
+// eye: the rules have its walk and the land.
 
 import * as THREE from "three";
 import { readyScenery, sceneryOf } from "../beasts/model.js";
 import { SCENERY } from "../core/scenery.js";
 import { scenesIn } from "../core/terrain/height.js";
-import { NONE } from "../core/walk.js";
 
 /**
  * How near the player comes before the art's read (metres from the scene's middle: as far as the
@@ -20,33 +20,12 @@ import { NONE } from "../core/walk.js";
  */
 export const LANDMARK = Object.freeze({ read: 2600, stone: 0x8a8580 });
 
-// A scene's stand-in: its walk's ground over each patch of what's under it (`under`'s grid), at the
-// highest of its floors there, or the lowest of it where it has none; none over a patch nothing's
-// over. In the scene's own metres.
+// A scene's stand-in: the top of its ground over each patch of what's under it (scenes.js sceneOf
+// `top`: its highest floor there, or round it), in the scene's own metres
 function standIn(scene) {
-    const { walk } = scene;
-    const { square, origin, size, heights } = walk.under;
+    const { square, origin, size } = scene.walk.under;
     const [width, depth] = size;
-    const top = Float32Array.from(heights, (h) => (h === NONE ? NaN : h / 100));
-    const level = walk.levels[0];
-    const across = level.box[2] - level.box[0] + 1;
-
-    // (The highest floor over each patch)
-    for (let z = level.box[1]; z <= level.box[3]; z++) {
-        for (let x = level.box[0]; x <= level.box[2]; x++) {
-            const h = level.heights[(z - level.box[1]) * across + (x - level.box[0])];
-
-            if (h !== NONE) {
-                const [px, pz] = [Math.floor((walk.origin[0] + x + 0.5 - origin[0]) / square), Math.floor((walk.origin[1] + z + 0.5 - origin[1]) / square)];
-                const k = pz * width + px;
-
-                if (px >= 0 && pz >= 0 && px < width && pz < depth) {
-                    top[k] = Number.isNaN(top[k]) ? h / 100 : Math.max(top[k], h / 100);
-                }
-            }
-        }
-    }
-
+    const top = scene.top;
     const positions = [];
     const corner = (x, z) => [origin[0] + (x + 0.5) * square, top[z * width + x], origin[1] + (z + 0.5) * square];
 
@@ -145,6 +124,15 @@ export class Landmarks {
                     part.castShadow = false;
                     part.receiveShadow = false;
                     part.frustumCulled = true;
+
+                    // (Not faded out where the near world is, before its camera stops: it goes on
+                    // into the far land, as the ground does, world/fog.js)
+                    for (const material of [part.material].flat()) {
+                        if (!("NO_NEAR_FADE" in (material.defines ?? {}))) {
+                            material.defines = { ...material.defines, NO_NEAR_FADE: "" };
+                            material.needsUpdate = true;
+                        }
+                    }
                 }
             });
             object.updateMatrixWorld(true);

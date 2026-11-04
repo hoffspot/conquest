@@ -145,10 +145,17 @@ describe("where scenery can be walked", () => {
         assert.equal(at(8, 1), NONE);
         assert.equal(walk(parts, { from: [1, 0, 1] }).under, undefined, "only where it's asked for");
 
+        // (And the top of its ground: the highest floor over each patch, reached or not, the
+        // bridge's over the chasm's floor; none where there's none)
+        const top = (x, z) => under.top[z * under.size[0] + x];
+
+        assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 8].map((x) => top(x, 0)), [0, 0, 0, 0, 0, 0, NONE, 200]);
+        assert.equal(top(8, 1), NONE);
+
         const json = JSON.parse(JSON.stringify(walkJson(result)));
 
         assert.equal(typeof json.under.heights, "string");
-        assert.deepEqual(readWalk(json).under, { ...under, heights: new Int16Array(under.heights) });
+        assert.deepEqual(readWalk(json).under, { ...under, heights: new Int16Array(under.heights), top: new Int16Array(under.top) });
     });
 
     it("says what's wrong: nowhere to walk from; nothing to walk on", () => {

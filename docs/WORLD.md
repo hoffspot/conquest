@@ -726,7 +726,8 @@ from Fab (licensed: `client/models/scenery/LICENSE.md`): the castle on its crag,
 130 m bridge over it. The owner's plan, in order:
 1. **Its own map**, entered by crossing the bridge from a landmark in the world.
 2. **The landmark**, where the castle is seen far off, light enough for the world's budget, until
-   the bridge is crossed and the castle loads, behind a loading screen.
+   its way in at the bridge's road's end is stepped onto and the castle loads, behind a loading
+   screen.
 3. **The keep**, a dungeon behind its doors.
 4. Stairs to a map of its own wherever one floor is over another.
 5. **The quest**: a rumour of its bell ringing again, the climb from the bridge through the courts
@@ -804,8 +805,38 @@ What's built so far:
   - Without the licensed models, it draws the walk, a block a square, as the lab does.
   - The minimap paints it from the walk (`app/minimap.js`), and its way out glows across the
     slope's foot (`app/doors.js`).
-  - Its way in isn't in the world yet: the landmark sets it there. Its tests set it down by hand
-    (`test/scenery.test.js`, `e2e/bellhaven.spec.js`).
+- **Set into the world** (`core/terrain/scenes.js`), one a world, as the volcano's crater is cut
+  into it.
+  - Where: laid out last in the world's plan (`worldplan/settle.js` `BELLHAVEN`), on the flattest
+    land with room for all it stands on. No road or water within 352 m of its middle, no site or
+    camp within 256 m, 320 m beyond every settlement's edge, a road within 900 m, and from 1.8 to
+    6 km from the nearest people's start, a guild within 2.6 km.
+  - It looks up in the hills first, then anywhere, till the land itself (its ridges and roughness
+    too, `landHeight`, at 37 points out to 270 m) rises and falls no more than 60 m round it. In
+    the first 16 worlds it's 9 to 58 m.
+  - It faces the nearest road, and its own trail comes up from there to its road's end
+    (`core/trails.js`).
+  - The land's laid under it (`landHeight`), from what's under the scene, baked with its walk
+    (`under`: the lowest of it and the top of its ground over each 4 m patch).
+    - Its own 0 is set by its road's end, the end of the ridge of earth that rises to the bridge's
+      near end: that stands 20 m over the land's own lie there.
+    - Where it stands, the land lies a metre under the lowest of it round each point (8 m each
+      way, so the far land, read every 8 m, never comes up through it either).
+    - Toward its edges (60 m), the land rises to meet the top of its ground, or its own lie where
+      that's higher: its edges sit on the land, and the land runs on into its outlying ground.
+    - Past them, it eases to its own lie over 96 m.
+    - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
+    - `TERRAIN_VERSION` 12.
+  - Its squares are all it stands on but its way in (`core/sites.js`): blocked, and blocking
+    sight. Its way in is the 6 m of the pad at its near edge, stepped onto, or its glow tapped, to
+    go in (`app/game.js`), behind the readying card. They come back out on the pad.
+  - On the maps it's a ruined castle (`core/places.js`), no one's.
+  - Drawn in the world (`world/landmark3d.js`): its far model, read once the player's within
+    2.6 km, where the land has it, turned to face its road. It's drawn twice, as the volcano is:
+    with the far land and with the near world. It isn't faded out with the near world (`NO_NEAR_
+    FADE`): it goes on into the far land, as the ground does. Without the licensed models, a stand-in:
+    the top of its ground over each patch, stone grey.
+  - The trees, near and far, keep off all it stands on.
 
 
 ## Next

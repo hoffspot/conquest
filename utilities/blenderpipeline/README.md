@@ -240,7 +240,8 @@ wherever its code runs, with no download of its own.
    over each patch of a coarser grid, from the same corner, as far as its triangles go: under a
    castle on its crag, the crag's ground, the chasm's floor and the land round them. A game that
    sets the scene into its world lays its own land just under that, so the scene stands on the
-   land and the land doesn't show through it.
+   land and the land doesn't show through it. With it, the top of its ground over each patch
+   (`top`: the highest floor there, reached or not), for the world's land to meet at its edges.
 
 The file is `{ square, origin: [x, z], size: [along x, along z], from, levels: [{ squares, low,
 high, box, heights }], links: [{ from, to, crossings }], left }`:
@@ -248,8 +249,9 @@ high, box, heights }], links: [{ from, to, crossings }], left }`:
 - `heights` are its floors' heights in centimetres, a little-endian Int16Array in base64, row by
   row along z and each row along x, `-32768` where it has no floor.
 - `crossings` are `[x, z, x, z]`: a square of one level, beside a square of the other.
-- `under`, where it's asked for, is `{ square, origin, size, heights }`: each patch's lowest
-  surface in centimetres, as the levels' heights are, `-32768` where nothing's over it.
+- `under`, where it's asked for, is `{ square, origin, size, heights, top }`: each patch's lowest
+  surface and its highest floor in centimetres, as the levels' heights are, `-32768` where
+  nothing's over it (or no floor is).
 
 `readWalk` and `floorAt` (`lib/walk.js`) read it back. The report gives each level's squares,
 heights and box, how many crossings each link has, and the grid under it and its lowest (`walk`).

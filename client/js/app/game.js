@@ -159,6 +159,7 @@ import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
+import { linkAt as interiorLinkAt } from "../core/interiors.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
@@ -3731,6 +3732,8 @@ export class Game {
         if (mine && mine.map !== this.mapId && this.avatars.has(this.me)) {
             this.#arrive(mine);
         }
+
+        this.#stepIn(mine);
 
         // (The prints on the ground fading by the clock, seen only out in the world)
         if (this.tracks) {
@@ -17445,6 +17448,24 @@ export class Game {
 
     // A way in that wouldn't let the player through: why, said (a hell's portal sealed, or cold by
     // day; a thread's lock)
+    // A scene's way in stepped onto in the world (Bellhaven's, at its road's end: core/terrain/
+    // scenes.js): gone in as if its door had been tapped, behind its readying card (#order). Once
+    // for each time they step onto it, not while they're already making for a way in.
+    #stepIn(mine) {
+        const found = mine && !mine.dead && mine.map === "town" ? interiorLinkAt(this.battle.links, "town", [Math.floor(mine.x), Math.floor(mine.y)]) : null;
+        const scene = found && this.world.interiors?.buildings.get(found.link.building)?.kind === "scenery" ? found.link : null;
+
+        if (scene && this.steppedIn !== scene.id && mine.order?.type !== "enter" && this.readyingAt === null) {
+            const door = this.doors.targets.find((each) => each.map === "town" && each.link.id === scene.id);
+
+            if (door) {
+                this.#order({ door }, { clientX: 0, clientY: 0, run: false, time: performance.now(), from: "step" });
+            }
+        }
+
+        this.steppedIn = scene?.id ?? null;
+    }
+
     #doorRefused(result) {
         if (!result?.ok && result?.reason) {
             this.hud.message(REFUSALS[result.reason] ?? "There's no way through there.", 3);

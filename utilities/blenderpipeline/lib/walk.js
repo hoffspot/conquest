@@ -159,7 +159,29 @@ export function walkOf(triangles, { from, under = null, ...options } = {}) {
 
     const walk = walkFrom({ from, square, least, origin, width, depth, floorStarts, heightOf, columnOf, nodes, besideOf });
 
-    return under ? { ...walk, under: underOf(triangles, under) } : walk;
+    if (!under) {
+        return walk;
+    }
+
+    // (And the highest floor over each of its patches, reached or not: the top of its ground)
+    const below = underOf(triangles, under);
+    const [across, along] = below.size;
+    const top = new Int16Array(across * along).fill(NONE);
+
+    for (let c = 0; c < width * depth; c++) {
+        if (floorStarts[c + 1] > floorStarts[c]) {
+            const highest = heightOf[floorStarts[c + 1] - 1];
+            const px = Math.floor((origin[0] + ((c % width) + 0.5) * square - below.origin[0]) / below.square);
+            const pz = Math.floor((origin[1] + (Math.floor(c / width) + 0.5) * square - below.origin[1]) / below.square);
+            const k = pz * across + px;
+
+            if (px >= 0 && pz >= 0 && px < across && pz < along) {
+                top[k] = Math.max(top[k], Math.max(-32767, Math.min(32767, Math.round(highest * 100))));
+            }
+        }
+    }
+
+    return { ...walk, under: { ...below, top } };
 }
 
 /**
@@ -557,7 +579,7 @@ export function walkJson(walk) {
     return {
         ...walk,
         levels: walk.levels.map(({ heights, ...level }) => ({ ...level, heights: base64(heights) })),
-        ...(walk.under ? { under: { ...walk.under, heights: base64(walk.under.heights) } } : {}),
+        ...(walk.under ? { under: { ...walk.under, heights: base64(walk.under.heights), ...(walk.under.top ? { top: base64(walk.under.top) } : {}) } } : {}),
     };
 }
 
@@ -573,7 +595,7 @@ export function readWalk(json) {
     return {
         ...json,
         levels: json.levels.map(({ heights, ...level }) => ({ ...level, heights: int16(heights) })),
-        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights) } } : {}),
+        ...(json.under ? { under: { ...json.under, heights: int16(json.under.heights), ...(json.under.top ? { top: int16(json.under.top) } : {}) } } : {}),
     };
 }
 

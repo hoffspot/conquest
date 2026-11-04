@@ -7,10 +7,10 @@
 //   through it, and it never stands over a gap.
 // - Its own height's set by its road's end (`approach`, at its near ridge's end): that stands
 //   `rise` above the land's own lie there, and the rest of it with it.
-// - Toward its edges (within `ring`), the land comes up to its own lie where that's higher than
-//   the scene's outlying ground: the land round it runs on into it.
-// - Past its edges, where the scene's higher than the land round it (the crag's back, its ridge),
-//   the land eases down from it to its own lie (within `band`); elsewhere it's the land's own.
+// - Toward its edges (within `ring`), the land rises to meet the top of the scene's ground there
+//   (its highest floor: its walk's `under.top`), or its own lie where that's higher: the scene's
+//   edges sit on the land, and the land round it runs on into its outlying ground.
+// - Past its edges, the land eases from there to its own lie (within `band`).
 // - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
 //
 // Plain data and arithmetic (+ - * /, floor and square roots): the same in every browser and
@@ -47,12 +47,62 @@ const PAD = Object.freeze({ ease: 6, under: 0.05 });
 // Each scene worked out once: its ground's patches, filled and lowered, its box, its middle
 const MADE = new Map();
 
+// A grid's patches nothing's over (NaN) given their neighbours' (`pick`: the lowest of them, or
+// their mean), ring by ring in from those that have one; NaN left only if none has
+function filledIn(grid, [width, depth], pick) {
+    let filled = grid;
+
+    for (let left = filled.some(Number.isNaN), more = true; left && more; ) {
+        const next = filled.slice();
+
+        [left, more] = [false, false];
+
+        for (let z = 0; z < depth; z++) {
+            for (let x = 0; x < width; x++) {
+                if (!Number.isNaN(filled[z * width + x])) {
+                    continue;
+                }
+
+                const round = [];
+
+                for (let dz = -1; dz <= 1; dz++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const [nx, nz] = [x + dx, z + dz];
+                        const h = nx >= 0 && nz >= 0 && nx < width && nz < depth ? filled[nz * width + nx] : NaN;
+
+                        if (!Number.isNaN(h)) {
+                            round.push(h);
+                        }
+                    }
+                }
+
+                next[z * width + x] = round.length ? pick(round) : NaN;
+                left ||= !round.length;
+                more ||= round.length > 0;
+            }
+        }
+
+        filled = next;
+    }
+
+    return filled;
+}
+
+/**
+ * How many patches round each the land under it looks to for the lowest (each way: the far land,
+ * read every 8 m at its finest, world/far/levels.js, then never comes up through it between its
+ * points either).
+ */
+const LOWEST_ROUND = 2;
+
 /**
  * A scene as it's set into the land: its id, walk (read), `box` ([x0, z0, x1, z1]: its patches'
  * extent, the scene's metres), `middle` ([x, z]), `reach` (from its middle to its box's corners,
- * metres), `ridge` (the height of the floor its road's end is level with, metres), and `low`
- * (a Float32Array, metres: each patch's height the land's laid under, the lowest of it there or
- * round it, so the land between patches never comes up through it either).
+ * metres), `ridge` (the height of the floor its road's end is level with, metres), `low` (a
+ * Float32Array, metres: each patch's height the land's laid under, the lowest of it there or round
+ * it, LOWEST_ROUND patches each way, so the land between patches never comes up through it either)
+ * and `top` (each patch's highest floor, metres: the top of its ground, where the land meets it at
+ * its edges; where it has none, its neighbours').
  */
 export function sceneOf(id) {
     if (!MADE.has(id)) {
@@ -60,50 +110,19 @@ export function sceneOf(id) {
         const walk = readWalk(json);
         const { square, origin, size, heights } = walk.under;
         const [width, depth] = size;
-        let filled = Float32Array.from(heights, (h) => (h === NONE ? NaN : h / 100));
+        const filled = filledIn(Float32Array.from(heights, (h) => (h === NONE ? NaN : h / 100)), size, (round) => Math.min(...round));
+        const top = filledIn(Float32Array.from(walk.under.top ?? heights, (h) => (h === NONE ? NaN : h / 100)), size, (round) => round.reduce((sum, h) => sum + h, 0) / round.length).map((h, k) => (Number.isNaN(h) ? filled[k] : Math.max(h, filled[k])));
 
-        // (Each patch nothing's over, at the corners of its ground, given its neighbours' lowest,
-        // ring by ring in from those that have one)
-        for (let left = filled.some(Number.isNaN); left; ) {
-            const next = filled.slice();
-
-            left = false;
-
-            for (let z = 0; z < depth; z++) {
-                for (let x = 0; x < width; x++) {
-                    if (!Number.isNaN(filled[z * width + x])) {
-                        continue;
-                    }
-
-                    let lowest = Infinity;
-
-                    for (let dz = -1; dz <= 1; dz++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            const [nx, nz] = [x + dx, z + dz];
-                            const h = nx >= 0 && nz >= 0 && nx < width && nz < depth ? filled[nz * width + nx] : NaN;
-
-                            lowest = Number.isNaN(h) ? lowest : Math.min(lowest, h);
-                        }
-                    }
-
-                    next[z * width + x] = lowest === Infinity ? NaN : lowest;
-                    left ||= lowest === Infinity;
-                }
-            }
-
-            filled = next;
-        }
-
-        // (Each the lowest of itself and the eight round it: read between patches' middles, the
-        // land over a patch is then never above the lowest of it)
+        // (Each the lowest of itself and those round it: read between patches' middles, the land
+        // over a patch is then never above the lowest of it)
         const low = new Float32Array(width * depth);
 
         for (let z = 0; z < depth; z++) {
             for (let x = 0; x < width; x++) {
                 let lowest = Infinity;
 
-                for (let dz = -1; dz <= 1; dz++) {
-                    for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -LOWEST_ROUND; dz <= LOWEST_ROUND; dz++) {
+                    for (let dx = -LOWEST_ROUND; dx <= LOWEST_ROUND; dx++) {
                         const [nx, nz] = [Math.min(width - 1, Math.max(0, x + dx)), Math.min(depth - 1, Math.max(0, z + dz))];
 
                         lowest = Math.min(lowest, filled[nz * width + nx]);
@@ -128,6 +147,7 @@ export function sceneOf(id) {
             reach: Math.sqrt((box[2] - middle[0]) ** 2 + (box[3] - middle[1]) ** 2),
             ridge: floorAt(walk, 0, rx, rz),
             low,
+            top,
         });
     }
 
@@ -173,23 +193,33 @@ function smoothstep(from, to, value) {
     return t * t * (3 - 2 * t);
 }
 
-// The height the land's laid at under a point of a scene (the scene's own metres, kept within its
-// box): its patches' lowest read between their middles, `margin` under that; along its road's end,
-// the pad, level with the ridge's floor, easing to that at its sides and its inner end
-function underOf(scene, settings, sx, sz) {
-    const { box, square, size, low } = scene;
+// A grid of a scene's patches (`low`, `top`) read at a point of it (the scene's own metres, kept
+// within its box), between its patches' middles
+function readAt(scene, grid, sx, sz) {
+    const { box, square, size } = scene;
     const [width, depth] = size;
     const u = Math.min(width - 1, Math.max(0, (sx - box[0]) / square - 0.5));
     const v = Math.min(depth - 1, Math.max(0, (sz - box[1]) / square - 0.5));
     const [i, j] = [Math.min(width - 2, Math.floor(u)), Math.min(depth - 2, Math.floor(v))];
     const [tu, tv] = [u - i, v - j];
     const k = j * width + i;
-    const ground = (low[k] * (1 - tu) + low[k + 1] * tu) * (1 - tv) + (low[k + width] * (1 - tu) + low[k + width + 1] * tu) * tv - settings.margin;
+
+    return (grid[k] * (1 - tu) + grid[k + 1] * tu) * (1 - tv) + (grid[k + width] * (1 - tu) + grid[k + width + 1] * tu) * tv;
+}
+
+// The land under a point of a scene (its own metres, kept within its box; over the scene's 0):
+// `under` its lowest there, `margin` under that; `edge`, what the land meets at its edges, just
+// under the top of its ground. Along its road's end both are the pad, level with the ridge's floor,
+// easing to the rest at its sides and its inner end.
+function landUnder(scene, settings, sx, sz) {
+    const under = readAt(scene, scene.low, sx, sz) - settings.margin;
+    const edge = readAt(scene, scene.top, sx, sz) - PAD.under;
     const across = 1 - smoothstep(settings.pad, settings.pad + PAD.ease, Math.abs(sx - settings.approach[0]));
     const along = smoothstep(settings.ridge[1] - PAD.ease, settings.ridge[1], sz);
     const pad = across * along;
+    const level = scene.ridge - PAD.under;
 
-    return pad > 0 ? ground + (scene.ridge - PAD.under - ground) * pad : ground;
+    return pad > 0 ? { under: under + (level - under) * pad, edge: edge + (level - edge) * pad } : { under, edge };
 }
 
 /**
@@ -216,18 +246,21 @@ export function setIn(placed, x, y, lie) {
     const [sx, sz] = toScene(placed, x, y);
     const [x0, z0, x1, z1] = scene.box;
     const [cx, cz] = [Math.min(x1, Math.max(x0, sx)), Math.min(z1, Math.max(z0, sz))];
-    const under = base + underOf(scene, settings, cx, cz);
+    const land = landUnder(scene, settings, cx, cz);
+    // (At its edges, the top of its ground, or the land's own lie where that's higher)
+    const edge = Math.max(base + land.edge, lie);
     const [ex, ez] = [sx - cx, sz - cz];
 
-    // (Where it stands: under it, but toward its edges up to the land's own lie if that's higher)
+    // (Where it stands: under it, rising toward its edges to meet them)
     if (ex === 0 && ez === 0) {
         const inward = Math.min(sx - x0, x1 - sx, sz - z0, z1 - sz);
+        const under = base + land.under;
 
-        return lie > under ? under + (lie - under) * (1 - smoothstep(0, settings.ring, inward)) : under;
+        return under + (Math.max(under, edge) - under) * (1 - smoothstep(0, settings.ring, inward));
     }
 
-    // (Past its edges: down from its edge to the land's own lie, where the edge is higher)
-    return lie >= under ? lie : under + (lie - under) * smoothstep(0, settings.band, Math.sqrt(ex * ex + ez * ez));
+    // (Past its edges: from its edge to the land's own lie)
+    return edge + (lie - edge) * smoothstep(0, settings.band, Math.sqrt(ex * ex + ez * ez));
 }
 
 /**
