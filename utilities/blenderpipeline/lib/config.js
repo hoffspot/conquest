@@ -45,6 +45,10 @@ export const DEFAULTS = Object.freeze({
     // Faces of these materials taken out (names, * and ? wildcards), and the materials with them:
     // what the game makes its own way, or another build carries (a castle's rock built apart)
     dropMaterials: [],
+    // Materials kept apart from the same ones of other names, which would be made one with them
+    // (names, * and ? wildcards): so simplify's `materials` gives them shares of their own (a
+    // scene's own parts set onto it, simplified less than the rest of it)
+    apart: [],
     // Each mesh cut into cells on the ground, { size: metres }, a mesh each ("<mesh>@<i>,<j>"),
     // by where its faces' centres are: the game draws only those in view, each at its own detail;
     // simplifying (simplify, lods) then keeps where one cell meets the next where it is, so none part
@@ -326,6 +330,10 @@ export function resolveConfig(raw, file) {
 
     if (!Array.isArray(config.dropMaterials) || !config.dropMaterials.every((name) => typeof name === "string" && name)) {
         fail("dropMaterials is a list of materials' names (* and ? wildcards)");
+    }
+
+    if (!Array.isArray(config.apart) || !config.apart.every((name) => typeof name === "string" && name)) {
+        fail("apart is a list of materials' names (* and ? wildcards)");
     }
 
     if (config.cells !== null) {
