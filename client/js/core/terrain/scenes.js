@@ -8,8 +8,9 @@
 // - Its own height's set by its road's end (`approach`, at its near ridge's end): that stands
 //   `rise` above the land's own lie there, and the rest of it with it.
 // - Toward its edges (within `ring`), the land rises to meet the top of the scene's ground there
-//   (its highest floor: its walk's `under.top`), or its own lie where that's higher: the scene's
-//   edges sit on the land, and the land round it runs on into its outlying ground.
+//   (its highest floor: its walk's `under.top`), a little over it at the very edge, or to its own
+//   lie where that's higher: the scene's ragged edges buried, and the land round it running on
+//   into its outlying ground.
 // - Past its edges, the land eases from there to its own lie (within `band`).
 // - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
 //
@@ -35,14 +36,16 @@ import { floorAt, NONE, readWalk, squareOf } from "../walk.js";
  * the pad; the door's glow is `height` metres high, across the way in.
  */
 export const SCENES = Object.freeze({
-    bellhaven: Object.freeze({ walk: BELLHAVEN, approach: Object.freeze([0, 88]), ridge: Object.freeze([0, 75]), pad: 8, rise: 20, margin: 1, ring: 60, band: 96, way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }) }),
+    bellhaven: Object.freeze({ walk: BELLHAVEN, approach: Object.freeze([0, 88]), ridge: Object.freeze([0, 75]), pad: 8, rise: 20, margin: 1, ring: 80, band: 96, way: Object.freeze({ across: 3, deep: 6, out: 3, height: 4 }) }),
 });
 
 /**
  * How far into the pad its sides and its inner end ease to the land round them (metres), and how
- * far under the ridge's floor it's laid (metres: the ground drawn just under the floor drawn on it).
+ * far under the ridge's floor it's laid (metres: the ground drawn just under the floor drawn on it);
+ * and how far over the top of the scene's ground the land's laid at its edges (`over`, metres: its
+ * ragged edge and what hangs from it buried, the land and its ground meeting in its ring).
  */
-const PAD = Object.freeze({ ease: 6, under: 0.05 });
+const PAD = Object.freeze({ ease: 6, under: 0.05, over: 1.5 });
 
 // Each scene worked out once: its ground's patches, filled and lowered, its box, its middle
 const MADE = new Map();
@@ -208,12 +211,12 @@ function readAt(scene, grid, sx, sz) {
 }
 
 // The land under a point of a scene (its own metres, kept within its box; over the scene's 0):
-// `under` its lowest there, `margin` under that; `edge`, what the land meets at its edges, just
-// under the top of its ground. Along its road's end both are the pad, level with the ridge's floor,
+// `under` its lowest there, `margin` under that; `edge`, what the land's laid at at its edges, just
+// over the top of its ground. Along its road's end both are the pad, level with the ridge's floor,
 // easing to the rest at its sides and its inner end.
 function landUnder(scene, settings, sx, sz) {
     const under = readAt(scene, scene.low, sx, sz) - settings.margin;
-    const edge = readAt(scene, scene.top, sx, sz) - PAD.under;
+    const edge = readAt(scene, scene.top, sx, sz) + PAD.over;
     const across = 1 - smoothstep(settings.pad, settings.pad + PAD.ease, Math.abs(sx - settings.approach[0]));
     const along = smoothstep(settings.ridge[1] - PAD.ease, settings.ridge[1], sz);
     const pad = across * along;

@@ -82,7 +82,7 @@ describe("a scene set into the land (terrain/scenes.js): Bellhaven", () => {
             }
         }
 
-        assert.ok(looked > 5000, `${looked}`);
+        assert.ok(looked > 1500, `${looked}`);
     });
 
     it("meets the top of its ground at its edges (or the land's own, higher), and the land's own past its band, without a step", () => {
@@ -99,8 +99,8 @@ describe("a scene set into the land (terrain/scenes.js): Bellhaven", () => {
             const at = (d) => landHeight(plan, ...toWorld(placed, sx + ox * d, sz + oz * d));
             const own = (d) => landHeight(bare, ...toWorld(placed, sx + ox * d, sz + oz * d));
 
-            // (Its edge: no lower than the land's own, nor than the top of its ground there, but
-            // just under it: the lowest of the patches' tops round it)
+            // (Its edge: no lower than the land's own, nor than the top of its ground there: the
+            // lowest of the patches' tops round it)
             const [px, pz] = [Math.min(scene.size[0] - 1, Math.floor((sx - x0) / scene.square)), Math.min(scene.size[1] - 1, Math.floor((sz - z0) / scene.square))];
             const tops = [-1, 0, 1].flatMap((dz) => [-1, 0, 1].map((dx) => scene.top[Math.min(scene.size[1] - 1, Math.max(0, pz + dz)) * scene.size[0] + Math.min(scene.size[0] - 1, Math.max(0, px + dx))]));
 

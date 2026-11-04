@@ -826,7 +826,7 @@ What's built so far:
       that's higher: its edges sit on the land, and the land runs on into its outlying ground.
     - Past them, it eases to its own lie over 96 m.
     - Its road's end is a level pad at the ridge's height, out from the ridge into the land.
-    - `TERRAIN_VERSION` 12.
+    - `TERRAIN_VERSION` 12, and `NET_VERSION` 203: a game from before has another world.
   - Its squares are all it stands on but its way in (`core/sites.js`): blocked, and blocking
     sight. Its way in is the 6 m of the pad at its near edge, stepped onto, or its glow tapped, to
     go in (`app/game.js`), behind the readying card. They come back out on the pad.
