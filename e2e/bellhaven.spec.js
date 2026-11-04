@@ -54,14 +54,23 @@ const stepIn = (page) =>
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
-        // (Its own terrain drawn as the world's ground is, so all on it stands on it)
-        let ground = false;
+        // (Its own terrain drawn as the world's ground is, so all on it stands on it, darkened round
+        // what stands on it; its rocks and walls darkened at their feet; its boulders, its scree and
+        // its chasm's mist: world/landmarkdress.js)
+        let [ground, contact, feet] = [false, false, 0];
+        const dressing = new Set();
 
         game.setIn?.far.traverse((part) => {
             ground ||= part.isMesh && part.visible && part.material?.name === "landmark ground";
+            contact ||= part.isMesh && part.material?.name === "landmark ground" && Boolean(part.material.userData.contact);
+            feet += part.isMesh && "LANDMARK_FEET_ON" in (part.material?.defines ?? {}) ? 1 : 0;
         });
 
-        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
+        for (const group of [game.setIn?.far, game.setIn?.near]) {
+            group?.traverse((part) => part.isMesh && part.name.startsWith("landmark ") && part.name !== "landmark stand-in" && dressing.add(part.name));
+        }
+
+        const seen = { drawn: game.setIn?.scenes[0]?.drawn ?? null, ground, contact, feet: feet > 0, dressing: [...dressing].sort(), dressed: game.setIn?.scenes[0]?.dressing ?? null, open: outside.squares.every(([sx, sy]) => !squares.blocked(sx, sy)), stood: squares.blocked(...site.at.map(Math.floor)) };
 
         // (Onto its way in: the nearest of its squares)
         const [to] = [...outside.squares].sort((a, b) => Math.hypot(a[0] - x, a[1] - y) - Math.hypot(b[0] - x, b[1] - y));
@@ -146,8 +155,17 @@ for (const licensed of [true, false]) {
             const tapped = await stepIn(page);
 
             // (Seen from its road's end: its far model, its own terrain drawn as the world's ground,
-            // or its stand-in; its way in open, the rest of it stood on)
-            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", ground: licensed, open: true, stood: true });
+            // darkened round what stands on it, or its stand-in; its way in open, the rest of it stood on)
+            expect(tapped).toMatchObject({ drawn: licensed ? "art" : "stand-in", ground: licensed, contact: licensed, feet: licensed, open: true, stood: true });
+            // (Dressed with its art: its boulders and scree along its crag's foot, its chasm's mist;
+            // its stand-in isn't)
+            expect(tapped.dressing).toEqual(licensed ? ["landmark boulders", "landmark mist", "landmark scree"] : []);
+
+            if (licensed) {
+                expect(tapped.dressed.mist).toBeGreaterThan(50);
+                expect(tapped.dressed.boulders).toBeGreaterThan(20);
+            }
+
 
             // (Stepped onto: the world stopped while its art's got ready, the card up, saying what
             // it's for)

@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BELLHAVEN, BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, HELLS, landAt, layOutWorld, openGround, planWorld, RACES, REACH, RIFT_TOWER, ROAD, RUINED_QUARRY, SETTLEMENTS, SITES, SUNDERED_RING, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
+import { backedOf, BELLHAVEN, BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, HELLS, landAt, layOutWorld, openGround, planWorld, RACES, REACH, RIFT_TOWER, ROAD, RUINED_QUARRY, SETTLEMENTS, SITES, SUNDERED_RING, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
 import { metresOf } from "../client/js/core/terrain/curve.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
@@ -462,7 +462,9 @@ describe("the world plan (worldplan/plan.js)", () => {
         assert.ok(thin.length >= plans.size * 0.7, `${thin.length} of ${plans.size}`);
     });
 
-    it("puts Bellhaven where there's room for all it stands on, one a world, last of all: no road or water near, clear of the sites, the camps and the settlements, a road near enough for its own, facing the nearest; mostly up in the hills", () => {
+    it("puts Bellhaven where there's room for all it stands on, one a world, last of all: no road or water near, clear of the sites, the camps and the settlements, a road near enough for its own; its back to the hills or the woods; mostly up in the hills", () => {
+        const backs = [];
+
         for (const [seed, plan] of plans) {
             const found = plan.sites.filter(({ scenery }) => scenery);
 
@@ -498,8 +500,21 @@ describe("the world plan (worldplan/plan.js)", () => {
             }
 
             assert.ok(nearest.far <= BELLHAVEN.road, `seed ${seed}: ${Math.round(nearest.far)} m from a road`);
-            assert.ok(Math.abs(Math.sin(castle.facing) - Math.sin(Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy))) < 0.2 && Math.abs(Math.cos(castle.facing) - Math.cos(Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy))) < 0.2, `seed ${seed}: facing its road`);
+
+            // (Its back to the hills or the woods: the way it's turned the one of its turns that
+            // weighs most, its back's land weighing more than its front's)
+            const { facing, ways } = backedOf(plan, plan, castle.at, Math.atan2(nearest.cell[0] - cx, nearest.cell[1] - cy));
+            const chosen = ways.find((way) => way.facing === facing);
+            const front = ways.find((way) => Math.abs(Math.cos(way.facing - facing) + 1) < 1e-9);
+
+            assert.equal(castle.facing, facing, `seed ${seed}`);
+            assert.ok(ways.every((way) => way.weight <= chosen.weight), `seed ${seed}`);
+            assert.ok(chosen.rise / BELLHAVEN.back.rise + chosen.woods > front.rise / BELLHAVEN.back.rise + front.woods - BELLHAVEN.back.road * 2, `seed ${seed}: its back to the hills or the woods`);
+            backs.push(chosen.rise / BELLHAVEN.back.rise + chosen.woods - (front.rise / BELLHAVEN.back.rise + front.woods));
         }
+
+        // (In most worlds, its back's land rises more or is more wooded than its front's)
+        assert.ok(backs.filter((more) => more >= 0).length >= backs.length * 0.6, `${backs.map((more) => more.toFixed(2))}`);
 
         // (Mostly up in the hills)
         const hills = [...plans.values()].filter((plan) => {

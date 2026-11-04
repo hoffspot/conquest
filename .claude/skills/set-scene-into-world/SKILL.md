@@ -35,7 +35,8 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
    apart from the cliff it was set into.
 2. **The plan places it** (`core/worldplan/settle.js`, Bellhaven's `BELLHAVEN`): laid out last,
    on the flattest land with room, measured with `landHeight` (ridges and all, not the plan's
-   coarse cells), facing its road.
+   coarse cells), turned with its plain back to the hills or the woods (`backedOf`), its front
+   toward its road as far as that allows.
 3. **The land's laid to it** (`core/terrain/scenes.js`, `SCENES`): its 0 set by its road's end;
    on the open ground (its terrain, or nothing of it, 6 m and more from all that stands on it,
    flooded in from its edges, so never within its walls) the land runs along its terrain, 10 cm
@@ -45,6 +46,19 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
    world's ground material (`ground.js` `groundMaterial({ land })`), all of it, and sunk 4 m on
    the open ground under the world's land, where the world's trees and grass grow (sites.js
    `growsAt`, `openOn`; overworld.js; far/trees.js).
+5. **It's dressed** (`world/landmarkdress.js`), from the heights of its art as drawn, each metre:
+   its ground darkened round what stands on it (`ground.js` `contactOf`), its rocks and walls at
+   their feet (`footed`), boulders and scree of our own rocks along its crag's foot (`screeOf`),
+   mist in its chasm (`DRESS.mist`, by scene: its box and how low its floor is).
+6. **Its plain faces are dressed with its own parts** before the far model's built. The artist's
+   scene is made to be seen from the front; its back was bare boxes.
+   - Find them: `faces.mjs <glb>` lists each broad face that looks back or out to a side.
+   - Set the parts onto them: `backwalls.py` (Bellhaven's placements, the rules to copy) writes
+     the placements; `dress.py` sets each part onto its face, by a ray onto the wall, with a dark
+     pane behind each window's tracery, and saves a `.blend`. Look at it with `look.py` first.
+   - Build the far model from that `.blend`, with its own config (`private/bellhaven-far.json`:
+     `source` the `.blend`, `join` the parts to the scene, `materials` the `M_Dress_*` copies'
+     textures, `apart: ["M_Dress*"]`, and `simplify.materials` their own shares).
 
 ## Rules learnt the hard way
 
@@ -65,6 +79,25 @@ this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under
   past 128 m.
 - The land under a slope read at a patch's middle: a patch's highest point is at its upper edge,
   so take half its rise off (`terrainOf`), or the land stands over the terrain on every slope.
+- **Look into every part of the scene from the world**, its chasm too: simplified to 1.5%,
+  Bellhaven's bridge's Gothic piers were stacks of white spikes there. `materials.mjs` says
+  which material is what's seen (`M_II_1_2`); give it a share of its own (8%).
+- **Parts set onto a scene keep materials of their own**: the same as the castle's but for
+  their names, the pipeline's dedup made them one with the castle's and they were cut to its
+  1.5%. `apart` keeps them apart.
+- **Faces' planes are only to the metre**: a window's tracery 0.3 m deep set onto the rounded
+  plane was inside the wall. Ray onto the wall from just off it, not from far out, where a rock
+  in front is hit first.
+- **A material drawn with both the far land and the near world must be two**: the boulders'
+  one material, its lights changed between the two passes, drew them black.
+- **Darken the ground only under what stands on it**: the darkening under every overhang and
+  the bridge left the crag's ground in shade black. Take the lowest of what's over the ground,
+  and keep it to about half of the world's darkening.
+- **Take pictures with the game's own draw distance.** Drawn out to 3 km, the near world drew
+  the scene's near copy over the far land in front of it: from behind, a hill seemed to cut
+  through Bellhaven, and its back walls, hidden in the game behind its crags, showed. The
+  pictures had to be taken again. `shots.cjs` keeps the game's 160 m now (`NEAR_FAR` to change
+  it, only to look at the near copy).
 
 ## Checking it
 
@@ -81,20 +114,26 @@ Scripts in `scripts/`, run from the repository's root:
 - `edge.mjs <seed> [x] [z]`: the land across its edges and along its road.
 - `shots.cjs`: pictures in the game (serve it with `PORT=8145 node server/index.js` after
   `npm run build:manifest`). Take at least these, at `DPR=2` for the owner: from its road, from its
-  way in looking left and right along the crag, from each side, from behind, from above, and
-  from 700 m. `HIDE=castle` shows the land alone, `HIDE=land` the scene alone.
+  way in looking left and right along the crag, from each side, from behind, from above, from
+  700 m, and into its chasm from its rim. `HIDE=castle` shows the land alone, `HIDE=land` the
+  scene alone, `HIDE="landmark mist"` all but that part of its dressing, `HIDE="far:landmark
+  boulders"` all but those drawn with the far land.
+- `faces.mjs <glb>`: its broad plain faces, to be dressed. `materials.mjs <glb> [box]`: each
+  material's triangles in the model and in a box of it.
+- `look.py <scene> <png> <eye> <at> [lens]`, with the pipeline's Blender Python
+  (`utilities/blenderpipeline/.venv/bin/python -I`): the scene, or a dressed `.blend`, in plain
+  clay, its dressing tinted, from where you say (Blender's coordinates: z up, -y the game's z).
 
 The browser test `e2e/bellhaven.spec.js` checks its far model's drawn with the world's ground
-material, its way in, and going in and out; `test/scenes.test.js` checks the land.
+material, darkened round what stands on it, its rocks and walls at their feet, its dressing, its
+way in, and going in and out; `test/scenes.test.js` checks the land, `test/landmarkdress.test.js`
+the dressing.
 
 ## Ideas not yet done
 
 These were offered to the owner; ask before doing them.
 - Tint the castle's own stone a little to the land's light and colour (mist, dusk).
-- Boulders and scree from the world's own rocks along the crag's foot, where the cliff meets the
-  land.
-- Contact darkening at the walls' feet.
 - The world's path texture along its walked ways.
-- Mist in its chasm.
 - The world's ground look in its own map too (its phone build's terrain).
-- Facing that puts its plain back walls toward hills or forest.
+- The sun's shadows of its walls and rocks near the player (they cast none: it's drawn twice,
+  and the shadow map's box is only 24 m round the player).
