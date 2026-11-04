@@ -62,8 +62,31 @@ function pictureTexture(path, colour) {
     return texture;
 }
 
-/** A picture's colour and normal textures (ROCK_PICTURES' name), and whether each has loaded. */
+// Pictures taken from a model rather than the catalog's own (setKitPicture: Bellhaven's keep's
+// castle's walls and floor, world/keepkit.js), by name
+const kitPictures = new Map();
+
+/**
+ * A picture the rock can be drawn with taken from a model's material (its colour and normal
+ * textures, already read), by name: how many metres one of it covers and its average colour (linear
+ * light, 0 to 1), as ROCK_PICTURES' are; rockMaterial(name) draws with it from then on.
+ */
+export function setKitPicture(name, { colour, normal, metres, mean }) {
+    for (const texture of [colour, normal]) {
+        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+        texture.userData.loaded = { value: 1 };
+        texture.needsUpdate = true;
+    }
+
+    kitPictures.set(name, { colour, normal, picture: { metres, mean } });
+}
+
+/** A picture's colour and normal textures (ROCK_PICTURES' name, or setKitPicture's), and whether each has loaded. */
 export function rockPictures(name) {
+    if (kitPictures.has(name)) {
+        return kitPictures.get(name);
+    }
+
     const picture = ROCK_PICTURES[name];
     const files = ASSETS.models[picture.entry]?.files ?? [];
     const of = (kind) => files.find(({ path }) => path.includes(`-${kind}.`))?.path ?? `${picture.entry}-${kind}`;
@@ -322,7 +345,8 @@ export class Blocks {
  * The scanned models a dungeon's rooms are furnished with (scripts/build-props.js: Poly Haven's,
  * CC0), by name, as the catalog (app/assets.js) lists them: each its file's entry (`asset`,
  * downloaded only once a dungeon's wanted) and, for one of a set's pieces (three candleholders in
- * one file, a heap of rocks), its nodes in that file (`nodes`; null for the whole file).
+ * one file, a heap of rocks), its nodes in that file (`nodes`; null for the whole file). And the
+ * licensed kit Bellhaven's keep's drawn with, its castle's pieces (world/keepkit.js), the same way.
  */
 export const DUNGEON_PROPS = Object.freeze(
     Object.fromEntries(
@@ -416,13 +440,19 @@ export function loadProp(name) {
 const METAL = 0.3;
 
 // A model's material in a colour (`tint`, times its picture's), lit by the room's flames as the
-// rock is, never cut away, drawn many times over at once (instanced); one for each of its parts
-// and tints. How rough and how metal it is, and whether it glows or can be seen through (glass, a
-// flame), as its own material has it.
+// rock is, drawn many times over at once (instanced); one for each of its parts and tints. How rough
+// and how metal it is, and whether it glows or can be seen through (glass, a flame), as its own
+// material has it. Never cut away, but for what stands as tall as the walls (`cut`: Bellhaven's
+// keep's columns and pilasters, world/keepkit.js), cut away with the rock while the camera's over
+// the roof (DUNGEON_CUT); one whose mesh is closed all round (`cut` "solid": the keep's columns)
+// drawn solid where it's cut, its insides the dark of cut stone (CUT_CAP, linear), not hollow
 const propMaterials = new Map();
 
-function propMaterial(name, part, source, tint) {
-    const key = `${name}|${part}|${tint ?? ""}`;
+// The colour a solid cut prop's insides are drawn, where it's cut (propMaterial `cut` "solid")
+const CUT_CAP = "vec3(0.11, 0.105, 0.1)";
+
+function propMaterial(name, part, source, tint, cut = false) {
+    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}`;
 
     if (propMaterials.has(key)) {
         return propMaterials.get(key);
@@ -440,6 +470,7 @@ function propMaterial(name, part, source, tint) {
         opacity: source.opacity ?? 1,
         depthWrite: !source.transparent,
         alphaTest: source.alphaTest ?? 0,
+        side: cut === "solid" ? THREE.DoubleSide : THREE.FrontSide,
     });
 
     result.name = `prop-${name}`;
@@ -447,9 +478,18 @@ function propMaterial(name, part, source, tint) {
     result.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;").replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;");
         shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;");
+
+        if (cut) {
+            Object.assign(shader.uniforms, { dungeonCutLow: DUNGEON_CUT.low, dungeonCutTop: DUNGEON_CUT.top });
+            shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", "#include <common>\nuniform float dungeonCutLow;\nuniform float dungeonCutTop;")
+                .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;")
+                .replace("#include <dithering_fragment>", cut === "solid" ? `#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(${CUT_CAP}, gl_FragColor.a);` : "#include <dithering_fragment>");
+        }
+
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => "dungeon-prop";
+    result.customProgramCacheKey = () => `dungeon-prop${cut === "solid" ? "-solid" : cut ? "-cut" : ""}`;
     propMaterials.set(key, result);
 
     return result;
@@ -503,7 +543,9 @@ const _corner = new THREE.Vector3();
  * (radians round its own x, before that: a shield leant back),
  * size (its longest side, metres; or `scale`: times its own size, a number or one for each side;
  * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
- * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said) }]), each
+ * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said), cut
+ * (cut away with the rock while the camera's over the roof; "solid", drawn solid where it is:
+ * propMaterial) }]), each
  * model's copies in each tile of the level (the rock's, CAVERNS) drawn at once (instanced, one for
  * each of its materials), so what's out of sight or of a light's reach isn't drawn; added to
  * `group` once they're all read (`read`: how, loadProp). What isn't read (not in the catalog, not
@@ -532,7 +574,7 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
             continue;
         }
 
-        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null } = placement;
+        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null, cut = false } = placement;
         const extent = prop.box.getSize(new THREE.Vector3());
         const each = fit ? [fit[0] / extent.x, fit[1] / extent.y, fit[2] / extent.z] : (placement.scale ?? (size ? size / Math.max(extent.x, extent.y, extent.z) : 1));
         const scale = Array.isArray(each) ? new THREE.Vector3(...each) : new THREE.Vector3(each, each, each);
@@ -551,10 +593,10 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         matrix.premultiply(new THREE.Matrix4().makeTranslation(x - (box.min.x + box.max.x) / 2, y - box.min.y, z - (box.min.z + box.max.z) / 2));
         tops.set(placement, y + box.max.y - box.min.y);
 
-        const key = `${placement.model}|${tint ?? ""}|${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
+        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
 
         if (!lots.has(key)) {
-            lots.set(key, { name: placement.model, prop, tint, matrices: [], shadow: false });
+            lots.set(key, { name: placement.model, prop, tint, cut, matrices: [], shadow: false });
         }
 
         const lot = lots.get(key);
@@ -563,9 +605,9 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         lot.shadow ||= placement.shadow ?? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) >= SHADOWS_FROM;
     }
 
-    for (const { name, prop, tint, matrices, shadow } of lots.values()) {
+    for (const { name, prop, tint, cut, matrices, shadow } of lots.values()) {
         prop.parts.forEach(({ geometry, source }, part) => {
-            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint), matrices.length);
+            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint, cut), matrices.length);
 
             matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
             mesh.instanceMatrix.needsUpdate = true;

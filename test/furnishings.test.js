@@ -44,10 +44,13 @@ describe("the scanned models a dungeon's furnished with (scripts/build-props.js)
     it("are each in the catalog, downloaded only once a dungeon's wanted, a GLB on disk, and small", () => {
         let all = 0;
 
-        // (A set's pieces each a prop of their own, all in their set's file)
+        // (A set's pieces each a prop of their own, all in their set's file; and besides them only a
+        // licensed kit's pieces, Bellhaven's keep's castle's: world/keepkit.js, test/keepkit.test.js)
         const names = Object.entries(PROPS).flatMap(([file, { pieces }]) => (pieces ? Object.keys(pieces) : [file]));
+        const scanned = Object.keys(DUNGEON_PROPS).filter((name) => !ASSETS.models[DUNGEON_PROPS[name].asset].licensed);
 
-        assert.deepEqual(Object.keys(DUNGEON_PROPS).sort(), names.sort());
+        assert.deepEqual(scanned.sort(), names.sort());
+        assert.deepEqual([...new Set(Object.keys(DUNGEON_PROPS).filter((name) => !scanned.includes(name)).map((name) => DUNGEON_PROPS[name].asset))], ["dungeon-prop-bellhaven-keep"]);
 
         for (const [file, { pieces }] of Object.entries(PROPS)) {
             const model = ASSETS.models[`dungeon-prop-${file}`];
