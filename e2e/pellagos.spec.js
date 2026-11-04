@@ -18080,7 +18080,9 @@ test("a werewolves' den neared: the Moonfang's model and its werewolves' (one fi
 
     expect(den.dark).toBe(false);
     expect(den.before).toEqual([false, false]);
-    expect(await playUntil(page, () => Boolean(window.modelOf("moonfang") && window.modelOf("werewolf")), { seconds: 60 })).toBe(true);
+    // (In real time, as a player plays it: the downloader keeps to a rate in real time, and a
+    // player takes minutes to walk the kilometre)
+    expect(await playUntil(page, () => Boolean(window.modelOf("moonfang") && window.modelOf("werewolf")), { seconds: 60, realTime: true })).toBe(true);
 
     const read = await page.evaluate(async (id) => {
         const { keptModels } = await import("/js/beasts/model.js");
