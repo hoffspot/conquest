@@ -346,7 +346,11 @@ export function woodsAt(plan, x, y) {
         const [sx, sy] = [x - scene.at[0], y - scene.at[1]];
 
         if (scene.hill && sx * sx + sy * sy < scene.reach * scene.reach) {
-            const slopeAt = () => Math.hypot(landHeight(plan, x + WOODS_SLOPE, y) - landHeight(plan, x - WOODS_SLOPE, y), landHeight(plan, x, y + WOODS_SLOPE) - landHeight(plan, x, y - WOODS_SLOPE)) / (2 * WOODS_SLOPE);
+            const slopeAt = () => {
+                const [across, along] = [landHeight(plan, x + WOODS_SLOPE, y) - landHeight(plan, x - WOODS_SLOPE, y), landHeight(plan, x, y + WOODS_SLOPE) - landHeight(plan, x, y - WOODS_SLOPE)];
+
+                return Math.sqrt(across * across + along * along) / (2 * WOODS_SLOPE);
+            };
 
             return woodsOn(scene, x, y, lieOf(plan, x, y, layers), slopeAt);
         }
