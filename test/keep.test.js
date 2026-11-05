@@ -14,7 +14,7 @@ import { HOST_PLAYER, Host, REFUSALS } from "../client/js/core/host.js";
 import { KEEP_ORIGINS } from "../client/js/core/insides.js";
 import { routeBetween } from "../client/js/core/interiors.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { KEEP_STOREY, keepOutlook, keepSiteOf, SCENERY, sceneryKeep, squareIn } from "../client/js/core/scenery.js";
+import { keepFloor, keepOutlook, keepSiteOf, outlookPoint, SCENERY, sceneryKeep, squareIn } from "../client/js/core/scenery.js";
 import { placedOf, toWorld } from "../client/js/core/terrain/scenes.js";
 import { BIOMES } from "../client/js/core/worldplan/plan.js";
 
@@ -252,23 +252,60 @@ describe("Bellhaven's keep gone into by its doors off its court (core/insides.js
         assert.equal(mine.map, keep.maps[1]);
         assert.deepEqual(again.maps[keep.maps[1]].rows ?? again.maps[keep.maps[1]].plan, world.maps[keep.maps[1]].rows ?? world.maps[keep.maps[1]].plan);
     });
-    it("stands each floor over the land where its keep does, its way in at the keep's doors, each floor a storey over the one under (core/scenery.js keepOutlook)", () => {
+    it("stands each floor over the land where its keep does, its way in at the keep's doors, going on into the keep as it does, turned as its castle is, its first floor at its doors and its belfry up under its roof; its own walls left out of what's seen from it (core/scenery.js keepOutlook)", () => {
         const placed = { ...placedOf({ scenery: "bellhaven", at: [1200, 3400], facing: 0.7 }), base: 140 };
-        const [x0, , x1] = SCENERY.bellhaven.keep.squares;
-        const doors = toWorld(placed, (x0 + x1) / 2, SCENERY.bellhaven.keep.door.z);
+        const { squares: [x0, , x1], door, shell } = SCENERY.bellhaven.keep;
+        const doors = [(x0 + x1) / 2, door.z];
         const floor = sceneryKeep("bellhaven").door.floor;
+        const near = (a, b, what) => assert.ok(a.every((value, k) => Math.abs(value - b[k]) < 1e-9), `${what}: ${a} against ${b}`);
+
+        // (Its first floor at its doors, its belfry as high as its top, the others evenly between,
+        // each well over the one under)
+        const heights = [0, 1, 2, 3].map((level) => keepFloor("bellhaven", level, 4));
+
+        assert.equal(heights[0], floor);
+        assert.equal(heights[3], SCENERY.bellhaven.keep.top);
+        assert.ok(heights.every((height, k) => !k || Math.abs(height - heights[k - 1] - (heights[3] - heights[0]) / 3) < 1e-9));
+        assert.ok(heights[1] - heights[0] > 6.4);
 
         for (const level of [0, 1, 3]) {
             const [origin, entry] = [[30000, 600 * level], [31.5, 66.5]];
-            const { offset, at } = keepOutlook(placed, { level, entry, origin });
+            const outlook = keepOutlook(placed, { level, levels: 4, entry, origin });
+            const [ex, ez] = [origin[0] + entry[0], origin[1] + entry[1]];
+            const height = 140 + heights[level];
 
-            // (Its way in, on its own map, is the keep's doors in the world, as high as their floor and a storey a floor)
-            assert.deepEqual(at, doors);
-            assert.ok(Math.abs(origin[0] + entry[0] + offset[0] - doors[0]) < 1e-9);
-            assert.ok(Math.abs(origin[1] + entry[1] + offset[2] - doors[1]) < 1e-9);
-            assert.ok(Math.abs(offset[1] - (140 + floor + level * KEEP_STOREY)) < 1e-9);
+            // (Its way in, on its own map, the keep's doors in the world, as high as their floor and a storey a floor)
+            near(outlook.at, toWorld(placed, ...doors), "its doors");
+            near(outlookPoint(outlook, ex, 0, ez), [outlook.at[0], height, outlook.at[1]], "its way in");
+            // (Its plan's north and east the keep's, its castle turned as it stands in the land)
+            for (const [dx, dz] of [[0, -20], [12, -5], [-9, 3]]) {
+                const [wx, wz] = toWorld(placed, doors[0] + dx, doors[1] + dz);
+
+                near(outlookPoint(outlook, ex + dx, 1.5, ez + dz), [wx, height + 1.5, wz], `${dx}, ${dz} from its way in`);
+            }
+
+            // (The keep's own walls left out of what's seen from it, over its floor)
+            assert.deepEqual(outlook.hollow.box, shell);
+            assert.ok(outlook.hollow.floor > heights[level] && outlook.hollow.floor < heights[level] + 1);
         }
 
-        assert.equal(keepOutlook({ ...placed, scene: { ...placed.scene, id: "nowhere" } }, { level: 0, entry: [0, 0], origin: [0, 0] }), null);
+        // (Every floor of it within the keep's walls, as its plan has it from its way in)
+        for (const seed of SEEDS) {
+            for (const level of buildDungeon({ seed, theme: "keep", tier: 5 }).levels) {
+                const [ex, ey] = level.entry.arrive;
+
+                level.rows.forEach((row, y) =>
+                    [...row].forEach((char, x) => {
+                        if (char !== "#" && char !== "_") {
+                            const [sx, sz] = [doors[0] + x + 0.5 - ex, doors[1] + y + 0.5 - ey];
+
+                            assert.ok(sx > shell[0] && sz > shell[1] && sx < shell[2] && sz < shell[3], `${seed}/${level.index}: ${x}, ${y} outside the keep`);
+                        }
+                    }),
+                );
+            }
+        }
+
+        assert.equal(keepOutlook({ ...placed, scene: { ...placed.scene, id: "nowhere" } }, { level: 0, levels: 4, entry: [0, 0], origin: [0, 0] }), null);
     });
 });

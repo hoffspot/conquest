@@ -3,22 +3,24 @@
 // walls, all beyond them open air ("_": not stood on, seen across, nothing there but the sky and
 // the land far below: world/interiors3d.js, view.js); and its balconies, on as many of its rooms as
 // `balconies` (the biggest first, never the way in), each where a run of the room's wall faces the
-// air straight across: `span` squares of it dug out to the air, `wall` deep, a parapet ("=") along
+// air straight across, one of the ways its balconies may face (`facing`): `span` squares of it dug out to the air, `wall` deep, a parapet ("=") along
 // its outer edge, the torches on that run of wall taken down. Pure, the same wherever it's made.
 
 /**
  * How a level stands in the air (themes.js `air`, as its own or as these): its walls `wall` squares
  * thick, `balconies` at most (a room at least `least` squares in area), each `span` squares along
- * its wall (from to, no more than its wall's run less a square at each end).
+ * its wall (from to, no more than its wall's run less a square at each end), facing only the ways
+ * in `facing` (of its plan: "n" up it, "s", "w", "e").
  */
-export const AIR = Object.freeze({ wall: 3, balconies: 2, span: Object.freeze([4, 8]), least: 60 });
+export const AIR = Object.freeze({ wall: 3, balconies: 2, span: Object.freeze([4, 8]), least: 60, facing: Object.freeze(["n", "s", "w", "e"]) });
 
-// The four ways out of a room: the step outwards, and which way along its side runs
+// The four ways out of a room: which way it faces, the step outwards, and which way along its side
+// runs
 const SIDES = Object.freeze([
-    Object.freeze({ out: [0, -1], along: [1, 0] }),
-    Object.freeze({ out: [0, 1], along: [1, 0] }),
-    Object.freeze({ out: [-1, 0], along: [0, 1] }),
-    Object.freeze({ out: [1, 0], along: [0, 1] }),
+    Object.freeze({ way: "n", out: [0, -1], along: [1, 0] }),
+    Object.freeze({ way: "s", out: [0, 1], along: [1, 0] }),
+    Object.freeze({ way: "w", out: [-1, 0], along: [0, 1] }),
+    Object.freeze({ way: "e", out: [1, 0], along: [0, 1] }),
 ]);
 
 // What a balcony may open off inside its room: the floor, or what's on it that isn't in the way
@@ -47,7 +49,7 @@ export const airy = (char) => char === "_" || char === "=";
  */
 export function inTheAir(level, air, random) {
     const { width, height } = level;
-    const { wall, balconies: most, span, least } = { ...AIR, ...air };
+    const { wall, balconies: most, span, least, facing } = { ...AIR, ...air };
     const grid = level.rows.map((row) => [...row]);
     const rock = (x, y) => x < 0 || y < 0 || x >= width || y >= height || grid[y][x] === "#";
 
@@ -95,7 +97,7 @@ export function inTheAir(level, air, random) {
             continue;
         }
 
-        for (const side of SIDES) {
+        for (const side of SIDES.filter(({ way }) => facing.includes(way))) {
             const length = side.along[0] ? room.w : room.h;
             // (The first square beyond the room along the side, and a square `k` along it and `d` out)
             const edge = side.out[0] > 0 ? [room.x + room.w, room.y] : side.out[0] < 0 ? [room.x - 1, room.y] : side.out[1] > 0 ? [room.x, room.y + room.h] : [room.x, room.y - 1];

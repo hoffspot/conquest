@@ -28,6 +28,7 @@ import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuMemory } from "./gpumemory.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
+import { hollowed } from "./landmarkdress.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
@@ -465,8 +466,12 @@ const _eye = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
-// (The outlook's offset, and the fog's colour kept while the far's drawn from it: #draw)
-const _outlook = new THREE.Vector3();
+// (Where the outlook stands its floor in the world, the far's camera from it, and the fog's colour
+// kept while the far's drawn from it: #draw)
+const _outlook = new THREE.Matrix4();
+const _pivot = new THREE.Matrix4();
+const _seen = new THREE.Matrix4();
+const _scale = new THREE.Vector3();
 const _fogColour = new THREE.Color();
 const _sphere = new THREE.Sphere();
 const _centre = new THREE.Vector3();
@@ -2121,12 +2126,17 @@ export class View {
         far.quaternion.copy(camera.quaternion);
 
         // (Indoors on a floor high in a tower: the sky and the land seen from where it stands over
-        // them, in the open air's haze, not its own fog)
+        // them, turned as it is (core/scenery.js keepOutlook), in the open air's haze, not its own
+        // fog; and the tower's own walls not drawn round it, landmarkdress.js hollowed)
         const fog = this.scene.fog;
         const kept = this.indoors ? [fog.near, fog.far, _fogColour.copy(fog.color)] : null;
 
         if (kept) {
-            far.position.add(_outlook.set(...this.outlook.offset));
+            const { pivot, at, y, turn } = this.outlook;
+
+            _outlook.makeRotationY(turn).setPosition(at[0], y, at[1]).multiply(_pivot.makeTranslation(-pivot[0], 0, -pivot[1]));
+            _seen.multiplyMatrices(_outlook, camera.matrixWorld).decompose(far.position, far.quaternion, _scale);
+            hollowed(this.outlook.hollow);
             this.sky.object.position.copy(far.position);
             this.sky.object.updateMatrix();
             [fog.near, fog.far] = this.seesFar ? [OUTDOORS.haze, farReach(this.quality.far)] : OUTDOORS.fog;
@@ -2145,6 +2155,7 @@ export class View {
         if (kept) {
             [fog.near, fog.far] = kept;
             fog.color.copy(kept[2]);
+            hollowed(null);
         }
 
         // (A scene's colour behind it clears what's drawn, however it's asked: none for the near)

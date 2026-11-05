@@ -321,6 +321,34 @@ for (const licensed of [true, false]) {
             );
             expect(kit.calls).toBeLessThan(250);
 
+            // High over the land, in the open air (core/dungeons/air.js): the world seen past its
+            // walls from where the floor stands in it (world/view.js outlook, core/scenery.js
+            // keepOutlook), its way in at the keep's doors, as high as their floor; the sky over it,
+            // the far land drawn whole round it, the keep's own walls left out of it
+            const seen = await page.evaluate(async (id) => {
+                const { game, session } = window.pellagos;
+                const { keepFloor, outlookPoint, SCENERY } = await import("/js/core/scenery.js");
+                const { scenesIn } = await import("/js/core/terrain/height.js");
+                const map = game.world.maps[id];
+                const { outlook, sky } = session.view;
+                const placed = scenesIn(game.world.plan).find(({ scene }) => scene.id === "bellhaven");
+
+                game.advance(0.1);
+
+                return {
+                    air: map.plan.some((row) => row.includes("_")),
+                    outlook: Boolean(outlook),
+                    doors: outlook ? outlookPoint(outlook, outlook.pivot[0], 0, outlook.pivot[1]).map((value, k) => Math.abs(value - [outlook.at[0], placed.base + keepFloor("bellhaven", 0, 4), outlook.at[1]][k]) < 1e-6) : null,
+                    hollow: outlook?.hollow.box.join() === SCENERY.bellhaven.keep.shell.join(),
+                    sky: sky.object.visible,
+                    hole: game.far?.hole.value.z ?? null,
+                    calls: session.view.renderer.info.render.calls,
+                };
+            }, keep.map);
+
+            expect(seen).toEqual({ air: true, outlook: true, doors: [true, true, true], hollow: true, sky: true, hole: 0, calls: seen.calls });
+            expect(seen.calls).toBeLessThan(250);
+
             // Back out by its doors, to before them on the castle's court, its art there still
             const out = await page.evaluate(async ([door, castle]) => {
                 const { game } = window.pellagos;
@@ -334,10 +362,10 @@ for (const licensed of [true, false]) {
 
                 game.advance(0.1);
 
-                return { map: player.map, art: game.interiors.get(castle)?.art ?? false, indoors: Boolean(window.pellagos.session.view.indoors) };
+                return { map: player.map, art: game.interiors.get(castle)?.art ?? false, indoors: Boolean(window.pellagos.session.view.indoors), outlook: window.pellagos.session.view.outlook };
             }, [keep.door, tapped.map]);
 
-            expect(out).toEqual({ map: tapped.map, art: licensed, indoors: false });
+            expect(out).toEqual({ map: tapped.map, art: licensed, indoors: false, outlook: null });
 
             // And back out by the bridge's foot, to its way in in the world: its art let go of
             const left = await page.evaluate(async ([door, id]) => {

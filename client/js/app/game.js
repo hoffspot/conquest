@@ -1834,8 +1834,10 @@ export class Game {
 
     /** Where a map is drawn in the world ([x, z] metres). */
     // The far land round the player at (x, z) (metres), out to the horizon (world/far/far.js): as
-    // many levels of it as the quality level has (made again if that's changed)
-    #farLand(x, z) {
+    // many levels of it as the quality level has (made again if that's changed); the hole in it
+    // round them where the chunks are (`hole`: none, looking out from a floor high in Bellhaven's
+    // keep, no chunks drawn under it)
+    #farLand(x, z, { hole } = {}) {
         if (this.far?.levels.length !== this.view.quality.far) {
             this.far?.dispose();
             this.far = new FarLand(this.world.plan, { land: this.chunks.land, levels: this.view.quality.far });
@@ -1866,7 +1868,7 @@ export class Game {
             this.view.setHorizon(this.setIn);
         }
 
-        this.far.update(x, z);
+        this.far.update(x, z, { hole });
         this.silhouettes.update(x, z, this.world.maps.town?.sites?.set);
         this.volcano.update(this.clock);
         this.setIn.update(x, z);
@@ -13530,7 +13532,7 @@ export class Game {
         const level = building?.dungeon?.levels?.[map?.dungeon?.level];
         const placed = level ? scenesIn(this.world.plan).find(({ scene }) => SCENERY[scene.id]?.keep?.theme === building.theme) : null;
 
-        return placed ? keepOutlook(placed, { level: map.dungeon.level, entry: level.entry.arrive, origin: map.origin }) : null;
+        return placed ? keepOutlook(placed, { level: map.dungeon.level, levels: building.dungeon.levels.length, entry: level.entry.arrive, origin: map.origin }) : null;
     }
 
     // The trees whose leaves can be heard: the town's, and those of the world drawn round it
@@ -13557,7 +13559,7 @@ export class Game {
             // (A floor high over the land looked out from: the land, what's built on it and the
             // castle round it drawn about where it stands)
             if (interior.outlook && this.chunks) {
-                this.#farLand(...interior.outlook.at);
+                this.#farLand(...interior.outlook.at, { hole: 0 });
             }
 
             cutFor(interior.map, at, this.view.camera.position);

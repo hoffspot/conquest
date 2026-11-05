@@ -28,7 +28,11 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * (`keep`), a dungeon of its own (core/dungeons/themes.js `theme`), gone into by its doors off its
  * court: the doorway's squares (`squares`: [x0, z0, x1, z1], the scene's metres), where whoever
  * comes back out of it stands and the way they face (`arrive`, `facing`), and the doors' face
- * (`door`: how far north it is, its width and height, metres), facing the court.
+ * (`door`: how far north it is, its width and height, metres), facing the court; where the keep's
+ * own walls stand (`shell`: [x0, z0, x1, z1], the scene's metres, its towers and the spire over its
+ * doors with them), left out of what's seen from its floors (keepOutlook); and how high its topmost
+ * floor stands (`top`, the scene's metres: its belfry, over its roof and under its spire, as high as
+ * the top of the cliff its back's built into), its others between that and its doors.
  */
 export const SCENERY = Object.freeze({
     bellhaven: Object.freeze({
@@ -40,7 +44,7 @@ export const SCENERY = Object.freeze({
         arrive: [0, 64],
         facing: FACING.n,
         out: [-20, 75, 20, 77],
-        keep: Object.freeze({ theme: "keep", name: "the Keep of Bellhaven", squares: [-1, -142, 1, -140], arrive: [-0.5, -137.5], facing: FACING.s, door: Object.freeze({ z: -142, width: 2, height: 3.6 }) }),
+        keep: Object.freeze({ theme: "keep", name: "the Keep of Bellhaven", squares: [-1, -142, 1, -140], arrive: [-0.5, -137.5], facing: FACING.s, door: Object.freeze({ z: -142, width: 2, height: 3.6 }), shell: Object.freeze([-34, -216, 34, -134]), top: 168 }),
     }),
 });
 
@@ -208,21 +212,35 @@ export function sceneryKeep(scenery) {
 }
 
 /**
- * How far apart a scene's keep's floors stand (metres): each over the one under it by as much as
- * its halls are high (world/interiors3d.js DUNGEON_LOOKS keep `tall`, its vault on top).
+ * How high a floor of a scene's keep stands (the scene's metres): its first (`level` 0) at its
+ * doors, its topmost (of `levels`) at its `top`, the others evenly between, a long stair's climb
+ * from one to the next.
  */
-export const KEEP_STOREY = 6.4;
+export function keepFloor(scenery, level, levels) {
+    const { door } = sceneryKeep(scenery);
+
+    return door.floor + (levels > 1 ? ((SCENERY[scenery].keep.top - door.floor) * level) / (levels - 1) : 0);
+}
+
+// How far over a keep's floor its own walls are left out of what's seen from it (metres): the
+// floor itself, and all under it, kept
+const HOLLOW_OVER = 0.25;
 
 /**
  * Where a floor of a scene's keep stands in the world (`placed`: core/terrain/height.js scenesIn's,
- * the scene set into the land; `level`: how many floors up, 0 the first; `entry`: where its own way
- * in is, [x, y] of its plan's squares, its doors on the first floor and the head of its stair up
- * from the one under on the others; `origin`: its map's corner, [x, z] metres): its way in at the
- * keep's doors, each floor KEEP_STOREY over the one under. { offset: [dx, dy, dz] (a point of its
- * map's, metres, plus this is where it is over the land: world/view.js's outlook), at: [x, z] (the
- * world's metres there) }; or null for a scene with no keep.
+ * the scene set into the land; `level`: how many floors up, 0 the first, of `levels`; `entry`: where
+ * its own way in is, [x, y] of its plan's squares, its doors on the first floor and the head of its
+ * stair up from the one under on the others; `origin`: its map's corner, [x, z] metres): its way in
+ * at the keep's doors, the floor going on from there as the keep does (its plan's north the keep's,
+ * into it from its doors), turned as the scene is, as high as keepFloor has it; and the keep's own
+ * walls (its `shell`, the scene's metres) left out of what's seen from it, over the floor it's seen
+ * from, so the castle round it and the land show past its parapets (world/view.js's outlook;
+ * landmarkdress.js hollowed). { pivot: [x, z] (its way in, its map's metres), at: [x, z] (the
+ * world's metres there), y (its floor's height in the world), turn (radians, as three.js turns
+ * round the upright), hollow: { box: [x0, z0, x1, z1], floor } (the scene's metres) }; or null for
+ * a scene with no keep.
  */
-export function keepOutlook(placed, { level, entry, origin }) {
+export function keepOutlook(placed, { level, levels, entry, origin }) {
     const keep = SCENERY[placed.scene.id]?.keep;
 
     if (!keep) {
@@ -231,7 +249,17 @@ export function keepOutlook(placed, { level, entry, origin }) {
 
     const [x0, , x1] = keep.squares;
     const at = toWorld(placed, (x0 + x1) / 2, keep.door.z);
-    const floor = sceneryKeep(placed.scene.id).door.floor;
+    const floor = keepFloor(placed.scene.id, level, levels);
 
-    return { offset: [at[0] - (origin[0] + entry[0]), placed.base + floor + level * KEEP_STOREY, at[1] - (origin[1] + entry[1])], at };
+    return { pivot: [origin[0] + entry[0], origin[1] + entry[1]], at, y: placed.base + floor, turn: Math.atan2(placed.sin, placed.cos), hollow: { box: keep.shell, floor: floor + HOLLOW_OVER } };
+}
+
+/**
+ * Where a point of a keep's floor's map (x, z its map's metres, y over its floor) is in the world,
+ * as keepOutlook stands the floor: [x, y, z] metres.
+ */
+export function outlookPoint({ pivot, at, y: floor, turn }, x, y, z) {
+    const [dx, dz, c, s] = [x - pivot[0], z - pivot[1], Math.cos(turn), Math.sin(turn)];
+
+    return [at[0] + dx * c + dz * s, floor + y, at[1] - dx * s + dz * c];
 }

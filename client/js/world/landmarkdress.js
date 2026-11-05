@@ -269,21 +269,42 @@ uniform sampler2D landmarkHeights;
 uniform vec4 landmarkArea;
 uniform mat4 sceneFromWorld;
 uniform vec4 landmarkFeet;
+uniform vec4 landmarkHollow;
+uniform float landmarkHollowOver;
 varying vec3 vLandmarkAt;
 varying float vLandmarkUp;`;
+
+// What of a scene's art isn't drawn while it's seen from inside it (hollowed), every scene's the
+// same: none (its box's far corner before its near)
+const HOLLOW = { landmarkHollow: { value: new THREE.Vector4(0, 0, -1, -1) }, landmarkHollowOver: { value: 0 } };
+
+/**
+ * A scene's art left out where it's seen from inside it (`hollow`: { box: [x0, z0, x1, z1], floor },
+ * the scene's own metres: all of it in the box over `floor`, Bellhaven's keep's own walls seen out
+ * of from its floors, core/scenery.js keepOutlook), or all of it drawn again (null).
+ */
+export function hollowed(hollow) {
+    if (hollow) {
+        HOLLOW.landmarkHollow.value.set(...hollow.box);
+        HOLLOW.landmarkHollowOver.value = hollow.floor;
+    } else {
+        HOLLOW.landmarkHollow.value.set(0, 0, -1, -1);
+    }
+}
 
 /**
  * A copy of one of a scene's art's materials (its rocks', `on` "rock", or its castle's, "wall"),
  * not faded out with the near world (it goes on into the far land, as the ground does: fog.js),
  * darkened at its feet (DRESS.feet): up from the top of the terrain under it (a rock's), or of the
- * terrain or rock under it (a wall's), but where it faces up. `uniforms`: dressUniforms'.
+ * terrain or rock under it (a wall's), but where it faces up; and left out where it's hollowed.
+ * `uniforms`: dressUniforms'.
  */
 export function footed(material, on, uniforms) {
     const own = material.clone();
 
     own.defines = { ...own.defines, NO_NEAR_FADE: "", LANDMARK_FEET_ON: on === "rock" ? "below.r" : "below.g" };
     own.onBeforeCompile = (shader) => {
-        Object.assign(shader.uniforms, uniforms);
+        Object.assign(shader.uniforms, uniforms, HOLLOW);
         shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>${FEET_PARS}`).replace(
             "#include <begin_vertex>",
             `#include <begin_vertex>
@@ -293,6 +314,7 @@ vLandmarkUp = normalize(transpose(mat3(viewMatrix)) * transformedNormal).y;`,
         shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>${FEET_PARS}`).replace(
             "#include <color_fragment>",
             `#include <color_fragment>
+if (all(greaterThan(vLandmarkAt.xz, landmarkHollow.xy)) && all(lessThan(vLandmarkAt.xz, landmarkHollow.zw)) && vLandmarkAt.y > landmarkHollowOver) discard;
 {
     vec2 below = texture2D(landmarkHeights, (vLandmarkAt.xz - landmarkArea.xy) / landmarkArea.zw).rg;
     float foot = (1.0 - smoothstep(-0.5, landmarkFeet.x, vLandmarkAt.y - LANDMARK_FEET_ON)) * (1.0 - smoothstep(landmarkFeet.z, landmarkFeet.w, vLandmarkUp));

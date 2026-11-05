@@ -70,7 +70,7 @@ describe("a dungeon's floors high in a tower (core/dungeons/air.js)", () => {
         }
     });
 
-    it("digs a balcony or two out of a big room's wall to the air, its parapet along its edge, walked out onto from the room, its torches taken down", () => {
+    it("digs a balcony or two out of a big room's wall to the air, never facing the cliff behind, its parapet along its edge, walked out onto from the room, its torches taken down", () => {
         let all = 0;
 
         for (const seed of SEEDS) {
@@ -86,6 +86,8 @@ describe("a dungeon's floors high in a tower (core/dungeons/air.js)", () => {
                     const long = out[0] ? h : w;
 
                     assert.equal(deep, AIR.wall);
+                    // (Never facing north, the cliff the keep's back is built into)
+                    assert.notDeepEqual(out, [0, -1], `${seed}/${level.index}: a balcony facing north`);
                     assert.ok(long >= AIR.span[0] && long <= AIR.span[1], `${long} long`);
 
                     for (let j = y; j < y + h; j++) {
