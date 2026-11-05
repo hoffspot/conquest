@@ -641,16 +641,16 @@
         <section id="hud" class="screen" hidden aria-label="Game">
             <div id="floaters" aria-hidden="true"></div>
             <div class="hud-top">
-                <button type="button" id="spellbookbutton" class="hud-button" aria-label="Spellbook" title="Spellbook (B)">
+                <button type="button" id="spellbookbutton" data-keys-title="spellbook" class="hud-button" aria-label="Spellbook" title="Spellbook (B)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13M16.5 8.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/></svg>
                 </button>
-                <button type="button" id="journalbutton" class="hud-button" aria-label="Journal" title="Journal (J)">
+                <button type="button" id="journalbutton" data-keys-title="journal" class="hud-button" aria-label="Journal" title="Journal (J)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h11v14H7a2 2 0 0 0 0 4h11M7 4a2 2 0 0 0-2 2v14M10 8h5M10 11.5h5"/></svg>
                 </button>
-                <button type="button" id="packbutton" class="hud-button" aria-label="Pack" title="Pack (I)">
+                <button type="button" id="packbutton" data-keys-title="pack" class="hud-button" aria-label="Pack" title="Pack (I)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5.5a4 4 0 0 1 8 0V7M5 8.5h14l-1.2 11H6.2zM9.5 12h5"/></svg>
                 </button>
-                <button type="button" id="menubutton" class="hud-button" aria-label="Menu" title="Menu (Esc)">
+                <button type="button" id="menubutton" data-keys-title="menu" class="hud-button" aria-label="Menu" title="Menu (Esc)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
                 </button>
             </div>
@@ -692,7 +692,7 @@
                 </svg>
             </button>
             <div id="party" role="group" aria-label="Your party">
-                <button type="button" id="partybutton" class="hud-button" aria-label="Party" title="Party (P)">
+                <button type="button" id="partybutton" data-keys-title="party" class="hud-button" aria-label="Party" title="Party (P)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 19.5c0-3.4 2.7-5.6 6-5.6s6 2.2 6 5.6M15.5 5.3a3 3 0 0 1 0 5.9M17.5 14.2c2.1.6 3.5 2.5 3.5 5.3"/></svg>
                     <span id="partyunread" class="party-badge" aria-hidden="true" hidden></span>
                 </button>
@@ -718,7 +718,7 @@
                 <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 <div class="bar stamina" hidden><div class="fill"></div><span class="value"></span></div>
             </div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them.<span class="stick-only"> Or steer with the stick in the bottom left: push it over to run.</span><span class="keys-only"> W, A, S, D run that way; hold Shift to walk.</span><span class="pad-only"> With a controller: the left stick walks, the right stick looks, ✕ does what's in front of you, R2 or L2 held brings up the Action Bar.</span> Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right<span class="keys-only"> (I and J)</span>.</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them.<span class="stick-only"> Or steer with the stick in the bottom left: push it over to run.</span><span class="keys-only"> <span data-keys="forward,left,back,right">W, A, S, D</span> run that way; hold <span data-keys="walk">Shift</span> to walk.</span><span class="pad-only"> With a controller: the left stick walks, the right stick looks, ✕ does what's in front of you, R2 or L2 held brings up the Action Bar.</span> Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right<span class="keys-only"> (<span data-keys="pack">I</span> and <span data-keys="journal">J</span>)</span>.</p>
             <div class="stickzone" id="stickzone" aria-hidden="true">
                 <div class="stick" id="stick">
                     <div class="stick-knob" id="stickknob"></div>
@@ -739,7 +739,7 @@
             <canvas id="worldmapcanvas" role="img" aria-label="Map of the world, where you've been"></canvas>
             <header class="worldmap-head">
                 <h2 id="worldmaptitle">The world</h2>
-                <button type="button" id="worldmapclose" class="hud-button" aria-label="Close the map" title="Close the map (Esc)">
+                <button type="button" id="worldmapclose" data-keys-title="menu" class="hud-button" aria-label="Close the map" title="Close the map (Esc)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
                 </button>
             </header>
@@ -1594,7 +1594,7 @@
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="controlsbutton" data-to="controls">
-                        <span class="text">Controls<small>Thumb stick, zoom buttons, minimap, a game controller</small></span>
+                        <span class="text">Controls<small>Keys and buttons for every action, handheld presets, thumb stick, zoom buttons, minimap, a game controller</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="camerabutton" data-to="camera">
@@ -1705,12 +1705,16 @@
                     <h2 id="controlstitle">Controls</h2>
                 </div>
                 <div class="options">
+                    <button type="button" class="option-link group" id="bindingsbutton">
+                        <span class="text">Bindings<small>The keys, mouse buttons and controller buttons for every action, and presets for handhelds such as the Steam Deck and Legion Go</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
                     <button type="button" class="option-link group" id="controllerbutton">
-                        <span class="text">Controller<small>A PS5, Xbox or other game controller: its buttons, sticks and rumble</small></span>
+                        <span class="text">Controller<small>A PS5, Xbox or other game controller: its sticks, rumble and symbols</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <label class="switch option">
-                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (running; Shift held, walking) steer either way.</span></small></span>
+                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> <span data-keys="forward,left,back,right">W, A, S, D</span> (running; <span data-keys="walk">Shift</span> held, walking) steer either way.</span></small></span>
                         <input type="checkbox" id="stickswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
@@ -1781,13 +1785,54 @@
                         <span class="text">Button symbols<small id="padsymbolsname">Match the controller</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
-                    <h3 class="options-heading" id="padbuttonsheading">Buttons</h3>
-                    <p class="note">Choose an action, then press the button for it, or hold a button to have it done when that button's held. Whatever had that button takes the action's old one. With a bar's trigger held, the Action Bar's slots are always □ △ ○ ✕, then ← and →.</p>
-                    <div class="padbindings" id="padbindings" role="group" aria-labelledby="padbuttonsheading"></div>
-                    <button type="button" class="button quiet" id="padreset">Every button as it came</button>
+                    <button type="button" class="option-link" id="padbindingsbutton">
+                        <span class="text">Buttons<small>Which button does what: set on the Bindings page, beside the keys</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
                 </div>
                 <div class="menu">
                     <button type="button" class="button" id="controllerback" data-back>Back</button>
+                </div>
+            </div>
+            <!-- Bindings (app/keys.js, app/gamepad.js): every action, its two keys (or mouse buttons)
+                 and its controller button, each set by pressing it -->
+            <div class="menupage" id="menubindings" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Controls">‹</button>
+                    <h2 id="bindingstitle">Bindings</h2>
+                </div>
+                <div class="options">
+                    <p class="note">Choose an action, then press a key, click a mouse button (right, middle, back or forward) or press a controller button for it. Choose one of its boxes to set only that one, or to clear it. Whatever had it lets it go. Holding a controller button can do another action too.</p>
+                    <button type="button" class="option-link" id="handheldsbutton">
+                        <span class="text">Handheld presets<small id="handheldname">None chosen</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <p class="note bind-guess" id="handheldguess" hidden></p>
+                    <div class="handheld-guide" id="handheldguide" hidden>
+                        <h3 class="options-heading" id="handheldguidetitle">Its back buttons</h3>
+                        <ol class="handheld-steps" id="handheldsteps"></ol>
+                    </div>
+                    <p class="note bind-told" id="bindtold" role="status" aria-live="polite"></p>
+                    <div class="bindings" id="bindings" role="group" aria-labelledby="bindingstitle"></div>
+                    <button type="button" class="button quiet" id="bindreset">Every key and button as it came</button>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="bindingsback" data-back>Back</button>
+                </div>
+            </div>
+            <!-- Handheld presets (app/handhelds.js): the back buttons' keys and how to set them, the
+                 sticks' dead zone and the text size, for each handheld gaming PC -->
+            <div class="menupage" id="menuhandhelds" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Bindings">‹</button>
+                    <h2 id="handheldstitle">Handheld presets</h2>
+                </div>
+                <div class="options">
+                    <p class="note">For a handheld gaming PC. Its controller's buttons are the game's as they come. Its back buttons can only send keys, set in its own software: a preset gives those keys to your wheels (and on four back buttons the world map and the Journal), and says how to set them. It also sets the sticks' dead zone and larger text for its small screen.</p>
+                    <div class="handheld-list" id="handheldlist" role="group" aria-labelledby="handheldstitle"></div>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="handheldsback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menuactions" hidden>
@@ -1831,7 +1876,7 @@
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <label class="level" id="dragoption">
-                        <span class="text">Camera turning<small>How far dragging across the screen turns the camera, and how fast Q and E turn it</small></span>
+                        <span class="text">Camera turning<small>How far dragging across the screen turns the camera, and how fast <span data-keys="turnLeft">Q</span> and <span data-keys="turnRight">E</span> turn it</small></span>
                         <input type="range" id="dragslider" min="50" max="200" step="25">
                         <output for="dragslider" id="dragname"></output>
                     </label>
