@@ -429,7 +429,13 @@ export function loadProp(name) {
             );
         }
 
-        props.set(name, file && page ? files.get(entry.asset).then((scene) => partsOf(scene, entry.nodes)) : Promise.resolve(null));
+        const read = file && page ? files.get(entry.asset).then((scene) => partsOf(scene, entry.nodes)) : Promise.resolve(null);
+
+        // (Asked for ahead of being wanted, a level's models read while it's built, and what wants
+        // them only waiting on them frames later, buildingInterior's furnish: one that can't be read
+        // (the licensed models left out, the network gone) never an error no one's caught)
+        read.catch(() => null);
+        props.set(name, read);
     }
 
     return props.get(name);
