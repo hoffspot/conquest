@@ -2134,7 +2134,8 @@ export class View {
         if (kept) {
             const { pivot, at, y, turn } = this.outlook;
 
-            _outlook.makeRotationY(turn).setPosition(at[0], y, at[1]).multiply(_pivot.makeTranslation(-pivot[0], 0, -pivot[1]));
+            // (Turned round the upright as three.js's makeRotationY turns, from its cos and sin)
+            _outlook.set(turn[0], 0, turn[1], at[0], 0, 1, 0, y, -turn[1], 0, turn[0], at[1], 0, 0, 0, 1).multiply(_pivot.makeTranslation(-pivot[0], 0, -pivot[1]));
             _seen.multiplyMatrices(_outlook, camera.matrixWorld).decompose(far.position, far.quaternion, _scale);
             hollowed(this.outlook.hollow);
             this.sky.object.position.copy(far.position);

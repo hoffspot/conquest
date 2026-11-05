@@ -236,8 +236,8 @@ const HOLLOW_OVER = 0.25;
  * walls (its `shell`, the scene's metres) left out of what's seen from it, over the floor it's seen
  * from, so the castle round it and the land show past its parapets (world/view.js's outlook;
  * landmarkdress.js hollowed). { pivot: [x, z] (its way in, its map's metres), at: [x, z] (the
- * world's metres there), y (its floor's height in the world), turn (radians, as three.js turns
- * round the upright), hollow: { box: [x0, z0, x1, z1], floor } (the scene's metres) }; or null for
+ * world's metres there), y (its floor's height in the world), turn: [cos, sin] (of how far it's
+ * turned round the upright, as three.js turns: the scene's own), hollow: { box: [x0, z0, x1, z1], floor } (the scene's metres) }; or null for
  * a scene with no keep.
  */
 export function keepOutlook(placed, { level, levels, entry, origin }) {
@@ -251,15 +251,15 @@ export function keepOutlook(placed, { level, levels, entry, origin }) {
     const at = toWorld(placed, (x0 + x1) / 2, keep.door.z);
     const floor = keepFloor(placed.scene.id, level, levels);
 
-    return { pivot: [origin[0] + entry[0], origin[1] + entry[1]], at, y: placed.base + floor, turn: Math.atan2(placed.sin, placed.cos), hollow: { box: keep.shell, floor: floor + HOLLOW_OVER } };
+    return { pivot: [origin[0] + entry[0], origin[1] + entry[1]], at, y: placed.base + floor, turn: [placed.cos, placed.sin], hollow: { box: keep.shell, floor: floor + HOLLOW_OVER } };
 }
 
 /**
  * Where a point of a keep's floor's map (x, z its map's metres, y over its floor) is in the world,
  * as keepOutlook stands the floor: [x, y, z] metres.
  */
-export function outlookPoint({ pivot, at, y: floor, turn }, x, y, z) {
-    const [dx, dz, c, s] = [x - pivot[0], z - pivot[1], Math.cos(turn), Math.sin(turn)];
+export function outlookPoint({ pivot, at, y: floor, turn: [c, s] }, x, y, z) {
+    const [dx, dz] = [x - pivot[0], z - pivot[1]];
 
     return [at[0] + dx * c + dz * s, floor + y, at[1] - dx * s + dz * c];
 }
