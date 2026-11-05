@@ -97,12 +97,37 @@ async function load(url) {
 }
 
 /** Shows one level of detail of a model whose lower-detail meshes are packed in (0: the full one). */
-function lod(level = 0) {
+let level = 0;
+let shown = null;
+
+// The part a mesh belongs to: its own name or its nearest named parent's, as its config joined it
+// (`join`), without a lower detail's ".lod1" or a primitive's "_1" after it
+const partOf = (node) => {
+    let named = node;
+
+    while (named && !named.name) {
+        named = named.parent;
+    }
+
+    return (named?.name ?? "").replace(/_\d+$/, "").replace(/\.?lod\d+$/, "").replace(/_\d+$/, "");
+};
+
+function lod(to = 0) {
+    level = to;
     model?.traverse((node) => {
         if (node.isMesh) {
-            node.visible = (node.userData.lod ?? 0) === level;
+            node.visible = (node.userData.lod ?? 0) === level && (!shown || shown.has(partOf(node)));
         }
     });
+}
+
+/**
+ * Only the parts named shown (a config's `join` names: a dressing of a model whose parts are kept
+ * apart, the game showing some for each look), or all of them again (null).
+ */
+function show(names = null) {
+    shown = names ? new Set(names) : null;
+    lod(level);
 }
 
 /** What's loaded: its clips, draw calls, bones, materials and nodes. */
@@ -468,6 +493,6 @@ async function look(url) {
     return given;
 }
 
-window.viewer = { load, look, info, pose, coverage, colourAt, sampleTexture, triangles, resize, lod, textureKinds };
+window.viewer = { load, look, info, pose, coverage, colourAt, sampleTexture, triangles, resize, lod, show, textureKinds };
 await chooseModels();
 window.viewerReady = true;

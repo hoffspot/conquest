@@ -26,7 +26,8 @@
   Orc King, with his two other skins, his champions', the Orc Warlord and the Orc Reaver), his fall
   Mesh2Motion's (CC0); and
   the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, with its
-  two other skins; and the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, with its two other skins
+  two other skins; and the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, with its two other skins;
+  and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, in three liveries, with its riders
   (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, its
   stand-in seen from afar and a kit of its parts drawing its keep's insides (`client/models/scenery/LICENSE.md`). Don't copy one out of the game or use it in anything else.
 - **The book's code and assets, in the git history.** The repository began as Last Colony, the

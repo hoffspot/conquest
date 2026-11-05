@@ -127,6 +127,8 @@ export const PARTS = Object.freeze({
     fireGland: { label: "Fire gland", worth: 30, icon: "gland", tint: "#ff8010" },
     // (A cerberus's: a fang as long as a dagger, still warm)
     hellFang: { label: "Hellhound fang", worth: 45, icon: "fang", tint: "#ff4a1a" },
+    // (The Order of the Bell's: the little bronze bell each wears on a cord, the Bell's cross on it)
+    bellToken: { label: "Bell of the Order", worth: 12, icon: "charm", tint: "#b08840" },
     // (A demon of the Breach's: a horn as long as a forearm, ridged and bone-pale)
     demonHorn: { label: "Demon's horn", worth: 50, icon: "tusk", tint: "#d8ccb4" },
     dragonScale: { label: "Drake scale", worth: 60, icon: "scale", tint: "#6e1812" },
@@ -192,6 +194,16 @@ export const SPOILS = Object.freeze({
     orcIronjaw: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }] },
     orcBloodtusk: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }] },
     orcRaider: { gold: [5, 16], items: [{ id: "potion", chance: 0.12 }] },
+    // (The Order of the Bell: what's in their purses, the little bells they wear, and what they
+    // carry; the Black Choir's and their Prior's more of each)
+    bellInitiate: { gold: [3, 10], items: [{ id: "potion", chance: 0.15 }, { id: "bellToken", chance: 0.25 }] },
+    bellBrother: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }, { id: "sword", chance: 0.05 }] },
+    bellRider: { gold: [18, 40], items: [{ id: "potion", chance: 0.4 }, { id: "bellToken", chance: 0.8 }, { id: "sword", chance: 0.08 }] },
+    choirRider: { gold: [26, 60], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }, { id: "sword", chance: 0.1 }] },
+    bellSpearman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }] },
+    bellArcher: { gold: [5, 16], items: [{ id: "potion", chance: 0.2 }, { id: "bellToken", chance: 0.45 }, { id: "bow", chance: 0.05 }] },
+    choirKnight: { gold: [20, 50], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }] },
+    priorVane: { gold: [80, 160], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "bellToken", chance: 0.95, count: [2, 4] }] },
     skeleton: { gold: [1, 6], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.2 }] },
     cultist: { gold: [4, 12], items: [{ id: "cultSigil", chance: 0.3 }, { id: "potion", chance: 0.15 }] },
     cultLeader: { gold: [30, 70], items: [{ id: "cultSigil", chance: 0.9, count: [1, 2] }, { id: "soulShard", chance: 0.4 }, { id: "potion", chance: 0.5 }] },

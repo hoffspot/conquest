@@ -68,6 +68,14 @@ const PLACES = Object.freeze({
     ashmaw: "in the wilds where its tracks lead from a hell's way in, once a world",
     demonBoss: "in the hells, holding the Breach",
     ashkhar: "in the wilds where its frosted prints lead from a moorland shrine, once a world",
+    bellInitiate: "at Bellhaven, in its courts and its keep",
+    bellBrother: "at Bellhaven, in its courts and its keep",
+    bellRider: "on the roads round Bellhaven, two to a patrol",
+    choirRider: "on the roads round Bellhaven, leading a patrol",
+    bellSpearman: "at Bellhaven, in its courts and its keep",
+    bellArcher: "at Bellhaven, in its courts and its keep",
+    choirKnight: "in the keep at Bellhaven",
+    priorVane: "in the belfry of the keep at Bellhaven",
 });
 
 // The ants' nests' own, and the hells' (met nowhere else)

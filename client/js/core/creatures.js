@@ -41,6 +41,13 @@ export const WILD = "beasts";
  */
 export const RIFT = "rift";
 
+/**
+ * The Order of the Bell's side, in Bellhaven's courts (core/scenery.js SCENERY.bellhaven `court`):
+ * against no one but those who've crossed it (host.js #against, #crossOrder) and the wild's that
+ * set on them.
+ */
+export const ORDER = "order";
+
 /** How many tiers there are, and how much stronger each is than the last (hit points and blows each). */
 export const TIERS = 10;
 export const TIER_GROWTH = 1.18;
@@ -122,6 +129,30 @@ export const HOUND_INFERNO = Object.freeze({
  * played in place, the creature carried over the ground) and down by them a little over a second in,
  * the ground heaving all round where it lands, shown there first.
  */
+// A rider of the Bell's charge (CREATURES bellRider, choirRider): at whoever's 5 to 14 m off,
+// every 9 seconds, the first 3 after it sets on anyone, its horse spurred into a gallop at them and
+// over them, a little off the ground, landing by them (17 to 26, 2.6 m all round where it lands,
+// throwing whoever it catches: the horse's hooves), where it'll land shown first
+export const RIDER_CHARGE = Object.freeze({
+    id: "charge",
+    kind: "melee",
+    reach: 0,
+    damage: Object.freeze([17, 26]),
+    hitAt: 900,
+    duration: 1100,
+    interval: 1500,
+    stagger: 500,
+    reaction: "crush",
+    animation: "charge",
+    first: 3000,
+    every: 9000,
+    least: 5,
+    most: 14,
+    leap: Object.freeze({ lift: 150, up: 0.1 }),
+    quake: Object.freeze({ ahead: 0, radius: 2.6, toss: 1, kind: "trample" }),
+    telegraph: true,
+});
+
 export const DEMON_LEAP = Object.freeze({
     id: "leap",
     kind: "melee",
@@ -466,6 +497,58 @@ export const CREATURES = Object.freeze({
     // (His raiders, the war band's orcs that burn the border villages: met only where his rare card
     // puts them, at a village they've burned (core/rare.js THREADS orcKing). A cleaver each)
     orcRaider: { name: "Orc raider", hp: 46, hands: true, weapon: "orcRaider", speed: 1.3, chase: 2.6, temper: "aggressive", roam: 8, leash: 30, pack: [2, 4], tiers: [3, 10], biomes: [], blood: "red", armor: 0.1 },
+    // (The Order of the Bell (docs/WILDS.md *The Order of the Bell*): zealots sworn to the voice of
+    // Bellhaven's Great Bell, rung again by their Prior after a hundred years' silence; met only where
+    // they hold Bellhaven, in its courts and its keep (dungeons/themes.js keep), and where they ride
+    // out to cleanse a village (core/rare.js THREADS bellhaven). Drawn from one model, each in what
+    // its rank wears (beasts/model.js order). Their ranks rise in strength: its initiates, not yet
+    // ordained, in olive, a knife each; its brothers in white, sworded and shielded, with spears,
+    // with bows, keeping off; the Black Choir in black, its inner circle, who hear the Bell's voice,
+    // in plate under it, a morning star each, too heavy to be thrown)
+    bellInitiate: { name: "Initiate of the Bell", hp: 44, hands: true, weapon: "bellKnife", speed: 1.3, chase: 2.6, temper: "aggressive", roam: 6, leash: 26, pack: [2, 4], tiers: [3, 10], biomes: [], blood: "red", armor: 0.05 },
+    bellBrother: { name: "Brother of the Bell", hp: 66, hands: true, weapon: "bellSword", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [2, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.2 },
+    bellSpearman: { name: "Spear-brother of the Bell", hp: 62, hands: true, weapon: "bellSpear", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [2, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.2 },
+    bellArcher: { name: "Bowman of the Bell", hp: 46, hands: true, weapon: "bellBow", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [1, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.1, keep: 7 },
+    choirKnight: { name: "Knight of the Black Choir", hp: 96, hands: true, weapon: "choirMace", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 5, leash: 30, pack: [1, 2], tiers: [5, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, steady: true },
+    // (The Order's riders, on barded warhorses, two to a patrol on the roads round Bellhaven (host.js
+    // #patrolsAbout; core/scenery.js SCENERY `patrols`): a brother of the Bell and a knight of the
+    // Black Choir, each quite strong, at a trot on their rounds and a gallop after whoever they're
+    // set on, too heavy to be thrown; their horses spurred over whoever's a little way off now and
+    // then, RIDER_CHARGE)
+    bellRider: { name: "Rider of the Bell", hp: 140, hands: true, weapon: "riderSword", speed: 2.4, chase: 5.5, temper: "aggressive", roam: 0, leash: 360, pack: [1, 2], tiers: [5, 10], biomes: [], blood: "red", armor: 0.35, steady: true, sight: 20, moves: [RIDER_CHARGE] },
+    choirRider: { name: "Black Choir Rider", hp: 170, hands: true, weapon: "choirRiderSword", speed: 2.4, chase: 5.5, temper: "aggressive", roam: 0, leash: 360, pack: [1, 2], tiers: [5, 10], biomes: [], blood: "red", armor: 0.4, perilous: true, steady: true, sight: 22, moves: [RIDER_CHARGE] },
+    // (Prior Osric Vane, the Voice of the Bell: the hedge-priest who found the old Order's Rule in a
+    // burnt chapter house, came to Bellhaven empty a hundred years, unchained the Great Bell's clapper
+    // and rang it, and heard it answer. Master of its keep (dungeons/themes.js keep), in the belfry
+    // under the bell, drawn as the Black Choir's knights are, bigger (beasts/model.js). His morning
+    // star (weapons.js NATURAL priorMace); his toll, his shield driven down and the Bell's voice
+    // ringing out all round him, throwing whoever it catches, shown on the ground first (`moves`);
+    // and as he's worn down, at two thirds and at one third, the Black Choir called to him (`rally`).
+    // His own model and spoils are to come)
+    priorVane: {
+        name: "Prior of the Bell",
+        hp: 150,
+        hands: true,
+        weapon: "priorMace",
+        speed: 1.1,
+        chase: 2.5,
+        temper: "aggressive",
+        roam: 4,
+        leash: 40,
+        pack: [1, 1],
+        tiers: [5, 10],
+        biomes: [],
+        blood: "red",
+        armor: 0.3,
+        perilous: true,
+        steady: true,
+        sight: 20,
+        moves: [{ id: "toll", kind: "melee", reach: 0, damage: [12, 19], hitAt: 640, duration: 1300, interval: 1600, stagger: 500, reaction: "crush", animation: "toll", first: 6000, every: 12000, least: 0, most: 4, quake: { ahead: 0, radius: 4, toss: 0.9, kind: "bellToll", element: null }, telegraph: true }],
+        rally: [
+            { below: 2 / 3, animation: "rally", hitAt: 1200, duration: 2900, call: { kind: "choirKnight", count: [1, 1], most: 2, down: 1, told: "cries out to the Bell: a knight of the Black Choir answers!" } },
+            { below: 1 / 3, animation: "rally", hitAt: 1200, duration: 2900, call: { kind: "choirKnight", count: [2, 2], most: 3, down: 1, told: "cries out to the Bell again: the Black Choir answers!" } },
+        ],
+    },
     // (Vharzul the Greenflame: the Pit's first lord, thrown down by his brother, who sits its throne
     // now, and cast up through a thin place into the world above, the gates below barred to him;
     // burning between the worlds turned his fire the green of the thin places (docs/WILDS.md

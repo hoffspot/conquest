@@ -32,7 +32,19 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * own walls stand (`shell`: [x0, z0, x1, z1], the scene's metres, its towers and the spire over its
  * doors with them), left out of what's seen from its floors (keepOutlook); and how high its topmost
  * floor stands (`top`, the scene's metres: its belfry, over its roof and under its spire, as high as
- * the top of the cliff its back's built into), its others between that and its doors.
+ * the top of the cliff its back's built into), its others between that and its doors. Its court
+ * (`court`), held by the Order of the Bell (core/creatures.js bellInitiate and the rest) while
+ * anyone's in the castle: each of its `posts` one of the Order, of a kind, standing at [x, z] (the
+ * scene's metres) and facing a way: spear-brothers at the bridge's end, brothers at the gate and
+ * either side of the keep's doors, initiates at their drill under a brother, bowmen on the court's
+ * east side, a brother and a spear-brother at its ends; what they say to whoever lingers by them
+ * who hasn't crossed the Order (`warnings`), and what as one does (`crossed`); and the thread its
+ * warning begins, if it isn't (`thread`: core/rare.js THREADS bellhaven, the Bell Tolls Again).
+ * And its patrols (`patrols`), the Order's riders on barded warhorses on the roads round it
+ * (host.js #patrolsAbout): `riders`, each patrol's kinds (core/creatures.js bellRider, choirRider:
+ * its first its leader), riding a round of `stops` stops `ring` metres out past where the scene
+ * stands (terrain/scenes.js patrolRound), out as anyone comes within `near` metres of it in the
+ * world, let go once everyone's further than `far`.
  */
 export const SCENERY = Object.freeze({
     bellhaven: Object.freeze({
@@ -45,6 +57,41 @@ export const SCENERY = Object.freeze({
         facing: FACING.n,
         out: [-20, 75, 20, 77],
         keep: Object.freeze({ theme: "keep", name: "the Keep of Bellhaven", squares: [-1, -142, 1, -140], arrive: [-0.5, -137.5], facing: FACING.s, door: Object.freeze({ z: -142, width: 2, height: 3.6 }), shell: Object.freeze([-34, -216, 34, -134]), top: 168 }),
+        court: Object.freeze({
+            posts: Object.freeze([
+                ["bellSpearman", [-4, -90], FACING.s],
+                ["bellSpearman", [4, -90], FACING.s],
+                ["bellBrother", [-4, -128], FACING.s],
+                ["bellBrother", [4, -128], FACING.s],
+                ["bellBrother", [-10, -140], FACING.s],
+                ["bellBrother", [10, -140], FACING.s],
+                ["bellBrother", [-20, -136], FACING.s],
+                ["bellInitiate", [-17, -133], FACING.n],
+                ["bellInitiate", [-23, -133], FACING.n],
+                ["bellInitiate", [-28, -130], FACING.e],
+                ["bellArcher", [34, -136], FACING.s],
+                ["bellArcher", [40, -130], FACING.s],
+                ["bellBrother", [-50, -138], FACING.e],
+                ["bellSpearman", [50, -138], FACING.w],
+            ].map((post) => Object.freeze(post))),
+            warnings: Object.freeze([
+                "Keep your distance, unrung one.",
+                "The Bell sees you, stranger. Walk softly here.",
+                "Kneel to the Bell, or keep walking.",
+                "This is holy ground. Mind where you tread.",
+                "The Prior has no time for the unrung.",
+                "The keep is the Order's. Don't go near its doors.",
+            ]),
+            crossed: Object.freeze(["Unclean! Take them!", "The Bell has judged you!", "Cleanse them!"]),
+            thread: "bellhaven",
+        }),
+        patrols: Object.freeze({
+            riders: Object.freeze([Object.freeze(["choirRider", "bellRider"]), Object.freeze(["bellRider", "bellRider"])]),
+            ring: 25,
+            stops: 8,
+            near: 380,
+            far: 520,
+        }),
     }),
 });
 
@@ -113,7 +160,7 @@ export function heightOn(walk, x, y) {
  * A scene's map (its id `id`, named `name`, the place `building` it's the inside of): its walk's
  * grid as squares (grid.js squaresOf), a square with no floor blocked and blocking sight, every
  * one stone underfoot and raised (battle.js: no blow struck between two whose floors are too far
- * one over the other, a ledge's top and its foot); the floor's height anywhere on it (heightOn);
+ * one over the other, a ledge's top and its foot), and nothing low enough to be seen over; the floor's height anywhere on it (heightOn);
  * and where it's drawn (`origin`: its corner, the walk's origin; `offset`, where the scene's own
  * metres are from it, for its art).
  */
@@ -132,7 +179,7 @@ export function sceneryMap(scenery, id, { name = SCENERY[scenery].name, building
         scenery,
         walk,
         building,
-        squares: { width, height, blocked, opaque: blocked, ground: () => GROUND.courtyard, raised: () => true },
+        squares: { width, height, blocked, opaque: blocked, ground: () => GROUND.courtyard, raised: () => true, low: () => false },
         heightAt: (x, y) => heightOn(walk, x, y),
     };
 }

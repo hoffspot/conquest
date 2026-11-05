@@ -192,18 +192,35 @@ def mesh_fbx(materials, faces, version=7400, packed=False, mapping=b"ByPolygon")
     return fbx_file([("FBXHeaderExtension", [], [("FBXVersion", [version], [])]), ("Objects", [], [geometry, model] + found), ("Connections", [], links)], version)
 
 
-def glb_file(faces):
-    """A .glb as Unreal's glTF Exporter writes one: a primitive for each material, named as it is."""
-    document = {
-        "asset": {"version": "2.0"},
-        "materials": [{"name": name} for name in faces],
-        "accessors": [{"count": 3 * count, "componentType": 5125, "type": "SCALAR"} for count in faces.values()],
-        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": index, "material": index} for index in range(len(faces))]}],
-    }
+def glb_file(faces, weights=None):
+    """A .glb as Unreal's glTF Exporter writes one: a primitive for each material, named as it is;
+    and the skin weights of those in `weights` (by material, each vertex's eight, 0 to 255), two sets
+    of four bytes each, normalized, in its binary chunk."""
+    accessors = [{"count": 3 * count, "componentType": 5125, "type": "SCALAR"} for count in faces.values()]
+    views, blob, primitives = [], b"", []
+
+    for index, name in enumerate(faces):
+        attributes = {"POSITION": 0}
+
+        for half, rows in enumerate(([row[:4] for row in weights[name]], [row[4:] for row in weights[name]]) if weights and name in weights else ()):
+            data = bytes(value for row in rows for value in row)
+            views.append({"buffer": 0, "byteOffset": len(blob), "byteLength": len(data)})
+            accessors.append({"bufferView": len(views) - 1, "count": len(rows), "componentType": 5121, "normalized": True, "type": "VEC4"})
+            attributes[f"WEIGHTS_{half}"] = len(accessors) - 1
+            blob += data + b"\0" * (-len(data) % 4)
+
+        primitives.append({"attributes": attributes, "indices": index, "material": index})
+
+    document = {"asset": {"version": "2.0"}, "materials": [{"name": name} for name in faces], "accessors": accessors, "meshes": [{"primitives": primitives}]}
+
+    if blob:
+        document.update(bufferViews=views, buffers=[{"byteLength": len(blob)}])
+
     text = json.dumps(document).encode()
     text += b" " * (-len(text) % 4)
+    tail = struct.pack("<II", len(blob), 0x004E4942) + blob if blob else b""
 
-    return b"glTF" + struct.pack("<II", 2, 20 + len(text)) + struct.pack("<II", len(text), 0x4E4F534A) + text
+    return b"glTF" + struct.pack("<II", 2, 20 + len(text) + len(tail)) + struct.pack("<II", len(text), 0x4E4F534A) + text + tail
 
 
 exported = []
@@ -233,7 +250,7 @@ class Exporter:
             materials = [(slot.properties["material_interface"].path.split(".")[-1] if slot.properties["material_interface"] else "WorldGridMaterial") for slot in slots]
             heads[ext] = asset.properties.get("fbx") or mesh_fbx(materials, asset.properties.get("faces", [12] * len(slots)))
         elif ext == ".glb":
-            heads[ext] = glb_file(asset.properties["glb"])
+            heads[ext] = glb_file(asset.properties["glb"], asset.properties.get("weights"))
 
         with open(filename, "wb") as file:
             file.write(heads.get(ext, b"exported"))
@@ -345,7 +362,7 @@ sys.modules["unreal"] = unreal
 sys.path.insert(0, os.path.dirname(__file__))
 
 import export_assets  # noqa: E402
-from export_assets import fbx_faces, glb_faces, main, relative_file  # noqa: E402
+from export_assets import fbx_faces, glb_faces, glb_skins, main, relative_file  # noqa: E402
 
 # --- A bought pack, as Fab adds it to a project ---
 
@@ -371,7 +388,9 @@ mesh = SkeletalMesh(
 rock = StaticMesh("/Game/Props/SM_Rock.SM_Rock", static_materials=[Thing(material_slot_name="Rock", material_interface=None)])
 
 # (A horse whose FBX loses parts, as the Order of the Bell's did: its caparison simulated as cloth,
-# its mane's section turned off; a slot no section uses; and its .glb, which has the caparison)
+# its mane's section turned off; a slot no section uses; and its .glb, which has the caparison,
+# but without its weights, as Unreal writes a cloth section's, and its coat's weights broken on
+# every other vertex, as Unreal's glTF export wrote the Order's horses')
 coat, caparison, mane, spare = (MaterialInstanceConstant(f"/Game/Horse/Materials/{name}.{name}", parent=master) for name in ("MI_Horse", "MI_Horse_Cloth", "MI_Horse_Hair", "MI_Horse_Spare"))
 horse = SkeletalMesh(
     "/Game/Horse/SKM_Horse.SKM_Horse",
@@ -381,6 +400,7 @@ horse = SkeletalMesh(
     sections=[[0, False], [1, True], [2, False], [4, False]],
     faces=[300, 0, 0, 0, 20],
     glb={"MI_Horse": 320, "MI_Horse_Cloth": 90},
+    weights={"MI_Horse": [[255, 0, 0, 0, 0, 0, 0, 0] if k % 2 else [90, 40, 0, 0, 0, 0, 0, 0] for k in range(160)], "MI_Horse_Cloth": [[0] * 8 for _ in range(60)]},
 )
 walk = AnimSequence("/Game/Monster4/Animations/Walk_F.Walk_F", skeleton=skeleton, length=1.2333333)
 stuck = AnimSequence("/Game/Monster4/Animations/Stuck.Stuck", skeleton=skeleton, length=1, refuses=(".fbx",))
@@ -508,11 +528,17 @@ class Export(unittest.TestCase):
         self.assertEqual(notes["glbFaces"], {"MI_Horse": 320, "MI_Horse_Cloth": 90})
         self.assertEqual(notes["found"], ["cloth"])
 
+        # (Its weights there: none on the caparison, as a cloth section's come out; half the coat's
+        # not adding up to one)
+        self.assertEqual(notes["glbSkins"], {"MI_Horse": {"vertices": 160, "unweighted": 0, "broken": 80}, "MI_Horse_Cloth": {"vertices": 60, "unweighted": 60, "broken": 0}})
+
         warnings = self.notes["warnings"]
 
-        self.assertEqual(len(warnings), 2)
+        self.assertEqual(len(warnings), 3)
         self.assertIn("SKM_Horse: the slot 'cloth' (MI_Horse_Cloth) has no faces in its FBX: its section is simulated as cloth", warnings[0])
-        self.assertIn("It's in SKM_Horse.glb", warnings[0])
+        self.assertIn("It's in SKM_Horse.glb, exported beside it, but without its skin weights there", warnings[0])
+        self.assertIn("set that one's Clothing to None", warnings[0])
+        self.assertIn("SKM_Horse.glb: 80 of 160 of MI_Horse's vertices have skin weights that don't add up to one", warnings[2])
         self.assertIn("SKM_Horse: the slot 'hair' (MI_Horse_Hair) has no faces in its FBX: its section is likely turned off", warnings[1])
         self.assertIn("right-click that section and enable it", warnings[1])
         self.assertIn("SKM_Horse.glb hasn't it either", warnings[1])
@@ -646,6 +672,15 @@ class ReadBack(unittest.TestCase):
     def test_glb_faces(self):
         self.assertEqual(glb_faces(self.write(glb_file({"MI_Horse": 12, "MI_Horse_Cloth": 5}), ".glb")), {"MI_Horse": 12, "MI_Horse_Cloth": 5})
         self.assertIsNone(glb_faces(self.write(b"not a glb", ".glb")))
+
+    def test_glb_skins(self):
+        whole = [[200, 55, 0, 0, 0, 0, 0, 0], [100, 100, 50, 0, 0, 0, 0, 5]]
+        glb = glb_file({"MI_Horse": 4, "MI_Horse_Cloth": 2, "MI_Rock": 1}, {"MI_Horse": whole + [[90, 0, 0, 0, 0, 0, 0, 0]], "MI_Horse_Cloth": [[0] * 8] * 3})
+
+        # (Two sets of weights summed; none on the cloth; one of the coat's short; nothing of what isn't skinned)
+        self.assertEqual(glb_skins(self.write(glb, ".glb")), {"MI_Horse": [3, 0, 1], "MI_Horse_Cloth": [3, 3, 0]})
+        self.assertEqual(glb_skins(self.write(glb_file({"MI_Rock": 1}), ".glb")), {})
+        self.assertIsNone(glb_skins(self.write(b"not a glb", ".glb")))
 
 
 class RelativeFile(unittest.TestCase):

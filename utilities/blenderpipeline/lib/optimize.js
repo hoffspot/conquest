@@ -125,6 +125,36 @@ export function mendTangents(document) {
 }
 
 /**
+ * Bones held where they stand through some clips (`hold`: { clip: [bone names] }): their keys in
+ * those clips left out, as if the clip never moved them (a pack's arrow flown off on the hand's
+ * socket bone as its bow's loosed, which would carry whatever the game hangs on that bone off with
+ * it). A clip left with nothing keeps one channel, as glTF wants one. Returns how many were left out.
+ */
+export function holdBones(document, hold) {
+    let held = 0;
+
+    for (const animation of document.getRoot().listAnimations()) {
+        const bones = new Set(hold[animation.getName()] ?? []);
+
+        for (const channel of animation.listChannels()) {
+            if (bones.has(channel.getTargetNode()?.getName()) && animation.listChannels().length > 1) {
+                const sampler = channel.getSampler();
+
+                channel.dispose();
+
+                if (sampler && !sampler.listParents().some((parent) => parent.propertyType === "AnimationChannel")) {
+                    sampler.dispose();
+                }
+
+                held++;
+            }
+        }
+    }
+
+    return held;
+}
+
+/**
  * Channels that never move a bone from where it stands at rest left out: a clip need only say
  * what moves (Three.js holds a bone no clip moves where it stands). A clip left with nothing
  * keeps one channel, as glTF wants one. Returns how many were left out.
@@ -636,6 +666,11 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     if (root.listTextures().length < textures) {
         result.texturesMadeFactors = textures - root.listTextures().length;
+    }
+
+    if (Object.keys(config.clips.hold).length) {
+        result.bonesHeld = holdBones(document, config.clips.hold);
+        await document.transform(prune());
     }
 
     if (config.clips.trimStill) {

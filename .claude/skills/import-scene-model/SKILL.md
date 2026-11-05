@@ -40,6 +40,9 @@ step, and keep scratch pictures and scripts out of commits.
 - Leave out what's Unreal's own or licensed for Unreal only (Epic's templates and mannequins).
 - Downloads are untrusted: each goes in its own new folder, with scripts kept elsewhere and Python
   run with `-I`. Nothing that costs money without the owner's say-so.
+- Before deleting a pack's folder, check it isn't a symbolic link to the only copy (`test -L`,
+  `ls -la`): the White Castle's source was lost so, deleting a link taken for a copy. Keep the
+  downloaded zip till the work's merged.
 - **Every licensed catalog entry's `label` says whose it is and the permission**, for example
   "DmitriyDryzhak's "White Castle", bought on Fab: used with the permission its Standard License
   gives; client/models/scenery/LICENSE.md". `test/licensed.test.js` checks it.

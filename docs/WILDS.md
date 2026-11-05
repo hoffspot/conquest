@@ -962,9 +962,16 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
 - *lock*: a lock opened as the thread comes to it, its way in marked; done once someone goes in
   by it (*Locks*, below).
 - *enter*: a way in to go in by, the plan's dungeon of a `theme` nearest where the thread was last
-  (a hell's way in: its cult's camp), marked on every player's maps (a scroll, its seal sea-green)
-  and in the journal; done once someone goes in by it (the host's `#threadCrossed`, its `site`),
-  they alone taking part (as anyone goes into a hell: by night, its rite broken).
+  (a hell's way in: its cult's camp; a scene's keep, `theme` "keep", the scenes' keeps counted
+  among the plan's dungeons: the host's `#keeps`), marked on every player's maps (a scroll, its
+  seal sea-green) and in the journal; done once someone goes in by it (the host's
+  `#threadCrossed`, its `site`: from the world, or a keep's from its court), they alone taking
+  part (as anyone goes into a hell: by night, its rite broken).
+- *slay*: a dungeon's master to strike down, the plan's dungeon of a `theme` nearest where the
+  thread was last, as an enter step's (the Prior at the top of the Keep of Bellhaven), marked on
+  every player's maps; done once its master falls (the host's `#delveFell`, `#threadSlain`),
+  those in the dungeon then taking part. Its master's there every time it's made again, so it's
+  there to strike down whenever the thread comes to it.
 - *fight*: foes to drive out of somewhere: the settlement its opener's rumour told of (`at`
   "opener", its middle; the Orc King's raiders in the border village they burned), or, as a
   place's, a spot `far` from where it was last; marked on every player's maps, as a place is. Its
@@ -986,7 +993,9 @@ map; `burn`, `count` of the settlement's houses set burning, the nearest its mid
 Behemoth of the Rift burns them (host.js `#burnAt`; core/burnt.js: burning till sunrise, then
 built again over the days after). A thread may change the world as it's begun too (`begins`, in
 its first step's settlement: the Iron Crown's border village set burning as its rumour's taken
-up). Told (host.js "thread"): to those who took part, as it's begun and as each step's done, what's
+up). And one may lead on to another once it's done (`then`: begun by those who did its last step,
+its `home` its own rumour's settlement, if the world has the place its rumour's of: the
+host's `#threadLeads`; the Bellbound's to the Order of the Bell's). Told (host.js "thread"): to those who took part, as it's begun and as each step's done, what's
 next (`quill`), and its end (`rareDone`); each reward to whoever's given it. The journal's
 *Legends* has each thread: its step, what's known of the next (`threadWords`: its settlement,
 which way it is) and where; and those followed to their end, by whom. Kept in the world's
@@ -1006,7 +1015,8 @@ where it was told, its `home` that settlement; their parting words, `taken`, and
 so it's not offered again) or left. Every guild has one of every calling the threads' talk asks
 for (`TALK_CALLINGS`: a mage and a warrior, so far; insides.js `guildFolkOf`: the last at its
 tables taking one up if none of the others has it), and one hired from it leaves the rumour to any
-adventurer still there. Or another of the folk tells it where they keep (`role`, `post`: the
+adventurer still there. A thread with no card (the Order of the Bell's) has its rumour told
+whenever it's not begun. Or another of the folk tells it where they keep (`role`, `post`: the
 Exile's Road's priest, at the temple of that settlement, every village or bigger having one as it
 has a guild), who takes back on it whoever gives it up (`keeperOf`: "The priest at the temple in
 Sarmir who told you of it will take you back on it, where it stood.").
@@ -1517,6 +1527,63 @@ Till its model's read (and where the licensed models aren't, as in CI) it's draw
 brute half as tall again as a man, grey-blue as ice (beasts/looks.js). The model viewer shows it,
 and the Breach's demon, under *For the mightiest*. The rules two games share changed with it
 (`NET_VERSION` 202: the demons, the rogue's rumour, a place step at the one its rumour told of).
+
+### The Order of the Bell
+
+A thread with no card of its own (`THREADS` `bellhaven`, *The Bell Tolls Again*): the Order of the
+Bell come back to its mother house, Bellhaven (docs/WORLD.md *Bellhaven, the White Castle*), and
+how it's broken (the user: "a prophet... rang the Great Bell", "expose and break them", "several
+hooks", "the courts become hostile to that player and their party after crossing").
+
+The Order of the Bell was knights and priests of the Six, who kept watch on the thin places and
+bound what came through them in blessed silver (Ashkhar the Bellbound, under the shrine on the
+moor, was theirs). What they drew up out of the thin place under Bellhaven had no body to chain,
+only a voice, so they cast it into the silver of the Great Bell as it was made, hung the bell over
+their own heads and chained its clapper. The Order dwindled away a lifetime ago and Bellhaven
+stood empty. Then Osric Vane, a hedge-priest who found the Order's Rule half burned in the ashes
+of a chapter-house, climbed up to the empty keep, cut the chain and rang the bell, and it
+answered him. He calls himself the Prior, the Voice of the Bell: it speaks to each who hears it in
+the voice they most wish to hear, and to him with the voice of the Six, and it asks only to be
+fed. He's filled Bellhaven again: initiates in olive, brothers and sisters in white with a blue
+cross, and the Black Choir in black, who sleep under the bell and no longer sleep (creatures.js
+`bellInitiate` and the rest; docs/DUNGEONS.md *Bellhaven's keep*). They keep its courts (the
+host's `#holdCourt`, docs/WORLD.md), and they ride out to cleanse the farms that won't kneel to
+the bell's word: burned, and whoever's in them.
+
+Three ways in, any of them beginning it if it isn't begun:
+- **The rumour**: the priest at the temple in the settlement with a guild nearest Bellhaven
+  (`opens`: `role` "priest", `post` "temple", `near` "bellhaven"), asked "You keep looking towards
+  the hills.", in four pieces: the Great Bell rung again this spring, {way} of there; the old
+  Order, and Osric Vane who rang it; his Order in white and black; and the cleansings. "I'll go
+  after the cleansers." begins it there, its home that settlement; the priest takes back on it
+  whoever gives it up.
+- **The courts' warning**: warned off by one of the Order at their posts in Bellhaven's courts
+  (core/scenery.js SCENERY `court` `thread`; the host's `#courtsAbout`): begun at Bellhaven, its
+  home the priest's settlement.
+- **The Bellbound's end** (`THREADS` `bellbound` `then`): the rogue, paying out its bounty, tells
+  of a bell rung at Bellhaven the night Corbin went back to the shrine, and it's begun.
+
+Its steps:
+- **The cleansers** (a *fight*, 160 to 240 m from where it was begun): initiates and brothers of
+  the Bell putting a farmstead to the torch, Brother Anselm the Cleanser among them, a mini-boss.
+  All fallen, 60 gold to each who fought them and the Prior's writ (writings.js `writ`: the order
+  under the bell's blue seal to cleanse the farms of the valley, and at its foot, in the Prior's
+  own hand, "The Black Choir shall see it done").
+- **The writ read out** (a *talk*: the priest at the temple in its home): "The cleansers carried
+  this: a writ, under the Prior's seal." The priest reads it, will read it from the temple steps
+  and send it to every temple in the land, and marks the way to Bellhaven on everyone's maps
+  (`reveal`); 40 gold.
+- **The keep** (an *enter*, `theme` "keep": the Keep of Bellhaven, gone into from its court):
+  going in crosses the Order (the host's `#intoTheKeep`), its courts set against whoever did and
+  their party from then on.
+- **The Prior** (a *slay*: the keep's master, Prior Osric Vane, the Voice of the Bell, at the top
+  of it by the Great Bell, his Black Choir about him): fallen, 150 gold to each in the keep and his
+  book (writings.js `bell`: the night he rang it; what it says to him and to the Choir; the page of
+  the old Rule sewn into the back, of what they sealed in the bell; and his last page: "if it does
+  not, then I have fed it a valley, and it is still hungry").
+- **The bell silent** (a *talk*: back to the priest): "The Prior's dead. This book was by his
+  bell." 250 gold, the thread at its end, and the Feast of the Silent Bell in the town for a day
+  (`festival`, its shops' prices at 85 in the hundred).
 
 ### Building a card
 

@@ -76,6 +76,8 @@ describe("an asset's config", () => {
         refuses({ source: "a.blend", simplify: { ratio: 0 } }, /simplify.ratio/);
         refuses({ source: "a.blend", simplify: { share: 0.5 } }, /unknown setting simplify.share/);
         refuses({ source: "a.blend", clips: { trimStill: 1 } }, /trimStill/);
+        refuses({ source: "a.blend", clips: { hold: ["weapon_r"] } }, /clips\.hold/);
+        refuses({ source: "a.blend", clips: { hold: { "Bow Shoot": "weapon_r" } } }, /clips\.hold/);
         refuses({ source: "a.blend", clips: { fps: 0 } }, /clips.fps is a number of times a second/);
         refuses({ source: "a.blend", clips: { fps: "30" } }, /clips.fps is a number of times a second/);
         refuses({ source: "a.blend", restPose: "" }, /restPose is the name of a clip/);

@@ -24,6 +24,8 @@ for the parts below. Times are told to the owner in US Eastern.
 - Downloads are untrusted: each in its own new folder, scripts kept elsewhere, Python run with `-I`.
   Never turn off TLS checks or route round the network policy.
 - Nothing that costs money without the owner's say-so.
+- Before deleting a pack's folder, check it isn't a symbolic link to the only copy (`test -L`,
+  `ls -la`): the White Castle's source was lost so. Keep the downloaded zip till the work's merged.
 
 ## 1. Download from Drive
 
@@ -54,6 +56,12 @@ A small file comes straight back from the first `curl` (no confirm page): check 
   where it hasn't, tell the owner the fix the warning gives, and wait for a new export. An export
   older than this check has no `warnings`: count each slot's faces in its FBX (`fbx_faces` in the
   script reads one) to see what's missing.
+- Read each mesh's `glbSkins` too (by material: `vertices`, `unweighted`, `broken`): Unreal's glTF
+  export leaves a cloth section's skin weights all zero, and can leave others not summing to one
+  (the Order's re-exported horse: its barding all unweighted, half its body broken). Such a part
+  wouldn't move with the bones: build the body from the FBX and only what's missing from the
+  `.glb`, bound to the skeleton yourself, or ask the owner for the fix the warning gives (the
+  section's clothing set to none, on a copy, and the FBX exported again).
 - Which channel of a packed texture is what: open it with the pipeline's Blender Python
   (`utilities/blenderpipeline/.venv/bin/python -I`, `bpy`), not the system's PIL (broken here).
   Unreal's `metalic+roughness` textures keep roughness in alpha (`"channel": "A"`); their normals

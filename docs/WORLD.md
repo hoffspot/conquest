@@ -720,8 +720,10 @@ its features about 1 ms more, and laying out a settlement 5 to 80 ms more (once)
 
 ## Bellhaven, the White Castle (being built)
 
-A place of its own for one quest: the Order of the Bell's mother house, abandoned since they forged
-the blessed silver there (the Bellbound thread). It's a bought scene, DmitriyDryzhak's White Castle
+A place of its own for one quest: the Order of the Bell's mother house, where they forged the
+blessed silver (the Bellbound thread), empty a hundred years till a hedge-priest rang its Great Bell
+again and raised the Order up anew, zealots who hold it now (docs/WILDS.md, *The Order of the
+Bell*). It's a bought scene, DmitriyDryzhak's White Castle
 from Fab (licensed: `client/models/scenery/LICENSE.md`): the castle on its crag, a chasm, and a
 130 m bridge over it. The owner's plan, in order:
 1. **Its own map**, entered by crossing the bridge from a landmark in the world.
@@ -731,7 +733,7 @@ from Fab (licensed: `client/models/scenery/LICENSE.md`): the castle on its crag,
 3. **The keep**, a dungeon behind its doors.
 4. Stairs to a map of its own wherever one floor is over another.
 5. **The quest**: a rumour of its bell ringing again, the climb from the bridge through the courts
-   to the nave, and what the Order sealed there.
+   to the nave, and what the Order sealed there (built: docs/WILDS.md *The Order of the Bell*).
 
 What's built so far:
 - **Its model** (`utilities/blenderpipeline`, `private/bellhaven.json`), the artist's whole scene
@@ -816,8 +818,45 @@ What's built so far:
   - Without the licensed models, it draws the walk, a block a square, as the lab does.
   - The minimap paints it from the walk (`app/minimap.js`), and its way out glows across the
     slope's foot (`app/doors.js`).
+- **Its court, held by the Order of the Bell** (`core/scenery.js` `SCENERY.bellhaven.court`,
+  `host.js` `#holdCourt`): while anyone's in the castle, one of the Order at each of its posts, as
+  its building's opened, and gone again once it's let go (no one near), all of them back the next
+  time: spear-brothers at the bridge's end, brothers at the gate and either side of the keep's doors,
+  initiates at their drill under a brother, bowmen on the court's east side, a brother and a
+  spear-brother at its ends; at the castle's finders' tier, as a dungeon's are.
+  - They're on a side of their own (`ORDER`, `core/creatures.js`): no one's enemy but those who've
+    crossed the Order (`host.js` `#against`). One who lingers by them is warned off, no oftener
+    than every 25 seconds ("order" events, `COURT`: said over the brother's head, the player told
+    the first time what the Order is).
+  - A player crosses the Order by striking one of them (they can be struck, `canFight`) or by going
+    into its keep (`#crossOrder`, `#intoTheKeep`): marked so in the world for good (`core/rare.js`
+    Legends `marks`, kept in its saves), the cry raised, and those of the court on their floor set
+    on them. From then on the court's against them and anyone in their party (`#crossed`).
+  - The first warning begins the Order's quest, *The Bell Tolls Again*, if it isn't begun
+    (`court.thread`; docs/WILDS.md *The Order of the Bell*): its cleansers, the Prior's writ, the
+    keep gone into, and the Prior struck down at the top of it.
+- **Its patrols, the Order's riders** (`core/scenery.js` `SCENERY.bellhaven.patrols`, `host.js`
+  `#patrolsAbout`; the user: "mounted templars patrolling the area and roads around bellhaven. Each
+  one should be quite strong"): two patrols, a knight of the Black Choir with a brother of the Bell
+  and two brothers, each on a barded warhorse (`core/creatures.js` `choirRider`, `bellRider`: 170
+  and 140 hit points at the first tier, a third of every blow turned, never thrown), ridden out as
+  a player comes within 380 m of Bellhaven in the world and let go once everyone's further than
+  520 m, at the castle's finders' tier as its court is.
+  - Each rides a round of eight stops (`core/terrain/scenes.js` `patrolRound`), 25 m out past
+    where the castle stands on the first open ground: the first from its road's end one way round,
+    the second from the far side the other. They trot their rounds (2.4 m/s) and gallop after
+    whoever they're set on (5.5 m/s).
+  - They're on the Order's side, as its court is: no one's enemy but those who've crossed it.
+    Striking one crosses it, and crossing it sets those within 120 m on whoever did (`#crossOrder`).
+  - They cut down from the saddle at whoever's by the horse (`riderSword`, 2.2 m: the sweep throws
+    them), and now and then spur the horse over whoever's 5 to 14 m off (`RIDER_CHARGE`: where it'll
+    land shown on the ground first, throwing whoever it catches).
+  - Drawn as one model, rider and horse (`beast-order-mounted`, the Templar Army's horse in its
+    barding; `client/models/beasts/LICENSE.md`); till that's read, as a grey warhorse
+    (`beasts/looks.js`).
 - **Its keep**, a dungeon of its own behind the keep's doors off its court (docs/DUNGEONS.md,
-  *Bellhaven's keep*): four floors going up, its theme never a wild dungeon's.
+  *Bellhaven's keep*): four floors going up, its theme never a wild dungeon's, held by the Order of
+  the Bell and none but them.
   - Its way in (`core/scenery.js` `SCENERY.bellhaven.keep`, `sceneryKeep`): the doorway, 2 m wide,
     at the head of the steps up from the court (the scene's -1 to 1 m across, -142 to -140 m in,
     81.4 m up). Stepping into it goes in, as stepping onto Bellhaven's way in does; or its doors

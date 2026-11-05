@@ -241,6 +241,70 @@ export const WRITINGS = Object.freeze({
             },
         ]),
     }),
+    // (The Prior's writ, given as the Order of the Bell's cleansers are driven off the farmstead
+    // they were burning: core/rare.js THREADS bellhaven)
+    writ: Object.freeze({
+        title: "The Prior's writ",
+        by: "Osric Vane, Prior of the Order of the Bell",
+        found: "Sealed in a scroll case on Brother Anselm the Cleanser, by the burning farmstead",
+        entries: Object.freeze([
+            {
+                heading: "To Brother Anselm of the Bell, captain of the cleansing",
+                hand: "A fine clerk's hand, the Great Bell pressed into blue wax beneath.",
+                text: [
+                    "In the name of the Six, and by the Voice of the Bell, which is their voice. The farms of the lower valley have been rung for three times, and have not come up to Bellhaven to kneel. The unrung shall not stand in the bell's hearing.",
+                    "Go down with the initiates and cleanse them. Burn the shrines they keep to the old saints, and the houses round them. Leave the wells. Whoever kneels at the last may be spared, and brought up to the courts to learn the Rule.",
+                ],
+            },
+            {
+                heading: "At the foot",
+                hand: "In another hand, the ink pressed so hard it has torn the page.",
+                text: [
+                    "The Black Choir shall see it done. Any who lift a hand against a brother of the Bell are unrung, every one, and are to be brought up to Bellhaven in chains, or cleansed where they stand.",
+                ],
+                signed: "Osric Vane, Prior, the Voice of the Bell",
+            },
+        ]),
+    }),
+    // (The Prior's own book, given as he falls at the top of the Keep of Bellhaven, by the Great
+    // Bell: core/rare.js THREADS bellhaven; what the old Order sealed in the bell's silver)
+    bell: Object.freeze({
+        title: "The Prior's book",
+        by: "Osric Vane, Prior of the Order of the Bell",
+        found: "Beside the Great Bell, in the belfry at the top of the Keep of Bellhaven",
+        entries: Object.freeze([
+            {
+                heading: "The first night",
+                text: [
+                    "I found the Rule of the Order in the ashes of the chapter-house at Wenford, half of it burned. I read what was left by the fire of its own beams, and in the spring I came up to Bellhaven alone. Not a soul in it, not a bird. Snow on the altar.",
+                    "The Great Bell hung in the belfry, its clapper bound to the frame with silver chain, every link stamped with a little bell. Why would anyone chain a bell? I cut the chain, and I rang it, three times, for the Six. And it answered me.",
+                ],
+            },
+            {
+                heading: "Midsummer",
+                text: [
+                    "It speaks when it is still now. Not in words at first: a warmth, a certainty, like a hand on the back of my neck. Then in words. It says the Six are weary of a world grown unclean. It says the unrung must be put out as a fire is put out, before it spreads.",
+                    "The Black Choir hear it too, the brothers who sleep in the belfry beneath it. They no longer sleep. They tell me it speaks to each of them in the voice he most loved: a mother, a dead wife, a master long buried. To me it speaks with the voice of the Six. Of course it does.",
+                ],
+            },
+            {
+                heading: "From the Rule of the Order",
+                hand: "Copied in an older hand, on a page sewn into the back of the book, its edges burned.",
+                text: [
+                    "What we drew up out of the thin place under Bellhaven we could not bind in chain, for it had no body, only a voice. So we cast it into the silver of the Great Bell as the bell was made, and hung the bell over our own heads, that we might keep it, and it keep silent.",
+                    "Let no brother ring it. Let the clapper stay chained. If it is rung it will speak, and it will speak with whatever voice its hearer most wishes to hear, and it will ask only to be fed.",
+                ],
+            },
+            {
+                heading: "The last page",
+                hand: "In the Prior's hand again, the letters ragged.",
+                text: [
+                    "I read that page my first winter here, and I tore it out, and I could not burn it. I have sewn it back in. It speaks with the voice of the Six. It must. Because if it does not, then I have fed it a valley, and it is still hungry.",
+                ],
+                signed: "O. V.",
+            },
+        ]),
+    }),
 });
 
 /** How near a writing's lectern (squares, from its edge) a player must stand to read it. */

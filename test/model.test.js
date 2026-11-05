@@ -15,6 +15,7 @@ const { ASSETS } = await import("../client/js/app/assets.js");
 const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.js");
 const { BEHEMOTH } = await import("../client/js/core/invasions.js");
 const { RARE_CARDS } = await import("../client/js/core/rare.js");
+const { SCENERY } = await import("../client/js/core/scenery.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -57,8 +58,11 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // (Or a rare card's world boss calls it to it as it's worn down, its model wanted with
             // its own: the Orc King's champions)
             const rallied = Object.entries(CREATURES).some(([boss, one]) => one.worldBoss && one.rally?.some(({ call }) => call.kind === id) && Object.values(RARE_CARDS).some(({ shape }) => shape?.creature === boss));
+            // (Or it rides a scene's patrols, its model wanted near the scene as a lair's is:
+            // Bellhaven's riders, game.js #modelLairs)
+            const patrolling = Object.values(SCENERY).some(({ patrols }) => patrols?.riders.flat().includes(id));
 
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls`);
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied || patrolling, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls, or rides a scene's patrols`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
@@ -76,7 +80,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, mouths = [], together = [], borrows, detail = 3 } of Object.values(MODELS)) {
+        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, mouths = [], together = [], borrows, detail = 3, parts: worn = [], choose = [] } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
@@ -100,6 +104,12 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
 
             for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {}), ...mouths.flatMap((other) => Object.values(other)), ...Object.values(carry).map((held) => held.bone)]) {
                 assert.ok(nodes.has(bone), bone);
+            }
+
+            // (The parts it wears, of a model whose parts are kept apart (the Order of the Bell's): each
+            // a part of its model, a mesh by that name, as partOf finds it)
+            for (const part of [...worn, ...choose.flat()]) {
+                assert.ok(gltf.nodes.some((node) => node.mesh !== undefined && PropertyBinding.sanitizeNodeName(node.name) === part), `${asset}: ${part}`);
             }
 
             // (Its other heads breathing with it only in a clip it breathes in, from a mouth of its own:

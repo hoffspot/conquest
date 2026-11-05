@@ -351,7 +351,7 @@ describe("rare encounters (rare.js)", () => {
         assert.equal(last.next, null);
         assert.equal(legends.threads.sampleTrail.done, true);
         assert.equal(legends.advance("sampleTrail"), null, "done");
-        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock", "fight", "enter"]);
+        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock", "fight", "enter", "slay"]);
         assert.ok(THREADS.sampleTrail.steps.every((step) => STEPS.includes(step.kind) && (!step.change || CHANGES.includes(step.change.kind))));
     });
 

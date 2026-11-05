@@ -124,8 +124,10 @@ describe("magic (spells.js)", () => {
     it("makes an attack spell of each tier a match for a creature of its tier: about three casts", () => {
         const random = createRandom(3);
 
-        // (The creatures of the wild, their hit points on average, at a tier)
-        const roster = Object.values(CREATURES).filter(({ tiers }) => tiers[0] < 9);
+        // (The creatures of the wild, their hit points on average, at a tier: those the wilds put
+        // out on some land, not those kept to one place (`biomes: []`: a dungeon's, a lair's
+        // master, Bellhaven's Order), stronger for being few)
+        const roster = Object.values(CREATURES).filter(({ tiers, biomes }) => tiers[0] < 9 && biomes?.length !== 0);
         const hp = (tier) => (roster.reduce((sum, { hp: each }) => sum + each, 0) / roster.length) * tierPower(tier);
 
         for (const school of ["fire", "earth", "air", "water"]) {

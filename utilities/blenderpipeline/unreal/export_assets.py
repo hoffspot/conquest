@@ -465,6 +465,57 @@ def glb_faces(path):
     return faces
 
 
+def glb_skins(path):
+    """Each skinned material's vertices in a .glb, by its name: [how many, how many are weighted to
+    no bone (a section simulated as cloth comes out so: it wouldn't move with the bones), how many
+    have weights that don't add up to one (they'd tear as it moves)], or None for a file it can't
+    read."""
+    try:
+        with open(path, "rb") as file:
+            data = file.read()
+
+        length = struct.unpack_from("<I", data, 12)[0]
+        document = json.loads(data[20: 20 + length])
+        size, kind = struct.unpack_from("<II", data, 20 + length) if len(data) >= 28 + length else (0, 0)
+        blob = data[28 + length: 28 + length + size] if kind == 0x004E4942 else b""
+    except Exception:
+        return None
+
+    accessors, views, materials, skins = document.get("accessors", []), document.get("bufferViews", []), document.get("materials", []), {}
+    # (Each kind of number a weight may be: its code, and what it's out of, normalized)
+    kinds = {5121: ("B", 255), 5123: ("H", 65535), 5126: ("f", 1)}
+
+    def totals(index):
+        accessor = accessors[index]
+        view = views[accessor["bufferView"]]
+        code, top = kinds[accessor["componentType"]]
+        stride = view.get("byteStride") or 4 * struct.calcsize("<" + code)
+        start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+
+        return [sum(struct.unpack_from("<4" + code, blob, start + k * stride)) / top for k in range(accessor["count"])]
+
+    for mesh in document.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            sets = sorted(key for key in primitive.get("attributes", {}) if key.startswith("WEIGHTS_"))
+
+            if not sets:
+                continue
+
+            try:
+                each = [sum(weights) for weights in zip(*(totals(primitive["attributes"][key]) for key in sets))]
+            except Exception:
+                return None
+
+            material = primitive.get("material")
+            name = materials[material].get("name", "") if material is not None and material < len(materials) else ""
+            had = skins.setdefault(name, [0, 0, 0])
+            had[0] += len(each)
+            had[1] += sum(1 for total in each if total < 0.01)
+            had[2] += sum(1 for total in each if total >= 0.01 and abs(total - 1) > 0.02)
+
+    return skins
+
+
 def mesh_library():
     """What reads a skeletal mesh's LODs and sections: the editor's subsystem (5.1 on), or its library before."""
     try:
@@ -519,8 +570,11 @@ def slot_faces(slots, faces):
 def look_over(mesh, entry, out, base):
     """What of a mesh came through its FBX: each slot's faces (`materials[].faces`); its LOD 0
     sections (`sections`) and clothing; the slots a section uses that have none (`lost`), and, for
-    those, a glTF export of it beside the FBX (`glb`), its faces by material (`glbFaces`) and which
-    lost slots it has (`found`). The warnings to give: one for each slot lost."""
+    those, a glTF export of it beside the FBX (`glb`), its faces by material (`glbFaces`), which
+    lost slots it has (`found`) and how its skin weights came out, by material (`glbSkins`: its
+    vertices, those weighted to no bone, those whose weights don't add up to one). The warnings to
+    give: one for each slot lost (one found in the glTF, but without its weights, said so), and one
+    for each material whose weights are broken there."""
     slots = entry["materials"]
     read = fbx_faces(os.path.join(out, base + ".fbx"))
     faces = slot_faces(slots, read)
@@ -574,13 +628,21 @@ def look_over(mesh, entry, out, base):
             fbx[material_name(slot["material"])] = fbx.get(material_name(slot["material"]), 0) + slot.get("faces", 0)
 
         entry["found"] = [part["slot"] for part in lost if had.get(material_name(part["material"]), 0) > fbx.get(material_name(part["material"]), 0)]
+        skins = glb_skins(glb)
+
+        if skins:
+            entry["glbSkins"] = {material: {"vertices": vertices, "unweighted": unweighted, "broken": broken} for material, (vertices, unweighted, broken) in skins.items()}
 
     warnings = []
 
     for part in lost:
         said = f"{name}: the slot '{part['slot']}' ({material_name(part['material'])}) has no faces in its FBX: {WHY[part['why']]}."
 
-        if part["slot"] in entry.get("found", ()):
+        skin = entry.get("glbSkins", {}).get(material_name(part["material"]))
+
+        if part["slot"] in entry.get("found", ()) and skin and skin["unweighted"] * 2 >= skin["vertices"]:
+            said += f" It's in {name}.glb, exported beside it, but without its skin weights there (as Unreal keeps a cloth section's): it wouldn't move with the bones. To have it whole, {FIX[part['why']]}."
+        elif part["slot"] in entry.get("found", ()):
             said += f" It's in {name}.glb, exported beside it."
         else:
             said += f" To have it, {FIX[part['why']]}."
@@ -593,6 +655,11 @@ def look_over(mesh, entry, out, base):
                 said += " (Its glTF export failed too.)"
 
         warnings.append(said)
+
+    # (Weights that don't add up to one, besides: what Unreal's glTF export does to some meshes)
+    for material, skin in entry.get("glbSkins", {}).items():
+        if skin["broken"] > max(2, skin["vertices"] // 100):
+            warnings.append(f"{name}.glb: {skin['broken']} of {skin['vertices']} of {material}'s vertices have skin weights that don't add up to one, which tear as it moves. Build those parts from the FBX (its weights are whole), or take the mesh's clothing off its sections and export again.")
 
     return warnings
 
