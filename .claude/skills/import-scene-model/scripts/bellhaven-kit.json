@@ -1,0 +1,9 @@
+[
+    ["column", "SM_Gat_WCArchElemCollumn7_Full", false],
+    ["pilaster", "SM_Gat_WCArchElemBeamVertical_4", true],
+    ["cornice", "SM_Det_WCArchElemCornice_1", true],
+    ["window", "SM_Gat_WCArchElemWindow2_Full", true],
+    ["bell", "SM_Det_WCBell_1", false],
+    ["wall", "SM_Surf_Plane_001", true],
+    ["floor", "SM_Floor_Plane_001", false]
+]

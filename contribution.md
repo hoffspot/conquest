@@ -334,7 +334,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
 - A scene's rocks that touch nothing are set down on what's under them, or left out (`seat`, the
   README's *Rocks that touch nothing*), after it's simplified: no rock hangs in the air in the
   game. `lib/seat.js` has unit tests of its own (`test/seat.test.js`), which need no Blender. The
-  skill `.claude/skills/set-scene-into-world` says how a scene's set into the world and checked.
+  skill `.claude/skills/set-scene-into-world` says how a scene's set into the world and checked;
+  `.claude/skills/import-scene-model`, how a bought scene comes in from the pack to a place of its
+  own (its build, its walk, its map, its insides a dungeon drawn with its own pieces), with what the
+  White Castle taught and the scripts that measure and picture it.
 
 ## 3. Making a change
 
@@ -465,8 +468,8 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    contributor's. Bringing in a model the owner bought, from the Drive link they share to the
    creature in the game, is written down step by step in
    `.claude/skills/import-licensed-model/SKILL.md`, with the scripts that picture and measure its
-   clips. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
-   script.
+   clips; a scene or a building the owner bought, in `.claude/skills/import-scene-model/SKILL.md`.
+   Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js` script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
    a budget, `BOOT_BUDGET` in `test/manifest.test.js` (15 MB), and raising it is a choice to make
    in review. A model the game can start without goes in `client/models/assets.json`: each with
