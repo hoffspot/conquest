@@ -835,6 +835,16 @@ What's built so far:
     they've left the castle's map.
   - Its insides drawn with its castle's own parts and stone (`world/keepkit.js`, docs/DUNGEONS.md
     *Bellhaven's keep*), their kit fetched while its court's crossed (`app/game.js` `#showMap`).
+  - Its floors stand where the keep does, high over the land (`core/scenery.js` `keepOutlook`):
+    each floor's way in at the keep's doors, the floor going on north into the keep as its plan
+    does, turned as the castle stands in the land; the first floor at the doors' 81.4 m, the belfry
+    at the keep's `top` (168 m, over its roof and under its spire, as high as the top of the cliff
+    behind it that its back's built into), the two between evenly between (`keepFloor`), a long
+    stair's climb apart.
+    From their balconies and past their walls' open air, the land's seen from there (docs/DUNGEONS.md
+    *Bellhaven's keep*): the sky, the far land drawn whole round it, the castle round the keep and
+    the horizon, the keep's own walls left out of it over the floor it's seen from (its `shell`:
+    the scene's -34 to 34 m across, -216 to -134 m in; `world/landmarkdress.js` `hollowed`).
 - **Set into the world** (`core/terrain/scenes.js`), one a world, as the volcano's crater is cut
   into it.
   - Where: laid out last in the world's plan (`worldplan/settle.js` `BELLHAVEN`), on the flattest

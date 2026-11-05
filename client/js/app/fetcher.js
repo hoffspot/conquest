@@ -68,6 +68,26 @@ const PARKED = 60000;
 const TRIES = 3;
 const RETRY = 2000;
 
+// How many parts, and of the browser's timings, are kept waiting to be matched with each other
+// (#timed): a few, one or the other usually coming first by a moment; and how soon after a part's
+// asked for its request's begun, as the browser times it (ms: at once, in the same moment)
+const TIMINGS_KEPT = 8;
+const TIMING_BEGUN = 250;
+
+// The browser's own timings of what the page fetches (Resource Timing), each heard as it comes,
+// whether or not the page's list of them is full; or false if it hasn't them
+function browserTimings(listen) {
+    const Observer = globalThis.PerformanceObserver;
+
+    if (!Observer?.supportedEntryTypes?.includes("resource")) {
+        return false;
+    }
+
+    new Observer((list) => list.getEntries().forEach(listen)).observe({ type: "resource" });
+
+    return true;
+}
+
 // Where the service worker keeps files by hash (sw.js): the catalog's, and the manifest's; and
 // the parts of those being downloaded, each by its file's address and where it starts in it
 // (`&part=` that many bytes in)
@@ -191,6 +211,11 @@ export class Controller {
  *     can't (a page not on https or localhost), when files are handed over unchecked, and not kept.
  * @param {object} [options.connection] - navigator.connection, where the browser has it.
  * @param {Function} [options.tell] - Tells the service worker something (sw.js "used").
+ * @param {Function} [options.timings] - Hears the browser's timing of each request the page
+ *     makes (listen(entry): Resource Timing's), and says whether it can: how fast each part came is
+ *     taken from there, from asking to its last byte as the network had it, not from when this
+ *     page got round to it (late when it's busy drawing or reading, which made the link seem slow
+ *     and paced downloads down to it).
  */
 export class Fetcher {
     constructor({
@@ -202,9 +227,15 @@ export class Fetcher {
         digest = globalThis.crypto?.subtle ? (bytes) => crypto.subtle.digest("SHA-256", bytes) : null,
         connection = globalThis.navigator?.connection,
         tell = (message) => globalThis.navigator?.serviceWorker?.controller?.postMessage(message),
+        timings = browserTimings,
     } = {}) {
         Object.assign(this, { base, fetch, caches, now, sleep, digest, connection, tell });
         this.controller = new Controller();
+
+        // (Parts come and the browser's timings of them, each waiting for the other: #timed)
+        this.parts = [];
+        this.timings = [];
+        this.timed = Boolean(timings((timing) => this.#timed(null, timing)));
 
         /** Asks for a round trip to be measured, now and then while downloading together (heard back by measure). */
         this.probe = () => {};
@@ -624,7 +655,12 @@ export class Fetcher {
                 entry.parts.push(bytes);
                 entry.received += bytes.length;
                 this.fetched += bytes.length;
-                this.controller.delivered({ bytes: bytes.length, ms: this.now() - asked });
+
+                if (this.timed) {
+                    this.#timed({ url: entry.url, bytes: bytes.length, asked }, null);
+                } else {
+                    this.controller.delivered({ bytes: bytes.length, ms: this.now() - asked });
+                }
                 await this.#store(entry, from, bytes);
             } else if (response.ok) {
                 await this.#whole(entry, response);
@@ -643,6 +679,31 @@ export class Fetcher {
                 entry.retryAt = this.now() + RETRY * 2 ** (entry.tries - 1);
             }
         }
+    }
+
+    // A part come (`part`: its address, bytes and when it was asked for), or the browser's timing
+    // of a request (`timing`): each matched with the other, whichever's first (a part's timing is
+    // of its address, begun as it was asked for, and as big, if the browser says), and how fast the
+    // part came, as the network had it, told to the controller
+    #timed(part, timing) {
+        const fits = (each, { name, startTime, encodedBodySize }) => name === each.url && startTime >= each.asked - 1 && startTime <= each.asked + TIMING_BEGUN && (!encodedBodySize || encodedBodySize === each.bytes);
+        const [waiting, kept] = part ? [this.timings, this.parts] : [this.parts, this.timings];
+        const k = part ? waiting.findIndex((each) => fits(part, each)) : waiting.findIndex((each) => fits(each, timing));
+
+        if (k < 0) {
+            // (Its other half to come: kept a while, but only a timing of what this fetches)
+            if (part || this.entries.has(timing.name)) {
+                kept.push(part ?? timing);
+                kept.splice(0, Math.max(0, kept.length - TIMINGS_KEPT));
+            }
+
+            return;
+        }
+
+        const [other] = waiting.splice(k, 1);
+        const [{ bytes }, { startTime, responseEnd }] = part ? [part, other] : [other, timing];
+
+        this.controller.delivered({ bytes, ms: responseEnd - startTime });
     }
 
     // The whole file at once: read slowly, keeping to the rate, and not at all at quiet times

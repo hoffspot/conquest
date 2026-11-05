@@ -78,11 +78,11 @@ export class FarLand {
 
     /**
      * The player's at (x, z) (metres): the levels moved on round them where they've moved far
-     * enough, and the hole round them with them.
+     * enough, and the hole round them with them (`hole`: how wide, metres; none where no chunks
+     * are drawn under where it's seen from, a floor high in Bellhaven's keep).
      */
-    update(x, z) {
-        this.hole.value.x = x;
-        this.hole.value.y = z;
+    update(x, z, { hole = FAR.hole } = {}) {
+        this.hole.value.set(x, z, hole);
 
         for (const each of this.levels) {
             const middle = middleOf(each.level, x, z);

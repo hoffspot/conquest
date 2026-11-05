@@ -538,6 +538,30 @@ dungeon's way in (`wild: false`), and there's one a world.
   castle's outside under the torches. All of it cut away with the rock while the camera's over the
   roof, its columns drawn solid where they're cut. The kit's fetched when a player comes to the keep's doors. Without the licensed models,
   none of it: the pale stone it's drawn in meanwhile, its own pillars.
+- **High over the land, in the open air** (`core/dungeons/air.js`, the theme's `air`): every floor
+  stands in it, as a tower's floors do. Its rock no further than 3 squares from its floor (counted
+  the eight ways round) is kept as its walls, and all beyond them is open air (`_` in its plan:
+  not stood on, seen across). Up to two of its biggest rooms (60 squares or more, never the way
+  in) each have a balcony, dug out of a run of its wall that's 3 deep with the air straight beyond
+  it, facing south, east or west (`facing`), never north into the cliff the keep's back is built
+  into: 4 to 8 squares along, a square in from the room's corners, its ends against rock or air,
+  not into another room or way. Its outer row is a parapet (`=`, a metre high, blocking but seen
+  over), the rest floor walked out onto from the room, and the torches on that run of wall come
+  down with it. Drawn (`world/interiors3d.js`): the floor laid and the vault raised only over what
+  isn't air (`floorAround`, `dressedWalls`), the walls' outer faces and the parapet in the keep's
+  stone (`PARAPET`). On the minimap the air's a pale sky blue, the parapet stone.
+- **The land seen from it** (`world/view.js` `outlook`, `app/game.js` `#outlookOf`): past its
+  balconies and its walls' open air, the world drawn first as it is out of doors, from where the
+  floor stands over the land (`core/scenery.js` `keepOutlook`: its way in at the keep's doors, the
+  floor going on into the keep, turned as its castle is; its first floor at its doors, its belfry up
+  over its roof, under its spire, 168 m up in the castle's own metres, as high as the top of the
+  cliff its back's built into, and the two between evenly between them: `keepFloor`).
+  The sky and the sun as the hour has them, the far land drawn whole round it (no hole for the
+  near world's chunks, none being drawn: `far/far.js` `update`'s `hole`), what's built on it and
+  the horizon, and the castle round the keep, its court, towers and walls, all in the open air's
+  haze; the keep's own walls left out of it over the floor it's seen from (`SCENERY.bellhaven.keep`
+  `shell`, `world/landmarkdress.js` `hollowed`), so its castle and the land show past its parapets.
+  The floor's drawn over it, as indoors.
 - **Its things** (`world/dungeondressing.js` `CLUTTER.keep`): shields and stools in its halls,
   barrels and crates in its stores, lanterns and candles in its library, bones and coffins in its
   undercroft and tombs.
@@ -1228,3 +1252,12 @@ code is here.
   - a new theme and layout can be added.
 - **`e2e/dungeon-map.spec.js`**: the dungeon map draws a dungeon for a seed, shows its bottom level's
   boss, and makes another for another theme or seed.
+- **`test/keep.test.js`**, Bellhaven's keep: four floors going up, each its own, its wardens
+  barring the stairs up, its master before the hoard at the top and the stair down out beyond
+  him; never a wild dungeon's; and each floor stood over the land where the keep is, turned as
+  its castle is, within the keep's walls, a storey over the one under. **`test/air.test.js`**: its
+  floors in the open air, their walls three squares thick, the air never stood on but seen across;
+  a balcony or two dug out of a big room's wall to it, its parapet along its edge, walked out onto
+  from the room, its torches taken down; every room reached as it was; no other theme's floors in
+  the air. **`test/keepkit.test.js`**: its castle's pieces set about each floor as its plan has
+  them, none out over the air.

@@ -13,6 +13,7 @@
 // dungeon cleared and made again is the next generation.
 
 import { TIERS } from "../creatures.js";
+import { airy, inTheAir } from "./air.js";
 import { linksOf, neighbours, roomPath, roomsOf } from "./graph.js";
 import { LAYOUTS } from "./layouts.js";
 import { fillLevel } from "./place.js";
@@ -25,7 +26,7 @@ export { dungeonName };
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
  * seed as this one makes it, not mixed).
  */
-export const DUNGEON_VERSION = 15;
+export const DUNGEON_VERSION = 16;
 
 /** How likely a dungeon is to be one, two or three levels deep. */
 export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
@@ -157,7 +158,7 @@ function finish(dug, plan) {
     const roles = new Map(filled.packs.map(({ room, role }) => [room, role]));
     const roleOf = (id) => (id === dug.entryRoom ? "entry" : id === filled.goal ? (plan.index === plan.levels - 1 ? "arena" : "stairs") : (roles.get(id) ?? "quiet"));
 
-    return {
+    const made = {
         index: plan.index,
         width: grid.width,
         height: grid.height,
@@ -176,6 +177,9 @@ function finish(dug, plan) {
         // (A realm's level: its realm, and how it's drawn and sounds)
         ...(plan.theme.realm ? { realm: plan.theme.realm, look: plan.theme.look, style: plan.theme.style, ground: plan.theme.ground, sound: plan.theme.sound } : {}),
     };
+
+    // (A level high in a tower: open air round its walls, and its balconies: air.js)
+    return plan.theme.air ? inTheAir(made, plan.theme.air, plan.random) : made;
 }
 
 /**
@@ -221,7 +225,7 @@ function farEnough(level) {
     return steps[goal.centre[1] * level.width + goal.centre[0]] >= most * CHECKS.far;
 }
 
-// Steps (four ways) from a square to every square of a level's plan rows that isn't rock
+// Steps (four ways) from a square to every square of a level's plan rows that isn't rock or air
 function walkFrom(level, [x, y]) {
     const { width, height, rows } = level;
     const far = new Int32Array(width * height).fill(-1);
@@ -236,7 +240,7 @@ function walkFrom(level, [x, y]) {
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const [nx, ny] = [ax + dx, ay + dy];
 
-            if (nx >= 0 && ny >= 0 && nx < width && ny < height && rows[ny][nx] !== "#" && far[ny * width + nx] < 0) {
+            if (nx >= 0 && ny >= 0 && nx < width && ny < height && rows[ny][nx] !== "#" && !airy(rows[ny][nx]) && far[ny * width + nx] < 0) {
                 far[ny * width + nx] = far[k] + 1;
                 queue.push(ny * width + nx);
             }

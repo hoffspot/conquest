@@ -19,10 +19,13 @@ function file(path, bytes) {
 }
 
 // The world the downloader runs in: a clock that moves only when it waits or a request takes time
-// (`rtt` ms, then `speed` bytes/s), a server with `files` (by path; serving parts unless `ranges`
-// is false), caches, and every request it was sent ({ path, from, to, at })
-function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connection, onRequest = () => {}, tell = () => {} } = {}) {
+// (`rtt` ms, then `speed` bytes/s, then `late` ms more before the page hears of it, busy), a server
+// with `files` (by path; serving parts unless `ranges` is false), caches, every request it was sent
+// ({ path, from, to, at }), and, if `timed`, the browser's timing of each part (Resource Timing's:
+// heard by turns before the part comes and after)
+function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 0, timed = false, connection, onRequest = () => {}, tell = () => {} } = {}) {
     const clock = { now: 0 };
+    let hear = null;
     const requests = [];
     const stores = new Map();
     const served = new Map(files.map((each) => [`/conquest/${each.path}`, each]));
@@ -69,6 +72,16 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
             Object.assign(request, { from, to });
             clock.now += rtt + ((to - from + 1) / speed) * 1000;
 
+            const timing = { name: url, startTime: request.at, responseEnd: clock.now, encodedBodySize: to - from + 1 };
+
+            if (hear && requests.length % 2) {
+                hear(timing);
+            } else if (hear) {
+                setImmediate(() => hear(timing));
+            }
+
+            clock.now += late;
+
             return new Response(found.data.slice(from, to + 1), { status: 206, headers: { "Content-Range": `bytes ${from}-${to}/${found.bytes}` } });
         }
 
@@ -105,6 +118,11 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
         digest: (bytes) => crypto.subtle.digest("SHA-256", bytes),
         connection,
         tell,
+        timings: (listen) => {
+            hear = timed ? listen : null;
+
+            return timed;
+        },
     });
     const fetcher = another();
 
@@ -252,6 +270,27 @@ describe("the downloader", () => {
         await fetcher.want(dragon);
         assert.deepEqual(await bytesOf(await fetcher.want(dragon)), dragon.data);
         assert.equal(requests.length, 1);
+    });
+
+    it("takes how fast each part came from the browser's timing of it, not from when a busy page heard of it", async () => {
+        const dragon = file("models/dragon.glb", 2048 * KB);
+
+        // (The page busy drawing: each part heard of 2 s after it's all here, 300 ms after it's
+        // asked for; alone, the link seems an eighth as fast, and the rate's 80% of that)
+        const busy = world({ files: [dragon], late: 2000 });
+
+        await busy.fetcher.want(dragon);
+        assert.ok(busy.fetcher.controller.throughput < 120 * KB, `${Math.round(busy.fetcher.controller.throughput / KB)} KB/s as heard`);
+
+        // (The browser's own timings: the link as fast as it is, the rate kept to it)
+        const timed = world({ files: [dragon], late: 2000, timed: true });
+
+        await timed.fetcher.want(dragon);
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.ok(timed.fetcher.controller.throughput > 800 * KB, `${Math.round(timed.fetcher.controller.throughput / KB)} KB/s as timed`);
+        assert.ok(timed.fetcher.controller.rate > 640 * KB, `${Math.round(timed.fetcher.controller.rate / KB)} KB/s`);
+        // (Every part matched with its timing, whichever came first)
+        assert.deepEqual([timed.fetcher.parts.length, timed.fetcher.timings.length], [0, 0]);
     });
 
     it("playing together, keeps to the rate: small parts, spaced out", async () => {

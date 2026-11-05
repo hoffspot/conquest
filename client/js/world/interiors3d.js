@@ -3773,6 +3773,31 @@ const SHORING = Object.freeze({ widest: 6, every: 4, tall: 2.5 });
 function floorAround(blocks, map, holes) {
     const [w, h] = [map.width + 1, map.height + 1];
 
+    // (A floor high in a tower, open air round it, Bellhaven's keep's: laid only where it's not the
+    // air, a row of squares at a time, round the holes)
+    if (map.marks._) {
+        const holed = (x, y) => holes.some((hole) => x >= hole.x && y >= hole.y && x < hole.x + hole.w && y < hole.y + hole.h);
+
+        for (let y = 0; y < map.height; y++) {
+            for (let x = 0; x < map.width; x++) {
+                if (map.plan[y][x] === "_" || holed(x, y)) {
+                    continue;
+                }
+
+                let end = x;
+
+                while (end + 1 < map.width && map.plan[y][end + 1] !== "_" && !holed(end + 1, y)) {
+                    end++;
+                }
+
+                blocks.box(x, -0.1, y, end + 1, 0, y + 1);
+                x = end;
+            }
+        }
+
+        return;
+    }
+
     if (!holes.length) {
         blocks.box(-1, -0.1, -1, w, 0, h);
 
@@ -3832,6 +3857,9 @@ async function kitDressed(object) {
     });
 }
 
+// How a balcony's parapet stands (metres): `high`, its coping `coping` thick on it and `proud` of it
+const PARAPET = Object.freeze({ high: 1.0, coping: 0.15, proud: 0.06 });
+
 // A level's walls of dressed stone (`blocks`: dungeons3d.js's, metres; `tall` metres high): each
 // run along a row of its plan's rock squares by open ground as one, a plinth of darker stone along
 // its foot and a cornice under the vault; and the vault over all
@@ -3859,7 +3887,33 @@ function dressedWalls(blocks, map, { tall }) {
         }
     }
 
-    blocks.box(-1, tall, -1, map.width + 1, tall + 0.4, map.height + 1, 0.7);
+    // (The vault over all; over a floor in the open air, Bellhaven's keep's, over all but the air and
+    // its balconies, open to the sky: a row of squares at a time)
+    if (!map.marks._) {
+        blocks.box(-1, tall, -1, map.width + 1, tall + 0.4, map.height + 1, 0.7);
+
+        return;
+    }
+
+    const balconies = map.dungeon?.balconies ?? [];
+    const open = (x, y) => map.plan[y][x] === "_" || balconies.some((one) => x >= one.x && y >= one.y && x < one.x + one.w && y < one.y + one.h);
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (open(x, y)) {
+                continue;
+            }
+
+            let end = x;
+
+            while (end + 1 < map.width && !open(end + 1, y)) {
+                end++;
+            }
+
+            blocks.box(x, tall, y, end + 1, tall + 0.4, y + 1, 0.7);
+            x = end;
+        }
+    }
 }
 
 // A flight of stairs dug into a level's rock (its plan's piece) from the landing before it: down
@@ -4723,6 +4777,15 @@ function dungeon(map) {
             case "stalagmite":
                 stalagmite(solid, x, z, rough, stuff, roof);
                 break;
+            case "parapet":
+                // (A balcony's parapet, dressed stone waist high, its coping a little proud of it:
+                // Bellhaven's keep's, over the air: core/dungeons/air.js)
+                if (look.walls) {
+                    walls.box(piece.x, 0, piece.y, piece.x + piece.w, PARAPET.high, piece.y + piece.h, 0.8 + 0.1 * rough);
+                    walls.box(piece.x - PARAPET.proud, PARAPET.high, piece.y - PARAPET.proud, piece.x + piece.w + PARAPET.proud, PARAPET.high + PARAPET.coping, piece.y + piece.h + PARAPET.proud, 0.65);
+                }
+
+                break;
             case "bones":
                 props.push(...bonesAt(x / M, z / M, spot));
                 break;
@@ -5032,9 +5095,9 @@ function dungeon(map) {
 
     const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls", { wet: Boolean(look.wet) }), floor.mesh(look.underfoot, look.ground ?? null, "floor", { wet: Boolean(look.wet) }), timber.mesh("timber", 0x8a7a66, "timbers"), pillars.mesh(look.picture, look.tint ?? null, "pillars"), look.sigils ? sigilsDrawn(map) : null, pools.length ? poolsDrawn(pools, look) : null, lakes?.regions.length ? lakesDrawn(lakes) : null, basins.length ? basinsDrawn(basins, mouths) : null, bloodDrawn(at("blood"))].filter(Boolean);
 
-    // (What's set about a piece and come out over the rock left out: a lantern by a bedroll in a
-    // corner)
-    const placed = props.filter(({ x, z }) => (map.plan[Math.floor(z)]?.[Math.floor(x)] ?? "#") !== "#");
+    // (What's set about a piece and come out over the rock, or the open air, left out: a lantern by a
+    // bedroll in a corner)
+    const placed = props.filter(({ x, z }) => !["#", "_"].includes(map.plan[Math.floor(z)]?.[Math.floor(x)] ?? "#"));
 
     // (The scanned models wanted, read from now on: buildingInterior furnishes the level with them)
     for (const name of new Set(placed.map(({ model }) => model))) {

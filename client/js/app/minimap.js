@@ -85,6 +85,9 @@ const INSIDE = {
     throne: [124, 84, 46],
     "war-table": [150, 112, 64],
     candles: [70, 66, 62],
+    // (The open air round a floor high in a tower, and a balcony's parapet: Bellhaven's keep's)
+    air: [128, 160, 196],
+    parapet: [190, 184, 170],
     // (A hell's lava, blood and heart)
     lava: [226, 92, 28],
     blood: [96, 14, 18],

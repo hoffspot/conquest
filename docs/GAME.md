@@ -6483,7 +6483,9 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   inside sample on the dungeon floor they're on: docs/WILDS.md *Rare encounters*, *Inside*);
 - the downloader (app/fetcher.js, which fetches the models the game downloads only as they're
   wanted, in the background): what it's fetching and how far it's got, its rate and what the link
-  has carried, alone or together, the queueing delay it sees (the round trip over the least lately),
+  has carried (each part as the browser timed it, Resource Timing's, not as the page heard of it:
+  a page busy drawing heard late, the link seemed slower than it was, and downloads were paced
+  down to it), alone or together, the queueing delay it sees (the round trip over the least lately),
   how many files are queued, done and failed, and why it's holding off (the game starting, a player
   joining, the link coming back) or fetching only what's needed (saving data).
 

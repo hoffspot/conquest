@@ -13,7 +13,9 @@
 // metres. What's near fades out before that (fog.js), but the ground, which goes on into the far
 // land; and the haze thickens the further off, to all but gone at the far land's edge. Indoors
 // it's drawn once, by the near camera seeing only to just past where the fog's thickest
-// (INDOORS.clip).
+// (INDOORS.clip): but on a floor high in a tower, open air round it (its `outlook`, Bellhaven's
+// keep's), what's far drawn first as outdoors, from where the floor stands over the land, the
+// floor over it.
 
 import * as THREE from "three";
 import { daylight } from "../core/daytime.js";
@@ -26,6 +28,7 @@ import { farHaze, GRADE, MIST } from "./fog.js";
 import { GpuMemory } from "./gpumemory.js";
 import { GpuTimer } from "./gputimer.js";
 import { FAR_FIELDS } from "./ground.js";
+import { hollowed } from "./landmarkdress.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
@@ -463,6 +466,13 @@ const _eye = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _size = new THREE.Vector2();
 const _viewProjection = new THREE.Matrix4();
+// (Where the outlook stands its floor in the world, the far's camera from it, and the fog's colour
+// kept while the far's drawn from it: #draw)
+const _outlook = new THREE.Matrix4();
+const _pivot = new THREE.Matrix4();
+const _seen = new THREE.Matrix4();
+const _scale = new THREE.Vector3();
+const _fogColour = new THREE.Color();
 const _sphere = new THREE.Sphere();
 const _centre = new THREE.Vector3();
 const _down = new THREE.Vector3();
@@ -599,6 +609,9 @@ export class View {
         // (Their shadow maps, and the sun's, drawn with only what they need: shadowpasses.js)
         watchShadows({ sun: this.sun, lamps: this.lamps.map(({ light }) => light) });
         this.room = null;
+        // (A floor high in a tower looked out from, Bellhaven's keep's: how far its map's metres are
+        // from the world's, [dx, dy, dz], and where it stands, [x, z]; setIndoors)
+        this.outlook = null;
         // (How far the greatest spells have changed the sky, and to what: setOmen)
         this.omen = 0;
         this.omenTint = "fire";
@@ -855,6 +868,18 @@ export class View {
             this.sun.intensity = this.windowLight ? INDOORS.sun[1] * (this.day ? daylight(this.day.time) : 1) : 0;
             this.renderer.toneMappingExposure = EXPOSURE;
             this.sun.shadow.intensity = 1;
+
+            // (Looking out from a floor high in a tower: the sky beyond it the time of day's)
+            if (this.outlook && this.day) {
+                const sky = (this.daySky = skyAt(this.day.time, this.day.phase, this.landLook ?? PLAIN, this.daySky));
+
+                this.far.scene.background.setRGB(sky.horizon[0], sky.horizon[1], sky.horizon[2], THREE.SRGBColorSpace);
+                this.sky.setTime(sky);
+                this.sky.uniforms.zenith.value.set(sky.zenith[0], sky.zenith[1], sky.zenith[2]);
+                this.sky.uniforms.horizon.value.set(sky.horizon[0], sky.horizon[1], sky.horizon[2]);
+                this.sky.setSun(sky.sun);
+                this.far.sun.position.copy(sky.key);
+            }
 
             return;
         }
@@ -1423,6 +1448,9 @@ export class View {
         const look = interior ? INDOORS : OUTDOORS;
         // (A place inside that's open to the sky, a broken tower's top: the sky over it)
         const open = Boolean(interior?.open);
+        // (A floor high in a tower, open air round its walls: the sky and the land beyond seen past
+        // them, from where it stands over the land: #draw)
+        this.outlook = interior?.outlook ?? null;
         // (A place with its own air, closer and warmer, dust lying low in it: an ants' nest's)
         const air = interior?.air ?? null;
         const background = air?.background ?? look.background;
@@ -1448,7 +1476,7 @@ export class View {
         this.far.sun.position.copy(this.sunDirection);
         this.scene.environment = this.environments[interior ? "indoors" : "outdoors"].texture;
         this.scene.environmentIntensity = look.environment;
-        this.sky.object.visible = !interior || open;
+        this.sky.object.visible = !interior || open || Boolean(this.outlook);
         this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 
@@ -2086,7 +2114,7 @@ export class View {
     #draw(camera) {
         const renderer = this.renderer;
 
-        if (this.indoors) {
+        if (this.indoors && !this.outlook) {
             renderer.render(this.scene, camera);
 
             return;
@@ -2097,6 +2125,25 @@ export class View {
         far.position.copy(camera.position);
         far.quaternion.copy(camera.quaternion);
 
+        // (Indoors on a floor high in a tower: the sky and the land seen from where it stands over
+        // them, turned as it is (core/scenery.js keepOutlook), in the open air's haze, not its own
+        // fog; and the tower's own walls not drawn round it, landmarkdress.js hollowed)
+        const fog = this.scene.fog;
+        const kept = this.indoors ? [fog.near, fog.far, _fogColour.copy(fog.color)] : null;
+
+        if (kept) {
+            const { pivot, at, y, turn } = this.outlook;
+
+            // (Turned round the upright as three.js's makeRotationY turns, from its cos and sin)
+            _outlook.set(turn[0], 0, turn[1], at[0], 0, 1, 0, y, -turn[1], 0, turn[0], at[1], 0, 0, 0, 1).multiply(_pivot.makeTranslation(-pivot[0], 0, -pivot[1]));
+            _seen.multiplyMatrices(_outlook, camera.matrixWorld).decompose(far.position, far.quaternion, _scale);
+            hollowed(this.outlook.hollow);
+            this.sky.object.position.copy(far.position);
+            this.sky.object.updateMatrix();
+            [fog.near, fog.far] = this.seesFar ? [OUTDOORS.haze, farReach(this.quality.far)] : OUTDOORS.fog;
+            fog.color.copy(this.far.scene.background);
+        }
+
         if (far.fov !== camera.fov || far.aspect !== camera.aspect) {
             far.fov = camera.fov;
             far.aspect = camera.aspect;
@@ -2105,6 +2152,12 @@ export class View {
 
         far.updateMatrixWorld();
         renderer.render(this.far.scene, far);
+
+        if (kept) {
+            [fog.near, fog.far] = kept;
+            fog.color.copy(kept[2]);
+            hollowed(null);
+        }
 
         // (A scene's colour behind it clears what's drawn, however it's asked: none for the near)
         const background = this.scene.background;
