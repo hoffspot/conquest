@@ -1085,7 +1085,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -5113,12 +5113,15 @@ export class Game {
     }
 
     // Every lair and den kept by a kind drawn from a model (a Dreadthorn's lair; a werewolves' den,
-    // its Moonfang and its werewolves), once for each such kind, its master or one of its guards:
-    // their models asked for near it (#modelling), so none's met as its stand-in
+    // its Moonfang and its werewolves), once for each such kind, its master or one of its guards;
+    // and every scene whose riders patrol round it (Bellhaven's: SCENERY `patrols`, host.js
+    // #patrolsAbout), each of their kinds: their models asked for near it (#modelling), so none's
+    // met as its stand-in
     #modelLairs() {
         this.modelLairs ??= this.world.plan.sites.flatMap((site) => {
             const lair = LAIRS[site.kind];
-            const kinds = lair ? [lair.master[0], ...lair.guards.map(([kind]) => kind)] : [];
+            const riders = site.scenery ? (SCENERY[site.scenery]?.patrols?.riders.flat() ?? []) : [];
+            const kinds = lair ? [lair.master[0], ...lair.guards.map(([kind]) => kind)] : riders;
 
             return [...new Set(kinds)].filter((kind) => MODELS[kind]).map((beast) => ({ id: site.id, at: site.at, beast }));
         });

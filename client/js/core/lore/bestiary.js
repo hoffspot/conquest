@@ -444,6 +444,38 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "One of the Orc King's war band, sent to burn the border villages: an orc of one of his four clans, a cleaver in hand, its blows now and then laying a wound open. Some stay behind among the ashes for what's left.",
         sign: "torches thrown down among the ashes, and orc tracks",
     }),
+    bellInitiate: Object.freeze({
+        lore: "One who would join the Order of the Bell and hasn't yet been let in: olive-clad, the Bell's cross small on the breast, unhelmed, a knife in hand. The Order takes the desperate and the zealous and works them hardest, and an initiate proves faith on the unrung, those who've never heard the Bell. Quick and light, they cut, slash and come again, and they're never alone.",
+        sign: "a scrap of olive cloth with a little blue cross stitched on it",
+    }),
+    bellBrother: Object.freeze({
+        lore: "A brother or sister of the Order of the Bell, ordained, in white over mail, helmed, the Bell's blue cross on breast and shield. They swear to the voice of Bellhaven's Great Bell, and hold that whoever won't kneel to it is unclean. They fight well together: a cut, a slash and back, a flurry, and a shield driven into whoever presses them, throwing them back.",
+        sign: "a heater shield's edge-mark in the mud, and boot prints in step",
+    }),
+    bellSpearman: Object.freeze({
+        lore: "A spear-brother of the Order of the Bell, in white over mail, helmed, a kite shield on the arm and a long spear that keeps foes off. They hold the Order's gates and its stairs, and strike from further off than a sword reaches: thrust twice, jabbed twice, or driven in to lay a wound open.",
+        sign: "the butt of a spear struck into the ground at a gate, a blue ribbon tied below the head",
+    }),
+    bellArcher: Object.freeze({
+        lore: "A bowman of the Order of the Bell, in white, a flat-topped helm, a longbow and a quiver at the hip. They keep off and shoot from as far as a bow will, and their brothers keep whoever comes at them busy.",
+        sign: "white-fletched arrows, each shaft painted with a ring of blue",
+    }),
+    choirKnight: Object.freeze({
+        lore: "A knight of the Black Choir, the Order of the Bell's inner circle: those who say the Bell speaks to them. In plate under the Choir's black and its cloak, a great helm with the cross cut in it, a morning star and a heater shield. Every blow crushes, the shield throws, and no blast moves them. The brothers lower their eyes as they pass.",
+        sign: "black thread caught on a nail, and the deep marks a morning star leaves in wood",
+    }),
+    bellRider: Object.freeze({
+        lore: "A rider of the Order of the Bell, in plate under the Order's white, on a grey warhorse in steel barding. They ride the roads round Bellhaven two by two, and let travellers pass, but whoever's crossed the Order they ride down: cuts from the saddle at whoever's by the horse, and the horse spurred over whoever keeps off, its hooves throwing them.",
+        sign: "the deep, evenly spaced prints of shod warhorses in pairs, and fresh dung on the road",
+    }),
+    choirRider: Object.freeze({
+        lore: "A knight of the Black Choir on a barded warhorse, leading one of the Order of the Bell's patrols round Bellhaven, the great helm with the cross cut in it over the Choir's black. Harder than the brothers who ride with them, and no more merciful.",
+        sign: "black thread caught on a hedge at a rider's height",
+    }),
+    priorVane: Object.freeze({
+        lore: "Osric Vane was a hedge-priest of the Six until he found the old Order of the Bell's Rule in a burnt chapter house. He came to Bellhaven, empty a hundred years, unchained the Great Bell's clapper and rang it, and heard it answer. He calls himself the Voice of the Bell now, and the Order he raised up cleanses in its name. He holds the belfry under the bell, a morning star in his hand and the Black Choir about him. When he drives his shield down the Bell's voice rings out all round him and throws whoever it catches, the ground warning of it first. Worn down, he cries out to the Bell, and the Choir answers.",
+        sign: "the Great Bell's toll at an hour no bell should ring, heard for miles",
+    }),
     vharzul: Object.freeze({
         lore: "Vharzul, the first Lord of the Pit, thrown down from its throne by his brother and cast up through a thin place into the world above, the gates below barred to him. Burning between the worlds turned his fire green. He keeps to the Sundered Ring, the broken stones where he came through, and only by night, testing whoever comes for one strong enough to go down and take back his throne. Nearly twice a man's height, his wings spread, he sweeps with burning claws, flings green fire from his hands, throws whoever crowds him with a sweep of his wings and bursts green fire all round him, the ground warning of it first. Worn down, he tears the thin place open behind him, and fiends come through it. Fire harms him little, and no blast moves him.",
         sign: "standing stones split and scorched, and a scar of green glass in the turf between them",
@@ -463,37 +495,5 @@ export const BESTIARY_LORE = Object.freeze({
     ashkhar: Object.freeze({
         lore: "A demon of the Breach that came up through a thin place on the moors a hundred years ago. The Order of the Bell bound it under their shrine in chains of blessed silver, and the cold of the silver smothered its fire to frost. When the Magpies stripped the shrine's silver for coin, it woke. Its hide has gone the blue of ice, and frost follows wherever it walks. It rakes and sweeps with frozen claws, and its fist's blow chills and slows. It leaps on whoever keeps off it, and brings its fists down so that frost bursts out all round it, the ground warning of both first. Worn down, it roars, and the moor's restless dead come to it. Cold harms it little.",
         sign: "prints as long as a man's arm, frost rimed in each though the day is warm, and links of tarnished silver chain",
-    }),
-    bellInitiate: Object.freeze({
-        lore: "One who would join the Order of the Bell and hasn't yet been let in: olive-clad, the Bell's cross small on the breast, unhelmed, a knife in hand. The Order takes the desperate and the zealous and works them hardest, and an initiate proves faith on the unrung, those who've never heard the Bell. Quick and light, they cut, slash and come again, and they're never alone.",
-        sign: "a scrap of olive cloth with a little blue cross stitched on it",
-    }),
-    bellBrother: Object.freeze({
-        lore: "A brother or sister of the Order of the Bell, ordained, in white over mail, helmed, the Bell's blue cross on breast and shield. They swear to the voice of Bellhaven's Great Bell, and hold that whoever won't kneel to it is unclean. They fight well together: a cut, a slash and back, a flurry, and a shield driven into whoever presses them, throwing them back.",
-        sign: "a heater shield's edge-mark in the mud, and boot prints in step",
-    }),
-    bellRider: Object.freeze({
-        lore: "A rider of the Order of the Bell, in plate under the Order's white, on a grey warhorse in steel barding. They ride the roads round Bellhaven two by two, and let travellers pass, but whoever's crossed the Order they ride down: cuts from the saddle at whoever's by the horse, and the horse spurred over whoever keeps off, its hooves throwing them.",
-        sign: "the deep, evenly spaced prints of shod warhorses in pairs, and fresh dung on the road",
-    }),
-    choirRider: Object.freeze({
-        lore: "A knight of the Black Choir on a barded warhorse, leading one of the Order of the Bell's patrols round Bellhaven, the great helm with the cross cut in it over the Choir's black. Harder than the brothers who ride with them, and no more merciful.",
-        sign: "black thread caught on a hedge at a rider's height",
-    }),
-    bellSpearman: Object.freeze({
-        lore: "A spear-brother of the Order of the Bell, in white over mail, helmed, a kite shield on the arm and a long spear that keeps foes off. They hold the Order's gates and its stairs, and strike from further off than a sword reaches: thrust twice, jabbed twice, or driven in to lay a wound open.",
-        sign: "the butt of a spear struck into the ground at a gate, a blue ribbon tied below the head",
-    }),
-    bellArcher: Object.freeze({
-        lore: "A bowman of the Order of the Bell, in white, a flat-topped helm, a longbow and a quiver at the hip. They keep off and shoot from as far as a bow will, and their brothers keep whoever comes at them busy.",
-        sign: "white-fletched arrows, each shaft painted with a ring of blue",
-    }),
-    choirKnight: Object.freeze({
-        lore: "A knight of the Black Choir, the Order of the Bell's inner circle: those who say the Bell speaks to them. In plate under the Choir's black and its cloak, a great helm with the cross cut in it, a morning star and a heater shield. Every blow crushes, the shield throws, and no blast moves them. The brothers lower their eyes as they pass.",
-        sign: "black thread caught on a nail, and the deep marks a morning star leaves in wood",
-    }),
-    priorVane: Object.freeze({
-        lore: "Osric Vane was a hedge-priest of the Six until he found the old Order of the Bell's Rule in a burnt chapter house. He came to Bellhaven, empty a hundred years, unchained the Great Bell's clapper and rang it, and heard it answer. He calls himself the Voice of the Bell now, and the Order he raised up cleanses in its name. He holds the belfry under the bell, a morning star in his hand and the Black Choir about him. When he drives his shield down the Bell's voice rings out all round him and throws whoever it catches, the ground warning of it first. Worn down, he cries out to the Bell, and the Choir answers.",
-        sign: "the Great Bell's toll at an hour no bell should ring, heard for miles",
     }),
 });

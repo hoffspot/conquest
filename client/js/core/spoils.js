@@ -203,7 +203,7 @@ export const SPOILS = Object.freeze({
     bellSpearman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }] },
     bellArcher: { gold: [5, 16], items: [{ id: "potion", chance: 0.2 }, { id: "bellToken", chance: 0.45 }, { id: "bow", chance: 0.05 }] },
     choirKnight: { gold: [20, 50], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }] },
-    priorVane: { gold: [80, 160], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "bellToken", chance: 1, count: [2, 4] }] },
+    priorVane: { gold: [80, 160], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "bellToken", chance: 0.95, count: [2, 4] }] },
     skeleton: { gold: [1, 6], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.2 }] },
     cultist: { gold: [4, 12], items: [{ id: "cultSigil", chance: 0.3 }, { id: "potion", chance: 0.15 }] },
     cultLeader: { gold: [30, 70], items: [{ id: "cultSigil", chance: 0.9, count: [1, 2] }, { id: "soulShard", chance: 0.4 }, { id: "potion", chance: 0.5 }] },
