@@ -347,7 +347,9 @@ for (const licensed of [true, false]) {
             }, keep.map);
 
             expect(seen).toEqual({ air: true, outlook: true, doors: [true, true, true], hollow: true, sky: true, hole: 0, calls: seen.calls });
-            expect(seen.calls).toBeLessThan(250);
+            // (At High, the browser tests' quality: the floor's own, under 250 as above, and the
+            // world seen past it, the far land's levels, the castle's far model and the horizon)
+            expect(seen.calls).toBeLessThan(300);
 
             // Back out by its doors, to before them on the castle's court, its art there still
             const out = await page.evaluate(async ([door, castle]) => {
