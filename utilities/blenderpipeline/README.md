@@ -615,7 +615,31 @@ Browser, it exports:
     space and compression: `"normal": true` for a normal map, Unreal's DirectX kind
     (`"flipGreen": true`); `TC_MASKS` for packed masks (an ORM's occlusion, roughness and metal in
     red, green and blue);
+  - each mesh's slots' faces as its FBX has them (`materials[].faces`), its LOD 0 sections' slots
+    and which are simulated as cloth (`sections`), and its clothing (`clothing`);
+  - what of a mesh its FBX left out (`lost`), a glTF of it where that was (`glb`, `glbFaces`,
+    `found`), and a line for each in `warnings`;
   - and what couldn't be exported.
+
+**Parts Unreal's FBX export leaves out.** It leaves a mesh's section out without a word when the
+section is simulated as cloth (a horse's caparison and barding, a cloak, a flag, a mane) or turned
+off; the slot stays in the FBX, with no faces. The Order of the Bell's horses came out so, with no
+barding, caparison or mane. So the script reads each FBX back once it's written and counts each
+slot's faces. A slot that one of the mesh's sections uses but that has none is *lost*: it's said in
+`notes.json`, in the Output Log (*Left out:*) and in a box at the end, with why and what to do. A
+slot no section uses is meant to be empty and isn't told of.
+
+A mesh that lost a part is exported as glTF too, beside its FBX (`SK_Horse.glb`): Unreal's glTF
+Exporter plugin keeps cloth sections. It's on in Unreal Engine 5 unless it's been turned off
+(*Edit → Plugins*, *glTF Exporter*). `found` says which lost slots the `.glb` has: their material
+has more faces there than in the FBX. A part the `.glb` hasn't either is put right in Unreal, and
+the asset exported again:
+- simulated as cloth: open the mesh, and in LOD 0's sections set that section's *Clothing* to
+  *None* (on a duplicate of the mesh, *Right-click → Duplicate*, to keep the pack's own as it is);
+- turned off: in the mesh's *Asset Details*, *LOD 0*, *Sections*, right-click the section and
+  enable it.
+
+Unreal's Python can't unbind cloth itself (only its C++ can), so the script can't do that for you.
 
 Zip the folder for the session, with the asset's Fab page and its licence.
 
