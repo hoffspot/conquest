@@ -251,6 +251,11 @@ const deepFreeze = (value) => {
     return value && typeof value === "object" ? Object.freeze(Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, deepFreeze(inner)]))) : value;
 };
 
+// (The parts of the Order's models their shadows are cast from (MODELS `shade`): the body, its
+// cloak and the horse, what makes its shape on the ground; not its helm, its head, its arms and
+// sheaths, each a draw of its own and twice over, for little on the ground)
+const ORDER_SHADE = Object.freeze(["Body", "Cloak", "Horse"]);
+
 const order = ({ parts, choose = [], arms, skins = null, scale = 1, specials = {}, spans = {} }) => {
     const kit = ORDER_ARMS[arms];
 
@@ -269,6 +274,7 @@ const order = ({ parts, choose = [], arms, skins = null, scale = 1, specials = {
         rests: Object.freeze({ ...kit.rests }),
         fire: Object.freeze({}),
         joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+        shade: ORDER_SHADE,
         mouth: null,
         pace: +(0.8 * scale).toFixed(2),
         runPace: +(4.5 * scale).toFixed(2),
@@ -299,6 +305,7 @@ const riderOf = (parts, skins = null) =>
         rests: Object.freeze({ look: "Mount Idle 2" }),
         fire: Object.freeze({}),
         joints: Object.freeze({ torso: "spine_03", body: "Spine1_M", head: "head", mouth: "head", left: "hand_l" }),
+        shade: ORDER_SHADE,
         mouth: null,
         pace: 2.4,
         runPace: 5,
@@ -327,7 +334,8 @@ const BROTHERS_HELMS = ["HelmPlain", "HelmFlat", "HelmBar", "HelmRidge"];
  * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does; its other heads'
  * mouths too, `mouths`, in the clips `together` names: a cerberus's three); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
- * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
+ * them); of a model whose parts are kept apart, the parts its shadow's cast from (`shade`: all of
+ * them if it isn't given); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
  * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
  * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false). One that
  * stands on guard (battle.js #onGuard) holds its guard up in a clip of its own (`guard`: `hold`,
@@ -1821,8 +1829,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
     // (Its shadow from its least detailed level only: there all the time, casting it; not its own
     // level shown, drawn leaving nothing on the screen. A layer of its own won't do: three.js casts
-    // only what the camera that's drawing sees)
-    const shadows = levels.at(-1);
+    // only what the camera that's drawing sees. A model whose parts are kept apart casts it from
+    // the parts its `shade` names alone, the rest of that level hidden when it isn't shown, as the
+    // other levels are: each of its parts a draw, twice over, all the time)
+    const least = levels.at(-1);
+    const shadows = model.shade ? least.filter((mesh) => model.shade.includes(partOf(mesh))) : least;
     const unseen = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
     for (const mesh of shadows) {
@@ -1834,7 +1845,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
         levels.forEach((meshes, i) => {
             for (const mesh of meshes) {
-                if (i === levels.length - 1) {
+                if (mesh.castShadow) {
                     mesh.material = i === shown ? drawn.get(mesh) : unseen;
                 } else {
                     mesh.visible = i === shown;
@@ -1865,7 +1876,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
     const sphere = new THREE.Sphere();
 
-    for (const mesh of shadows) {
+    for (const mesh of least) {
         mesh.computeBoundingSphere();
         sphere.isEmpty() ? sphere.copy(mesh.boundingSphere) : sphere.union(mesh.boundingSphere);
     }
