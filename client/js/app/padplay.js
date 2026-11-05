@@ -7,7 +7,7 @@
 //
 //  - In the world (playing, nothing open over it): the left stick walks and runs (app/steering.js
 //    `pad`), the right stick turns and tilts the camera, and the buttons do the game's actions as
-//    they're set (app/gamepad.js ACTIONS: Game options, Controls, Controller). Cross does what's
+//    they're set (app/gamepad.js ACTIONS: Game options, Controls, Bindings). Cross does what's
 //    in front of the player (Game padFront: marked, its word beside Cross's symbol); held, Square
 //    and Triangle open the wheels, and the trigger held, R2 or L2, turns the face buttons and the
 //    D-pad's left and right into an Action Bar's slots, each slot showing its button.
@@ -33,6 +33,7 @@
 
 import { actionsOf, BAR_SLOTS, barHeld, bindingsOf, buttonsOf, DEAD_ZONE, HEART, HOLD_MS, heartDue, nearestThatWay, PadReader, rumbleAt, sliceOf, swapped, symbolOf, symbolsFor } from "./gamepad.js";
 import { CodePicker, lower, PadKeyboard, raisable, raise, READY_LINES } from "./padkeys.js";
+import { actionFor, heldBy, keyMap, keyOf, keysOf } from "./keys.js";
 
 // Held, the D-pad (or the left stick pushed over) goes on again after this long (ms), then this
 // often; how far the stick's pushed over to count as the D-pad
@@ -63,6 +64,9 @@ export const RING = Object.freeze([
     Object.freeze({ id: "party", name: "Party" }),
     Object.freeze({ id: "pack", name: "Pack" }),
 ]);
+
+// The ring held open by a key, not a button (keyRing)
+const KEY_RING = "key";
 
 /** What the player's told when the controller's pressed but the sound can't start without a tap. */
 export const SOUND_NOTE = "Tap the screen once to turn the sound on";
@@ -99,6 +103,7 @@ export class PadPlay {
     #wheelButton = null;
     #ringButton = null;
     #ringAt = -1;
+    #ringWays = new Set();
     #heart = -Infinity;
     #noted = 0;
     #listening = null;
@@ -157,6 +162,10 @@ export class PadPlay {
         for (const type of ["pointerdown", "keydown", "wheel"]) {
             document.addEventListener(type, (event) => event.isTrusted && this.#putDown(), { capture: true, passive: true });
         }
+
+        // (The ring held open by a key: the keys pick from it, keyRing)
+        document.addEventListener("keydown", (event) => this.#ringKey(event, true), { capture: true });
+        document.addEventListener("keyup", (event) => this.#ringKey(event, false), { capture: true });
 
         for (const pad of this.#pads()) {
             this.#connected(pad);
@@ -360,7 +369,10 @@ export class PadPlay {
         const scope = this.#scope(game);
 
         if (this.ring.hidden === false) {
-            this.#ringWork(reading, game);
+            // (Held open by a key, the keys pick from it: keyRing)
+            if (this.#ringButton !== KEY_RING) {
+                this.#ringWork(reading, game);
+            }
         } else if (this.#wheelButton) {
             this.#wheelWork(reading, game);
         } else if (scope) {
@@ -546,6 +558,80 @@ export class PadPlay {
         game.padWheelAim(reading.right.far >= reading.left.far ? reading.right : reading.left);
     }
 
+    /**
+     * The ring of panels held open by a key (Game options, Bindings: O, as it comes), or let go of
+     * (`game` null): the keys that move pick a slice from it, as a stick does, and it's gone.
+     */
+    keyRing(game) {
+        if (!game) {
+            if (this.#ringButton === KEY_RING) {
+                this.#closeRing();
+            }
+
+            return;
+        }
+
+        if (this.ring.hidden === false || !game.running) {
+            return;
+        }
+
+        this.#ringButton = KEY_RING;
+        this.#ringAt = -1;
+        this.#ringWays = new Set();
+        game.steering?.release();
+        this.ring.hidden = false;
+        this.#drawRing();
+    }
+
+    // A key while the ring's held open by one: a way's (as the player's set them) pointing at a
+    // slice, which opens its panel; the menu's putting the ring away. Not walked, nor anything else
+    #ringKey(event, down) {
+        if (this.#ringButton !== KEY_RING) {
+            return;
+        }
+
+        const keys = keysOf(this.how.settings.keyBindings);
+        const ways = heldBy(keys, event.code).filter((id) => id === "forward" || id === "back" || id === "left" || id === "right");
+
+        if (!ways.length) {
+            if (down && actionFor(keyMap(keys, ["world"]), keyOf(event)) === "menu") {
+                event.preventDefault();
+                event.stopPropagation();
+                this.#closeRing();
+            }
+
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        for (const way of ways) {
+            if (down) {
+                this.#ringWays.add(way);
+            } else {
+                this.#ringWays.delete(way);
+            }
+        }
+
+        const x = (this.#ringWays.has("right") ? 1 : 0) - (this.#ringWays.has("left") ? 1 : 0);
+        const y = (this.#ringWays.has("back") ? 1 : 0) - (this.#ringWays.has("forward") ? 1 : 0);
+        const far = Math.hypot(x, y);
+        const slice = far && down ? sliceOf({ x: x / far, y: y / far, far: 1 }, RING.length) : -1;
+
+        if (slice >= 0) {
+            const game = this.how.game();
+
+            this.#ringAt = slice;
+            this.#drawRing();
+            this.#closeRing();
+
+            if (game) {
+                this.#openPanel(RING[slice].id, game);
+            }
+        }
+    }
+
     #openRing(button, game) {
         if (!button || !game?.running) {
             return;
@@ -643,7 +729,7 @@ export class PadPlay {
             }
 
             if (book && (way === "left" || way === "right")) {
-                key(way === "left" ? "ArrowLeft" : "ArrowRight");
+                this.how.game()?.reader?.turn(way === "left" ? -1 : 1);
                 continue;
             }
 
@@ -658,7 +744,7 @@ export class PadPlay {
             const step = reading.pressed.has("l1") ? -1 : 1;
 
             if (book) {
-                key(step < 0 ? "ArrowLeft" : "ArrowRight");
+                this.how.game()?.reader?.turn(step);
             } else {
                 this.#tab(scope, focused, step);
             }
@@ -968,8 +1054,13 @@ export class PadPlay {
             return;
         }
 
+        // (Over the world: as the menu's key does, whatever it's set to: main.js `back`)
         if (document.body.dataset.screen === "hud") {
-            key("Escape");
+            if (this.how.back) {
+                this.how.back();
+            } else {
+                key("Escape");
+            }
 
             return;
         }

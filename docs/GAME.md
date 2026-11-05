@@ -5715,11 +5715,65 @@ and says so.
 
 **Game options, Controls, Controller** shows the controller seen (or how to pair one) and sets
 its rumble and strength, the camera's speed and either way turned round, the sticks' dead zone,
-✕ and ○ swapped, the symbols shown (matching the controller by its name, or PlayStation, Xbox or
-Nintendo's), and each action's button: chosen, then the button pressed (or held, to set it held),
-whatever had that button taking the action's old one (`rebind`), and **Every button as it came**.
+✕ and ○ swapped, and the symbols shown (matching the controller by its name, or PlayStation, Xbox
+or Nintendo's). Which button does what is set on the **Bindings** page, beside the keys (below):
+a button held can be set to an action too, and a bar's trigger is the bar's alone (`rebind`).
 **Text size** (Graphics) grows the windows, the HUD's buttons and words, the keyboard and the
 prompts (CSS `zoom`: 1.15 Large, 1.35 Larger, for a TV), never the game's view.
+
+### Keys, mouse buttons and bindings (app/keys.js, app/handhelds.js)
+
+**Every key can be set.** Each of the game's actions (`KEY_ACTIONS`, in groups: moving, the
+camera, doing and fighting, the Action Bar, panels and the menu, talking, reading a book) has two
+keys, a main one and a spare, as they come: W, A, S, D and the arrows walk; Shift held walks rather
+than runs; Q and E turn the camera, R swings it behind; = and - (or the number pad's + and -) zoom;
+F does what's in front (as a controller's ✕: talk, open, pick up, fight), C stops, V lets go of
+the foe; Tab and Shift+Tab the next and last foe nearest first, X and Z the enemies list's; G held
+your own wheel and T held theirs, the keys that move aiming it as a stick does; 1 to 6 (or the
+number pad's) the Action Bar's slots, \` swapping its bars; I the Pack, J the Journal, B the
+Spellbook, P the Party panel, Enter the party's chat, M the world map, O held the ring of panels
+(the keys that move pick from it); Escape the menu, or back out of what's open (a wheel, a talk, a
+panel, the Pack's look at something); 1 to 9 a talk's lines, and ← and → a book's pages. A key's
+kept by where it sits (`KeyboardEvent.code`), so they're in the same places on any layout, and
+shown as the keyboard in hand prints them where the browser says (`navigator.keyboard`). One key
+does only one action where the player is (in the world, talking, or reading: a talk's lines share
+the digits with the Action Bar, a book's arrows with walking). Shift held to walk doesn't stop a
+key doing its own (Shift+I still opens the Pack, unless Shift+I's set to something).
+
+**The mouse's other buttons** (the middle, the right, back and forward; the left's the game's tap,
+and the wheel zooms) can be set to any action too, as a key; set, the browser's own for them (its
+menu, going back a page, scrolling by the middle button) isn't done, and the game doesn't take it
+for a tap or a drag. As they come, none is.
+
+**Game options, Controls, Bindings** lists every action with its key, its spare and its controller
+button. Chosen by its name, an action takes whatever's pressed next: a key (into its main box), a
+mouse button, or a controller's button (or one held). Chosen by one of its boxes, only that one's
+set, or cleared. Escape's set like any other key while one's listened for (the menu doesn't close);
+a modifier pressed alone is set as it's let go of. Whatever had what's pressed lets it go, left
+without, and the page says which (**Taken from The Journal**), so it can be given another. Given
+up after ten seconds, a click elsewhere, or **Cancel**. **Every key and button as it came** puts
+them all back. The keys set are the device's (`keyBindings`, beside `padBindings`), and the hint,
+the stick's and the camera's notes and the HUD's buttons' titles name them as they're set.
+
+**Handheld presets.** The handheld gaming PCs (the Steam Deck, the Legion Go, Go 2 and Go S, the
+ROG Ally and Xbox Ally families, the MSI Claw) give a browser their controller as an Xbox
+controller, its buttons the game's as they come; their back buttons, trackpads and gyro never
+reach a page, except as keys or mouse buttons their own software (Steam Input, Legion Space,
+Armoury Crate SE, MSI Center M) is set to send. So a handheld's preset (Bindings, **Handheld
+presets**) gives its back buttons' actions keys if they have none (four: your own wheel, their
+wheel, the world map, the Journal; two: the wheels), and says, step by step, how to set each back
+button to send its key in that software, with the keys as they're set now (Gamepad mode in
+Armoury Crate, the secondary function off; a non-Steam game in Steam with the Gamepad with Mouse
+Trackpad layout; the Claw's firmware first). It sets the sticks' dead zone (less for the Hall-effect
+and TMR sticks of the Legion Go 2 and the Claw) and Large text for the small screen. **The Legion
+Go in FPS mode** (its right controller a mouse, the left sending keys) sets the mouse's buttons
+beside the keys: right click does what's in front, the middle recentres, back and forward the
+wheels; and says which keys to give the left controller in Legion Space. Which handheld it is can
+only be guessed (Chrome and Edge on Windows don't name it; under Steam every controller's
+Steam's): by its controller's maker and product where the browser gives them, or a touch screen,
+a controller and the screen's size together (`guessHandheld`). The guess is only offered: once in
+play (**Playing on a Steam Deck? Game options, Controls, Bindings has a preset for it.**), and on
+the Bindings page till one's chosen.
 
 ## The screens (main.js)
 
