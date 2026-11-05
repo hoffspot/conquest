@@ -15724,12 +15724,20 @@ export class Game {
 
     /**
      * Back out of what's open, as the menu's key does (Escape, as it comes; a controller's back,
-     * app/padplay.js): what was opened in the Pack to see what it is put away; the talk stopped;
-     * an open panel closed. Whether anything was (if not, the menu opens: main.js).
+     * app/padplay.js): a wheel put away; what was opened in the Pack to see what it is put away;
+     * the talk stopped; an open panel closed. Whether anything was (if not, the menu opens:
+     * main.js).
      */
     keyBack() {
         if (!this.running) {
             return false;
+        }
+
+        if (this.wheel?.open) {
+            this.keyWheel = null;
+            this.#closeWheel();
+
+            return true;
         }
 
         if (this.talk?.open) {
@@ -15783,7 +15791,7 @@ export class Game {
         }
 
         if (id === "menu") {
-            if (!this.wheel?.open && this.keyBack()) {
+            if (this.keyBack()) {
                 event.preventDefault();
                 event.stopPropagation();
             }

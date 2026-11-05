@@ -12235,7 +12235,8 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a w
     expect(taunted.floated).toContain("Taunted");
 
     // Chosen again a moment after: its slice greyed over as it cools down, flashed refused, and
-    // nothing done (its cooldown as it was); the wheel left open, closed with Escape
+    // nothing done (its cooldown as it was); the wheel put away as it's let go (not slid onto the
+    // screen, it isn't left open to be clicked: game.js #letGoWheel)
     await page.evaluate(() => window.taunting.heard.splice(0));
     await page.evaluate(() => window.pellagos.game.start());
     await page.mouse.move(taunted.at.x, taunted.at.y);
@@ -12250,9 +12251,12 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a w
     await expect(wheel.locator('.slice[data-direction="sw"]')).toHaveClass(/refused/);
     expect(await page.evaluate(() => window.taunting.heard)).toContain("denied");
     expect(await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).readyAt.taunt)).toBe(readyAt);
-    await page.keyboard.press("Escape");
     await expect(wheel).toBeHidden();
-    await expect(page.locator("#menu")).toBeHidden();
+
+    // (Escape then, with nothing open, is the menu's: it stays open, not closed again by the same
+    // Escape, as it was before the key was taken)
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#menu")).toBeVisible();
 });
 
 test("Show whom foes are on (Game options, on): a ring round a foe's icon on the right, grey off them, yellow about to turn on them, orange on them with another close, red held; a dot for one of theirs it's on, and a count on that one's icon; a taunt's mark over it; none of it with the switch off", async ({ page }) => {
