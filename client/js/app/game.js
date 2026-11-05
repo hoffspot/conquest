@@ -66,6 +66,7 @@ import { PALISADE } from "../core/war/armies.js";
 import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
 import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
+import { actionFor, heldBy, keyMap, keyOf, keysOf, mouseOf } from "./keys.js";
 import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
@@ -1552,9 +1553,14 @@ export class Game {
         this.battleCamOn = null;
         this.battleCamLeft = new Set();
 
-        // (The keys held turning the camera, Q and E, and whether they've taken hold of it)
+        // The keys (and mouse buttons) that do the game's actions, as the player's set them
+        // (app/keys.js: Game options, Controls, Bindings; main.js sets them); the actions held
+        // turning the camera ("turnLeft", "turnRight": Q and E, as they come), and whether they've
+        // taken hold of it; and a wheel held open by a key (its key, and the ways held aiming it)
+        this.keys = keysOf();
         this.turnKeys = new Set();
         this.keyTurning = false;
+        this.keyWheel = null;
 
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
@@ -7733,10 +7739,11 @@ export class Game {
      * the fight, it lets that foe be till the fight's over, rather than swinging back round to
      * frame it again a second after every drag.
      */
-    // Q and E held, turning the camera round the player (KEY_TURN), as a drag does: taken hold of
-    // as they're pressed, let go as the last is (unless a drag holds it still)
+    // The camera's turning keys held (Q and E, as they come), turning it round the player
+    // (KEY_TURN), as a drag does: taken hold of as they're pressed, let go as the last is (unless a
+    // drag holds it still)
     #keyTurn(dt) {
-        const way = (this.turnKeys.has("q") ? 1 : 0) - (this.turnKeys.has("e") ? 1 : 0);
+        const way = (this.turnKeys.has("turnLeft") ? 1 : 0) - (this.turnKeys.has("turnRight") ? 1 : 0);
 
         if (way && !this.keyTurning) {
             this.keyTurning = true;
@@ -15656,6 +15663,7 @@ export class Game {
             this.steering = new Steering({
                 zone,
                 knob,
+                keys: () => this.keys,
                 ring: this.hud.root.querySelector("#stick"),
                 looking: () => this.#steerable(),
                 go: (facing, run) => {
@@ -15672,95 +15680,271 @@ export class Game {
             });
         }
 
-        // The pack: its button, or I; Escape closes it (not the menu)
+        // The panels' buttons (their keys: #keyed)
         this.#on(this.hud.root.querySelector("#packbutton") ?? document.createElement("button"), "click", () => this.togglePack());
         this.#on(this.hud.root.querySelector("#journalbutton") ?? document.createElement("button"), "click", () => this.toggleJournal());
         this.#on(this.hud.root.querySelector("#spellbookbutton") ?? document.createElement("button"), "click", () => this.toggleSpellbook());
         this.#on(this.hud.root.querySelector("#partybutton") ?? document.createElement("button"), "click", () => this.toggleParty());
-        this.#on(document, "keydown", (event) => {
-            if (!this.running || this.talk?.open) {
-                return;
-            }
+        // The keys, as the player's set them (app/keys.js), and the mouse's other buttons set to
+        // anything (#keyed). Escape (the menu's key, as it comes) puts away what's open first
+        this.#on(document, "keydown", (event) => this.#keyed(keyOf(event), event), { capture: true });
+        this.#on(document, "keyup", (event) => this.#keyLetGo(event.code));
+        this.#on(document, "mousedown", (event) => this.#mouseKey(event, true), { capture: true });
+        this.#on(document, "mouseup", (event) => this.#mouseKey(event, false), { capture: true });
 
-            // (Typing, in the party's chat, isn't asking for anything with a key; Escape still closes)
-            const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
-            const plain = !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !typing;
+        // (A mouse button set to something isn't the game's tap or drag as well, nor the browser's:
+        // its menu, scrolling by the middle button, back and forward)
+        this.#on(document, "pointerdown", (event) => event.pointerType === "mouse" && this.#mouseSet(event.button) && event.stopPropagation(), { capture: true });
+        this.#on(document, "pointerup", (event) => event.pointerType === "mouse" && this.#mouseSet(event.button) && event.stopPropagation(), { capture: true });
 
-            if (event.key === "Escape" && this.pack?.open && this.pack.unpeek()) {
-                // (What was open in the pack to see what it is, put away first)
-                event.preventDefault();
-                event.stopPropagation();
-            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
-                event.preventDefault();
-                event.stopPropagation();
-                this.closePack();
-                this.closeJournal();
-                this.closeReader();
-                this.closeSpellbook();
-                this.closeParty();
-                this.fate?.hide();
-            } else if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && this.reader?.open && plain) {
-                // (Reading, the arrow keys turn its pages)
-                event.preventDefault();
-                event.stopPropagation();
-                this.reader.turn(event.key === "ArrowRight" ? 1 : -1);
-            } else if ((event.key === "i" || event.key === "I") && plain) {
-                this.togglePack();
-            } else if ((event.key === "j" || event.key === "J") && plain) {
-                this.toggleJournal();
-            } else if ((event.key === "b" || event.key === "B") && plain) {
-                this.toggleSpellbook();
-            } else if ((event.key === "p" || event.key === "P") && plain) {
-                this.toggleParty();
-            } else if (event.key === "Enter" && plain && (event.target === document.body || event.target instanceof HTMLCanvasElement) && !this.partyPanel?.open && (this.hosting || this.remote) && this.host.partyFor(this.me)) {
-                // (Enter, in a party of players, with nothing else to press: its chat, ready to type)
-                event.preventDefault();
-                this.toggleParty({ chat: true });
-            } else if (/^[1-6]$/.test(event.key) && Number(event.key) <= this.quickShown && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
-                this.quick(Number(event.key) - 1);
-            } else if (event.code === "Backquote" && plain && this.quickBar?.up) {
-                // (The key left of 1, ` on most keyboards: the Action Bar swapped to its other bar)
-                event.preventDefault();
-                this.swapQuick();
-            } else if ((event.key === "x" || event.key === "X" || event.key === "z" || event.key === "Z") && plain) {
-                // (X and Z: the next foe in the enemies list set on, or the last)
-                this.cycleTarget(event.key.toLowerCase() === "x" ? 1 : -1, "list");
-            } else if (event.key === "Tab" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !typing && !(this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
-                // (Tab: the nearest foe in sight set on, then each next one out; Shift+Tab back.
-                // Not the browser's: its focus taken off the game to the next button, for nothing)
-                event.preventDefault();
-                this.cycleTarget(event.shiftKey ? -1 : 1, "distance");
-            } else if (/^[qe]$/i.test(event.key) && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                // (The camera turned round the player while Q or E is held)
-                this.turnKeys.add(event.key.toLowerCase());
-            } else if ((event.key === "r" || event.key === "R") && plain) {
-                this.recentre();
-            }
-        }, { capture: true });
-        this.#on(document, "keyup", (event) => {
-            this.turnKeys.delete(event.key.toLowerCase());
-        });
+        for (const type of ["contextmenu", "auxclick"]) {
+            this.#on(document, type, (event) => this.running && this.#mouseSet(event.button) && event.preventDefault(), { capture: true });
+        }
+
         // (Keys let go of unseen, the page or the window left: none held)
-        this.#on(window, "blur", () => this.turnKeys.clear());
+        this.#on(window, "blur", () => {
+            this.turnKeys.clear();
 
-        // Talking, the number keys say what's next to them, and Escape stops (not the menu)
-        this.#on(document, "keydown", (event) => {
-            if (!this.talk?.open || !this.running) {
-                return;
+            if (this.keyWheel) {
+                this.keyWheel = null;
+                this.padWheelShut();
             }
-
-            if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                this.#endTalk();
-            } else if (/^[1-9]$/.test(event.key)) {
-                this.#say(Number(event.key) - 1);
-            }
-        }, { capture: true });
+        });
         this.#on(canvas, "wheel", (event) => {
             event.preventDefault();
             this.view.zoomSmoothly(Math.exp(event.deltaY * 0.0015));
         }, { passive: false });
+    }
+
+    // --- Keys and the mouse's other buttons (app/keys.js: as the player's set them) ---
+
+    // Where the player is, for which keys do what: talking, reading a book (the world's keys
+    // still working), or in the world
+    #keyScopes() {
+        return this.talk?.open ? ["talk"] : this.reader?.open ? ["reading", "world"] : ["world"];
+    }
+
+    /** The action a key pressed (as app/keys.js keyOf keeps it) asks for where the player is, or null. */
+    keyActionOf(key) {
+        return actionFor(keyMap(this.keys, this.#keyScopes()), key);
+    }
+
+    /**
+     * Back out of what's open, as the menu's key does (Escape, as it comes; a controller's back,
+     * app/padplay.js): a wheel put away; what was opened in the Pack to see what it is put away;
+     * the talk stopped; an open panel closed. Whether anything was (if not, the menu opens:
+     * main.js).
+     */
+    keyBack() {
+        if (!this.running) {
+            return false;
+        }
+
+        if (this.wheel?.open) {
+            this.keyWheel = null;
+            this.#closeWheel();
+
+            return true;
+        }
+
+        if (this.talk?.open) {
+            this.#endTalk();
+
+            return true;
+        }
+
+        if (this.pack?.open && this.pack.unpeek()) {
+            return true;
+        }
+
+        if (this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open) {
+            this.closePack();
+            this.closeJournal();
+            this.closeReader();
+            this.closeSpellbook();
+            this.closeParty();
+            this.fate?.hide();
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // A key (or mouse button) pressed: what it's set to do where the player is, done. The menu's
+    // key backs out of what's open (keyBack), even while typing in the party's chat; the rest
+    // wait while anything's being typed
+    #keyed(key, event) {
+        if (!this.running || !key) {
+            return;
+        }
+
+        const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+
+        // (Held keys, turning the camera, or aiming a wheel held open by a key: not while talking)
+        if (!typing && !this.talk?.open && !/^(?:Ctrl|Alt)\+/.test(key)) {
+            this.#keyHeld(event.code ?? key, true);
+        }
+
+        const id = this.keyActionOf(key);
+
+        if (!id) {
+            return;
+        }
+
+        // (Ctrl or Alt with a key set to something: the game's, not the browser's shortcut)
+        if (/^(?:Ctrl|Alt)\+/.test(key)) {
+            event.preventDefault();
+        }
+
+        if (id === "menu") {
+            if (this.keyBack()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            return;
+        }
+
+        if (typing || event.repeat) {
+            return;
+        }
+
+        const open = this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open;
+        const taken = () => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        if (this.talk?.open) {
+            if (/^say[1-9]$/.test(id)) {
+                this.#say(Number(id.slice(3)) - 1);
+            }
+
+            return;
+        }
+
+        if ((id === "pageBack" || id === "pageOn") && this.reader?.open) {
+            // (Reading, the page turned, not the player walked)
+            taken();
+            this.reader.turn(id === "pageOn" ? 1 : -1);
+        } else if (id === "pack") {
+            this.togglePack();
+        } else if (id === "journal") {
+            this.toggleJournal();
+        } else if (id === "spellbook") {
+            this.toggleSpellbook();
+        } else if (id === "party") {
+            this.toggleParty();
+        } else if (id === "chat" && (event.target === document.body || event.target instanceof HTMLCanvasElement || event.target === document) && !this.partyPanel?.open && (this.hosting || this.remote) && this.host.partyFor(this.me)) {
+            // (In a party of players, with nothing else to press: its chat, ready to type)
+            event.preventDefault();
+            this.toggleParty({ chat: true });
+        } else if (/^slot[1-6]$/.test(id) && Number(id.slice(4)) <= this.quickShown && this.quickBar?.up) {
+            this.quick(Number(id.slice(4)) - 1);
+        } else if (id === "swapBar" && this.quickBar?.up) {
+            event.preventDefault();
+            this.swapQuick();
+        } else if (id === "nextListed" || id === "lastListed") {
+            this.cycleTarget(id === "nextListed" ? 1 : -1, "list");
+        } else if ((id === "nextFoe" || id === "lastFoe") && !open) {
+            // (Not the browser's Tab: its focus taken off the game to the next button, for nothing)
+            event.preventDefault();
+            this.cycleTarget(id === "nextFoe" ? 1 : -1, "distance");
+        } else if (id === "recentre") {
+            this.recentre();
+        } else if (id === "do" && !open) {
+            this.padDo();
+        } else if (id === "stop") {
+            this.padStop();
+        } else if (id === "unlock") {
+            this.padUnlock();
+        } else if (id === "zoomIn" || id === "zoomOut") {
+            event.preventDefault();
+            this.padZoom(id === "zoomIn" ? 0.8 : 1.25);
+        } else if ((id === "selfWheel" || id === "theirWheel") && !open && !this.keyWheel) {
+            // (Held open while the key's held; the keys that move aim it, as the stick does)
+            if (this.padWheel(id === "selfWheel" ? "own" : "theirs")) {
+                this.keyWheel = { code: event.code ?? key, ways: new Set() };
+                this.steering?.release();
+            }
+        }
+    }
+
+    // A key let go of: a camera turn or a wheel's aim no longer held; the key holding a wheel open,
+    // the wheel put away (unless it picked)
+    #keyLetGo(code) {
+        this.#keyHeld(code, false);
+
+        if (this.keyWheel && code === this.keyWheel.code) {
+            this.keyWheel = null;
+            this.padWheelShut();
+        }
+    }
+
+    // Keys held: turning the camera; or, a wheel held open by a key, the keys that move aiming it
+    // (as the stick does: the ways held together, all the way over)
+    #keyHeld(code, down) {
+        const held = heldBy(this.keys, code);
+
+        for (const id of held) {
+            if (id === "turnLeft" || id === "turnRight") {
+                if (down) {
+                    this.turnKeys.add(id);
+                } else {
+                    this.turnKeys.delete(id);
+                }
+            }
+        }
+
+        const wheel = this.keyWheel;
+        const ways = held.filter((id) => id === "forward" || id === "back" || id === "left" || id === "right");
+
+        if (!wheel || !ways.length) {
+            return;
+        }
+
+        for (const way of ways) {
+            if (down) {
+                wheel.ways.add(way);
+            } else {
+                wheel.ways.delete(way);
+            }
+        }
+
+        const x = (wheel.ways.has("right") ? 1 : 0) - (wheel.ways.has("left") ? 1 : 0);
+        const y = (wheel.ways.has("back") ? 1 : 0) - (wheel.ways.has("forward") ? 1 : 0);
+        const far = Math.hypot(x, y);
+
+        this.padWheelAim(far ? { x: x / far, y: y / far, far: 1 } : { x: 0, y: 0, far: 0 });
+    }
+
+    // Whether a mouse button's set to something where the player is (only the middle, right, back
+    // and forward ever are: app/keys.js MOUSE_BUTTONS)
+    #mouseSet(button) {
+        const key = mouseOf(button);
+
+        return Boolean(key && this.running && (this.keyActionOf(key) || heldBy(this.keys, key).length));
+    }
+
+    // A mouse button set to something, pressed or let go of: as a key is (#keyed, #keyLetGo), and
+    // walking with it if it's set to a way (app/steering.js `mouse`). Not the browser's own:
+    // scrolling by the middle button, back and forward
+    #mouseKey(event, down) {
+        if (!this.#mouseSet(event.button)) {
+            return;
+        }
+
+        const key = mouseOf(event.button);
+
+        event.preventDefault();
+        this.steering?.mouse(key, down);
+
+        if (down) {
+            this.#keyed(key, { target: event.target, code: key, repeat: false, preventDefault: () => event.preventDefault(), stopPropagation: () => event.stopPropagation() });
+        } else {
+            this.#keyLetGo(key);
+        }
     }
 
     // A drag lets go of the camera: walking, it swings back round behind the player
@@ -16830,7 +17014,8 @@ export class Game {
             return null;
         }
 
-        if (this.talk?.open || this.pack?.open || this.journal?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open) {
+        // (Nor while a wheel's held open by a key: the keys that move aim it)
+        if (this.talk?.open || this.pack?.open || this.journal?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open || this.keyWheel) {
             return null;
         }
 
@@ -17303,7 +17488,8 @@ export class Game {
             }
         };
         const key = (event) => {
-            if (event.key === "Escape") {
+            // (The menu's key, Escape as it comes)
+            if (this.keyActionOf(keyOf(event)) === "menu") {
                 event.preventDefault();
                 event.stopPropagation();
                 this.#closeWheel();

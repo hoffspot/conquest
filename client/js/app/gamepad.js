@@ -6,7 +6,8 @@
 // (test/gamepad.test.js): which buttons went down and came up, which were held (QUICK_HOLD_MS, as
 // long as an Action Bar slot's hold), how far each stick's pushed once its dead zone's taken off,
 // and which of the game's actions each button gives (ACTIONS, as the player's set them: Game
-// options, Controls, Controller). app/padplay.js reads the controller and does what it means.
+// options, Controls, Bindings, beside the keys: app/keys.js). app/padplay.js reads the controller
+// and does what it means.
 //
 // The layout goes by where a button sits, not what's printed on it: the bottom face button is
 // always 0 (Cross on a DualSense, A on an Xbox controller, B on a Switch Pro). So the names here are
@@ -158,7 +159,7 @@ const BINDING = /^([a-z0-9]+)(:hold)?$/;
 
 /**
  * Every action's button: as it comes, with what the player's set (`saved`: { action id: "r1" or
- * "square:hold" }) over it, anything unknown or no longer bindable left as it comes.
+ * "square:hold", or "" for none }) over it, anything unknown or no longer bindable left as it comes.
  */
 export function bindingsOf(saved = {}) {
     const bindings = {};
@@ -166,7 +167,7 @@ export function bindingsOf(saved = {}) {
     for (const action of ACTIONS) {
         const mine = saved?.[action.id];
         const match = typeof mine === "string" ? BINDING.exec(mine) : null;
-        const fits = match && BINDABLE.includes(match[1]) && !(action.bar && match[2]);
+        const fits = mine === "" || (match && BINDABLE.includes(match[1]) && !(action.bar && match[2]));
 
         bindings[action.id] = fits ? mine : bindingOf(action);
     }
@@ -175,31 +176,40 @@ export function bindingsOf(saved = {}) {
 }
 
 /**
- * An action set to another button (`binding`, as bindingsOf keeps them), in a copy: whatever had
- * that button takes the action's old one instead, so no two share. A bar's action can't be set to a
- * button held (it's held anyway).
+ * An action set to another button (`binding`, as bindingsOf keeps them; "" for none), in a copy:
+ * whatever else had that button lets it go (left with none: Game options says which), so no two
+ * share. A bar's trigger is the bar's alone: set to a button, nothing else has it, tapped or held;
+ * and a bar's action can't be set to a button held (it's held anyway).
  */
 export function rebind(bindings, id, binding) {
     const action = BY_ID.get(id);
     const match = typeof binding === "string" ? BINDING.exec(binding) : null;
+
+    if (action && binding === "") {
+        return { ...bindings, [id]: "" };
+    }
 
     if (!action || !match || !BINDABLE.includes(match[1]) || (action.bar && match[2])) {
         return { ...bindings };
     }
 
     const next = { ...bindings };
-    const old = next[id];
-    const other = Object.keys(next).find((key) => key !== id && next[key] === binding);
+
+    for (const other of ACTIONS) {
+        const theirs = BINDING.exec(next[other.id] ?? "");
+
+        if (other.id !== id && theirs && (next[other.id] === binding || (theirs[1] === match[1] && (action.bar || other.bar)))) {
+            next[other.id] = "";
+        }
+    }
 
     next[id] = binding;
 
-    if (other) {
-        // (A bar's action given a hold takes the button alone)
-        next[other] = BY_ID.get(other)?.bar ? old.replace(":hold", "") : old;
-    }
-
     return next;
 }
+
+/** The actions that had a button before (`before`) and have none now (`after`): those a button was taken from. */
+export const takenFrom = (before, after) => ACTIONS.filter((action) => before[action.id] && !after[action.id]).map((action) => action.id);
 
 /** Whether every action's set as it comes. */
 export const asTheyCome = (bindings) => ACTIONS.every((action) => bindings[action.id] === bindingOf(action));

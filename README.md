@@ -153,7 +153,9 @@ way twice in a row, and fireballs, bolts and spells each have five looks too. **
 (a quick flick upwards, starting on your character) to turn the way the camera looks and go
 straight ahead that way, as far as you can until something's in the way: sprinting while you
 have stamina, then walking. On a keyboard, **W, A, S, D** (or the arrow keys) steer you the way
-the camera looks, running; hold **Shift** to walk. Out of breath, you walk on the way you're
+the camera looks, running; hold **Shift** to walk. Every key can be changed, and the mouse's
+right, middle and side buttons given actions, in **Game options, Controls, Bindings**, which also
+has presets for handhelds (the Steam Deck, Legion Go, ROG Ally and MSI Claw). Out of breath, you walk on the way you're
 steering until a quarter of your stamina is back, then run again.
 
 **Weapons are put away** out of a fight, each in its place on the body:
@@ -481,6 +483,9 @@ up. They're all remembered.
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
 | Action Bar (in a fight) | Tap one of the four (or six) along the bottom; hold one to change it; flick a spell up or down for the next or last of its school | Click one, or press 1 to 4 (or 6); drag a spell up or down |
 | Pause, Game options | The menu button | The menu button or Escape |
+| Do what's in front, stop, let go of the foe | Tap them | F, C and V |
+| Your own wheel, their wheel | Hold on yourself or them | Hold G or T, steering to a slice with W, A, S, D |
+| Change a key, a mouse button or a controller button | Game options, Controls, Bindings | Choose the action, then press the key, click or button |
 
 **Playing together.** There are two ways.
 

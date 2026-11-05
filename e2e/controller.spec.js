@@ -252,7 +252,7 @@ test("a game controller works the windows: Multiplayer, a world's code picked a 
     await expect(page.locator("#multiplayer")).toBeHidden();
 });
 
-test("a game controller's buttons are set on the Controller page: chosen, the button pressed, swapped with what had it, and set back", async ({ page }) => {
+test("a game controller's buttons are set on the Bindings page: chosen, the button pressed, taken from what had it (and said), and set back", async ({ page }) => {
     test.setTimeout(240000);
 
     const pad = await standIn(page);
@@ -262,7 +262,7 @@ test("a game controller's buttons are set on the Controller page: chosen, the bu
     await pad.press("options");
     await page.waitForFunction(() => document.querySelector("#menu").open, null, { timeout: 30000 });
 
-    // Game options, Controls, Controller: the controller's seen
+    // Game options, Controls, Controller: the controller's seen; its buttons, on the Bindings page
     for (const button of ["#optionsbutton", "#controlsbutton", "#controllerbutton"]) {
         await page.locator(button).focus();
         await pad.press("cross");
@@ -270,22 +270,33 @@ test("a game controller's buttons are set on the Controller page: chosen, the bu
 
     await expect(page.locator("#menucontroller")).toBeVisible();
     await expect(page.locator("#padseen")).toContainText("DualSense Wireless Controller: ready.");
+    await page.locator("#padbindingsbutton").focus();
+    await pad.press("cross");
+    await expect(page.locator("#menubindings")).toBeVisible();
 
-    // "Do it" set to R1: R1's old action (the next foe) takes Cross
-    const doIt = page.locator('.padbind[data-action="do"]');
+    // "Do it" set to R1, its controller box chosen: R1's old action (the next foe) lets it go, and that's said
+    const doIt = page.locator('.bind[data-action="do"] .bind-slot[data-slot="pad"]');
 
-    await expect(doIt.locator(".padbind-key")).toHaveText("✕");
+    await expect(doIt).toHaveText("✕");
     await doIt.focus();
     await pad.press("cross");
-    await expect(doIt.locator(".padbind-key")).toHaveText("Press a button…");
+    await expect(page.locator('.bind[data-action="do"] .bind-ask')).toHaveText("Press a button…");
     await pad.press("r1");
-    await expect(doIt.locator(".padbind-key")).toHaveText("R1");
-    await expect(page.locator('.padbind[data-action="nextFoe"] .padbind-key')).toHaveText("✕");
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).padBindings)).toMatchObject({ do: "r1", nextFoe: "cross" });
+    await expect(doIt).toHaveText("R1");
+    await expect(page.locator('.bind[data-action="nextFoe"] .bind-slot[data-slot="pad"]')).toHaveText("—");
+    await expect(page.locator("#bindtold")).toHaveText("Taken from The next foe, nearest first: choose it to give it another.");
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).padBindings)).toMatchObject({ do: "r1", nextFoe: "" });
 
-    // Every button as it came
-    await page.locator("#padreset").focus();
+    // Chosen by its name, the action takes a button pressed too: Stop, held Triangle
+    await page.locator('.bind[data-action="stop"] .bind-name').focus();
     await pad.press("cross");
-    await expect(doIt.locator(".padbind-key")).toHaveText("✕");
-    await expect(page.locator("#padreset")).toBeDisabled();
+    await pad.hold("triangle");
+    await page.waitForFunction(() => document.querySelector('.bind[data-action="stop"] .bind-slot[data-slot="pad"]').textContent === "△ held", null, { timeout: 30000 });
+    await pad.hold("triangle", false);
+
+    // Every key and button as it came
+    await page.locator("#bindreset").focus();
+    await pad.press("cross");
+    await expect(doIt).toHaveText("✕");
+    await expect(page.locator("#bindreset")).toBeDisabled();
 });
