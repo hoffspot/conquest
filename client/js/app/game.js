@@ -136,7 +136,8 @@ import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
-import { cutRock, DUNGEON_CUT } from "../world/dungeons3d.js";
+import { cutRock, DUNGEON_CUT, loadProp } from "../world/dungeons3d.js";
+import { KEEP_KIT } from "../world/keepkit.js";
 import { showSilhouette, SILHOUETTE } from "../world/silhouette.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
@@ -13483,6 +13484,12 @@ export class Game {
 
         // (A scene's keep gone into, core/insides.js: its scene's art kept for coming back out)
         const into = this.world.interiors?.of(mapId) ?? null;
+
+        // (Bellhaven's keep's castle's pieces fetched while its court's crossed, ready by its doors:
+        // world/keepkit.js; none without the licensed models)
+        if (into?.kind === "scenery" && SCENERY[into.scenery]?.keep) {
+            Promise.resolve(loadProp(KEEP_KIT.wall)).catch(() => null);
+        }
 
         for (const [id, each] of this.interiors) {
             each.object.visible = id === mapId;

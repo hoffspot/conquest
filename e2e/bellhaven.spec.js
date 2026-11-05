@@ -288,6 +288,39 @@ for (const licensed of [true, false]) {
             expect(floor).toMatchObject({ indoors: true, look: "keep", level: 0, doors: ["doors", "stair"], castle: licensed, name: "The Keep of Bellhaven: the Great Hall" });
             expect(floor.calls).toBeLessThan(250);
 
+            // Drawn in its castle's own stone (world/keepkit.js), its kit fetched while the court was
+            // crossed: its pieces set about it, its walls and floor its castle's, its own pillars put
+            // away for its castle's columns; without the licensed models, none of it
+            const kit = await page.evaluate(async (id) => {
+                const { game, session } = window.pellagos;
+                const { object } = game.interiors.get(id);
+                const pieces = new Set();
+                const rock = {};
+                let pillars = null;
+
+                await object.userData.furnished;
+                game.advance(0.1);
+
+                object.traverse((node) => {
+                    if (node.isMesh && node.material?.name?.startsWith("prop-bellhaven-keep-")) {
+                        pieces.add(node.material.name.slice("prop-bellhaven-keep-".length));
+                    } else if (node.isMesh && (node.name === "walls" || node.name === "floor")) {
+                        rock[node.name] = node.material.name;
+                    } else if (node.isMesh && node.name === "pillars") {
+                        pillars = node.visible;
+                    }
+                });
+
+                return { pieces: [...pieces].sort(), rock, pillars, calls: session.view.renderer.info.render.calls };
+            }, keep.map);
+
+            expect(kit).toMatchObject(
+                licensed
+                    ? { pieces: ["column", "cornice", "pilaster", "window"], rock: { walls: "rock-keep-wall", floor: "rock-keep-floor" }, pillars: false }
+                    : { pieces: [], rock: { walls: "rock-stone-temple", floor: "rock-floor-temple" }, pillars: true },
+            );
+            expect(kit.calls).toBeLessThan(250);
+
             // Back out by its doors, to before them on the castle's court, its art there still
             const out = await page.evaluate(async ([door, castle]) => {
                 const { game } = window.pellagos;

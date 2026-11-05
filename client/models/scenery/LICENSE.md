@@ -32,3 +32,20 @@ baked from it (`utilities/blenderpipeline`, README *Where it can be walked*): th
 square a body can stand on, no mesh or texture.
 
 Don't copy them out of this game or use them in anything else.
+
+## bellhaven-keep.bin
+
+The same **White Castle**, by **DmitriyDryzhak**, bought on **Fab** by this repository's owner under
+**Fab's Standard License**, and its pieces drawing the insides of Bellhaven's keep (a dungeon of
+four floors going up behind the keep's doors): a kit of its parts taken from the bought files and
+put through `utilities/blenderpipeline` (`private/bellhaven-keep.json`, which stays out of the
+repository with them), each part a node of its own, its `phone` build: its Gothic column, a
+pilaster, a cornice, a tracery window, its bell, and a plane of its wall and one of its floor (their
+textures the keep's walls and floor are drawn with), 10,198 triangles in 9 draw calls, its 6
+materials' textures as KTX2 (1,024 pixels; normals 512).
+
+It is not CC0 and not free to reuse, as the castle's other builds aren't: scrambled as the game
+serves it, with whose it is in its glTF asset's `copyright`, and kept in the private repository
+the game's builds fetch it from, not in this one.
+
+Don't copy it out of this game or use it in anything else.
