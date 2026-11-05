@@ -15,7 +15,8 @@ const { ASSETS } = await import("../client/js/app/assets.js");
 const { dungeonRooms } = await import("../client/js/core/insides.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { CAVERNS } = await import("../client/js/world/caverns.js");
-const { DUNGEON_PROPS, furnish } = await import("../client/js/world/dungeons3d.js");
+const { DUNGEON_PROPS, furnish, loadProp } = await import("../client/js/world/dungeons3d.js");
+const { KEEP_KIT } = await import("../client/js/world/keepkit.js");
 const { buildInterior } = await import("../client/js/world/interiors3d.js");
 const { PROPS } = await import("../scripts/build-props.js");
 
@@ -187,5 +188,29 @@ describe("the models placed (world/dungeons3d.js furnish)", () => {
         near(d.max.y - d.min.y, 1, "made as tall");
         near(d.max.z - d.min.z, 2, "made as wide");
         near((d.min.x + d.max.x) / 2, CAVERNS.tile + 4, "over x");
+    });
+
+    it("never leaves a model that can't be read an error no one's caught, asked for ahead of being wanted as a level's built (the licensed models left out)", async () => {
+        const [page, fetching] = [globalThis.document.baseURI, globalThis.fetch];
+        const uncaught = [];
+        const note = (reason) => uncaught.push(reason);
+
+        globalThis.document.baseURI = "http://localhost/";
+        globalThis.fetch = () => Promise.reject(new TypeError("Failed to fetch"));
+        process.on("unhandledRejection", note);
+
+        try {
+            // (Asked for, as a level being built asks, and only waited on later)
+            const read = loadProp(KEEP_KIT.column);
+
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            assert.deepEqual(uncaught, []);
+            // (What waits on it still hears it couldn't be)
+            await assert.rejects(read, /Failed to fetch/);
+        } finally {
+            process.off("unhandledRejection", note);
+            globalThis.fetch = fetching;
+            globalThis.document.baseURI = page;
+        }
     });
 });
