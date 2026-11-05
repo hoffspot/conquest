@@ -9,7 +9,9 @@ How Bellhaven (DmitriyDryzhak's White Castle, November 2026) went into the world
 took to make it look a part of the land. Read `contribution.md`, `docs/WORLD.md` (*Set into the
 world*) and `utilities/blenderpipeline/README.md` (*Where it can be walked*, *Rocks that touch
 nothing*) first. A bought scene comes in by the `import-licensed-model` skill's rules: never in
-this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under a new name.
+this repository, scrambled into `hoffspot/conquest-models`, a rebuilt file under a new name. What
+comes before and after this (the pack looked at, its build and walk, its own map, its insides a
+dungeon drawn with its own pieces) is the `import-scene-model` skill's.
 
 ## What the owner wants, every time
 
