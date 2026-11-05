@@ -243,6 +243,7 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
             texturesOfOneColourMadeFactors: optimized.texturesMadeFactors ?? 0,
             tangentsMended: optimized.tangentsMended ?? 0,
             stillChannelsTrimmed: optimized.stillChannelsTrimmed ?? 0,
+            ...(optimized.bonesHeld ? { bonesHeld: optimized.bonesHeld } : {}),
             keyframesThinned: optimized.keyframesThinned ?? 0,
             ktx2: optimized.ktx2 ?? [],
             ...(blender.madeMaterials?.length ? { materialsFromTextures: blender.madeMaterials } : {}),

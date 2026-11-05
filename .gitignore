@@ -72,6 +72,11 @@ client/models/beasts/cerberus.ash.bin
 client/models/beasts/demon-boss.bin
 client/models/beasts/demon-boss.blue.bin
 client/models/beasts/demon-boss.green.bin
+client/models/beasts/order.bin
+client/models/beasts/order.initiate.bin
+client/models/beasts/order.choir.bin
+client/models/beasts/order-mounted.bin
+client/models/beasts/order-mounted.choir.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

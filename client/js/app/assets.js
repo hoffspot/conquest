@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "5d5f629477",
+    release: "9c4da361a5",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2500,6 +2500,59 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/demon-boss.green.bin",
                     "hash": "acc0e80318",
                     "bytes": 1423964
+                }
+            ]
+        },
+        "beast-order": {
+            "tier": "demand",
+            "label": "The Order of the Bell: its brothers in white, its armour, helms and arms (Naked Singularity Studio's \"Templar Army\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/order.bin",
+                    "hash": "68e39ddf81",
+                    "bytes": 7833320
+                }
+            ]
+        },
+        "beast-order-skins": {
+            "tier": "demand",
+            "label": "The Order of the Bell's other liveries: its initiates' olive and the Black Choir's black (Naked Singularity Studio's \"Templar Army\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/order.initiate.bin",
+                    "hash": "139c12df12",
+                    "bytes": 570740
+                },
+                {
+                    "path": "models/beasts/order.choir.bin",
+                    "hash": "db8f2cf245",
+                    "bytes": 539936
+                }
+            ]
+        },
+        "beast-order-mounted": {
+            "tier": "demand",
+            "label": "The Order of the Bell's riders: a knight of the Bell on a barded warhorse, rider and horse in one (Naked Singularity Studio's \"Templar Army\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/order-mounted.bin",
+                    "hash": "be14aaf6b4",
+                    "bytes": 12525104
+                }
+            ]
+        },
+        "beast-order-mounted-skins": {
+            "tier": "demand",
+            "label": "The Order of the Bell's riders' other livery: the Black Choir's black (Naked Singularity Studio's \"Templar Army\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/order-mounted.choir.bin",
+                    "hash": "db8f2cf245",
+                    "bytes": 539936
                 }
             ]
         },

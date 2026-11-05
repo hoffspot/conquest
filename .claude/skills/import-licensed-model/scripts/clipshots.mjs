@@ -1,7 +1,9 @@
 /* global console, process, URL, window, document */
 // Pictures of a model's clips at moments through them, from the pipeline's viewer (served on
 // `port`): node clipshots.mjs <port> <file under utilities/blenderpipeline> <out dir> <clip:t,t,...>...
-// (the model's own skin; ?variant isn't asked for). Each picture <out>/<clip>-<t>.png
+// Each picture <out>/<clip>-<t>.png. In the model's own skin, or a variant's (VARIANT: its file, as
+// the model's is given); every part shown, or only those PARTS names (its config's `join` names,
+// comma-separated: a dressing of a model whose parts are kept apart)
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 
@@ -17,6 +19,15 @@ page.on("pageerror", (error) => console.error("page:", error.message));
 await page.goto(`http://localhost:${port}/?test&file=${encodeURIComponent(file)}`);
 await page.waitForFunction(() => window.viewerReady && window.viewer && document.querySelector("#clips button"), null, { timeout: 120000 });
 await page.evaluate((file) => window.viewer.load(`/${file}`), file);
+
+if (process.env.VARIANT) {
+    await page.evaluate((file) => window.viewer.look(`/${file}`), process.env.VARIANT);
+}
+
+if (process.env.PARTS) {
+    await page.evaluate((parts) => window.viewer.show(parts.split(",")), process.env.PARTS);
+}
+
 await page.waitForTimeout(1500);
 
 console.log("clips:", JSON.stringify((await page.evaluate(() => window.viewer.info())).clips.map((clip) => clip.name)));

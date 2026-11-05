@@ -205,6 +205,110 @@ const demons = (length, skins) => {
     });
 };
 
+// The Order of the Bell (MODELS bellInitiate, bellBrother, bellSpearman, bellArcher, choirKnight,
+// priorVane): Naked Singularity Studio's Templar Army (the catalog's beast-order), one body on one
+// skeleton, made 1.85 metres tall, its parts kept apart (its mail and head, its surcoat, cloak,
+// cuirass, plate and gauntlets, five helms, its arms, shields, sheaths and quiver): each kind wears
+// its own (`parts`, and one of each of `choose`'s lists, by its seed: beast.js partsOf), in its
+// livery (`skins`: its own white; the initiates' olive, the Black Choir's black). Its clips by what
+// it holds (`arms`). A sword's (a knife and a morning star swung so too): a cut (Sword Attack 2, to
+// 1.3 seconds, the blow at 0.64), a slash and back (3, to 1.7: 0.56 and 1.2), a flurry of two (4, to
+// 1.4: 0.4 and 0.8) and its shield driven into whoever's before it as it lunges low, its blade after
+// (1, to 1.3: 0.32 and 0.64); on guard as it rests (Sword Idle 2). A spear's: thrust and thrust again
+// (Spear Attack 2, to 1.7: 0.56 and 1.16), jabbed (3, to 1.8: 0.64 and 1.24) and driven (1, to 1.9:
+// 0.68 and 1.32); couched as it rests (Spear Ready). A bow's: drawn (Bow Aim from 0.4 seconds) and
+// loosed (Bow Shoot to 0.7, the arrow away 0.2 seconds into it). Each played to where its blows are
+// struck, not through the long recovery after them. Its flinch (Hit), its fall (Death). Walking at
+// 0.8 m/s and running at 4.5 as it's made, its run played slower at its chase
+const ORDER_ARMS = Object.freeze({
+    sword: {
+        clips: { idle: "Sword Idle", walk: "Sword Walk", run: "Sword Run" },
+        specials: { cut: "Sword Attack 2", slash: "Sword Attack 3", flurry: "Sword Attack 4", bash: "Sword Attack 1" },
+        spans: { cut: [0, 1.3], slash: [0, 1.7], flurry: [0, 1.4], bash: [0, 1.3] },
+        rests: { guard: "Sword Idle 2" },
+    },
+    spear: {
+        clips: { idle: "Spear Idle", walk: "Spear Walk", run: "Spear Run" },
+        specials: { thrust: "Spear Attack 2", jab: "Spear Attack 3", drive: "Spear Attack 1" },
+        spans: { thrust: [0, 1.7], jab: [0, 1.8], drive: [0, 1.9] },
+        rests: { ready: "Spear Ready" },
+    },
+    bow: {
+        clips: { idle: "Bow Idle", walk: "Bow Walk", run: "Bow Run" },
+        specials: {},
+        spans: {},
+        chains: { shoot: [{ clip: "Bow Aim", from: 0.4, to: 1.4 }, { clip: "Bow Shoot", from: 0, to: 0.7 }] },
+        rests: {},
+    },
+});
+
+// (Frozen all through: its lists and their lists, its objects and theirs)
+const deepFreeze = (value) => {
+    if (Array.isArray(value)) {
+        return Object.freeze(value.map(deepFreeze));
+    }
+
+    return value && typeof value === "object" ? Object.freeze(Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, deepFreeze(inner)]))) : value;
+};
+
+const order = ({ parts, choose = [], arms, skins = null, scale = 1, specials = {}, spans = {} }) => {
+    const kit = ORDER_ARMS[arms];
+
+    return Object.freeze({
+        asset: "beast-order",
+        ...(skins ? { skins: Object.freeze(skins) } : {}),
+        parts: Object.freeze(parts),
+        choose: Object.freeze(choose.map((list) => Object.freeze(list))),
+        length: +(0.7 * scale).toFixed(3),
+        made: Object.freeze({ long: 0.7, tall: 1.85 }),
+        clips: Object.freeze({ ...kit.clips, react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ ...kit.specials, ...specials }),
+        spans: deepFreeze({ ...kit.spans, ...spans }),
+        ...(kit.chains ? { chains: deepFreeze(kit.chains) } : {}),
+        rests: Object.freeze({ ...kit.rests }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+        mouth: null,
+        pace: +(0.8 * scale).toFixed(2),
+        runPace: +(4.5 * scale).toFixed(2),
+        flinch: 0.6,
+    });
+};
+
+// A rider of the Order of the Bell on a barded warhorse (MODELS bellRider, choirRider): the
+// catalog's beast-order-mounted, the Order's rider and the pack's horse joined in one, their clips
+// the horse's and the rider's together (utilities/blenderpipeline private/mounted.json), its parts
+// those it wears (`parts`) and its skins (`skins`); at a trot on its rounds and a gallop after
+// whoever it's set on (`pace`, `runPace`: how fast each carries it); cutting down from the saddle
+// as the horse canters (`ride`, `sweep`: 1.3 s of each clip, the blow 0.7 s in), and the horse
+// spurred over whoever's a little way off, its gallop played twice over (`charge`)
+const riderOf = (parts, skins = null) =>
+    Object.freeze({
+        asset: "beast-order-mounted",
+        ...(skins ? { skins: Object.freeze(skins) } : {}),
+        parts: Object.freeze(parts),
+        choose: Object.freeze([]),
+        length: 2.56,
+        made: Object.freeze({ long: 2.56, tall: 2.27 }),
+        clips: Object.freeze({ idle: "Mount Idle", walk: "Mount Trot", run: "Mount Gallop", react: "Mount Hit", dead: "Mount Death" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ ride: "Mount Attack", sweep: "Mount Attack 2" }),
+        spans: deepFreeze({ ride: [0.2, 1.5], sweep: [0.2, 1.5] }),
+        chains: deepFreeze({ charge: [{ clip: "Mount Gallop", from: 0, to: 0.53 }, { clip: "Mount Gallop", from: 0, to: 0.53 }] }),
+        rests: Object.freeze({ look: "Mount Idle 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "Spine1_M", head: "head", mouth: "head", left: "hand_l" }),
+        mouth: null,
+        pace: 2.4,
+        runPace: 5,
+        flinch: 0.6,
+    });
+
+// (The helms a brother of the Bell may wear: one of four, by his seed. The Black Choir's is the
+// great helm with the cross on it)
+const BROTHERS_HELMS = ["HelmPlain", "HelmFlat", "HelmBar", "HelmRidge"];
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -595,6 +699,33 @@ export const MODELS = Object.freeze({
     // (Ashkhar the Bellbound (creatures.js): the Breach's demon a fifth bigger than it's made, in its
     // blue skin, its fire smothered to frost)
     ashkhar: demons(2.34, ["blue"]),
+    // (The Order of the Bell (creatures.js), each kind in what it wears (`order`, above). An
+    // initiate of the Bell: unhelmed, in mail and the initiates' olive, a knife at the belt and
+    // in hand. A brother: helmed, sword and heater shield, his sword's sheath at his hip. A
+    // spear-brother: helmed, spear and kite shield. A bowman: in a flat-topped helm or a plain
+    // one, his bow and quiver. A knight of the Black Choir: in plate, cuirass and gauntlets under
+    // the Choir's black and its cloak, the crossed great helm, morning star and heater shield;
+    // drawn a little bigger. Prior Osric Vane, the Voice of the Bell, the keep's master: as the
+    // Choir's knights are, bigger again, his shield driven in as he lunges ringing out as the
+    // Bell's voice does (his toll), and on guard as he calls the Choir to him (his rally))
+    bellInitiate: order({ parts: ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"], arms: "sword", skins: ["initiate"], scale: 0.98 }),
+    bellBrother: order({ parts: ["Body", "Head", "Surcoat", "Sword", "HeaterShield", "SwordSheath"], choose: [BROTHERS_HELMS], arms: "sword" }),
+    bellSpearman: order({ parts: ["Body", "Head", "Surcoat", "Spear", "KiteShield"], choose: [BROTHERS_HELMS], arms: "spear" }),
+    bellArcher: order({ parts: ["Body", "Head", "Surcoat", "Bow", "Quiver", "KnifeSheath"], choose: [["HelmFlat", "HelmPlain"]], arms: "bow" }),
+    choirKnight: order({ parts: ["Body", "Head", "Plate", "Cuirass", "Gauntlets", "Surcoat", "Cloak", "HelmCross", "MorningStar", "HeaterShield"], arms: "sword", skins: ["choir"], scale: 1.05 }),
+    // (The Order's riders (core/creatures.js bellRider, choirRider): a knight of the Bell on a barded
+    // warhorse, one model of the two (riderOf), a brother in a barred helm or a knight of the Black
+    // Choir in the great helm and black)
+    bellRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmBar", "SwordSheath", "Sword", "KiteShield", "Horse"]),
+    choirRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmCross", "SwordSheath", "Sword", "KiteShield", "Horse"], ["choir"]),
+    priorVane: order({
+        parts: ["Body", "Head", "Plate", "Cuirass", "Gauntlets", "Surcoat", "Cloak", "HelmCross", "MorningStar", "HeaterShield"],
+        arms: "sword",
+        skins: ["choir"],
+        scale: 1.12,
+        specials: { toll: "Sword Attack 1", rally: "Sword Idle 2" },
+        spans: { toll: [0, 1.3], rally: [0, 2.9] },
+    }),
     // (The River of Fire's master (dungeons/themes.js `hell`), the Lord of the Pit's before: the
     // Greater Demon, made 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves
     // played on its skeleton (utilities/blenderpipeline's clips), its wings beating to them:
@@ -1587,12 +1718,28 @@ export function breathing(model, attack, lengths, aloft = false) {
 }
 
 /**
+ * The part of a model a mesh is (the name its parts were joined under, the pipeline's `join`): its
+ * own name or its nearest named parent's, without a lower detail's "lod1" (".lod1" as made: three.js
+ * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials.
+ */
+export function partOf(node) {
+    let named = node;
+
+    while (named && !named.name) {
+        named = named.parent;
+    }
+
+    return (named?.name ?? "").replace(/_\d+$/, "").replace(/\.?lod\d+$/, "").replace(/_\d+$/, "");
+}
+
+/**
  * A body (BeastAvatar's plan) made from a kind's model as read (`gltf`), at the size BeastAvatar
  * scales it by (`scale`: drawn at MODELS' `length` all the same), in one of its skins (`skin`: ""
  * its own, or one of MODELS' `skins`, as wantModel read it; its own if that wasn't). `groundAt(x,
- * z)`: the ground's height, for its fire to spread along.
+ * z)`: the ground's height, for its fire to spread along. `parts`: the parts it wears, of a model
+ * whose parts are kept apart (partsOf); all of them if null.
  */
-export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" } = {}) {
+export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", parts = null } = {}) {
     const model = MODELS[id];
     const scene = clone(gltf.scene);
     const inner = new THREE.Group();
@@ -1606,6 +1753,24 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
     inner.add(scene);
     // (Made standing above where it is: sunk to the ground)
     scene.position.y = -(model.sink ?? 0);
+
+    // (Only the parts it wears of a model whose parts are kept apart (the pipeline's `join`: the
+    // Order of the Bell's one body, its armour, helms and arms each a part), every level of each;
+    // the rest left out of what's drawn)
+    if (parts) {
+        const worn = new Set(parts);
+        const off = [];
+
+        scene.traverse((node) => {
+            if (node.isMesh && !worn.has(partOf(node))) {
+                off.push(node);
+            }
+        });
+
+        for (const node of off) {
+            node.removeFromParent();
+        }
+    }
 
     // Its meshes, a level of detail at a time (the pipeline's packed lower details: extras.lod),
     // each level's those of all its parts (a werewolf's body and its two lengths of fur); each of

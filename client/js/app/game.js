@@ -22,7 +22,7 @@
 // (world/chunks3d.js), as they go.
 
 import * as THREE from "three";
-import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
+import { ATTACKS, DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { folkLook, followerLook } from "../characters/folk.js";
 import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/folkcrowd.js";
@@ -216,6 +216,13 @@ export function heroEquipment(weapon, pieces = null, parts = []) {
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
 export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? null;
+
+// The motion a people-shaped creature's stand-in swings with (an ATTACKS key) for a way of attacking
+// of its model's own, not among the characters' (a knight of the Bell's cut, a spear-brother's
+// thrust, the Orc King's chop): as what it holds is swung (its weapon's equipment), a blade's else
+const HELD_SWINGS = Object.freeze({ sword: "sword", cleaver: "cleaver", staff: "staff", bow: "bow", warHammer: "hammer", battleAxe: "hammer" });
+
+export const swingOf = (animation, weapon) => (ATTACKS[animation] ? animation : ((weaponOf(weapon)?.equipment ?? []).map((item) => HELD_SWINGS[item]).find(Boolean) ?? "sword"));
 
 // The sound of drawing each kind of weapon and putting it away (at the moment the hand takes it
 // or lets it go): a blade from its scabbard, something slung off the back or from a belt, fists
@@ -932,6 +939,12 @@ const COLOSSAL_BLASTS = Object.freeze({
     demonLeap: { quake: "slam", shake: 0.4, sound: "impactEarthMid" },
     demonFlare: { quake: "inferno", shake: 0.3, sound: "impactFireMid" },
     frostFlare: { quake: "frost", shake: 0.3, sound: "impactWaterHigh" },
+    // (The Prior of the Bell's toll: his shield driven down and the Bell's voice ringing out all
+    // round him, the ground shuddering, heard as a deep bell)
+    bellToll: { quake: "roar", shake: 0.3, sound: "impactHealingHigh" },
+    // (A rider of the Bell's charge: the horse coming down over whoever it rode at, the ground
+    // heaving, heard as hooves come down hard)
+    trample: { quake: "slam", shake: 0.25, sound: "impactEarthMid" },
     shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
 });
@@ -2774,7 +2787,8 @@ export class Game {
         // drawn till it is, #modelling)
         wantModel(actor.wild.creature, "now");
 
-        const weapon = WEAPONS[actor.weapon];
+        // (Its weapon a player's or its kind's own: a knight of the Bell's morning star, an orc's axe)
+        const weapon = weaponOf(actor.weapon);
         const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null, release: true });
 
         // (Gone from the battle, or drawn in full some other way, while it was being built: but
@@ -5365,7 +5379,11 @@ export class Game {
         }
 
         const weapon = actor.weapon;
-        const fights = { guard: guardOf(weapon), attack: weaponOf(weapon)?.attacks[0] ?? { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null };
+        // (Its first attack, or the first way of one of several, `either`; swung as a character swings:
+        // swingOf)
+        const first = weaponOf(weapon)?.attacks[0];
+        const swing = first?.either?.[0] ?? first;
+        const fights = { guard: guardOf(weapon), attack: swing ? { ...swing, animation: swingOf(swing.animation, weapon) } : { animation: "sword", hitAt: 380, duration: 760 }, cast: CROWD_CASTS[weapon] ?? null };
 
         // (One of the players' own, named and on the party's icons: drawn as they look, a figure of their own)
         if (actor.kind === "follower") {
@@ -5384,7 +5402,7 @@ export class Game {
         return {
             key: `wild:${creature}:${kind}:${weapon}`,
             size: sizeOf(creature, seed),
-            spec: { ...fights, look: { ...look, equipment: [...look.equipment, ...(WEAPONS[weapon]?.equipment ?? [])] } },
+            spec: { ...fights, look: { ...look, equipment: [...look.equipment, ...(weaponOf(weapon)?.equipment ?? [])] } },
         };
     }
 
@@ -6082,6 +6100,28 @@ export class Game {
         }
     }
 
+    // The Order of the Bell in a court (host.js "order"): one of them warning off a player who's
+    // lingering by them, said over its head (`words`), the player told what the Order is the first
+    // time; or a player who's crossed the Order: the cry over whoever saw it, and that player told
+    // its courts are against them and their party now, its warning sounded
+    #orderSaid({ change, id, player, words }) {
+        if (id && this.battle.actor(id) && words) {
+            this.hud.say(id, words, 1 + bubbleSeconds(words));
+        }
+
+        if (player !== this.me) {
+            return;
+        }
+
+        if (change === "warn" && !this.orderTold) {
+            this.orderTold = true;
+            this.hud.message("The Order of the Bell holds Bellhaven. They'll let you be, unless you strike one of them or go into their keep.", 5);
+        } else if (change === "crossed") {
+            this.hud.message("You've crossed the Order of the Bell: its brothers will set on you and your party wherever they hold.", 5);
+            this.sound?.play("townHorn");
+        }
+    }
+
     // The strangers out (core/director.js STRANGERS; host.js "stranger" events): put out, drawn
     // (a few at a time, as the wild's are); and what's said as they deal with the player, over
     // their heads: hungry bandits' chief hailing them (and told what they want), paid, and refused
@@ -6526,13 +6566,14 @@ export class Game {
     rareIcons() {
         const seen = [...this.raresSeen.values()].filter(({ map }) => map === "town").map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
         // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps, a
-        // fight's, and a card's kept at a site marked on the maps, `mark`: the Orc King's war camp;
+        // fight's, a way in to go in by or a master to strike down in there, and a card's kept at a
+        // site marked on the maps, `mark`: the Orc King's war camp;
         // and where a card's kept that they fell to, `fell`. None of a thread they've given up)
         const legends = this.host.legends;
         const threads = Object.entries(legends?.threads ?? {})
             .filter(([id]) => !legends.gaveUp?.(id, this.me))
             .map(([id, thread]) => ({ id, thread, def: legends.stepOf(id), fell: (thread.fell ?? []).includes(this.me) }))
-            .filter(({ thread, def, fell }) => thread.place && (["place", "lock", "fight", "enter"].includes(def?.kind) || def?.mark || (def?.kind === "card" && fell)))
+            .filter(({ thread, def, fell }) => thread.place && (["place", "lock", "fight", "enter", "slay"].includes(def?.kind) || def?.mark || (def?.kind === "card" && fell)))
             .map(({ id, thread: { place: [x, z] }, def, fell }) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: ${def?.kind === "card" && fell ? "where you fell to it" : "where it leads"}` }));
 
         return [...seen, ...threads];
@@ -11551,13 +11592,13 @@ export class Game {
             // (Its card kept where they fell to it: there, and that it waits for them still)
             const fell = def?.kind === "card" && thread.place && (thread.fell ?? []).includes(this.me);
             const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-            const where = ((def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.kind === "enter" || def?.mark) && thread.place) || fell ? thread.place : town?.at;
+            const where = ((def?.kind === "place" || def?.kind === "lock" || def?.kind === "fight" || def?.kind === "enter" || def?.kind === "slay" || def?.mark) && thread.place) || fell ? thread.place : town?.at;
 
             return {
                 title,
                 state: thread.done ? "Its end" : `Step ${thread.step + 1} of ${THREADS[id]?.steps.length ?? thread.step + 1}`,
                 words: thread.done ? (thread.by.length ? `Followed to its end by ${names(thread.by)}.` : "Followed to its end.") : `${this.#threadWordsOf(id)}${fell ? " You fell to it there, and it waits for you there still." : ""}`,
-                where: !thread.done && at && where ? `${town && def?.kind !== "place" && def?.kind !== "enter" && !def?.mark && !fell ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
+                where: !thread.done && at && where ? `${town && def?.kind !== "place" && def?.kind !== "enter" && def?.kind !== "slay" && !def?.mark && !fell ? `${town.name}, ` : ""}${bearing(at, where)}` : "",
                 thread: thread.done ? null : id,
             };
         });
@@ -14293,6 +14334,9 @@ export class Game {
             case "stranger":
                 this.#strangerSaid(event);
                 break;
+            case "order":
+                this.#orderSaid(event);
+                break;
             case "obstacle":
                 this.#obstacleSaid(event);
                 break;
@@ -15062,7 +15106,7 @@ export class Game {
         // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in hand, whatever
         // it looked like: once starting the attack has finished any drawing or putting away. How
         // far off its target is, for a creature that reaches it: a frog's tongue)
-        avatar.actions.startAttack(event.animation, {
+        avatar.actions.startAttack(avatar instanceof BeastAvatar ? event.animation : swingOf(event.animation, actor.weapon), {
             hitAt: event.hitAt / 1000,
             duration: event.duration / 1000,
             arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon),

@@ -926,6 +926,131 @@ export const NATURAL = Object.freeze({
         equipment: ["cleaver"],
         attacks: [melee({ id: "hack", damage: [6, 11], hitAt: 520, duration: 900, interval: 1400, stagger: 250, reaction: "hack", animation: "cleaver", afflict: { kind: "bleed", chance: 0.15 } })],
     },
+    // (The Order of the Bell (creatures.js bellInitiate and the rest), each blow when their model's
+    // clips land it (beasts/model.js order: each clip cut off once its blows are struck). An
+    // initiate's knife, cut, slashed and back, or in a flurry of two, quick and light. A brother's
+    // sword the same, harder, and his heater shield driven into whoever's before him now and then,
+    // throwing them back. A spear-brother's spear, reaching further: thrust twice, jabbed twice, or
+    // driven in. A bowman's arrows, drawn and loosed, from as far as a bow shoots. The Black Choir's
+    // morning stars, cut, slashed and back, in a flurry, or with the shield, each crushing, heavier
+    // than a brother's. Their stand-ins holding a cleaver, a sword, a staff for a spear, a bow, a war
+    // hammer)
+    bellKnife: {
+        label: "Knife",
+        equipment: ["cleaver"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "cut", damage: [4, 7], hitAt: 640, duration: 1300, interval: 1500, stagger: 150, reaction: "slash", animation: "cut", afflict: { kind: "bleed", chance: 0.2 } }),
+                    melee({ id: "slash", damage: [5, 8], hitAt: 560, duration: 1700, interval: 1900, stagger: 150, reaction: "slash", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.55 }] }),
+                    melee({ id: "flurry", damage: [4, 7], hitAt: 400, duration: 1400, interval: 1600, stagger: 120, reaction: "slash", animation: "flurry", blows: [{ at: 400, share: 0.55 }, { at: 800, share: 0.55 }] }),
+                ],
+            },
+        ],
+    },
+    bellSword: {
+        label: "Sword and shield",
+        equipment: ["sword", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "cut", damage: [8, 13], hitAt: 640, duration: 1300, interval: 1600, stagger: 250, reaction: "slash", animation: "cut" }),
+                    melee({ id: "slash", damage: [9, 14], hitAt: 560, duration: 1700, interval: 2000, stagger: 250, reaction: "slash", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.6 }] }),
+                    melee({ id: "flurry", damage: [8, 13], hitAt: 400, duration: 1400, interval: 1700, stagger: 200, reaction: "slash", animation: "flurry", blows: [{ at: 400, share: 0.55 }, { at: 800, share: 0.55 }] }),
+                    melee({ id: "bash", damage: [6, 10], hitAt: 320, duration: 1300, interval: 1800, stagger: 400, reaction: "crush", animation: "bash", blows: [{ at: 320, share: 0.45, toss: 0.7 }, { at: 640, share: 0.6 }] }),
+                ],
+            },
+        ],
+    },
+    bellSpear: {
+        label: "Spear and shield",
+        equipment: ["staff", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: 1.8,
+                either: [
+                    melee({ id: "thrust", reach: 1.8, damage: [9, 14], hitAt: 560, duration: 1700, interval: 1900, stagger: 300, reaction: "pierce", animation: "thrust", blows: [{ at: 560, share: 0.6 }, { at: 1160, share: 0.55 }] }),
+                    melee({ id: "jab", reach: 1.8, damage: [8, 13], hitAt: 640, duration: 1800, interval: 2000, stagger: 250, reaction: "pierce", animation: "jab", blows: [{ at: 640, share: 0.55 }, { at: 1240, share: 0.55 }] }),
+                    melee({ id: "drive", reach: 1.8, damage: [10, 16], hitAt: 680, duration: 1900, interval: 2200, stagger: 350, reaction: "pierce", animation: "drive", blows: [{ at: 680, share: 0.6 }, { at: 1320, share: 0.6 }], afflict: { kind: "bleed", chance: 0.25 } }),
+                ],
+            },
+        ],
+    },
+    // (A rider of the Bell's sword, from the saddle of a barded warhorse: two cuts down at whoever's
+    // by the horse's side as it canters, each landing when its clip has it, 0.7 s into the 1.3 s of
+    // it played (beasts/model.js `spans`); reaching further than a man on foot does, from up there.
+    // The Black Choir's rider's harder)
+    riderSword: {
+        label: "Sword from the saddle",
+        equipment: ["sword", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: 2.2,
+                either: [
+                    melee({ id: "ride", reach: 2.2, damage: [14, 22], hitAt: 700, duration: 1300, interval: 1700, stagger: 450, reaction: "slash", animation: "ride" }),
+                    melee({ id: "sweep", reach: 2.2, damage: [15, 24], hitAt: 700, duration: 1300, interval: 1800, stagger: 500, reaction: "slash", animation: "sweep", toss: 0.5 }),
+                ],
+            },
+        ],
+    },
+    choirRiderSword: {
+        label: "Sword from the saddle",
+        equipment: ["sword", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: 2.2,
+                either: [
+                    melee({ id: "ride", reach: 2.2, damage: [17, 26], hitAt: 700, duration: 1300, interval: 1700, stagger: 500, reaction: "slash", animation: "ride" }),
+                    melee({ id: "sweep", reach: 2.2, damage: [18, 28], hitAt: 700, duration: 1300, interval: 1800, stagger: 550, reaction: "slash", animation: "sweep", toss: 0.6 }),
+                ],
+            },
+        ],
+    },
+    bellBow: {
+        label: "Longbow",
+        equipment: ["bow", "quiver"],
+        attacks: [ranged({ id: "arrow", reach: 13.5, damage: [7, 12], hitAt: 1200, duration: 1700, interval: 2300, stagger: 200, reaction: "pierce", animation: "shoot", projectile: { kind: "arrow", speed: 22 } })],
+    },
+    choirMace: {
+        label: "Morning star and shield",
+        equipment: ["warHammer", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "cut", damage: [12, 19], hitAt: 640, duration: 1300, interval: 1700, stagger: 400, reaction: "crush", animation: "cut" }),
+                    melee({ id: "slash", damage: [13, 21], hitAt: 560, duration: 1700, interval: 2100, stagger: 400, reaction: "crush", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.65 }] }),
+                    melee({ id: "flurry", damage: [12, 19], hitAt: 400, duration: 1400, interval: 1800, stagger: 350, reaction: "crush", animation: "flurry", blows: [{ at: 400, share: 0.5 }, { at: 800, share: 0.6 }] }),
+                    melee({ id: "bash", damage: [9, 14], hitAt: 320, duration: 1300, interval: 1900, stagger: 450, reaction: "crush", animation: "bash", blows: [{ at: 320, share: 0.45, toss: 0.9 }, { at: 640, share: 0.65 }] }),
+                ],
+            },
+        ],
+    },
+    // (Prior Osric Vane, the Voice of the Bell (creatures.js priorVane): the Choir's morning star,
+    // heavier still in his hand; his toll is a move of his own (creatures.js `moves`))
+    priorMace: {
+        label: "Morning star and shield",
+        equipment: ["warHammer", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "cut", damage: [15, 23], hitAt: 640, duration: 1300, interval: 1700, stagger: 450, reaction: "crush", animation: "cut" }),
+                    melee({ id: "slash", damage: [16, 25], hitAt: 560, duration: 1700, interval: 2100, stagger: 450, reaction: "crush", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.65 }] }),
+                    melee({ id: "flurry", damage: [15, 23], hitAt: 400, duration: 1400, interval: 1800, stagger: 400, reaction: "crush", animation: "flurry", blows: [{ at: 400, share: 0.5 }, { at: 800, share: 0.6 }] }),
+                ],
+            },
+        ],
+    },
 });
 
 /** A weapon (a WEAPONS key) or a creature's own (a NATURAL key), or null. */

@@ -14098,11 +14098,14 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     await expect(card).toBeHidden();
     expect(await page.evaluate(() => ({ running: window.pellagos.game.running, map: window.pellagos.game.battle.actor("player").map }))).toEqual({ running: true, map: "town" });
 
-    // Tapped again: waited for again, Go in now offered after a while, the bar part way; then in,
-    // of itself, once they're read
+    // Tapped again: waited for again, Go in now offered after a while (Not now not moved from under
+    // a finger as it is: its room kept), the bar part way; then in, of itself, once they're read
     await door(dens.wolves, "wolfDen", { there: true });
     await expect(card).toBeVisible();
+    await card.evaluate((element) => Promise.all(element.getAnimations().map((animation) => animation.finished)));
+    const back = await page.locator("#readyingback").boundingBox();
     await expect(page.locator("#readyinggo")).toBeVisible({ timeout: 8000 });
+    expect(await page.locator("#readyingback").boundingBox()).toEqual(back);
     await expect(page.locator("#readyingamount")).toHaveText(/^\d+\.\d of \d+\.\d MB$/);
     await expect(card).toBeHidden({ timeout: 90000 });
     await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor("player").map), { timeout: 30000 }).not.toBe("town");

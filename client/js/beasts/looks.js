@@ -156,6 +156,33 @@ export const LOOKS = Object.freeze({
     orcIronjaw: { body: "humanoid", scale: [1.14, 1.16] },
     orcBloodtusk: { body: "humanoid", scale: [1.14, 1.16] },
     orcRaider: { body: "humanoid", scale: [0.98, 1.06] },
+    // (The Order of the Bell: men and women in mail under the order's alb, until the bought model of
+    // their own is read: humanoidLook. The Black Choir bigger, their Prior bigger again)
+    bellInitiate: { body: "humanoid", scale: [0.96, 1.02] },
+    bellBrother: { body: "humanoid", scale: [1, 1.05] },
+    bellSpearman: { body: "humanoid", scale: [1, 1.05] },
+    bellArcher: { body: "humanoid", scale: [0.98, 1.03] },
+    choirKnight: { body: "humanoid", scale: [1.05, 1.1] },
+    priorVane: { body: "humanoid", scale: [1.12, 1.12] },
+    // (Its riders: a grey warhorse in steel barding, its rider left to the bought model)
+    bellRider: {
+        body: "quadruped",
+        scale: [1, 1.04],
+        length: 2.3, height: 1.6, girth: 0.34, width: 0.27, chest: 1.2, haunch: 1.1, neck: 0.64, neckUp: 0.85,
+        head: [0.1, 0.12, 0.19], snout: { length: 0.36, radius: 0.08, taper: 0.85 }, ears: "pointed", legs: 0.075, hooves: true, mane: "horse",
+        tail: { length: 1.2, radius: 0.08, bushy: true, lift: -1.45, curl: 0.04 }, roughness: 0.4,
+        colours: { fur: 0xc8c4bc, belly: 0xb0aca4, dark: 0x3a3c40, mane: 0x2a2620, tail: 0x2a2620, mask: 0x8a8e96, saddle: 0x6a7078, eyes: 0x140c08 },
+        attacks: ["stamp", "toss", "stamp"], rests: ["sniff", "shake", "root"],
+    },
+    choirRider: {
+        body: "quadruped",
+        scale: [1.03, 1.06],
+        length: 2.3, height: 1.6, girth: 0.34, width: 0.27, chest: 1.2, haunch: 1.1, neck: 0.64, neckUp: 0.85,
+        head: [0.1, 0.12, 0.19], snout: { length: 0.36, radius: 0.08, taper: 0.85 }, ears: "pointed", legs: 0.075, hooves: true, mane: "horse",
+        tail: { length: 1.2, radius: 0.08, bushy: true, lift: -1.45, curl: 0.04 }, roughness: 0.4,
+        colours: { fur: 0x3a3632, belly: 0x2e2a28, dark: 0x101012, mane: 0x141210, tail: 0x141210, mask: 0x5a5e66, saddle: 0x1a1a1e, eyes: 0x140c08 },
+        attacks: ["stamp", "toss", "stamp"], rests: ["sniff", "shake", "root"],
+    },
     skeleton: {
         body: "biped",
         scale: [0.95, 1.05],
@@ -1014,6 +1041,17 @@ const BRUTES = {
     bileWalker: flayed(["#5a6a3a", "#4e5c32", "#667644"], ["#9aff5a", "#6adf3a"], [["loincloth"]]),
 };
 
+// The Order of the Bell's stand-ins (humanoidLook): what calling's clothes each rank wears, and
+// what besides
+const ORDER_LOOKS = Object.freeze({
+    bellInitiate: { calling: "rogue", wear: [] },
+    bellBrother: { calling: "cleric", wear: ["nasalHelm"] },
+    bellSpearman: { calling: "cleric", wear: ["nasalHelm"] },
+    bellArcher: { calling: "cleric", wear: ["nasalHelm"] },
+    choirKnight: { calling: "cleric", wear: ["nasalHelm", "breastplate"] },
+    priorVane: { calling: "cleric", wear: ["nasalHelm", "breastplate"] },
+});
+
 /**
  * One of the people-shaped creatures (a HUMANOIDS id), from a seed: { shape, look, equipment,
  * walk } (as presets.js's), not yet armed (the game adds its weapon's). Bandits are human
@@ -1021,6 +1059,18 @@ const BRUTES = {
  * are their kind's.
  */
 export function humanoidLook(id, seed = 1) {
+    // (The Order of the Bell: its brothers and the Black Choir in mail under a cleric's alb, helmed,
+    // the Choir in a breastplate besides; its initiates unhelmed, in a rogue's jerkin; each holding
+    // its own arms, as the game adds them)
+    if (ORDER_LOOKS[id]) {
+        const { calling, wear } = ORDER_LOOKS[id];
+        const sex = seed % 3 === 0 ? "f" : "m";
+        const folk = folkLook({ role: "adventurer", look: calling, sex, seed });
+        const carried = new Set(["sword", "staff", "wand", "wizardHat", "warHammer", "bow", "quiver", "roundShield", "kiteShield"]);
+
+        return { shape: folk.shape, look: folk.look, equipment: [...folk.equipment.filter((each) => !carried.has(each)), ...wear], walk: "natural" };
+    }
+
     // (Bandits: cutthroats, dressed as rogues, their chief in a warrior's harness; cultists in
     // mages' robes, hatless, their high priest holding the staff it raises over its rite)
     if (id === "bandit" || id === "banditChief" || id === "cultist" || id === "cultLeader") {

@@ -76,7 +76,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, mouths = [], together = [], borrows, detail = 3 } of Object.values(MODELS)) {
+        for (const { asset, skins = [""], clips, attacks, specials, chains = {}, carry = {}, aloft, rests, lurk, fire, joints, mouth, mouths = [], together = [], borrows, detail = 3, parts: worn = [], choose = [] } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
@@ -100,6 +100,12 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
 
             for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {}), ...mouths.flatMap((other) => Object.values(other)), ...Object.values(carry).map((held) => held.bone)]) {
                 assert.ok(nodes.has(bone), bone);
+            }
+
+            // (The parts it wears, of a model whose parts are kept apart (the Order of the Bell's): each
+            // a part of its model, a mesh by that name, as partOf finds it)
+            for (const part of [...worn, ...choose.flat()]) {
+                assert.ok(gltf.nodes.some((node) => node.mesh !== undefined && PropertyBinding.sanitizeNodeName(node.name) === part), `${asset}: ${part}`);
             }
 
             // (Its other heads breathing with it only in a clip it breathes in, from a mouth of its own:

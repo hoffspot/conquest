@@ -6606,6 +6606,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin: 18px 0 0;
 }
 
+/* (Go in now's room kept till it's offered, unseen: offered, it doesn't push Not now from under a
+   finger on its way to it, the card centred on what it holds) */
+.readying #readyinggo[hidden] {
+    display: block !important;
+    visibility: hidden;
+}
+
 /* The great foe's bar (hud.js boss: the Behemoth of the Rift's): its name over its health, across
 the top under the buttons, clear of the minimap */
 #bossbar {

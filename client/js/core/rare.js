@@ -348,10 +348,14 @@ export function cardOf(id) {
  * - `lock`: a lock opened (`lock`: LOCKS), as the thread comes to it, its way in marked on every
  *   player's maps; done once someone goes in by it.
  * - `enter`: a way in to go in by, the plan's dungeon of a theme nearest where the thread was last
- *   (`theme`: "hell", a hell's way in, its cult's camp), marked on every player's maps; done once
- *   someone goes in by it (by night, its rite broken, as anyone goes into a hell).
+ *   (`theme`: "hell", a hell's way in, its cult's camp; "keep", a scene's keep, Bellhaven's, gone
+ *   into from its court), marked on every player's maps; done once someone goes in by it (by
+ *   night, its rite broken, as anyone goes into a hell).
+ * - `slay`: a dungeon's master to strike down, the plan's dungeon of a theme nearest where the
+ *   thread was last (as an enter step's: "keep", the Prior at the top of the Keep of Bellhaven),
+ *   marked on every player's maps; done once it falls, those in the dungeon then taking part.
  */
-export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock", "fight", "enter"]);
+export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock", "fight", "enter", "slay"]);
 
 /**
  * How a thread's step changes the world as it's done (a step's `change`), in the settlement it
@@ -377,11 +381,15 @@ export const CHANGES = Object.freeze(["stock", "price", "festival", "reveal", "b
  * settlement), steps: [{ kind (STEPS), word (what's known of it, as it begins and in the
  * journal: {town} its settlement's name, {way} which way it is from where it was last), reward? ({
  * gold?, unique? (UNIQUES), writing? (writings.js WRITINGS) }: each who takes part in it given
- * their own), change? (CHANGES), and its kind's own }] }`. The sample's, debug mode's, has one of
+ * their own), change? (CHANGES), and its kind's own }], then? (a thread begun once it's done, by
+ * those who did its last step, if the world has its opener's place: the Bellbound's, the Order of
+ * the Bell's) }`. The sample's, debug mode's, has one of
  * each kind; the Golem of Harrowstone's is begun by a rumour, and its card's its second step; the
  * Iron Crown's too, its first step a fight; the Exile's Road's, a priest's rumour, its last step a
  * hell's way in gone through; the Hound Unchained's, a ranger's rumour, its first step a hell's way
- * in come to; the Bellbound's, a rogue's rumour, its first step the shrine its rumour told of.
+ * in come to; the Bellbound's, a rogue's rumour, its first step the shrine its rumour told of,
+ * leading on to the Order of the Bell's; the Order of the Bell's, with no card, a priest's rumour or
+ * its own courts' warning, its last steps its keep gone into and its Prior struck down there.
  */
 export const THREADS = Object.freeze({
     sampleTrail: Object.freeze({
@@ -598,8 +606,71 @@ export const THREADS = Object.freeze({
                 home: true,
                 word: "Ashkhar is dead. Take word of it, and Corbin's confession, to the rogue at the guild in {town}.",
                 ask: "The demon's dead. And I found what Corbin wrote.",
-                reply: "Dead. Good. And Corbin went back to put the silver back, didn't he. The fool. The brave fool. He never could leave a job half done. Here: the Magpies' share, what's left of it, and the guild's bounty with it. Spend it on something that doesn't shine.",
+                reply: "Dead. Good. And Corbin went back to put the silver back, didn't he. The fool. The brave fool. He never could leave a job half done. Here: the Magpies' share, what's left of it, and the guild's bounty with it. Spend it on something that doesn't shine. And one more thing, for nothing: the night Corbin went back, they say a bell rang up at Bellhaven, the old Order's own house. The Order of the Bell's back in it, they say. Whatever they're ringing, it's no friend of yours or mine.",
                 reward: Object.freeze({ gold: 200 }),
+            }),
+        ]),
+        then: "bellhaven",
+    }),
+    // (The Bell Tolls Again (docs/WILDS.md *The Order of the Bell*): the Order of the Bell come back
+    // to its mother house, Bellhaven, under Prior Osric Vane, who rang its Great Bell; begun by a
+    // temple priest's rumour in the settlement nearest Bellhaven, by the Order's own warning to a
+    // stranger in its courts (core/scenery.js SCENERY bellhaven `court.thread`), or by the
+    // Bellbound's end (`then`). The Order's cleansers driven off a farmstead they're putting to the
+    // torch, their captain carrying the Prior's writ; the writ taken to the priest, who reads it out
+    // and shows the way to Bellhaven; the keep gone into, past its courts, the Order crossed so; the
+    // Prior struck down at the top of it, by his bell (a `slay` step: the keep's master), his book
+    // found there; and word of it all taken back to the priest)
+    bellhaven: Object.freeze({
+        id: "bellhaven",
+        title: "The Bell Tolls Again",
+        opens: Object.freeze({
+            kind: "talk",
+            role: "priest",
+            post: "temple",
+            near: "bellhaven",
+            ask: "You keep looking towards the hills.",
+            tale: Object.freeze([
+                Object.freeze({ say: "Towards Bellhaven, yes. The old castle on the crag, {way} of here: the Order of the Bell's mother house. It stood empty longer than anyone in this town has been alive. This spring the Great Bell in its keep rang again, at dusk, three times. We heard it from here.", ask: "The Order of the Bell?" }),
+                Object.freeze({ say: "Knights and priests of the Six, once. They kept watch on the thin places, where the hells press close, and bound what came through in blessed silver. The Order dwindled away a lifetime ago, and their bell hung silent, its clapper chained. Then a hedge-priest named Osric Vane climbed up to the empty keep and rang it. He calls himself the Prior now. The bell, he says, speaks to him with the Six's own voice.", ask: "And people believe him?" }),
+                Object.freeze({ say: "Hundreds do. The poor, the frightened, the grandsons of old Order families. He puts them in white with a blue cross on the breast, and those closest to him in black: the Black Choir, who say they hear the bell even when it's still. They keep the courts of Bellhaven now, and they don't care for strangers.", ask: "What's the harm in that?" }),
+                Object.freeze({ say: "They've started riding out. Cleansings, they call them. A farm that won't kneel to the bell's word, a hamlet that keeps to the old shrines: burned, and whoever's in it. The lords call it zeal and look away. The Six never asked for fire. Someone has to stop them, and find out what's really speaking in that bell." }),
+            ]),
+            take: "I'll go after the cleansers.",
+            taken: "Then go carefully. They wear the Six's colours, and that makes folk slow to raise a hand to them. If you find anything that shows what they are, bring it to me, and I'll read it from the temple steps.",
+            leave: "Not for me.",
+            back: Object.freeze({ ask: "About the Order of the Bell: I'll take it up after all.", reply: "Thank the Six. They burned another farm last night; we saw the smoke from the tower. Take it up where you left it." }),
+        }),
+        steps: Object.freeze([
+            Object.freeze({
+                kind: "fight",
+                far: Object.freeze([160, 240]),
+                reach: 45,
+                foes: Object.freeze([Object.freeze({ creature: "bellInitiate", count: Object.freeze([3, 4]) }), Object.freeze({ creature: "bellBrother", count: Object.freeze([1, 2]) }), Object.freeze({ creature: "bellBrother", count: Object.freeze([1, 1]), champion: "mini", title: "Brother Anselm the Cleanser" })]),
+                word: "The Order of the Bell's cleansers are out {way} of {town}, putting a farmstead to the torch for not kneeling to their bell. Drive them off before they finish it.",
+                reward: Object.freeze({ gold: 60, writing: "writ" }),
+            }),
+            Object.freeze({
+                kind: "talk",
+                role: "priest",
+                home: true,
+                word: "Brother Anselm carried a writ under the Prior's own seal, naming the farms to be cleansed. Take it to the priest at the temple in {town}.",
+                ask: "The cleansers carried this: a writ, under the Prior's seal.",
+                reply: "Let me see. The unrung shall not stand in the bell's hearing... Osric Vane, Prior, the Voice of the Bell. And at the foot: the Black Choir shall see it done. This is no zeal. It's murder in a holy coat. I'll read it from the temple steps tonight, and send copies to every temple in the land. But it won't stop him. He's up in the keep at Bellhaven with his bell. Here: I've marked the way on your map. Someone has to go in after him.",
+                reward: Object.freeze({ gold: 40 }),
+                change: Object.freeze({ kind: "reveal", site: "bellhaven" }),
+            }),
+            Object.freeze({ kind: "enter", theme: "keep", word: "The Prior keeps to the Keep of Bellhaven, behind his Order's courts. Go up through them and into the keep. Once you're inside, the whole Order will know your face." }),
+            Object.freeze({ kind: "slay", theme: "keep", word: "Prior Osric Vane waits at the top of the Keep of Bellhaven, in the belfry beside the Great Bell, his Black Choir about him. Climb to him, and silence the bell's voice.", reward: Object.freeze({ gold: 150, writing: "bell" }) }),
+            Object.freeze({
+                kind: "talk",
+                role: "priest",
+                home: true,
+                word: "Prior Osric Vane is dead, and his bell is silent. Take his book, and word of it, to the priest at the temple in {town}.",
+                ask: "The Prior's dead. This book was by his bell.",
+                reply: "So it was never the Six. Something the old Order sealed in the bell's silver, and he rang it loose, and called it holy. The Rule says the bell must never be rung, and he never read that far. Without his voice the Order will break, or crawl back to the Six on its knees. Here: the temple's alms, and the land's thanks. Tonight we'll ring every bell in town for you. Every bell but that one.",
+                reward: Object.freeze({ gold: 250 }),
+                change: Object.freeze({ kind: "festival", name: "the Feast of the Silent Bell", times: 0.85, lasts: DAY.length }),
             }),
         ]),
     }),
@@ -967,6 +1038,27 @@ export class Legends {
         this.changes = structuredClone(json.changes ?? []);
         this.opened = new Set(json.opened ?? []);
         this.vaults = structuredClone(json.vaults ?? {});
+        // (What each player's done that's marked them in this world, by player: { [id]: [mark,
+        // ...] }: "order", the Order of the Bell crossed, its courts against them and their party)
+        this.marks = structuredClone(json.marks ?? {});
+    }
+
+    /** Mark a player in this world (`what`: "order"...). Whether they weren't so already. */
+    mark(id, what) {
+        const theirs = (this.marks[id] ??= []);
+
+        if (theirs.includes(what)) {
+            return false;
+        }
+
+        theirs.push(what);
+
+        return true;
+    }
+
+    /** Whether a player's been marked so in this world. */
+    marked(id, what) {
+        return Boolean(this.marks[id]?.includes(what));
     }
 
     toJSON() {
@@ -987,6 +1079,7 @@ export class Legends {
             changes: this.changes,
             opened: [...this.opened],
             vaults: this.vaults,
+            marks: this.marks,
         };
     }
 
@@ -1040,11 +1133,13 @@ export class Legends {
 
     /**
      * Whether a thread's opener's rumour may be told now (THREADS `opens`): the thread not begun,
-     * and the card it leads to (one that `requires` it) among those dealt from, none of debug
-     * mode's, and not done in this world.
+     * and the card it leads to (one that `requires` it), if it has a card step, among those dealt
+     * from, none of debug mode's, and not done in this world.
      */
     opening(id) {
-        return Boolean(THREADS[id]?.opens) && !this.threads[id] && Object.values(this.cards).some((card) => card.requires?.thread === id && !card.debug && !this.gone.has(card.id));
+        const card = THREADS[id]?.steps.find((step) => step.kind === "card");
+
+        return Boolean(THREADS[id]?.opens) && !this.threads[id] && (!card || Object.values(this.cards).some((one) => one.requires?.thread === id && !one.debug && !this.gone.has(one.id)));
     }
 
     /**

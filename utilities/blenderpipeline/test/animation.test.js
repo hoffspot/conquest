@@ -6,7 +6,7 @@ import { Quaternion, Vector3 } from "three";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
 import { eased, inventClip } from "../lib/invent.js";
 import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
-import { inventClips, mendTangents, packLod, restFromClip, thinKeys, trimStill } from "../lib/optimize.js";
+import { holdBones, inventClips, mendTangents, packLod, restFromClip, thinKeys, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -175,6 +175,24 @@ describe("mending tangents", () => {
         assert.ok(near(tangents[3], [0, 1, 0, 1]));
         assert.ok(near(tangents[0], [1, 0, 0, 1]));
         assert.equal(mendTangents(document), 0);
+    });
+});
+
+describe("holding bones where they stand through some clips", () => {
+    it("leaves the named bones' keys out of the named clips, and only those", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const names = (animation) => animation.listChannels().map((channel) => `${channel.getTargetNode().getName()} ${channel.getTargetPath()}`);
+        const before = names(walk);
+
+        assert.ok(before.includes("spine rotation"));
+        assert.equal(holdBones(document, { Run: ["spine"] }), 0);
+        assert.deepEqual(names(walk), before);
+        assert.equal(holdBones(document, { Walk: ["spine"] }), 1);
+        assert.deepEqual(names(walk), before.filter((name) => !name.startsWith("spine ")));
+        // (A clip's last channel kept: glTF wants one)
+        assert.equal(holdBones(document, { Walk: ["root", "spine"] }), 0);
+        assert.equal(walk.listChannels().length, 1);
     });
 });
 

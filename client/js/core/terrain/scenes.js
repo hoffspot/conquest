@@ -28,7 +28,7 @@
 // worker, wherever and whenever it's asked.
 
 import BELLHAVEN from "../scenery/bellhaven.walk.js";
-import { cos, sin } from "../exact.js";
+import { atan2, cos, sin } from "../exact.js";
 import { floorAt, NONE, readWalk, squareOf } from "../walk.js";
 import { CELL, CELLS, WATER } from "../worldplan/terrain.js";
 
@@ -813,6 +813,46 @@ export function standsOn(placed, x, y) {
     const [sx, sz] = toScene(placed, x + 0.5, y + 0.5);
 
     return within(placed.scene, sx, sz) && !onWayIn(placed, x, y);
+}
+
+/**
+ * A round for one of a scene's patrols to ride (core/scenery.js SCENERY `patrols`; host.js
+ * #rideOut): `stops` points round the scene, each `ring` metres out past where the scene stands
+ * (standsOn), on the first ground anyone can stand on (`blocked(x, y)` not) from there out; the
+ * first patrol's (`k` 0) from its road's end (wayInOf `outside`) round one way, the next's from
+ * the far side of it round the other. [[x, y], ...]: squares of the world.
+ */
+export function patrolRound(placed, { ring, stops }, k, blocked) {
+    const [cx, cy] = placed.at;
+    const start = wayInOf(placed).outside;
+    const from = atan2(start[1] - cy, start[0] - cx) + (k % 2 ? Math.PI : 0);
+    const turn = k % 2 ? -1 : 1;
+    const round = k % 2 ? [] : [[...start]];
+
+    for (let n = round.length; round.length < stops; n++) {
+        const angle = from + (turn * n * 2 * Math.PI) / stops;
+        const at = (far) => [Math.floor(cx + cos(angle) * far), Math.floor(cy + sin(angle) * far)];
+        let edge = 0;
+
+        while (edge < 900 && standsOn(placed, ...at(edge))) {
+            edge += 4;
+        }
+
+        for (let far = edge + ring; far < edge + ring + 60; far += 2) {
+            const [x, y] = at(far);
+
+            if (!blocked(x, y) && !standsOn(placed, x, y)) {
+                round.push([x, y]);
+                break;
+            }
+        }
+
+        if (n > stops * 3) {
+            break;
+        }
+    }
+
+    return round;
 }
 
 /**

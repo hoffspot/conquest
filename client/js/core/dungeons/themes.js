@@ -491,14 +491,17 @@ export const THEMES = {
         },
     },
     // (Bellhaven's keep (core/scenery.js SCENERY.bellhaven `keep`): the Order of the Bell's
-    // mother house, gone into by its keep's doors off its court, never dealt to a wild dungeon's
-    // way in. Four floors, going up (`rises`: each level's way on a stair up, the next come into
-    // at the head of a stair down), each its own (`realms`): its great hall, where its garrison
-    // fell at their posts and lie there still; its cloister, the brothers' cells, refectory and
-    // stores, haunted by those who kept them; its library and chapter house, where the cult that
-    // came after them searches its shelves; and its belfry under the bell, where the last of the
-    // Order's masters keeps the tower. A warden on each floor below the belfry bars its stair up
-    // till it falls; from beyond its last master's hall a stair down, out to the keep's doors)
+    // mother house, held by the Order raised up again under its Prior (creatures.js bellInitiate
+    // and the rest), and by none but them; gone into by its keep's doors off its court, never dealt
+    // to a wild dungeon's way in. Four floors, going up (`rises`: each level's way on a stair up,
+    // the next come into at the head of a stair down), each its own (`realms`), its brothers the
+    // harder the higher: its great hall, the Order's garrison, under the Castellan; its cloister,
+    // where its initiates are tried, under the Sub-Prior; its library and chapter house, where the
+    // Black Choir reads the Rule, under its Lector; and its belfry under the Great Bell, the Choir's
+    // own, where Prior Osric Vane keeps the tower. A warden on each floor below the belfry bars its
+    // stair up till it falls; from beyond the Prior's hall a stair down, out to the keep's doors.
+    // Made again once its hoard's been taken and everyone's left, as any dungeon is, the Prior its
+    // master again)
     keep: {
         id: "keep",
         name: "a castle keep",
@@ -522,18 +525,16 @@ export const THEMES = {
                 look: "keep",
                 layout: "axial",
                 packs: [
-                    { id: "garrison", creatures: ["skeleton"], size: [3, 5], weight: 4 },
-                    { id: "knights", creatures: ["draugr", "skeleton"], size: [2, 3], weight: 2 },
-                    { id: "looters", creatures: ["cultist"], size: [2, 3], weight: 1 },
-                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
-                    { id: "bats", creatures: ["bats"], size: [2, 3], weight: 1 },
-                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+                    { id: "watch", creatures: ["bellBrother", "bellSpearman"], size: [2, 3], weight: 4 },
+                    { id: "initiates", creatures: ["bellInitiate"], size: [3, 4], weight: 3 },
+                    { id: "bowmen", creatures: ["bellArcher", "bellBrother"], size: [2, 3], weight: 2 },
+                    { id: "patrol", creatures: ["bellBrother", "bellInitiate"], size: [3, 4], weight: 2 },
                 ],
                 minis: [
-                    { id: "fallenKnight", creature: "draugr", title: "Fallen knight of the Bell", weight: 2 },
-                    { id: "guardCaptain", creature: "skeleton", title: "Captain of the guard", weight: 1 },
+                    { id: "sergeant", creature: "bellBrother", title: "a Sergeant of the Bell", weight: 2 },
+                    { id: "masterAtArms", creature: "bellSpearman", title: "the Master-at-arms", weight: 1 },
                 ],
-                warden: { id: "castellan", creature: "draugr", title: "the Castellan of Bellhaven", guard: ["skeleton"] },
+                warden: { id: "castellan", creature: "choirKnight", title: "the Castellan of Bellhaven", guard: ["bellBrother", "bellSpearman"] },
                 rooms: {
                     vestibule: [{ id: "doors", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [2, 2], at: "wall", mirror: true }, { char: "m", count: [0, 1], at: "corner" }], torches: [2, 2] }],
                     hypostyle: [{ id: "greatHall", props: [{ char: "I", count: [6, 16], at: "rows" }, { char: "Y", count: [0, 1], at: "head" }, { char: "T", count: [1, 2], at: "open", size: [2, 1] }, { char: "j", count: [0, 2], at: "open" }, { char: "i", count: [0, 2], at: "open" }], torches: [2, 4] }],
@@ -552,18 +553,16 @@ export const THEMES = {
                 look: "keep",
                 layout: "accretion",
                 packs: [
-                    { id: "brothers", creatures: ["ghost"], size: [2, 3], weight: 3 },
-                    { id: "fallen", creatures: ["skeleton"], size: [3, 4], weight: 2 },
-                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 2 },
-                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
-                    { id: "cult", creatures: ["cultist"], size: [2, 4], weight: 1 },
-                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+                    { id: "initiates", creatures: ["bellInitiate"], size: [3, 5], weight: 4 },
+                    { id: "trial", creatures: ["bellInitiate", "bellBrother"], size: [3, 4], weight: 3 },
+                    { id: "brothers", creatures: ["bellBrother"], size: [2, 3], weight: 2 },
+                    { id: "bowmen", creatures: ["bellArcher"], size: [2, 3], weight: 1 },
                 ],
                 minis: [
-                    { id: "greySister", creature: "ghost", title: "the Grey Sister", weight: 2 },
-                    { id: "madBrother", creature: "cultist", title: "the Mad Brother", weight: 1 },
+                    { id: "novicemaster", creature: "bellBrother", title: "the Master of Initiates", weight: 2 },
+                    { id: "almoner", creature: "bellSpearman", title: "the Almoner", weight: 1 },
                 ],
-                warden: { id: "abbess", creature: "wraith", title: "the Grey Abbess", guard: ["ghost"] },
+                warden: { id: "subprior", creature: "choirKnight", title: "the Sub-Prior", guard: ["bellInitiate", "bellBrother"] },
                 rooms: {
                     gate: [{ id: "cloisterGate", props: [{ char: "Z", count: [1, 2], at: "wall" }, { char: "v", count: [1, 2], at: "wall" }, { char: "d", count: [0, 2], at: "wall" }], torches: [1, 2] }],
                     hall: [
@@ -582,18 +581,16 @@ export const THEMES = {
                 look: "keep",
                 layout: "axial",
                 packs: [
-                    { id: "seekers", creatures: ["cultist"], size: [2, 4], weight: 3 },
-                    { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 2 },
-                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 1 },
-                    { id: "dead", creatures: ["skeleton"], size: [3, 4], weight: 1 },
-                    { id: "rats", creatures: ["rat"], size: [3, 5], weight: 1 },
-                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
+                    { id: "brothers", creatures: ["bellBrother", "bellSpearman"], size: [2, 3], weight: 3 },
+                    { id: "choir", creatures: ["choirKnight"], size: [1, 2], weight: 2 },
+                    { id: "guard", creatures: ["choirKnight", "bellBrother"], size: [2, 3], weight: 2 },
+                    { id: "bowmen", creatures: ["bellArcher", "bellBrother"], size: [2, 3], weight: 2 },
                 ],
                 minis: [
-                    { id: "librarian", creature: "wraith", title: "the Librarian", weight: 1 },
-                    { id: "scrollKeeper", creature: "cultist", title: "Keeper of the scrolls", weight: 2 },
+                    { id: "ruleKeeper", creature: "bellBrother", title: "the Keeper of the Rule", weight: 2 },
+                    { id: "chorister", creature: "choirKnight", title: "a Chorister of the Black Choir", weight: 1 },
                 ],
-                warden: { id: "sentinel", creature: "stoneGolem", title: "the Stone Sentinel", guard: ["cultist"] },
+                warden: { id: "lector", creature: "choirKnight", title: "the Lector of the Choir", guard: ["choirKnight"] },
                 rooms: {
                     vestibule: [{ id: "landing", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "v", count: [0, 2], at: "wall" }], torches: [2, 2] }],
                     hypostyle: [{ id: "scriptorium", props: [{ char: "I", count: [6, 12], at: "rows" }, { char: "T", count: [2, 4], at: "open", size: [2, 1] }, { char: "e", count: [2, 4], at: "wall" }, { char: "k", count: [0, 2], at: "open" }], torches: [2, 4] }],
@@ -612,16 +609,14 @@ export const THEMES = {
                 look: "keep",
                 layout: "axial",
                 packs: [
-                    { id: "bats", creatures: ["bats"], size: [2, 4], weight: 2 },
-                    { id: "knights", creatures: ["draugr", "skeleton"], size: [2, 3], weight: 3 },
-                    { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 1 },
-                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
-                    { id: "rats", creatures: ["rat"], size: [3, 4], weight: 1 },
-                    { id: "lights", creatures: ["wisp"], size: [2, 3], weight: 1 },
+                    { id: "choir", creatures: ["choirKnight"], size: [2, 2], weight: 3 },
+                    { id: "choirAndBrothers", creatures: ["choirKnight", "bellBrother"], size: [2, 3], weight: 3 },
+                    { id: "spears", creatures: ["bellSpearman", "choirKnight"], size: [2, 3], weight: 2 },
+                    { id: "bowmen", creatures: ["bellArcher"], size: [2, 3], weight: 1 },
                 ],
                 minis: [
-                    { id: "bellRinger", creature: "draugr", title: "the Bell-ringer", weight: 2 },
-                    { id: "towerWraith", creature: "wraith", title: "the Wraith of the Tower", weight: 1 },
+                    { id: "bellRinger", creature: "choirKnight", title: "the Bell-ringer", weight: 2 },
+                    { id: "precentor", creature: "choirKnight", title: "the Precentor of the Choir", weight: 1 },
                 ],
                 rooms: {
                     vestibule: [{ id: "landing", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [0, 2], at: "wall", mirror: true }], torches: [2, 2] }],
@@ -637,11 +632,7 @@ export const THEMES = {
                 },
             },
         ],
-        bosses: [
-            { id: "hollowAbbot", creature: "wightLord", title: "the Hollow Abbot", weight: 3, guard: ["draugr", "skeleton"] },
-            { id: "bellwarden", creature: "draugr", title: "the Bellwarden", weight: 2, guard: ["skeleton"] },
-            { id: "greyLord", creature: "wraith", title: "the Grey Lord of Bellhaven", weight: 1, guard: ["ghost"] },
-        ],
+        bosses: [{ id: "prior", creature: "priorVane", title: "Prior Osric Vane, the Voice of the Bell", weight: 1, guard: ["choirKnight"] }],
         get packs() {
             return this.realms.flatMap(({ id, packs }) => packs.map((pack) => ({ ...pack, id: `${id}-${pack.id}` })));
         },

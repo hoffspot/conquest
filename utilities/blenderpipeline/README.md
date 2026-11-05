@@ -179,6 +179,7 @@ error, so a misspelt one isn't silently ignored.
 | `clips.trimStill` | `false` | Leaves out channels that never move a bone from where it stands at rest |
 | `clips.fps` | `null` | Keeps this many keyframes a second (a 60-frame source's at 30: half of them), and each clip's last, not every frame's |
 | `clips.invent` | `[]` | Clips made up from those there are (*Clips made up*, below) |
+| `clips.hold` | `{}` | `{ "Bow Shoot": ["weapon_r"] }`: bones held where they stand through those clips, their keys there left out: a pack's arrow flown off on the hand's socket bone as its bow's loosed, which would carry whatever the game hangs on that bone away with it (the report says how many keys went: `exported.bonesHeld`) |
 | `deformBonesOnly` | `true` | Only bones that deform the mesh (above) |
 | `keepBones` | `[]` | Bones to keep even if they move nothing (points to attach things to: a mouth for fire, a claw for footprints) |
 | `applyModifiers` | `true` | Applies modifiers (mirror, subdivision...) except the armature |
@@ -618,7 +619,8 @@ Browser, it exports:
   - each mesh's slots' faces as its FBX has them (`materials[].faces`), its LOD 0 sections' slots
     and which are simulated as cloth (`sections`), and its clothing (`clothing`);
   - what of a mesh its FBX left out (`lost`), a glTF of it where that was (`glb`, `glbFaces`,
-    `found`), and a line for each in `warnings`;
+    `found`), how that glTF's skin weights came out (`glbSkins`), and a line for each in
+    `warnings`;
   - and what couldn't be exported.
 
 **Parts Unreal's FBX export leaves out.** It leaves a mesh's section out without a word when the
@@ -638,6 +640,18 @@ the asset exported again:
   *None* (on a duplicate of the mesh, *Right-click → Duplicate*, to keep the pack's own as it is);
 - turned off: in the mesh's *Asset Details*, *LOD 0*, *Sections*, right-click the section and
   enable it.
+
+**But a cloth section comes out of the glTF without its skin weights.** Unreal keeps a cloth
+section's vertices to its clothing's simulation, not its bones, and the glTF export writes their
+weights as none: the part would stand still as the rest moves (the Order of the Bell's barding
+came out so). And it can spoil the weights of the rest of such a mesh: half the Order's horses'
+body and saddle vertices came out with weights that don't add up to one, which tear as it moves.
+So the script reads the `.glb`'s weights back too (`glbSkins`, by material: its `vertices`, those
+`unweighted`, those `broken`), and says so: a lost part the `.glb` has but without its weights is
+told as that, with what to do; and a material with broken weights has a line of its own. The FBX's
+weights are whole: build what you can from the FBX and only the lost part from the `.glb`, or,
+better, take the clothing off those sections (above) and export again, for the FBX to have every
+part with its own weights.
 
 Unreal's Python can't unbind cloth itself (only its C++ can), so the script can't do that for you.
 

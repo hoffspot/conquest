@@ -164,6 +164,14 @@ const ABOUT = {
     ashmaw: ["Ashmaw, the Hound Unchained", "In the wilds where its tracks lead from a hell's way in, once a world: a hell's cerberus broken loose; its rare card's foe, a world's boss"],
     demonBoss: ["Demon Boss", "A hell's Breach: its master, its cultists and magma about it"],
     ashkhar: ["Ashkhar the Bellbound", "In the wilds where its frosted prints lead from a moorland shrine, once a world: a Breach demon bound a hundred years and loose again; its rare card's foe, a world's boss"],
+    bellInitiate: ["Initiate of the Bell", "Bellhaven, its courts and its keep: one who'd join the Order, in olive, a knife in hand", "sword"],
+    bellBrother: ["Brother of the Bell", "Bellhaven, its courts and its keep: in white over mail, helmed, sword and shield", "sword"],
+    bellRider: ["Rider of the Bell", "The roads round Bellhaven: a brother in plate on a barded warhorse, cutting down from the saddle, riding down whoever keeps off", "sword"],
+    choirRider: ["Black Choir Rider", "Leading the Order's patrols round Bellhaven: a knight of the Black Choir on a barded warhorse", "sword"],
+    bellSpearman: ["Spear-brother of the Bell", "Bellhaven, its courts and its keep: in white, spear and kite shield", "staff"],
+    bellArcher: ["Bowman of the Bell", "Bellhaven, its courts and its keep: in white, a longbow, keeping off", "bow"],
+    choirKnight: ["Knight of the Black Choir", "Bellhaven's keep: the Order's inner circle, in plate under black, a morning star", "hammer"],
+    priorVane: ["Prior of the Bell", "Bellhaven's keep, in the belfry: Osric Vane, the Voice of the Bell, its master", "hammer"],
     greaterDemon: ["Greater demon", "A hell's River of Fire, by the Hellforge: its master"],
     fiend: ["Fiend", "A hell's every level, in packs: the more of them the deeper down"],
     flayling: ["Flayling", "A hell's Breach, in swarms: raw claws that leave you bleeding"],
@@ -1512,6 +1520,7 @@ const groups = [
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
     ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
+    ["The Order of the Bell", ["bellInitiate", "bellBrother", "bellSpearman", "bellArcher", "choirKnight", "priorVane", "bellRider", "choirRider"]],
     ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul", "cerberus", "ashmaw", "demonBoss", "ashkhar"]],
 ];
 

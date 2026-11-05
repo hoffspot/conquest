@@ -565,3 +565,41 @@ in this repository, but in the private one the game's builds fetch it from
 (`docs/LICENSED_MODELS.md`).
 
 Don't copy it out of this game or use it in anything else.
+
+## order.bin, order.initiate.bin, order.choir.bin
+
+**Templar Army**, by **Naked Singularity Studio** (its Unreal Engine files: its modular templars'
+parts, their arms and shields, their textures and their animations, exported from Unreal Engine by
+this repository's owner), bought on **Fab** by this repository's owner under **Fab's Standard
+License**: the Order of the Bell, the zealots who hold Bellhaven, its courts and its keep.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/order.json`, which stays out of the repository with the bought files), its `phone` build.
+That's one body on one skeleton with its parts kept apart, each worn or not by the kind drawn: the
+mail-clad body and its head, the surcoat, the cloak, the cuirass, the plate of arms and legs, the
+gauntlets, five helms, the sword, the spear, the morning star, the knife, the heater and kite
+shields, the bow, the sheaths and the quiver; 41,689 triangles in all, with two lower details
+packed in (20,755 and 8,279). Its materials and textures (colour, normal, and occlusion with
+roughness and metal) are as KTX2, the surcoat's and shields' red cross made Bellhaven's blue
+(#3B61B4) in their colour. It has 34 of its own clips: three flinches, two deaths; the sword's two
+idles, walk, run and four attacks; the spear's idle, guard, walk, run and four attacks; the bow's
+idle, walk, run, draw and loosing; and eight a rider's (kept for its horses). Its other two
+liveries, the initiates' olive with a smaller cross and the Black Choir's black, are its cloth's
+colour alone (`order.initiate.bin`, `order.choir.bin`).
+
+Its riders (`order-mounted.bin`, `private/mounted.json`) are the same body joined with the pack's
+barded warhorse: a rider's parts (mail and plate, surcoat and cloak, two helms, the sword and kite
+shield) and the horse, its barding from the owner's second export of it (Unreal's FBX export
+leaves out the cloth-simulated parts), on the horse's and the rider's skeletons joined in one;
+55,087 triangles, with two lower details packed in (32,892 and 13,183). It has 11 clips, each the
+horse's and the rider's together: two idles, the walk, trot, canter and gallop, two attacks from
+the saddle, two flinches and the death. Its Black Choir livery is its cloth's colour alone
+(`order-mounted.choir.bin`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.

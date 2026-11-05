@@ -121,7 +121,14 @@ const BONES = { Spine2: "torso", Spine1: "torso", Spine: "body", Head: "head", N
  */
 export function skinOf(id, seed) {
     const skins = MODELS[id]?.skins ?? [""];
-    let mixed = (seed * 104729 + 29) | 0;
+
+    return skins[Math.floor(mix(seed, 29) * skins.length)];
+}
+
+// (A seed's share, 0 to 1, mixed so neighbouring seeds don't follow each other: a different `salt`
+// for each choice made from it)
+function mix(seed, salt) {
+    let mixed = (seed * 104729 + salt) | 0;
 
     mixed ^= mixed >>> 16;
     mixed = Math.imul(mixed, 0x85ebca6b);
@@ -129,7 +136,22 @@ export function skinOf(id, seed) {
     mixed = Math.imul(mixed, 0xc2b2ae35);
     mixed ^= mixed >>> 16;
 
-    return skins[Math.floor(((mixed >>> 0) / 4294967296) * skins.length)];
+    return (mixed >>> 0) / 4294967296;
+}
+
+/**
+ * The parts a kind drawn from a model of parts kept apart wears (MODELS `parts`: those it always
+ * wears; `choose`: lists of which it wears one, chosen by its seed, a helm of several), or null for
+ * a model drawn whole.
+ */
+export function partsOf(id, seed) {
+    const model = MODELS[id];
+
+    if (!model?.parts) {
+        return null;
+    }
+
+    return [...model.parts, ...(model.choose ?? []).map((choices, k) => choices[Math.floor(mix(seed, 61 + k * 17) * choices.length)])];
 }
 
 /** How big one of a kind is (its seed): a share of its look's size. */
@@ -169,7 +191,7 @@ export class BeastAvatar {
 
         this.id = id;
         this.scale = sizeOf(id, seed);
-        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y, skin: skinOf(id, seed) }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
+        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y, skin: skinOf(id, seed), parts: partsOf(id, seed) }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
         this.scale *= champion ? championScale(champion, this.plan.height * this.scale) : 1;
 
         /** Is it drawn from its model (beasts/model.js), not its stand-in? */

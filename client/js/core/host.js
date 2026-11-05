@@ -49,9 +49,10 @@ import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, ORDER, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
-import { keepSiteOf } from "./scenery.js";
+import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
+import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
@@ -373,6 +374,17 @@ const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMEN
  * time as each one's time runs out. A wild camp's folk come out once a player's `camp` metres
  * from it (a few more than its patrols roam), and are let go `campFar` away.
  */
+/**
+ * The Order of the Bell in a scene's court (core/scenery.js SCENERY `court`): how near (metres) one
+ * who hasn't crossed it may come to one of them before they're warned off, and no oftener than
+ * every `every` ms; how far (squares) each sets on one who has, from its post (`guard`).
+ */
+export const COURT = Object.freeze({ warn: 3.5, every: 25000, guard: 6 });
+
+// How near a player crossing the Order of the Bell its riders on the roads must be to be set on
+// them then (metres: host.js #crossOrder); those further off only once they come on them
+const PATROL_SEES = 120;
+
 export const WILDS = Object.freeze({ count: 4, night: 1, about: 60, from: 30, to: 44, clear: 60, road: 10, cleared: 120000, far: 90, camp: 60, campFar: 140 });
 
 /**
@@ -1327,6 +1339,19 @@ export class Host {
          * first), cleared (all of them put down), relief (when they're to be made up, or null) }.
          */
         this.quartered = new Map();
+        /**
+         * The courts a scene's held in by the Order of the Bell (core/scenery.js SCENERY `court`:
+         * Bellhaven's), by its building's key, while it's open: { map, ids } (those posted, standing
+         * till they fall or the castle's let go: #holdCourt); and when each player was last warned
+         * off by one of them (`warned`, by player: battle ms; not kept).
+         */
+        this.courts = new Map();
+        this.courtWarned = new Map();
+        /**
+         * A scene's patrols, the Order of the Bell's riders on its roads (core/scenery.js SCENERY
+         * `patrols`: Bellhaven's), by its site's id, while they're out: { ids } (#patrolsAbout).
+         */
+        this.patrols = new Map();
         this.wagons = new Map();
 
         /**
@@ -2249,7 +2274,9 @@ export class Host {
             return true;
         }
 
-        return target.kind === "soldier" && target.team !== actor.team && !this.war?.friendly(actor.team, target.team);
+        // (A guard of a people not friendly to theirs; or one of the Order of the Bell in its court,
+        // which crosses it: #crossOrder)
+        return (target.kind === "soldier" && target.team !== actor.team && !this.war?.friendly(actor.team, target.team)) || (target.team === ORDER && actor.team !== ORDER);
     }
 
     // The light to see by out in the world now (light.js lighting: the sky's by the war's clock,
@@ -2588,6 +2615,7 @@ export class Host {
                 this.#threadCrossed(event);
                 this.#vaultCrossed(event);
                 this.#rareInside(event);
+                this.#intoTheKeep(event);
             }
 
             // A section of a camp's palisade hacked down: broken open (#hacked)
@@ -2609,6 +2637,17 @@ export class Host {
 
                 if (lost > 0 && !this.war.strike(event.id, lost, by)) {
                     this.#letFortGo(event.id, { razed: true, by });
+                }
+            }
+
+            // (One of the Order of the Bell in a scene's court, or riding its roads, struck by a player
+            // or one of theirs: that player's crossed the Order)
+            if (event.type === "hit" && event.by && (this.wild.get(event.id)?.court || this.wild.get(event.id)?.patrol)) {
+                const by = this.battle.actor(event.by);
+                const owner = by && this.#ownerOf(by);
+
+                if (owner && this.players.has(owner)) {
+                    this.#crossOrder(owner, event.id);
                 }
             }
 
@@ -2961,6 +3000,8 @@ export class Host {
             fortsOut: [...this.fortsOut.entries()],
             squadsOut: [...this.squadsOut.entries()],
             quartered: [...this.quartered.entries()],
+            courts: [...this.courts.entries()],
+            patrols: [...this.patrols.entries()],
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
             mending: [...this.mending.entries()],
@@ -3144,6 +3185,8 @@ export class Host {
         host.fortsOut = new Map(structuredClone(snapshot.fortsOut ?? []));
         host.squadsOut = new Map(structuredClone(snapshot.squadsOut ?? []));
         host.quartered = new Map(structuredClone(snapshot.quartered ?? []));
+        host.courts = new Map(structuredClone(snapshot.courts ?? []));
+        host.patrols = new Map(structuredClone(snapshot.patrols ?? []));
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
         host.mending = new Map(structuredClone(snapshot.mending ?? []));
@@ -5060,6 +5103,24 @@ export class Host {
             const owner = this.#ownerOf(other);
 
             return !owner || !this.#spares(raider.id, owner);
+        }
+
+        // (The Order of the Bell in a scene's court: against those who've crossed it, and theirs,
+        // and the wild's that come at them; and they against it. No one else: #crossed)
+        if (a.team === ORDER || b.team === ORDER) {
+            const other = a.team === ORDER ? b : a;
+
+            if (other.team === ORDER) {
+                return false;
+            }
+
+            if (other.team === WILD) {
+                return Boolean(other.wild?.menace);
+            }
+
+            const owner = this.#ownerOf(other);
+
+            return Boolean(owner) && this.#crossed(owner);
         }
 
         if (a.team === WILD || b.team === WILD) {
@@ -8848,6 +8909,213 @@ export class Host {
         this.#event("unquartered", { town: id, ids: out?.ids ?? [] });
     }
 
+    // --- A scene's court, held by the Order of the Bell (core/scenery.js SCENERY `court`) ---
+
+    // A scene's court (`building`: its castle, open now) held: one of the Order at each of its
+    // posts, on the nearest free floor, facing as posted, at the castle's finders' tier (the
+    // stronger for the stronger who come, as a dungeon's is); each keeping to its post, setting on
+    // no one who hasn't crossed the Order (#against), all of them one pack
+    #holdCourt(building) {
+        const court = SCENERY[building.scenery].court;
+        const map = this.world.maps[building.maps[0]];
+
+        if (!map || this.courts.has(building.key)) {
+            return;
+        }
+
+        const site = this.#siteOf(building.site);
+        const finders = [...this.players.values()].filter((player) => building.maps.includes(this.battle.actor(player.id)?.map));
+        const tier = Math.min(TIERS, Math.max(CREATURES.bellBrother.tiers[0], cacheTier(site && this.world.plan ? dungeonTier(this.world.plan, site) : 1, Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))))));
+        const free = this.#spots(map.id);
+        const stamp = this.battle.time;
+        const ids = [];
+
+        try {
+            for (const [k, [creature, at, facing]] of court.posts.entries()) {
+                const id = `${building.key}/court-${stamp}-${k}`;
+
+                this.#rouse(id, creature, tier, free(squareIn(building.scenery, at)), { pack: `${building.key}/court`, map: map.id, roam: 0, temper: "territorial", guard: COURT.guard, team: ORDER, facing, court: building.key });
+                ids.push(id);
+            }
+        } catch {
+            // (No free floor: those posted, and no more)
+        }
+
+        this.courts.set(building.key, { map: map.id, ids });
+    }
+
+    // A scene's court let go (its castle let go: #closeBuilding): those standing gone from the
+    // battle, the fallen as ever; all of them again at their posts the next time it's held
+    #leaveCourt(key) {
+        const court = this.courts.get(key);
+
+        if (!court) {
+            return;
+        }
+
+        this.courts.delete(key);
+
+        for (const id of court.ids) {
+            const actor = this.battle.actor(id);
+
+            if (actor && !actor.dead) {
+                this.battle.remove(id);
+            }
+
+            this.#unwild(id);
+        }
+    }
+
+    // Whether a player's crossed the Order of the Bell, or anyone of their party has (rare.js
+    // Legends `marks`): its courts against them all
+    #crossed(id) {
+        return this.legends.marked(id, "order") || this.fellows(id).some((one) => this.legends.marked(one, "order"));
+    }
+
+    // A player who's crossed the Order of the Bell (struck one of it in a court, `by`; or gone into
+    // its keep): marked so in this world (once: rare.js Legends `mark`), told so (`words`, what one
+    // of the Order cries), and those of its courts on their floor set on them now
+    #crossOrder(id, by = null) {
+        if (!this.legends.mark(id, "order")) {
+            return;
+        }
+
+        const player = this.battle.actor(id);
+        const posted = [...this.courts.values(), ...this.patrols.values()].flatMap((held) => held.ids).map((one) => this.battle.actor(one)).filter((one) => one && !one.dead && player && one.map === player.map && (one.map !== "town" || hypot(one.x - player.x, one.y - player.y) <= PATROL_SEES));
+        const crier = (by && posted.find((one) => one.id === by)) ?? posted[0] ?? null;
+
+        this.#event("order", { change: "crossed", player: id, id: crier?.id ?? null, words: this.random.pick(SCENERY.bellhaven.court.crossed) });
+
+        for (const one of posted) {
+            this.battle.command(one.id, { type: "engage", target: id, run: true });
+        }
+    }
+
+    // A player into a scene's keep from its court (core/scenery.js SCENERY `keep`: Bellhaven's, the
+    // Order of the Bell's mother house, its theme's floors drawn as `keep`): they've crossed the
+    // Order
+    #intoTheKeep(event) {
+        const [into, from] = [this.world.maps[event.to], this.world.maps[event.from]];
+
+        if (into?.dungeon?.theme === "keep" && !from?.dungeon) {
+            this.#crossOrder(event.id);
+        }
+    }
+
+    // The Order of the Bell at their posts in a scene's court: one who hasn't crossed it lingering
+    // within COURT.warn metres of one of them not fighting, warned off (what it says: SCENERY
+    // `warnings`), no oftener than every COURT.every ms, the one who warns them turned to them;
+    // the Order's thread begun so, if it isn't (SCENERY `thread`)
+    #courtsAbout() {
+        for (const [key, court] of this.courts) {
+            const lines = SCENERY[this.#building(key)?.scenery]?.court?.warnings;
+
+            for (const id of lines ? this.players.keys() : []) {
+                const player = this.battle.actor(id);
+
+                if (!player || player.dead || player.map !== court.map || this.battle.time - (this.courtWarned.get(id) ?? -Infinity) < COURT.every || this.#crossed(id)) {
+                    continue;
+                }
+
+                const near = court.ids.map((one) => this.battle.actor(one)).find((one) => one && !one.dead && one.target === null && hypot(one.x - player.x, one.y - player.y) <= COURT.warn);
+
+                if (near) {
+                    const site = this.#siteOf(this.#building(key)?.site);
+                    const thread = SCENERY[this.#building(key).scenery].court.thread;
+
+                    this.courtWarned.set(id, this.battle.time);
+                    near.facing = atan2(player.x - near.x, player.y - near.y);
+                    this.#event("order", { change: "warn", id: near.id, player: id, words: this.random.pick(lines) });
+
+                    // (Its warning a way into the Order's thread: the Bell Tolls Again)
+                    if (thread && site) {
+                        this.#threadLeads(thread, site.at, [id]);
+                    }
+                }
+            }
+        }
+    }
+
+    // --- A scene's patrols: the Order of the Bell's riders on the roads round it (SCENERY `patrols`) ---
+
+    // The scenes' patrols: ridden out as a player comes within `near` metres of their scene in the
+    // world (#rideOut), let go again once every player's further than `far` from it, or not in the
+    // world (#rideIn)
+    #patrolsAbout() {
+        for (const site of this.world.plan?.sites ?? []) {
+            const patrols = site.scenery ? SCENERY[site.scenery]?.patrols : null;
+
+            if (!patrols) {
+                continue;
+            }
+
+            const off = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town").map((actor) => hypot(actor.x - site.at[0], actor.y - site.at[1]));
+
+            if (!this.patrols.has(site.id) && off.some((far) => far <= patrols.near)) {
+                this.#rideOut(site, patrols);
+            } else if (this.patrols.has(site.id) && off.every((far) => far > patrols.far)) {
+                this.#rideIn(site.id);
+            }
+        }
+    }
+
+    // A scene's patrols ridden out (SCENERY `patrols` `riders`: each patrol's kinds, its first its
+    // leader, the rest keeping with it): each on a round of its own (patrolRound), the first from the
+    // scene's road's end, the next from the far side of it the other way round, at the land's tier
+    // there (the stronger for the stronger who come, as its castle's court is), on the Order's side
+    // (#against: no one's enemy but those who've crossed it)
+    #rideOut(site, patrols) {
+        const plan = this.world.plan;
+        const placed = placedOf(site);
+        const squares = squaresOf(this.world.maps.town);
+        const finders = [...this.players.values()].filter((player) => {
+            const actor = this.battle.actor(player.id);
+
+            return actor && actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) <= patrols.near;
+        });
+        const tier = Math.min(TIERS, Math.max(CREATURES.bellRider.tiers[0], cacheTier(dungeonTier(plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))))));
+        const free = this.#spots("town");
+        const stamp = this.battle.time;
+        const ids = [];
+
+        patrols.riders.forEach((kinds, k) => {
+            const stops = patrolRound(placed, patrols, k, (x, y) => squares.blocked(x, y));
+            const leader = `patrol-${site.id}-${stamp}-${k}`;
+
+            try {
+                kinds.forEach((creature, n) => {
+                    const id = n ? `${leader}-${n}` : leader;
+
+                    this.#rouse(id, creature, tier, free(stops[0]), { pack: leader, leader: n ? leader : null, map: "town", roam: 0, team: ORDER, round: { stops, at: 0 }, patrol: site.id });
+                    ids.push(id);
+                });
+            } catch {
+                // (No free ground for them: those out, and no more)
+            }
+        });
+
+        this.patrols.set(site.id, { ids });
+        this.#event("patrol", { change: "out", site: site.id, ids: [...ids] });
+    }
+
+    // A scene's patrols let go: those riding gone from the battle, the fallen as ever; ridden out
+    // afresh the next time anyone comes near
+    #rideIn(key) {
+        const out = this.patrols.get(key);
+
+        this.patrols.delete(key);
+
+        for (const id of out?.ids ?? []) {
+            const actor = this.battle.actor(id);
+
+            if (actor && !actor.dead) {
+                this.battle.remove(id);
+            }
+
+            this.#unwild(id);
+        }
+    }
+
     // One of a town's barracks' garrison fallen: made up a while after (RELIEF_MS); and once the
     // last of them's down, captain and guardsmen, the barracks is cleared, and made up sooner
     // (BARRACKS_NEAR.relief). It's part of the town's garrison (docs/WAR.md *Standing armies*):
@@ -9181,7 +9449,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && !one.thread && one.vault === undefined && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && !one.thread && !one.court && !one.patrol && one.vault === undefined && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -9612,7 +9880,7 @@ export class Host {
     // anything, an elite, called, nor sent after someone), minded on first seeing a player, one
     // of a pack of `packSize`; one of a den's, standing its ground there, its nerve never gone
     // (`stands`)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null, thread = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null, thread = null, team = WILD, facing = null, court = null, patrol = null }) {
         const spec = CREATURES[creature];
         const reacting = reacts && wary(creature) && map === "town" && !elite && !camp && !lair && !cache && !stranger && !trial && !place && !works && !dungeon && !called && !champion && !ambush;
         const lead = elite === "lead";
@@ -9623,14 +9891,16 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}), ...(thread ? { thread } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}), ...(thread ? { thread } : {}), ...(court ? { court } : {}), ...(patrol ? { patrol } : {}) });
         this.battle.add({
             id,
             kind: "beast",
             name: title ?? (lead ? eliteName(creature) : spec.name),
             // (One with a weapon of its own: an ambush's bowman, core/ambush.js)
             weapon: arms ?? spec.weapon,
-            team: WILD,
+            // (The wild's, or the Order of the Bell's in a scene's court, facing as posted: #holdCourt)
+            team,
+            ...(facing === null ? {} : { facing }),
             square,
             map,
             ai: "wild",
@@ -9722,7 +9992,7 @@ export class Host {
             this.fights.delete(one.pack);
         }
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.trial && this.trials.get(one.trial), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.trial && this.trials.get(one.trial), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works), one.court && this.courts.get(one.court), one.patrol && this.patrols.get(one.patrol)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -10245,6 +10515,8 @@ export class Host {
         }
 
         this.#strangersAbout(homes);
+        this.#courtsAbout();
+        this.#patrolsAbout();
         this.#obstaclesAbout(homes);
         this.#ambushesAbout();
         this.#rareSites(homes);
@@ -11347,9 +11619,10 @@ export class Host {
             // (Kept where the thread was last, `here`: Vharzul at the Sundered Ring; else its haunt)
             thread.place = def.here ? [...thread.at] : this.#threadHaunt(thread.at, def.far ?? [110, 170], def.toward ?? null);
             thread.town = this.#nearestTown(thread.at);
-        } else if (def?.kind === "enter") {
+        } else if (def?.kind === "enter" || def?.kind === "slay") {
             // (The plan's dungeon of its theme nearest where it was last, its way in marked: a hell's
-            // cult's camp, the way Vharzul's brand points)
+            // cult's camp, the way Vharzul's brand points; the Keep of Bellhaven, its Prior at the
+            // top of it)
             const site = this.#nearestSite("dungeon", thread.at, def.theme ?? null);
 
             thread.place = site ? [...site.at] : null;
@@ -11408,15 +11681,40 @@ export class Host {
     }
 
     // A player gone in by a way in (`event`: the battle's "cross"): a thread whose lock step's
-    // that way's, or whose enter step's (its `site`: a hell's), done by them
+    // that way's, or whose enter step's (its `site`: a hell's, from the world; a scene's keep, from
+    // its court), done by them
     #threadCrossed(event) {
         for (const [id, thread] of Object.entries(this.legends.threads)) {
             const def = this.legends.stepOf(id);
             const site = def?.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : def?.kind === "enter" && thread.site ? { id: thread.site } : null;
+            const inward = event.from === "town" || (def?.kind === "enter" && !this.world.maps[event.from]?.dungeon);
 
-            if (site && event.link === siteDoor(site) && event.from === "town" && !this.legends.gaveUp(id, event.id)) {
+            if (site && event.link === siteDoor(site) && inward && !this.legends.gaveUp(id, event.id)) {
                 this.#threadDone(id, [event.id], thread.place);
             }
+        }
+    }
+
+    // A dungeon's master fallen (`site`: its id; #delveFell): a thread whose slay step's that
+    // dungeon's (its `site`: the Keep of Bellhaven's, its Prior) done, by those in it then
+    #threadSlain(site) {
+        const maps = this.world.interiors?.buildings.get(`site:${site}`)?.maps ?? [];
+
+        for (const [id, thread] of Object.entries(this.legends.threads)) {
+            if (this.legends.stepOf(id)?.kind === "slay" && thread.site === site) {
+                this.#threadDone(id, [...this.players.keys()].filter((one) => maps.includes(this.battle.actor(one)?.map)), thread.place);
+            }
+        }
+    }
+
+    // A thread begun by the world rather than its rumour (THREADS `then`, a thread done leading on
+    // to it; a scene's court's warning, SCENERY `court.thread`), at `at`, by `ids`: its home the
+    // settlement its rumour's told in (openerOf); not if the world hasn't its opener's place
+    #threadLeads(id, at, ids) {
+        const opener = THREADS[id] ? openerOf(this.world.plan, id) : null;
+
+        if (opener && !this.legends.threads[id]) {
+            this.#threadBegin(id, at, ids, { home: opener.town.id });
         }
     }
 
@@ -11440,10 +11738,10 @@ export class Host {
         return [...at];
     }
 
-    // The plan's place of a kind (`kind`: one of its sites'; a dungeon of a `theme`, if it's given)
-    // nearest `at`, or null
+    // The plan's place of a kind (`kind`: one of its sites'; a dungeon of a `theme`, if it's given,
+    // the scenes' keeps among them: #keeps) nearest `at`, or null
     #nearestSite(kind, at, theme = null) {
-        const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === kind && (!theme || site.theme === theme));
+        const sites = [...(this.world.plan?.sites ?? []), ...(kind === "dungeon" && this.world.plan ? this.#keeps() : [])].filter((site) => site.kind === kind && (!theme || site.theme === theme));
 
         return sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
     }
@@ -11530,6 +11828,11 @@ export class Host {
 
         this.#threadSetUp(id);
         this.#event("thread", { change: done.next ? "step" : "done", thread: id, step: done.step, ids: [...ids], by });
+
+        // (Done, and leading on to another: the Bellbound's to the Order of the Bell's)
+        if (!done.next && THREADS[id].then) {
+            this.#threadLeads(THREADS[id].then, thread.at, ids);
+        }
 
         return done;
     }
@@ -13232,6 +13535,7 @@ export class Host {
             }
 
             this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
+            this.#threadSlain(beast.dungeon);
         } else if (beast.champion === "floor") {
             this.#event("dungeon", { site: beast.dungeon, change: "floor", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
         }
@@ -16593,9 +16897,11 @@ export class Host {
         this.open.set(key, folk);
         this.#event("open", { key, folk });
 
-        // (A barracks: its garrison in it)
+        // (A barracks: its garrison in it; a scene's court, the Order of the Bell at its posts)
         if (building.kind === "barracks") {
             this.#quarter(building);
+        } else if (building.kind === "scenery" && SCENERY[building.scenery]?.court) {
+            this.#holdCourt(building);
         }
     }
 
@@ -16655,6 +16961,7 @@ export class Host {
             }
         }
 
+        this.#leaveCourt(key);
         this.#event("close", { key, folk });
     }
 

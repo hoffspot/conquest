@@ -70,8 +70,10 @@ export const DEFAULTS = Object.freeze({
     // the topmost bone that moves); `trimStill`: channels that never move a bone from where it
     // stands at rest left out (a clip only says what moves); `fps`: how many keyframes a second
     // the clips keep (a 60-frame source's at 30, half of them, and always each clip's last; null,
-    // every frame); and `invent`: clips made up from those there are (lib/invent.js)
-    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null, trimStill: false, fps: null, invent: [] },
+    // every frame); `invent`: clips made up from those there are (lib/invent.js); and `hold`:
+    // bones held where they stand through some clips, their keys there left out ({ "clip":
+    // ["bone", ...] }: a pack's arrow flown off on the hand's socket bone as its bow's loosed)
+    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null, trimStill: false, fps: null, invent: [], hold: {} },
     // Only the bones that deform the mesh: no control bones, IK targets or widgets, and no bones
     // flagged to deform that move no vertex and carry none that do (the tips of chains)...
     deformBonesOnly: true,
@@ -443,6 +445,10 @@ export function resolveConfig(raw, file) {
 
     if (typeof config.clips.trimStill !== "boolean") {
         fail("clips.trimStill is true or false");
+    }
+
+    if (config.clips.hold === null || typeof config.clips.hold !== "object" || Array.isArray(config.clips.hold) || !Object.values(config.clips.hold).every((bones) => Array.isArray(bones) && bones.every((bone) => typeof bone === "string" && bone))) {
+        fail('clips.hold is { "clip": ["bone", ...] }: the bones held where they stand through each clip');
     }
 
     if (config.clips.fps !== null && !(typeof config.clips.fps === "number" && config.clips.fps > 0)) {

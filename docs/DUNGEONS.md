@@ -499,21 +499,31 @@ dungeon's way in (`wild: false`), and there's one a world.
   The first floor's come into by the keep's doors. The builder doesn't otherwise care which way
   its levels go.
 - **Each floor its own** (`realms`, as a hell's are; its look, `keep`, the same on all four):
-  1. **The Great Hall** (`axial`): its garrison fallen at their posts and risen (skeletons, draugr
-     and skeletons, looters of the cult, rats, bats, wraiths); its pillared hall, armoury, guard
-     hall, chapel, undercroft and guardrooms. Its warden, **the Castellan of Bellhaven** (a
-     draugr, skeletons about him).
-  2. **The Cloister** (`accretion`): the brothers' cells, refectory, stores and kitchens, haunted
-     by those who kept them (ghosts, skeletons, wisps, rats, cultists, wraiths). Its warden, **the
-     Grey Abbess** (a wraith, ghosts about her).
+  Held by the Order of the Bell and by none but them (docs/WILDS.md, *The Order of the Bell*),
+  the harder the higher: its initiates in olive, its brothers in white with swords, spears and
+  bows, and the Black Choir, its inner circle, in black and plate.
+  1. **The Great Hall** (`axial`): the Order's garrison (brothers and spear-brothers on watch,
+     initiates, bowmen with a brother, a brother's patrol of initiates); its pillared hall,
+     armoury, guard hall, chapel, undercroft and guardrooms. A sergeant or the Master-at-arms
+     among them. Its warden, **the Castellan of Bellhaven** (a knight of the Black Choir, brothers
+     and spear-brothers about him).
+  2. **The Cloister** (`accretion`): the brothers' cells, refectory, stores and kitchens, where
+     the Order's initiates are tried (initiates, initiates under a brother, brothers, bowmen). The
+     Master of Initiates or the Almoner among them. Its warden, **the Sub-Prior** (a knight of the
+     Choir, initiates and brothers about him).
   3. **The Library** (`axial`): its scriptorium, stacks, chapter house, reliquary and studies,
-     where the cult that came after the Order searches its shelves (cultists, ghosts, wisps,
-     skeletons, rats, wraiths). Its warden, **the Stone Sentinel** (a stone golem, cultists about
-     it).
-  4. **The Belfry** (`axial`): the bell-ringers' hall, the knights' hall, the tower, bats under
-     the bell (bats, draugr and skeletons, ghosts, wraiths, rats, wisps). Its master in the bell
-     chamber, before his hoard at its head: **the Hollow Abbot** (a wight lord), **the Bellwarden**
-     (a draugr) or **the Grey Lord of Bellhaven** (a wraith).
+     where the Black Choir reads the old Order's Rule (brothers and spear-brothers, the Choir's
+     knights, the Choir with a brother, bowmen). The Keeper of the Rule or a Chorister among them.
+     Its warden, **the Lector of the Choir** (a knight of the Choir, the Choir about him).
+  4. **The Belfry** (`axial`): the bell-ringers' hall, the knights' hall, the tower, the Black
+     Choir's own (its knights in pairs, with brothers, with spear-brothers, and bowmen). The
+     Bell-ringer or the Precentor among them. Its master in the bell chamber, before his hoard at
+     its head: **Prior Osric Vane, the Voice of the Bell** (`priorVane`, the Choir about him): his
+     morning star, his toll (his shield driven down and the Bell's voice ringing out all round him,
+     throwing whoever it catches, shown on the ground first), and at two thirds and at one third of
+     his strength the Choir called to him. His own model and spoils are still to come. The keep's
+     made again once its hoard's been taken and everyone's left, as any dungeon is, the Prior its
+     master again, so it can be fought up again.
 - **Each warden bars its floor's stair up** till it falls (its flight's `seal`, refused as
   `barred`: "The stair up is barred, and its warden still stands somewhere on this floor."), as a
   hell's level's master seals its portal down. "The stair up is open" once it's slain.
