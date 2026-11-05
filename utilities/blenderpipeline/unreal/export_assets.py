@@ -23,13 +23,22 @@ the Content Browser (`/Game/Monster4/Meshes/SK_Monster4` as `Monster4/Meshes/SK_
   compression (a normal map is `TC_NORMALMAP`; Unreal's are DirectX's, their green flipped for
   glTF by the pipeline's `flipGreen`); and anything that couldn't be exported.
 
+Unreal's FBX export leaves some of a mesh out without a word: a section simulated as cloth (a
+horse's caparison and barding, a cloak, a mane), and one turned off. So each mesh's FBX is read
+back once it's written, and each material slot's faces counted. A slot that a section of the mesh
+uses but that came out with none is said in `notes.json` (`lost`), in the Output Log and in a box
+at the end, with why and what to do. Such a mesh is exported as glTF too (`SK_Monster4.glb`, beside
+its FBX), which keeps cloth sections, when Unreal's glTF Exporter plugin is on (Edit → Plugins).
+
 Montages, blend spaces, blueprints and levels aren't exported: they're Unreal's own, and the
 animation sequences they're made of are.
 """
 
 import json
 import os
+import struct
 import sys
+import zlib
 
 import unreal
 
@@ -60,6 +69,33 @@ FBX_OPTIONS = {
     "map_skeletal_motion_to_root": False,
     "force_front_x_axis": False,
     "export_local_time": True,
+}
+
+# The glTF export's options (Unreal's glTF Exporter plugin), for a mesh whose FBX lost a part: its
+# full detail, skinned, with no textures (they're exported on their own) and no animations. Each
+# set where the plugin has it; (enum, value) for one of its enums
+GLTF_OPTIONS = {
+    "default_level_of_detail": 0,
+    "export_vertex_colors": True,
+    "export_vertex_skin_weights": True,
+    "export_morph_targets": True,
+    "export_preview_mesh": False,
+    "export_animation_sequences": False,
+    "export_level_sequences": False,
+    "bake_material_inputs": ("GLTFMaterialBakeMode", "DISABLED"),
+    "texture_image_format": ("GLTFTextureImageFormat", "NONE"),
+}
+
+# Why a slot a section uses came through the FBX with no faces, and what's to be done about it
+WHY = {
+    "cloth": "its section is simulated as cloth, which Unreal's FBX export leaves out",
+    "off": "its section is likely turned off, which Unreal's FBX export leaves out",
+    "unknown": "this engine can't say whether a section uses it (if one does, it's cloth or turned off)",
+}
+FIX = {
+    "cloth": "open the mesh, and in LOD 0's sections set that one's Clothing to None (on a duplicate of the mesh, to keep the pack's own as it is); then export again",
+    "off": "open the mesh, and in its Asset Details, LOD 0, Sections, right-click that section and enable it; then export again",
+    "unknown": "see the README, From Unreal",
 }
 
 
@@ -106,16 +142,31 @@ def get(asset, name, default=None):
         return default
 
 
-def fbx_options():
-    options = unreal.FbxExportOption()
+def options_of(kind, settings):
+    """An export's options: each of `settings` set where this engine has it, the rest left as they are."""
+    options = kind()
 
-    for name, value in FBX_OPTIONS.items():
+    for name, value in settings.items():
         try:
+            if isinstance(value, tuple):
+                value = getattr(getattr(unreal, value[0]), value[1])
+
             options.set_editor_property(name, value)
         except Exception:
             pass
 
     return options
+
+
+def fbx_options():
+    return options_of(unreal.FbxExportOption, FBX_OPTIONS)
+
+
+def gltf_options():
+    """The glTF export's options, or None where the glTF Exporter plugin isn't on."""
+    kind = getattr(unreal, "GLTFExportOptions", None)
+
+    return options_of(kind, GLTF_OPTIONS) if kind else None
 
 
 def export(asset, filename, options=None):
@@ -241,6 +292,311 @@ def texture_notes(texture, file, path):
     return notes
 
 
+# --- What came through: each mesh's sections, and its FBX's faces read back ---
+
+# (A binary FBX's property types: arrays of numbers, and single ones, as struct reads them)
+FBX_ARRAYS = {"f": ("f", 4), "d": ("d", 8), "l": ("q", 8), "i": ("i", 4), "b": ("b", 1)}
+FBX_SCALARS = {"Y": ("h", 2), "C": ("?", 1), "I": ("i", 4), "F": ("f", 4), "D": ("d", 8), "L": ("q", 8)}
+
+
+def read_fbx(data):
+    """A binary FBX's nodes, each (name, properties, children); None for one that isn't (an ASCII one)."""
+    if not data.startswith(b"Kaydara FBX Binary  \x00"):
+        return None
+
+    # (From 7.5 on, its records' offsets and counts are 64-bit)
+    wide = struct.unpack_from("<I", data, 23)[0] >= 7500
+    head, head_size = ("<QQQ", 24) if wide else ("<III", 12)
+
+    def node(at):
+        end, count, _ = struct.unpack_from(head, data, at)
+
+        if end == 0:
+            return None, at + head_size + 1
+
+        at += head_size
+        name = data[at + 1: at + 1 + data[at]].decode("ascii", "replace")
+        at += 1 + data[at]
+        properties = []
+
+        for _ in range(count):
+            kind = chr(data[at])
+            at += 1
+
+            if kind in FBX_SCALARS:
+                code, size = FBX_SCALARS[kind]
+                properties.append(struct.unpack_from("<" + code, data, at)[0])
+                at += size
+            elif kind in FBX_ARRAYS:
+                length, encoding, stored = struct.unpack_from("<III", data, at)
+                raw = data[at + 12: at + 12 + stored]
+                at += 12 + stored
+                code, size = FBX_ARRAYS[kind]
+                properties.append(list(struct.unpack_from(f"<{length}{code}", zlib.decompress(raw) if encoding == 1 else raw)))
+            elif kind in "SR":
+                length = struct.unpack_from("<I", data, at)[0]
+                properties.append(data[at + 4: at + 4 + length])
+                at += 4 + length
+            else:
+                raise ValueError(f"an FBX property of a kind unknown: {kind!r}")
+
+        children = []
+
+        while at < end:
+            child, at = node(at)
+
+            if child is None:
+                break
+
+            children.append(child)
+
+        return (name, properties, children), end
+
+    nodes, at = [], 27
+
+    while at < len(data) - head_size:
+        top, at = node(at)
+
+        if top is None:
+            break
+
+        nodes.append(top)
+
+    return nodes
+
+
+def child_of(node, name):
+    return next((child for child in node[2] if child[0] == name), None)
+
+
+def fbx_faces(path):
+    """Each material's faces in an FBX, as its mesh has them in order ([[name, faces], ...]: Unreal
+    writes a mesh's slots in order, a material in several slots named `MI_Cloth`, `MI_Cloth_6`...),
+    or None for a file it can't read."""
+    try:
+        with open(path, "rb") as file:
+            nodes = read_fbx(file.read())
+    except Exception:
+        return None
+
+    if nodes is None:
+        return None
+
+    top = {node[0]: node for node in nodes}
+    names, geometries, models = {}, {}, set()
+
+    for thing in (top.get("Objects") or ("", [], []))[2]:
+        if thing[0] == "Material":
+            names[thing[1][0]] = thing[1][1].split(b"\x00\x01")[0].decode("utf-8", "replace")
+        elif thing[0] == "Geometry" and len(thing[1]) > 2 and thing[1][2] == b"Mesh":
+            geometries[thing[1][0]] = thing
+        elif thing[0] == "Model":
+            models.add(thing[1][0])
+
+    # (Each model's materials, in the order they're joined to it; each mesh's model)
+    materials_of, model_of = {}, {}
+
+    for link in (top.get("Connections") or ("", [], []))[2]:
+        if link[0] == "C" and link[1][0] == b"OO":
+            source, target = link[1][1], link[1][2]
+
+            if source in names and target in models:
+                materials_of.setdefault(target, []).append(names[source])
+            elif source in geometries and target in models:
+                model_of[source] = target
+
+    faces = {}
+
+    for key, geometry in geometries.items():
+        materials = materials_of.get(model_of.get(key), [])
+        corners = child_of(geometry, "PolygonVertexIndex")
+        polygons = sum(1 for corner in corners[1][0] if corner < 0) if corners else 0
+        layer = child_of(geometry, "LayerElementMaterial")
+
+        for name in materials:
+            faces.setdefault(name, 0)
+
+        if not materials:
+            continue
+
+        if layer is None or child_of(layer, "Materials") is None:
+            each = [0] * polygons
+        else:
+            mapping = child_of(layer, "MappingInformationType")
+            each = child_of(layer, "Materials")[1][0]
+
+            if mapping is None or mapping[1][0] != b"ByPolygon":
+                each = [each[0] if each else 0] * polygons
+
+        for index in each:
+            if 0 <= index < len(materials):
+                faces[materials[index]] += 1
+
+    return [[name, count] for name, count in faces.items()]
+
+
+def glb_faces(path):
+    """Each material's triangles in a .glb, by its name, or None for a file it can't read."""
+    try:
+        with open(path, "rb") as file:
+            data = file.read()
+
+        length, kind = struct.unpack_from("<II", data, 12)
+        document = json.loads(data[20: 20 + length]) if data[:4] == b"glTF" and kind == 0x4E4F534A else None
+    except Exception:
+        return None
+
+    if document is None:
+        return None
+
+    accessors, materials, faces = document.get("accessors", []), document.get("materials", []), {}
+
+    for mesh in document.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            read = primitive.get("indices", primitive.get("attributes", {}).get("POSITION"))
+
+            if primitive.get("mode", 4) != 4 or read is None:
+                continue
+
+            material = primitive.get("material")
+            name = materials[material].get("name", "") if material is not None and material < len(materials) else ""
+            faces[name] = faces.get(name, 0) + accessors[read]["count"] // 3
+
+    return faces
+
+
+def mesh_library():
+    """What reads a skeletal mesh's LODs and sections: the editor's subsystem (5.1 on), or its library before."""
+    try:
+        return unreal.get_editor_subsystem(unreal.SkeletalMeshEditorSubsystem)
+    except Exception:
+        return getattr(unreal, "EditorSkeletalMeshLibrary", None)
+
+
+def sections_of(mesh):
+    """A skeletal mesh's LOD 0 sections, each [its slot, whether it's simulated as cloth], or None
+    where this engine can't say."""
+    library = mesh_library()
+
+    try:
+        count = library.get_num_sections(mesh, 0)
+        slots = [library.get_lod_material_slot(mesh, 0, section) for section in range(max(0, count))]
+    except Exception:
+        return None
+
+    sections = []
+
+    for section, slot in enumerate(slots):
+        try:
+            cloth = bool(mesh.is_section_using_cloth(section, True))
+        except Exception:
+            cloth = None
+
+        sections.append([slot, cloth])
+
+    return sections
+
+
+def material_name(path):
+    """A material's object name (`MI_Skin`) from its path (`/Game/Monster4/Materials/MI_Skin.MI_Skin`)."""
+    return path.split(".")[-1] if path else None
+
+
+def slot_faces(slots, faces):
+    """Each slot's faces in the FBX (None where it can't be matched): by place, as Unreal writes them,
+    else by its material's name, as itself or numbered by its slot."""
+    if faces is None:
+        return [None] * len(slots)
+
+    if len(faces) == len(slots):
+        return [count for _, count in faces]
+
+    by_name = dict((name, count) for name, count in faces)
+
+    return [by_name.get(material_name(slot["material"]), by_name.get(f"{material_name(slot['material'])}_{index}")) for index, slot in enumerate(slots)]
+
+
+def look_over(mesh, entry, out, base):
+    """What of a mesh came through its FBX: each slot's faces (`materials[].faces`); its LOD 0
+    sections (`sections`) and clothing; the slots a section uses that have none (`lost`), and, for
+    those, a glTF export of it beside the FBX (`glb`), its faces by material (`glbFaces`) and which
+    lost slots it has (`found`). The warnings to give: one for each slot lost."""
+    slots = entry["materials"]
+    read = fbx_faces(os.path.join(out, base + ".fbx"))
+    faces = slot_faces(slots, read)
+    name = base.replace(os.sep, "/").split("/")[-1]
+
+    if read is None:
+        return [f"{name}: its FBX couldn't be read back, to see that all of it came through"]
+
+    for slot, count in zip(slots, faces):
+        if count is not None:
+            slot["faces"] = count
+
+    sections = sections_of(mesh) if isinstance(mesh, unreal.SkeletalMesh) else None
+    clothing = [path_of(asset) for asset in get(mesh, "mesh_clothing_assets") or []]
+
+    if sections is not None:
+        entry["sections"] = [{"slot": slot, "cloth": cloth} for slot, cloth in sections]
+
+    if clothing:
+        entry["clothing"] = clothing
+
+    # (A slot no section uses is meant to be empty; where this engine can't say which are used,
+    # skeletal meshes' empty slots are told of all the same)
+    lost = []
+
+    for index, (slot, count) in enumerate(zip(slots, faces)):
+        if count != 0:
+            continue
+
+        if sections is None:
+            if isinstance(mesh, unreal.SkeletalMesh):
+                lost.append({"slot": slot["slot"], "material": slot["material"], "why": "unknown"})
+        elif any(used == index for used, _ in sections):
+            cloth = any(used == index and on for used, on in sections)
+            lost.append({"slot": slot["slot"], "material": slot["material"], "why": "cloth" if cloth else "off"})
+
+    if not lost:
+        return []
+
+    entry["lost"] = lost
+    options = gltf_options()
+    glb = os.path.join(out, base + ".glb")
+
+    # (Its glTF: a lost slot is found there when its material has more faces there than in the FBX)
+    if options is not None and export(mesh, glb, options):
+        entry["glb"] = (base + ".glb").replace(os.sep, "/")
+        had, fbx = glb_faces(glb) or {}, {}
+        entry["glbFaces"] = had
+
+        for slot in slots:
+            fbx[material_name(slot["material"])] = fbx.get(material_name(slot["material"]), 0) + slot.get("faces", 0)
+
+        entry["found"] = [part["slot"] for part in lost if had.get(material_name(part["material"]), 0) > fbx.get(material_name(part["material"]), 0)]
+
+    warnings = []
+
+    for part in lost:
+        said = f"{name}: the slot '{part['slot']}' ({material_name(part['material'])}) has no faces in its FBX: {WHY[part['why']]}."
+
+        if part["slot"] in entry.get("found", ()):
+            said += f" It's in {name}.glb, exported beside it."
+        else:
+            said += f" To have it, {FIX[part['why']]}."
+
+            if options is None:
+                said += " (Or turn on the glTF Exporter plugin, in Edit, Plugins, and export again: it keeps cloth.)"
+            elif "glb" in entry:
+                said += f" ({name}.glb hasn't it either, by its materials' names: glbFaces in notes.json.)"
+            else:
+                said += " (Its glTF export failed too.)"
+
+        warnings.append(said)
+
+    return warnings
+
+
 def main(root=None, out=None):
     root = root or ROOT
     out = out or OUT or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), "PellagosExport")
@@ -262,6 +618,7 @@ def main(root=None, out=None):
         "materials": {},
         "textures": {},
         "failed": [],
+        "warnings": [],
     }
 
     unreal.log(f"Exporting {len(found)} assets under {root} into {out}")
@@ -293,7 +650,12 @@ def main(root=None, out=None):
                 file = (base + ".fbx").replace(os.sep, "/")
 
                 if kind in MESHES:
-                    notes["meshes"][path_of(asset)] = mesh_notes(asset, file)
+                    entry = notes["meshes"][path_of(asset)] = mesh_notes(asset, file)
+
+                    try:
+                        notes["warnings"] += look_over(asset, entry, out, base)
+                    except Exception as error:
+                        notes["warnings"].append(f"{package}: what came through its FBX couldn't be read ({error})")
                 else:
                     notes["animations"][path_of(asset)] = animation_notes(asset, file)
             else:
@@ -310,6 +672,18 @@ def main(root=None, out=None):
 
     for failure in notes["failed"]:
         unreal.log_warning(f"Not exported: {failure['asset']} ({failure['why']})")
+
+    for warning in notes["warnings"]:
+        unreal.log_warning(f"Left out: {warning}")
+
+    # (Said in a box too, as parts left out are easily missed in the log)
+    if notes["warnings"]:
+        shown = notes["warnings"][:8] + ([f"...and {len(notes['warnings']) - 8} more, in notes.json (\"warnings\")"] if len(notes["warnings"]) > 8 else [])
+
+        try:
+            unreal.EditorDialog.show_message("Exported for Pellagos, with parts left out", "\n\n".join(shown), unreal.AppMsgType.OK)
+        except Exception:
+            pass
 
     return notes
 

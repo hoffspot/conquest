@@ -316,9 +316,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
   input uses `fixtures/fbx-creature/`, made by `fixtures/make_fbx_creature.py`.
 - An asset sold for Unreal Engine is exported out of it by `unreal/export_assets.py`, run in the
   Unreal Editor (its `README.md`, *From Unreal*): its meshes and animations as FBX, its textures,
-  and `notes.json` (which texture each material takes). Unreal can't run here, so its tests run on
-  a stand-in for Unreal's Python module (`python3 unreal/test_export_assets.py`; `npm test` runs
-  them too).
+  and `notes.json` (which texture each material takes). It reads each mesh's FBX back and says what
+  Unreal's FBX export left out (a section simulated as cloth, or turned off), exporting that mesh
+  as glTF too. Unreal can't run here, so its tests run on a stand-in for Unreal's Python module,
+  which writes FBX and glTF files as Unreal does (`python3 unreal/test_export_assets.py`; `npm test`
+  runs them too).
 - Scenery the game walks on, such as a castle, is cut into cells (`cells`): the game draws only the
   cells in view, each at its own detail. Where it can be walked is baked from it (`walk`) into
   `<name>.walk.json`, and the same as a module, `<name>.walk.js`: the height of each square a body

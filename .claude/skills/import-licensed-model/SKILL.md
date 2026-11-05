@@ -48,6 +48,12 @@ A small file comes straight back from the first `curl` (no confirm page): check 
   Unreal: *PellagosExport*) has `notes.json`:
   each animation's length and skeleton, each material's slots and textures, each texture's size and
   whether it's sRGB. Read it before anything else.
+- Read its `warnings`, and each mesh's `lost`, before building: parts Unreal's FBX export left
+  out (sections simulated as cloth, or turned off: the Order of the Bell's horses lost their
+  barding, caparison and manes so). Where the mesh's `.glb` has them (`found`), take them from it;
+  where it hasn't, tell the owner the fix the warning gives, and wait for a new export. An export
+  older than this check has no `warnings`: count each slot's faces in its FBX (`fbx_faces` in the
+  script reads one) to see what's missing.
 - Which channel of a packed texture is what: open it with the pipeline's Blender Python
   (`utilities/blenderpipeline/.venv/bin/python -I`, `bpy`), not the system's PIL (broken here).
   Unreal's `metalic+roughness` textures keep roughness in alpha (`"channel": "A"`); their normals
