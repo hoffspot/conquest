@@ -2319,6 +2319,518 @@
                 }
             ]
         },
+        "scenery-meshsmith-houses": {
+            "tier": "demand",
+            "label": "The humans' town houses, built of a kit of half-timbered pieces: frames and braces, the plaster and brick between, windows, doors, corner posts, footings, gables row on row and finials, and its roof tiles laid flat (Meshsmith Foundry's half-timbered building kit, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/meshsmith-houses.bin",
+                    "hash": "077826c229",
+                    "bytes": 1895012
+                }
+            ],
+            "pieces": {
+                "WallFrame_2m": [
+                    "walls@0,0"
+                ],
+                "WallFrame_2m_DoorCenter": [
+                    "walls@1,0"
+                ],
+                "WallFrame_2m_DoorLeft": [
+                    "walls@2,0"
+                ],
+                "WallFrame_2m_DoorRight": [
+                    "walls@3,0"
+                ],
+                "WallFrame_1m": [
+                    "walls@4,0"
+                ],
+                "WallFrame_02m": [
+                    "walls@5,0"
+                ],
+                "WallFrame_CornerOuter_01": [
+                    "walls@6,0"
+                ],
+                "WallFrame_CornerOuter_02": [
+                    "walls@7,0"
+                ],
+                "WallFrame_CornerOuter_03": [
+                    "walls@8,0"
+                ],
+                "WallFrame_CornerInner": [
+                    "walls@9,0"
+                ],
+                "WallFrame_2m_RoofL_Lower": [
+                    "walls@0,1"
+                ],
+                "WallFrame_2m_RoofR_Lower": [
+                    "walls@1,1"
+                ],
+                "WallFrame_2m_RoofL_Upper": [
+                    "walls@2,1"
+                ],
+                "WallFrame_2m_RoofR_Upper": [
+                    "walls@3,1"
+                ],
+                "WallFrame_2m_RoofPeak_Lower": [
+                    "walls@4,1"
+                ],
+                "WallFrame_2m_RoofPeak_Upper": [
+                    "walls@5,1"
+                ],
+                "WallFrame_2m_RoofMiddle_Upper": [
+                    "walls@6,1"
+                ],
+                "WallFrame_Roof_PeakFil": [
+                    "walls@7,1"
+                ],
+                "WallFrame_Beams_01_2m": [
+                    "walls@8,1"
+                ],
+                "WallFrame_Beams_01_1m": [
+                    "walls@9,1"
+                ],
+                "WoodBeam_Simple_2m": [
+                    "walls@0,2"
+                ],
+                "WoodBeam_Simple_1m": [
+                    "walls@1,2"
+                ],
+                "WallFill_Stone_2m": [
+                    "fills@2,2"
+                ],
+                "WallFill_Stone_1m": [
+                    "fills@3,2"
+                ],
+                "WallFill_Stone_20cm": [
+                    "fills@4,2"
+                ],
+                "WallFill_Stone_2m_DoorCenter": [
+                    "fills@5,2"
+                ],
+                "WallFill_Stone_2m_DoorLeft": [
+                    "fills@6,2"
+                ],
+                "WallFill_Stone_2m_DoorRight": [
+                    "fills@7,2"
+                ],
+                "WallFill_Stone_2m_RoofL": [
+                    "fills@8,2"
+                ],
+                "WallFill_Stone_2m_RoofR": [
+                    "fills@9,2"
+                ],
+                "WallFill_Stone_2m_RoofPeak": [
+                    "fills@0,3"
+                ],
+                "WallFill_Stone_2m_RoofL_Window_1x2": [
+                    "fills@1,3"
+                ],
+                "WallFill_Stone_2m_RoofR_Window_1x2": [
+                    "fills@2,3"
+                ],
+                "WallFill_Stone_2m_RoofPeak_Window_1x2": [
+                    "fills@3,3"
+                ],
+                "WallFill_Stone_2m_Window_1x3": [
+                    "fills@4,3"
+                ],
+                "WallFill_Stone_2m_Window_2x2": [
+                    "fills@5,3"
+                ],
+                "WallFill_Stone_2m_Window_2x3": [
+                    "fills@6,3"
+                ],
+                "WallFill_Stone_2m_Window_2x4": [
+                    "fills@7,3"
+                ],
+                "WallFill_Stone_2m_Window_1x3_Double": [
+                    "fills@8,3"
+                ],
+                "WallFill_Stone_2m_Window_2x3_Double": [
+                    "fills@9,3"
+                ],
+                "WallFill_Stone_2m_Window_2x4_Double": [
+                    "fills@0,4"
+                ],
+                "WallFill_Stone_2m_Window_2x3_Triple": [
+                    "fills@1,4"
+                ],
+                "WallFill_Stone_1m_Window_1x3": [
+                    "fills@2,4"
+                ],
+                "WallFill_Stone_1m_Window_2x3": [
+                    "fills@3,4"
+                ],
+                "WallFill_Stone_1m_Window_2x4": [
+                    "fills@4,4"
+                ],
+                "WallFill_Stone_2m_DoorLeft_Window_1x2": [
+                    "fills@5,4"
+                ],
+                "WallFill_Stone_2m_DoorRight_Window_1x2": [
+                    "fills@6,4"
+                ],
+                "WallFill_Stone_2m_DoorLeft_Window_1x3": [
+                    "fills@7,4"
+                ],
+                "WallFill_Stone_2m_DoorRight_Window_1x3": [
+                    "fills@8,4"
+                ],
+                "WallFill_Brick_2m": [
+                    "fills@9,4"
+                ],
+                "WallFill_Brick_1m": [
+                    "fills@0,5"
+                ],
+                "WallFill_Brick_20cm": [
+                    "fills@1,5"
+                ],
+                "WallFill_Brick_2m_DoorCenter": [
+                    "fills@2,5"
+                ],
+                "WallFill_Brick_2m_DoorLeft": [
+                    "fills@3,5"
+                ],
+                "WallFill_Brick_2m_DoorRight": [
+                    "fills@4,5"
+                ],
+                "WallFill_Brick_2m_RoofL": [
+                    "fills@5,5"
+                ],
+                "WallFill_Brick_2m_RoofR": [
+                    "fills@6,5"
+                ],
+                "WallFill_Brick_2m_RoofPeak": [
+                    "fills@7,5"
+                ],
+                "WallFill_Brick_2m_RoofL_Window_1x2": [
+                    "fills@8,5"
+                ],
+                "WallFill_Brick_2m_RoofR_Window_1x2": [
+                    "fills@9,5"
+                ],
+                "WallFill_Brick_2m_RoofPeak_Window_1x2": [
+                    "fills@0,6"
+                ],
+                "WallFill_Brick_2m_Window_1x3": [
+                    "fills@1,6"
+                ],
+                "WallFill_Brick_2m_Window_2x2": [
+                    "fills@2,6"
+                ],
+                "WallFill_Brick_2m_Window_2x3": [
+                    "fills@3,6"
+                ],
+                "WallFill_Brick_2m_Window_2x4": [
+                    "fills@4,6"
+                ],
+                "WallFill_Brick_2m_Window_1x3_Double": [
+                    "fills@5,6"
+                ],
+                "WallFill_Brick_2m_Window_2x3_Double": [
+                    "fills@6,6"
+                ],
+                "WallFill_Brick_2m_Window_2x4_Double": [
+                    "fills@7,6"
+                ],
+                "WallFill_Brick_2m_Window_2x3_Triple": [
+                    "fills@8,6"
+                ],
+                "WallFill_Brick_1m_Window_1x3": [
+                    "fills@9,6"
+                ],
+                "WallFill_Brick_1m_Window_2x3": [
+                    "fills@0,7"
+                ],
+                "WallFill_Brick_1m_Window_2x4": [
+                    "fills@1,7"
+                ],
+                "WallFill_Brick_2m_DoorLeft_Window_1x2": [
+                    "fills@2,7"
+                ],
+                "WallFill_Brick_2m_DoorRight_Window_1x2": [
+                    "fills@3,7"
+                ],
+                "WallFill_Brick_2m_DoorLeft_Window_1x3": [
+                    "fills@4,7"
+                ],
+                "WallFill_Brick_2m_DoorRight_Window_1x3": [
+                    "fills@5,7"
+                ],
+                "WallPattern_2m_A": [
+                    "walls@6,7"
+                ],
+                "WallPattern_2m_V": [
+                    "walls@7,7"
+                ],
+                "WallPattern_2m_W": [
+                    "walls@8,7"
+                ],
+                "WallPattern_2m_X": [
+                    "walls@9,7"
+                ],
+                "WallPattern_2m_M": [
+                    "walls@0,8"
+                ],
+                "WallPattern_2m_H": [
+                    "walls@1,8"
+                ],
+                "WallPattern_2m_Plus": [
+                    "walls@2,8"
+                ],
+                "WallPattern_2m_MPlus": [
+                    "walls@3,8"
+                ],
+                "WallPattern_2m_WPlus2": [
+                    "walls@4,8"
+                ],
+                "WallPattern_2m_DiagonalLeftRight": [
+                    "walls@5,8"
+                ],
+                "WallPattern_2m_TTPlus": [
+                    "walls@6,8"
+                ],
+                "WallPattern_2m_OSPlus": [
+                    "walls@7,8"
+                ],
+                "WallPattern_2m_DoorCenter": [
+                    "walls@8,8"
+                ],
+                "WallPattern_2m_DoorLeft": [
+                    "walls@9,8"
+                ],
+                "WallPattern_2m_DoorRight": [
+                    "walls@0,9"
+                ],
+                "WallPattern_2m_Window_H": [
+                    "walls@1,9"
+                ],
+                "WallPattern_2m_Window_Plus": [
+                    "walls@2,9"
+                ],
+                "WallPattern_2m_WindowHorizontal": [
+                    "walls@3,9"
+                ],
+                "WallPattern_1m_DiagonalLeft": [
+                    "walls@4,9"
+                ],
+                "WallPattern_1m_DiagonalRight": [
+                    "walls@5,9"
+                ],
+                "WallPattern_1m_Plus": [
+                    "walls@6,9"
+                ],
+                "WallPattern_1m_T": [
+                    "walls@7,9"
+                ],
+                "WallPattern_1m_V": [
+                    "walls@8,9"
+                ],
+                "WallPattern_1m_XT": [
+                    "walls@9,9"
+                ],
+                "WallPattern_1m_Window": [
+                    "walls@0,10"
+                ],
+                "WallPattern_1m_Window_T": [
+                    "walls@1,10"
+                ],
+                "WallPattern_2m_RoofL_DiagonalLeft": [
+                    "walls@2,10"
+                ],
+                "WallPattern_2m_RoofL_DiagonalRight": [
+                    "walls@3,10"
+                ],
+                "WallPattern_2m_RoofL_TX": [
+                    "walls@4,10"
+                ],
+                "WallPattern_2m_RoofL_TXX": [
+                    "walls@5,10"
+                ],
+                "WallPattern_2m_RoofL_T": [
+                    "walls@6,10"
+                ],
+                "WallPattern_2m_RoofL_SLeft": [
+                    "walls@7,10"
+                ],
+                "WallPattern_2m_RoofL_SRight": [
+                    "walls@8,10"
+                ],
+                "WallPattern_2m_RoofL_Box": [
+                    "walls@9,10"
+                ],
+                "WallPattern_2m_RoofR_DiagonalLeft": [
+                    "walls@0,11"
+                ],
+                "WallPattern_2m_RoofR_DiagonalRight": [
+                    "walls@1,11"
+                ],
+                "WallPattern_2m_RoofR_TX": [
+                    "walls@2,11"
+                ],
+                "WallPattern_2m_RoofR_TXX": [
+                    "walls@3,11"
+                ],
+                "WallPattern_2m_RoofR_T": [
+                    "walls@4,11"
+                ],
+                "WallPattern_2m_RoofR_SLeft": [
+                    "walls@5,11"
+                ],
+                "WallPattern_2m_RoofR_SRight": [
+                    "walls@6,11"
+                ],
+                "WallPattern_2m_RoofR_Box": [
+                    "walls@7,11"
+                ],
+                "WallPattern_2m_RoofPeak_Plus": [
+                    "walls@8,11"
+                ],
+                "WallPattern_2m_RoofPeak_H": [
+                    "walls@9,11"
+                ],
+                "WallPattern_2m_RoofPeak_T": [
+                    "walls@0,12"
+                ],
+                "WallPattern_2m_RoofPeak_W": [
+                    "walls@1,12"
+                ],
+                "WallPattern_2m_RoofPeak_X": [
+                    "walls@2,12"
+                ],
+                "WallPattern_2m_RoofPeak_V": [
+                    "walls@3,12"
+                ],
+                "Window_Opaque_1x3": [
+                    "walls@4,12",
+                    "glass@4,12"
+                ],
+                "Window_Opaque_2x2": [
+                    "walls@5,12",
+                    "glass@5,12"
+                ],
+                "Window_Opaque_2x3": [
+                    "walls@6,12",
+                    "glass@6,12"
+                ],
+                "Window_Opaque_2x4": [
+                    "walls@7,12",
+                    "glass@7,12"
+                ],
+                "Door_01": [
+                    "walls@8,12"
+                ],
+                "Door_02": [
+                    "walls@9,12"
+                ],
+                "Door_03": [
+                    "walls@0,13"
+                ],
+                "Door_05": [
+                    "walls@1,13"
+                ],
+                "DoorFrame": [
+                    "walls@2,13"
+                ],
+                "Foundation_Smooth_2x2m": [
+                    "walls@3,13"
+                ],
+                "Foundation_Smooth_2x1m": [
+                    "walls@4,13"
+                ],
+                "Foundation_Smooth_1x2m": [
+                    "walls@5,13"
+                ],
+                "Foundation_Smooth_1x1m": [
+                    "walls@6,13"
+                ],
+                "Foundation_Smooth_Edge_2m": [
+                    "walls@7,13"
+                ],
+                "Foundation_Smooth_Edge_1m": [
+                    "walls@8,13"
+                ],
+                "Foundation_Smooth_CornerOuter": [
+                    "walls@9,13"
+                ],
+                "Foundation_Smooth_CornerInner": [
+                    "walls@0,14"
+                ],
+                "WoodFloor_2x2m": [
+                    "walls@1,14"
+                ],
+                "WoodFloor_2x1m": [
+                    "walls@2,14"
+                ],
+                "WoodFloor_1x2m": [
+                    "walls@3,14"
+                ],
+                "WoodFloor_1x1m": [
+                    "walls@4,14"
+                ],
+                "Roof_Peak_Ornament_01": [
+                    "walls@5,14"
+                ],
+                "Roof_Peak_Ornament_02": [
+                    "walls@6,14"
+                ],
+                "Roof_Peak_Ornament_03": [
+                    "walls@7,14"
+                ],
+                "Roof_Peak_Ornament_04": [
+                    "walls@8,14"
+                ],
+                "Roof_Peak_Ornament_05": [
+                    "walls@9,14"
+                ],
+                "Roof_Peak_Ornament_06": [
+                    "walls@0,15"
+                ],
+                "Roof_Peak_Ornament_07": [
+                    "walls@1,15"
+                ],
+                "Roof_Peak_Ornament_08": [
+                    "walls@2,15"
+                ],
+                "Window_Opaque_1x2": [
+                    "walls@3,15",
+                    "glass@3,15"
+                ],
+                "WallFill_Stone_1m_RoofPeak": [
+                    "fills@4,15"
+                ],
+                "WallFill_Brick_1m_RoofPeak": [
+                    "fills@5,15"
+                ],
+                "WallFrame_1m_RoofPeak_Upper_Var1": [
+                    "walls@6,15"
+                ],
+                "WallFrame_1m_RoofPeak_Lower_Var1": [
+                    "walls@7,15"
+                ],
+                "WallFill_Stone_1m_RoofPeak_Window_1x1": [
+                    "fills@8,15"
+                ],
+                "WallFill_Brick_1m_RoofPeak_Window_1x1": [
+                    "fills@9,15"
+                ],
+                "Window_Opaque_1x1": [
+                    "walls@0,16",
+                    "glass@0,16"
+                ],
+                "WallFrame_Beams_01_Single": [
+                    "walls@1,16"
+                ],
+                "RoofTiles_Red": [
+                    "RoofTiles_Red@2,16"
+                ],
+                "RoofTiles_Slate": [
+                    "RoofTiles_Slate@3,16"
+                ]
+            }
+        },
         "dungeon-prop-bellhaven-keep": {
             "tier": "demand",
             "label": "Bellhaven's keep's insides: its castle's Gothic column, pilaster, cornice, tracery window and bell, and its wall and floor (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",

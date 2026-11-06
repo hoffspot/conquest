@@ -160,6 +160,8 @@ import { Look } from "../world/look.js";
 import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
+import { HOUSE_KIT, kitBuilt } from "../world/art/kits/kithouse.js";
+import { houseKitRead, readyHouseKit } from "../world/kithouses3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { linkAt as interiorLinkAt } from "../core/interiors.js";
@@ -332,6 +334,10 @@ const CALLS = Object.freeze({ again: 8, idle: Object.freeze([25, 70]), apart: 5,
 // Going up or down the stairs: how many treads are heard, how far apart (s), and how fast they're
 // climbed (m/s, as a footstep's: a steady walk)
 const STAIRS = Object.freeze({ treads: 4, apart: 0.26, speed: 1.5 });
+
+// How long the start town's building waits for the house kit to be read (ms: kithouses3d.js),
+// built of it then, or of the game's own and again once it is
+const HOUSE_KIT_WAIT = 6000;
 
 // How long the dead lie once they've hit the ground before sinking out of sight (s), and how long
 // they take to sink
@@ -2073,6 +2079,8 @@ export class Game {
 
         // The buildings' textures, painted in workers while the land is laid
         const atlas = prepareAtlas();
+        // (And the house kit, if the start town's houses are built of it: kithouses3d.js)
+        const houseKit = HOUSE_KIT.settlements.includes(world.town.kind) ? readyHouseKit() : null;
 
         // The town's trees, for hearing their leaves (and the world's, as it's drawn)
         this.townTrees = treesOf(world).map(({ x, y }) => ({ x, z: y }));
@@ -2125,6 +2133,11 @@ export class Game {
         step("Building the town");
         await time("atlas", () => atlas);
 
+        // (The town built of the house kit if it's read soon enough; else built again once it is)
+        if (houseKit) {
+            await time("house kit", () => Promise.race([houseKit.ready, new Promise((resolve) => setTimeout(resolve, HOUSE_KIT_WAIT))]));
+        }
+
         const built = done;
 
         this.town = await time("town", () => buildTown(world, {
@@ -2138,6 +2151,12 @@ export class Game {
             },
         }));
         view.scene.add(this.town.object);
+
+        if (houseKit && !houseKitRead()) {
+            const houses = world.town.pieces.flatMap((piece, index) => (kitBuilt(piece, world.town.kind) ? [index] : []));
+
+            houseKit.ready.then(() => houseKitRead() && this.town?.rebuild?.(houses));
+        }
 
         // What can stand between the camera and the player: the town's buildings and trees, and
         // the world's trees round it

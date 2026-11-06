@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; and the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; and the humans' town houses, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -286,6 +286,44 @@ Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
 - **Tests:** `test/propkits.test.js` (the catalog, the choosing, the shops and upstairs set out,
   the licensed file's nodes and its one material), and `test/furnishings.test.js` (only the
   registered kits' pieces among the licensed props).
+
+## The house kit
+
+The humans' houses in their towns, cities and capitals (timber, brick and cottage: the stone
+ones are the game's own) are built of a bought kit of half-timbered pieces, Meshsmith Foundry's
+half-timbered building kit from Fab: frames and braces, the plaster and brick between, windows,
+doors, corner posts, footings, gables row on row, finials. The villages keep the game's own, and
+something more rustic is to come for them.
+
+- **One file, a piece to a square.** `.claude/skills/import-scene-model/scripts/housekit.py` sets
+  each piece in a square of its own (3 m) keeping the pack's own pivot (a wall piece's inner face
+  at its foot), splits a window's glass from its frame, and lays a plane of each of the two roof
+  tiles' repeats (2 m by ten rows, baked seamless from the pack's roof pieces); the pipeline
+  (`private/meshsmith-houses.json`) bakes the pieces onto one atlas and cuts them apart again,
+  each kind (`walls`, `fills`, `glass`) a node of its square, with a lower detail packed in. Its
+  catalog entry (`scenery-meshsmith-houses`) maps each piece's name to its nodes (`pieces`).
+- **The rules** (`client/js/world/art/kits/kithouse.js`, pure): a house planned as ever
+  (kits/house.js `planHouse`) built of the kit on its own grid (2 m modules, a 1 m one, 0.2 m
+  fillers), every fit measured from the pack: storeys of 2.7 m with the beams' course in the band
+  between a frame's posts and its plate, jetties, the plan's openings each in its module, the
+  gables row on row along the line their rafters rise along (0.518 m over the walls' top, 1.2 m a
+  metre), the roof's slopes laid with its tiles on that line (gable, hip, half-hip), the eaves'
+  course, verges and soffits, a ridge cap of its tiles, and on some fronts a gable of its own
+  rising through the roof. Each house has a dark inside (its walls, floors and roof's underside
+  facing in), as the pack's plaster is open round its windows.
+- **Drawn in the game** (`client/js/world/kithouses3d.js`): each house one mesh of the kit's
+  own material for its pieces and roof (red or slate tiles by a corner's `roof`), merged with its
+  block or chunk as the game's own houses are (town3d.js), its plaster, glass (lit at night) and
+  soffits in the game's own materials; one more draw a block, and no shadows of its own (the
+  plaster, the dark inside and the soffits cast the house's). Its lower detail in the world, its
+  windows only near. The humans' insides' floorboards are laid with its wood floor.
+- **Till it's read, and without the licensed models,** the game's own houses (kits/house.js);
+  those drawn then are built again once it is (`town.rebuild`, `Chunks` #rebuildWhere). The
+  building lab shows both (`&kit=0`, `&detail=near`).
+- **Checked:** `test/kithouse.test.js` (the catalog, the runs, every piece the kit's, inside its
+  lot, the slopes on the line), `e2e/building-lab.spec.js` (the draws, both ways); the fits by
+  rays and measure in Blender while it was made (the gables within 8 cm of their line, no holes
+  in walls, gables or eaves, nothing through the roof).
 
 ## Changing the key
 

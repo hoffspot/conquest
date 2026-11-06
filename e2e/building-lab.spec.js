@@ -1,3 +1,4 @@
+import { licensedModelsHere } from "../scripts/licensed-models.js";
 import { expect, test } from "./fixtures.js";
 
 // The building lab (building-lab.html): a street of every style of house, or a whole town, built
@@ -9,8 +10,22 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test("builds a street of every style of house in a few draw calls, and the town", async ({ page }) => {
-    await page.goto("/building-lab.html?seed=7&show=street");
+// What's drawn of the house kit (world/kithouses3d.js): how many meshes of its one material (one
+// a block of the town), and the counts
+const kitDrawn = (page) =>
+    page.evaluate(() => {
+        let meshes = 0;
+
+        window.buildingLab.state.built.traverse((node) => {
+            meshes += node.isMesh && node.material.name === "kit house" ? 1 : 0;
+        });
+
+        return { meshes, stats: window.buildingLab.state.stats, address: location.search };
+    });
+
+test("builds a street of every style of house in a few draw calls, of the house kit where it's read, and the town", async ({ page }) => {
+    // The art's own houses (&kit=0)
+    await page.goto("/building-lab.html?seed=7&show=street&kit=0");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
     await expect(page.locator("#status")).toBeHidden();
 
@@ -21,6 +36,25 @@ test("builds a street of every style of house in a few draw calls, and the town"
     expect(street.pieces).toBe(20);
     expect(street.triangles).toBeGreaterThan(20000);
     expect(street.calls).toBeLessThan(30);
+    expect(await page.evaluate(() => location.search)).toBe("?seed=7&show=street&kit=0");
+
+    // Its timber, brick and cottage houses built of the house kit, with the licensed models: its
+    // pieces and roofs in its one material, one more draw for each block of the street (they cast
+    // no shadows of their own: the art's plaster, the houses' dark insides and soffits do), for
+    // not three times the triangles; without them, the art's own as before
+    await page.goto("/building-lab.html?seed=7&show=street");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const kit = await kitDrawn(page);
+
+    expect(kit.stats.pieces).toBe(20);
+    expect(kit.stats.calls).toBeLessThanOrEqual(street.calls + kit.meshes);
+    expect(kit.meshes).toBeLessThanOrEqual(6);
+    expect(kit.stats.triangles).toBeLessThan(street.triangles * 3);
+
+    if (licensedModelsHere()) {
+        expect(kit.meshes).toBeGreaterThan(0);
+    }
 
     await page.locator("#show").selectOption("town");
     await page.waitForFunction(() => window.buildingLab.state.ready && window.buildingLab.state.stats.pieces !== 20, null, { timeout: 120000 });
@@ -50,7 +84,9 @@ test("shows a street's houses as the Behemoth of the Rift leaves them, burning, 
             return { stats: window.buildingLab.state.stats, address: location.search, names: [...names] };
         });
 
-    await page.goto("/building-lab.html?seed=7&show=street");
+    // (The art's own houses, burnt as they're drawn: a house of the kit burnt is drawn as the art's
+    // own burnt is, kithouses3d.js)
+    await page.goto("/building-lab.html?seed=7&show=street&kit=0");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
 
     const whole = await seen();
@@ -61,7 +97,7 @@ test("shows a street's houses as the Behemoth of the Rift leaves them, burning, 
 
     for (const stage of ["burning", "burnt", "framed", "roofed"]) {
         await page.locator("#burnt").selectOption(stage);
-        await page.waitForFunction((asked) => window.buildingLab.state.ready && location.search.endsWith(`&burnt=${asked}`), stage, { timeout: 120000 });
+        await page.waitForFunction((asked) => window.buildingLab.state.ready && location.search.endsWith(`&burnt=${asked}&kit=0`), stage, { timeout: 120000 });
         stages[stage] = await seen();
         expect(stages[stage].stats.pieces, stage).toBe(20);
         expect(stages[stage].stats.calls, stage).toBeLessThan(30);
@@ -81,7 +117,7 @@ test("shows a street's houses as the Behemoth of the Rift leaves them, burning, 
     // Roofed: the scaffolding still up, its hearths not yet lit
     expect(stages.roofed.stats.triangles).toBeGreaterThan(whole.stats.triangles);
     expect(stages.roofed.names).not.toContain("chimney smoke");
-    expect(stages.roofed.address).toBe("?seed=7&show=street&burnt=roofed");
+    expect(stages.roofed.address).toBe("?seed=7&show=street&burnt=roofed&kit=0");
 
     // A village's out in the world, drawn in its chunks as the game draws them
     await page.goto("/building-lab.html?seed=21&show=village&burnt=burning");
