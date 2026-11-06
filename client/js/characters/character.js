@@ -381,6 +381,8 @@ export class Character {
         this.lowBodies = null;
         this.lowKey = null;
         this.lowEyes = null;
+        // (Its whole body, under its clothes too, from afar: into the shadow maps, #updateIndex)
+        this.lowShadow = null;
         this.lods = null;
 
         this.geometry = this.#createGeometry();
@@ -644,7 +646,8 @@ export class Character {
 
             mesh.name = "garments";
             mesh.userData.merged = merged.map(({ id }) => id);
-            mesh.castShadow = true;
+            // (Fitted over the body: its shadow the body's, #updateIndex)
+            mesh.castShadow = false;
             mesh.receiveShadow = true;
             mesh.bind(this.rig.skeleton, new THREE.Matrix4());
             mesh.boundingSphere = this.mesh.boundingSphere;
@@ -657,12 +660,12 @@ export class Character {
             }
         }
 
-        for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
+        for (const { id, geometry } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;
-            // (lace would cast a shadow as if it were solid)
-            mesh.castShadow = !garment.design;
+            // (Fitted over the body: its shadow the body's, #updateIndex)
+            mesh.castShadow = false;
             mesh.receiveShadow = true;
             mesh.bind(this.rig.skeleton, new THREE.Matrix4());
             mesh.boundingSphere = this.mesh.boundingSphere;
@@ -1709,7 +1712,11 @@ export class Character {
         }
 
         const lowEyesAt = at;
-        const index = new Uint16Array(lowEyesAt + lowEyes.length);
+        // (Its whole body for the shadow maps, under its clothes too: from afar, as far as it has
+        // it; in full till it does)
+        const shadow = this.lowShadow ?? human.renderIndices("body");
+        const shadowAt = lowEyesAt + lowEyes.length;
+        const index = new Uint16Array(shadowAt + shadow.length);
 
         index.set(kept, 0);
         index.set(eyes, kept.length);
@@ -1717,6 +1724,7 @@ export class Character {
         index.set(mouth, mouthAt);
         lows.forEach((low, k) => index.set(low, lowAt[k]));
         index.set(lowEyes, lowEyesAt);
+        index.set(shadow, shadowAt);
 
         this.geometry.setIndex(new THREE.BufferAttribute(index, 1));
 
@@ -1731,9 +1739,11 @@ export class Character {
         const farEyes = this.lowEyes ? { start: lowEyesAt, count: lowEyes.length, materialIndex: 1 } : full[1];
         const lowBodies = lows.map((low, k) => ({ start: lowAt[k], count: low.length, materialIndex: 0 }));
 
-        // (And into the shadow maps, the body alone, the farthest level's as far as it has it:
-        // shadowpasses.js)
-        this.detail = { levels: [full, ...LODS.map((lod, k) => (lowBodies[k] ? [lowBodies[k], farEyes] : full))], shadow: [lowBodies.at(-1) ?? full[0]] };
+        // (And into the shadow maps, its whole body alone, from afar as far as it has it: what's
+        // fitted over it (its garments, its armour) a few millimetres proud of it, under a
+        // shadow map's texel, casts none of its own, so it's a draw into each, not one for each
+        // garment: shadowpasses.js. What hangs from it (a skirt, a cloak) and its hair cast their own)
+        this.detail = { levels: [full, ...LODS.map((lod, k) => (lowBodies[k] ? [lowBodies[k], farEyes] : full))], shadow: [{ start: shadowAt, count: shadow.length, materialIndex: 0 }] };
         this.geometry.groups = this.detail.levels[this.level];
 
         if (this.mesh) {
@@ -1794,6 +1804,20 @@ export class Character {
         const human = this.human;
 
         this.#lowerBody(this.#shown());
+        // (Its whole body from afar, for its shadow, made once for everyone: #updateIndex)
+        const whole = human.renderIndices("body");
+        const far = LODS.at(-1);
+
+        lods.of(`${keyOf("shadow", whole)}@${LODS.length}`, () => ({ indices: whole, positions: this.geometry.attributes.position.array, uvs: human.uvs, share: far.share, error: far.error })).then(
+            (low) => {
+                if (!this.disposed && !this.lowShadow) {
+                    this.lowShadow = low;
+                    this.#updateIndex();
+                }
+            },
+            () => {},
+        );
+
         // (And its eyes: a few pixels from afar, a tenth of their triangles is plenty)
         lods.of("eyes", () => ({ indices: human.renderIndices("eyes"), positions: this.geometry.attributes.position.array, uvs: human.uvs, ...FAR.eyes })).then(
             (low) => {

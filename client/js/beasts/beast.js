@@ -630,6 +630,7 @@ export class BeastAvatar {
         // (A model's lower details are packed in it: shown a level at a time, fitDetail)
         if (this.plan.showLevel) {
             this.levels = this.plan.levels;
+            this.plan.lowerShadow?.(lods);
 
             return;
         }
@@ -696,10 +697,14 @@ export class BeastAvatar {
             return;
         }
 
+        // (A model's own casters its own to cast from, or not: drawn unseen only while they do,
+        // modelBody's castShadows)
         if (!this.casters) {
+            const own = new Set(this.plan.casters ?? []);
+
             this.casters = [];
             this.object.traverse((node) => {
-                if (node.isMesh && node.castShadow) {
+                if (node.isMesh && node.castShadow && !own.has(node)) {
                     this.casters.push(node);
                 }
             });
@@ -709,6 +714,7 @@ export class BeastAvatar {
             mesh.castShadow = on;
         }
 
+        this.plan.castShadows?.(on);
         this.shadowed = on;
     }
 

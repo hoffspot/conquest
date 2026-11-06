@@ -1034,19 +1034,24 @@ export const NATURAL = Object.freeze({
             },
         ],
     },
-    // (Prior Osric Vane, the Voice of the Bell (creatures.js priorVane): the Choir's morning star,
-    // heavier still in his hand; his toll is a move of his own (creatures.js `moves`))
+    // (Prior Osric Vane, the Voice of the Bell (creatures.js priorVane): his war mace and shield,
+    // each blow at its clip's own moment (beasts/model.js priorVane): a swing wound up from behind,
+    // landing 1.15 s in (his cut); a swing and a blow back (his slash); two blows from on high (his
+    // flurry); and four together (his combo). Slower than a knight's and heavier for it, his blows
+    // land as hard over a fight as the Choir's morning star did in his hand. His toll is a move of
+    // his own (creatures.js `moves`))
     priorMace: {
-        label: "Morning star and shield",
+        label: "War mace and shield",
         equipment: ["warHammer", "kiteShield"],
         attacks: [
             {
                 kind: "melee",
                 reach: MELEE_REACH,
                 either: [
-                    melee({ id: "cut", damage: [15, 23], hitAt: 640, duration: 1300, interval: 1700, stagger: 450, reaction: "crush", animation: "cut" }),
-                    melee({ id: "slash", damage: [16, 25], hitAt: 560, duration: 1700, interval: 2100, stagger: 450, reaction: "crush", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.65 }] }),
-                    melee({ id: "flurry", damage: [15, 23], hitAt: 400, duration: 1400, interval: 1800, stagger: 400, reaction: "crush", animation: "flurry", blows: [{ at: 400, share: 0.5 }, { at: 800, share: 0.6 }] }),
+                    melee({ id: "cut", damage: [21, 32], hitAt: 1150, duration: 2000, interval: 2400, stagger: 500, reaction: "crush", animation: "cut" }),
+                    melee({ id: "slash", damage: [18, 29], hitAt: 800, duration: 2000, interval: 2400, stagger: 450, reaction: "crush", animation: "slash", blows: [{ at: 800, share: 0.6 }, { at: 1450, share: 0.65 }] }),
+                    melee({ id: "flurry", damage: [17, 26], hitAt: 450, duration: 1600, interval: 2000, stagger: 400, reaction: "crush", animation: "flurry", blows: [{ at: 450, share: 0.5 }, { at: 900, share: 0.6 }] }),
+                    melee({ id: "combo", damage: [16, 25], hitAt: 300, duration: 2600, interval: 3000, stagger: 450, reaction: "crush", animation: "combo", blows: [{ at: 300, share: 0.35 }, { at: 750, share: 0.35 }, { at: 1550, share: 0.5 }, { at: 2100, share: 0.6 }] }),
                 ],
             },
         ],

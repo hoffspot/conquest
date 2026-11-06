@@ -266,9 +266,9 @@ describe("characters built a step at a time (Character.building)", () => {
         await Promise.all(lods.made.values());
         await new Promise((resolve) => setTimeout(resolve, 0));
 
-        // (Made once each, the body's and the outfit's at each level and the eyes', for both of them,
-        // dressed alike)
-        assert.equal(asked, 2 * LODS.length + 1);
+        // (Made once each, the body's and the outfit's at each level, the eyes' and the whole body's
+        // for its shadow, for both of them, dressed alike)
+        assert.equal(asked, 2 * LODS.length + 2);
 
         const { geometry } = character;
         const outfit = character.garments.find(({ userData }) => userData.merged);
@@ -390,13 +390,32 @@ describe("characters built a step at a time (Character.building)", () => {
 
         assert.ok(triangles(far) < triangles(short) / 4, `${triangles(far)} of ${triangles(short)}`);
 
-        // The body into the shadow maps: its farthest level alone (no eyes, lashes or mouth); one
-        // never lowered, its body alone in full
+        // The body into the shadow maps: the whole of it, under its clothes too, from afar (no eyes,
+        // lashes or mouth), made once for everyone; one never lowered, the whole of it in full.
+        // What's fitted over it casts no shadow of its own; what hangs from it (a skirt) does
+        const body = human.renderIndices("body");
+
         for (const character of [courtesan, folk, hero]) {
-            assert.deepEqual(character.mesh.userData.cheaper.groups, [character.detail.levels.at(-1)[0]]);
+            const [shadow] = character.mesh.userData.cheaper.groups;
+
+            assert.equal(character.mesh.userData.cheaper.groups.length, 1);
+            assert.equal(shadow.count, character.lowShadow.length);
+            assert.ok(character.lowShadow.length < body.length / 5, `${character.lowShadow.length / 3} of ${body.length / 3} triangles`);
+            assert.equal(character.lowShadow, folk.lowShadow, "made once for everyone");
+            assert.deepEqual(Array.from(character.geometry.index.array.subarray(shadow.start, shadow.start + shadow.count)), Array.from(character.lowShadow));
         }
 
-        assert.deepEqual(plain.mesh.userData.cheaper.groups, [plain.detail.levels[0][0]]);
+        const [whole] = plain.mesh.userData.cheaper.groups;
+
+        assert.deepEqual(Array.from(plain.geometry.index.array.subarray(whole.start, whole.start + whole.count)), Array.from(body));
+
+        for (const character of [courtesan, folk, hero, plain]) {
+            for (const mesh of character.garments) {
+                assert.equal(mesh.castShadow, Boolean(mesh.userData.drape), mesh.name);
+            }
+        }
+
+        assert.ok(folk.garments.some(({ castShadow }) => castShadow), "its skirt's");
 
         for (const character of [courtesan, folk, hero, plain]) {
             character.dispose();

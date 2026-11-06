@@ -689,6 +689,54 @@ test("draws the black widow from its model: on the ground, as long as it's drawn
     expect(drawn.error).toBe(0);
 });
 
+test("draws the Order's riders sat in their saddles, not standing through their horses as their model's made: their hips and feet up off the ground, standing and at a trot", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const seats = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { wantModel } = await import("./js/beasts/model.js");
+        const seats = {};
+
+        for (const kind of ["bellRider", "choirRider"]) {
+            await wantModel(kind);
+
+            const beast = new BeastAvatar(kind, { seed: 2 });
+            // (How high a bone of the rider's is, metres off the ground the horse stands on)
+            const height = (name) => beast.object.getObjectByName(name).getWorldPosition(new THREE.Vector3()).y;
+            const seat = () => ({ hips: height("pelvis"), feet: Math.min(height("foot_l"), height("foot_r")) });
+
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateWorldMatrix(true, true);
+
+            const standing = seat();
+
+            for (let i = 0; i < 20; i++) {
+                beast.update(1 / 30, 1.5, 0, 0);
+            }
+
+            beast.object.updateWorldMatrix(true, true);
+            seats[kind] = { model: beast.model, standing, trotting: seat() };
+            beast.dispose();
+        }
+
+        return seats;
+    });
+
+    // (Sat on a warhorse's back, about 1.7 metres up, his feet in its stirrups about a metre up:
+    // in the model's own pose, he stands on the ground, his hips under a metre)
+    for (const { model, standing, trotting } of Object.values(seats)) {
+        expect(model).toBe(true);
+
+        for (const { hips, feet } of [standing, trotting]) {
+            expect(hips).toBeGreaterThan(1.4);
+            expect(feet).toBeGreaterThan(0.6);
+        }
+    }
+});
+
 test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await page.goto("/");

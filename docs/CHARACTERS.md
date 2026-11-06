@@ -2361,11 +2361,14 @@ the middle level and 4,800 to 12,900 at the far level (from afar it was 10,900 t
 wild one, a bandit, was never lowered: 40,900). Characters are also drawn **into the shadow
 maps** with their far level, near or far, a player's too (`shadowpasses.js castCheaply`: three.js
 asks each mesh whether it's in a shadow map's view, and that's when it's handed what to draw
-there): the body's far triangles alone (no eyes, lashes or mouth: a character never lowered, its
-body alone in full), each garment's, and the far thinner hair. Where a shadow map's texels are a
-few centimetres across, the shadow's the same; a player casts 7,500 to 8,300 triangles into the
-sun's shadows where it cast 45,600 to 49,100, a follower, the orc or a wild one 4,700 to 7,100
-where they cast 40,900 to 42,500.
+there): the whole body's far triangles (under its clothes too; no eyes, lashes or mouth: a
+character never lowered, its whole body in full) and the far thinner hair, and what hangs from it
+(a skirt, a cloak). What's fitted over the body (garments, armour) is a few millimetres proud of it
+and casts no shadow of its own: one draw into each shadow map for the body, not one a garment (a
+player in eight garments was nine, into each of a lamp's six faces). Where a shadow map's texels
+are a few centimetres across, the shadow's the same; a player casts 7,500 to 8,300 triangles into
+the sun's shadows where it cast 45,600 to 49,100, a follower, the orc or a wild one 4,700 to 7,100
+where they cast 40,900 to 42,500 (before garments stopped casting their own: fewer now).
 
 Twenty-four of the uniform lab's figures from afar, their hair as in the game: 1.85
 million triangles a frame (with the sun's shadows) to 0.61 million, and in software rendering 2.1

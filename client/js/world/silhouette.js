@@ -106,8 +106,10 @@ export function showSilhouette(object, on, colour = SILHOUETTE.player) {
         object.userData.silhouette = { key, colour, copies };
     }
 
-    // (Shown as what they copy is)
+    // (Shown as what they copy is; not what's drawn unseen, to cast a shadow: beasts/model.js)
     for (const copy of object.userData.silhouette.copies) {
-        copy.visible = copy.userData.silhouetteOf.visible;
+        const of = copy.userData.silhouetteOf;
+
+        copy.visible = of.visible && [of.material].flat().some((material) => material?.colorWrite !== false);
     }
 }

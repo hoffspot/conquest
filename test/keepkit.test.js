@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { readPlan } from "../client/js/core/interiors.js";
+import { CAVERNS } from "../client/js/world/caverns.js";
 import { KEEP_KIT, KIT, KIT_PICTURES, kitPlacements, wallRuns } from "../client/js/world/keepkit.js";
 
 const CATALOG = JSON.parse(readFileSync(new URL("../client/models/assets.json", import.meta.url))).models;
@@ -58,6 +59,10 @@ describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
                 assert.ok(pilasters.length > runs.length / 2, `${seed}/${k}: ${pilasters.length} pilasters`);
                 assert.ok(windows.length > 0, `${seed}/${k}: some windows`);
                 assert.ok(pilasters.every(({ fit }) => Math.abs(fit[1] - (TALL - KIT.cornice)) < 1e-9), "as high as under the cornice");
+                // (What lies flat on the wall casts no shadow: a draw into each of a torch's six for none to see)
+                assert.ok([...cornices, ...pilasters, ...windows].every(({ shadow }) => shadow === false));
+                // (Its pieces drawn a kind at once in squares wider than the rock's)
+                assert.ok(KIT.lot > CAVERNS.tile && placements.filter(({ model }) => model !== KEEP_KIT.bell).every(({ lot }) => lot === KIT.lot));
 
                 for (const each of placements) {
                     assert.ok(!rock(map, each.x, each.z), `${seed}/${k}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)} on the rock`);

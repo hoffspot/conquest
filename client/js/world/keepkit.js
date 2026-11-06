@@ -42,9 +42,13 @@ export const KIT_PICTURES = Object.freeze({
  * between them in a run at least `windows` long, `window` wide and as high as `high` of the wall
  * under the cornice; a column the hall's height less `under`, `wide` across; the bell `bell` tall,
  * its foot `hang` under the vault. Its stone (all but the bell) drawn a little cooler than the pack
- * has it (`tint`), as white as the castle's outside under the torches' warm light.
+ * has it (`tint`), as white as the castle's outside under the torches' warm light. What lies flat
+ * on the wall (its cornice, pilasters and windows, a hand or less proud of it) casts no shadow:
+ * none to be seen from it, and a draw of its own into each of a torch's six shadows. Its pieces
+ * drawn a kind at once in squares `lot` metres across (dungeons3d.js furnish): twice the rock's,
+ * a few hundred triangles each, a draw for each square in sight.
  */
-export const KIT = Object.freeze({ cornice: 1.2, deep: 0.5, stretch: 4, every: 4, corner: 1, torch: 0.9, windows: 9, window: 1.2, high: 0.72, under: 0, wide: 0.9, bell: 2.8, hang: 3.4, tint: 0xc4cde0 });
+export const KIT = Object.freeze({ cornice: 1.2, deep: 0.5, stretch: 4, every: 4, corner: 1, torch: 0.9, windows: 9, window: 1.2, high: 0.72, under: 0, wide: 0.9, bell: 2.8, hang: 3.4, tint: 0xc4cde0, lot: 32 });
 
 // The four ways a wall can face into a room: the step from the open square to the rock beside it,
 // and which way something set against it faces (radians, as furnish turns it: 0 is +z, south)
@@ -124,7 +128,7 @@ export function kitPlacements(map, { tall }) {
         for (let k = 0; k < pieces; k++) {
             const [x, z] = onRun(run, run.from + ((k + 0.5) * length) / pieces, KIT.deep / 2);
 
-            placements.push({ model: KEEP_KIT.cornice, x, z, y: under, turn, fit: [length / pieces, KIT.cornice, KIT.deep], tint: KIT.tint, cut: true, shadow: false });
+            placements.push({ model: KEEP_KIT.cornice, x, z, y: under, turn, fit: [length / pieces, KIT.cornice, KIT.deep], tint: KIT.tint, cut: true, shadow: false, lot: KIT.lot });
         }
 
         // (Its pilasters, evenly between its ends, and its windows in every other bay between them)
@@ -141,7 +145,7 @@ export function kitPlacements(map, { tall }) {
             const [x, z] = onRun(run, along, 0.1);
 
             if (!nearTorch(x, z)) {
-                placements.push({ model: KEEP_KIT.pilaster, x, z, turn, fit: [0.5, under, 0.2], tint: KIT.tint, cut: true });
+                placements.push({ model: KEEP_KIT.pilaster, x, z, turn, fit: [0.5, under, 0.2], tint: KIT.tint, cut: true, shadow: false, lot: KIT.lot });
             }
         }
 
@@ -152,7 +156,7 @@ export function kitPlacements(map, { tall }) {
                 const high = under * KIT.high;
 
                 if (!nearTorch(x, z)) {
-                    placements.push({ model: KEEP_KIT.window, x, z, y: (under - high) / 2, turn, fit: [KIT.window, high, 0.14], tint: KIT.tint, cut: true });
+                    placements.push({ model: KEEP_KIT.window, x, z, y: (under - high) / 2, turn, fit: [KIT.window, high, 0.14], tint: KIT.tint, cut: true, shadow: false, lot: KIT.lot });
                 }
             }
         }
@@ -160,7 +164,7 @@ export function kitPlacements(map, { tall }) {
 
     // (The castle's Gothic column in each pillar's place)
     for (const piece of map.pieces.filter(({ kind }) => kind === "pillar")) {
-        placements.push({ model: KEEP_KIT.column, x: piece.x + piece.w / 2, z: piece.y + piece.h / 2, turn: 0, fit: [KIT.wide, tall - KIT.under, KIT.wide], tint: KIT.tint, cut: "solid" });
+        placements.push({ model: KEEP_KIT.column, x: piece.x + piece.w / 2, z: piece.y + piece.h / 2, turn: 0, fit: [KIT.wide, tall - KIT.under, KIT.wide], tint: KIT.tint, cut: "solid", lot: KIT.lot });
     }
 
     // (The bell, over the bell chamber's altar: its realm's last room)
