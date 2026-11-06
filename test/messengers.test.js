@@ -192,6 +192,63 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.ok(!events.some(({ type }) => type === "messenger"));
     });
 
+    it("brings a party one messenger: taken by one, the mission's each of theirs, at their own rank", () => {
+        const host = hosted();
+
+        camped(host);
+        host.join({ id: "bea", hero: { ...HERO, name: "Bea" } });
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "bea" });
+        host.command("bea", { type: "party", do: "accept" });
+        put(host.battle.actor("bea"), [host.battle.actor(HOST_PLAYER).square[0] + 2, host.battle.actor(HOST_PLAYER).square[1]]);
+        host.players.get("bea").standing.gain(200);
+
+        const arrived = hailed(host);
+
+        assert.deepEqual([...arrived.players].sort(), [HOST_PLAYER, "bea"].sort());
+        host.command(HOST_PLAYER, { type: "talk", with: arrived.folk });
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } }).ok, true);
+
+        const [mine] = host.players.get(HOST_PLAYER).standing.missions;
+        const [hers] = host.players.get("bea").standing.missions;
+
+        assert.equal(hers.key, mine.key);
+        assert.equal(hers.rank, 2);
+        assert.ok(hers.reward.gold > mine.reward.gold);
+        assert.equal([...host.messengers.values()].filter(({ state }) => state !== "leaving").length, 0);
+    });
+
+    it("sends the commander of a reserve the player's come to join to brief them: what they face, their part, and the objective worth more", () => {
+        const host = hosted();
+        const war = host.war;
+        const me = host.battle.actor(HOST_PLAYER);
+        const at = [me.x + 120, me.y];
+
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.forces.push({ id: "force-900", realm: "orc", kind: "army", size: 30, at: [at[0] + 900, at[1]], path: [[at[0] + 900, at[1]]], leg: 0, mission: "attack", target: host.world.start.id });
+        war.forces.push({ id: "force-901", realm: "human", kind: "reserve", size: 25, at, path: [[...at]], leg: 0, mission: "defend", target: "force-900", home: host.world.start.id });
+
+        const arrived = hailed(host);
+
+        assert.equal(arrived.mission.kind, "reserve");
+        assert.equal(arrived.mission.from.kind, "general");
+        host.command(HOST_PLAYER, { type: "talk", with: arrived.folk });
+        host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } });
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+
+        // (Come to the reserve: its commander comes to brief them)
+        put(me, [Math.floor(at[0] - 20), Math.floor(at[1])]);
+
+        const briefing = until(host, (now) => now.some(({ type, change, kind }) => type === "messenger" && change === "arrived" && kind === "briefing"), 90000).find(({ type, change, kind }) => type === "messenger" && change === "arrived" && kind === "briefing");
+
+        assert.ok(briefing, "briefed");
+        assert.equal(host.battle.actor(briefing.folk).name, arrived.mission.from.name);
+        assert.equal(briefing.mission.briefing.lines.length, 4);
+        assert.match(briefing.mission.briefing.lines[0], /30 orcish soldiers are coming at us/);
+        host.command(HOST_PLAYER, { type: "talk", with: briefing.folk });
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { briefed: true } }).ok, true);
+        assert.equal(host.players.get(HOST_PLAYER).standing.missions[0].briefing.heard, true);
+    });
+
     it("keeps a messenger on the way with the world, and carries on from it", () => {
         const host = hosted();
 
