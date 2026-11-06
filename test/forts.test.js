@@ -28,12 +28,14 @@ const { buildingView, BUILD_SHOWN, goodsText } = await import("../client/js/app/
 const { FORT_ICONS, ICON_KINDS } = await import("../client/js/app/mapicons.js");
 const { TREES } = await import("../client/js/core/dialogue.js");
 const { OPENS } = await import("../client/js/core/standing.js");
-const { affords, COUNCIL, footprintOf, FORT_KINDS, FORTS, mayBuild, PLACING, plansFor } = await import("../client/js/core/war/forts.js");
+const { affords, COUNCIL, footprintOf, FORT_KINDS, FORTS, fortSize, mayBuild, PLACING, plansFor, SIZES } = await import("../client/js/core/war/forts.js");
 const { tell } = await import("../client/js/core/war/news.js");
 const { FORT_SIEGE, TURN_MS, War, WAR_VERSION } = await import("../client/js/core/war/war.js");
 const { landAt, planWorld, WATER } = await import("../client/js/core/worldplan/plan.js");
 const { FORT_LOOKS, fortObject } = await import("../client/js/world/art/kits/forts.js");
-const { FORT_HEIGHTS, FortAvatar, Forts, FORTS_VIEW } = await import("../client/js/world/forts3d.js");
+const { FORT_HEIGHTS, FortAvatar, fortModel, Forts, FORTS_VIEW, heightsOf, TIMBER } = await import("../client/js/world/forts3d.js");
+const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
+const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
 
 const apart = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
 const keyOf = (a, b) => [a, b].sort().join("|");
@@ -528,7 +530,9 @@ describe("the fortifications drawn (art/kits/forts.js, world/forts3d.js, app/map
                 // (In world pixels, five to the metre: as wide as it stands over, about)
                 const across = (box.max.x - box.min.x) / 5;
 
-                assert.ok(across >= FORTS[kind].size - 0.5 && across <= FORTS[kind].size + 2.5, `${people} ${kind}: ${across.toFixed(1)} m across`);
+                const size = fortSize({ kind, realm: people });
+
+                assert.ok(across >= size - 0.5 && across <= size + 2.5, `${people} ${kind}: ${across.toFixed(1)} m across`);
             }
         }
     });
@@ -603,6 +607,78 @@ describe("the fortifications drawn (art/kits/forts.js, world/forts3d.js, app/map
             assert.deepEqual([avatar.hand().x, avatar.hand().z], [10, 20]);
             assert.equal(avatar.actions.die(), 0);
         }
+    });
+
+    it("stands the humans' garrison over twenty metres, the timber palisade's, and every other people's over FORTS' ten; their towers over four", () => {
+        assert.deepEqual(SIZES, { human: { garrison: 20 } });
+
+        for (const people of Object.keys(FORT_LOOKS)) {
+            assert.equal(fortSize({ kind: "tower", realm: people }), 4);
+            assert.equal(fortSize({ kind: "garrison", realm: people }), people === "human" ? 20 : FORTS.garrison.size);
+        }
+
+        assert.deepEqual(footprintOf({ kind: "garrison", realm: "human", at: [100, 200] }), [90, 190, 109, 209]);
+        assert.deepEqual(footprintOf({ kind: "garrison", realm: "orc", at: [100, 200] }), [95, 195, 104, 204]);
+        assert.deepEqual(footprintOf({ kind: "garrison", at: [100, 200] }), [95, 195, 104, 204], "a people not said: FORTS'");
+        assert.ok(TIMBER.palisade.half * 2 <= 20 && TIMBER.palisade.half * 2 > 19, "the timber palisade inside the squares it stands over");
+    });
+
+    it("stands the humans' in the battle as tall as their timber forts, and every other people's as their own", () => {
+        for (const kind of FORT_KINDS) {
+            const avatar = new FortAvatar(kind, "human");
+
+            assert.equal(avatar.character.height, TIMBER.heights[kind].height);
+            assert.equal(avatar.hand("Right").y, TIMBER.heights[kind].loops);
+            assert.deepEqual(heightsOf(kind, "orc"), FORT_HEIGHTS[kind]);
+        }
+
+        assert.deepEqual(heightsOf("stakes", "human"), FORT_HEIGHTS.stakes);
+    });
+
+    it("draws the humans' as their own stand-in till their timber kit's read: a timber gallery on the tower and a palisade of stakes", () => {
+        assert.equal(FORT_LOOKS.human.kit, "scenery-timber-forts");
+        assert.deepEqual([FORT_LOOKS.human.tower, FORT_LOOKS.human.wall], ["hoarding", "stakes"]);
+
+        for (const kind of FORT_KINDS) {
+            const model = fortModel(kind, "human");
+
+            assert.equal(model.userData.kit, undefined, `${kind}: its own, with no kit read`);
+            assert.ok(model.userData.lights.length >= 1);
+        }
+    });
+
+    // (The licensed kit, read as the game reads it: left out where it isn't here, saying so)
+    const licensed = licensedModelsHere() || LEFT_OUT;
+
+    it("has the timber kit's tower and garrison, each with its lower detail, standing in the squares the battle holds for them, as tall as the battle has them", { skip: licensed !== true && licensed }, async () => {
+        const { readFileSync } = await import("node:fs");
+        const { ASSETS } = await import("../client/js/app/assets.js");
+        const [file] = ASSETS.models[FORT_LOOKS.human.kit].files;
+        const raw = new Uint8Array(readFileSync(new URL(`../client/${file.path}`, import.meta.url)));
+        const bytes = isScrambled(raw) ? unscramble(raw) : raw;
+        const view = new DataView(bytes.buffer, bytes.byteOffset);
+        const json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + view.getUint32(12, true))));
+        const bound = (node) => {
+            const accessor = json.accessors[json.meshes[node.mesh].primitives[0].attributes.POSITION];
+            const unit = accessor.normalized ? { 5120: 127, 5121: 255, 5122: 32767, 5123: 65535 }[accessor.componentType] : 1;
+            const [t, k] = [node.translation ?? [0, 0, 0], node.scale ?? [1, 1, 1]];
+
+            return [accessor.min, accessor.max].map((corner) => corner.map((v, i) => t[i] + (k[i] * v) / unit));
+        };
+        const named = Object.fromEntries(json.nodes.map((node) => [node.name, node]));
+
+        for (const kind of FORT_KINDS) {
+            assert.ok(named[kind] && named[`${kind}.lod1`], `${kind} and its lower detail`);
+
+            const [[x0, y0, z0], [x1, y1, z1]] = bound(named[kind]);
+            const half = fortSize({ kind, realm: "human" }) / 2;
+
+            assert.ok(Math.max(-x0, x1, -z0, z1) <= half, `${kind}: ${[x0, z0, x1, z1].map((v) => v.toFixed(2))} inside its ${half * 2} m`);
+            assert.ok(y0 < -0.5, `${kind}: its feet sunk below the ground (${y0.toFixed(2)})`);
+            assert.ok(y1 > TIMBER.heights.tower.loops && y1 < TIMBER.heights.tower.height, `${kind}: ${y1.toFixed(2)} m tall, its towers'`);
+        }
+
+        assert.ok(Math.abs(bound(named.garrison)[1][0] - TIMBER.palisade.half) < 0.05, "its palisade where the far shapes have it");
     });
 
     it("has an icon for each kind on the maps", () => {

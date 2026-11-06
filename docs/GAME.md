@@ -214,6 +214,10 @@ back to the same world:
     the back with a torch by it, and its top as its people build it (`FORT_LOOKS`);
   - **a forward garrison:** a 10 m curtain of stone or a palisade of stakes, a turret at each
     corner, its gate at the back, its barracks' roof showing over the wall;
+  - **the humans':** Wind Ways' timber forts (a licensed model, `world/forts3d.js` `fortModel`):
+    the watchtower, and a palisade 19.4 m square with its walkway, its gate and a watchtower in
+    each corner (standing over twenty metres: `core/war/forts.js` `fortSize`); their stand-in a
+    tower under a timber gallery and a palisade of stakes;
   - **round it:** the ground cleared, 3 m round its squares (`CLEARING`: no crops, no trees), and
     its people's banner by its door or gate;
   - **seen:** whole within 200 m, from afar as boxes and roofs in its people's colours;

@@ -5,11 +5,13 @@
 // from the enemy, a torch by it. And a forward garrison, ten metres square: a curtain of stone (or
 // a palisade of stakes, as some build), loops along it, a turret at each corner and the gate in
 // its back wall, the roof of its barracks showing over the wall. In each people's own stone,
-// timber and roofing (kits/works.js WORKS_STUFF).
+// timber and roofing (kits/works.js WORKS_STUFF), as wide as the war has it stand over
+// (core/war/forts.js fortSize: the humans' garrison twenty metres, the rest ten).
 //
 // In world pixels as the kits are (a metre is five), round the fortification's point, its front
 // (its door, its gate) towards +z.
 
+import { fortSize } from "../../../core/war/forts.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { torch } from "./torches.js";
@@ -21,10 +23,14 @@ const m = (metres) => metres * M;
 /**
  * How each people tops a guard tower (`tower`: "battlements", "roof" a pointed roof over a ring of
  * corbels, or "hoarding" a timber gallery under a roof) and walls a forward garrison (`wall`:
- * "stone", or "stakes" a palisade), and the roofing their roofs are of (their works').
+ * "stone", or "stakes" a palisade), and the roofing their roofs are of (their works'). A people
+ * with a `kit` has its fortifications drawn from that licensed model once it's read (its `tower`
+ * and `garrison` nodes: world/forts3d.js), these its stand-in till then and without it: the
+ * humans' Wind Ways' timber forts, a watchtower and a palisade with its walkways, whose stand-in is
+ * a timber gallery on a tower and a palisade of stakes.
  */
 export const FORT_LOOKS = Object.freeze({
-    human: { tower: "battlements", wall: "stone" },
+    human: { tower: "hoarding", wall: "stakes", kit: "scenery-timber-forts" },
     elf: { tower: "roof", wall: "stone" },
     darkElf: { tower: "battlements", wall: "stone" },
     cat: { tower: "roof", wall: "stone" },
@@ -130,7 +136,8 @@ function tower(solid, stuff, look) {
 function garrison(solid, stuff, look, people) {
     const stone = material(stuff.dressed);
     const timber = material(stuff.timber);
-    const half = m(GARRISON.half);
+    // (As wide as its people's stands over: core/war/forts.js fortSize, GARRISON.half's but the humans')
+    const half = m(fortSize({ kind: "garrison", realm: people }) / 2);
     const high = m(GARRISON.high);
     const thick = m(GARRISON.thick);
     const gate = m(GARRISON.gate) / 2;

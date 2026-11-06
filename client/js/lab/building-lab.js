@@ -31,9 +31,10 @@ import { generateWorld } from "../core/world.js";
 import { readPlan } from "../core/interiors.js";
 import { barracksRooms, guildRooms, hallRooms, keepRooms, shopRooms, smithyRooms, tavernRooms, templeRooms } from "../core/insides.js";
 import { buildInterior, INTERIOR_CUT } from "../world/interiors3d.js";
-import { fortObject } from "../world/art/kits/forts.js";
 import { SHOP_NAMES } from "../world/art/kits/shopfront.js";
 import { Camps } from "../world/camps3d.js";
+import { fortModel, readyFortKit } from "../world/forts3d.js";
+import { fortSize } from "../core/war/forts.js";
 import { Chunks, lagoonOf } from "../world/chunks3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
@@ -343,30 +344,40 @@ async function build() {
     }
 
     // Every people's fortifications in two rows: a guard tower each, and a forward garrison each
-    // (art/kits/forts.js)
+    // (art/kits/forts.js), drawn as the game draws them (world/forts3d.js fortModel): a people's
+    // from its licensed kit once that's read (the humans' timber forts), built again then
     if (state.show === "forts") {
         const group = new THREE.Group();
         const peoples = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
-        const width = peoples.length * 16 + 8;
-        const world = { width, height: 40, ground: Array.from({ length: 40 }, () => new Uint8Array(width)) };
+        // (Each people's column as wide as its garrison stands over, 6 m between: core/war/forts.js fortSize)
+        const across = peoples.map((people) => fortSize({ kind: "garrison", realm: people }));
+        const middles = across.map((size, k) => 4 + across.slice(0, k).reduce((sum, wide) => sum + wide + 6, 0) + size / 2);
+        const width = Math.ceil(middles.at(-1) + across.at(-1) / 2 + 4);
+        const height = Math.ceil(16 + Math.max(...across) + 4);
+        const world = { width, height, ground: Array.from({ length: height }, () => new Uint8Array(width)) };
 
         group.add(buildGround(world, { land: landColour(HOMELANDS[state.people], state.people) }));
-        state.frames = peoples.flatMap((people, k) =>
-            ["tower", "garrison"].map((kind, row) => {
-                const [x, z] = [12 + k * 16, 10 + row * 18];
-                const fort = fortObject(kind, people);
 
-                fort.scale.setScalar(1 / 5);
+        for (const people of peoples) {
+            readyFortKit(people)?.ready.then(() => state.show === "forts" && build());
+        }
+
+        state.frames = peoples.flatMap((people, k) =>
+            ["tower", "garrison"].map((kind) => {
+                const size = fortSize({ kind, realm: people });
+                const [x, z] = [middles[k], kind === "tower" ? 8 : 16 + across[k] / 2];
+                const fort = fortModel(kind, people);
+
                 fort.position.set(x, 0, z);
                 group.add(fort);
 
-                return { label: `${kind} ${people}`, x, z, w: 12, d: 12 };
+                return { label: `${kind} ${people}`, x, z, w: size + 2, d: size + 2 };
             }),
         );
         view.scene.add(group);
         state.built = group;
-        orbit.focus.set(width / 2, 2, 20);
-        orbit.distance = 70;
+        orbit.focus.set(width / 2, 2, height / 2);
+        orbit.distance = 80;
         finish(group.children.length);
 
         return;

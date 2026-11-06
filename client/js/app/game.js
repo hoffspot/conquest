@@ -63,7 +63,7 @@ import { FORT_ICONS, ICON_NAMES, partyColour, PING, PLACE_RIMS, WORKS_ICONS, WOR
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
-import { affords, CLEARING, footprintOf, FORTS } from "../core/war/forts.js";
+import { affords, CLEARING, footprintOf, FORTS, fortSize } from "../core/war/forts.js";
 import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
 import { actionFor, heldBy, keyMap, keyOf, keysOf, mouseOf } from "./keys.js";
@@ -2549,7 +2549,9 @@ export class Game {
         // A fortification (its stone drawn by world/forts3d.js): standing in for it in the battle; and
         // a camp's stakes being hacked at (drawn by world/stockades3d.js) the same way
         if (actor.kind === "fort" || actor.kind === "stakes") {
-            return this.#register(actor.id, new FortAvatar(actor.kind === "stakes" ? "stakes" : (this.host.fortsOut.get(actor.id)?.kind ?? "tower")), { wounds: false });
+            const out = this.host.fortsOut.get(actor.id);
+
+            return this.#register(actor.id, new FortAvatar(actor.kind === "stakes" ? "stakes" : (out?.kind ?? "tower"), out?.realm), { wounds: false });
         }
 
         // The orc
@@ -13044,7 +13046,8 @@ export class Game {
         const { added, gone } = this.forts3d.sync(forts, [ox + me.x, oz + me.y]);
 
         for (const { id, kind, realm, at: [x, z], facing } of added) {
-            const [out, side] = kind === "garrison" ? [6.4, 2.4] : [3.2, 1.6];
+            const half = fortSize({ kind, realm }) / 2;
+            const [out, side] = kind === "garrison" ? [half + 1.4, 2.4] : [half + 1.2, 1.6];
 
             this.banners?.raise(`fort:${id}`, realm, [{ x: x + Math.sin(facing) * out + Math.cos(facing) * side, z: z + Math.cos(facing) * out - Math.sin(facing) * side, facing }]);
         }
@@ -14543,7 +14546,7 @@ export class Game {
                 // (A fortification gone up or come down: the ground under it, and round it, drawn
                 // again: core/overworld.js setForts. Not a camp: nothing's built under it)
                 if (["built", "razed", "abandoned"].includes(event.event.type) && FORTS[event.event.kind]) {
-                    this.chunks?.redraw(footprintOf({ kind: event.event.kind, at: event.event.at }, CLEARING));
+                    this.chunks?.redraw(footprintOf({ kind: event.event.kind, realm: event.event.realm, at: event.event.at }, CLEARING));
                 }
 
                 // (A force routed in a fight played out near a player: told, as a storm is)
