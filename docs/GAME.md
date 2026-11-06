@@ -3050,6 +3050,12 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
       shows.
     - It's never drawn further than its map reaches: a chunk's width every way from the player
       (*Its map*, below).
+  - **Clear round a campfire** (`GRASS_CLEARINGS`; `TallGrass.setClearings`): none grows inside
+    the ring of stones of a fire near the player (a camp's, `camps3d.js clearings`; an old
+    campsite's, `finds3d.js clearings`; one left in the undergrowth, `chunks3d.js hearths`), and
+    round it it's trodden short, from 30% of its height at the stones back to all of it 1.2 m
+    out. Up to eight at once, the nearest the player, sent each frame; each blade looks at where
+    its foot is in the vertex shader.
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
     gaps between the blades read as more grass (`ground.js GRASS_UNDER`), out to the distant
     band's edge.

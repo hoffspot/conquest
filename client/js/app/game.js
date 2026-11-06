@@ -4155,9 +4155,11 @@ export class Game {
             }
 
             // (The tall grass following them, as tall as the quality draws it, ahead of them the
-            // way the camera looks)
+            // way the camera looks; and none inside the rings of the campfires near them: the
+            // camps', the old campsites' and the undergrowth's, finds3d.js, camps3d.js)
             this.grass?.setQuality(this.view.quality.grass);
             this.grass?.update(x, z, 2, this.#lookAlong());
+            this.grass?.setClearings([...(this.camps?.clearings() ?? []), ...this.findProps.clearings(), ...this.chunks.hearths()], [x, z]);
 
             // (The chimneys' smoke, as much as the quality draws)
             SMOKE_SHARE.value = this.view.quality.smoke;
