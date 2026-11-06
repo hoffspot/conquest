@@ -2012,7 +2012,12 @@ def run(job):
     meshes, armature = pick_objects(job, scene)
     meshes = drop_materials(job, meshes)
     meshes = join_objects(job, meshes)
-    meshes = cut_into_cells(job, meshes)
+    # (A kit's pieces, laid out a cell each and joined: cut once baked, so they share one atlas)
+    bake_first = bool((job.get("cells") or {}).get("bakeFirst"))
+
+    if not bake_first:
+        meshes = cut_into_cells(job, meshes)
+
     missing = missing_images(meshes)
 
     if missing:
@@ -2072,6 +2077,9 @@ def run(job):
                 raise PipelineError(f"{thing.name} has UDIM tiles: bake them (textures.bake) or split them (textures.udim: split)")
 
             materials.append({"object": thing.name, "baked": False, "materials": [m.name for m in used if m], "udim": udim, "lost": lost})
+
+    if bake_first:
+        meshes = cut_into_cells(job, meshes)
 
     REPORT["images"] = shrink_images(meshes, textures["maxSize"])
     REPORT["materials"] = materials

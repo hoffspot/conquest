@@ -163,7 +163,7 @@ error, so a misspelt one isn't silently ignored.
 | `join` | `{}` | `{ "Body": ["Body", "Teeth*"] }`: objects joined into one mesh each, named so (one draw call for each material in it; a group kept apart can be shown or hidden on its own). The first named is the one the others join |
 | `dropMaterials` | `[]` | `["M_Rock*", "M_Ground"]`: the faces of these materials taken out, and the materials with them (a mesh left with none, out altogether): what the game makes its own way, or another build carries, such as a castle's rock built apart from its walls |
 | `apart` | `[]` | `["M_Dress*"]`: these materials kept apart from the same ones of other names, which would be made one with them, so `simplify`'s and a copy's `materials` give them shares of their own: a scene's own parts set onto it, a copy of its material each, kept in more detail than the rest of it. Their textures are still shared |
-| `cells` | `null` | `{ "size": 40 }`: each mesh cut into cells this many metres on a side on the ground, by where its faces' centres are, each a mesh of its own named `<mesh>@<i>,<j>` (`i` along x, `j` along z, from the origin) with its materials. The game draws only the cells in view, each at its own detail. Its modifiers are applied first, and it can't be moved by an armature. Simplifying (`simplify`, `lods`) then keeps where one cell meets the next, and one material another, where they are (the vertices there locked), so no gap opens between them; every other edge is free to move. A lower-detail copy may also collapse edges where texture coordinates or normals part (meshopt's `Permissive`): without it the carved stone of a castle, a seam at every corner, stopped at a quarter of its triangles. It does by default (`"permissive": false` on a copy says not to); the full mesh doesn't, unless `simplify` says `"permissive": true`, which a mesh not cut into cells may say too (a far-off stand-in's one detail) |
+| `cells` | `null` | `{ "size": 40 }`: each mesh cut into cells this many metres on a side on the ground, by where its faces' centres are, each a mesh of its own named `<mesh>@<i>,<j>` (`i` along x, `j` along z, from the origin) with its materials. The game draws only the cells in view, each at its own detail. Its modifiers are applied first, and it can't be moved by an armature. Simplifying (`simplify`, `lods`) then keeps where one cell meets the next, and one material another, where they are (the vertices there locked), so no gap opens between them; every other edge is free to move. A lower-detail copy may also collapse edges where texture coordinates or normals part (meshopt's `Permissive`): without it the carved stone of a castle, a seam at every corner, stopped at a quarter of its triangles. It does by default (`"permissive": false` on a copy says not to); the full mesh doesn't, unless `simplify` says `"permissive": true`, which a mesh not cut into cells may say too (a far-off stand-in's one detail). `"bakeFirst": true` cuts it only once its materials are baked, so every cell is drawn with the one atlas (*A kit of pieces*, below) |
 | `materials` | `{}` | Materials made from texture files, in place of the source's of these names (*Materials from textures*, below) |
 | `variants` | `{}` | `{ "pale": { "materials": { "skin": { ... } } } }`: other looks, each `<name>.<variant>.glb` (*Variants*, below) |
 | `profiles` | `{}` | `{ "full": { ... }, "phone": { ... } }`: ways to build it, each a set of these settings merged over the rest, into `<out>/<profile>/` (*Profiles*, below) |
@@ -727,6 +727,26 @@ What it makes (Blender 4.5.14 LTS, about 4.5 minutes, most of it baking):
   toes), the flying clips within 14 degrees (the toes), the crawls within 20 (the wing
   membranes). Played looped, each has a small hitch there. Take off and Landing play once. The crawls stay in place
   as they come, so the game moves the dragon itself.
+
+## A kit of pieces
+
+A pack's loose pieces (a shop's counter, cupboards and lanterns; a castle's columns and windows)
+made into one file the game sets out a piece at a time, every piece drawn with one atlas: one
+texture of each kind for the whole kit, not one for each piece.
+
+1. Bring the pieces into one `.blend`, each centred in a square of its own:
+   `.claude/skills/import-scene-model/scripts/kit.py ... --cells 8` (each piece's foot at 0, one
+   set against a wall facing −y, its back at 0), which writes which square each is in beside it
+   (`<blend>.cells.json`).
+2. Its config joins them into one mesh (`join`), bakes their materials onto one atlas
+   (`textures.bake: "always"`, `mergeMaterials`) and cuts them apart again into those squares
+   once baked (`cells: { "size": 8, "bakeFirst": true }`): each piece a node of its own,
+   `<joined>@<i>,<j>`, every one with the one material. Its pieces can be simplified evenly
+   (`simplify`): no piece shares an edge with another.
+3. Its catalog entry maps each piece's name to its node (`pieces`), as the game reads it: the
+   Wind Ways shop's is `private/wind-ways-shop.json` (with its bought files, out of the
+   repository), and the game's side is `client/js/world/propkits.js` (docs/LICENSED_MODELS.md,
+   *Prop kits*).
 
 ## Testing
 

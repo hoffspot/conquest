@@ -51,7 +51,9 @@ export const DEFAULTS = Object.freeze({
     apart: [],
     // Each mesh cut into cells on the ground, { size: metres }, a mesh each ("<mesh>@<i>,<j>"),
     // by where its faces' centres are: the game draws only those in view, each at its own detail;
-    // simplifying (simplify, lods) then keeps where one cell meets the next where it is, so none part
+    // simplifying (simplify, lods) then keeps where one cell meets the next where it is, so none part.
+    // `bakeFirst`: cut once its materials are baked, so every cell shares the one atlas (a kit's
+    // pieces, laid out a cell each and joined: README.md, *A kit of pieces*)
     cells: null,
     // Materials made from texture files, in place of those in the source by these names:
     // { "material": { baseColor, alpha, alphaMap, normal, occlusion, roughness, metallic,
@@ -343,10 +345,14 @@ export function resolveConfig(raw, file) {
             fail("cells is { size: metres a side } (or null: not cut)");
         }
 
-        unknownKeys(config.cells, { size: 0 }, "cells.", fail);
+        unknownKeys(config.cells, { size: 0, bakeFirst: false }, "cells.", fail);
 
         if (!(typeof config.cells.size === "number" && config.cells.size > 0)) {
             fail("cells.size is how many metres a cell is on a side, more than 0");
+        }
+
+        if (config.cells.bakeFirst !== undefined && typeof config.cells.bakeFirst !== "boolean") {
+            fail("cells.bakeFirst is true (cut once baked, every cell sharing one atlas) or false");
         }
     }
 
