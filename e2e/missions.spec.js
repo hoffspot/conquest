@@ -41,16 +41,16 @@ async function playUntil(page, done, seconds = 30) {
 test("a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
-    // (The switch in Game options, Gameplay: on to start with)
+    // (The switch in Game options, Chat and players: on to start with)
     await page.locator("#menubutton").click();
 
-    for (const button of ["#optionsbutton", "#gameplaybutton"]) {
+    for (const button of ["#optionsbutton", "#chatbutton"]) {
         await page.locator(button).click();
     }
 
     await expect(page.locator("#messengerswitch")).toBeChecked();
 
-    for (const button of ["#gameplayback", "#optionsback", "#resumebutton"]) {
+    for (const button of ["#chatback", "#optionsback", "#resumebutton"]) {
         await page.locator(button).click();
     }
 

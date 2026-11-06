@@ -1933,9 +1933,9 @@ mission given is only one the player's not already carrying (`held`).
 **Who may hear one** (`#mayHearMessenger`): alive, out in the world (not indoors or in a dungeon),
 not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than
 two missions (`MOST_MISSIONS`), their people still standing, and **War messengers** on in Game
-options (Gameplay; `messengers` in their own settings, sent to a server-kept world's host). One
-comes at most once every ten war turns (`MESSENGER_EVERY`, ten minutes of play) since the last
-(`standing.messengerAt`), with none already on the way.
+options (Chat and players; `messengers` in their own settings, sent to a server-kept world's
+host). One comes at most once every ten war turns (`MESSENGER_EVERY`, ten minutes of play) since
+the last (`standing.messengerAt`), with none already on the way.
 
 **The messenger** (`#putMessenger`): one of the player's people's folk, in a tunic and jerkin, a cap
 or hood, with a ledger in hand (characters/folk.js `messenger`), put 40 m off (`MESSENGER.from`) the way

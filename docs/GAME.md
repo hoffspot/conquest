@@ -2066,7 +2066,10 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   reach the player, and they're none the wiser (game.js `block`, `isBlocked`; docs/WAR.md
   *Parties*); with a line at the foot on what can be done. Game options' **Chat and players** has
   Party chat on screen, **Refuse party DMs**, **Refuse world DMs** and Refuse party invites (each
-  kept with a hero a world server keeps but the first), and **Blocked players**: everyone blocked,
+  kept with a hero a world server keeps but the first), **War messengers** (on to start with: a
+  messenger finds the player with a war mission when the war's near them, docs/WAR.md *War
+  missions by messenger*; `messengers`, sent to a server-kept world's host as the player's own
+  settings), and **Blocked players**: everyone blocked,
   by name, in this world or another, and who that world knows them as, each to **Unblock**
   (main.js `showBlocked`). In a world on a
   server, playing together or alone, the menu's header has **World** (game.js `onWorldPanel`,
@@ -6410,10 +6413,7 @@ the Bindings page till one's chosen.
      takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
      *Locked on*, under *Those attacking the player*); Show whom foes are on (on to start with:
      the rings, dots, counts and taunt marks, *Whom each foe is on*); Mercenaries' chatter (on to start with:
-     their words over their heads, docs/WAR.md *Mercenaries that grow*); War messengers (on to
-     start with: a messenger finds the player with a war mission when the war's near them,
-     docs/WAR.md *War missions by messenger*; `messengers`, sent to a server-kept world's host as
-     the player's own settings); Mercenaries can die (off
+     their words over their heads, docs/WAR.md *Mercenaries that grow*); Mercenaries can die (off
      to start with: the world's rule, `RULES` `mortal`, shown only to the world's host's player
      or an owner, who alone can change it: main.js `showMortal`, game.js `mayRule`, `setMortal`);
      Resist all summons; Refuse party invites.

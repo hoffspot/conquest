@@ -472,14 +472,13 @@ failing it, costs a little standing. Sent to stand with our reserve or march wit
 commander walks up when you get there to brief you: how many are coming and under whom, your
 part, and an objective worth more (their commander, or their standard). In a party, one messenger
 comes for you all, and a mission taken is each of yours, at your own rank. Turn them off in Game
-options, Gameplay, **War messengers**.
+options, Chat and players, **War messengers**.
 
 **Game options**, in the menu, is a list of groups at the top, each a short page of its own:
 **Action Wheel and Bar** (the Action wheels page, yours, a foe's and your followers', and the
 Action Bar page), **Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**,
 **Controls** (the thumb stick, zoom buttons and minimap), **Camera**
-and **Gameplay** (Auto-snag, war messengers, other players' summons and party invites), then the
-**Debug log**.
+and **Gameplay** (Auto-snag, other players' summons and party invites), then the **Debug log**.
 The arrow in each page's heading, or Back at its foot, goes back a page. Under Sound, turn all the
 sound on or off, and set how loud the effects (50% to start with), the environment (40%) and the
 music (35%) are. The defaults suit a phone at about 40% volume, with plenty of room to turn each
