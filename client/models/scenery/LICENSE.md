@@ -78,3 +78,26 @@ scrambled as the game serves it, with whose it is in its glTF asset's `copyright
 private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
 
 Don't copy it out of this game or use it in anything else.
+
+## wind-ways-shop.bin
+
+**Wind Ways' medieval shop pack** (the loose pieces of its shop: counters, cupboards, cabinets and
+chests, a table and a chair, a lantern, a basket and trays of goods, a curtain, a window, a rack, a
+sign bracket and a sign post, a newel and a door; its Unreal Engine files exported by this
+repository's owner), by **Wind Ways**, bought on **Fab** by this repository's owner under **Fab's
+Standard License**: the first of the game's prop kits (`client/js/world/propkits.js`), furnishing
+the humans' shops and the rooms upstairs at their inns.
+
+Its 21 pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/wind-ways-shop/kit.json`) and put through `utilities/blenderpipeline`
+(`private/wind-ways-shop.json`), both of which stay out of the repository with the bought files:
+joined, their materials baked onto one atlas (2,048 pixels; normals 1,024; KTX2) and cut apart
+again (`cells.bakeFirst`), each piece a node of its own (`kit@<i>,<j>`), its `phone` build:
+24,954 triangles in all, one material for every piece.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.

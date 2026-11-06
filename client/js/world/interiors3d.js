@@ -40,8 +40,10 @@ import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { VEIL, veilShader } from "./veil.js";
 import { CAVERNS, cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
-import { Blocks, DUNGEON_CUT, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial, setKitPicture } from "./dungeons3d.js";
+import { Blocks, DUNGEON_CUT, DUNGEON_PROPS, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial, setKitPicture } from "./dungeons3d.js";
+import { ASSETS } from "../app/assets.js";
 import { KEEP_KIT, KIT_PICTURES, kitPlacements } from "./keepkit.js";
+import { kitPiece, kitsFor } from "./propkits.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
 import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeometry, ribPaths, veinsOn } from "./flesh.js";
@@ -186,6 +188,42 @@ const materials = new Map();
 let palette = null;
 let framed = true;
 let lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
+
+// The prop kits furnishing the inside being built (world/propkits.js: its people and kind, if any
+// kit's for them), and its stand-ins: the art drawn for what a kit's piece stands in for, till
+// the kit's read and without the licensed models (buildingInterior puts it away once it's in)
+let kitting = null;
+let standIns = null;
+
+// The piece of a kit that stands in for a furnishing of `role` in the inside being built, or none
+const kitted = (role, seed = 0) => (kitting ? kitPiece(role, { ...kitting, seed }) : null);
+
+// Where a furnishing's own art is drawn: among the stand-ins if a kit's piece stands in for it
+const artOf = (solid, piece) => (piece ? standIns : solid);
+
+// Which way a thing set in a square faces (radians, as furnish turns it: 0 south): away from the
+// wall or edge beside it, west, east, north or south first
+function awayFromWall(map, x, y) {
+    const wall = (dx, dy) => {
+        const [wx, wy] = [x + dx, y + dy];
+
+        return wx < 0 || wy < 0 || wx >= map.width || wy >= map.height || "W#".includes(map.plan[wy][wx]);
+    };
+
+    return wall(-1, 0) ? Math.PI / 2 : wall(1, 0) ? -Math.PI / 2 : wall(0, -1) ? 0 : wall(0, 1) ? Math.PI : 0;
+}
+
+// A kit's counter along a counter piece (a run of squares along x), its top `top` metres up, its
+// front south: as many of its counters end to end as fit, each its share of the run
+function kitCounter(counter, piece, top) {
+    const count = Math.max(1, Math.round(counter.w / piece.size[0]));
+
+    return Array.from({ length: count }, (_, k) => ({ model: piece.model, x: counter.x + ((k + 0.5) * counter.w) / count, z: counter.y + 0.5, fit: [counter.w / count, top, 0.8], turn: 0, double: piece.double }));
+}
+
+// A kit's piece standing in a square of the plan (x, y), its back to the wall beside it, as big as
+// the piece is set (or `fit`)
+const kitStanding = (map, piece, x, y, fit = piece.size) => ({ model: piece.model, x: x + 0.5, z: y + 0.5, fit, turn: awayFromWall(map, x, y), double: piece.double });
 
 // How each of a thing's cuts is known (its material's and its mesh's): a wall's round the edge
 // ("wall"), through the floor ("wall-x", "wall-z"), a ceiling's, or anything else's
@@ -1593,9 +1631,17 @@ function upstairs(map) {
 
     const side = map.pieces.find((piece) => piece.kind === "side-table");
     const [sx, sz] = [m(side.x + 0.5), m(side.y + 0.5)];
+    // (A kit's table in place of its own where there's a kit for it, and chests by the beds:
+    // world/propkits.js)
+    const kit = [];
+    const table = kitted("side-table");
 
-    solid.cylinder(sx, sz, 0, m(0.65), m(0.08), m(0.08), material("timber"), { segments: 8 });
-    solid.cylinder(sx, sz, m(0.62), m(0.68), m(0.35), m(0.35), material("timber-light"), { segments: 14 });
+    artOf(solid, table).cylinder(sx, sz, 0, m(0.65), m(0.08), m(0.08), material("timber"), { segments: 8 });
+    artOf(solid, table).cylinder(sx, sz, m(0.62), m(0.68), m(0.35), m(0.35), material("timber-light"), { segments: 14 });
+
+    if (table) {
+        kit.push({ model: table.model, x: side.x + 0.5, z: side.y + 0.5, fit: [0.8, 0.68, 0.8], double: table.double });
+    }
     candle(solid, sx - m(0.1), sz - m(0.1), m(0.68));
     candle(solid, sx + m(0.12), sz - m(0.05), m(0.68));
     solid.cylinder(sx + m(0.05), sz + m(0.15), m(0.68), m(0.95), m(0.05), m(0.03), material("wine"), { segments: 8 });
@@ -1629,8 +1675,14 @@ function upstairs(map) {
 
     // (A candle on each chest, to go to bed by)
     for (const piece of map.pieces.filter((each) => each.kind === "chest")) {
-        chest(solid, m(piece.x + 0.5), m(piece.y + 0.5));
+        const kept = kitted("chest");
+
+        chest(artOf(solid, kept), m(piece.x + 0.5), m(piece.y + 0.5));
         candle(solid, m(piece.x + 0.3), m(piece.y + 0.5), m(0.52));
+
+        if (kept) {
+            kit.push(kitStanding(map, kept, piece.x, piece.y, [kept.size[0], 0.52, kept.size[2]]));
+        }
     }
 
     // Sconces in the hallway and by the counter: red glass in a madam's house, clear at an inn
@@ -1641,7 +1693,7 @@ function upstairs(map) {
     // A wheel of candles over the lounge
     solid.add(objectSolid(candleWheel(m(4), m(8), m(2.45), m(0.7), 6)));
 
-    return { solid, moving: [], flames: [], lights: [], hearth: null };
+    return { solid, moving: [], flames: [], lights: [], hearth: null, props: kit };
 }
 
 // --- The smithy ---
@@ -2243,12 +2295,13 @@ function rollShelves(solid, shelf, bound = "ledger") {
 
 // A desk (a counter piece): dark wood, a cloth over its top, a ledger, a stamp and its pad, papers,
 // an inkpot and quill, and a bell
-function desk(solid, counter, cloth) {
+function desk(solid, counter, cloth, frame = solid) {
     const [x0, x1, z0, z1] = [m(counter.x), m(counter.x + counter.w), m(counter.y + 0.1), m(counter.y + 0.9)];
 
-    solid.box(x0, 0, z0, x1, m(1), z1, material("planks-dark"));
-    solid.box(x0 - 0.4, m(1), z0 - 0.4, x1 + 0.4, m(1.07), z1 + 0.4, material("timber-light"));
-    solid.box(x0 + m(0.2), m(1.07), z0 + 0.4, x1 - m(0.2), m(1.09), z1 - 0.4, material(cloth));
+    // (Its body, top and cloth: a kit's counter's in their place, if there is one: kitCounter)
+    frame.box(x0, 0, z0, x1, m(1), z1, material("planks-dark"));
+    frame.box(x0 - 0.4, m(1), z0 - 0.4, x1 + 0.4, m(1.07), z1 + 0.4, material("timber-light"));
+    frame.box(x0 + m(0.2), m(1.07), z0 + 0.4, x1 - m(0.2), m(1.09), z1 - 0.4, material(cloth));
     solid.box(x0 + m(0.6), m(1.09), z0 + m(0.15), x0 + m(1.1), m(1.15), z0 + m(0.5), material("ledger"));
     solid.box(x0 + m(1.5), m(1.09), z0 + m(0.2), x0 + m(1.8), m(1.11), z0 + m(0.5), material("rug-border"));
     solid.cylinder(x0 + m(1.65), z0 + m(0.35), m(1.11), m(1.23), m(0.03), m(0.04), material("timber"), { segments: 6 });
@@ -3824,6 +3877,16 @@ function floorAround(blocks, map, holes) {
         if (from < w) {
             blocks.box(from, -0.1, z0, w, 0, z1);
         }
+    }
+}
+
+// An inside furnished with a prop kit's pieces (world/propkits.js) once they're read: what they
+// stand in for put away (`standing`), if any of them was (none, without the licensed models)
+function kitShown(object, standing, placements) {
+    const kitModels = new Set(placements.map(({ model }) => model).filter((model) => DUNGEON_PROPS[model] && ASSETS.models[DUNGEON_PROPS[model].asset]?.licensed));
+
+    if ([...kitModels].some((model) => object.getObjectByName(`prop-${model}`))) {
+        standing.visible = false;
     }
 }
 
@@ -5798,8 +5861,17 @@ function shop(map) {
     solid.box(m(doorMiddle - 0.9), 0, h - 0.2, m(doorMiddle + 0.9), m(2.4), h + 0.4, material("planks-dark", WALL));
     ceiling(solid, map);
 
+    // (A kit's counters, chests and cabinets in place of its own where there's a kit for it:
+    // world/propkits.js; a basket on a chest, a lantern on a cabinet)
+    const kit = [];
+    const counterPiece = kitted("counter");
+
     for (const counter of at("counter")) {
-        desk(solid, counter, look.cloth);
+        desk(solid, counter, look.cloth, artOf(solid, counterPiece));
+
+        if (counterPiece) {
+            kit.push(...kitCounter(counter, counterPiece, SHOP_TOPS.counter));
+        }
     }
 
     for (const shelf of at("shelves")) {
@@ -5845,8 +5917,17 @@ function shop(map) {
         }
     }
 
-    for (const box of at("chest")) {
-        chest(solid, m(box.x + 0.5), m(box.y + 0.5));
+    for (const [k, box] of at("chest").entries()) {
+        const piece = kitted(k % 2 ? "cabinet" : "chest");
+
+        chest(artOf(solid, piece), m(box.x + 0.5), m(box.y + 0.5));
+
+        if (piece) {
+            const standing = kitStanding(map, piece, box.x, box.y);
+            const on = kitted(k % 2 ? "lantern" : "basket");
+
+            kit.push(standing, ...(on ? [{ model: on.model, x: box.x + 0.5, z: box.y + 0.5, on: standing, fit: on.size, turn: 0.3, double: on.double }] : []));
+        }
     }
 
     for (const carpet of at("carpet")) {
@@ -5876,7 +5957,7 @@ function shop(map) {
         moving: [],
         flames: torches.map(({ fire }) => fire),
         lights: [...torches.map(({ light }) => light), ...stands],
-        props: props.map(({ piece: _piece, ...placement }) => placement),
+        props: [...props.map(({ piece: _piece, ...placement }) => placement), ...kit],
     };
 }
 
@@ -6287,8 +6368,15 @@ export function* buildingInterior(map) {
     people = own;
     lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
+    // (Furnished with a prop kit's pieces where one's for its people and kind: world/propkits.js)
+    const place = { people: map.people ?? "human", place: map.style ?? map.id };
+
+    kitting = kitsFor(place).length ? place : null;
+    standIns = kitting ? new Solid() : null;
+
     try {
         built = (BUILDERS[map.style ?? map.id] ?? (map.dungeon ? dungeon : null))(map);
+        built.standIns = standIns;
 
         if (own) {
             accents(built.solid, map, own);
@@ -6298,6 +6386,8 @@ export function* buildingInterior(map) {
         palette = null;
         framed = true;
         people = null;
+        kitting = null;
+        standIns = null;
         lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
     }
 
@@ -6326,6 +6416,22 @@ export function* buildingInterior(map) {
 
     object.add(merged);
 
+    // (What a prop kit's pieces stand in for, merged apart, put away once they're read)
+    const standing = built.standIns && new THREE.Group();
+
+    if (standing) {
+        const own = new THREE.Group();
+        const wrapped = new THREE.Group();
+
+        own.scale.setScalar(1 / M);
+        own.add(built.standIns.toObject());
+        wrapped.add(own);
+        wrapped.updateMatrixWorld(true);
+        standing.add(joined(partsOf(wrapped, { atlas: (stuff) => atlasInside(stuff.userData.cut) })));
+        standing.name = "kit-stand-ins";
+        object.add(standing);
+    }
+
     // (Its rock's roof, how high over a point of the level: caverns.js)
     let roof = null;
 
@@ -6344,8 +6450,10 @@ export function* buildingInterior(map) {
     // keep's castle's pieces among them, and its walls and floor its castle's once they are; when,
     // `furnished`)
     if (built.props?.length) {
+        object.userData.props = built.props;
         object.userData.furnished = furnish(object, built.props)
             .then(() => built.kit && kitDressed(object))
+            .then(() => standing && kitShown(object, standing, built.props))
             .catch((error) => console.warn("Couldn't furnish", map.id, error));
     }
 

@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; and the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; and the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -262,6 +262,30 @@ the change that uses it is in. So:
 
 Files that come out the same (a model's skins, which hold no clips) stay as they are: compare the
 scrambled copy's hash with the catalog's.
+
+## Prop kits
+
+A bought pack's loose furniture and things (a shop's counters, cupboards and lanterns) can stand
+in for the game's own wherever it suits, a piece for each kind of furnishing. The first is Wind
+Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
+
+- **One file, a node a piece, one atlas.** Its pieces are set a square each in a `.blend`
+  (`.claude/skills/import-scene-model/scripts/kit.py ... --cells 8`), then joined, baked onto one
+  atlas and cut apart again by the pipeline (`cells.bakeFirst`: utilities/blenderpipeline/README.md,
+  *A kit of pieces*). Scrambled into the private repository as any licensed model; its catalog
+  entry (`dungeon-prop-<kit>`, `licensed`, `tier: "demand"`) maps each piece's name to its node
+  (`pieces`), and world/dungeons3d.js `DUNGEON_PROPS` has each as a prop of its own.
+- **The kit's entry** in `client/js/world/propkits.js` `PROP_KITS`: whose it is, the peoples
+  and the kinds of inside it's for, whether its pieces are drawn from both sides (a pack made for
+  two-sided materials), and each piece's role (counter, chest, cabinet, lantern...) and the size
+  it's set at.
+- **The insides ask for roles** (`world/interiors3d.js`: `kitted(role)`): a piece of that role
+  is set out fitted to the furnishing's squares, and the game's own furnishing there is drawn
+  apart (its stand-in), put away once the kit's read. Without the licensed models, or for a
+  people or kind of inside no kit's for, the game's own is all there is.
+- **Tests:** `test/propkits.test.js` (the catalog, the choosing, the shops and upstairs set out,
+  the licensed file's nodes and its one material), and `test/furnishings.test.js` (only the
+  registered kits' pieces among the licensed props).
 
 ## Changing the key
 
