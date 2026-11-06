@@ -1109,8 +1109,8 @@ leather, a heavy pommel) and a **battle axe** (a broad, bearded blade on a long 
 behind). Both are held as the war hammer is (`HOLDS.hammer`), the right hand by the cross or a
 quarter of the way up the haft, the left by the pommel or the haft's foot. And a one-hander found,
 sold and carried by the Order of the Bell's mace-brothers, never anyone's to start with: a
-**mace** (`mace`: about 62 cm, a leather-bound grip over an iron pommel, a steel haft, a round head
-with six dark flanges standing out all round and a knob on top), held, swung, drawn and hung at the
+**mace** (`mace`: about 62 cm, a leather-bound grip capped in iron no further below the hand than a
+cleaver's, a steel haft, a round head about 10 cm across six dark flanges and a knob on top), held, swung, drawn and hung at the
 left hip as the cleaver is (its sheath the cleaver's, `SHEATHS.mace`; its blows the cleaver's,
 app/game.js `HELD_SWINGS`). The Prior of the Bell's own two are drawn in their place when held or
 worn (characters/liveries.js `UNIQUE_LOOKS`, by the piece's `unique`: core/progress.js `worn`,
