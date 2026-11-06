@@ -253,13 +253,18 @@ describe("a legendary weapon's effect (legendary.js)", () => {
             }
         }
 
-        // (A ward, a unique's: Stoneheart's, from its first level's to its highest's, no harm of its own)
-        for (const id of Object.keys(EFFECTS).filter((each) => EFFECTS[each].ward)) {
+        // (A ward, a unique's, from its first level's to its highest's, no harm of its own: Stoneheart's
+        // guard, stone skin and its hardness; the Bulwark's knell, how far round and how long it stuns)
+        const wards = Object.keys(EFFECTS).filter((each) => EFFECTS[each].ward);
+
+        assert.deepEqual(wards, ["stoneheart", "knell"]);
+
+        for (const id of wards) {
             const [weak, strong] = [effectAt(id, 1), effectAt(id, 100)];
 
             assert.equal(weak.damage, undefined, id);
 
-            for (const key of ["guard", "skin", "harden"]) {
+            for (const key of id === "knell" ? ["radius", "stun"] : ["guard", "skin", "harden"]) {
                 assert.equal(weak[key], EFFECTS[id][key][0], `${id} ${key} at the first level`);
                 assert.equal(strong[key], EFFECTS[id][key][1], `${id} ${key} at the highest`);
             }

@@ -18,6 +18,7 @@
 // (app/gearinfo.js), the world shows them (world/effects.js) and the sounds sound them
 // (audio/catalog.js).
 
+import { pow } from "./exact.js";
 import { WEAPONS } from "./weapons.js";
 
 /**
@@ -46,7 +47,19 @@ import { WEAPONS } from "./weapons.js";
  *  - witchfire (a unique's own, `unique`: Greenbrand's; always, `always`, no charge to it): every
  *    blow up close setting the foe struck alight with green fire, and the fire leaping on from them
  *    to as many more as `leaps`, each the nearest not yet caught within `reach` metres of the last,
- *    each struck `share` as hard, fire's, and set alight too (battle.js #witchfire).
+ *    each struck `share` as hard, fire's, and set alight too (battle.js #witchfire);
+ *  - toll (a unique's own, `unique`: Vespers', the Prior of the Bell's mace; with a charge, as a
+ *    legendary weapon's): the blow ringing out like the Great Bell, everyone `radius` metres round
+ *    the foe struck hurt, thrown back `toss` and stunned `stun` ms (battle.js #unleash);
+ *  - knell (a unique's own, `unique`, and a ward, `ward`: the Bulwark's, the Prior's shield; its
+ *    charge filled by blows taken): the shield ringing out like the Great Bell, whoever struck the
+ *    blow that filled it, and everyone `radius` metres round them, stunned `stun` ms (battle.js
+ *    #steel); what the one bearing it's told then, `felt`.
+ *
+ * A unique's effect may be graded (`graded`: the Prior's, a different one each time he falls,
+ * core/rare.js UNIQUES `graded`): its piece's `grade` (0 to 1, the finest the rarest: GRADE) making
+ * each number it names that many times stronger, from the first of its pair (the poorest) to the
+ * second (the finest), as well as its level does.
  */
 export const EFFECTS = Object.freeze({
     frostbind: {
@@ -127,7 +140,52 @@ export const EFFECTS = Object.freeze({
         leaps: [1, 2],
         reach: 4,
     },
+    // (A unique's own, never rolled on a legendary weapon; with a charge, as theirs: Vespers',
+    // rare.js, the Prior of the Bell's mace)
+    toll: {
+        label: "Toll",
+        unique: true,
+        element: null,
+        about: "Every so many blows, it rings out like the Great Bell: everyone round the foe struck is hurt, thrown back and stunned.",
+        damage: [8, 14],
+        radius: [1.6, 2.6],
+        toss: [0.3, 0.55],
+        stun: [700, 1500],
+        graded: { stun: [0.6, 1.6], radius: [0.85, 1.2] },
+    },
+    // (A unique's own and a ward, its charge filled by blows taken: the Bulwark's, rare.js, the
+    // Prior of the Bell's shield)
+    knell: {
+        label: "Knell",
+        unique: true,
+        ward: true,
+        element: null,
+        about: "Every so many blows taken, it rings out like the Great Bell: whoever struck the blow, and everyone round them, is stunned.",
+        felt: "your shield rings out like the Great Bell!",
+        radius: [1.4, 2.4],
+        stun: [800, 1600],
+        graded: { stun: [0.6, 1.6], radius: [0.85, 1.2] },
+    },
 });
+
+/**
+ * A graded piece's grade (core/rare.js UNIQUES `graded`: 0 the poorest, 1 the finest), rolled as
+ * it's made: a share of the way up, to the `skew` power, so the finest are the rarest (about one in
+ * twelve in the top fifth, one in twenty-five in the top tenth).
+ */
+export const GRADE = Object.freeze({ skew: 2.5 });
+
+/** A piece's grade rolled (random.js random: GRADE), to two places. */
+export const rollGrade = (random) => Math.round(pow(random.next(), GRADE.skew) * 100) / 100;
+
+/** How fine a grade is, in words ("" for none). */
+export function gradeWords(grade) {
+    if (!Number.isFinite(grade)) {
+        return "";
+    }
+
+    return grade >= 0.9 ? "Rings as true as the Great Bell itself" : grade >= 0.7 ? "Rings true" : grade >= 0.4 ? "Rings clear" : grade >= 0.15 ? "Rings dull" : "Rings flat";
+}
 
 /** The effects let loose by blows struck (EFFECTS but the wards and a unique's own): those rolled on a legendary weapon. */
 export const BLOW_EFFECTS = Object.freeze(Object.keys(EFFECTS).filter((id) => !EFFECTS[id].ward && !EFFECTS[id].unique));
@@ -162,9 +220,10 @@ export const effectStrength = (level) => Math.max(1, Math.min(100, Number.isFini
 /**
  * An effect's numbers at a weapon's level (or a piece's, EFFECTS, each between its first level's
  * and its highest's): { damage: [least, most] (before the wielder's power), freeze, radius, near,
- * knockdown, leaps, reach, falls, stun, toss, guard, skin, harden, share, arc }, those it has.
+ * knockdown, leaps, reach, falls, stun, toss, guard, skin, harden, share, arc }, those it has; a
+ * graded one's at its piece's `grade` too (EFFECTS `graded`: none given, as it's made).
  */
-export function effectAt(id, level = 1) {
+export function effectAt(id, level = 1, grade = null) {
     const def = EFFECTS[id];
 
     if (!def) {
@@ -187,6 +246,17 @@ export function effectAt(id, level = 1) {
     for (const key of ["near", "reach", "falls", "arc"]) {
         if (def[key] !== undefined) {
             numbers[key] = def[key];
+        }
+    }
+
+    // (Graded: each number it names the stronger the finer its piece; none given, as it's made)
+    const fine = Number.isFinite(grade) ? Math.max(0, Math.min(1, grade)) : null;
+
+    for (const [key, [poorest, finest]] of Object.entries(fine === null ? {} : (def.graded ?? {}))) {
+        if (numbers[key] !== undefined) {
+            const value = numbers[key] * (poorest + (finest - poorest) * fine);
+
+            numbers[key] = key === "radius" ? Math.round(value * 100) / 100 : Math.round(value);
         }
     }
 

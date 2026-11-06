@@ -58,7 +58,7 @@ import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
-import { rollSpoils } from "./spoils.js";
+import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
@@ -4712,6 +4712,13 @@ export class Host {
             }
 
             const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite, extra: Boolean(beast.extra) });
+            const own = SPOILS[beast.creature]?.uniques ?? [];
+
+            // (A master's own, one of them each time it falls, made for each player there at their
+            // might, bound to them: the Prior's mace or shield, spoils.js `uniques`)
+            if (own.length && !beast.extra) {
+                bundle.items.push({ ...makeUnique(this.random.pick(own), levelOf(this.mightFor(player.id)), this.random), count: 1 });
+            }
 
             if (elite) {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
@@ -4741,7 +4748,7 @@ export class Host {
         }
 
         this.#outfit(player);
-        this.#event("gear", { id: player.id, weapon: player.hero.weapon, worn: player.progress.worn() });
+        this.#event("gear", { id: player.id, weapon: player.hero.weapon, worn: player.progress.worn(), held: player.progress.wielded() });
 
         return OK;
     }

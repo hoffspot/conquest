@@ -1061,6 +1061,17 @@ export const ITEM_ICONS = Object.freeze({
             <path d="M-12,-2 h18" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
         </g>`,
 
+    // A mace, leaning: a short steel haft, a leather grip and pommel, a flanged head
+    mace: `
+        <g transform="rotate(35)">
+            <rect x="-1.6" y="-14" width="3.2" height="22" rx="1" fill="#8a949c" stroke="#2f363d" stroke-width="0.9"/>
+            <rect x="-2.2" y="6" width="4.4" height="10" rx="1.2" fill="#3a2414" stroke="#1d120a" stroke-width="0.8"/>
+            <circle cx="0" cy="17.5" r="2.6" fill="#4a525a" stroke="#22282d" stroke-width="0.9"/>
+            <ellipse cx="0" cy="-19" rx="5" ry="7" fill="url(#icon-steel)" stroke="#2f363d" stroke-width="1.1"/>
+            <path d="M-9,-19 L-5,-24 L-5,-14 Z M9,-19 L5,-24 L5,-14 Z M0,-28 L-3,-24 L3,-24 Z" fill="#aeb8c2" stroke="#2f363d" stroke-width="0.9"/>
+            <path d="M0,-25 L0,-13" stroke="#ffffff" stroke-width="0.8" opacity="0.6"/>
+        </g>`,
+
     // A greatsword, point up and leaning: a long blade, a wide cross, a long grip and its pommel
     greatsword: `
         <g transform="rotate(35)">

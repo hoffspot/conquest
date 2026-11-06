@@ -200,7 +200,7 @@ export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96
  * played for MADE_KEPT seconds is let go of, to be made again the next time (in 50 to 400 ms),
  * but for those kept and those slow to make again (more than MADE_QUICK seconds' making).
  */
-export const MADE_AHEAD = /^(step|swing)|^(slash|hack|cleave|chop|strike|crush|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
+export const MADE_AHEAD = /^(step|swing)|^(slash|hack|cleave|chop|strike|crush|bludgeon|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
 const MADE_LATE = 0.25;
 const MADE_WAITING = 8;
 export const MADE_KEPT = 300;
@@ -451,6 +451,7 @@ export const CREATURE_VOICES = Object.freeze({
     bellRider: { family: "human" },
     choirRider: { family: "humanRough" },
     bellSpearman: { family: "human" },
+    bellMaceman: { family: "human" },
     bellArcher: { family: "human" },
     choirKnight: { family: "humanRough" },
     priorVane: { family: "humanRough" },
@@ -806,7 +807,7 @@ export const ARMOUR = Object.freeze({
 });
 
 // The blows a body's armour is heard under (weapons.js reactions: not spells, not fire)
-const STRUCK = new Set(["slash", "hack", "cleave", "chop", "strike", "crush", "pierce", "punch", "kick"]);
+const STRUCK = new Set(["slash", "hack", "cleave", "chop", "strike", "crush", "bludgeon", "pierce", "punch", "kick"]);
 
 // A bow's shot: an arrow taken from the quiver as it starts, the string drawn back after (s)
 const DRAWN = 0.12;

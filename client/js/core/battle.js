@@ -342,7 +342,7 @@ const chainOf = (prism) => ({ element: prism?.element ?? null, step: prism?.step
 // Is a blow magic (a spell, or a wand's or grimoire's bolt, a curse, a wisp's)? (Not a blow of the body: Surge and Inertial Barrier have nothing to do with it)
 // How each legendary weapon's effect strikes (its reaction: what's seen and heard of the blow), and
 // how much of its harm those near the foe it was let loose on take (core/legendary.js)
-const UNLEASHED = Object.freeze({ frostbind: "arcane", cinderburst: "fire", earthsunder: "crush", stormlash: "arcane", ruinblast: "crush", near: 0.6 });
+const UNLEASHED = Object.freeze({ frostbind: "arcane", cinderburst: "fire", earthsunder: "crush", stormlash: "arcane", ruinblast: "crush", toll: "crush", near: 0.6 });
 
 const magicOf = (attack, spell) => Boolean(spell) || attack.kind === "effect" || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
 
@@ -6213,12 +6213,13 @@ export class Battle {
         return (actor.stoneUntil ?? -Infinity) > this.time;
     }
 
-    // A blow that did harm taken by one who wears a ward (core/legendary.js EFFECTS `ward`): its
-    // charge (`steeled`) the fuller, up to full (WARD_CHARGE), begun again after CHARGE.idle without
-    // being struck; not while their skin's stone already. Full, let loose on them: their skin stone
-    // for its `skin` ms (Stoneheart), every blow on them the lighter and none throwing them down.
-    // Told as "unleashed" ({ id, target (theirs), effect, level, map, x, y, until })
-    #steel(actor) {
+    // A blow that did harm taken by one who wears a ward (core/legendary.js EFFECTS `ward`), from
+    // `by`: its charge (`steeled`) the fuller, up to full (WARD_CHARGE), begun again after
+    // CHARGE.idle without being struck; not while their skin's stone already. Full, let loose on
+    // them: their skin stone for its `skin` ms (Stoneheart), every blow on them the lighter and none
+    // throwing them down; or their shield ringing out (the Bulwark's knell: #knell). Told as
+    // "unleashed" ({ id, target (theirs), effect, level, map, x, y, until })
+    #steel(actor, by = null) {
         if (this.time - (actor.steeledAt ?? -Infinity) > CHARGE.idle) {
             actor.steeled = 0;
         }
@@ -6235,12 +6236,34 @@ export class Battle {
             return;
         }
 
-        const { effect, level } = actor.ward;
-        const numbers = effectAt(effect, level);
+        const { effect, level, grade = null } = actor.ward;
+        const numbers = effectAt(effect, level, grade);
 
         actor.steeled = 0;
+
+        if (effect === "knell") {
+            this.#knell(actor, by, numbers);
+
+            return;
+        }
+
         actor.stoneUntil = this.time + (numbers.skin ?? 0);
         this.#emit("unleashed", { id: actor.id, target: actor.id, effect, level, map: actor.map, x: actor.x, y: actor.y, radius: null, struck: [], until: actor.stoneUntil });
+    }
+
+    // A shield's knell (core/legendary.js knell: the Bulwark's, as strong as its level and grade,
+    // `numbers`): whoever struck the blow that filled its charge (`by`), and every foe of its bearer
+    // within its `radius` of them, stunned its `stun` ms. Told as "unleashed", where they stood,
+    // with whoever it caught
+    #knell(actor, by, numbers) {
+        const at = by && !by.dead && by.map === actor.map ? by : actor;
+        const caught = this.#foesNear(actor, at.map, at.x, at.y, numbers.radius, at === actor ? null : at);
+
+        for (const one of caught) {
+            this.#freeze(actor, one, numbers.stun, "toll");
+        }
+
+        this.#emit("unleashed", { id: actor.id, target: at.id, effect: "knell", level: actor.ward.level, map: at.map, x: at.x, y: at.y, radius: numbers.radius, struck: caught.map(({ id }) => id) });
     }
 
     // A legendary weapon's effect let loose on whoever its blow landed on (`blow`: "melee" or
@@ -6249,8 +6272,8 @@ export class Battle {
     // from the ground under and round it, lightning leaping on from it, or a blast throwing them all
     // back. Told as "unleashed" ({ id, target, effect, level, map, x, y, radius, struck })
     #unleash(actor, target, blow) {
-        const { effect, level } = actor.legendary;
-        const numbers = effectAt(effect, level);
+        const { effect, level, grade = null } = actor.legendary;
+        const numbers = effectAt(effect, level, grade);
         const { element } = EFFECTS[effect];
         const power = actor.power?.[blow] ?? 1;
         const [map, x, y] = [target.map, target.x, target.y];
@@ -6301,6 +6324,29 @@ export class Battle {
         } else if (effect === "ruinblast") {
             // (Those it throws told as the blast's: "blast", its `throws`)
             this.#blast(actor, actor, map, x, y, { radius: numbers.radius, damage: numbers.damage.map((value) => value * power), toss: numbers.toss, kind: "ruinblast", heart: [actor.x, actor.y], element: null, reaction: "crush", stagger: 400 });
+        } else if (effect === "toll") {
+            // (Rung out like the Great Bell: everyone round the foe struck, it first, hurt, thrown
+            // back from the one who rang it, and stunned)
+            const near = this.#foesNear(actor, map, x, y, numbers.radius, target);
+            const throws = [];
+
+            for (const one of near) {
+                strike(one, one === target ? 1 : UNLEASHED.near);
+
+                if (!one.dead) {
+                    const thrown = this.#toss(one, [x, y], hypot(one.x - x, one.y - y) / numbers.radius, numbers.toss, [actor.x, actor.y], one === target ? [actor.x, actor.y] : null);
+
+                    if (thrown) {
+                        throws.push(thrown);
+                    }
+
+                    this.#freeze(actor, one, numbers.stun, "toll");
+                }
+            }
+
+            this.#emit("unleashed", { id: actor.id, target: target.id, effect, level, map, x, y, radius: numbers.radius, struck, throws });
+
+            return;
         }
 
         this.#emit("unleashed", { id: actor.id, target: target.id, effect, level, map, x, y, radius: numbers.radius ?? null, struck });
@@ -6364,14 +6410,17 @@ export class Battle {
         this.#emit("unleashed", { id: actor.id, target: target.id, effect: "witchfire", level: actor.legendary.level, map: actor.map, x: target.x, y: target.y, radius: reach, struck: chain.slice(1).map(({ id }) => id) });
     }
 
-    // Held fast by a legendary weapon's effect `ms` (frozen solid, or shocked: `look`): stunned as a
-    // spell stuns, less long warded against its element; never the colossal
+    // Held fast by a legendary weapon's effect `ms` (frozen solid, shocked, or rung through by a
+    // bell's toll or knell: `look`): stunned as a spell stuns, less long warded against its element
+    // (a bell's ring is none's); never the colossal
     #freeze(by, target, ms, look) {
         if (target.wild?.colossus || target.engine || !(ms > 0)) {
             return;
         }
 
-        const warded = this.#warded(target, { element: look === "frost" ? "water" : "air" });
+        // (A bell's ring is no element's: warded against by none)
+        const element = { frost: "water", shock: "air" }[look] ?? null;
+        const warded = element ? this.#warded(target, { element }) : false;
         const held = Math.round(ms * (warded ? WARD : 1));
 
         target.stunnedUntil = Math.max(target.stunnedUntil, this.time + held);
@@ -6805,7 +6854,8 @@ export class Battle {
         const blow = attack.kind === "ranged" ? "ranged" : "melee";
         const boosted = given === null && attacker?.empowered?.blow === blow ? attacker.empowered : null;
         const empowered = boosted?.factor ?? 1;
-        const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0))));
+        // (A crushing blow, a mace's, going partly through armour: weapons.js `crushing`)
+        const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0) * (1 - (attack.crushing ?? 0)))));
         const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
         const element = spell ? null : elementOf(attack);
         const warded = this.#warded(target, { school, element });
@@ -6845,7 +6895,7 @@ export class Battle {
 
         // (A ward worn, its charge the fuller for a blow that did them harm: #steel)
         if (target.ward && damage > 0 && target.hp > 0 && attacker && attacker !== target) {
-            this.#steel(target);
+            this.#steel(target, attacker);
         }
 
         // (A siege engine isn't staggered: what's struck is its timbers)

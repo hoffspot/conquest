@@ -51,6 +51,8 @@ export const KINDS = Object.freeze({
     chop: { heights: [0.45, 0.85], spread: 0.8, paint: "cut", length: 0.27, width: 0.025, blood: 1.6, drips: 5 },
     pierce: { heights: [0.45, 0.82], spread: 0.7, paint: "puncture", radius: 0.007, blood: 1.1, drips: 2 },
     crush: { heights: [0.5, 0.86], spread: 0.9, paint: "bruise", radius: 0.08, blood: 0.8, drips: 2 },
+    // (A mace's: a smaller bruise, a little blood where its flanges broke the skin)
+    bludgeon: { heights: [0.5, 0.86], spread: 0.9, paint: "bruise", radius: 0.06, blood: 0.9, drips: 2 },
     strike: { heights: [0.45, 0.86], spread: 0.9, paint: "welt", length: 0.18, radius: 0.028, blood: 0.6, drips: 1 },
     punch: { heights: [0.55, 0.86], spread: 0.8, paint: "spiked", radius: 0.045, blood: 0.8, drips: 2 },
     // (A spiked boot: lower, on the thighs, belly and ribs, and bigger)

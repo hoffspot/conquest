@@ -28,7 +28,7 @@ import { patrolRound, placedOf, standsOn, wayInOf } from "../client/js/core/terr
 import { squaresOf } from "../client/js/core/grid.js";
 import { parseGrid } from "./helpers.js";
 
-const THE_ORDER = ["bellInitiate", "bellBrother", "bellSpearman", "bellArcher", "choirKnight", "priorVane"];
+const THE_ORDER = ["bellInitiate", "bellBrother", "bellMaceman", "bellSpearman", "bellArcher", "choirKnight", "priorVane"];
 
 // An open field `size` squares across
 const field = (size) => ({ blocked: parseGrid(Array.from({ length: size }, () => ".".repeat(size))).map((row) => Uint8Array.from(row)) });
@@ -100,7 +100,7 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
     });
 
     it("rises in strength by rank: its initiates, its brothers, the Black Choir, their Prior", () => {
-        const ranks = [["bellInitiate"], ["bellBrother", "bellSpearman"], ["choirKnight"], ["priorVane"]];
+        const ranks = [["bellInitiate"], ["bellBrother", "bellMaceman", "bellSpearman"], ["choirKnight"], ["priorVane"]];
 
         for (let k = 1; k < ranks.length; k++) {
             for (const lower of ranks[k - 1]) {
@@ -125,7 +125,7 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.ok(ranks.every((kind) => MODELS[kind].asset === "beast-order"));
         assert.equal(MODELS.priorVane.asset, "beast-prior");
-        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], ["choir"], [""]]);
+        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], [""], ["choir"], [""]]);
         assert.deepEqual(partsOf("bellInitiate", 7), ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"]);
         assert.equal(partsOf("orcKing", 7), null, "(a model drawn whole)");
 
@@ -142,6 +142,8 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.deepEqual([...helms].sort(), ["HelmBar", "HelmFlat", "HelmPlain", "HelmRidge"]);
         assert.ok(partsOf("choirKnight", 3).includes("HelmCross") && partsOf("choirKnight", 3).includes("MorningStar"));
+        // (A mace-brother in white, a morning star and a heater shield, helmed as a brother is)
+        assert.ok(["Surcoat", "MorningStar", "HeaterShield"].every((part) => partsOf("bellMaceman", 3).includes(part)) && partsOf("bellMaceman", 3).some((part) => part.startsWith("Helm")));
         // (Each drawn the taller the higher, the Prior a head and more over the heroes' 1.85 metres)
         const tall = (kind) => (MODELS[kind].made.tall * MODELS[kind].length) / MODELS[kind].made.long;
 

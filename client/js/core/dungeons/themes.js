@@ -526,6 +526,7 @@ export const THEMES = {
                 layout: "axial",
                 packs: [
                     { id: "watch", creatures: ["bellBrother", "bellSpearman"], size: [2, 3], weight: 4 },
+                    { id: "maces", creatures: ["bellMaceman", "bellBrother"], size: [2, 3], weight: 2 },
                     { id: "initiates", creatures: ["bellInitiate"], size: [3, 4], weight: 3 },
                     { id: "bowmen", creatures: ["bellArcher", "bellBrother"], size: [2, 3], weight: 2 },
                     { id: "patrol", creatures: ["bellBrother", "bellInitiate"], size: [3, 4], weight: 2 },
@@ -555,6 +556,7 @@ export const THEMES = {
                 packs: [
                     { id: "initiates", creatures: ["bellInitiate"], size: [3, 5], weight: 4 },
                     { id: "trial", creatures: ["bellInitiate", "bellBrother"], size: [3, 4], weight: 3 },
+                    { id: "maces", creatures: ["bellMaceman", "bellInitiate"], size: [2, 4], weight: 2 },
                     { id: "brothers", creatures: ["bellBrother"], size: [2, 3], weight: 2 },
                     { id: "bowmen", creatures: ["bellArcher"], size: [2, 3], weight: 1 },
                 ],
@@ -582,6 +584,7 @@ export const THEMES = {
                 layout: "axial",
                 packs: [
                     { id: "brothers", creatures: ["bellBrother", "bellSpearman"], size: [2, 3], weight: 3 },
+                    { id: "maces", creatures: ["bellMaceman", "bellSpearman"], size: [2, 3], weight: 2 },
                     { id: "choir", creatures: ["choirKnight"], size: [1, 2], weight: 2 },
                     { id: "guard", creatures: ["choirKnight", "bellBrother"], size: [2, 3], weight: 2 },
                     { id: "bowmen", creatures: ["bellArcher", "bellBrother"], size: [2, 3], weight: 2 },
@@ -611,6 +614,7 @@ export const THEMES = {
                 packs: [
                     { id: "choir", creatures: ["choirKnight"], size: [2, 2], weight: 3 },
                     { id: "choirAndBrothers", creatures: ["choirKnight", "bellBrother"], size: [2, 3], weight: 3 },
+                    { id: "maces", creatures: ["choirKnight", "bellMaceman"], size: [2, 3], weight: 2 },
                     { id: "spears", creatures: ["bellSpearman", "choirKnight"], size: [2, 3], weight: 2 },
                     { id: "bowmen", creatures: ["bellArcher"], size: [2, 3], weight: 1 },
                 ],

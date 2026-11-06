@@ -109,6 +109,9 @@ const SHEATHS = {
     // the hip, the grip forward, the blade down and back past the thigh, its edge forward, hung
     // and swung as the sword is)
     cleaver: { socket: "leftFrog", round: 28, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
+    // (A mace hung from its ring on the belt as the cleaver is, its grip forward and up, its head
+    // down and back past the thigh)
+    mace: { socket: "leftFrog", round: 28, at: [0.008, 0.028, 0.078], point: [0.15, -0.7, -0.7], edge: [0, -0.7, 0.7], garment: "belt", hangs: true, seated: [0.1, -0.08, -0.16] },
     // (Tucked in the belt at the right hip, the tip down and a little out, clear of the thigh)
     wand: { socket: "rightHip", at: [-0.04, 0.05, 0.03], point: [-0.1, -1, -0.12], edge: [0, -0.12, 1], garment: "belt" },
     // (Closed, hanging flat at the left hip, its spine down)
@@ -181,6 +184,10 @@ export const ITEMS = Object.freeze({
     greatsword: { label: "Greatsword", slot: "mainHand", model: "greatsword", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.016, sheath: SHEATHS.greatsword },
     battleAxe: { label: "Battle axe", slot: "mainHand", model: "battleAxe", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.02, hold: HOLDS.hammer, haft: [-0.22, -0.16], haftRound: 0.019, sheath: SHEATHS.axe },
     cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.015, hilt: [-0.06, 0.054], hold: HOLDS.sword, sheath: SHEATHS.cleaver },
+    // (A mace held as the cleaver is; Vespers, the Prior of the Bell's, his own: core/rare.js
+    // UNIQUES, characters/liveries.js UNIQUE_LOOKS)
+    mace: { label: "Mace", slot: "mainHand", model: "mace", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.07, 0.07], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    vespers: { label: "Vespers", slot: "mainHand", model: "vespers", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.075, 0.07], hold: HOLDS.sword, sheath: SHEATHS.mace },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },
     // (Iron on both feet: over the toes, round the heels and down the shins, each on its bone)
@@ -199,6 +206,8 @@ export const ITEMS = Object.freeze({
     bow: { label: "Longbow", slot: "offHand", model: "bow", socket: "leftHand", turn: [0.4, 0, 0], grips: true, hold: HOLDS.bow, sheath: SHEATHS.bow },
     roundShield: { label: "Round shield", slot: "offHand", model: "roundShield", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
     kiteShield: { label: "Kite shield", slot: "offHand", model: "kiteShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: true },
+    // (The Bulwark, the Prior of the Bell's shield, his own: held as a kite shield is)
+    bulwark: { label: "The Bulwark", slot: "offHand", model: "bulwark", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: true },
     towerShield: { label: "Tower shield", slot: "offHand", model: "towerShield", socket: "leftForearm", hold: HOLDS.shield, grips: true, sling: false },
     spellward: { label: "Spellward", slot: "offHand", model: "spellward", socket: "leftFist", hold: HOLDS.shield, grips: true, sling: true },
     nasalHelm: { label: "Nasal helm", slot: "head", model: "nasalHelm", socket: "head", hides: ["hair"], rim: "helm" },

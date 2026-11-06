@@ -554,7 +554,7 @@ both hands.
 - **The hands.** A weapon goes in the main hand. One held in both (a staff, a war hammer, a bow,
   spiked gauntlets, a grimoire held open) leaves nothing for the other hand, except a bow, whose
   other hand takes a quiver (+5% ranged damage); a one-handed one leaves it for a shield: a sword
-  any, a wand only a spellward ("A wand's other hand takes only a mage's shield": `offHandFits`,
+  or a mace any (the mace no one's to start with: docs/GAME.md), a wand only a spellward ("A wand's other hand takes only a mage's shield": `offHandFits`,
   `offHandFree`). Taking up a two-handed weapon puts the shield back in the pack. For the shield
   they can't carry, the two-handed weapons do about half as much again as a sword in a fight
   (their blows over time, core/weapons.js): a war hammer twice a sword's blow (8 to 16), slower

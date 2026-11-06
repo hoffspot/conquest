@@ -4,8 +4,8 @@
 //  - head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and both hands;
 //  - a weapon in the main hand; one held in both hands (a staff, a war hammer, a bow, spiked
 //    gauntlets, a grimoire held open) leaves nothing for the other, except a bow, whose other
-//    hand takes a quiver; one-handed, the other takes a shield (a sword, any; a wand, only a
-//    mage's: a spellward);
+//    hand takes a quiver; one-handed, the other takes a shield (a sword or a mace, any; a wand,
+//    only a mage's: a spellward);
 //  - each shield as robust as it's made (`robust`), and how much of a blow it takes when it's
 //    caught on it rolled when it's made, more the better made (BLOCK_MOST, rollBlock);
 //  - each piece as well made as it was (progress.js QUALITIES), and, the better made, with more
@@ -65,6 +65,7 @@ export const GEAR = Object.freeze({
     hammer: { label: "War hammer", slot: "mainHand", hands: 2, price: 35 },
     greatsword: { label: "Greatsword", slot: "mainHand", hands: 2, price: 45 },
     axe: { label: "Battle axe", slot: "mainHand", hands: 2, price: 40 },
+    mace: { label: "Mace", slot: "mainHand", hands: 1, price: 32 },
     bow: { label: "Bow", slot: "mainHand", hands: 2, price: 35, quiver: true },
     gauntlets: { label: "Spiked gauntlets", slot: "mainHand", hands: 2, price: 25 },
     // (Held open in both hands, its spells a quarter stronger again than a wand's: `spellTimes`)
@@ -180,7 +181,7 @@ export const STATS = Object.freeze({
 });
 
 // Which pieces can have which bonuses (by slot, or a weapon by how it fights)
-const MELEE_WEAPONS = ["sword", "staff", "hammer", "greatsword", "axe", "gauntlets"];
+const MELEE_WEAPONS = ["sword", "staff", "hammer", "greatsword", "axe", "mace", "gauntlets"];
 const MAGIC_WEAPONS = ["wand", "grimoire", "staff"];
 const ARMOUR_SLOTS = ["head", "chest", "bracers", "gloves", "belt", "legs", "boots", "cloak", "offHand"];
 const JEWELS = ["amulet", "ring"];
@@ -346,9 +347,10 @@ const rounded = (stat, value) => (STATS[stat].share ? Math.round(value * 100) / 
  * shield's: how much of a blow it takes, rollBlock), effect (a legendary weapon's:
  * core/legendary.js) }. As many bonuses as its make and level roll (bonusCount; jewellery at least
  * one), each different, stronger the better made and the higher its level; two, a word before its
- * name and one after.
+ * name and one after. A graded piece (`grade`, 0 to 1: core/rare.js UNIQUES `graded`), as many and
+ * as strong as its grade has it.
  */
-export function rollGear(id, quality = "common", random, { people = null, level = 1 } = {}) {
+export function rollGear(id, quality = "common", random, { people = null, level = 1, grade = null } = {}) {
     const def = GEAR[id];
     const item = { id, quality };
     const at = levelOf(level);
@@ -365,8 +367,11 @@ export function rollGear(id, quality = "common", random, { people = null, level 
         item.people = UNIFORM_PEOPLES.includes(people) ? people : "human";
     }
 
-    const { strength } = ROLLS[quality] ?? ROLLS.common;
-    const count = Math.max(bonusCount(quality, at, random), def.jewel ? 1 : 0);
+    const { strength, count: [fewest, most] } = ROLLS[quality] ?? ROLLS.common;
+    // (A graded piece, core/rare.js UNIQUES `graded`: as many bonuses, and each as strong, as its
+    // grade has it, the finest the most and the strongest, as much as the dice)
+    const graded = Number.isFinite(grade) ? Math.max(0, Math.min(1, grade)) : null;
+    const count = Math.max(graded === null ? bonusCount(quality, at, random) : fewest + Math.round(graded * (most - fewest)), def.jewel ? 1 : 0);
     const choices = affixesFor(id);
     const chosen = [];
 
@@ -389,7 +394,9 @@ export function rollGear(id, quality = "common", random, { people = null, level 
         item.bonuses = Object.fromEntries(chosen.map((key) => {
             const { stat, range: [least, most] } = AFFIXES[key];
 
-            return [stat, rounded(stat, (least + random.next() * (most - least)) * strength * levelFactor(at))];
+            const share = graded === null ? random.next() : (random.next() + graded) / 2;
+
+            return [stat, rounded(stat, (least + share * (most - least)) * strength * levelFactor(at))];
         }));
     }
 
@@ -524,9 +531,9 @@ export function disguiseOf(gear) {
     return peoples[0] && peoples.every((people) => people === peoples[0]) ? peoples[0] : null;
 }
 
-/** Whether two pieces are alike (the same, made alike, as high a level, with the same bonuses and effect): they stack. */
+/** Whether two pieces are alike (the same, made alike, as high a level, with the same bonuses, effect and grade): they stack. */
 export function sameGear(a, b) {
     const bonuses = (item) => JSON.stringify(Object.entries(item.bonuses ?? {}).sort());
 
-    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && (a.unique ?? null) === (b.unique ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
+    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && (a.unique ?? null) === (b.unique ?? null) && (a.grade ?? null) === (b.grade ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
 }

@@ -11,7 +11,7 @@
 import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
-import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, WARD_CHARGE } from "../core/legendary.js";
+import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, gradeWords, WARD_CHARGE } from "../core/legendary.js";
 import { mightOf } from "../core/might.js";
 import { BOOSTS, gradeOf, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { UNIQUES } from "../core/rare.js";
@@ -57,18 +57,18 @@ export function charmWords({ id, quality = "common", bonuses = null, level = 1 }
 
 /**
  * A piece's effect (core/legendary.js: a legendary weapon's, or a unique's), in words, at its
- * level (`level`), on a weapon (`weapon`, a WEAPONS key: how many blows fill its charge; none, a
- * piece worn): "Frostbind: every 7 blows, ...", "Stoneheart: every blow on you 4% lighter...", or
- * null for none.
+ * level (`level`) and grade (`grade`: a graded piece's, the Prior's), on a weapon (`weapon`, a
+ * WEAPONS key: how many blows fill its charge; none, a piece worn): "Frostbind: every 7 blows,
+ * ...", "Stoneheart: every blow on you 4% lighter...", or null for none.
  */
-export function effectWords(effect, level = 1, weapon = null) {
+export function effectWords(effect, level = 1, weapon = null, grade = null) {
     const def = EFFECTS[effect];
 
     if (!def) {
         return null;
     }
 
-    const numbers = effectAt(effect, level);
+    const numbers = effectAt(effect, level, grade);
     const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
 
     // (On every blow, with no charge to it: Greenbrand's witchfire, Kingsplitter's cleave)
@@ -78,6 +78,11 @@ export function effectWords(effect, level = 1, weapon = null) {
 
     if (def.always) {
         return `${def.label}: every blow up close cleaves on through every other foe within ${numbers.reach} m before you, each struck ${Math.round(numbers.share * 100)}% as hard`;
+    }
+
+    // (A shield's knell, let loose by the blows its bearer takes: the Bulwark's)
+    if (effect === "knell") {
+        return `${def.label}: every ${WARD_CHARGE.blows} blows you take, your shield rings out like the Great Bell, and whoever struck the blow, and everyone ${numbers.radius} m round them, is stunned ${seconds(numbers.stun)}`;
     }
 
     // (A ward, let loose by the blows its wearer takes: Stoneheart's)
@@ -96,6 +101,7 @@ export function effectWords(effect, level = 1, weapon = null) {
         earthsunder: `stone spears from the ground ${numbers.radius} m round the foe struck, throwing them down ${seconds(numbers.knockdown)}`,
         stormlash: `lightning leaping from the foe struck to ${numbers.leaps === 1 ? "one more" : `${numbers.leaps} more`} near it`,
         ruinblast: `an explosion ${numbers.radius} m round the foe struck, hurling them back`,
+        toll: `it rings out like the Great Bell, everyone ${numbers.radius} m round the foe struck thrown back and stunned ${seconds(numbers.stun)}`,
     }[effect];
 
     return `${def.label}: ${blows}, ${what} (${harm} damage, times your power)`;
@@ -124,7 +130,7 @@ export function kindOf(id) {
     }
 
     if (def.robust) {
-        return def.spells ? "Off hand: a mage's shield (with a wand or a sword)" : "Off hand: a shield (with a sword)";
+        return def.spells ? "Off hand: a mage's shield (with a wand, a sword or a mace)" : "Off hand: a shield (with a sword or a mace)";
     }
 
     return def.slot === "ring" ? "Ring" : (GEAR_SLOTS.find(({ takes }) => takes === def.slot)?.label ?? def.slot);
@@ -175,10 +181,16 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const unique = item.unique ? (UNIQUES[item.unique] ?? null) : null;
 
     if (unique) {
-        lines.push({ text: "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away; thrown away, it's gone for good)", tone: "unique" });
+        // (A graded one, the Prior's, he gives up again each time the bell raises him)
+        lines.push({ text: unique.graded ? "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away; thrown away, it's gone, though the Prior gives up his mace or his shield each time he falls)" : "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away; thrown away, it's gone for good)", tone: "unique" });
 
         if (unique.about) {
             lines.push({ text: unique.about, tone: "note" });
+        }
+
+        // (A graded one, the Prior's: how true it rings, the finest the rarest, legendary.js GRADE)
+        if (unique.graded && Number.isFinite(item.grade)) {
+            lines.push({ text: `${gradeWords(item.grade)}: ${Math.round(item.grade * 100)} in 100`, tone: "unique" });
         }
     }
 
@@ -199,7 +211,7 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const effect = ware ? null : effectOf(item);
 
     if (effect) {
-        lines.push({ text: effectWords(effect, item.level, def.slot === "mainHand" ? item.id : null), tone: "effect" });
+        lines.push({ text: effectWords(effect, item.level, def.slot === "mainHand" ? item.id : null, item.grade ?? null), tone: "effect" });
     }
 
     if (def.magic && ware) {

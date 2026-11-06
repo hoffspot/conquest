@@ -164,7 +164,9 @@ export const PARTS = Object.freeze({
 
 /**
  * What each creature might leave: gold (the people-shaped: [least, most], at its first tier), and
- * things, each with its chance (0 to 1) and how many ([least, most]).
+ * things, each with its chance (0 to 1) and how many ([least, most]); and, a master's own, one of
+ * its `uniques` each time it falls, made for each player there (core/rare.js UNIQUES, makeUnique:
+ * the Prior of the Bell's mace or shield).
  */
 export const SPOILS = Object.freeze({
     rat: { items: [{ id: "ratTail", chance: 0.5 }, { id: "ratTooth", chance: 0.2 }] },
@@ -201,9 +203,12 @@ export const SPOILS = Object.freeze({
     bellRider: { gold: [18, 40], items: [{ id: "potion", chance: 0.4 }, { id: "bellToken", chance: 0.8 }, { id: "sword", chance: 0.08 }] },
     choirRider: { gold: [26, 60], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }, { id: "sword", chance: 0.1 }] },
     bellSpearman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }] },
+    bellMaceman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }, { id: "mace", chance: 0.06 }] },
     bellArcher: { gold: [5, 16], items: [{ id: "potion", chance: 0.2 }, { id: "bellToken", chance: 0.45 }, { id: "bow", chance: 0.05 }] },
     choirKnight: { gold: [20, 50], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }] },
-    priorVane: { gold: [80, 160], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "bellToken", chance: 0.95, count: [2, 4] }] },
+    // (And the Prior's own, one or the other each time he falls, made for each player there,
+    // graded: `uniques`, core/rare.js UNIQUES vespers and bulwark; the host's #spoils)
+    priorVane: { gold: [80, 160], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "bellToken", chance: 0.95, count: [2, 4] }], uniques: ["vespers", "bulwark"] },
     skeleton: { gold: [1, 6], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.2 }] },
     cultist: { gold: [4, 12], items: [{ id: "cultSigil", chance: 0.3 }, { id: "potion", chance: 0.15 }] },
     cultLeader: { gold: [30, 70], items: [{ id: "cultSigil", chance: 0.9, count: [1, 2] }, { id: "soulShard", chance: 0.4 }, { id: "potion", chance: 0.5 }] },

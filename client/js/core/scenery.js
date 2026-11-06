@@ -35,8 +35,8 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * the top of the cliff its back's built into), its others between that and its doors. Its court
  * (`court`), held by the Order of the Bell (core/creatures.js bellInitiate and the rest) while
  * anyone's in the castle: each of its `posts` one of the Order, of a kind, standing at [x, z] (the
- * scene's metres) and facing a way: spear-brothers at the bridge's end, brothers at the gate and
- * either side of the keep's doors, initiates at their drill under a brother, bowmen on the court's
+ * scene's metres) and facing a way: spear-brothers at the bridge's end, brothers at the gate,
+ * mace-brothers either side of the keep's doors, initiates at their drill under a brother, bowmen on the court's
  * east side, a brother and a spear-brother at its ends; what they say to whoever lingers by them
  * who hasn't crossed the Order (`warnings`), and what as one does (`crossed`); what's heard as its
  * Prior falls, the Great Bell's one low note struck by no one (`fallen`: host.js #priorFell), and as
@@ -66,8 +66,8 @@ export const SCENERY = Object.freeze({
                 ["bellSpearman", [4, -90], FACING.s],
                 ["bellBrother", [-4, -128], FACING.s],
                 ["bellBrother", [4, -128], FACING.s],
-                ["bellBrother", [-10, -140], FACING.s],
-                ["bellBrother", [10, -140], FACING.s],
+                ["bellMaceman", [-10, -140], FACING.s],
+                ["bellMaceman", [10, -140], FACING.s],
                 ["bellBrother", [-20, -136], FACING.s],
                 ["bellInitiate", [-17, -133], FACING.n],
                 ["bellInitiate", [-23, -133], FACING.n],

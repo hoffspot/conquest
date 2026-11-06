@@ -206,8 +206,8 @@ const demons = (length, skins) => {
     });
 };
 
-// The Order of the Bell (MODELS bellInitiate, bellBrother, bellSpearman, bellArcher, choirKnight,
-// priorVane): Naked Singularity Studio's Templar Army (the catalog's beast-order), one body on one
+// The Order of the Bell (MODELS bellInitiate, bellBrother, bellMaceman, bellSpearman, bellArcher,
+// choirKnight, priorVane): Naked Singularity Studio's Templar Army (the catalog's beast-order), one body on one
 // skeleton, made 1.85 metres tall, its parts kept apart (its mail and head, its surcoat, cloak,
 // cuirass, plate and gauntlets, five helms, its arms, shields, sheaths and quiver): each kind wears
 // its own (`parts`, and one of each of `choose`'s lists, by its seed: beast.js partsOf), in its
@@ -725,6 +725,7 @@ export const MODELS = Object.freeze({
     bellInitiate: order({ parts: ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"], arms: "sword", skins: ["initiate"], scale: 0.98 }),
     bellBrother: order({ parts: ["Body", "Head", "Surcoat", "Sword", "HeaterShield", "SwordSheath"], choose: [BROTHERS_HELMS], arms: "sword" }),
     bellSpearman: order({ parts: ["Body", "Head", "Surcoat", "Spear", "KiteShield"], choose: [BROTHERS_HELMS], arms: "spear" }),
+    bellMaceman: order({ parts: ["Body", "Head", "Surcoat", "MorningStar", "HeaterShield"], choose: [BROTHERS_HELMS], arms: "sword" }),
     bellArcher: order({ parts: ["Body", "Head", "Surcoat", "Bow", "Quiver", "KnifeSheath"], choose: [["HelmFlat", "HelmPlain"]], arms: "bow" }),
     choirKnight: order({ parts: ["Body", "Head", "Plate", "Cuirass", "Gauntlets", "Surcoat", "Cloak", "HelmCross", "MorningStar", "HeaterShield"], arms: "sword", skins: ["choir"], scale: 1.05 }),
     // (The Order's riders (core/creatures.js bellRider, choirRider): a knight of the Bell on a barded

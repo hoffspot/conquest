@@ -73,6 +73,7 @@ const PLACES = Object.freeze({
     bellRider: "on the roads round Bellhaven, two to a patrol",
     choirRider: "on the roads round Bellhaven, leading a patrol",
     bellSpearman: "at Bellhaven, in its courts and its keep",
+    bellMaceman: "at Bellhaven, in its courts and its keep",
     bellArcher: "at Bellhaven, in its courts and its keep",
     choirKnight: "in the keep at Bellhaven",
     priorVane: "in the belfry of the keep at Bellhaven",

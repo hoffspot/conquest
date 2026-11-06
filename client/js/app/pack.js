@@ -1048,8 +1048,9 @@ export class PackPanel {
                 this.onCommand({ type: key, index, count });
             }
         } else if (key === "discard") {
-            // (A unique: asked first, being found nowhere else and never given again)
-            if (stack.bound && !(await this.#sure({ title: `Throw away ${stack.label}?`, text: "It's found nowhere else: thrown away, it's gone for good, and you'll never be given it again.", verb: "Throw away" }))) {
+            // (A unique: asked first, being found nowhere else and never given again; the Prior's,
+            // graded, his to give again each time he falls, but no two alike)
+            if (stack.bound && !(await this.#sure({ title: `Throw away ${stack.label}?`, text: Number.isFinite(stack.grade) ? "It's found nowhere else: thrown away, it's gone for good. The Prior gives up his mace or his shield each time he falls, but no two ring alike." : "It's found nowhere else: thrown away, it's gone for good, and you'll never be given it again.", verb: "Throw away" }))) {
                 return;
             }
 

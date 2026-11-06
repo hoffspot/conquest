@@ -256,6 +256,18 @@ const GLASS = [
     [5.4, 0.08],
 ];
 
+// A bell's partials, as a cast bell rings (hum, prime, minor third, fifth, nominal and above):
+// the Prior's mace's toll and his shield's knell, small bells of the Great Bell's metal
+const BELL = [
+    [0.5, 0.3],
+    [1, 1],
+    [1.19, 0.4],
+    [1.5, 0.22],
+    [2, 0.45],
+    [2.52, 0.12],
+    [3.01, 0.08],
+];
+
 // A horn's buzz: a stack of harmonics, as a brass instrument's (a phone's speaker, which plays
 // little under 200 Hz, gives a low note's weight in them: the ear hears the missing low note)
 const BRASS = [
@@ -388,6 +400,12 @@ export const SOUNDS = {
         variants: 3,
         volume: 0.9,
         make: (random) => add(add(thump(75, 38, 0.5, 0.14), burst(random, 0.35, "lowpass", 650, 0.8, 0.002, 0.08), 0.8), burst(random, 0.03, "highpass", 3000, 0.7, 0.0005, 0.006), 0.5),
+    },
+    // A mace's blow: a dense thud, a dull clank of its flanges over it
+    bludgeon: {
+        variants: 3,
+        volume: 0.85,
+        make: (random) => add(add(thump(95, 48, 0.34, 0.09), burst(random, 0.22, "lowpass", 900, 0.8, 0.002, 0.05), 0.75), ring([[620, 0.08, 0.06], [1010, 0.05, 0.05]], 0.25)),
     },
     // A blow caught on a shield: the boards' thud, and the boss and rim ringing
     block: {
@@ -681,6 +699,10 @@ export const SOUNDS = {
         },
     },
     legendRuinblast: { variants: 3, volume: 1, make: (random) => add(blast(random, 1.6 + random.next() * 0.2), notes([[1568, 0]], { decay: 0.3, harmonics: GLASS, length: 0.6 }), 0.2) },
+    // (The Prior's own: his mace's toll, a small bell struck once over a dull thud; his shield's
+    // knell, a little lower. Soft, as they're heard every few blows: core/legendary.js toll, knell)
+    legendToll: { variants: 2, volume: 0.3, make: (random) => add(notes([[392 * (1 + (random.next() - 0.5) * 0.04), 0]], { decay: 0.4, harmonics: BELL, length: 1 }), thump(150, 90, 0.16, 0.04), 0.35) },
+    legendKnell: { variants: 2, volume: 0.28, make: (random) => notes([[330 * (1 + (random.next() - 0.5) * 0.04), 0]], { decay: 0.45, harmonics: BELL, length: 1.1 }) },
 
     // The wild's ways (core/wary.js, core/ambush.js). An ambush's tells: a twig snapping underfoot
     // in the brush (two sharp dry cracks); a glint of steel (a faint high shing, a blade eased in

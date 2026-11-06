@@ -452,6 +452,10 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "A brother or sister of the Order of the Bell, ordained, in white over mail, helmed, the Bell's blue cross on breast and shield. They swear to the voice of Bellhaven's Great Bell, and hold that whoever won't kneel to it is unclean. They fight well together: a cut, a slash and back, a flurry, and a shield driven into whoever presses them, throwing them back.",
         sign: "a heater shield's edge-mark in the mud, and boot prints in step",
     }),
+    bellMaceman: Object.freeze({
+        lore: "A brother or sister of the Order of the Bell who carries a morning star in place of a sword: in white over mail, helmed, the Bell's blue cross on breast and shield. The Order says the unclean are broken, not cut. Their blows crush through armour and leave whoever they land on reeling, and their shield is driven into whoever presses them.",
+        sign: "dents in a helm left by the roadside, and a heater shield's edge-mark in the mud",
+    }),
     bellSpearman: Object.freeze({
         lore: "A spear-brother of the Order of the Bell, in white over mail, helmed, a kite shield on the arm and a long spear that keeps foes off. They hold the Order's gates and its stairs, and strike from further off than a sword reaches: thrust twice, jabbed twice, or driven in to lay a wound open.",
         sign: "the butt of a spear struck into the ground at a gate, a blue ribbon tied below the head",
