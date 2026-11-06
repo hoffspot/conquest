@@ -192,6 +192,15 @@ const PARTS = {
     hunter: {
         m: { wear: [["greenTunic", "brownTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["hood", null], ["bow"], ["quiver"]], hair: ["short", "swept", "long"], beard: ["short", "stubble", "full"], build: { weight: [0.4, 0.6], muscle: [0.5, 0.75], belly: [0, 0.1] }, armed: true },
         f: { wear: [["greenTunic", "brownTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["hood", null], ["bow"], ["quiver"]], hair: ["ponytail", "long", "bob"], build: { weight: [0.4, 0.55], muscle: [0.45, 0.65], bust: [0.4, 0.7] }, armed: true },
+    },    // The war's messengers (core/missions.js), out on the roads with their letters; and an army's
+    // commander come to brief a player who's joined it, in a fine jerkin and gloves
+    messenger: {
+        m: { wear: [["blueTunic", "russetTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["leatherCap", "hood"], ["ledger"]], hair: ["short", "swept"], beard: ["none", "stubble", "short"], build: { weight: [0.35, 0.5], muscle: [0.45, 0.6], belly: [0, 0.05] } },
+        f: { wear: [["blueTunic", "russetTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["leatherCap", "hood"], ["ledger"]], hair: ["ponytail", "bob"], build: { weight: [0.35, 0.5], muscle: [0.4, 0.55], bust: [0.35, 0.6] } },
+    },
+    commander: {
+        m: { wear: [["blueTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"]], hair: ["short", "swept", "bald"], beard: ["full", "short", "goatee"], build: { weight: [0.45, 0.65], muscle: [0.6, 0.8], belly: [0, 0.1] } },
+        f: { wear: [["blueTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"]], hair: ["topknot", "ponytail"], build: { weight: [0.4, 0.55], muscle: [0.55, 0.7], bust: [0.35, 0.6] } },
     },
 };
 

@@ -297,7 +297,7 @@ export function missionOf({ war, realm, kind, key, target, rank = 0 }) {
         kind,
         key,
         title: def.title,
-        text: missionText(war, kind, target, them),
+        text: missionText(war, kind, target, them).replace(/^./, (first) => first.toUpperCase()),
         from,
         target: structuredClone(target),
         given: war.turn,

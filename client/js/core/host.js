@@ -718,7 +718,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 48;
+export const SNAPSHOT_VERSION = 49;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -883,6 +883,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
 
         return { ...snapshot, version: 48, battle: { ...snapshot.battle, formations, actors: snapshot.battle.actors.map((actor) => ({ ...actor, ...holds(actor), ...knife(actor), ...shield(actor) })) } };
     },
+    // 49: the war's messengers out to players and the commanders come to brief them (none yet);
+    // each player's war missions are kept with their standing (core/standing.js: none yet)
+    48: (snapshot) => ({ ...snapshot, version: 49, messengers: [], nextMessenger: 1 }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -965,6 +968,7 @@ const BODILY = new Set(["blade", "marksman", "endurance"]);
 
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
+    missions: "You're carrying as many war missions as you can.",
     player: "No such player.",
     dead: "The dead can't do that.",
     command: "Nothing that can be done.",
@@ -17090,7 +17094,7 @@ export class Host {
                     one.since = this.battle.time;
                     me.facing = atan2(them.x - me.x, them.y - me.y);
                     this.battle.reroute(me.id, { order: "cycle", wait: [MESSENGER.wait, MESSENGER.wait], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
-                    this.#event("messenger", { change: "arrived", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players], ...this.#messengerSays(one) });
+                    this.#event("messenger", { change: "arrived", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players], lead: one.lead, ...this.#messengerSays(one) });
                 } else if (far > MESSENGER.far + MESSENGER.from) {
                     this.#messengerLeaves(one, "gone");
                 } else if (this.battle.time - one.routed >= MESSENGER.reroute) {

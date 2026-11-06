@@ -459,11 +459,27 @@ The effects and the town's sounds are made in code as the game starts (in a work
 waits for them); the music's recordings (about 1.1 megabytes) are downloaded meanwhile. Effects and
 the town are heard from where you stand: quieter further away, and to the left or right.
 
+**War missions.** When the war comes within a couple of kilometres of you (an enemy camp, a
+convoy or supply wagons on the road, their works or a guard tower, our works or a town under
+threat, our reserve or army in the field), a messenger comes to find you, from your people's
+ruler, the nearest lord or a general, at most once every ten minutes and never in a fight (if
+you're indoors, they wait outside). They walk up and tell you what's asked and what it pays: gold,
+standing and your pick of three pieces from the armoury, more and finer the higher your rank.
+Take it or turn it down (that costs nothing, and none comes again for a while). Taken, it's in
+your journal under **War missions** and marked on the world map with a red ring and a star; done,
+you're paid on the spot and choose your piece (or Later, from the journal). Giving one up, or
+failing it, costs a little standing. Sent to stand with our reserve or march with our army, its
+commander walks up when you get there to brief you: how many are coming and under whom, your
+part, and an objective worth more (their commander, or their standard). In a party, one messenger
+comes for you all, and a mission taken is each of yours, at your own rank. Turn them off in Game
+options, Gameplay, **War messengers**.
+
 **Game options**, in the menu, is a list of groups at the top, each a short page of its own:
 **Action Wheel and Bar** (the Action wheels page, yours, a foe's and your followers', and the
 Action Bar page), **Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**,
 **Controls** (the thumb stick, zoom buttons and minimap), **Camera**
-and **Gameplay** (Auto-snag, other players' summons and party invites), then the **Debug log**.
+and **Gameplay** (Auto-snag, war messengers, other players' summons and party invites), then the
+**Debug log**.
 The arrow in each page's heading, or Back at its foot, goes back a page. Under Sound, turn all the
 sound on or off, and set how loud the effects (50% to start with), the environment (40%) and the
 music (35%) are. The defaults suit a phone at about 40% volume, with plenty of room to turn each
@@ -746,10 +762,10 @@ client/                 The game (static files served to the browser)
                         sorted; tapped, a card beside it says what it is); the skills; a
                         shop's wares (tapped, a row opens to say what it is). gearinfo.js says
                         what gear does, and what's rolled on a shop's as it's bought
-    journal.js          The journal: the player's rank, their requests, their people, their
-                        company; the bestiary (bestiary.js: a page for each creature met, as
-                        far as it's been found out); and the last ten messages told across
-                        the screen
+    journal.js          The journal: the player's rank, their war missions, their requests,
+                        their people, their company; the bestiary (bestiary.js: a page for
+                        each creature met, as far as it's been found out); and the last ten
+                        messages told across the screen
     spellbook.js        The spellbook: the schools, how far they've grown, every spell known
                         and still to come; spellicons.js draws each spell's icon
     fate.js             The war's great turns for the player's people: victory, brought under
@@ -824,6 +840,9 @@ client/                 The game (static files served to the browser)
                         weapons), bonuses rolled on it, each people's uniform, sets, disguise
     standing.js         Standing in a people: its ranks, the requests the rulers make, the
                         armoury's gifts and counsel's weight
+    missions.js         The war's missions, brought by messenger: what's near a player, who
+                        sends it, what it pays at their rank, the armoury's three pieces, how
+                        it stands, and a commander's briefing
     spells.js           Magic: the schools and their tiers, the hexes, and the tomes' spells
                         (docs/MAGIC.md)
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
