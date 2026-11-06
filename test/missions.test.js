@@ -117,7 +117,7 @@ describe("a mission offered", () => {
         const mission = missionOf({ war, realm: "human", ...found, rank: 0 });
 
         assert.equal(mission.title, MISSIONS.rout.title);
-        assert.match(mission.text, /the Iron Horde have a camp near Calbury/);
+        assert.match(mission.text, /^The Iron Horde have a camp near Calbury\./);
         assert.equal(mission.until, war.turn + MISSIONS.rout.turns);
         assert.deepEqual(mission.reward, rewardOf("rout", 0));
         assert.equal(mission.state, "offered");
