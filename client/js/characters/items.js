@@ -693,9 +693,13 @@ function kiteShield() {
 function bulwark() {
     // The Bulwark, the Prior of the Bell's shield (core/rare.js UNIQUES): a tall kite of pale steel,
     // a gilt edge standing out round it, the Order's cross in gold on its face, a gilt boss, and
-    // gold thorns along its top; curved round the arm as a kite shield is, facing out (+x)
-    const outline = (scale) => {
+    // gold thorns along its top; curved round the arm as a kite shield is, facing out (+x), and as
+    // big as one (`size`: about 90 cm tall, as kiteShield's is, on a hero; its own on the Prior's
+    // model is drawn to his height)
+    const size = 0.85;
+    const outline = (rim) => {
         const shape = new THREE.Shape();
+        const scale = rim * size;
 
         shape.moveTo(0, 0.42 * scale);
         shape.quadraticCurveTo(0.3 * scale, 0.4 * scale, 0.29 * scale, 0.14 * scale);
@@ -726,10 +730,10 @@ function bulwark() {
     return assemble([
         [face, "steel"],
         [rim, "gold"],
-        [at(new THREE.BoxGeometry(0.012, 0.66, 0.05), off, -0.06, 0), "gold"],
-        [at(new THREE.BoxGeometry(0.012, 0.05, 0.36), off, 0.12, 0), "gold"],
-        [at(new THREE.SphereGeometry(0.045, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0.04, 0.12, 0, 0, 0, -Math.PI / 2), "gold"],
-        ...[-0.2, -0.1, 0, 0.1, 0.2].map((z) => [at(new THREE.ConeGeometry(0.012, 0.07, 5), -0.01, 0.43 + 0.04 - Math.abs(z) * 0.15, z), "gold"]),
+        [at(new THREE.BoxGeometry(0.012, 0.66 * size, 0.05 * size), off, -0.06 * size, 0), "gold"],
+        [at(new THREE.BoxGeometry(0.012, 0.05 * size, 0.36 * size), off, 0.12 * size, 0), "gold"],
+        [at(new THREE.SphereGeometry(0.04, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0.035, 0.12 * size, 0, 0, 0, -Math.PI / 2), "gold"],
+        ...[-0.2, -0.1, 0, 0.1, 0.2].map((z) => [at(new THREE.ConeGeometry(0.011, 0.06, 5), -0.01, (0.43 + 0.04 - Math.abs(z) * 0.15) * size, z * size), "gold"]),
     ], "shield");
 }
 
