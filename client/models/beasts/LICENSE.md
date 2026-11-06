@@ -483,9 +483,7 @@ licensed for Unreal Engine only.
 
 They're scrambled as the game serves them, with whose they are (Snake|3D's, bought on Fab) in
 their glTF assets' `copyright`. They aren't in this repository, but in the private one the game's
-builds fetch them from (`docs/LICENSED_MODELS.md`), where the same models scrambled before his name
-was in them (`orc-king.bin` and its skins, `orc-warlord.bin`, `orc-reaver.bin`) are kept for the
-game's earlier versions.
+builds fetch them from (`docs/LICENSED_MODELS.md`).
 
 Don't copy them out of this game or use them in anything else.
 
@@ -617,8 +615,7 @@ served scrambled as part of the game: the bought files put through `utilities/bl
 (`private/cathedral.json`, which stays out of the repository with the bought files), its `phone`
 build (`prior-3.bin`). That's its armoured mesh with its halo of thorns, its mace and shield on the
 bones they're held by (`weapon_r`, `weapon_l`), the shield on his forearm with its face out, its
-spiked end up and its point down (its first build, `prior.bin`, held it edge-on through his body;
-its second, `prior-2.bin`, upside down), 50,568 triangles with two lower details packed in
+spiked end up and its point down, 50,568 triangles with two lower details packed in
 (22,749 and 10,110); its three materials (body, armour, weapons), each its textures (colour, normal
 at 512 pixels, and occlusion, roughness and metal; its body's and its mace's glow) as KTX2; and all
 25 of its own clips: five attacks, three flinches, three deaths, a dodge, four idles, walking and

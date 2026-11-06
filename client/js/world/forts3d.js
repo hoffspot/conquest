@@ -9,13 +9,22 @@
 // land as it's seen from afar (the world plan's own heights, as the settlements' are), not the
 // ground's, which would lay out the land round every one of them, however far, to find it.
 //
+// A people whose fortifications have a licensed kit (art/kits/forts.js FORT_LOOKS `kit`: the humans',
+// Wind Ways' timber forts) has them drawn from it once it's read (asked for the first time one's
+// drawn), its own drawn in their place till then and without the licensed models; those standing
+// then drawn again from it. Each its lower detail from TIMBER.far off, and a torch by its ladder or
+// its gate.
+//
 // And a fortification stood up in the battle near a player (core/host.js FORT_NEAR), as an avatar
 // as the game asks for one (FortAvatar): nothing of its own to draw (its stone's drawn here), but
 // where its bar shows over it, where its arrows are loosed from (its loops), and the rest of what's
 // asked of an avatar doing nothing.
 
 import * as THREE from "three";
+import { readyScenery, sceneryOf } from "../beasts/model.js";
+import { Solid } from "./art/engine/solid.js";
 import { FORT_LOOKS, fortObject, GARRISON, TOWER } from "./art/kits/forts.js";
+import { torch } from "./art/kits/torches.js";
 import { buildersOf, Shapes } from "./far/shapes.js";
 
 /** How far off (metres) the fortifications are drawn whole (further, only from afar). */
@@ -34,6 +43,111 @@ const SUNK = 2;
  */
 export const FORT_HEIGHTS = Object.freeze({ tower: { height: TOWER.high + 1.2, loops: TOWER.loops[1] }, garrison: { height: GARRISON.high + 1.8, loops: GARRISON.high }, stakes: { height: 3.1, loops: 2.4 } });
 
+/**
+ * The timber forts' measures (metres), as Wind Ways' pieces stand in the kit (its `tower` 2.89 by
+ * 2.98 m and 13.5 m tall, its lookout's floor 8 m up; its `garrison` a palisade two wall runs a
+ * side, 19.38 m square and 5.7 m tall, its walkway 4 m up and a watchtower inside each corner): how
+ * tall each stands for its bar and how high its archers loose from (as FORT_HEIGHTS, for a people
+ * with the kit, its stand-in as tall); where the torches by the tower's ladder and the garrison's
+ * gate burn (its front +z); where the garrison's towers stand (their middles, inside its corners);
+ * and how far off each is drawn in its lower detail.
+ */
+export const TIMBER = Object.freeze({
+    heights: Object.freeze({ tower: Object.freeze({ height: 14.2, loops: 9.2 }), garrison: Object.freeze({ height: 7.5, loops: 5.2 }) }),
+    torches: Object.freeze({ tower: [1.25, 2.2, 1.5], garrison: [2.7, 2.4, 9.71] }),
+    towers: Object.freeze({ at: [8.04, 8.0], width: 2.9, high: 10, roof: 3.5 }),
+    palisade: Object.freeze({ half: 9.69, high: 5.7 }),
+    far: 40,
+});
+
+/** How tall a people's fortification of `kind` stands, and how high its archers loose from. */
+export function heightsOf(kind, people = null) {
+    return (FORT_LOOKS[people]?.kit && TIMBER.heights[kind]) || FORT_HEIGHTS[kind] || FORT_HEIGHTS.tower;
+}
+
+/** A people's fortifications' licensed kit, once it's read (its glTF: { scene }); else null. */
+function fortKit(people) {
+    const asset = FORT_LOOKS[people]?.kit;
+
+    return asset ? sceneryOf(asset) : null;
+}
+
+/**
+ * Ask for a people's fortifications' licensed kit to be read (beasts/model.js readyScenery):
+ * { ready } (a promise, resolved once it's read or couldn't be); or null if it has none, or there's
+ * no page to read it from.
+ */
+export function readyFortKit(people) {
+    const asset = FORT_LOOKS[people]?.kit;
+
+    if (!asset || sceneryOf(asset)) {
+        return null;
+    }
+
+    // (Asked for once, however many ask)
+    if (!asking.has(asset)) {
+        asking.set(asset, readyScenery(asset));
+    }
+
+    return asking.get(asset);
+}
+
+// Each kit asked for (readyScenery's, by its catalog name)
+const asking = new Map();
+
+/**
+ * A people's fortification of `kind` ("tower", "garrison") as it's drawn, in metres, its front (its
+ * door, its gate) towards +z: from its licensed kit once that's read (its lower detail drawn from
+ * TIMBER.far off, a torch by its ladder or its gate), else its own (art/kits/forts.js, scaled from
+ * world pixels). Its torches' flames in `userData.lights`, where its own matrix has them.
+ */
+export function fortModel(kind, people) {
+    const kit = fortKit(people);
+    const near = kit?.scene.getObjectByName(kind);
+
+    if (!near) {
+        const own = fortObject(kind, people);
+
+        own.scale.setScalar(1 / M);
+
+        return own;
+    }
+
+    // (The lower detail's node is "<kind>.lod1", which the glTF loader names "<kind>lod1")
+    const far = kit.scene.getObjectByName(`${kind}lod1`) ?? kit.scene.getObjectByName(`${kind}.lod1`);
+    const lod = new THREE.LOD();
+    const model = new THREE.Group();
+    const lit = new Solid();
+    const [x, y, z] = TIMBER.torches[kind];
+
+    // (Each node keeps its own position and scale: what its quantized corners are read back by)
+    for (const [node, distance] of [[near, 0], [far, TIMBER.far]]) {
+        if (!node) {
+            continue;
+        }
+
+        const mesh = node.clone();
+
+        mesh.traverse((part) => {
+            part.castShadow = part.isMesh;
+            part.receiveShadow = part.isMesh;
+        });
+        lod.addLevel(mesh, distance);
+    }
+
+    torch(lit, [x * M, y * M, z * M], [0, 1]);
+
+    const torches = lit.toObject();
+
+    torches.scale.setScalar(1 / M);
+    model.name = `${kind} (${FORT_LOOKS[people].kit})`;
+    model.add(lod, torches);
+    model.userData.kit = true;
+    model.userData.lights = (torches.userData.lights ?? []).map(([lx, ly, lz, ...rest]) => [lx / M, ly / M, lz / M, ...rest]);
+
+    return model;
+}
+
 export class Forts {
     /**
      * @param {THREE.Scene} scene - The near world's.
@@ -48,8 +162,12 @@ export class Forts {
         /** Those drawn, by id: their group. */
         this.drawn = new Map();
 
-        // Each kind of each people's, built once (by `${kind}:${people}`)
+        // Each kind of each people's, built once (by `${kind}:${people}`): its own, and from its
+        // kit once that's read; and each kit asked for (by people: its readyScenery, or null)
         this.models = new Map();
+        this.kits = new Map();
+        this.asked = new Map();
+        this.disposed = false;
 
         // Every one as seen from afar: one mesh with the far land, its copy with the near world
         // (fading in where the near world fades out: fog.js FAR_FADE_IN), made again as they change
@@ -111,6 +229,7 @@ export class Forts {
             const [x, z] = fort.at;
 
             object.name = `fort:${fort.id}`;
+            object.userData = { kind: fort.kind, realm: fort.realm };
             object.add(this.#model(fort.kind, fort.realm).clone());
             object.position.set(x, this.groundAt(x, z), z);
             object.rotation.y = fort.facing;
@@ -143,6 +262,8 @@ export class Forts {
 
     /** Let them all go, and what they're built of. */
     dispose() {
+        this.disposed = true;
+
         for (const object of this.drawn.values()) {
             object.removeFromParent();
         }
@@ -156,11 +277,17 @@ export class Forts {
         this.farGeometry.dispose();
         this.farMaterial.dispose();
 
+        // (Not the kit's: its glTF's shared, kept by beasts/model.js)
         for (const model of this.models.values()) {
             model.traverse((node) => node.geometry?.dispose());
         }
 
+        for (const model of this.kits.values()) {
+            model.children[1]?.traverse((node) => node.geometry?.dispose());
+        }
+
         this.models.clear();
+        this.kits.clear();
     }
 
     // Every one of them as seen from afar, made again when they've changed: a tower a box of its
@@ -179,6 +306,12 @@ export class Forts {
             const builders = buildersOf(realm);
             const look = FORT_LOOKS[realm] ?? FORT_LOOKS.human;
             const y = this.landAt(x, z) - SUNK;
+
+            if (look.kit) {
+                timberAfar(shapes, kind, [x, y, z], facing, builders);
+
+                continue;
+            }
 
             if (kind === "garrison") {
                 const high = GARRISON.high + SUNK;
@@ -221,18 +354,68 @@ export class Forts {
         }
     }
 
-    // A kind of a people's, built the first time it's wanted (in metres, its shapes shared by each)
+    // A kind of a people's, built the first time it's wanted (in metres, its shapes shared by each):
+    // from its kit once that's read, asked for the first time it's wanted; its own till then
     #model(kind, people) {
         const key = `${kind}:${people}`;
 
-        if (!this.models.has(key)) {
-            const model = fortObject(kind, people);
+        if (FORT_LOOKS[people]?.kit && !this.asked.has(people)) {
+            const asked = readyFortKit(people);
 
-            model.scale.setScalar(1 / M);
-            this.models.set(key, model);
+            this.asked.set(people, asked);
+            asked?.ready.then(() => !this.disposed && fortKit(people) && this.#redraw(people));
+        }
+
+        if (fortKit(people)) {
+            if (!this.kits.has(key)) {
+                this.kits.set(key, fortModel(kind, people));
+            }
+
+            return this.kits.get(key);
+        }
+
+        if (!this.models.has(key)) {
+            this.models.set(key, fortModel(kind, people));
         }
 
         return this.models.get(key);
+    }
+
+    // A people's kit read: those of theirs standing drawn again from it
+    #redraw(people) {
+        for (const object of this.drawn.values()) {
+            const { kind, realm } = object.userData;
+
+            if (realm === people) {
+                object.clear();
+                object.add(this.#model(kind, realm).clone());
+            }
+        }
+    }
+}
+
+// A timber fort as it's seen from afar (TIMBER): the watchtower a box of its timber, roofed; the
+// garrison its palisade round, the watchtowers in its corners over it
+function timberAfar(shapes, kind, [x, y, z], facing, builders) {
+    const { towers, palisade } = TIMBER;
+    const [sin, cos] = [Math.sin(facing), Math.cos(facing)];
+    const tower = (u, v) => {
+        const [tx, tz] = [x + u * cos + v * sin, z + v * cos - u * sin];
+
+        shapes.box(tx, tz, y, towers.width, towers.width, towers.high + SUNK, facing, builders.wood);
+        shapes.roof(tx, tz, y + towers.high + SUNK, towers.width + 0.5, towers.width + 0.5, towers.roof, facing, builders.roof, true);
+    };
+
+    if (kind !== "garrison") {
+        tower(0, 0);
+
+        return;
+    }
+
+    shapes.box(x, z, y, palisade.half * 2, palisade.half * 2, palisade.high + SUNK, facing, builders.wood);
+
+    for (const [u, v] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        tower(u * towers.at[0], v * towers.at[1]);
     }
 }
 
@@ -242,8 +425,9 @@ export class Forts {
  * stakes hacked at stand in the same way, drawn by world/stockades3d.js)
  */
 export class FortAvatar {
-    constructor(kind) {
-        const { height, loops } = FORT_HEIGHTS[kind] ?? FORT_HEIGHTS.tower;
+    /** A fortification of `kind` ("tower", "garrison", "stakes") of `people`'s, as tall as it's drawn. */
+    constructor(kind, people = null) {
+        const { height, loops } = heightsOf(kind, people);
         const noop = () => {};
 
         this.kind = kind;

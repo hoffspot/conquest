@@ -88,7 +88,7 @@ menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
 in, and updating it. [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md) is how the models that
-aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant, the Dungeon Spider, the Elite Dungeon Spider, the Dungeon Scorpion, the Giant Cockroach, the Dungeon Wasp, the Black Widow, the Greater Demon, the Fiend, a hell's six flayed, its six gorgers, the Pit henchman, a hell's walkers, the Infernal Demon, the Stone Golem, the Orc (the Orc King, the Orc Warlord and the Orc Reaver), the Kaiju, the cerberus and the Demon Boss; and Bellhaven, the White Castle) are kept out of the public repository and scrambled where
+aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant, the Dungeon Spider, the Elite Dungeon Spider, the Dungeon Scorpion, the Giant Cockroach, the Dungeon Wasp, the Black Widow, the Greater Demon, the Fiend, a hell's six flayed, its six gorgers, the Pit henchman, a hell's walkers, the Infernal Demon, the Stone Golem, the Orc (the Orc King, the Orc Warlord and the Orc Reaver), the Kaiju, the cerberus and the Demon Boss; Bellhaven, the White Castle; and the human peoples' timber forts) are kept out of the public repository and scrambled where
 they're served, and what the owner sets up for it.
 
 ## How to play
@@ -693,8 +693,8 @@ client/                 The game (static files served to the browser)
   textures/dungeons/    The photographs a dungeon's rock, earth, stone and timber are drawn with,
                         each a colour picture and a normal map, as KTX2 (made by npm run
                         build:textures from ambientCG's and Poly Haven's CC0 scans)
-  models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
-                        are its own now), kept for serving glTF
+  models/kaykit/        KayKit's barrel (CC0), not drawn by the game (its props are its own now):
+                        the server's tests' glTF
   models/kenney/        The town's siege engines, a catapult and a ballista, and their wrecks
                         (Kenney's Castle Kit, CC0)
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs, and Cinzel
@@ -1031,12 +1031,13 @@ what it doesn't cover.
 - The centipede is Centipede Monster-V2, the Ant Monster Ant Monster V1b, the ant Ant V2, the
   Dungeon Spider Spider V3, the Elite Dungeon Spider Spider V6a, the Dungeon Scorpion Scorpion
   V5d, the Giant Cockroach Medhue's Cockroach, the Dungeon Wasp Vespa Titanus Giant Wasp, the
-  Black Widow Medhue's Black Widow, the Greater Demon Gloomy Demon, the Fiend Monster4, a hell's six flayed Monster1, its six gorgers Monster2, the Pit henchman Andrew Ermakov's Monster3 "Villain's Henchman", a hell's walkers Andrew Ermakov's Monster4 "Walking Villain", the Infernal Demon Lilpupinduy's Infernal Demon RIG, the Stone Golem Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss, the Orc King and his champions, the Orc Warlord and the Orc Reaver Snake|3D's modular orc (their fall Mesh2Motion's, CC0) the Kaiju HuyKhoi2407's Kaiju, the cerberus Panchenko Lyudmila's Cerberus, the Demon Boss her DemonBoss, the Order of the Bell Naked Singularity Studio's Templar Army, its Prior Alexander Lenski's Cathedral Guardian, and Bellhaven (its keep's insides drawn with its parts too) DmitriyDryzhak's White Castle, all bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
+  Black Widow Medhue's Black Widow, the Greater Demon Gloomy Demon, the Fiend Monster4, a hell's six flayed Monster1, its six gorgers Monster2, the Pit henchman Andrew Ermakov's Monster3 "Villain's Henchman", a hell's walkers Andrew Ermakov's Monster4 "Walking Villain", the Infernal Demon Lilpupinduy's Infernal Demon RIG, the Stone Golem Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss, the Orc King and his champions, the Orc Warlord and the Orc Reaver Snake|3D's modular orc (their fall Mesh2Motion's, CC0) the Kaiju HuyKhoi2407's Kaiju, the cerberus Panchenko Lyudmila's Cerberus, the Demon Boss her DemonBoss, the Order of the Bell Naked Singularity Studio's Templar Army, its Prior Alexander Lenski's Cathedral Guardian, Bellhaven (its keep's insides drawn with its parts too) DmitriyDryzhak's White Castle, and the human peoples' timber forts (a guard tower and a forward garrison) Wind Ways' medieval village pack, all bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
   scrambled, in the private repository (`client/models/beasts/LICENSE.md`; the castle's,
   `client/models/scenery/LICENSE.md`). They aren't free to
   reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
-  (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
+  (`client/models/kaykit/LICENSE.txt`): its barrel, kept for the server's tests; the town's props
+  were its models until the game built its own.
 - The dungeons' rock, earth, stone and timber are photographs scanned by ambientCG
   (<https://ambientcg.com>: Rock028, Ground022, Ground048) and Poly Haven
   (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles,

@@ -2307,6 +2307,18 @@
                 }
             ]
         },
+        "scenery-timber-forts": {
+            "tier": "demand",
+            "label": "The human peoples' timber fortifications: a guard tower, the watchtower on its own, and a forward garrison, a palisade two wall runs a side with its gate, walkways, stair and a watchtower in each corner (Wind Ways' medieval village pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/timber-forts-2.bin",
+                    "hash": "bec36f6b21",
+                    "bytes": 1690936
+                }
+            ]
+        },
         "dungeon-prop-bellhaven-keep": {
             "tier": "demand",
             "label": "Bellhaven's keep's insides: its castle's Gothic column, pilaster, cornice, tracery window and bell, and its wall and floor (DmitriyDryzhak's \"White Castle\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",

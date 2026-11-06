@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "3824c64bd0",
+    release: "8f3ab9f014",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2643,6 +2643,18 @@ export const ASSETS = Object.freeze({
                     "path": "models/scenery/bellhaven-far-3.bin",
                     "hash": "4833b492cd",
                     "bytes": 2333756
+                }
+            ]
+        },
+        "scenery-timber-forts": {
+            "tier": "demand",
+            "label": "The human peoples' timber fortifications: a guard tower, the watchtower on its own, and a forward garrison, a palisade two wall runs a side with its gate, walkways, stair and a watchtower in each corner (Wind Ways' medieval village pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/timber-forts-2.bin",
+                    "hash": "bec36f6b21",
+                    "bytes": 1690936
                 }
             ]
         },

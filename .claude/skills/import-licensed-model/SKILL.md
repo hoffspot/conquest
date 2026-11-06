@@ -14,9 +14,12 @@ for the parts below. Times are told to the owner in US Eastern.
 - A bought file and anything built from it never goes in this repository. Only its scrambled
   build goes, and only into the private `hoffspot/conquest-models`; `client/models/beasts/*.bin`
   are ignored here (`.gitignore`).
-- Never replace a licensed file under a name it already has in `hoffspot/conquest-models` (older
-  builds of the game fetch it by that name and hash). A rebuilt body gets a new name: `<name>-2.bin`.
-  Skins that didn't change keep theirs.
+- Never replace a licensed file under a name it already has in `hoffspot/conquest-models` (`main`'s
+  builds fetch it by that name and hash till the change that uses the rebuild is merged). A
+  rebuilt body gets a new name: `<name>-2.bin`. Skins that didn't change keep theirs. Once it's
+  merged, delete the old file there and its name from both `LICENSE.md`s, and move its
+  `.gitignore` line to the superseded builds (`docs/LICENSED_MODELS.md`, *Remaking a licensed
+  model*).
 - Leave out anything licensed for Unreal Engine only: Epic's templates and mannequin animations
   (`ThirdPerson*`, `MM_*`, `MF_*`, demo folders).
 - Credit the seller by the name the owner gives. Never copy a seller's email or anything else
