@@ -293,6 +293,7 @@ export const WRITINGS = Object.freeze({
                 text: [
                     "What we drew up out of the thin place under Bellhaven we could not bind in chain, for it had no body, only a voice. So we cast it into the silver of the Great Bell as the bell was made, and hung the bell over our own heads, that we might keep it, and it keep silent.",
                     "Let no brother ring it. Let the clapper stay chained. If it is rung it will speak, and it will speak with whatever voice its hearer most wishes to hear, and it will ask only to be fed.",
+                    "And know this: it keeps what it speaks through. A brother who has heard it is never let go. Strike him down and the bell will toll, and he will stand beneath it again, and again, until the clapper is chained. We never found the chain that would hold it twice.",
                 ],
             },
             {

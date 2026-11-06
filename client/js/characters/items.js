@@ -37,6 +37,8 @@ export function itemMaterial(name) {
             foam: { color: 0xf3ead2, roughness: 0.95 },
             hotIron: { color: 0xff7a2a, emissive: 0xff4a0a, emissiveIntensity: 1.4, roughness: 0.6 },
             gold: { color: 0xe0b44a, metalness: 1, roughness: 0.25 },
+            // (Steel the colour of old bone: the Prior of the Bell's own, Vespers and the Bulwark)
+            paleSteel: { color: 0xd6cbb2, metalness: 0.7, roughness: 0.42 },
             // (Stands for the character's own skin or fur: a character gives what's made of it its
             // own colour, character.js)
             skin: { color: 0xc8a080, roughness: 0.8 },
@@ -396,6 +398,53 @@ function warHammer() {
     ], "hammer");
 }
 
+function mace() {
+    // A flanged mace, about 62 cm: a leather-bound grip (held at the origin), a flat iron cap under
+    // it (no further below the hand than a cleaver's, clear of the other arm as it's put away), a
+    // steel haft up to the head; the head a round steel core about 10 cm across its six flanges,
+    // standing out from it all round, a knob on top
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.13, 10), 0, 0, 0), "leather"],
+        [at(new THREE.CylinderGeometry(0.019, 0.019, 0.02, 10), 0, -0.07, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.013, 0.015, 0.36, 10), 0, 0.25, 0), "steel"],
+        [at(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 10), 0, 0.075, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.024, 0.024, 0.09, 12), 0, 0.47, 0), "steel"],
+        ...Array.from({ length: 6 }, (each, k) => {
+            const angle = (k * Math.PI) / 3;
+
+            return [at(new THREE.BoxGeometry(0.008, 0.09, 0.03), Math.sin(angle) * 0.034, 0.47, Math.cos(angle) * 0.034, 0, angle, 0), "darkSteel"];
+        }),
+        [at(new THREE.SphereGeometry(0.02, 10, 8), 0, 0.525, 0), "steel"],
+    ], "mace");
+}
+
+function vespers() {
+    // Vespers, the Prior of the Bell's mace (core/rare.js UNIQUES), made as his own is: pale steel
+    // the colour of old bone, its head a long cluster of thorns standing out every way round a
+    // core, a thorn rising from its top, a gilt collar under it; a haft ringed with knobs, a dark
+    // leather grip and a gilt cap (no further below the hand than a cleaver's)
+    const thorns = [0.46, 0.505, 0.55].flatMap((y, ring) => Array.from({ length: 7 }, (each, k) => {
+        const angle = ((k + ring / 2) * Math.PI * 2) / 7;
+        const lean = 1.15 - ring * 0.25;
+        const cone = new THREE.ConeGeometry(0.009, 0.055 - ring * 0.005, 5).translate(0, 0.024, 0);
+
+        cone.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(Math.sin(angle), 1 / lean - 0.6, Math.cos(angle)).normalize()));
+
+        return [cone.translate(Math.sin(angle) * 0.026, y, Math.cos(angle) * 0.026), "paleSteel"];
+    }));
+
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.13, 10), 0, 0, 0), "darkLeather"],
+        [at(new THREE.CylinderGeometry(0.019, 0.017, 0.02, 10), 0, -0.07, 0), "gold"],
+        [at(new THREE.CylinderGeometry(0.012, 0.015, 0.36, 10), 0, 0.25, 0), "paleSteel"],
+        ...[0.13, 0.23, 0.33].map((y) => [at(new THREE.SphereGeometry(0.019, 10, 6), 0, y, 0), "paleSteel"]),
+        [at(new THREE.CylinderGeometry(0.024, 0.02, 0.024, 12), 0, 0.43, 0), "gold"],
+        [at(new THREE.CylinderGeometry(0.022, 0.03, 0.15, 10), 0, 0.515, 0), "paleSteel"],
+        ...thorns,
+        [at(new THREE.ConeGeometry(0.016, 0.08, 6), 0, 0.63, 0), "paleSteel"],
+    ], "vespers");
+}
+
 function greatsword() {
     // A long, broad blade over a wide cross; a grip a third of a metre long, as a two-handed
     // sword's is (the right hand by the cross, the left by the pommel, as far apart as a war
@@ -637,6 +686,65 @@ function kiteShield() {
     return assemble([
         [body, "cloth"],
         [at(new THREE.SphereGeometry(0.05, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0.035, 0.05, 0, 0, 0, -Math.PI / 2), "brass"],
+    ], "shield");
+}
+
+function bulwark() {
+    // The Bulwark, the Prior of the Bell's shield (core/rare.js UNIQUES), made as his own is: a tall
+    // kite of pale steel the colour of old bone, the Order's cross raised on its face, thorns
+    // standing out along its top and down its lower edges, a gilt boss and a thin gilt edge; curved
+    // round the arm as a kite shield is, facing out (+x), and as big as one (`size`: about 90 cm
+    // tall, as kiteShield's is, on a hero; his own on his model is drawn to his height)
+    const size = 0.85;
+    const outline = (rim) => {
+        const shape = new THREE.Shape();
+        const scale = rim * size;
+
+        shape.moveTo(0, 0.42 * scale);
+        shape.quadraticCurveTo(0.3 * scale, 0.4 * scale, 0.29 * scale, 0.14 * scale);
+        shape.quadraticCurveTo(0.24 * scale, -0.3 * scale, 0, -0.62 * scale);
+        shape.quadraticCurveTo(-0.24 * scale, -0.3 * scale, -0.29 * scale, 0.14 * scale);
+        shape.quadraticCurveTo(-0.3 * scale, 0.4 * scale, 0, 0.42 * scale);
+
+        return shape;
+    };
+    const curved = (geometry, back) => {
+        const position = geometry.attributes.position;
+
+        for (let i = 0; i < position.count; i++) {
+            const x = position.getX(i);
+
+            position.setZ(i, position.getZ(i) - x * x * 0.6 - back);
+        }
+
+        geometry.computeVertexNormals();
+
+        return at(geometry, 0, 0, 0, 0, Math.PI / 2, 0);
+    };
+    const face = curved(new THREE.ExtrudeGeometry(outline(1), { depth: 0.02, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.008, bevelSegments: 1, curveSegments: 16 }), 0);
+    const rim = curved(new THREE.ExtrudeGeometry(outline(1.04), { depth: 0.014, bevelEnabled: false, curveSegments: 16 }), 0.008);
+    // (Thorns along its lower edges, standing out from its middle in its own plane, curved round
+    // with it)
+    const edge = outline(1.04).getSpacedPoints(44).filter(({ y }, k) => k % 2 === 0 && y < 0.1 * size && y > -0.55 * size);
+    const thorns = edge.map(({ x, y }) => {
+        const out = new THREE.Vector3(x, y + 0.05 * size, 0).normalize();
+        const cone = new THREE.ConeGeometry(0.008, 0.04, 5).translate(0, 0.018, 0);
+
+        cone.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), out));
+
+        return [at(cone.translate(x, y, 0.01 - x * x * 0.6), 0, 0, 0, 0, Math.PI / 2, 0), "paleSteel"];
+    });
+    // (The cross standing just off the face's middle, where it bows out least)
+    const off = 0.036;
+
+    return assemble([
+        [face, "paleSteel"],
+        [rim, "gold"],
+        [at(new THREE.BoxGeometry(0.016, 0.66 * size, 0.06 * size), off, -0.06 * size, 0), "bone"],
+        [at(new THREE.BoxGeometry(0.016, 0.06 * size, 0.36 * size), off, 0.12 * size, 0), "bone"],
+        [at(new THREE.SphereGeometry(0.035, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0.04, 0.12 * size, 0, 0, 0, -Math.PI / 2), "gold"],
+        ...[-0.2, -0.1, 0, 0.1, 0.2].map((z) => [at(new THREE.ConeGeometry(0.011, 0.06, 5), -0.01, (0.43 + 0.04 - Math.abs(z) * 0.15) * size, z * size), "paleSteel"]),
+        ...thorns,
     ], "shield");
 }
 
@@ -2214,6 +2322,10 @@ export function buildItem(model, fit = {}) {
             return wand();
         case "warHammer":
             return warHammer();
+        case "mace":
+            return mace();
+        case "vespers":
+            return vespers();
         case "greatsword":
             return greatsword();
         case "battleAxe":
@@ -2246,6 +2358,8 @@ export function buildItem(model, fit = {}) {
             return roundShield();
         case "kiteShield":
             return kiteShield();
+        case "bulwark":
+            return bulwark();
         case "towerShield":
             return towerShield();
         case "spellward":

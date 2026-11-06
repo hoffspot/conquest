@@ -524,9 +524,19 @@ dungeon's way in (`wild: false`), and there's one a world.
      from behind, a swing and a blow back, two blows from on high and four together; his toll (his
      mace raised over his head and driven into the floor, the Bell's voice ringing out all round
      him, throwing whoever it catches, shown on the ground while it's raised); and at two thirds
-     and at one third of his strength the Choir called to him. His own spoils are still to come. The keep's
+     and at one third of his strength the Choir called to him. **His spoils**: besides his hoard,
+     each time he falls each hero there is given one of his own, his war mace *Vespers* or his
+     shield *the Bulwark*, never both (core/spoils.js `uniques`, made for them at their might:
+     core/host.js `#spoils`), each graded as it's made, the finest the rarest (docs/GAME.md
+     *Legendary weapons*): Vespers' *Toll*, every 6 blows everyone round the foe struck hurt,
+     thrown back and stunned; the Bulwark's *Knell*, every 6 blows its bearer takes whoever struck
+     and everyone round them stunned. The keep's mace-brothers at its gate and in its halls (the
+     `maces` pack on each floor) carry morning stars. The keep's
      made again once its hoard's been taken and everyone's left, as any dungeon is, the Prior its
-     master again, so it can be fought up again.
+     master again, so it can be fought up again: the bell raises him (docs/WILDS.md *The Order of
+     the Bell*). As he falls the Great Bell gives one low note, struck by no one, and the Order's
+     sworn against those who felled him; made again, the bell's heard tolling far off, and he walks
+     again.
 - **Each warden bars its floor's stair up** till it falls (its flight's `seal`, refused as
   `barred`: "The stair up is barred, and its warden still stands somewhere on this floor."), as a
   hell's level's master seals its portal down. "The stair up is open" once it's slain.

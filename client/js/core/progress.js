@@ -196,7 +196,7 @@ export const ITEMS = Object.freeze({
 });
 
 // The arms a smith keeps, from a sword to a quiver (not a wand or a grimoire: the arcane's)
-const ARMS = Object.freeze(["sword", "hammer", "greatsword", "axe", "staff", "bow", "gauntlets", "quiver"]);
+const ARMS = Object.freeze(["sword", "mace", "hammer", "greatsword", "axe", "staff", "bow", "gauntlets", "quiver"]);
 
 // The armour a smith keeps: shields, and what's worn, head to foot
 const ARMOUR = Object.freeze(["roundShield", "kiteShield", "towerShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "plate", "bracers", "gloves", "platedGloves", "belt", "trousers", "breeches", "greaves", "leatherBoots", "sabatons", "boots", "travelCloak"]);
@@ -477,7 +477,8 @@ export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ??
 /**
  * A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
  * level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
- * legendary weapon) its effect, and (a charm) what was rolled on it. Anything else of it left off.
+ * legendary weapon) its effect, (a unique) which it is and (a graded one) its grade, and (a charm)
+ * what was rolled on it. Anything else of it left off.
  */
 export function thingOf(item) {
     const def = ITEMS[item.id];
@@ -519,6 +520,11 @@ export function thingOf(item) {
     // bound to who has it)
     if (def?.slot && typeof item.unique === "string" && item.unique) {
         thing.unique = item.unique.slice(0, 40);
+
+        // (A graded one, the Prior's: how true it rings, rare.js makeUnique, legendary.js GRADE)
+        if (Number.isFinite(item.grade)) {
+            thing.grade = Math.round(Math.max(0, Math.min(1, item.grade)) * 100) / 100;
+        }
     }
 
     return thing;
@@ -1020,10 +1026,17 @@ export class Progress {
      */
     worn() {
         return SLOT_IDS.filter((slot) => slot !== "mainHand" && this.gear[slot]).map((slot) => {
-            const { id, people } = this.gear[slot];
+            const { id, people, unique } = this.gear[slot];
 
-            return people ? { id, people } : { id };
+            return { id, ...(people ? { people } : {}), ...(unique ? { unique } : {}) };
         });
+    }
+
+    /** What's in the main hand, as it's drawn ({ id, unique? }: a unique's own look), or null. */
+    wielded() {
+        const piece = this.gear.mainHand;
+
+        return piece ? { id: piece.id, ...(piece.unique ? { unique: piece.unique } : {}) } : null;
     }
 
     /**

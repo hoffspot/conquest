@@ -503,10 +503,13 @@ export const CREATURES = Object.freeze({
     // out to cleanse a village (core/rare.js THREADS bellhaven). Drawn from one model, each in what
     // its rank wears (beasts/model.js order). Their ranks rise in strength: its initiates, not yet
     // ordained, in olive, a knife each; its brothers in white, sworded and shielded, with spears,
-    // with bows, keeping off; the Black Choir in black, its inner circle, who hear the Bell's voice,
+    // with bows, keeping off, with morning stars, crushing; the Black Choir in black, its inner circle, who hear the Bell's voice,
     // in plate under it, a morning star each, too heavy to be thrown)
     bellInitiate: { name: "Initiate of the Bell", hp: 44, hands: true, weapon: "bellKnife", speed: 1.3, chase: 2.6, temper: "aggressive", roam: 6, leash: 26, pack: [2, 4], tiers: [3, 10], biomes: [], blood: "red", armor: 0.05 },
     bellBrother: { name: "Brother of the Bell", hp: 66, hands: true, weapon: "bellSword", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [2, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.2 },
+    // (A brother of the Bell with a morning star in place of a sword: its blows crushing, partly
+    // through armour, staggering whoever they land on: weapons.js NATURAL bellMace)
+    bellMaceman: { name: "Mace-brother of the Bell", hp: 68, hands: true, weapon: "bellMace", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [2, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.2 },
     bellSpearman: { name: "Spear-brother of the Bell", hp: 62, hands: true, weapon: "bellSpear", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [2, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.2 },
     bellArcher: { name: "Bowman of the Bell", hp: 46, hands: true, weapon: "bellBow", speed: 1.2, chase: 2.5, temper: "aggressive", roam: 6, leash: 28, pack: [1, 3], tiers: [4, 10], biomes: [], blood: "red", armor: 0.1, keep: 7 },
     choirKnight: { name: "Knight of the Black Choir", hp: 96, hands: true, weapon: "choirMace", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 5, leash: 30, pack: [1, 2], tiers: [5, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, steady: true },
@@ -525,7 +528,8 @@ export const CREATURES = Object.freeze({
     // his toll, his mace raised over his head and driven into the floor, the Bell's voice ringing
     // out all round him, throwing whoever it catches, shown on the ground for the long moment it's
     // raised (`moves`); and as he's worn down, at two thirds and at one third, the Black Choir
-    // called to him (`rally`). His own spoils are to come)
+    // called to him (`rally`). His spoils, besides his hoard, his own war mace or his shield, one or
+    // the other each time he falls: spoils.js SPOILS priorVane `uniques`, rare.js vespers, bulwark)
     priorVane: {
         name: "Prior of the Bell",
         hp: 150,

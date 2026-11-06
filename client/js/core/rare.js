@@ -26,6 +26,7 @@ import { DAY, timeOfDay } from "./daytime.js";
 import { shuffled } from "./director.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { rollGear } from "./gear.js";
+import { rollGrade } from "./legendary.js";
 import { createRandom } from "./random.js";
 
 const MINUTE = 60000;
@@ -218,6 +219,25 @@ export const UNIQUES = Object.freeze({
         base: "ring",
         effect: "cinderburst",
         about: "The last link of the chain that held Ashmaw at the way down from a hell's Halls of Bone, bitten through and hammered shut again into a ring. It's as warm as a hearthstone, always. Now and then a blow its wearer strikes bursts into hellfire round the foe, setting them burning, and those beside them. Found nowhere else.",
+    }),
+    // (The Prior of the Bell's own, one or the other each time he falls (spoils.js SPOILS priorVane
+    // `uniques`), graded (`graded`: legendary.js GRADE, rollGrade), the finest the rarest: his mace,
+    // its effect legendary.js toll; his shield, its ward legendary.js knell)
+    vespers: Object.freeze({
+        id: "vespers",
+        name: "Vespers",
+        base: "mace",
+        effect: "toll",
+        graded: true,
+        about: "Prior Osric Vane's war mace, steel the colour of old bone, its head a cluster of thorns over a band of gold. The brothers say it was cast from the Great Bell's own metal. Every so many blows it rings out as the bell does, and everyone round the foe it strikes is hurt, thrown back and stunned. No two ring alike. Found nowhere else.",
+    }),
+    bulwark: Object.freeze({
+        id: "bulwark",
+        name: "The Bulwark",
+        base: "kiteShield",
+        effect: "knell",
+        graded: true,
+        about: "Prior Osric Vane's shield: a tall kite of steel the colour of old bone, thorns along its edges and the Order's cross raised on its face, a little bell hung inside its rim. Every so many blows it takes it rings out like the Great Bell, and whoever struck the blow, and everyone round them, stands stunned. No two ring alike. Found nowhere else.",
     }),
     // (Ashkhar's reward: a link of the silver that bound it, set as an amulet, its effect
     // legendary.js frostbind: now and then a blow its wearer strikes freezing the foe solid, then
@@ -668,7 +688,7 @@ export const THREADS = Object.freeze({
                 home: true,
                 word: "Prior Osric Vane is dead, and his bell is silent. Take his book, and word of it, to the priest at the temple in {town}.",
                 ask: "The Prior's dead. This book was by his bell.",
-                reply: "So it was never the Six. Something the old Order sealed in the bell's silver, and he rang it loose, and called it holy. The Rule says the bell must never be rung, and he never read that far. Without his voice the Order will break, or crawl back to the Six on its knees. Here: the temple's alms, and the land's thanks. Tonight we'll ring every bell in town for you. Every bell but that one.",
+                reply: "So it was never the Six. Something the old Order sealed in the bell's silver, and he rang it loose, and called it holy. The Rule says the bell must never be rung, and he never read that far. And it says more: what's in that bell keeps its voice. When it tolls again, he'll be standing under it again, and his Order with him, and every one of them will know your face. Go back up as often as you have the stomach for it, and take what he carries off him each time. Here: the temple's alms, and the land's thanks. Tonight we'll ring every bell in town for you. Every bell but that one.",
                 reward: Object.freeze({ gold: 250 }),
                 change: Object.freeze({ kind: "festival", name: "the Feast of the Silent Bell", times: 0.85, lasts: DAY.length }),
             }),
@@ -970,13 +990,20 @@ export function gatesHold(card, at) {
 /**
  * A unique (UNIQUES) made for a player at `level` (gear.js levelOf: their might's): a legendary of
  * its base, with its own name, its own effect if it has one, and its id (`unique`): bound to them.
+ * A graded one (`graded`: the Prior's) a grade of its own (`grade`, legendary.js rollGrade, the
+ * finest the rarest), its bonuses and its effect as strong as that has them.
  */
 export function makeUnique(id, level, random) {
     const def = UNIQUES[id];
-    const item = { ...rollGear(def.base, "legendary", random, { level }), name: def.name, unique: def.id };
+    const grade = def.graded ? rollGrade(random) : null;
+    const item = { ...rollGear(def.base, "legendary", random, { level, ...(grade === null ? {} : { grade }) }), name: def.name, unique: def.id };
 
     if (def.effect) {
         item.effect = def.effect;
+    }
+
+    if (grade !== null) {
+        item.grade = grade;
     }
 
     return item;

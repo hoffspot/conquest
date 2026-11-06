@@ -452,6 +452,10 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "A brother or sister of the Order of the Bell, ordained, in white over mail, helmed, the Bell's blue cross on breast and shield. They swear to the voice of Bellhaven's Great Bell, and hold that whoever won't kneel to it is unclean. They fight well together: a cut, a slash and back, a flurry, and a shield driven into whoever presses them, throwing them back.",
         sign: "a heater shield's edge-mark in the mud, and boot prints in step",
     }),
+    bellMaceman: Object.freeze({
+        lore: "A brother or sister of the Order of the Bell who carries a morning star in place of a sword: in white over mail, helmed, the Bell's blue cross on breast and shield. The Order says the unclean are broken, not cut. Their blows crush through armour and leave whoever they land on reeling, and their shield is driven into whoever presses them.",
+        sign: "dents in a helm left by the roadside, and a heater shield's edge-mark in the mud",
+    }),
     bellSpearman: Object.freeze({
         lore: "A spear-brother of the Order of the Bell, in white over mail, helmed, a kite shield on the arm and a long spear that keeps foes off. They hold the Order's gates and its stairs, and strike from further off than a sword reaches: thrust twice, jabbed twice, or driven in to lay a wound open.",
         sign: "the butt of a spear struck into the ground at a gate, a blue ribbon tied below the head",
@@ -473,7 +477,7 @@ export const BESTIARY_LORE = Object.freeze({
         sign: "black thread caught on a hedge at a rider's height",
     }),
     priorVane: Object.freeze({
-        lore: "Osric Vane was a hedge-priest of the Six until he found the old Order of the Bell's Rule in a burnt chapter house. He came to Bellhaven, empty a hundred years, unchained the Great Bell's clapper and rang it, and heard it answer. He calls himself the Voice of the Bell now, and the Order he raised up cleanses in its name. He holds the belfry under the bell in gilded plate under a halo of thorns, a head taller than any man, a war mace in his hand and the Black Choir about him. When he raises his mace over his head and drives it into the floor the Bell's voice rings out all round him and throws whoever it catches, the ground warning of it first. Worn down, he cries out to the Bell, and the Choir answers.",
+        lore: "Osric Vane was a hedge-priest of the Six until he found the old Order of the Bell's Rule in a burnt chapter house. He came to Bellhaven, empty a hundred years, unchained the Great Bell's clapper and rang it, and heard it answer. He calls himself the Voice of the Bell now, and the Order he raised up cleanses in its name. He holds the belfry under the bell in gilded plate under a halo of thorns, a head taller than any man, a war mace in his hand and the Black Choir about him. When he raises his mace over his head and drives it into the floor the Bell's voice rings out all round him and throws whoever it catches, the ground warning of it first. Worn down, he cries out to the Bell, and the Choir answers. He does not stay dead: what's in the bell keeps him, and when it tolls again he stands beneath it again, his Order sworn against whoever struck him down.",
         sign: "the Great Bell's toll at an hour no bell should ring, heard for miles",
     }),
     vharzul: Object.freeze({

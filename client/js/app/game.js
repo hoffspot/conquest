@@ -71,7 +71,7 @@ import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
-import { dress } from "../characters/liveries.js";
+import { dress, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
@@ -204,14 +204,15 @@ export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
 
 /**
  * Everything a character wears and carries (EQUIPMENT ids): what's under their gear, the weapon
- * in their hand (a WEAPONS key), each piece of gear they wear (`pieces`: core/progress.js
- * Progress worn; none given, what a new character starts with on: core/progress.js
- * startingGear), and the parts of their own (a cat's ears and tail).
+ * in their hand (a WEAPONS key; drawn as `held` is, a unique's own look: Progress wielded), each
+ * piece of gear they wear (`pieces`: core/progress.js Progress worn; none given, what a new
+ * character starts with on: core/progress.js startingGear), and the parts of their own (a cat's
+ * ears and tail).
  */
-export function heroEquipment(weapon, pieces = null, parts = []) {
+export function heroEquipment(weapon, pieces = null, parts = [], held = null) {
     const worn = pieces ?? new Progress({}, { weapon }).worn();
 
-    return [...new Set([...BASE_OUTFIT, ...WEAPONS[weapon].equipment, ...dress(worn), ...parts])];
+    return [...new Set([...BASE_OUTFIT, ...(UNIQUE_LOOKS[held?.unique] ?? WEAPONS[weapon].equipment), ...dress(worn), ...parts])];
 }
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
@@ -220,7 +221,7 @@ export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? nul
 // The motion a people-shaped creature's stand-in swings with (an ATTACKS key) for a way of attacking
 // of its model's own, not among the characters' (a knight of the Bell's cut, a spear-brother's
 // thrust, the Orc King's chop): as what it holds is swung (its weapon's equipment), a blade's else
-const HELD_SWINGS = Object.freeze({ sword: "sword", cleaver: "cleaver", staff: "staff", bow: "bow", warHammer: "hammer", battleAxe: "hammer" });
+const HELD_SWINGS = Object.freeze({ sword: "sword", cleaver: "cleaver", mace: "cleaver", vespers: "cleaver", staff: "staff", bow: "bow", warHammer: "hammer", battleAxe: "hammer" });
 
 export const swingOf = (animation, weapon) => (ATTACKS[animation] ? animation : ((weaponOf(weapon)?.equipment ?? []).map((item) => HELD_SWINGS[item]).find(Boolean) ?? "sword"));
 
@@ -866,8 +867,10 @@ const UNLEASHED_MOTES = Object.freeze({
     dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
     sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
     greenfire: mote([0xd8ffe0, 0x18c050], { count: 14, size: [0.14, 0.3], speed: [0.8, 2], life: [0.35, 0.65], gravity: -3 }),
+    // (A bell's ring: a few motes of gilt light over each it rang through, as stunned stars)
+    gilt: mote([0xfff4d0, 0xffc860], { count: 8, size: [0.04, 0.08], speed: [0.4, 1.1], life: [0.5, 0.9], gravity: 0.6, spread: 1.2 }),
 });
-const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", cleave: "clash", witchfire: "legendCinderburst" });
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast", cleave: "clash", witchfire: "legendCinderburst", toll: "legendToll", knell: "legendKnell" });
 
 // How a ward let loose on whoever wears it is drawn (core/legendary.js EFFECTS `ward`), by its
 // element: the shell closing round them and holding while it lasts, the shards thrown off it, the
@@ -878,6 +881,10 @@ const WARD_LOOKS = Object.freeze({
     water: { shell: 0x9ad8ff, shards: 0x6aa8d8, ring: 0xd0f0ff, sound: "castWaterMid" },
     air: { shell: 0xd8e8ff, shards: 0xa8b8d8, ring: 0xf0f6ff, sound: "castAirMid" },
 });
+// The Great Bell of Bellhaven heard (#orderSaid): the church bell's recording played this much
+// slower, deeper (its one low note as the Prior falls, `fallen`; its three strokes as the keep's
+// made again, `tolls`), as loud close by (`near`) and far off (`far`)
+const BELL_TOLLS = Object.freeze({ fallen: 0.55, tolls: 0.7, near: 0.8, far: 0.45 });
 const ATOMIC_LEAD = 0.05;
 const BOSS_NEAR = 150;
 
@@ -2509,7 +2516,7 @@ export class Game {
 
         if (actor.kind === "player") {
             const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
-            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? []), hairDetail });
+            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail });
 
             if (!character) {
                 return this.avatars.get(actor.id) ?? null;
@@ -5626,8 +5633,6 @@ export class Game {
     // out of it, and sound's slower than light); whoever's caught thrown (Actions.toss, a
     // creature's body tumbling), each hitting the ground as it comes down
     #blast(event) {
-        const { battle, hud } = this;
-
         if (event.bomb !== null) {
             this.spellFx.burst(event.bomb);
             this.sound?.cut(this.fuses.get(event.bomb));
@@ -5662,7 +5667,16 @@ export class Game {
             this.sound?.play(BURSTS[look ?? event.kind]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
         }
 
-        for (const { id, to, flight, up, until } of event.throws) {
+        this.#flung(event.throws, ox, oz);
+    }
+
+    // Those a blast or a bell's toll throws (battle.js #toss: `throws`, each { id, to, flight, up,
+    // until }), flown there on the player's own map (`ox`, `oz` its origin), heard landing; the
+    // player told they've been thrown
+    #flung(throws, ox, oz) {
+        const { battle, hud } = this;
+
+        for (const { id, to, flight, up, until } of throws) {
             const avatar = this.avatars.get(id);
             const actor = battle.actor(id);
 
@@ -6106,8 +6120,25 @@ export class Game {
     // The Order of the Bell in a court (host.js "order"): one of them warning off a player who's
     // lingering by them, said over its head (`words`), the player told what the Order is the first
     // time; or a player who's crossed the Order: the cry over whoever saw it, and that player told
-    // its courts are against them and their party now, its warning sounded
-    #orderSaid({ change, id, player, words }) {
+    // its courts are against them and their party now, its warning sounded. Its Prior felled: the
+    // Great Bell's one low note, struck by no one, heard by those who felled him (`players`), and
+    // what it means for them told (`words`: he'll walk again, and the Order's sworn against them);
+    // its keep made again: the bell heard tolling far off, everyone told the Prior walks again
+    #orderSaid({ change, id, player, players = [], words }) {
+        if (change === "fallen" || change === "tolls") {
+            if (change === "tolls" || players.includes(this.me)) {
+                this.hud.message(words, 7);
+
+                // (The church bell's recording, deeper: one low note close by, struck by no one; or
+                // three strokes far off, softer)
+                for (const delay of change === "fallen" ? [0] : [0, 2.4, 4.8]) {
+                    this.sound?.play("churchBell", change === "fallen" ? { rate: BELL_TOLLS.fallen, volume: BELL_TOLLS.near } : { rate: BELL_TOLLS.tolls, volume: BELL_TOLLS.far, delay });
+                }
+            }
+
+            return;
+        }
+
         if (id && this.battle.actor(id) && words) {
             this.hud.say(id, words, 1 + bubbleSeconds(words));
         }
@@ -10072,7 +10103,7 @@ export class Game {
     }
 
     // Someone's gear changed: what they wear and carry shown (and how they hold their weapon)
-    #regear({ id, weapon, worn }) {
+    #regear({ id, weapon, worn, held = null }) {
         const avatar = this.avatars.get(id);
         const hero = this.host.players.get(id)?.hero;
 
@@ -10080,7 +10111,7 @@ export class Game {
             return;
         }
 
-        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? []));
+        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? [], held));
         avatar.character.sheathe(!this.battle.actor(id)?.armed);
         avatar.actions.setWeapon(guardOf(weapon));
     }
@@ -17727,7 +17758,8 @@ export class Game {
         // (A ward's let loose on whoever wears it (Stoneheart's stone skin), not by a weapon's charge:
         // they're told what it does to them; a cleave by every blow, with none)
         const def = EFFECTS[event.effect];
-        const ward = def?.ward ? (WARD_LOOKS[def.element] ?? WARD_LOOKS.earth) : null;
+        // (The Bulwark's knell is drawn on whoever it caught, not as a shell round its bearer)
+        const ward = def?.ward && event.effect !== "knell" ? (WARD_LOOKS[def.element] ?? WARD_LOOKS.earth) : null;
 
         if (event.id === this.me && !ward && !def?.always) {
             this.charge.flare();
@@ -17797,6 +17829,24 @@ export class Game {
                     fx.spray(UNLEASHED_MOTES.greenfire, to);
                     from = to;
                 }
+            }
+        } else if (event.effect === "toll" || event.effect === "knell") {
+            // (Rung out like the Great Bell: a soft golden flash, two rings of gilt light spreading
+            // to its reach, a glint off each it caught; the toll's thrown flown back: #flung)
+            fx.flash(point, { colour: 0xffe2a0, intensity: 22, distance: 8, life: 0.35, size: 2 });
+            fx.ring(at, { colour: 0xffd27a, from: 0.3, to: radius, life: 0.5, opacity: 0.7 });
+            fx.ring(at, { colour: 0xfff0c8, from: 0.2, to: radius * 0.7, life: 0.65, opacity: 0.45 });
+
+            for (const id of event.struck) {
+                const hit = this.avatars.get(id)?.point(0.9);
+
+                if (hit) {
+                    fx.spray(UNLEASHED_MOTES.gilt, hit);
+                }
+            }
+
+            if (event.throws?.length) {
+                this.#flung(event.throws, ox, oz);
             }
         } else if (event.effect === "cleave") {
             // (A blow carried on through the others before its wielder: a pale arc swept out to its

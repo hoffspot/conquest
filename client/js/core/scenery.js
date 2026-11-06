@@ -35,11 +35,14 @@ export const SCENERY_ORIGINS = Object.freeze({ x: 34000, step: 1000 });
  * the top of the cliff its back's built into), its others between that and its doors. Its court
  * (`court`), held by the Order of the Bell (core/creatures.js bellInitiate and the rest) while
  * anyone's in the castle: each of its `posts` one of the Order, of a kind, standing at [x, z] (the
- * scene's metres) and facing a way: spear-brothers at the bridge's end, brothers at the gate and
- * either side of the keep's doors, initiates at their drill under a brother, bowmen on the court's
+ * scene's metres) and facing a way: spear-brothers at the bridge's end, brothers at the gate,
+ * mace-brothers either side of the keep's doors, initiates at their drill under a brother, bowmen on the court's
  * east side, a brother and a spear-brother at its ends; what they say to whoever lingers by them
- * who hasn't crossed the Order (`warnings`), and what as one does (`crossed`); and the thread its
- * warning begins, if it isn't (`thread`: core/rare.js THREADS bellhaven, the Bell Tolls Again).
+ * who hasn't crossed the Order (`warnings`), and what as one does (`crossed`); what's heard as its
+ * Prior falls, the Great Bell's one low note struck by no one (`fallen`: host.js #priorFell), and as
+ * the keep's made again, the bell tolling and the Prior walking again (`tolls`: #remakeDungeon); and
+ * the thread its warning begins, if it isn't (`thread`: core/rare.js THREADS bellhaven, the Bell
+ * Tolls Again).
  * And its patrols (`patrols`), the Order's riders on barded warhorses on the roads round it
  * (host.js #patrolsAbout): `riders`, each patrol's kinds (core/creatures.js bellRider, choirRider:
  * its first its leader), riding a round of `stops` stops `ring` metres out past where the scene
@@ -63,8 +66,8 @@ export const SCENERY = Object.freeze({
                 ["bellSpearman", [4, -90], FACING.s],
                 ["bellBrother", [-4, -128], FACING.s],
                 ["bellBrother", [4, -128], FACING.s],
-                ["bellBrother", [-10, -140], FACING.s],
-                ["bellBrother", [10, -140], FACING.s],
+                ["bellMaceman", [-10, -140], FACING.s],
+                ["bellMaceman", [10, -140], FACING.s],
                 ["bellBrother", [-20, -136], FACING.s],
                 ["bellInitiate", [-17, -133], FACING.n],
                 ["bellInitiate", [-23, -133], FACING.n],
@@ -83,6 +86,8 @@ export const SCENERY = Object.freeze({
                 "The keep is the Order's. Don't go near its doors.",
             ]),
             crossed: Object.freeze(["Unclean! Take them!", "The Bell has judged you!", "Cleanse them!"]),
+            fallen: "Above you the Great Bell gives one low note, though no one's touched it. It's not done with him. When it tolls again, he'll walk again, and every one of the Order will know your face.",
+            tolls: "Far off, the Great Bell of Bellhaven tolls three times. The Prior walks again.",
             thread: "bellhaven",
         }),
         patrols: Object.freeze({

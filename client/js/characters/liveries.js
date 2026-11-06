@@ -120,7 +120,13 @@ const LOOKS = Object.freeze({
 });
 
 /** How a piece of gear ({ id, people }: core/gear.js) is drawn: its equipment ids. */
-export const lookOf = ({ id, people = null }) => LOOKS[id] ?? uniformLook(id, people);
+/**
+ * The uniques with a look of their own (core/rare.js UNIQUES), worn or held in place of their
+ * kind's: the Prior of the Bell's mace and shield, styled as his own are.
+ */
+export const UNIQUE_LOOKS = Object.freeze({ vespers: Object.freeze(["vespers"]), bulwark: Object.freeze(["bulwark"]) });
+
+export const lookOf = ({ id, people = null, unique = null }) => UNIQUE_LOOKS[unique] ?? LOOKS[id] ?? uniformLook(id, people);
 
 /** What a character wearing some gear ([{ id, people }]) has on: equipment ids, each once. */
 export const dress = (pieces) => [...new Set(pieces.flatMap((piece) => lookOf(piece)))];

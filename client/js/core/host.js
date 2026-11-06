@@ -58,7 +58,7 @@ import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
-import { rollSpoils } from "./spoils.js";
+import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
@@ -1194,7 +1194,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor), nerve: (actor, player) => this.#nerve(actor, player) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor), nerve: (actor, player) => this.#nerve(actor, player), sworn: (actor, enemy) => this.#sworn(actor, enemy) });
         this.#wire();
 
         /**
@@ -2522,7 +2522,7 @@ export class Host {
                 }
 
                 if (beast.dungeon) {
-                    this.#delveFell(beast, event.id);
+                    this.#delveFell(beast, event.id, event.by);
                 }
 
                 // (A rare encounter's foe: core/rare.js, #rareFell; one keeping a sealed room)
@@ -3158,7 +3158,7 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
@@ -4712,6 +4712,13 @@ export class Host {
             }
 
             const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite, extra: Boolean(beast.extra) });
+            const own = SPOILS[beast.creature]?.uniques ?? [];
+
+            // (A master's own, one of them each time it falls, made for each player there at their
+            // might, bound to them: the Prior's mace or shield, spoils.js `uniques`)
+            if (own.length && !beast.extra) {
+                bundle.items.push({ ...makeUnique(this.random.pick(own), levelOf(this.mightFor(player.id)), this.random), count: 1 });
+            }
 
             if (elite) {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
@@ -4741,7 +4748,7 @@ export class Host {
         }
 
         this.#outfit(player);
-        this.#event("gear", { id: player.id, weapon: player.hero.weapon, worn: player.progress.worn() });
+        this.#event("gear", { id: player.id, weapon: player.hero.weapon, worn: player.progress.worn(), held: player.progress.wielded() });
 
         return OK;
     }
@@ -8970,6 +8977,44 @@ export class Host {
     // Legends `marks`): its courts against them all
     #crossed(id) {
         return this.legends.marked(id, "order") || this.fellows(id).some((one) => this.legends.marked(one, "order"));
+    }
+
+    // Whether one of the Order of the Bell at its posts (its courts', its riders') is sworn against
+    // someone (battle.js `sworn`): one of a player's, that player or anyone of their party having
+    // brought its Prior down (rare.js Legends `marks` "sworn": #priorFell). Set on them wherever
+    // it sees them, its post's guard aside, without a word of warning
+    #sworn(actor, enemy) {
+        if (actor.team !== ORDER) {
+            return false;
+        }
+
+        const owner = this.#ownerOf(enemy);
+
+        return Boolean(owner) && (this.legends.marked(owner, "sworn") || this.fellows(owner).some((one) => this.legends.marked(one, "sworn")));
+    }
+
+    // The Prior of the Order of the Bell felled, the master of its keep (dungeons/themes.js keep):
+    // everyone on his floor then, and whoever dealt the last blow, the Order's sworn enemies in this
+    // world from now on (rare.js Legends `mark` "sworn", and crossed, "order"), its courts and its
+    // riders set on them wherever they see them (#sworn); and the Great Bell's one low note, struck
+    // by no one, for all of them to hear: what's in it isn't done with him (SCENERY `court.fallen`;
+    // made again, he walks again: #remakeDungeon)
+    #priorFell(id, by) {
+        const fallen = this.battle.actor(id);
+        const there = [...this.players.keys()].filter((one) => {
+            const actor = this.battle.actor(one);
+
+            return actor && actor.map === fallen?.map;
+        });
+        const killer = by ? this.#ownerOf(this.battle.actor(by) ?? { id: by }) : null;
+        const sworn = [...new Set([...there, ...(killer && this.players.has(killer) ? [killer] : [])])];
+
+        for (const one of sworn) {
+            this.legends.mark(one, "order");
+            this.legends.mark(one, "sworn");
+        }
+
+        this.#event("order", { change: "fallen", players: sworn, id, words: SCENERY.bellhaven.court.fallen });
     }
 
     // A player who's crossed the Order of the Bell (struck one of it in a court, `by`; or gone into
@@ -13518,7 +13563,7 @@ export class Host {
     // One of a dungeon's foes slain (`id`, its wild's record `beast`): slain for good (till it's
     // made again); the boss: its hoard unlocked (and a hell's portal out unsealed); a hell's
     // level's own boss: its portal down unsealed
-    #delveFell(beast, id) {
+    #delveFell(beast, id, by = null) {
         const delve = this.dungeons.get(beast.dungeon);
 
         if (!delve || beast.foe === null || delve.dead.includes(beast.foe)) {
@@ -13536,6 +13581,13 @@ export class Host {
 
             this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
             this.#threadSlain(beast.dungeon);
+
+            delve.masterFell = true;
+
+            // (The Order of the Bell's Prior, its keep's master: #priorFell)
+            if (this.world.maps[this.battle.actor(id)?.map]?.dungeon?.theme === "keep") {
+                this.#priorFell(id, by);
+            }
         } else if (beast.champion === "floor") {
             this.#event("dungeon", { site: beast.dungeon, change: "floor", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
         }
@@ -13592,8 +13644,12 @@ export class Host {
 
     // A dungeon cleared and everyone gone from it, made again: its foes let go (wherever they
     // are), what's left in it gone (the fallen, what's on the ground), its levels made anew the
-    // next time a player comes (Interiors.remake: the next generation)
+    // next time a player comes (Interiors.remake: the next generation). The Order of the Bell's
+    // keep, its Prior felled in it: the Great Bell heard tolling far and wide, and its Prior
+    // walking again at the top of it (SCENERY `court.tolls`)
     #remakeDungeon(site, building, delve) {
+        const tolls = (building.dungeon?.theme ?? building.theme) === "keep" && Boolean(delve.masterFell);
+
         for (const [id, one] of [...this.wild]) {
             if (one.dungeon === site.id) {
                 if (this.battle.actor(id)) {
@@ -13617,8 +13673,12 @@ export class Host {
         }
 
         this.world.interiors.remake(building.key);
-        Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false });
+        Object.assign(delve, { generation: building.generation, awake: [], dead: [], opened: [], cleared: false, masterFell: false });
         this.#event("dungeon", { site: site.id, change: "remade", name: building.name });
+
+        if (tolls) {
+            this.#event("order", { change: "tolls", site: site.id, words: SCENERY.bellhaven.court.tolls });
+        }
     }
 
     // An envoy on the road near a player met (docs/WAR.md M7): them, and their escort, where the

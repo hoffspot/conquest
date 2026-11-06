@@ -168,6 +168,7 @@ const ABOUT = {
     bellBrother: ["Brother of the Bell", "Bellhaven, its courts and its keep: in white over mail, helmed, sword and shield", "sword"],
     bellRider: ["Rider of the Bell", "The roads round Bellhaven: a brother in plate on a barded warhorse, cutting down from the saddle, riding down whoever keeps off", "sword"],
     choirRider: ["Black Choir Rider", "Leading the Order's patrols round Bellhaven: a knight of the Black Choir on a barded warhorse", "sword"],
+    bellMaceman: ["Mace-brother of the Bell", "Bellhaven, its courts and its keep: in white, a morning star and heater shield", "mace"],
     bellSpearman: ["Spear-brother of the Bell", "Bellhaven, its courts and its keep: in white, spear and kite shield", "staff"],
     bellArcher: ["Bowman of the Bell", "Bellhaven, its courts and its keep: in white, a longbow, keeping off", "bow"],
     choirKnight: ["Knight of the Black Choir", "Bellhaven's keep: the Order's inner circle, in plate under black, a morning star", "hammer"],
@@ -1520,7 +1521,7 @@ const groups = [
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
     ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
-    ["The Order of the Bell", ["bellInitiate", "bellBrother", "bellSpearman", "bellArcher", "choirKnight", "priorVane", "bellRider", "choirRider"]],
+    ["The Order of the Bell", ["bellInitiate", "bellBrother", "bellMaceman", "bellSpearman", "bellArcher", "choirKnight", "priorVane", "bellRider", "choirRider"]],
     ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul", "cerberus", "ashmaw", "demonBoss", "ashkhar"]],
 ];
 

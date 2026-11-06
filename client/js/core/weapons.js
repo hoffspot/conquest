@@ -82,7 +82,12 @@ const bomber = (label, bomb) => ({
  * again as a sword's, between them; the staff a little more than a sword's, quicker; the
  * gauntlets' punches, quicker still; the bow's arrows half as much again. The greatsword and the
  * battle axe are swung two-handed as the war hammer is (its `animation`: characters/actions.js). The wand and the grimoire are for spells (a
- * grimoire's a quarter stronger, for the spellward a wand leaves a hand for: progress.js).
+ * grimoire's a quarter stronger, for the spellward a wand leaves a hand for: progress.js). The
+ * mace, in one hand with a shield as the sword is, a little slower and a little harder, about a
+ * sword's in a fight: its blows staggering whoever they land on twice as long, and going a quarter
+ * of the way through their armour (`crushing`: battle.js #hit); swung as an orc's cleaver is, hung
+ * at the hip. No one has one to start with (STARTING_WEAPONS): found, bought, or taken off the
+ * Order of the Bell's brothers.
  */
 export const WEAPONS = Object.freeze({
     sword: {
@@ -126,6 +131,13 @@ export const WEAPONS = Object.freeze({
         about: "A long two-handed sword, its grip long enough for both hands. Sweeping cuts, two thirds as much again as a sword's, that check whoever they land on.",
         equipment: ["greatsword"],
         attacks: [melee({ id: "cleave", damage: [7, 13], hitAt: 520, duration: 950, interval: 1250, stagger: 300, reaction: "cleave", animation: "hammer" })],
+    },
+    mace: {
+        label: "Mace",
+        school: "Melee",
+        about: "A flanged steel mace in one hand, and a shield in the other. A little slower than a sword and a little harder, its blows staggering whoever they land on and going partly through their armour.",
+        equipment: ["mace"],
+        attacks: [melee({ id: "bludgeon", damage: [5, 10], hitAt: 460, duration: 880, interval: 1300, stagger: 300, crushing: 0.25, reaction: "bludgeon", animation: "cleaver" })],
     },
     axe: {
         label: "Battle axe",
@@ -961,6 +973,25 @@ export const NATURAL = Object.freeze({
                     melee({ id: "cut", damage: [8, 13], hitAt: 640, duration: 1300, interval: 1600, stagger: 250, reaction: "slash", animation: "cut" }),
                     melee({ id: "slash", damage: [9, 14], hitAt: 560, duration: 1700, interval: 2000, stagger: 250, reaction: "slash", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.6 }] }),
                     melee({ id: "flurry", damage: [8, 13], hitAt: 400, duration: 1400, interval: 1700, stagger: 200, reaction: "slash", animation: "flurry", blows: [{ at: 400, share: 0.55 }, { at: 800, share: 0.55 }] }),
+                    melee({ id: "bash", damage: [6, 10], hitAt: 320, duration: 1300, interval: 1800, stagger: 400, reaction: "crush", animation: "bash", blows: [{ at: 320, share: 0.45, toss: 0.7 }, { at: 640, share: 0.6 }] }),
+                ],
+            },
+        ],
+    },
+    // (A mace-brother's morning star, swung as a brother's sword is, its blows crushing: partly
+    // through armour, staggering longer; his shield driven into whoever's before him as a
+    // brother's is)
+    bellMace: {
+        label: "Morning star and shield",
+        equipment: ["mace", "kiteShield"],
+        attacks: [
+            {
+                kind: "melee",
+                reach: MELEE_REACH,
+                either: [
+                    melee({ id: "cut", damage: [9, 14], hitAt: 640, duration: 1300, interval: 1700, stagger: 350, crushing: 0.25, reaction: "bludgeon", animation: "cut" }),
+                    melee({ id: "slash", damage: [10, 15], hitAt: 560, duration: 1700, interval: 2100, stagger: 350, crushing: 0.25, reaction: "bludgeon", animation: "slash", blows: [{ at: 560, share: 0.55 }, { at: 1200, share: 0.6 }] }),
+                    melee({ id: "flurry", damage: [9, 14], hitAt: 400, duration: 1400, interval: 1800, stagger: 300, crushing: 0.25, reaction: "bludgeon", animation: "flurry", blows: [{ at: 400, share: 0.55 }, { at: 800, share: 0.55 }] }),
                     melee({ id: "bash", damage: [6, 10], hitAt: 320, duration: 1300, interval: 1800, stagger: 400, reaction: "crush", animation: "bash", blows: [{ at: 320, share: 0.45, toss: 0.7 }, { at: 640, share: 0.6 }] }),
                 ],
             },

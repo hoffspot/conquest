@@ -63,9 +63,9 @@ export const FIGHT = Object.freeze({ seconds: 30, healing: 0.2, stun: 0.25, stun
  * their power for blows, shots, healing, stuns and spells, armour, dodging, shield, hit points, how
  * much sooner their blows come (`haste`), the harm they get back (`leech`), how likely a blow is to
  * leave its foe bleeding (`bleed`), the effect their blows let loose (`legendary`: a legendary
- * weapon's, or a unique's worn anywhere: { effect, level, charge }, or null: core/legendary.js),
- * and the ward the blows they take let loose (`ward`: a unique's, { effect, level, charge }, or
- * null). One of each at most: the weapon's first, then each piece's as they're worn (gear.js
+ * weapon's, or a unique's worn anywhere: { effect, level, charge, grade? (a graded piece's) }, or
+ * null: core/legendary.js), and the ward the blows they take let loose (`ward`: a unique's, { effect,
+ * level, charge, grade? }, or null). One of each at most: the weapon's first, then each piece's as they're worn (gear.js
  * SLOT_IDS), at its own level.
  */
 export function fighterOf(progress, bonus = progress.bonuses()) {
@@ -85,8 +85,8 @@ export function fighterOf(progress, bonus = progress.bonuses()) {
         haste: bonus.haste,
         leech: bonus.leech,
         bleed: bonus.bleed,
-        legendary: blows && WEAPONS_HELD(weapon) ? { effect: effectOf(blows), level: levelOf(blows.level), charge: chargeOf(weapon) } : null,
-        ward: warding ? { effect: effectOf(warding), level: levelOf(warding.level), charge: WARD_CHARGE.blows } : null,
+        legendary: blows && WEAPONS_HELD(weapon) ? { effect: effectOf(blows), level: levelOf(blows.level), charge: chargeOf(weapon), ...(Number.isFinite(blows.grade) ? { grade: blows.grade } : {}) } : null,
+        ward: warding ? { effect: effectOf(warding), level: levelOf(warding.level), charge: WARD_CHARGE.blows, ...(Number.isFinite(warding.grade) ? { grade: warding.grade } : {}) } : null,
     };
 }
 

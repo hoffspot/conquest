@@ -1198,12 +1198,22 @@ would be one line in weapons.js):
 | Orc cleaver | hack | melee | 3–8 | 520 | 900 | 1400 | 200 | hack |
 | Greatsword | cleave | melee | 7–13 | 520 | 950 | 1250 | 300 | cleave |
 | Battle axe | chop | melee | 9–17 | 700 | 1200 | 1600 | 400 | chop |
+| Mace | bludgeon | melee | 5–10 | 460 | 880 | 1300 | 300 | bludgeon |
 
 The greatsword and the battle axe are no one's to start with: the smith, the armoury and the watch
 sell them (45 and 40 gold), and a line of battle's two-handers carry them (core/host.js
 `ROLE_ARMS`). Both are two-handed and swing as the war hammer does (its guard, blows and sound),
 and over a fight strike about half again as hard as a sword, as the hammer does; the axe slower
 and heavier.
+
+The mace isn't in the character creator either: it's found (any foe's spoils as other gear is, and
+the Order of the Bell's mace-brothers', core/spoils.js `bellMaceman`), and bought at a smith's, a
+swordsmith's and the Master Swordsmith's (32 gold). It's one-handed, taken with any shield, and swung, drawn and hung
+at the hip as the cleaver is (`animation: "cleaver"`). Over a fight it strikes about as hard as a
+sword, a little slower and harder, but its blows stagger twice as long, and it **crushes**: a
+quarter of each blow goes through armour (`crushing: 0.25`: an armoured foe's armour takes 0.75 of
+its share off it; a foe in armour of 0.4 takes 7 of a blow of 10, not 6). Each of an attack's
+`crushing` share counts the same way, the mace-brothers' morning stars' (`NATURAL.bellMace`) too.
 
 | Spell | On | Reach | Casts in | Does | Cooldown |
 | --- | --- | --- | --- | --- | --- |
@@ -1272,15 +1282,21 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     the Bellbound (docs/WILDS.md *Ashkhar the Bellbound*).
   - *A ward* (`ward`: `WARD_CHARGE`, battle.js `#steel`, `#wardThrough`), let loose on whoever wears
     it by the blows they take: every blow that does them harm fills its charge a mark, full after 6
-    (lost after thirty seconds without being struck); full, it's let loose on them at once. The
-    only one so far, *Stoneheart* (earth), the Heart of Harrowstone's (docs/WILDS.md *The Stone
+    (lost after thirty seconds without being struck); full, it's let loose on them at once. Two so
+    far. *Stoneheart* (earth), the Heart of Harrowstone's (docs/WILDS.md *The Stone
     Golem*): every blow on them 4 to 10% lighter, always; full, their skin stone 3 to 6 seconds,
     every blow on them 35 to 55% lighter again and none able to knock them down or throw them (a
     shell the grey-gold of cut stone closes round them and holds while it lasts, shards and grit
     thrown off, a ring of dust, a stone's grind heard; "Stoneheart: your skin turns to stone!").
     Any ward's made of the same: its numbers (`guard`, `skin`, `harden`), what the wearer's told
     (`felt`), and its `element`, which says how it's drawn and heard (app/game.js `WARD_LOOKS`: the
-    shell's, the shards' and the ring's colours, its element's casting heard).
+    shell's, the shards' and the ring's colours, its element's casting heard). And *Knell*, the
+    Bulwark's (the Prior of the Bell's kite shield: docs/DUNGEONS.md *The Prior's spoils*), a
+    unique's own too: full, the shield rings out like the Great Bell, and whoever struck the blow
+    that filled it, and every foe of its bearer within 1.4 to 2.4 m of them, stands stunned 0.8 to
+    1.6 seconds (battle.js `#knell`; the stun its own, `toll`, not warded against as frost or
+    lightning is). A gold flash and rings where they stood, gilt motes, and a bell's note, kept low
+    (`legendKnell`: it rings often); "Knell: your shield rings out like the Great Bell!".
   - *A unique's own* (`unique`, never rolled on a legendary weapon), on every blow with no charge to
     fill (`always`: no charge shown, `charge.js`). Two so far. *Cleave*, Kingsplitter's (a
     great axe: docs/WILDS.md *The Orc King*): every blow up close carries on through every other foe
@@ -1302,6 +1318,25 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     it (effects.js `legendWitchfire`). Its card: "Witchfire: every blow up close sets the foe struck
     alight with green fire, leaping on to the 2 nearest foes within 4 m of them, each struck 60% as
     hard and set alight". In might, as a cleave.
+  - *A unique's own, with a charge* (`unique` without `always`): *Toll*, Vespers' (the Prior of the
+    Bell's war mace, its charge a mace's, 6 blows). Full, the blow rings out like the Great Bell:
+    every foe within 1.6 to 2.6 m of the one struck takes 8 to 18 harm at the mace's level (its
+    `damage`, as the five's), is thrown back from it (the one struck, away from its wielder) 0.3 to
+    0.55 times as far as Explosion throws, and stands stunned 0.7 to 1.5 seconds (battle.js
+    `#unleash`, its reaction a crushing blow's). A gold flash, rings, gilt motes, the foes flung, and
+    a bell's note over a thump, kept low (`legendToll`: it rings every few blows).
+  - *Graded* (`graded`: the Prior's, rare.js `UNIQUES` `graded`; legendary.js `GRADE`, `rollGrade`):
+    each is made with a grade of its own, 0 to 1, the finest the rarest: a random share to the power
+    2.5 (about one in twelve in the top fifth, one in twenty-five in the top tenth, the average 0.29).
+    Its grade sets how many bonuses it rolls (a legendary's 3 to 5: gear.js `rollGear` `grade`) and
+    how strong (each halfway between its roll and the grade), and its effect's numbers (`graded`: a
+    toll's or a knell's stun 0.6 to 1.6 times as long, its reach 0.85 to 1.2 times as far: a
+    level-100 Vespers' stun 0.9 seconds at the poorest, 2.4 at the finest). It's kept with the piece
+    (progress.js `thingOf`; two of different grades aren't one stack) and carried into the fight
+    (might.js `fighterOf`: `legendary.grade`, `ward.grade`). Its card says how true it rings
+    (`gradeWords`: flat, dull, clear, true, "as true as the Great Bell itself") and its grade out of
+    100. Bound as any unique is, but he gives up one or the other each time he falls, so throwing
+    one away isn't for good (app/pack.js).
   - *One of each at most* (might.js `fighterOf`: `legendary`, `ward`): the weapon's first, then
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).
@@ -4300,6 +4335,7 @@ each one it crossed, bigger and worse. The kind is the attack's reaction:
 | hack (orc cleaver) | a cut | a deep, wide gash, bleeding more |
 | pierce (bow) | a hole | a hole with the arrow left in it, blood welling and running |
 | crush (war hammer) | a bruise | a swollen bruise, split open and bleeding |
+| bludgeon (mace) | a bruise, smaller | a swollen bruise, smaller than a hammer's, split open and bleeding a little less |
 | cleave (greatsword) | a cut | a long cut, longer than a sword's, bleeding more |
 | chop (battle axe) | a cut | a deep, wide gash, wider than a cleaver's, bleeding most |
 | strike (staff) | a welt | a long welt, raw and bleeding along the middle |
@@ -4941,7 +4977,8 @@ played at its own volume:
   - **The bow**: an arrow drawn from a leather quiver as the shot starts, the longbow's string
     drawn back, and its thrum as it's loosed.
   - **Hits**: wet slaps for a blade's bite (a sword's brighter, a cleaver's deeper), a wooden
-    staff's crack, a deep thud for the hammer, fists on a bag, a boot's thud, an arrow into a
+    staff's crack, a deep thud for the hammer, a denser one made in code for the mace with a dull
+    clank of its flanges over it (`bludgeon`), fists on a bag, a boot's thud, an arrow into a
     target. A blow caught on a shield knocks on its boards, but a blade's rings on its iron
     (`clash`).
   - **Armour** (`ARMOUR`, by what's worn over the chest: `game.js` armourOf): under a weapon's

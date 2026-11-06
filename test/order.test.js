@@ -28,7 +28,7 @@ import { patrolRound, placedOf, standsOn, wayInOf } from "../client/js/core/terr
 import { squaresOf } from "../client/js/core/grid.js";
 import { parseGrid } from "./helpers.js";
 
-const THE_ORDER = ["bellInitiate", "bellBrother", "bellSpearman", "bellArcher", "choirKnight", "priorVane"];
+const THE_ORDER = ["bellInitiate", "bellBrother", "bellMaceman", "bellSpearman", "bellArcher", "choirKnight", "priorVane"];
 
 // An open field `size` squares across
 const field = (size) => ({ blocked: parseGrid(Array.from({ length: size }, () => ".".repeat(size))).map((row) => Uint8Array.from(row)) });
@@ -100,7 +100,7 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
     });
 
     it("rises in strength by rank: its initiates, its brothers, the Black Choir, their Prior", () => {
-        const ranks = [["bellInitiate"], ["bellBrother", "bellSpearman"], ["choirKnight"], ["priorVane"]];
+        const ranks = [["bellInitiate"], ["bellBrother", "bellMaceman", "bellSpearman"], ["choirKnight"], ["priorVane"]];
 
         for (let k = 1; k < ranks.length; k++) {
             for (const lower of ranks[k - 1]) {
@@ -125,7 +125,7 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.ok(ranks.every((kind) => MODELS[kind].asset === "beast-order"));
         assert.equal(MODELS.priorVane.asset, "beast-prior");
-        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], ["choir"], [""]]);
+        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], [""], ["choir"], [""]]);
         assert.deepEqual(partsOf("bellInitiate", 7), ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"]);
         assert.equal(partsOf("orcKing", 7), null, "(a model drawn whole)");
 
@@ -142,6 +142,8 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.deepEqual([...helms].sort(), ["HelmBar", "HelmFlat", "HelmPlain", "HelmRidge"]);
         assert.ok(partsOf("choirKnight", 3).includes("HelmCross") && partsOf("choirKnight", 3).includes("MorningStar"));
+        // (A mace-brother in white, a morning star and a heater shield, helmed as a brother is)
+        assert.ok(["Surcoat", "MorningStar", "HeaterShield"].every((part) => partsOf("bellMaceman", 3).includes(part)) && partsOf("bellMaceman", 3).some((part) => part.startsWith("Helm")));
         // (Each drawn the taller the higher, the Prior a head and more over the heroes' 1.85 metres)
         const tall = (kind) => (MODELS[kind].made.tall * MODELS[kind].length) / MODELS[kind].made.long;
 
@@ -375,6 +377,80 @@ describe("Bellhaven's court, held by the Order of the Bell (host.js, core/scener
         assert.ok(crossed && host.legends.marked(HOST_PLAYER, "order"));
     });
 
+    it("is sworn against whoever brought its Prior down, and their party: set on them wherever it sees them, past its posts' guard, without a word of warning; the rest let be", () => {
+        const { host, building, ada, bea, cy } = inTheCastle();
+        const posted = host.courts.get(building.key).ids.map((id) => host.battle.actor(id));
+        const brother = posted.find((one) => host.wild.get(one.id).creature === "bellBrother");
+        const off = [brother.square[0], brother.square[1] + COURT.guard + 3];
+
+        // (Crossed, not sworn: let be past its guard)
+        host.legends.mark(HOST_PLAYER, "order");
+        put(ada, off);
+        run(host, 3000, [ada]);
+        assert.ok(posted.every((one) => one.target !== HOST_PLAYER), "(crossed: only within its guard)");
+
+        // (Sworn, as the Prior's felled: #priorFell)
+        host.legends.mark(HOST_PLAYER, "sworn");
+        put(ada, off);
+
+        const events = run(host, 3000, [ada]);
+
+        assert.ok(posted.some((one) => one.target === HOST_PLAYER), "(set on her past its guard)");
+        assert.ok(!events.some(({ type, change }) => type === "order" && change === "warn"), "(no warning)");
+
+        // (Her party too; not the rest)
+        put(ada, [ada.square[0] + 300, ada.square[1]], "town");
+        put(bea, off, posted[0].map);
+        put(cy, [off[0] + 1, off[1]], posted[0].map);
+
+        for (const one of posted) {
+            Object.assign(one, { target: null });
+        }
+
+        run(host, 3000, [bea, cy]);
+        assert.ok(posted.some((one) => one.target === "bea"));
+        assert.ok(posted.every((one) => one.target !== "cy"));
+    });
+
+    it("tolls its Great Bell as its keep's made again after its Prior's fallen: heard by everyone, he walks again", () => {
+        const { host, building, ada } = inTheCastle();
+        const keep = host.world.interiors.buildings.get(`${building.key}-keep`);
+
+        put(ada, squareIn("bellhaven", [-0.5, -138.5]));
+        host.command(HOST_PLAYER, { type: "enter", link: keep.door.id });
+
+        for (let t = 0; t < 30000 && !keep.maps.includes(ada.map); t += 250) {
+            run(host, 250, [ada]);
+        }
+
+        const delve = host.dungeons.get(keep.site);
+        const generation = keep.generation ?? 0;
+
+        assert.ok(delve, "(its keep gone into)");
+
+        // (Its hoard opened, its Prior felled: #delveFell; and everyone gone)
+        Object.assign(delve, { cleared: true, masterFell: true });
+        put(ada, [ada.square[0] + 400, ada.square[1]], "town");
+
+        let tolls = null;
+
+        for (let t = 0; t < 30000 && !tolls; t += 250) {
+            tolls = run(host, 250, [ada]).find(({ type, change }) => type === "order" && change === "tolls") ?? null;
+        }
+
+        assert.ok(tolls, "(the bell tolls)");
+        assert.equal(tolls.words, SCENERY.bellhaven.court.tolls);
+        assert.equal(keep.generation, generation + 1, "(made again)");
+        assert.equal(delve.masterFell, false);
+
+        // (Made again with no Prior fallen in it: not)
+        Object.assign(delve, { cleared: true });
+
+        const quiet = run(host, 5000, [ada]);
+
+        assert.ok(!quiet.some(({ type, change }) => type === "order" && change === "tolls"));
+    });
+
     it("is let go when everyone's left the castle, its brothers gone from the battle", () => {
         const { host, building, ada } = inTheCastle();
         const ids = [...host.courts.get(building.key).ids];
@@ -551,6 +627,14 @@ describe("the Bell Tolls Again (rare.js THREADS bellhaven, writings.js)", () => 
 
         assert.equal(thread.step, 4);
         assert.ok(given(slain, 150, "bell"));
+
+        // (The Great Bell's one low note: he'll walk again, and the Order's sworn against her and
+        // her party: #priorFell)
+        const fallen = slain.find(({ type, change }) => type === "order" && change === "fallen");
+
+        assert.ok(fallen && fallen.players.includes(HOST_PLAYER));
+        assert.equal(fallen.words, SCENERY.bellhaven.court.fallen);
+        assert.ok(host.legends.marked(HOST_PLAYER, "sworn") && host.legends.marked(HOST_PLAYER, "order"));
 
         // Word taken back to the priest: its end, a festival in the town
         const again = into(host, "church", opener.town.id);

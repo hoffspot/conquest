@@ -1932,6 +1932,17 @@ export const REACTIONS = Object.freeze({
             return { ...spine({ flex: front * 24 * e, bend: side * 6 * e }), Head: { flex: front * -3 * e }, RightArm: { flex: 25 * e, abduct: 18 * e }, LeftArm: { flex: 25 * e, abduct: 18 * e }, RightForeArm: { flex: 30 * e }, LeftForeArm: { flex: 30 * e }, offset: [0, -0.14 * e, -front * 0.16 * e] };
         },
     },
+    // A mace's blow: knocked half round by it, a shoulder dropped and the knees giving a little,
+    // the head jolted to the side (lighter than a hammer's, and sideways)
+    bludgeon: {
+        length: 0.6,
+        effect: "impact",
+        pose: (t, { side, front }) => {
+            const e = pulse(t, 0.16);
+
+            return { ...spine({ flex: front * 12 * e, bend: side * 14 * e, turn: -side * 12 * e }), Head: { bend: side * 12 * e, turn: -side * 8 * e }, RightArm: { flex: 15 * e, abduct: 16 * e }, LeftArm: { flex: 15 * e, abduct: 16 * e }, RightForeArm: { flex: 20 * e }, LeftForeArm: { flex: 20 * e }, offset: [side * 0.04 * e, -0.08 * e, -front * 0.08 * e] };
+        },
+    },
     // An arrow: a sharp jolt at the chest
     pierce: {
         length: 0.4,

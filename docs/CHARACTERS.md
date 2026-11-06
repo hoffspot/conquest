@@ -1107,7 +1107,19 @@ the orc's notched cleaver, and two more two-handers the shops sell and armies ca
 **greatsword** (a metre of broad blade over a wide cross, a grip long enough for both hands bound in
 leather, a heavy pommel) and a **battle axe** (a broad, bearded blade on a long ash haft, a lug
 behind). Both are held as the war hammer is (`HOLDS.hammer`), the right hand by the cross or a
-quarter of the way up the haft, the left by the pommel or the haft's foot. Every character starts in the same outfit: a tunic, leather
+quarter of the way up the haft, the left by the pommel or the haft's foot. And a one-hander found,
+sold and carried by the Order of the Bell's mace-brothers, never anyone's to start with: a
+**mace** (`mace`: about 62 cm, a leather-bound grip capped in iron no further below the hand than a
+cleaver's, a steel haft, a round head about 10 cm across six dark flanges and a knob on top), held, swung, drawn and hung at the
+left hip as the cleaver is (its sheath the cleaver's, `SHEATHS.mace`; its blows the cleaver's,
+app/game.js `HELD_SWINGS`). The Prior of the Bell's own two are drawn in their place when held or
+worn (characters/liveries.js `UNIQUE_LOOKS`, by the piece's `unique`: core/progress.js `worn`,
+`wielded`), each made as his own are on his model, in pale steel the colour of old bone
+(`paleSteel`), gold kept to its accents: **Vespers** (`vespers`), a long head clustered with thorns
+standing out every way, a thorn rising from its top over a gilt collar, on a haft ringed with knobs;
+and **the Bulwark** (`bulwark`), a kite as big as a kite shield, the Order's cross raised on its
+face, thorns along its top and down its lower edges, a gilt boss and a thin gilt edge, worn on the
+forearm as a kite shield is. Every character starts in the same outfit: a tunic, leather
 bracers, leather pants and leather boots.
 
 **Spiked boots** are an item in several parts (`parts`), each on its own socket: a domed iron cap
@@ -1132,6 +1144,7 @@ into it.
 | --- | --- |
 | Sword | In a leather scabbard with brass fittings at the left hip, hung from its frog on the belt round the front of the hip, close in, canted 45° (the hilt forward and up, where the right hand crossing in front of the belly takes it, the blade down and back behind the thigh) |
 | Orc cleaver | At the left hip too, as a messer was worn: hung from a ring on the belt round the front of the hip, canted as the sword is, the grip forward, the blade down and back behind the thigh, its edge forward |
+| Mace, Vespers | As the orc cleaver is: from a ring on the belt round the front of the left hip, the grip forward, the head down and back behind the thigh |
 | Wand | Tucked in the belt at the right hip, the tip down and a little back and out, clear of the thigh (nearer in, Vitruvian's thighs came into it as the legs came out of the guard; further out, the right arm swinging past) |
 | Grimoire | Closed, hanging flat at the left hip, its spine down |
 | Staff, war hammer, greatsword, battle axe | On the back, slung from the right shoulder: the grip up behind it by the ear, where a hand reaching up over the shoulder takes it without the elbow folding further than it can; the head (the staff's crystal) down across the back to the left hip, angled a little off the back and back from the hip, clear of the buttocks and the thigh; the war hammer's and battle axe's heads side-on, the greatsword's blade flat to the back |
@@ -1470,6 +1483,7 @@ battle knowing.
 | Bow | A side-on draw: turned side on, the bow at arm's length towards the target; drawn to the chin, loosed, the hand flying back past the ear | a high draw, a snap shot, a crouching shot, a canted draw |
 | Spiked gauntlets | A straight punch at head height from a boxer's guard (left and right in turn, whichever way) | a hook, an uppercut, a body blow, an overhand |
 | Orc cleaver | An overhead hack: raised high behind the head; hacked down | a backhand, a flat chop, a gut rip, a stab and rip |
+| Mace, Vespers | The orc cleaver's: it's swung as the cleaver is (`animation: "cleaver"`) | the orc cleaver's |
 | Greatsword, battle axe | The war hammer's: they're swung as it is, both hands on the grip or haft | the war hammer's |
 
 **Two-handed blows keep the haft out in front.** A staff's or war hammer's second hand isn't moved
@@ -1793,6 +1807,7 @@ effect where it lands, so how a character reacts depends on what hit it:
 | pierce (bow) | a sharp jolt at the chest (and the arrow sticks) | `Hit_Chest` | sparks |
 | punch (gauntlets) | the head snaps round | `Hit_Head`: the head jolted, the body knocked back a little | a flash and dust |
 | hack (orc cleaver) | a heavy cut that twists and staggers | | sparks |
+| bludgeon (mace) | knocked half round by it, a shoulder dropped and the knees giving a little, the head jolted to the side (lighter than a hammer's crush, and sideways) | | a flash and dust |
 | cleave (greatsword) | a long cut that twists the body further away than a sword's and sets it back a little | | sparks |
 | chop (battle axe) | a heavy blow that drives the body down and round, forearms drawn in | | sparks |
 | kick (spiked boots) | winded: doubles over, driven back a step, the arms drawn in | `Hit_Chest` | a flash and dust |
