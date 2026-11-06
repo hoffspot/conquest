@@ -737,14 +737,18 @@ export class Battle {
      *     their peoples or what's passed between them (the host's: in one party).
      * @param {Function} [options.haven] - Whether someone's in a sanctuary (the host's: a shrine's,
      *     core/shrines.js), the wild's creatures never going after them there.
+     * @param {Function} [options.sworn] - Whether one of the wild's creatures is sworn against
+     *     someone, set on them wherever it sees them, whatever its temper (the host's: the Order of
+     *     the Bell, against whoever brought its Prior down).
      */
-    constructor(world, { seed = 1, relations = null, allied = null, haven = null, nerve = null } = {}) {
+    constructor(world, { seed = 1, relations = null, allied = null, haven = null, nerve = null, sworn = null } = {}) {
         this.world = world;
         this.relations = relations;
         this.allied = allied;
         this.haven = haven;
         // (What sways a wary beast meeting a player, beyond its temper: the host's, core/wary.js nerveOf)
         this.nerve = nerve;
+        this.sworn = sworn;
 
         // The maps (the world itself if it has only the one) and the links between them
         this.maps = world.maps ?? { town: world };
@@ -1468,7 +1472,7 @@ export class Battle {
             breaths: [],
             formations: {},
         };
-        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve });
+        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve, sworn: this.sworn });
 
         forked.bakedOnly = true;
 
@@ -1476,8 +1480,8 @@ export class Battle {
     }
 
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
-    static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null } = {}) {
-        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve });
+    static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null, sworn = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve, sworn });
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
@@ -3097,8 +3101,9 @@ export class Battle {
      * One of the wild's creatures (core/creatures.js): wandering near where it was found (a pack
      * keeping with its leader; a guard walking its round, `round`), resting between; fighting as its temper has it (whoever it sees,
      * if it's aggressive; whoever comes within its guard, if it's territorial; only whoever's
-     * struck it or its pack, if it's defensive); never going further than its leash from where it
-     * was found after anyone, and making its way back there if it's further.
+     * struck it or its pack, if it's defensive; whatever its temper, whoever it's sworn against,
+     * wherever it sees them: `sworn`); never going further than its leash from where it was found
+     * after anyone, and making its way back there if it's further.
      */
     #wild(actor) {
         const wild = actor.wild;
@@ -3118,7 +3123,7 @@ export class Battle {
 
         const rouses = wild.reacts
             ? (enemy) => provoked(enemy) || (actor.mood?.kind === "attack" && actor.mood.by === enemy.id)
-            : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
+            : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard) || Boolean(this.sworn?.(actor, enemy));
         // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY)
         const rousing = (enemy) => leashed(enemy) && rouses(enemy);
         const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, this.#nearestSeen(actor, rousing));

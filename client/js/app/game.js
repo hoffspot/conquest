@@ -878,6 +878,10 @@ const WARD_LOOKS = Object.freeze({
     water: { shell: 0x9ad8ff, shards: 0x6aa8d8, ring: 0xd0f0ff, sound: "castWaterMid" },
     air: { shell: 0xd8e8ff, shards: 0xa8b8d8, ring: 0xf0f6ff, sound: "castAirMid" },
 });
+// The Great Bell of Bellhaven heard (#orderSaid): the church bell's recording played this much
+// slower, deeper (its one low note as the Prior falls, `fallen`; its three strokes as the keep's
+// made again, `tolls`), as loud close by (`near`) and far off (`far`)
+const BELL_TOLLS = Object.freeze({ fallen: 0.55, tolls: 0.7, near: 0.8, far: 0.45 });
 const ATOMIC_LEAD = 0.05;
 const BOSS_NEAR = 150;
 
@@ -6106,8 +6110,25 @@ export class Game {
     // The Order of the Bell in a court (host.js "order"): one of them warning off a player who's
     // lingering by them, said over its head (`words`), the player told what the Order is the first
     // time; or a player who's crossed the Order: the cry over whoever saw it, and that player told
-    // its courts are against them and their party now, its warning sounded
-    #orderSaid({ change, id, player, words }) {
+    // its courts are against them and their party now, its warning sounded. Its Prior felled: the
+    // Great Bell's one low note, struck by no one, heard by those who felled him (`players`), and
+    // what it means for them told (`words`: he'll walk again, and the Order's sworn against them);
+    // its keep made again: the bell heard tolling far off, everyone told the Prior walks again
+    #orderSaid({ change, id, player, players = [], words }) {
+        if (change === "fallen" || change === "tolls") {
+            if (change === "tolls" || players.includes(this.me)) {
+                this.hud.message(words, 7);
+
+                // (The church bell's recording, deeper: one low note close by, struck by no one; or
+                // three strokes far off, softer)
+                for (const delay of change === "fallen" ? [0] : [0, 2.4, 4.8]) {
+                    this.sound?.play("churchBell", change === "fallen" ? { rate: BELL_TOLLS.fallen, volume: BELL_TOLLS.near } : { rate: BELL_TOLLS.tolls, volume: BELL_TOLLS.far, delay });
+                }
+            }
+
+            return;
+        }
+
         if (id && this.battle.actor(id) && words) {
             this.hud.say(id, words, 1 + bubbleSeconds(words));
         }

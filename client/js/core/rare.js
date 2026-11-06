@@ -668,7 +668,7 @@ export const THREADS = Object.freeze({
                 home: true,
                 word: "Prior Osric Vane is dead, and his bell is silent. Take his book, and word of it, to the priest at the temple in {town}.",
                 ask: "The Prior's dead. This book was by his bell.",
-                reply: "So it was never the Six. Something the old Order sealed in the bell's silver, and he rang it loose, and called it holy. The Rule says the bell must never be rung, and he never read that far. Without his voice the Order will break, or crawl back to the Six on its knees. Here: the temple's alms, and the land's thanks. Tonight we'll ring every bell in town for you. Every bell but that one.",
+                reply: "So it was never the Six. Something the old Order sealed in the bell's silver, and he rang it loose, and called it holy. The Rule says the bell must never be rung, and he never read that far. And it says more: what's in that bell keeps its voice. When it tolls again, he'll be standing under it again, and his Order with him, and every one of them will know your face. Go back up as often as you have the stomach for it, and take what he carries off him each time. Here: the temple's alms, and the land's thanks. Tonight we'll ring every bell in town for you. Every bell but that one.",
                 reward: Object.freeze({ gold: 250 }),
                 change: Object.freeze({ kind: "festival", name: "the Feast of the Silent Bell", times: 0.85, lasts: DAY.length }),
             }),

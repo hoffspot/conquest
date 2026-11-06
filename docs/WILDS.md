@@ -1579,11 +1579,29 @@ Its steps:
 - **The Prior** (a *slay*: the keep's master, Prior Osric Vane, the Voice of the Bell, at the top
   of it by the Great Bell, his Black Choir about him): fallen, 150 gold to each in the keep and his
   book (writings.js `bell`: the night he rang it; what it says to him and to the Choir; the page of
-  the old Rule sewn into the back, of what they sealed in the bell; and his last page: "if it does
-  not, then I have fed it a valley, and it is still hungry").
+  the old Rule sewn into the back, of what they sealed in the bell, and that it keeps what it
+  speaks through, the brother struck down standing beneath it again when it tolls; and his last
+  page: "if it does not, then I have fed it a valley, and it is still hungry").
 - **The bell silent** (a *talk*: back to the priest): "The Prior's dead. This book was by his
-  bell." 250 gold, the thread at its end, and the Feast of the Silent Bell in the town for a day
-  (`festival`, its shops' prices at 85 in the hundred).
+  bell." The priest reads what the Rule says of the bell keeping its voice: when it tolls again
+  he'll be standing under it again, his Order with him, and every one of them will know your face;
+  go back up as often as you've the stomach for it. 250 gold, the thread at its end, and the Feast
+  of the Silent Bell in the town for a day (`festival`, its shops' prices at 85 in the hundred).
+
+Once the Prior's down (the host's `#priorFell`, whenever he falls, the thread's first time or any
+after):
+- **The Great Bell's one low note**, struck by no one, for those who felled him (SCENERY `court`
+  `fallen`; the church bell's recording, deeper): "It's not done with him. When it tolls again,
+  he'll walk again, and every one of the Order will know your face."
+- **The Order sworn against them** (rare.js Legends `marks` "sworn", and crossed): everyone on his
+  floor as he falls, and whoever dealt the last blow, and their parties. Its courts and its riders
+  set on them wherever they see them, past their posts' guard and without a word of warning
+  (battle.js `sworn`, the host's `#sworn`), not only within a few steps of their posts as on one
+  who's only crossed them.
+- **He walks again**: the keep's made again once its hoard's been taken and everyone's left, as any
+  dungeon is (docs/DUNGEONS.md), the Prior its master again, and the Great Bell's heard tolling
+  three times far off by everyone (SCENERY `court` `tolls`): "The Prior walks again." So the keep
+  can be fought up again, the Order sworn the whole way.
 
 ### Building a card
 
