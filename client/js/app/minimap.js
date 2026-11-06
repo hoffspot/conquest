@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBattleArrow, drawBuildingIcon, drawCommander, drawMarker, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
+import { drawBattleArrow, drawBuildingIcon, drawCommander, drawMarker, drawMissionMark, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -506,7 +506,7 @@ export class Minimap {
      * app/game.js partyView), each a dot in their own colour, or further than shown, a badge with
      * their initial at the edge, its arrow pointing the way they are.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] } }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] }, missions = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -741,6 +741,17 @@ export class Minimap {
 
             star(context, x, y, ELITE_MARK.size * (k < 1 ? 0.85 : 1) * (1 + 0.08 * Math.sin(now / 220)));
             this.elites.push({ x, y, edge: k < 1 });
+        }
+
+        // Where the player's war missions take them (core/missions.js): further than shown, at the
+        // edge the way each is, as the elites are (those drawn kept for tests: `missions`)
+        this.missions = [];
+
+        for (const mission of missions) {
+            const [x, y, k] = marked(mission);
+
+            drawMissionMark(context, x, y, { size: k < 1 ? 5.5 : 6.5 });
+            this.missions.push({ x, y, edge: k < 1 });
         }
 
         // The party's pings: further than shown, at the edge the way each is, as the elites are

@@ -1339,6 +1339,56 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A war messenger come to the player out in the world (core/missions.js, core/host.js
+    // #messengersAbout): who sends them, what's asked, what it pays at the player's rank, and that
+    // it pays more the higher their rank; taken, or turned down
+    messenger: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: ["{player}! I've come a long way to find you. Word from {sender}.", "{player}? Good, I've found you. I come from {sender}.", "A message for you, {player}, from {sender}."],
+                choices: [{ say: "Go on.", next: "offer" }],
+            },
+            offer: {
+                say: ["{missionText}"],
+                choices: [{ say: "And what's in it for me?", next: "reward" }],
+            },
+            reward: {
+                say: ["{reward}. {rankNote}"],
+                choices: [
+                    { say: "Tell them it will be done.", next: "accepted", do: [{ mission: "accept" }] },
+                    { say: "Not this time.", next: "declined", do: [{ mission: "decline" }] },
+                ],
+            },
+            accepted: {
+                say: ["I'll tell them. It's in your journal, with the way there.", "They'll be glad of it. Go well."],
+                choices: [{ say: "Farewell.", next: null }],
+            },
+            declined: {
+                say: ["As you will. I'll tell them.", "Another time, then."],
+                choices: [{ say: "Farewell.", next: null }],
+            },
+        },
+    },
+    // An army's or a reserve's commander come to brief a player who's come to join it (core/
+    // missions.js briefingOf): what they face, the player's part, and their own objective
+    briefing: {
+        start: "face",
+        nodes: {
+            face: {
+                say: ["{brief1}"],
+                choices: [{ say: "What do you need of me?", next: "part" }],
+            },
+            part: {
+                say: ["{brief2} {brief3}"],
+                choices: [{ say: "Anything else?", next: "extra" }],
+            },
+            extra: {
+                say: ["{brief4}"],
+                choices: [{ say: "Understood.", next: null, do: [{ briefed: true }] }],
+            },
+        },
+    },
     ruler: {
         start: "greet",
         nodes: {

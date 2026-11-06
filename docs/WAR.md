@@ -121,6 +121,11 @@ Grudges and favours fade slowly. They weigh on which way a neutral people turns.
   - defend a town.
 
   Carrying them out raises the player's **standing**.
+- **War missions** come to the player by **messenger** when the war is near them: break a camp,
+  fall on a convoy or supply wagons, cut off reinforcements, take a works or bring down a tower,
+  guard our works or see our convoy in, hold a town, stand with our reserve or march with our army
+  (*War missions by messenger*, below). They pay on the spot in gold, standing and a piece from the
+  armoury, more the higher the player's rank.
 - **Standing** is a rank in their people. Higher ranks bring:
   - more say in what the rulers decide (where the army goes, whether to make peace), and, from a
     Lord, orders for the army itself;
@@ -1895,6 +1900,99 @@ to, wagon, ids, at, over }`), the skirmishers out (`skirmishers`: `{ camp, peopl
 ids, since, fought, back }`) and the seats' leaders out (`leaders`: `{ people, ids, at }`;
 `SNAPSHOT_VERSION` 20), their lines in the battle's. What two games share changed (`NET_VERSION`
 81).
+
+### War missions by messenger
+
+The war comes to find the player (`core/missions.js`; the host's `#sendMessengers`,
+`#messengersAbout`, `#messengerAnswer`, `#watchMissions`, `#missionWon` and `#brief`; the game's
+`#messengerHeard`, `#missionHeard` and `#pickReward`). It's apart from the halls' and keep's
+requests (M4), which stay as they are.
+
+**What's near.** Every 3 s the host looks, for each player or party, at what of the war is within
+2 km (`MISSION_REACH`) of whoever a messenger would walk to (`missionsNear`), the nearest first:
+
+| Kind | Title | From | What | Done when |
+| --- | --- | --- | --- | --- |
+| `rout` | Break the camp | the ruler | an enemy camp | it's gone (fails if the town it's before falls) |
+| `plunder` | Fall on their convoy | the ruler | an enemy convoy of the works' goods | ambushed by the player's people, as they were there |
+| `wagons` | Raid their supply wagons | the ruler | an enemy army's supply wagons | lost to the player's people, within 400 m of where they were |
+| `intercept` | Cut off their reinforcements | the ruler | fresh soldiers on the road to an enemy army | cut off by the player's people (it fails if they get through) |
+| `seize` | Take their works | the ruler | an enemy's works (a quarry, a lumber mill...) | seized or cleared by the player's people, played |
+| `tower` | Bring down their tower | the ruler | an enemy guard tower or forward garrison | razed by the player's people |
+| `retake` | Win back the works | the nearest lord | works of ours taken | won back |
+| `guard` | Guard our works | the nearest lord | works of ours an enemy army's after | still ours when it's gone |
+| `convoy` | See our convoy in | the nearest lord | a convoy of ours on the road | delivered |
+| `defend` | Hold the town | the nearest lord | an enemy camp within a march of a town of ours | the camp gone, the town still ours |
+| `reserve` | Stand with the reserve | a general | our reserve out against an enemy army | their army beaten or turned back, ours still standing |
+| `attack` | March with the army | a general | our army marching on an objective | the objective ours (fails if our army's beaten or sent elsewhere) |
+
+Each is done only if the player was there first (within 150 m of it, 120 m of a town's edge:
+`THERE`); done by others before they got there, it comes to nothing (`void`), at no cost. A
+mission given is only one the player's not already carrying (`held`).
+
+**Who may hear one** (`#mayHearMessenger`): alive, out in the world (not indoors or in a dungeon),
+not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than
+two missions (`MOST_MISSIONS`), their people still standing, and **War messengers** on in Game
+options (Chat and players; `messengers` in their own settings, sent to a server-kept world's
+host). One comes at most once every ten war turns (`MESSENGER_EVERY`, ten minutes of play) since
+the last (`standing.messengerAt`), with none already on the way.
+
+**The messenger** (`#putMessenger`): one of the player's people's folk, in a tunic and jerkin, a cap
+or hood, with a ledger in hand (characters/folk.js `messenger`), put 40 m off (`MESSENGER.from`) the way
+from whoever sent them, and walking up. The player's told "A messenger from King Redhelm of the
+Kingdom of Mardenmoor is coming to find you." Within 3.5 m (`hail`) they hail them, and wait: "Ralf
+Holt, a messenger from King Redhelm of the Kingdom of Mardenmoor, has found you. Tap them to hear
+what they bring." (The talk isn't opened over whatever the player's doing.) Tapped, they talk (the
+"messenger" tree, core/dialogue.js): who sends them, what's asked, and what it pays at the
+player's rank and what the next rank would have, with "The higher your rank with us, the more we
+give." The player takes it ("Tell them it will be done.") or
+turns it down ("Not this time.", free; none comes again for ten turns). A messenger left
+unanswered waits a minute (`wait`), following a player who walks off and giving up past 120 m
+(`far`); five minutes if the player's gone indoors or underground (`outside`), where they went in;
+then goes back the way they came, let go of once 60 m from every player (`gone`) or after 30 s.
+
+**What it pays** (`rewardOf`): each kind's gold and standing (80 to 160 gold, 40 to 80 standing),
+30% more for each rank above the first (`RANK_PAY`), and the pick of three pieces from the
+armoury, finer the higher the rank (`RANK_QUALITY`: fine, fine, masterwork, rare, very rare,
+legendary) and a step finer still for the hardest (`hard` 2: take their works, bring down their
+tower, march with the army): a weapon of the player's kind, a piece of armour and a ring or an amulet, of their
+people's make and suited to their level (`gearChoices`, gear.js `rollGear`).
+
+**Carried.** Taken, it's in the player's standing (`standing.missions`, kept with the character,
+`mission-N`), the journal's **War missions** (who sent it, what's asked, how far and which way,
+the time left, Give up), and marked on the world map and the minimap (a red ring with a star,
+app/mapicons.js `drawMissionMark`; the map's key). Each has its time (`turns`: 30 or 40 war
+turns). The host looks at it each step (`#watchMissions`, `checkMission`): there (told), done
+(`ready`), failed (out of time, or the war's gone the other way) or come to nothing (`void`: done
+by others before the player got there, no loss).
+
+**Paid on the spot** (`#missionWon`): the gold (less what the player's hired adventurers take, as
+for anything won) and the standing, with "Break the camp: done! 120 gold and 60 standing. Choose
+your reward from the armoury.", and the pick of three offered at once (Later keeps it: Choose your
+reward, in the journal). The piece picked goes into the pack (or at their feet, if it's full),
+and the mission's done (`standing.missionsDone`, the last eight). Given up, or failed, it costs 5
+standing (`MISSION_FAILED`).
+
+**The briefing.** Sent to stand with the reserve or march with the army, once the player's within
+80 m of it (`BRIEFING_REACH`) its commander (the general, as the battle names them: `#generalOf`)
+walks out to them and hails them ("General Kendrick has come to brief you. Tap them to hear it.");
+tapped, they brief them (the "briefing" tree; `briefingOf`): how many are coming and under
+whom; how many we are; the player's part (hold our left flank, our right or our centre, or stand
+with our archers and keep their soldiers off them); and an objective that makes the whole worth
+40% more (`BONUS`): bring down their commander, by name, or their standard-bearer. Heard, it's
+kept with the mission in the journal, and the player's battle job (Battles, *jobs*) is the part
+they were given. The objective done is told ("There's more in it for you"), and paid with the
+rest (`#missionBonus`).
+
+**In a party.** One messenger comes for the party (none while any of them heard one in the last
+ten turns), to its first member who may hear one, and whatever any of them answers is answered
+for them all: taken, the mission's each of theirs of the
+same people, at each one's own rank, each paid and choosing their own piece (`#messengerAnswer`).
+
+**Kept.** The messengers out are in the host's snapshot (`messengers`, `nextMessenger`;
+`SNAPSHOT_VERSION` 49, none in a world kept before), the folk record with them. What two games
+share changed (`NET_VERSION` 212: the `mission` command, `pick` and `giveUp`; the `messenger` and
+`mission` events).
 
 ### The war table (M21)
 

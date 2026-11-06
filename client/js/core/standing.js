@@ -22,6 +22,7 @@ import { hypot } from "./exact.js";
 import { circleOf, rumoursNear, rumourWord, warningOf } from "./rumours.js";
 import { compass, wayOf } from "./ways.js";
 import { landAt } from "./worldplan/plan.js";
+import { KEEP_MISSIONS, MISSIONS, MOST_MISSIONS } from "./missions.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
 export const STANDINGS = Object.freeze([
@@ -1101,9 +1102,10 @@ export function meritOf(done) {
 export class Standing {
     /**
      * @param {object} [kept] - As kept (toJSON): { points, claimed, requests, done, next, guild
-     *   (null till they register at a guild: { merit }) }.
+     *   (null till they register at a guild: { merit }), missions, missionsDone, nextMission,
+     *   messengerAt }.
      */
-    constructor({ points = 0, claimed = [], requests = [], done = [], next = 1, guild = null } = {}) {
+    constructor({ points = 0, claimed = [], requests = [], done = [], next = 1, guild = null, missions = [], missionsDone = [], nextMission = 1, messengerAt = null } = {}) {
         this.points = Math.max(0, Number.isFinite(points) ? points : 0);
 
         /** Their guild card: null till they register; { merit } after. */
@@ -1119,6 +1121,53 @@ export class Standing {
         this.requests = requests.filter((request) => REQUESTS[request?.kind]).slice(0, MOST_CARRIED).map(inGold);
         this.done = done.filter((request) => REQUESTS[request?.kind]).slice(0, KEEP_DONE).map(inGold);
         this.next = Number.isInteger(next) && next > 0 ? next : 1;
+
+        /**
+         * The war missions a messenger brought them (core/missions.js): those carried (taken, or
+         * done and their pick of the armoury still to make: `state` "won"), at most MOST_MISSIONS
+         * of their own taking, and the last few done, failed or come to nothing (newest first); and
+         * when the last messenger came (a war turn), for the next to wait on.
+         */
+        const kept = (list) => (Array.isArray(list) ? list.filter((mission) => MISSIONS[mission?.kind] && typeof mission.id === "string") : []);
+
+        this.missions = kept(missions).slice(0, MOST_MISSIONS + 6);
+        this.missionsDone = kept(missionsDone).slice(0, KEEP_MISSIONS);
+        this.nextMission = Number.isInteger(nextMission) && nextMission > 0 ? nextMission : 1;
+        this.messengerAt = Number.isFinite(messengerAt) ? messengerAt : null;
+    }
+
+    /** A war mission taken on (core/missions.js missionOf), given an id; or null (carrying as many as they can). */
+    takeMission(mission) {
+        if (this.missions.filter((each) => each.state !== "won").length >= MOST_MISSIONS || this.missions.some((each) => each.kind === mission.kind && each.key === mission.key)) {
+            return null;
+        }
+
+        const taken = { ...structuredClone(mission), id: `mission-${this.nextMission++}`, state: "open" };
+
+        this.missions.push(taken);
+
+        return taken;
+    }
+
+    findMission(id) {
+        return this.missions.find((mission) => mission.id === id) ?? null;
+    }
+
+    /** A war mission set down as done, failed or come to nothing, kept among the last few. */
+    closeMission(id, state) {
+        const mission = this.findMission(id);
+
+        if (!mission) {
+            return null;
+        }
+
+        this.missions = this.missions.filter((each) => each !== mission);
+        mission.state = state;
+        delete mission.gear;
+        this.missionsDone.unshift(mission);
+        this.missionsDone.length = Math.min(this.missionsDone.length, KEEP_MISSIONS);
+
+        return mission;
     }
 
     /** Their rank (an index into STANDINGS). */
@@ -1258,6 +1307,6 @@ export class Standing {
     }
 
     toJSON() {
-        return { points: this.points, claimed: [...this.claimed], requests: structuredClone(this.requests), done: structuredClone(this.done), next: this.next, guild: this.guild ? { ...this.guild } : null };
+        return { points: this.points, claimed: [...this.claimed], requests: structuredClone(this.requests), done: structuredClone(this.done), next: this.next, guild: this.guild ? { ...this.guild } : null, missions: structuredClone(this.missions), missionsDone: structuredClone(this.missionsDone), nextMission: this.nextMission, messengerAt: this.messengerAt };
     }
 }

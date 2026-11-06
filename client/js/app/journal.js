@@ -204,6 +204,8 @@ export class JournalPanel {
         this.onGiveUpThread = () => {};
         this.onRead = () => {};
         this.onClose = () => {};
+        this.onGiveUpMission = () => {};
+        this.onPickMission = () => {};
     }
 
     get open() {
@@ -235,7 +237,7 @@ export class JournalPanel {
      * lead), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, party = false, people, done, company = [], mending = [], roll = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, legends = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, missions = [], missionsDone = [], party = false, people, done, company = [], mending = [], roll = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, legends = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -295,6 +297,53 @@ export class JournalPanel {
         }
 
         sections.push(this.#section("Adventurers' Guild", card));
+
+        // The war missions messengers brought them (core/missions.js): each, who sent it, what's
+        // asked, the way there and the time left; a commander's briefing, once heard; done, their
+        // pick of the armoury to make; and the last few done or failed
+        const war = element("ul", "journal-list missions");
+
+        war.append(
+            ...missions.map(({ id, title, from, text, state, progress, where, left, briefing = null }) => {
+                const row = element("li", `journal-request journal-mission${state === "won" ? " won" : ""}`);
+                const head = element("div", "journal-request-head");
+                const actions = element("div", "journal-request-actions");
+                const button = (words, label, act) => {
+                    const each = element("button", "journal-button", words);
+
+                    each.type = "button";
+                    each.setAttribute("aria-label", label);
+                    each.addEventListener("click", act);
+
+                    return each;
+                };
+
+                head.append(element("span", "journal-request-title", title), element("span", "journal-request-from", from));
+                row.append(head, element("p", "journal-request-text", text));
+
+                if (briefing?.length) {
+                    row.append(element("p", "journal-mission-briefing", briefing.join(" ")));
+                }
+
+                if (state === "won") {
+                    actions.append(button("Choose your reward", `Choose your reward for ${title}`, () => this.onPickMission(id)));
+                } else {
+                    row.append(element("p", "journal-request-progress", [progress, where, left].filter(Boolean).join(" · ")));
+                    actions.append(button("Give up", `Give up ${title}`, () => this.onGiveUpMission(id)));
+                }
+
+                row.append(actions);
+
+                return row;
+            }),
+            ...missionsDone.map(({ title, from, state }) => element("li", `journal-done ${state}`, `${title}, for ${from}: ${{ done: "done", failed: "failed", void: "came to nothing" }[state] ?? state}`)),
+        );
+
+        if (!missions.length && !missionsDone.length) {
+            war.append(element("li", "journal-empty", "None yet. When the war comes near you, a messenger will find you with work: the higher your rank, the more it pays."));
+        }
+
+        sections.push(this.#section("War missions", war));
 
         // What they've been asked
         const list = element("ul", "journal-list requests");

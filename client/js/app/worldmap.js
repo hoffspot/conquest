@@ -28,7 +28,7 @@
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { MARKER_NAMES } from "../core/markers.js";
-import { drawBuildingIcon, drawMarker, drawPartyPin, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawMissionMark, drawPartyPin, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -858,11 +858,17 @@ export class WorldMap {
             drawSearch(context, x, y, r, grade, { cross: Math.min(16, Math.max(8, r * 0.5)), own });
         }
 
-        // Where the player's requests take them: a gold ring with a star in it, fog or no
+        // Where the player's requests take them: a gold ring with a star in it, fog or no; their
+        // war missions, the same in the war's red (mapicons.js drawMissionMark)
         for (const mark of this.marks ?? []) {
             const [x, y] = at(mark.x, mark.z);
 
             if (x < -20 || y < -20 || x > width + 20 || y > height + 20) {
+                continue;
+            }
+
+            if (mark.war) {
+                drawMissionMark(context, x, y);
                 continue;
             }
 

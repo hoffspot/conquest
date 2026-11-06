@@ -952,6 +952,7 @@ $("#debugswitch").addEventListener("change", (event) => applySetting("debug", ev
 function showPlaySettings() {
     $("#resistswitch").checked = settings.resistSummons;
     $("#refuseswitch").checked = settings.refuseInvites;
+    $("#messengerswitch").checked = settings.messengers;
     $("#partydmswitch").checked = settings.refusePartyDms;
     $("#worlddmswitch").checked = settings.refuseWorldDms;
     $("#chatfeedswitch").checked = settings.chatOnScreen;
@@ -1263,6 +1264,7 @@ async function playing(save, { world, place, war }) {
     game.refuseInvites = settings.refuseInvites;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
+    game.messengers = settings.messengers;
     game.keys = keysOf(settings.keyBindings);
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
@@ -2239,7 +2241,7 @@ function toggleLegend() {
 
 // The map's key: each icon, and the fog
 async function keyOf() {
-    const { drawBuildingIcon, drawMarker, drawTracked, ICON_NAMES } = await import("./app/mapicons.js");
+    const { drawBuildingIcon, drawMarker, drawMissionMark, drawTracked, ICON_NAMES } = await import("./app/mapicons.js");
     const list = $("#worldmapkey");
 
     list.replaceChildren();
@@ -2303,6 +2305,14 @@ async function keyOf() {
     drawTracked(paw.getContext("2d"), 20, 20, 32);
     tracked.append(paw, "Tracked home by its trails");
     list.append(tracked);
+
+    // (Where a war mission takes the player: a red ring with a star in it)
+    const mission = document.createElement("li");
+    const ring = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+
+    drawMissionMark(ring.getContext("2d"), 22, 22, { size: 13 });
+    mission.append(ring, "A war mission");
+    list.append(mission);
 
     // (The pin: held down to drop it; and tapping twice to run)
     const pin = document.createElement("li");
@@ -3064,6 +3074,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.refuseInvites = settings.refuseInvites;
     applyChat(game);
     game.autoSnag = settings.autoSnag;
+    game.messengers = settings.messengers;
     game.keys = keysOf(settings.keyBindings);
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
@@ -5516,6 +5527,7 @@ $("#largepointerswitch").addEventListener("change", (event) => applySetting("lar
 $("#crashswitch").addEventListener("change", (event) => applySetting("sendCrashes", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
+$("#messengerswitch").addEventListener("change", (event) => applySetting("messengers", event.target.checked));
 $("#partydmswitch").addEventListener("change", (event) => applySetting("refusePartyDms", event.target.checked));
 $("#worlddmswitch").addEventListener("change", (event) => applySetting("refuseWorldDms", event.target.checked));
 $("#chatfeedswitch").addEventListener("change", (event) => applySetting("chatOnScreen", event.target.checked));
@@ -6276,7 +6288,7 @@ function applySetting(key, value) {
             tellPlaySettings();
             showBlocked();
         }
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter" || key === "showEnmity") {
+    } else if (key === "messengers" || key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter" || key === "showEnmity") {
         if (state.game) {
             state.game[key] = value;
         }
