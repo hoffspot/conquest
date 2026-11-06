@@ -1384,9 +1384,15 @@ the view answers for the sun and the lamps (`watchShadows`):
   80,000 triangles in the sun's shadows. The lamps' shadows, drawn only every few frames, keep
   everyone in reach, so the shadows don't lag when the camera turns.
 - **Characters** (the terrain plan's M8) are drawn into them with their fewest triangles, near or
-  far (`castCheaply`, characters/character.js): the body's far level alone, each garment's, and a
-  far thinner hair. A player cast 45,600 to 49,100 triangles into the sun's shadows and casts
-  7,500 to 8,300; a follower, the orc or a wild one 4,700 to 7,100 where they cast 41,000.
+  far (`castCheaply`, characters/character.js): the whole body's far level (under its clothes
+  too), a far thinner hair and what hangs from it (a skirt, a cloak); what's fitted over it
+  casts none of its own, a draw into each shadow map for the body, not one a garment. A player
+  cast 45,600 to 49,100 triangles into the sun's shadows and casts 7,500 to 8,300 or fewer; a
+  follower, the orc or a wild one 4,700 to 7,100 where they cast 41,000.
+- **Creatures drawn from a model** (beasts/model.js) cast theirs from their least detailed level
+  alone, its meshes (a part of several materials; the Order of the Bell's body and cloak) joined
+  into one and drawn with about three tenths of its triangles once they're made (`shadowShape`,
+  `SHADOW_DETAIL`): a draw into each shadow map, made once for everyone drawn from the model.
 - **What's seen is the same:** what's left out lies outside a shadow map's view, or casts where
   the camera doesn't look; characters' shadows are drawn from fewer of the same triangles, a few
   millimetres out where the shadow map's texels are centimetres across.
