@@ -604,7 +604,7 @@ in this repository, but in the private one the game's builds fetch it from
 
 Don't copy it out of this game or use it in anything else.
 
-## prior-2.bin, prior.umber.bin, prior.pale.bin, prior.iron.bin
+## prior-3.bin, prior.umber.bin, prior.pale.bin, prior.iron.bin
 
 **Cathedral Guardian**, by **Alexander Lenski** (its Unreal Engine files: its skeletal mesh, its war
 mace and shield, its textures and its 25 animations, exported from Unreal Engine by this
@@ -615,10 +615,10 @@ It is not CC0 and not free to reuse. That licence lets it be used in a game its 
 distributed as part of it, never on its own, so it's in the game only in this converted form,
 served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
 (`private/cathedral.json`, which stays out of the repository with the bought files), its `phone`
-build (`prior-2.bin`). That's its armoured mesh with its halo of thorns, its mace and shield on the
-bones they're held by (`weapon_r`, `weapon_l`), the shield turned to lie along his forearm, its
-face out and its point down (its first build, `prior.bin`, held it edge-on through his body),
-50,568 triangles with two lower details packed in
+build (`prior-3.bin`). That's its armoured mesh with its halo of thorns, its mace and shield on the
+bones they're held by (`weapon_r`, `weapon_l`), the shield on his forearm with its face out, its
+spiked end up and its point down (its first build, `prior.bin`, held it edge-on through his body;
+its second, `prior-2.bin`, upside down), 50,568 triangles with two lower details packed in
 (22,749 and 10,110); its three materials (body, armour, weapons), each its textures (colour, normal
 at 512 pixels, and occlusion, roughness and metal; its body's and its mace's glow) as KTX2; and all
 25 of its own clips: five attacks, three flinches, three deaths, a dodge, four idles, walking and
