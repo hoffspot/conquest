@@ -73,7 +73,7 @@ function orderModel({ segments = 4 } = {}) {
     const scene = new THREE.Group();
     const root = new THREE.Bone();
     const spine = new THREE.Bone();
-    const materials = Object.fromEntries(["M_Chainmail", "M_Cloth", "M_Head"].map((name) => [name, Object.assign(new THREE.MeshStandardMaterial(), { name })]));
+    const materials = Object.fromEntries(["M_Chainmail", "M_Cloth", "M_Head", "M_Eyes", "M_Weapon"].map((name) => [name, Object.assign(new THREE.MeshStandardMaterial(), { name })]));
     const cloakPack = new THREE.Matrix4().compose(new THREE.Vector3(0.1, 0.9, -0.05), new THREE.Quaternion(), new THREE.Vector3(0.6, 1.1, 0.5));
 
     root.name = "pelvis";
@@ -86,9 +86,10 @@ function orderModel({ segments = 4 } = {}) {
     for (const [lod, suffix] of [[0, ""], [1, "lod1"], [2, "lod2"]]) {
         const body = partNode(`Body${suffix}`, lod, [partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod, segments }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod, segments })]);
         const cloak = partNode(`Cloak${suffix}`, lod, [partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod, segments })]);
-        const head = partNode(`Head${suffix}`, lod, [partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod })]);
+        const head = partNode(`Head${suffix}`, lod, [partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod }), partMesh(`Head${suffix}_1`, lod, materials.M_Eyes, [root, spine], { seed: 5 + lod })]);
+        const knife = partNode(`Knife${suffix}`, lod, [partMesh(`Knife${suffix}`, lod, materials.M_Weapon, [root, spine], { seed: 6 + lod })]);
 
-        scene.add(body, cloak, head);
+        scene.add(body, cloak, head, knife);
     }
 
     const model = MODELS.choirKnight;
@@ -157,7 +158,8 @@ describe("a model's shadow (beasts/model.js)", () => {
         // level read from the group round its meshes, where three.js puts its node's extras)
         assert.deepEqual(
             plan.levels.map((meshes) => meshes.map(({ name }) => name).sort()),
-            ["", "lod1", "lod2"].map((suffix) => [`Body${suffix}`, `Body${suffix}_1`, `Cloak${suffix}`, `Head${suffix}`]),
+            // (Its eyes left out of its least detailed level: MODELS `close`)
+            ["", "lod1", "lod2"].map((suffix) => [`Body${suffix}`, `Body${suffix}_1`, `Cloak${suffix}`, `Head${suffix}`, ...(suffix === "lod2" ? [] : [`Head${suffix}_1`])]),
         );
         assert.deepEqual(shownAt(), [true, false, false]);
 
@@ -171,7 +173,7 @@ describe("a model's shadow (beasts/model.js)", () => {
         assert.ok(!caster.visible);
         plan.castShadows(true);
         assert.ok(caster.visible && caster.castShadow);
-        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 4 + 1, "its first level's four meshes, and its shadow's");
+        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 5 + 1, "its first level's five meshes, and its shadow's");
     });
 
     it("is drawn with fewer triangles once they're made (about SHADOW_DETAIL's share), over the same corners, made once for everyone drawn from the model", async () => {
@@ -201,6 +203,17 @@ describe("a model's shadow (beasts/model.js)", () => {
 
         await single.lowerShadow(lods);
         assert.equal(asked, 1);
+    });
+
+    it("leaves what's too small to see out of its least detailed level (MODELS `close`, by part or material): an Order brother's knife, his eyes", () => {
+        const plan = modelBody("bellBrother", orderModel(), { parts: ["Body", "Head", "Knife"] });
+        const names = (level) => plan.levels[level].map(({ name }) => name).sort();
+
+        assert.ok(MODELS.bellBrother.close.includes("Knife") && MODELS.bellBrother.close.includes("M_Eyes"));
+        assert.deepEqual(names(0), ["Body", "Body_1", "Head", "Head_1", "Knife"]);
+        assert.deepEqual(names(1), ["Bodylod1", "Bodylod1_1", "Headlod1", "Headlod1_1", "Knifelod1"]);
+        assert.deepEqual(names(2), ["Bodylod2", "Bodylod2_1", "Headlod2"]);
+        assert.ok(!plan.object.getObjectByName("Knifelod2") && !plan.object.getObjectByName("Headlod2_1"), "nor drawn");
     });
 
     it("joins one shape for everyone drawn from the model", () => {

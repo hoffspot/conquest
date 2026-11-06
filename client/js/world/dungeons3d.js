@@ -551,9 +551,10 @@ const _corner = new THREE.Vector3();
  * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
  * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said), cut
  * (cut away with the rock while the camera's over the roof; "solid", drawn solid where it is:
- * propMaterial) }]), each
- * model's copies in each tile of the level (the rock's, CAVERNS) drawn at once (instanced, one for
- * each of its materials), so what's out of sight or of a light's reach isn't drawn; added to
+ * propMaterial), lot (how wide a square of the level its copies are drawn at once in, metres:
+ * the rock's tile, CAVERNS, if it isn't said) }]), each model's copies in each such square drawn at
+ * once (instanced, one for each of its materials), so what's out of sight or of a light's reach
+ * isn't drawn; added to
  * `group` once they're all read (`read`: how, loadProp). What isn't read (not in the catalog, not
  * downloaded) is left out, and what's on it. Resolves once they're in.
  */
@@ -599,7 +600,8 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         matrix.premultiply(new THREE.Matrix4().makeTranslation(x - (box.min.x + box.max.x) / 2, y - box.min.y, z - (box.min.z + box.max.z) / 2));
         tops.set(placement, y + box.max.y - box.min.y);
 
-        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${Math.floor(x / CAVERNS.tile)},${Math.floor(z / CAVERNS.tile)}`;
+        const across = placement.lot ?? CAVERNS.tile;
+        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
 
         if (!lots.has(key)) {
             lots.set(key, { name: placement.model, prop, tint, cut, matrices: [], shadow: false });

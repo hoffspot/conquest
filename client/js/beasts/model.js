@@ -257,6 +257,10 @@ const deepFreeze = (value) => {
 // sheaths, each a draw of its own and twice over, for little on the ground)
 const ORDER_SHADE = Object.freeze(["Body", "Cloak", "Horse"]);
 
+// (What of the Order's models is left out of its least detailed level (MODELS `close`): a few
+// pixels each at it, a draw each: its knife, its sheaths and quiver, and its eyes)
+const ORDER_CLOSE = Object.freeze(["Knife", "KnifeSheath", "SwordSheath", "Quiver", "M_Eyes"]);
+
 const order = ({ parts, choose = [], arms, skins = null, scale = 1, specials = {}, spans = {} }) => {
     const kit = ORDER_ARMS[arms];
 
@@ -276,6 +280,7 @@ const order = ({ parts, choose = [], arms, skins = null, scale = 1, specials = {
         fire: Object.freeze({}),
         joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
         shade: ORDER_SHADE,
+        close: ORDER_CLOSE,
         mouth: null,
         pace: +(0.8 * scale).toFixed(2),
         runPace: +(4.5 * scale).toFixed(2),
@@ -307,6 +312,7 @@ const riderOf = (parts, skins = null) =>
         fire: Object.freeze({}),
         joints: Object.freeze({ torso: "spine_03", body: "Spine1_M", head: "head", mouth: "head", left: "hand_l" }),
         shade: ORDER_SHADE,
+        close: ORDER_CLOSE,
         mouth: null,
         pace: 2.4,
         runPace: 5,
@@ -336,7 +342,8 @@ const BROTHERS_HELMS = ["HelmPlain", "HelmFlat", "HelmBar", "HelmRidge"];
  * mouths too, `mouths`, in the clips `together` names: a cerberus's three); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); of a model whose parts are kept apart, the parts its shadow's cast from (`shade`: all of
- * them if it isn't given); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
+ * them if it isn't given), and the parts or materials left out of its least detailed level
+ * (`close`: too small to see at it); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
  * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
  * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false). One that
  * stands on guard (battle.js #onGuard) holds its guard up in a clip of its own (`guard`: `hold`,
@@ -2039,6 +2046,20 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
                 materials.set(node.material.name, node.material);
                 drawn.set(node, node.material);
             }
+        });
+    }
+
+    // (What's too small to see at its least detailed level left out of it: `close`, by part or
+    // material)
+    if (model.close && levels.length > 1) {
+        levels[levels.length - 1] = levels.at(-1).filter((mesh) => {
+            const out = model.close.includes(partOf(mesh)) || model.close.includes(mesh.material.name);
+
+            if (out) {
+                mesh.removeFromParent();
+            }
+
+            return !out;
         });
     }
 

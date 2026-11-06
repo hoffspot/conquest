@@ -188,6 +188,16 @@ describe("the models placed (world/dungeons3d.js furnish)", () => {
         near(d.max.y - d.min.y, 1, "made as tall");
         near(d.max.z - d.min.z, 2, "made as wide");
         near((d.min.x + d.max.x) / 2, CAVERNS.tile + 4, "over x");
+
+        // (Drawn at once in wider squares where it's asked (`lot`): those two tiles' one)
+        const wider = new THREE.Group();
+
+        const lot = 4 * CAVERNS.tile;
+        const foot = { model: "block", x: 3, z: 4, size: 1, lot };
+
+        await furnish(wider, [foot, { model: "block", on: foot, x: 3, z: 4, size: 1, lot }, { model: "block", x: 5, z: 6, size: 2, lot }, { model: "block", x: CAVERNS.tile + 4, z: 4, size: 1, lot }], { read });
+        assert.equal(wider.children.length, 1);
+        assert.equal(wider.children[0].count, 4);
     });
 
     it("never leaves a model that can't be read an error no one's caught, asked for ahead of being wanted as a level's built (the licensed models left out)", async () => {
