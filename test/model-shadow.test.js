@@ -23,8 +23,6 @@ function partMesh(name, lod, material, bones, { pack = new THREE.Matrix4(), segm
     const weights = [];
     const v = new THREE.Vector3();
 
-    geometry.deleteAttribute("uv");
-
     for (let i = 0; i < position.count; i++) {
         v.fromBufferAttribute(position, i);
         v.set(v.x + 0.1 * Math.sin(seed), v.y + 1 + 0.1 * seed, v.z);
@@ -113,10 +111,11 @@ const meshesOf = (plan) => {
 
 describe("a model's shadow (beasts/model.js)", () => {
     it("is cast from its least detailed level's body and cloak joined into one, each corner where its own skin put it, however the figure's posed", () => {
-        const plan = modelBody("choirKnight", orderModel(), { parts: ["Body", "Cloak", "Head"] });
+        // (All its parts worn, none chosen: none of them joined, its least detailed level's own)
+        const plan = modelBody("choirKnight", orderModel());
         const [caster] = plan.casters;
         const least = plan.levels.at(-1);
-        const shading = least.filter((mesh) => !mesh.name.startsWith("Head"));
+        const shading = least.filter((mesh) => !mesh.name.startsWith("Head") && !mesh.name.startsWith("Knife"));
 
         assert.equal(plan.casters.length, 1);
         assert.ok(caster.isSkinnedMesh && caster.castShadow && caster.visible && !caster.receiveShadow);
@@ -150,7 +149,7 @@ describe("a model's shadow (beasts/model.js)", () => {
     });
 
     it("is drawn unseen at every level while it's cast, and not at all while it isn't; its levels shown one at a time all the same", () => {
-        const plan = modelBody("choirKnight", orderModel(), { parts: ["Body", "Cloak", "Head"] });
+        const plan = modelBody("choirKnight", orderModel());
         const [caster] = plan.casters;
         const shownAt = () => plan.levels.map((meshes) => meshes.every(({ visible }) => visible));
 
@@ -158,8 +157,8 @@ describe("a model's shadow (beasts/model.js)", () => {
         // level read from the group round its meshes, where three.js puts its node's extras)
         assert.deepEqual(
             plan.levels.map((meshes) => meshes.map(({ name }) => name).sort()),
-            // (Its eyes left out of its least detailed level: MODELS `close`)
-            ["", "lod1", "lod2"].map((suffix) => [`Body${suffix}`, `Body${suffix}_1`, `Cloak${suffix}`, `Head${suffix}`, ...(suffix === "lod2" ? [] : [`Head${suffix}_1`])]),
+            // (Its eyes and knife left out of its least detailed level: MODELS `close`)
+            ["", "lod1", "lod2"].map((suffix) => [`Body${suffix}`, `Body${suffix}_1`, `Cloak${suffix}`, `Head${suffix}`, ...(suffix === "lod2" ? [] : [`Head${suffix}_1`, `Knife${suffix}`])]),
         );
         assert.deepEqual(shownAt(), [true, false, false]);
 
@@ -173,7 +172,7 @@ describe("a model's shadow (beasts/model.js)", () => {
         assert.ok(!caster.visible);
         plan.castShadows(true);
         assert.ok(caster.visible && caster.castShadow);
-        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 5 + 1, "its first level's five meshes, and its shadow's");
+        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 6 + 1, "its first level's six meshes, and its shadow's");
     });
 
     it("is drawn with fewer triangles once they're made (about SHADOW_DETAIL's share), over the same corners, made once for everyone drawn from the model", async () => {
@@ -214,6 +213,51 @@ describe("a model's shadow (beasts/model.js)", () => {
         assert.deepEqual(names(1), ["Bodylod1", "Bodylod1_1", "Headlod1", "Headlod1_1", "Knifelod1"]);
         assert.deepEqual(names(2), ["Bodylod2", "Bodylod2_1", "Headlod2"]);
         assert.ok(!plan.object.getObjectByName("Knifelod2") && !plan.object.getObjectByName("Headlod2_1"), "nor drawn");
+    });
+
+    it("of a model whose parts are kept apart, joins the parts it wears of one material at each level into one, drawn as they were, however the figure's posed", () => {
+        const gltf = orderModel();
+        const plan = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+        const apart = modelBody("choirKnight", gltf);
+        const names = (level) => plan.levels[level].map(({ name }) => name).sort();
+
+        // (Its body's cloth and its cloak one mesh at each level, the rest as they were)
+        assert.deepEqual(names(0), ["Body", "Head", "Head_1", "M_Cloth:Body+Cloak"]);
+        assert.deepEqual(names(1), ["Bodylod1", "Headlod1", "Headlod1_1", "M_Cloth:Body+Cloak"]);
+        assert.deepEqual(names(2), ["Bodylod2", "Headlod2", "M_Cloth:Body+Cloak"]);
+
+        const [joined] = plan.levels[0].filter(({ name }) => name.startsWith("M_Cloth"));
+
+        assert.ok(joined.isSkinnedMesh && !joined.castShadow && joined.receiveShadow && joined.material.name === "M_Cloth");
+        assert.ok(["normal", "uv"].every((name) => joined.geometry.attributes[name]), "drawn as they were: which way they face, their picture's place");
+        assert.equal(joined.geometry, modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] }).levels[0].find(({ name }) => name === joined.name).geometry, "once for everyone dressed alike");
+
+        // (Both posed alike: the joined mesh's corners where each part's own skin puts its)
+        for (const one of [plan, apart]) {
+            one.object.getObjectByName("spine_03").rotation.set(-0.3, 0.8, 0.2);
+            one.object.position.set(-1, 0.2, 4);
+            one.object.rotation.y = -0.6;
+            one.object.updateMatrixWorld(true);
+        }
+
+        const parts = ["Body_1", "Cloak"].map((name) => apart.levels[0].find((mesh) => mesh.name === name));
+        let at = 0;
+
+        for (const mesh of parts) {
+            for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+                const own = cornerOf(mesh, i);
+                const drawn = cornerOf(joined, at + i);
+
+                assert.ok(own.distanceTo(drawn) < 1e-5, `${mesh.name} ${i}`);
+                assert.ok(Math.abs(new THREE.Vector3().fromBufferAttribute(joined.geometry.attributes.normal, at + i).length() - 1) < 1e-5);
+            }
+
+            at += mesh.geometry.attributes.position.count;
+        }
+
+        // (Shown a level at a time, as its own were)
+        plan.showLevel(2);
+        assert.ok(plan.levels[2].every(({ visible }) => visible) && plan.levels[0].every(({ visible }) => !visible));
     });
 
     it("joins one shape for everyone drawn from the model", () => {

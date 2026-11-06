@@ -1778,15 +1778,26 @@ export const SHADOW_DETAIL = Object.freeze({ share: 0.3, error: 0.04 });
  * One shape for a model's shadow, joined from the meshes it's cast from (`meshes`: its least
  * detailed level's, each a part of it in one of its materials, in `scene`, one drawn from it): one
  * draw for its shadow, not one a part and material. Just where their corners are and how their
- * skins weight them, all a shadow needs; each mesh's corners put where the first's skin puts them
- * where its own would (the pipeline packs each mesh's positions small, its skin's inverses making
- * them full size again: the same bones, other inverses). Null if they can't be joined: a bone
- * weighted that the first's skin hasn't, or a skin that puts a mesh elsewhere than the first's
- * would, bone by bone.
+ * skins weight them, all a shadow needs (joinedShape). Null if they can't be joined.
  */
 function shadowShape(gltf, scene, meshes) {
+    return joinedShape(gltf, scene, meshes, false);
+}
+
+/**
+ * Meshes of a model (`meshes`, in `scene`, one drawn from it) joined into one shape, made once for
+ * everyone drawn from the model (`gltf`, as read) and kept with it (let go of with it:
+ * disposeModel): all they're drawn with if `drawn` (each mesh's corners, which way they face, their
+ * picture's place and colour: the same material's, the same pictures), else where their corners
+ * are and how their skins weight them alone (a shadow's). Each mesh's corners put where the first's
+ * skin puts them where its own would (the pipeline packs each mesh's positions small, its skin's
+ * inverses making them full size again: the same bones, other inverses), and turned so. Null if
+ * they can't be joined: a bone weighted that the first's skin hasn't, a skin that puts a mesh
+ * elsewhere than the first's would, bone by bone, or (drawn) a mesh without what the first has.
+ */
+function joinedShape(gltf, scene, meshes, drawn) {
     const known = shadowShapes.get(gltf) ?? new Map();
-    const key = meshes.map(({ geometry }) => geometry.uuid).join(" ");
+    const key = `${drawn ? "drawn" : "shadow"} ${meshes.map(({ geometry }) => geometry.uuid).join(" ")}`;
 
     shadowShapes.set(gltf, known);
 
@@ -1796,6 +1807,7 @@ function shadowShape(gltf, scene, meshes) {
 
     const [first] = meshes;
     const bones = first.skeleton.bones;
+    const names = drawn ? Object.keys(first.geometry.attributes).filter((name) => !["position", "skinIndex", "skinWeight"].includes(name)) : [];
     const to = new THREE.Matrix4();
     const from = new THREE.Matrix4();
     const between = new THREE.Matrix4();
@@ -1803,6 +1815,11 @@ function shadowShape(gltf, scene, meshes) {
     // (How far a mesh has been moved since it was bound to its skin)
     const since = (mesh) => new THREE.Matrix4().multiplyMatrices(mesh.matrixWorld, mesh.bindMatrixInverse);
     const each = [];
+    const none = () => {
+        known.set(key, null);
+
+        return null;
+    };
 
     scene.updateMatrixWorld(true);
 
@@ -1811,6 +1828,10 @@ function shadowShape(gltf, scene, meshes) {
         // every bone, or it isn't joined; it and the first moved alike since they were bound)
         const into = mesh.skeleton.bones.map((bone) => bones.indexOf(bone));
         let moved = alike(since(mesh), since(first)) ? null : false;
+
+        if (names.some((name) => mesh.geometry.attributes[name]?.itemSize !== first.geometry.attributes[name].itemSize)) {
+            return none();
+        }
 
         for (const [k, j] of into.entries()) {
             if (moved === false) {
@@ -1833,12 +1854,10 @@ function shadowShape(gltf, scene, meshes) {
         }
 
         if (!moved) {
-            known.set(key, null);
-
-            return null;
+            return none();
         }
 
-        each.push({ mesh, into, moved });
+        each.push({ mesh, into, moved, turned: new THREE.Matrix3().getNormalMatrix(moved) });
     }
 
     const corners = each.reduce((sum, { mesh }) => sum + mesh.geometry.attributes.position.count, 0);
@@ -1846,12 +1865,13 @@ function shadowShape(gltf, scene, meshes) {
     const position = new Float32Array(corners * 3);
     const skinIndex = new Uint16Array(corners * 4);
     const skinWeight = new Float32Array(corners * 4);
+    const others = Object.fromEntries(names.map((name) => [name, new Float32Array(corners * first.geometry.attributes[name].itemSize)]));
     const index = corners > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
     const corner = new THREE.Vector3();
     let at = 0;
     let next = 0;
 
-    for (const { mesh, into, moved } of each) {
+    for (const { mesh, into, moved, turned } of each) {
         const { attributes, index: own } = mesh.geometry;
         const { position: where, skinIndex: by, skinWeight: weight } = attributes;
 
@@ -1864,13 +1884,30 @@ function shadowShape(gltf, scene, meshes) {
                 const bone = into[by.getComponent(i, c)] ?? -1;
 
                 if (share > 0 && bone < 0) {
-                    known.set(key, null);
-
-                    return null;
+                    return none();
                 }
 
                 skinIndex[(at + i) * 4 + c] = Math.max(bone, 0);
                 skinWeight[(at + i) * 4 + c] = share;
+            }
+
+            // (Which way it faces, and its tangent, turned as its corners are; the rest as it is)
+            for (const name of names) {
+                const attribute = attributes[name];
+                const size = attribute.itemSize;
+
+                if (name === "normal" || name === "tangent") {
+                    corner.set(attribute.getX(i), attribute.getY(i), attribute.getZ(i)).applyMatrix3(turned).normalize();
+                    corner.toArray(others[name], (at + i) * size);
+
+                    if (size === 4) {
+                        others[name][(at + i) * 4 + 3] = attribute.getW(i);
+                    }
+                } else {
+                    for (let c = 0; c < size; c++) {
+                        others[name][(at + i) * size + c] = attribute.getComponent(i, c);
+                    }
+                }
             }
         }
 
@@ -1886,6 +1923,11 @@ function shadowShape(gltf, scene, meshes) {
     shape.setAttribute("position", new THREE.BufferAttribute(position, 3));
     shape.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
     shape.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+
+    for (const name of names) {
+        shape.setAttribute(name, new THREE.BufferAttribute(others[name], first.geometry.attributes[name].itemSize));
+    }
+
     shape.setIndex(new THREE.BufferAttribute(index, 1));
     known.set(key, shape);
 
@@ -2094,6 +2136,46 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
     for (const mesh of casters) {
         mesh.castShadow = true;
+    }
+
+    // (Of a model whose parts are kept apart, its parts of one material at each level joined into
+    // one as they're worn (joinedShape): a draw a material, not a part and material, made once for
+    // everyone dressed alike; what its shadow's cast from left as it is)
+    if (parts) {
+        levels.forEach((meshes, i) => {
+            const alike = new Map();
+
+            for (const mesh of meshes.filter((one) => !casters.includes(one))) {
+                alike.set(mesh.material.name, [...(alike.get(mesh.material.name) ?? []), mesh]);
+            }
+
+            for (const group of [...alike.values()].filter((one) => one.length > 1)) {
+                const shape = joinedShape(gltf, scene, group, true);
+
+                if (!shape) {
+                    continue;
+                }
+
+                const [first] = group;
+                const joined = new THREE.SkinnedMesh(shape, first.material);
+
+                joined.name = `${first.material.name}:${group.map(partOf).join("+")}`;
+                joined.position.copy(first.position);
+                joined.quaternion.copy(first.quaternion);
+                joined.scale.copy(first.scale);
+                joined.castShadow = false;
+                joined.receiveShadow = true;
+                first.parent.add(joined);
+                joined.bind(first.skeleton, first.bindMatrix);
+                drawn.set(joined, first.material);
+
+                for (const mesh of group) {
+                    mesh.removeFromParent();
+                }
+
+                levels[i] = [...levels[i].filter((mesh) => !group.includes(mesh)), joined];
+            }
+        });
     }
 
     const showLevel = (level) => {
