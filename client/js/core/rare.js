@@ -229,7 +229,7 @@ export const UNIQUES = Object.freeze({
         base: "mace",
         effect: "toll",
         graded: true,
-        about: "Prior Osric Vane's war mace, gilded, its flanged head cast like a bell turned upside down and crowned with thorns. The brothers say it was cast from the Great Bell's own metal. Every so many blows it rings out as the bell does, and everyone round the foe it strikes is hurt, thrown back and stunned. No two ring alike. Found nowhere else.",
+        about: "Prior Osric Vane's war mace, steel the colour of old bone, its head a cluster of thorns over a band of gold. The brothers say it was cast from the Great Bell's own metal. Every so many blows it rings out as the bell does, and everyone round the foe it strikes is hurt, thrown back and stunned. No two ring alike. Found nowhere else.",
     }),
     bulwark: Object.freeze({
         id: "bulwark",
@@ -237,7 +237,7 @@ export const UNIQUES = Object.freeze({
         base: "kiteShield",
         effect: "knell",
         graded: true,
-        about: "Prior Osric Vane's shield: a tall kite of gilded steel, thorns along its top and the Order's cross on its face, a little bell hung inside its rim. Every so many blows it takes it rings out like the Great Bell, and whoever struck the blow, and everyone round them, stands stunned. No two ring alike. Found nowhere else.",
+        about: "Prior Osric Vane's shield: a tall kite of steel the colour of old bone, thorns along its edges and the Order's cross raised on its face, a little bell hung inside its rim. Every so many blows it takes it rings out like the Great Bell, and whoever struck the blow, and everyone round them, stands stunned. No two ring alike. Found nowhere else.",
     }),
     // (Ashkhar's reward: a link of the silver that bound it, set as an amulet, its effect
     // legendary.js frostbind: now and then a blow its wearer strikes freezing the foe solid, then

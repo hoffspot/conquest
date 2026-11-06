@@ -1114,10 +1114,12 @@ cleaver's, a steel haft, a round head about 10 cm across six dark flanges and a 
 left hip as the cleaver is (its sheath the cleaver's, `SHEATHS.mace`; its blows the cleaver's,
 app/game.js `HELD_SWINGS`). The Prior of the Bell's own two are drawn in their place when held or
 worn (characters/liveries.js `UNIQUE_LOOKS`, by the piece's `unique`: core/progress.js `worn`,
-`wielded`): **Vespers** (`vespers`), a gilded head cast like a bell turned upside down, its mouth
-crowned with thorns and a spike rising from its heart, on a dark steel haft banded in gold; and
-**the Bulwark** (`bulwark`), a tall kite of pale steel with a gilt rim, the Order's cross in gold on
-its face, a gilt boss, and gold thorns along its top, worn on the forearm as a kite shield is. Every character starts in the same outfit: a tunic, leather
+`wielded`), each made as his own are on his model, in pale steel the colour of old bone
+(`paleSteel`), gold kept to its accents: **Vespers** (`vespers`), a long head clustered with thorns
+standing out every way, a thorn rising from its top over a gilt collar, on a haft ringed with knobs;
+and **the Bulwark** (`bulwark`), a kite as big as a kite shield, the Order's cross raised on its
+face, thorns along its top and down its lower edges, a gilt boss and a thin gilt edge, worn on the
+forearm as a kite shield is. Every character starts in the same outfit: a tunic, leather
 bracers, leather pants and leather boots.
 
 **Spiked boots** are an item in several parts (`parts`), each on its own socket: a domed iron cap
