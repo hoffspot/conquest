@@ -2317,7 +2317,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         // `lods` (the kit's: characters/lod.js) once for everyone drawn from the model: in place
         // of the whole when they're made. Resolves when it's done (or there's none to make)
         lowerShadow(lods) {
-            if (!shape) {
+            // (Nothing to make, or nothing to make it with: its shadow left whole)
+            if (!shape || typeof lods?.of !== "function") {
                 return Promise.resolve();
             }
 

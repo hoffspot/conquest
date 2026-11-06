@@ -202,6 +202,14 @@ describe("a model's shadow (beasts/model.js)", () => {
 
         await single.lowerShadow(lods);
         assert.equal(asked, 1);
+
+        // (Nothing to make it with, as the model viewer gets ready: left whole)
+        const unmade = modelBody("choirKnight", orderModel(), { parts: ["Body", "Cloak", "Head"] });
+        const left = unmade.casters[0].geometry;
+
+        await unmade.lowerShadow({});
+        await unmade.lowerShadow(undefined);
+        assert.equal(unmade.casters[0].geometry, left);
     });
 
     it("leaves what's too small to see out of its least detailed level (MODELS `close`, by part or material): an Order brother's knife, his eyes", () => {
