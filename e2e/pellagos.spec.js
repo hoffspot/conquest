@@ -10177,12 +10177,13 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await key.click();
     await expect(key).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#worldmapkey")).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(20);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(21);
     await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Your markers (up to 10): tap one to share it or take it away" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Heard tell of: somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Strange lights by night" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Tracked home by its trails" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "A war mission" })).toBeVisible();
 
     const opened = await page.locator("#worldmaplegend").boundingBox();
 
