@@ -82,6 +82,7 @@ import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
@@ -1106,7 +1107,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2394,6 +2395,16 @@ export class Game {
             this.#command({ type: "share", request: id }, (result) => this.#requestShared(result));
         };
         this.journal.onRead = (id) => this.read(id);
+        this.journal.onGiveUpMission = (id) => {
+            this.#command({ type: "mission", act: "giveUp", id }, () => this.journal.open && this.#showJournal());
+        };
+        this.journal.onPickMission = (id) => {
+            const mission = this.standing.findMission?.(id);
+
+            if (mission?.gear) {
+                this.#pickReward(mission);
+            }
+        };
         this.journal.onGiveUpThread = (id) => {
             this.#command({ type: "abandon", thread: id }, () => this.journal.open && this.#showJournal());
         };
@@ -5973,6 +5984,8 @@ export class Game {
             icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
+            // (Where their war missions take them: core/missions.js)
+            missions: this.mapId === "town" ? (this.standing.missions ?? []).filter(({ state, target }) => state === "open" && target?.at).map(({ target }) => ({ x: target.at[0], z: target.at[1] })) : [],
             // (The party's pings: pingView; and the player's markers: markerView)
             pings: this.mapId === "town" ? this.pingView() : [],
             markers: this.mapId === "town" ? this.markers : [],
@@ -7465,10 +7478,14 @@ export class Game {
     requestMarks() {
         const war = this.host.war;
 
+        // (And the war missions carried: where what each is about is now, core/missions.js)
+        const missions = (this.standing.missions ?? []).filter(({ state, target }) => state === "open" && target?.at).map(({ title, target }) => ({ x: target.at[0], z: target.at[1], label: title, war: true }));
+
         return this.standing.requests
             .map((request) => ({ request, where: whereTo(request, war) }))
             .filter(({ where }) => where.at)
-            .map(({ request, where }) => ({ x: where.at[0], z: where.at[1], label: request.title }));
+            .map(({ request, where }) => ({ x: where.at[0], z: where.at[1], label: request.title }))
+            .concat(missions);
     }
 
     // The player's found more of the world: keep it
@@ -8221,7 +8238,7 @@ export class Game {
 
         const heardAt = building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null);
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords());
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords(), this.#messengerWords(npc));
 
         // (An adventurer who could be hired, how strong and for how much (core/host.js hireOffer);
         // a follower waiting or following, and how they're holding up; one of the player's mending
@@ -11491,6 +11508,156 @@ export class Game {
     }
 
     // The journal as it is now
+    // --- War missions (core/missions.js): messengers, briefings, and the missions they bring ---
+
+    /**
+     * Whether the war's messengers come to the player (Game options, Gameplay: on to start with).
+     * Hosting, the host's told at once (its player's own settings: core/host.js #mayHearMessenger);
+     * on a world server, with the rest of how they play (main.js tellPlaySettings).
+     */
+    set messengers(on) {
+        this.messengersOn = on !== false;
+
+        const player = !this.remote ? this.host.players?.get(this.me) : null;
+
+        if (player) {
+            player.own = { ...(player.own ?? {}), settings: { ...(player.own?.settings ?? {}), messengers: this.messengersOn } };
+        }
+    }
+
+    get messengers() {
+        return this.messengersOn !== false;
+    }
+
+    // A messenger, or a commander come to brief: coming (said), arrived (what they say kept for
+    // the talk, and the one they walked to hailed: tapped, they talk; the talk isn't opened on its
+    // own, over whatever the player's doing), or gone
+    #messengerHeard(event) {
+        // (Drawn for anyone about as they come, as a stranger by the road is: #strangerSaid; and
+        // let go of once they're gone)
+        if (event.change === "coming" && !this.avatars.has(event.folk) && !this.enlisting.includes(event.folk)) {
+            this.enlisting.push(event.folk);
+        } else if (event.change === "gone") {
+            this.#unenlist([event.folk]);
+
+            if (!this.battle.actor(event.folk)) {
+                this.#undress(event.folk);
+            }
+        }
+
+        if (!event.players?.includes(this.me)) {
+            return;
+        }
+
+        this.messengerSaid ??= new Map();
+
+        if (event.change === "coming" && event.kind === "messenger" && event.from) {
+            this.hud.message(`A messenger from ${senderName(event.from)} is coming to find you.`, 3);
+        } else if (event.change === "arrived") {
+            this.messengerSaid.set(event.folk, event.mission);
+
+            const npc = this.battle.actor(event.folk);
+
+            if (event.lead === this.me && npc) {
+                const title = event.mission?.from?.title;
+
+                this.hud.message(event.kind === "briefing" ? `${title ? `${title} ` : ""}${npc.name} has come to brief you. Tap them to hear it.` : `${npc.name}, a messenger from ${senderName(event.mission.from)}, has found you. Tap them to hear what they bring.`, 5);
+            }
+        } else if (event.change === "gone") {
+            this.messengerSaid.delete(event.folk);
+        }
+    }
+
+    // What a messenger or a commander says, for their talk (the "messenger" and "briefing" trees):
+    // who sends them, what's asked, what it pays at the player's rank and that it pays more the
+    // higher it is; or the briefing, line by line
+    #messengerWords(npc) {
+        const mission = this.messengerSaid?.get(npc.id);
+
+        if (!mission) {
+            return {};
+        }
+
+        if (mission.briefing?.lines) {
+            return Object.fromEntries(mission.briefing.lines.map((line, k) => [`brief${k + 1}`, line]));
+        }
+
+        const rank = this.standing.rank();
+        const next = STANDINGS[rank + 1];
+
+        return {
+            sender: senderName(mission.from),
+            missionText: mission.text,
+            reward: `${rewardWords(missionReward(mission.kind, rank)).replace(/^./, (first) => first.toUpperCase())}, as you're ${/^[AEIOU]/.test(STANDINGS[rank].title) ? "an" : "a"} ${STANDINGS[rank].title.toLowerCase()} of ours`,
+            rankNote: next ? `${MORE_BY_RANK} ${/^[AEIOU]/.test(next.title) ? "An" : "A"} ${next.title.toLowerCase()} would have ${missionReward(mission.kind, rank + 1).gold} gold for it.` : "None of ours is paid more.",
+        };
+    }
+
+    // A war mission moved on: told (taken, there, briefed, the commander's objective done, done
+    // and paid, failed, come to nothing), and done, the pick of the armoury offered; the journal
+    // shown again
+    #missionHeard(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        const { change, mission } = event;
+        const told = {
+            taken: `War mission: ${mission.title}. (J for your journal.)`,
+            there: `You're there: ${mission.title.toLowerCase()}.`,
+            briefed: mission.briefing ? `Your part: ${mission.briefing.asked.charAt(0).toLowerCase()}${mission.briefing.asked.slice(1)}.` : null,
+            bonus: mission.briefing ? `Done: ${mission.briefing.extra}. There's more in it for you.` : null,
+            won: event.reward ? `${mission.title}: done! ${event.reward.gold} gold and ${event.reward.standing} standing. Choose your reward from the armoury.` : null,
+            done: event.piece ? `${itemLabel(event.piece)} is yours, from the armoury.` : null,
+            failed: `${mission.title}: failed. Your standing suffers.`,
+            void: `${mission.title}: it's come to nothing.`,
+        }[change];
+
+        if (told) {
+            this.hud.message(told, 3.5);
+        }
+
+        const cue = { taken: "quill", won: "questDone", failed: "denied" }[change];
+
+        if (cue) {
+            this.sound?.play(cue);
+        }
+
+        if (change === "won" && mission.gear) {
+            this.#pickReward(mission);
+        }
+
+        this.hud.setGold(this.progress.gold);
+        this.onProgress(this.progress);
+        this.onStanding(this.standing);
+
+        if (this.journal?.open) {
+            this.#showJournal();
+        }
+    }
+
+    // A mission's reward: one of three pieces from the armoury, chosen (or later, from the journal)
+    #pickReward(mission) {
+        this.hud.choose(
+            `${mission.title}: your pick from the armoury`,
+            mission.gear.map((piece, which) => ({ label: itemLabel(piece), value: which })),
+            (which) => {
+                if (which === undefined) {
+                    this.hud.message("Choose it later, from your journal.", 2.5);
+
+                    return;
+                }
+
+                this.#command({ type: "mission", act: "pick", id: mission.id, which }, (result) => {
+                    if (!result.ok) {
+                        this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                    }
+                });
+            },
+            { cancel: "Later" },
+        );
+    }
+
     #showJournal() {
         const war = this.host.war;
         const standing = this.standing;
@@ -11518,6 +11685,19 @@ export class Game {
                     shared: request.shared ?? null,
                 };
             }),
+            // (The war missions messengers brought: core/missions.js)
+            missions: (standing.missions ?? []).map((mission) => ({
+                id: mission.id,
+                title: mission.title,
+                from: senderName(mission.from),
+                text: mission.text,
+                state: mission.state,
+                progress: mission.there ? "You're there" : "On the way",
+                where: mission.target?.at && at ? bearing(at, mission.target.at) : "",
+                left: mission.until === null || mission.until === undefined || !war ? "" : `${Math.max(0, mission.until - war.turn)} min left`,
+                briefing: mission.briefing?.heard ? mission.briefing.lines : null,
+            })),
+            missionsDone: (standing.missionsDone ?? []).slice(0, 4).map(({ title, from: sender, state }) => ({ title, from: senderName(sender), state })),
             // (In a party with other players: each request to share with them)
             party: this.host.fellows(this.me).length > 0,
             people: realm
@@ -14751,6 +14931,13 @@ export class Game {
             case "gift":
             case "counsel":
                 this.#stood(event);
+                break;
+            // (The war's messengers, and the missions they bring: core/missions.js)
+            case "messenger":
+                this.#messengerHeard(event);
+                break;
+            case "mission":
+                this.#missionHeard(event);
                 break;
             case "trade":
                 this.#traded(event);

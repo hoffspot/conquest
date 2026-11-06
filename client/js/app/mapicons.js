@@ -525,6 +525,33 @@ export const PING = Object.freeze({ lasts: 30, every: 1.5, most: 4, pulse: 1.4, 
  * reads on any ground, and rings swelling out from it to `size` pixels over and over; fainter as
  * it gets older (`age`, seconds, of PING.lasts).
  */
+/**
+ * Where a war mission takes the player (core/missions.js): a ring with a star in it, in the war's
+ * red, `size` its ring's radius (pixels): on the world map and the minimap alike.
+ */
+export function drawMissionMark(context, x, y, { size = 9 } = {}) {
+    context.save();
+    context.beginPath();
+    context.arc(x, y, size, 0, Math.PI * 2);
+    context.fillStyle = "rgba(30, 12, 8, 0.8)";
+    context.fill();
+    context.lineWidth = Math.max(1.6, size * 0.27);
+    context.strokeStyle = "#e86a4f";
+    context.stroke();
+    context.beginPath();
+
+    for (let k = 0; k < 10; k++) {
+        const [r, angle] = [k % 2 ? size * 0.27 : size * 0.67, -Math.PI / 2 + (k * Math.PI) / 5];
+
+        context.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
+    }
+
+    context.closePath();
+    context.fillStyle = "#e86a4f";
+    context.fill();
+    context.restore();
+}
+
 export function drawPing(context, x, y, { size = 22, age = 0 } = {}) {
     const fade = 1 - 0.6 * Math.min(1, Math.max(0, age / PING.lasts));
 
