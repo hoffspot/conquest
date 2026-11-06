@@ -630,6 +630,7 @@ export class BeastAvatar {
         // (A model's lower details are packed in it: shown a level at a time, fitDetail)
         if (this.plan.showLevel) {
             this.levels = this.plan.levels;
+            this.plan.lowerShadow?.(lods);
 
             return;
         }

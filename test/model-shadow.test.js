@@ -9,37 +9,36 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 
-const { MODELS, modelBody } = await import("../client/js/beasts/model.js");
+const { MODELS, SHADOW_DETAIL, modelBody } = await import("../client/js/beasts/model.js");
+const { lowerDetail } = await import("../client/js/characters/lod.js");
 
 // A skinned mesh of a part (`name`), at a level of detail (`lod`), in a material (`material`): a
-// few corners weighted between the two bones, its positions packed by `pack` (a matrix: its skin's
-// inverses made to undo it, as the pipeline's are), or not
-function partMesh(name, lod, material, bones, { pack = new THREE.Matrix4(), corners = 6, seed = 1 } = {}) {
+// ball of it (`segments` round), weighted between the two bones by how high it is, its positions
+// packed by `pack` (a matrix: its skin's inverses made to undo it, as the pipeline's are), or not
+function partMesh(name, lod, material, bones, { pack = new THREE.Matrix4(), segments = 4, seed = 1 } = {}) {
     const unpack = pack.clone().invert();
-    const positions = [];
-    const indices = [];
-    const weights = [];
+    const geometry = new THREE.SphereGeometry(0.3 + 0.05 * seed, segments, Math.max(2, segments / 2));
+    const position = geometry.attributes.position;
     const joints = [];
+    const weights = [];
     const v = new THREE.Vector3();
 
-    for (let i = 0; i < corners; i++) {
-        v.set(Math.sin(seed + i) * 0.3, 0.2 + i * 0.25, Math.cos(seed * 2 + i) * 0.2).applyMatrix4(unpack);
-        positions.push(v.x, v.y, v.z);
+    geometry.deleteAttribute("uv");
+
+    for (let i = 0; i < position.count; i++) {
+        v.fromBufferAttribute(position, i);
+        v.set(v.x + 0.1 * Math.sin(seed), v.y + 1 + 0.1 * seed, v.z);
+
+        const up = Math.min(1, Math.max(0, (v.y - 0.6) / 1));
+
         joints.push(0, 1, 0, 0);
-        weights.push(1 - i / corners, i / corners, 0, 0);
+        weights.push(1 - up, up, 0, 0);
+        v.applyMatrix4(unpack);
+        position.setXYZ(i, v.x, v.y, v.z);
     }
 
-    for (let i = 0; i + 2 < corners; i++) {
-        indices.push(i, i + 1, i + 2);
-    }
-
-    const geometry = new THREE.BufferGeometry();
-
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute("normal", new THREE.Float32BufferAttribute(positions.map(() => 0), 3));
     geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(joints, 4));
     geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
-    geometry.setIndex(indices);
 
     const mesh = new THREE.SkinnedMesh(geometry, material);
     const inverses = bones.map((bone) => bone.matrixWorld.clone().invert().multiply(pack));
@@ -70,7 +69,7 @@ function partNode(name, lod, meshes) {
 
 // A small model of the Order's: two bones, its body a part of two materials, its cloak packed its
 // own way, its head; each at its first level and its least detailed, as the pipeline packs them
-function orderModel() {
+function orderModel({ segments = 4 } = {}) {
     const scene = new THREE.Group();
     const root = new THREE.Bone();
     const spine = new THREE.Bone();
@@ -85,8 +84,8 @@ function orderModel() {
     scene.updateMatrixWorld(true);
 
     for (const [lod, suffix] of [[0, ""], [1, "lod1"], [2, "lod2"]]) {
-        const body = partNode(`Body${suffix}`, lod, [partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod })]);
-        const cloak = partNode(`Cloak${suffix}`, lod, [partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod })]);
+        const body = partNode(`Body${suffix}`, lod, [partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod, segments }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod, segments })]);
+        const cloak = partNode(`Cloak${suffix}`, lod, [partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod, segments })]);
         const head = partNode(`Head${suffix}`, lod, [partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod })]);
 
         scene.add(body, cloak, head);
@@ -123,7 +122,7 @@ describe("a model's shadow (beasts/model.js)", () => {
         assert.equal(caster.material.colorWrite, false);
         assert.ok(plan.levels.flat().every((mesh) => !mesh.castShadow), "none of its own meshes casts it");
         assert.equal(shading.length, 3);
-        assert.equal(caster.geometry.attributes.position.count, 18);
+        assert.equal(caster.geometry.attributes.position.count, shading.reduce((sum, { geometry }) => sum + geometry.attributes.position.count, 0));
         assert.ok(!caster.geometry.attributes.uv && !caster.geometry.attributes.normal, "where its corners are and how they're weighted, no more");
 
         // (Posed: its spine bent, the figure turned and moved; the shadow's corners where the
@@ -173,6 +172,35 @@ describe("a model's shadow (beasts/model.js)", () => {
         plan.castShadows(true);
         assert.ok(caster.visible && caster.castShadow);
         assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 4 + 1, "its first level's four meshes, and its shadow's");
+    });
+
+    it("is drawn with fewer triangles once they're made (about SHADOW_DETAIL's share), over the same corners, made once for everyone drawn from the model", async () => {
+        const gltf = orderModel({ segments: 24 });
+        const one = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+        const other = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+        const whole = one.casters[0].geometry;
+        let asked = 0;
+        // (The kit's maker of fewer triangles, here and now: lod.js Lods.of)
+        const lods = { of: (key, mesh) => (asked++, Promise.resolve(mesh()).then(({ indices, positions, uvs, share, error, flags }) => lowerDetail(indices, positions, uvs, share, error, flags))) };
+
+        one.object.updateMatrixWorld(true);
+        other.object.updateMatrixWorld(true);
+        await Promise.all([one.lowerShadow(lods), other.lowerShadow(lods)]);
+
+        const lower = one.casters[0].geometry;
+
+        assert.notEqual(lower, whole);
+        assert.equal(other.casters[0].geometry, lower, "one for everyone");
+        assert.equal(asked, 1);
+        assert.equal(lower.attributes.position, whole.attributes.position, "the same corners");
+        assert.ok(lower.index.count < whole.index.count * (SHADOW_DETAIL.share + 0.25), `${lower.index.count} of ${whole.index.count}`);
+        assert.ok(lower.index.count > 0);
+
+        // (A model of one mesh: nothing to make)
+        const single = modelBody("bellBrother", orderModel(), { parts: ["Cloak", "Head"] });
+
+        await single.lowerShadow(lods);
+        assert.equal(asked, 1);
     });
 
     it("joins one shape for everyone drawn from the model", () => {

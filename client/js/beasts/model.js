@@ -1371,7 +1371,12 @@ function disposeModel(gltf) {
     const materials = new Set(Object.values(gltf.skins ?? {}).flat());
 
     for (const shape of shadowShapes.get(gltf)?.values() ?? []) {
-        shape?.dispose();
+        if (shape instanceof Promise) {
+            // (A lowered one's index alone its own: its corners the shape's)
+            shape.then((lower) => lower?.index && lower.dispose());
+        } else {
+            shape?.dispose();
+        }
     }
 
     shadowShapes.delete(gltf);
@@ -1755,6 +1760,14 @@ export function breathing(model, attack, lengths, aloft = false) {
 const shadowShapes = new WeakMap();
 
 /**
+ * A joined shadow's shape drawn with fewer triangles once they're made (lowerShadow: meshoptimizer's
+ * simplifier, off the page's thread): about `share` of its least detailed level's, never more than
+ * `error` metres out of place. Its shadow's texels are a few centimetres
+ * across (the sun's: view.js SHADOW_REACH over its map), so a few centimetres off shows nowhere.
+ */
+export const SHADOW_DETAIL = Object.freeze({ share: 0.3, error: 0.04 });
+
+/**
  * One shape for a model's shadow, joined from the meshes it's cast from (`meshes`: its least
  * detailed level's, each a part of it in one of its materials, in `scene`, one drawn from it): one
  * draw for its shadow, not one a part and material. Just where their corners are and how their
@@ -1870,6 +1883,53 @@ function shadowShape(gltf, scene, meshes) {
     known.set(key, shape);
 
     return shape;
+}
+
+/**
+ * A joined shadow's shape (`shape`, shadowShape's, of the model as read, `gltf`) with fewer
+ * triangles (SHADOW_DETAIL), over the same corners, made by `lods` from where `caster` (a mesh of it)
+ * puts them as it stands now (world metres): a promise of it, made once and kept with the shape (let
+ * go of with the model: disposeModel), or of null if it can't be made.
+ */
+function lowerShape(gltf, shape, caster, lods) {
+    const known = shadowShapes.get(gltf) ?? new Map();
+    const key = `lower ${shape.uuid}`;
+
+    shadowShapes.set(gltf, known);
+
+    if (!known.has(key)) {
+        const count = shape.attributes.position.count;
+        const positions = new Float32Array(count * 3);
+        const corner = new THREE.Vector3();
+
+        for (let i = 0; i < count; i++) {
+            caster.getVertexPosition(i, corner).toArray(positions, i * 3);
+        }
+
+        const making = lods
+            .of(`shadow:${shape.uuid}`, () => ({ indices: shape.index.array, positions, uvs: new Float32Array(count * 2), share: SHADOW_DETAIL.share, error: SHADOW_DETAIL.error, flags: ["Permissive"] }))
+            .then((triangles) => {
+                if (!triangles?.length || triangles.length >= shape.index.count) {
+                    return null;
+                }
+
+                const lower = new THREE.BufferGeometry();
+
+                for (const [name, attribute] of Object.entries(shape.attributes)) {
+                    lower.setAttribute(name, attribute);
+                }
+
+                lower.setIndex(new THREE.BufferAttribute(count > 65535 ? Uint32Array.from(triangles) : Uint16Array.from(triangles), 1));
+                lower.userData.lowerOf = shape;
+
+                return lower;
+            })
+            .catch(() => null);
+
+        known.set(key, making);
+    }
+
+    return known.get(key);
 }
 
 /**
@@ -2156,6 +2216,24 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         // (What its shadow's cast from, and its shadow cast or not: BeastAvatar.castShadows)
         casters,
         castShadows,
+
+        // Its joined shadow (shadowShape) drawn with fewer triangles (SHADOW_DETAIL), made by
+        // `lods` (the kit's: characters/lod.js) once for everyone drawn from the model: in place
+        // of the whole when they're made. Resolves when it's done (or there's none to make)
+        lowerShadow(lods) {
+            if (!shape) {
+                return Promise.resolve();
+            }
+
+            return lowerShape(gltf, shape, casters[0], lods).then(
+                (lower) => {
+                    if (lower) {
+                        casters[0].geometry = lower;
+                    }
+                },
+                () => {},
+            );
+        },
         breath,
         beam,
         lengths,
