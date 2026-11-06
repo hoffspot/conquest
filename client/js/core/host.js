@@ -69,7 +69,7 @@ import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } fr
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
-import { FORTS, footprintOf } from "./war/forts.js";
+import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
 import { signOf, TRAILS, trailCreature, trailsOf } from "./tracks.js";
@@ -260,9 +260,10 @@ export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.
  * A forward garrison's squads out with it near a player (docs/WAR.md *Battle lines*, M15; war.js
  * SQUADS): its patrols walking their rounds, `rounds` metres out from it (each a ring of `stops`,
  * the second turned half a stop on from the first), and its assault team at its gate, `gate`
- * metres out from its middle, or out against an enemy's fortification stood up within reach.
+ * metres out past its wall (as wide as it stands: war/forts.js fortSize), or out against an enemy's
+ * fortification stood up within reach.
  */
-export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 9 });
+export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 4 });
 
 /**
  * A town's barracks near a player (docs/WAR.md M16): its guardsmen (war/muster.js QUARTERED) and
@@ -8718,7 +8719,8 @@ export class Host {
                 return null;
             }
         };
-        const gate = near([fort.at[0] + sin(facing) * SQUADS_NEAR.gate, fort.at[1] + cos(facing) * SQUADS_NEAR.gate], 12);
+        const reach = fortSize(fort) / 2 + SQUADS_NEAR.gate;
+        const gate = near([fort.at[0] + sin(facing) * reach, fort.at[1] + cos(facing) * reach], 12);
         const rounds = SQUADS_NEAR.rounds.map((radius, k) =>
             Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
                 const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;

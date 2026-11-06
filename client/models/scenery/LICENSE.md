@@ -20,8 +20,7 @@ served scrambled as part of the game: the bought files put through `utilities/bl
   cornices, set onto them; `private/bellhaven-far.json`), in one detail of 121,026 triangles, 19
   draw calls, its textures at 256 pixels.
 - In both, its rocks that touched nothing are set down on what's under them or left out (the
-  pipeline's `seat`). They replace `bellhaven.bin`, `bellhaven-far.bin` and `bellhaven-far-2.bin`,
-  the earlier builds, which older builds of the game still fetch.
+  pipeline's `seat`).
 
 Each is scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. They
 aren't in this repository, but in the private one the game's builds fetch them from
@@ -47,5 +46,35 @@ materials' textures as KTX2 (1,024 pixels; normals 512).
 It is not CC0 and not free to reuse, as the castle's other builds aren't: scrambled as the game
 serves it, with whose it is in its glTF asset's `copyright`, and kept in the private repository
 the game's builds fetch it from, not in this one.
+
+Don't copy it out of this game or use it in anything else.
+
+## timber-forts-2.bin
+
+**Wind Ways' medieval village pack** (its timber fort pieces: a watchtower, a fighting walkway on
+its posts, a palisade, a gate run and a stair; its Unreal Engine files exported by this
+repository's owner), by **Wind Ways**, bought on **Fab** by this repository's owner under **Fab's
+Standard License**: the human peoples' fortifications (`client/js/world/forts3d.js`), a guard
+tower and a forward garrison.
+
+Its pieces were set together in Blender (`private/wind-ways/forts.py`) and put through
+`utilities/blenderpipeline` (`private/timber-forts.json`), both of which stay out of the repository
+with the bought files: two nodes, its `phone` build:
+
+- `tower`: the watchtower on its own, its ladder at its back, 2.89 by 2.98 m and 13.5 m tall;
+- `garrison`: a palisade two of its wall runs long a side, 19.38 m square (inside the twenty
+  metres the battle holds for the humans' garrison), its gate run in the middle of its front, the
+  walkway four metres up behind it all round, a watchtower inside each corner and a stair up to
+  the walkway.
+
+Every foot is sunk a metre below where it stood, so it stands on a slope with no gap under it.
+32,013 triangles between them (the tower 2,582, the garrison 29,431), each one draw call, their
+pieces' materials baked onto an atlas of 1,024 pixels each (KTX2; normals 512); a lower detail of
+10,419 triangles packed in.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
 
 Don't copy it out of this game or use it in anything else.

@@ -24,6 +24,18 @@ export const FORTS = Object.freeze({
     garrison: { cost: { wood: 100, stone: 30, metal: 40 }, upkeep: { wood: 0.4, metal: 0.2 }, hp: 2400, apart: 500, most: 3, out: 220, size: 10 },
 });
 
+/**
+ * How many squares across a people's fortification of a kind stands over, where it isn't FORTS'
+ * `size`: the humans' forward garrison, Wind Ways' timber palisade two of its wall runs long a side
+ * (world/forts3d.js TIMBER), 19.4 metres square.
+ */
+export const SIZES = Object.freeze({ human: Object.freeze({ garrison: 20 }) });
+
+/** How many squares across a fortification (its `kind`, its `realm`'s) stands over. */
+export function fortSize({ kind, realm = null }) {
+    return SIZES[realm]?.[kind] ?? FORTS[kind].size;
+}
+
 /** The kinds of fortification, in the order the building screen shows them. */
 export const FORT_KINDS = Object.freeze(Object.keys(FORTS));
 
@@ -52,10 +64,10 @@ export const CLEARING = 3;
 
 /**
  * The squares a fortification stands over in the world, round its point: [x0, y0, x1, y1]
- * (inclusive), FORTS size across; and `clearing` more each way.
+ * (inclusive), as many across as its kind and its people's (fortSize); and `clearing` more each way.
  */
-export function footprintOf({ kind, at: [x, y] }, clearing = 0) {
-    const half = FORTS[kind].size / 2;
+export function footprintOf({ kind, realm = null, at: [x, y] }, clearing = 0) {
+    const half = fortSize({ kind, realm }) / 2;
 
     return [x - half - clearing, y - half - clearing, x + half - 1 + clearing, y + half - 1 + clearing];
 }

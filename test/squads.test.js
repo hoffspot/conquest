@@ -6,7 +6,7 @@
 // to the war and made up (core/host.js SQUADS_NEAR)
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { mayBuild } from "../client/js/core/war/forts.js";
+import { fortSize, mayBuild } from "../client/js/core/war/forts.js";
 import { tell } from "../client/js/core/war/news.js";
 import { FORT_COVER, FORT_SIEGE, SQUAD_NAMES, SQUADS, War, WAR_VERSION } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -309,7 +309,7 @@ describe("a forward garrison's squads near a player (host.js SQUADS_NEAR)", () =
             assert.ok(actor.patrol.length > 2, "on its round");
         }
 
-        assert.ok(standing("assault").every((id) => far(id) < SQUADS_NEAR.gate + 6 && /vanguard$/.test(host.battle.actor(id).name)), "at its gate");
+        assert.ok(standing("assault").every((id) => far(id) < fortSize(fort) / 2 + SQUADS_NEAR.gate + 6 && far(id) > fortSize(fort) / 2 && /vanguard$/.test(host.battle.actor(id).name)), "at its gate, outside its wall");
 
         // (On their rounds a while: out there, within the 300 m)
         run(host, 15000);

@@ -32,9 +32,12 @@ step, and keep scratch pictures and scripts out of commits.
 - **The one thing built from it that goes in here is its walk**: `client/js/core/scenery/<name>.walk.js`.
   It holds plain heights, with no mesh or texture. It's what lets the game, the host, the world
   server and CI walk the place without the art.
-- **Never replace a licensed file under a name it already has.** Older builds fetch it by that
-  name and hash. A rebuild gets a new name: `bellhaven.bin`, then `bellhaven-2.bin`;
-  `bellhaven-far.bin`, then `-far-2` and `-far-3`. Its `LICENSE.md` says which replaced which.
+- **Never replace a licensed file under a name it already has.** `main`'s builds fetch it by that
+  name and hash till the change that uses the rebuild is merged. A rebuild gets a new name:
+  `bellhaven.bin`, then `bellhaven-2.bin`; `bellhaven-far.bin`, then `-far-2` and `-far-3`. Once
+  it's merged, delete the old file from the private repository and its name from both
+  `LICENSE.md`s, and move its `.gitignore` line to the superseded builds
+  (`docs/LICENSED_MODELS.md`, *Remaking a licensed model*). Keep nothing no build draws.
 - Credit the seller by the name the owner gives (here **DmitriyDryzhak**). Never copy a seller's
   email or anything else from the owner's screenshots.
 - Leave out what's Unreal's own or licensed for Unreal only (Epic's templates and mannequins).

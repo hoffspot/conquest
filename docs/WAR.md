@@ -1160,10 +1160,12 @@ What two games share changed with the wagons' ways through the gates (`NET_VERSI
 | | Costs | Kept up, a turn | Strength | Apart | Most | Stands over |
 | --- | --- | --- | --- | --- | --- | --- |
 | Guard tower | 40 wood, 40 stone, 10 metal | 0.1 wood, 0.1 stone | 1,200 | 150 m | 8 | 4 m square |
-| Forward garrison | 100 wood, 30 stone, 40 metal | 0.4 wood, 0.2 metal | 2,400 | 500 m | 3 | 10 m square |
+| Forward garrison | 100 wood, 30 stone, 40 metal | 0.4 wood, 0.2 metal | 2,400 | 500 m | 3 | 10 m square (the humans' 20 m) |
 
 - **Apart:** how near another of its people's of the same kind may stand. **Most:** how many of
-  the kind a people keeps.
+  the kind a people keeps. **Stands over:** the squares it blocks in the world (`footprintOf`),
+  as many across as its kind's, or its people's own (`SIZES`, `fortSize`): the humans' forward
+  garrison, Wind Ways' timber palisade, twenty.
 - **Kept up** each turn from its people's stores (`war.js` `#keepUp`), it's mended 2% of its
   strength (`FORT_SIEGE.mend`), once it's not been fallen on for 3 turns (`rest`). Unkept, the
   stores short, it falls 2% into ruin (`decay`), and is given up at nothing; a fallen people's
@@ -1217,13 +1219,25 @@ let go once every player's beyond 350:
   `#aimAt`, `#goalOf`).
 
 **Drawn** (`art/kits/forts.js`, `world/forts3d.js`):
-- **a guard tower:** 3.6 m square and 9.5 m high, battered at its foot, two rows of loops in each
-  face, its door at the back with a torch by it. Its top is its people's (`FORT_LOOKS`):
-  battlements (humans, dark elves), a pointed roof over corbels (elves, cat folk), or a timber
-  gallery under a low roof (lizard folk, orcs);
-- **a forward garrison:** a 10 m curtain of its people's stone (a palisade of stakes, for the
-  lizard folk and orcs), battlemented and looped, a turret at each corner, its gate in the back
-  wall, the hipped roof of its barracks over the wall;
+- **the humans':** Wind Ways' timber forts, a licensed model (`scenery-timber-forts`:
+  `client/models/scenery/LICENSE.md`), read the first time one's drawn and those standing drawn
+  again from it once it's read, each in a lower detail from 40 m off (`TIMBER.far`):
+  - **a guard tower**, the watchtower: 2.9 m square and 13.5 m tall, its lookout 8 m up, its ladder
+    at its back with a torch by it;
+  - **a forward garrison**, a palisade two of the kit's wall runs long a side, 19.4 m square and
+    5.7 m tall, its gate run in the middle of its front with a torch by it, a walkway 4 m up behind
+    it all round, a watchtower inside each corner and a stair up to the walkway;
+  - their feet sunk a metre into the ground, so they stand on a slope with no gap under them;
+  - till it's read, and without the licensed models, their stand-in: the humans' own tower under a
+    timber gallery and a palisade of stakes, as wide;
+- **every other people's**, its own:
+  - **a guard tower:** 3.6 m square and 9.5 m high, battered at its foot, two rows of loops in each
+    face, its door at the back with a torch by it. Its top is its people's (`FORT_LOOKS`):
+    battlements (dark elves), a pointed roof over corbels (elves, cat folk), or a timber gallery
+    under a low roof (lizard folk, orcs);
+  - **a forward garrison:** a 10 m curtain of its people's stone (a palisade of stakes, for the
+    lizard folk and orcs), battlemented and looped, a turret at each corner, its gate in the back
+    wall, the hipped roof of its barracks over the wall;
 - each turned with its front towards home, away from the enemy town it faces, its people's
   banner by its door or gate;
 - drawn whole within 200 m (`FORTS_VIEW`), and from afar as a few boxes and roofs in its people's
@@ -1232,7 +1246,9 @@ let go once every player's beyond 350:
   the ground's height as it's walked would lay out the land round every one of them to say
   (`core/overworld.js` chunks: a game a long war in, its dozens of fortifications, froze for
   seconds on its first frame);
-- a bar over it, broader and heavier than a soldier's (`hud.js` `fort`).
+- a bar over it, broader and heavier than a soldier's (`hud.js` `fort`), as high as it stands
+  (`FORT_HEIGHTS`; the humans', their timber forts': `TIMBER.heights`, the watchtower's archers
+  loosing from its lookout, the garrison's from its walkway).
 
 **The building screen** (`app/building.js`): at their own people's keep, a Knight or above asks
 the ruler "Where should we build our defences?" (`dialogue.js` ruler's `build`). Once the council
@@ -1280,8 +1296,9 @@ within reach of it if it has none: *Standing armies*), and for the town once it'
 **Near a player** (`host.js` `SQUADS_NEAR`), stood up with their garrison:
 - **its patrols,** each on a ring of 8 stops round it, 80 m and 200 m out (the second turned half
   a stop on), each one's first its captain;
-- **its assault team** ("vanguard") at its gate, 9 m out at its back, or out against an enemy's
-  fortification stood up within 900 m of it, to the foot of its walls, fighting it there;
+- **its assault team** ("vanguard") at its gate, 4 m out past its wall at its back
+  (`SQUADS_NEAR.gate`), or out against an enemy's fortification stood up within 900 m of it, to
+  the foot of its walls, fighting it there;
 - **its fallen** told to the war (`war.squadLost`); those the war makes up come out of its gate;
 - **let go** with their garrison (no player near, or razed: the survivors fight on), each as it's
   out of every player's sight. Stood up again first, they're its again.

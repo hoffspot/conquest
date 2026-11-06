@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; and the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -251,11 +251,14 @@ against the hash the catalog keeps, so replacing it would break `main`'s builds 
 the change that uses it is in. So:
 
 1. Scramble the new build as above, into the private repository under its new name, and commit
-   it there beside the old one (its `LICENSE.md` saying so).
-2. In this repository, the catalog entry's `path`, `hash` and `bytes` the new file's, and its path
-   in `.gitignore` beside the old (which stays: a copy of it is left behind in everyone's
-   `client/`, and mustn't be committed); `npm run models:fetch`, `npm run build:manifest`.
-3. Once that's merged, delete the old file from the private repository.
+   it there beside the old one.
+2. In this repository, the catalog entry's `path`, `hash` and `bytes` the new file's, its path in
+   `.gitignore`, and its `LICENSE.md` section the new file's; `npm run models:fetch`,
+   `npm run build:manifest`.
+3. Once that's merged, delete the old file from the private repository, and its name from both
+   `LICENSE.md`s: nothing is kept that no build of `main` draws. Its line in `.gitignore` moves to
+   the superseded builds at its end, and stays: a copy of it is left behind in everyone's
+   `client/`, and mustn't be committed.
 
 Files that come out the same (a model's skins, which hold no clips) stay as they are: compare the
 scrambled copy's hash with the catalog's.
