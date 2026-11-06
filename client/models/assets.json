@@ -2327,6 +2327,42 @@
                 "bellhaven-keep-wall": ["wall"],
                 "bellhaven-keep-floor": ["floor"]
             }
+        },
+        "dungeon-prop-mace-studded": {
+            "tier": "demand",
+            "label": "A studded mace (Price's [W007] Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-studded.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mace-star": {
+            "tier": "demand",
+            "label": "A star-headed mace (Price's [W008] Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-star.glb"
+                }
+            ]
+        },
+        "dungeon-prop-mace-bronze": {
+            "tier": "demand",
+            "label": "A bronze mace (Price's [W004] Composite Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-bronze.glb"
+                }
+            ]
+        },
+        "dungeon-prop-morning-star": {
+            "tier": "demand",
+            "label": "A morning star (Lucian Pavel's CC0 Morning Star on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/morning-star.glb"
+                }
+            ]
         }
     }
 }

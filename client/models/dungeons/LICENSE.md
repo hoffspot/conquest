@@ -60,6 +60,10 @@ CC0 (<https://creativecommons.org/publicdomain/zero/1.0/>) or, where it says so,
 - `estoc.glb`: a long sword, Poly Haven's antique_estoc, CC0; from <https://polyhaven.com/a/antique_estoc>
 - `dagger.glb`: a dagger and its sheath, Poly Haven's ornate_medieval_dagger, CC0; from <https://polyhaven.com/a/ornate_medieval_dagger>
 - `mace.glb`: a mace, Poly Haven's ornate_medieval_mace, CC0; from <https://polyhaven.com/a/ornate_medieval_mace>
+- `mace-studded.glb`: a studded mace, Price's [W007] Mace on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/%5BW007%5D%20Mace%20%5Bblend%2Bpng2048px%5D.zip>
+- `mace-star.glb`: a star-headed mace, Price's [W008] Mace on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/%5BW008%5D%20Mace%20%5Bblend%2Bpng2048px%5D.zip>
+- `mace-bronze.glb`: a bronze mace, Price's [W004] Composite Mace on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/%5BW004%5D%20Mace.zip>
+- `morning-star.glb`: a morning star, Lucian Pavel's CC0 Morning Star on OpenGameArt, CC0; from <https://opengameart.org/sites/default/files/Morning%20Star_0.zip>
 - `war-hammer.glb`: a war hammer, Poly Haven's ornate_war_hammer, CC0; from <https://polyhaven.com/a/ornate_war_hammer>
 - `saber.glb`: a sabre, Poly Haven's wooden_handle_saber, CC0; from <https://polyhaven.com/a/wooden_handle_saber>
 - `shield-kite.glb`: a kite shield, Poly Haven's kite_shield, CC0; from <https://polyhaven.com/a/kite_shield>

@@ -126,6 +126,12 @@ const LOOKS = Object.freeze({
  */
 export const UNIQUE_LOOKS = Object.freeze({ vespers: Object.freeze(["vespers"]), bulwark: Object.freeze(["bulwark"]) });
 
+/**
+ * What a weapon that comes in several looks is held as, by its look (core/gear.js GEAR `looks`,
+ * rolled on each: a mace's): its equipment id, the CC0 maces' models (characters/equipment.js).
+ */
+export const HELD_LOOKS = Object.freeze({ mace: Object.freeze({ ornate: "maceOrnate", studded: "maceStudded", star: "maceStar", bronze: "maceBronze", morningStar: "maceMorningStar" }) });
+
 export const lookOf = ({ id, people = null, unique = null }) => UNIQUE_LOOKS[unique] ?? LOOKS[id] ?? uniformLook(id, people);
 
 /** What a character wearing some gear ([{ id, people }]) has on: equipment ids, each once. */

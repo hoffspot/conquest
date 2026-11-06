@@ -6,6 +6,9 @@
 // that frame goes on the body; `size` scales items that fit the body (helmets fit the head).
 
 import * as THREE from "three";
+import { ASSETS } from "../app/assets.js";
+import { filesOf } from "../app/catalog.js";
+import { loadGltf } from "../world/art/engine/models.js";
 import { fireLit } from "../world/firelight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { HeadMap, headPlate, rimLine } from "./headwear.js";
@@ -416,6 +419,64 @@ function mace() {
         }),
         [at(new THREE.SphereGeometry(0.02, 10, 8), 0, 0.525, 0), "steel"],
     ], "mace");
+}
+
+/**
+ * What's held as one of the catalog's models ("held:<name>": characters/equipment.js, a mace's
+ * looks), each its prop's (client/models/dungeons, scripts/build-props.js): `asset`, its catalog
+ * entry; turned so its haft runs up (+y) to its head (`turn`, radians about x, y and z: the bronze
+ * mace is made lying down, its head at -z), with where it's held (`grip`, in its file, metres:
+ * about 9 cm up from the end of its haft) at the origin; and `stand`, the item made here drawn till
+ * its model's read, and in its place where it can't be (no page to read it from: the motion check,
+ * the tests).
+ */
+export const HELD_MODELS = Object.freeze({
+    mace: Object.freeze({ asset: "dungeon-prop-mace", grip: [0, -0.013, 0], stand: "mace" }),
+    "mace-studded": Object.freeze({ asset: "dungeon-prop-mace-studded", grip: [0, -0.416, 0], stand: "mace" }),
+    "mace-star": Object.freeze({ asset: "dungeon-prop-mace-star", grip: [0, -0.128, 0], stand: "mace" }),
+    "mace-bronze": Object.freeze({ asset: "dungeon-prop-mace-bronze", turn: [Math.PI / 2, 0, 0], grip: [0, 0, 0.306], stand: "mace" }),
+    "morning-star": Object.freeze({ asset: "dungeon-prop-morning-star", grip: [0, -0.022, 0], stand: "mace" }),
+});
+
+// One of HELD_MODELS (`name`), as it's held: its stand-in at first, its model in its place once
+// it's read (each read once, shared: models.js loadGltf). What holds it is told how long it is
+// then (`userData.resized`, given the box it fills: what hangs from the belt swings as long as it
+// is, character.js hanging)
+function heldModel(name, fit) {
+    const { asset, turn = [0, 0, 0], grip, stand } = HELD_MODELS[name];
+    const group = new THREE.Group();
+    const standIn = buildItem(stand, fit);
+    const page = globalThis.document?.baseURI;
+    const url = page && ASSETS.models[asset] ? Object.values(filesOf(ASSETS, asset, page))[0] : null;
+
+    group.name = `held:${name}`;
+    group.add(standIn);
+
+    if (url) {
+        loadGltf(url).then(
+            ({ scene }) => {
+                const model = scene.clone(true);
+                const held = new THREE.Group();
+
+                model.position.set(-grip[0], -grip[1], -grip[2]);
+                model.traverse((node) => {
+                    node.castShadow = Boolean(node.isMesh);
+                });
+                held.rotation.set(...turn);
+                held.add(model);
+
+                const box = new THREE.Box3().setFromObject(held);
+
+                group.remove(standIn);
+                standIn.traverse((part) => part.geometry?.dispose());
+                group.add(held);
+                group.userData.resized?.(box);
+            },
+            () => {},
+        );
+    }
+
+    return group;
 }
 
 function vespers() {
@@ -2311,6 +2372,11 @@ export function buildItem(model, fit = {}) {
     // (Each people's and band's standard: "standard.orc", "standard.northmen")
     if (people && kind === "standard") {
         return standard(people);
+    }
+
+    // (One of the catalog's models: "held:mace-studded")
+    if (model.startsWith("held:") && HELD_MODELS[model.slice(5)]) {
+        return heldModel(model.slice(5), fit);
     }
 
     switch (model) {

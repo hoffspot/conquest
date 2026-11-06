@@ -806,6 +806,24 @@ export class Character {
                     }
                 }
 
+                // (One held as a model of the catalog's, read after it's made (items.js heldModel):
+                // hung from the belt as long as its model is once it's read, fitted to the body
+                // afresh (fitHanging) from where its frog was first put)
+                const hangs = model.userData.hangs;
+                const frog = model.userData.sheath;
+
+                if (hangs && frog) {
+                    const first = { position: frog.position.clone(), quaternion: frog.quaternion.clone() };
+
+                    look.userData.resized = (box) => {
+                        hangs.length = box.max.y;
+                        hangs.pommel = box.min.y;
+                        frog.position.copy(first.position);
+                        frog.quaternion.copy(first.quaternion);
+                        hangs.clear = null;
+                    };
+                }
+
                 // (A shield that's slung on the back while the weapons are put away: over whatever
                 // else is on the back)
                 model.userData.sling = part === item && item.sling ? slung(socketOn(this, SLING.socket), look, { over: this.equipment.has("back") }) : null;

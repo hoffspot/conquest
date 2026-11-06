@@ -65,7 +65,8 @@ export const GEAR = Object.freeze({
     hammer: { label: "War hammer", slot: "mainHand", hands: 2, price: 35 },
     greatsword: { label: "Greatsword", slot: "mainHand", hands: 2, price: 45 },
     axe: { label: "Battle axe", slot: "mainHand", hands: 2, price: 40 },
-    mace: { label: "Mace", slot: "mainHand", hands: 1, price: 32 },
+    // (A mace looks like one of `looks`, rolled on each as it's made: characters/equipment.js MACE_LOOKS)
+    mace: { label: "Mace", slot: "mainHand", hands: 1, price: 32, looks: Object.freeze(["ornate", "studded", "star", "bronze", "morningStar"]) },
     bow: { label: "Bow", slot: "mainHand", hands: 2, price: 35, quiver: true },
     gauntlets: { label: "Spiked gauntlets", slot: "mainHand", hands: 2, price: 25 },
     // (Held open in both hands, its spells a quarter stronger again than a wand's: `spellTimes`)
@@ -348,9 +349,10 @@ const rounded = (stat, value) => (STATS[stat].share ? Math.round(value * 100) / 
  * core/legendary.js) }. As many bonuses as its make and level roll (bonusCount; jewellery at least
  * one), each different, stronger the better made and the higher its level; two, a word before its
  * name and one after. A graded piece (`grade`, 0 to 1: core/rare.js UNIQUES `graded`), as many and
- * as strong as its grade has it.
+ * as strong as its grade has it. One that comes in several looks (GEAR `looks`: a mace's), one of
+ * them (`look`), unless it's to look as its own (`looked`: false, a unique's: core/rare.js).
  */
-export function rollGear(id, quality = "common", random, { people = null, level = 1, grade = null } = {}) {
+export function rollGear(id, quality = "common", random, { people = null, level = 1, grade = null, looked = true } = {}) {
     const def = GEAR[id];
     const item = { id, quality };
     const at = levelOf(level);
@@ -418,8 +420,16 @@ export function rollGear(id, quality = "common", random, { people = null, level 
         item.effect = pick(random, BLOW_EFFECTS);
     }
 
+    // (Its look, the last thing rolled: what's rolled before it is as it was before maces had them)
+    if (def.looks && looked) {
+        item.look = pick(random, def.looks);
+    }
+
     return item;
 }
+
+/** A piece's look (GEAR `looks`: one of them, its first if it has none, or none it can have), or null if it has no looks. */
+export const gearLook = ({ id, look = null }) => (GEAR[id]?.looks ? (GEAR[id].looks.includes(look) ? look : GEAR[id].looks[0]) : null);
 
 /**
  * The effect a piece has (core/legendary.js EFFECTS key), or null: its own, whatever it is, held
@@ -531,9 +541,9 @@ export function disguiseOf(gear) {
     return peoples[0] && peoples.every((people) => people === peoples[0]) ? peoples[0] : null;
 }
 
-/** Whether two pieces are alike (the same, made alike, as high a level, with the same bonuses, effect and grade): they stack. */
+/** Whether two pieces are alike (the same, made alike, as high a level, with the same bonuses, effect, grade and look): they stack. */
 export function sameGear(a, b) {
     const bonuses = (item) => JSON.stringify(Object.entries(item.bonuses ?? {}).sort());
 
-    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && (a.unique ?? null) === (b.unique ?? null) && (a.grade ?? null) === (b.grade ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
+    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && (a.unique ?? null) === (b.unique ?? null) && (a.grade ?? null) === (b.grade ?? null) && (a.look ?? null) === (b.look ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
 }

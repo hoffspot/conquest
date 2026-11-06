@@ -1215,6 +1215,16 @@ quarter of each blow goes through armour (`crushing: 0.25`: an armoured foe's ar
 its share off it; a foe in armour of 0.4 takes 7 of a blow of 10, not 6). Each of an attack's
 `crushing` share counts the same way, the mace-brothers' morning stars' (`NATURAL.bellMace`) too.
 
+Each mace has a **look** of its own, rolled on it as it's made (wherever it's found or bought:
+core/gear.js GEAR mace `looks`, the last thing rolled on it) and kept with it, in the pack, in a
+save and in a trade, two maces stacking only if they look alike; its card says it ("Looks like a
+morning star: a spiked steel ball on a long haft"). It's one of five CC0 maces, each about as
+likely: Poly Haven's ornate mace (`ornate`), Price's [W007] studded mace (`studded`), [W008]
+star-headed mace (`star`) and [W004] composite mace (`bronze`), and Lucian Pavel's morning star
+(`morningStar`), all from OpenGameArt but the first. It's only how the mace looks: every look fights
+as a mace does. A mace found before maces had looks looks like the first. The Prior's Vespers has
+none: it looks as his own.
+
 | Spell | On | Reach | Casts in | Does | Cooldown |
 | --- | --- | --- | --- | --- | --- |
 | Vigor | anyone | 16 m | 500 ms | 8–12 hit points back | 4000 ms |

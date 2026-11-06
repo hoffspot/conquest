@@ -264,3 +264,40 @@ test("dresses each people's soldiers and officials, their garments drawn all at 
     expect(apart[1].garments).toEqual(expect.arrayContaining(soldier.merged));
     expect(apart[1].garments).not.toContain("garments");
 });
+
+test("holds a mace as each of its five looks, the CC0 mace's model in the hand in place of the mace made here once it's read, hung at the hip as long as it is", async ({ page }) => {
+    await openLab(page, "/character-lab.html?weapon=mace");
+
+    const looks = ["maceOrnate", "maceStudded", "maceStar", "maceBronze", "maceMorningStar"];
+
+    for (const look of looks) {
+        await page.evaluate((look) => {
+            const { state, change } = window.lab;
+
+            state.equipment = state.equipment.map((id) => (id === "mace" || id.startsWith("mace") ? look : id));
+            change("equipment");
+        }, look);
+
+        // (What's in the hand: its model read in place of the stand-in, as long as the model is)
+        await expect
+            .poll(
+                () =>
+                    page.evaluate((look) => {
+                        const item = window.lab.character.items.find(({ name }) => name === look);
+                        const held = item?.children.find(({ name }) => name.startsWith("held:"));
+                        const meshes = [];
+
+                        held?.traverse((node) => node.isMesh && meshes.push(node));
+
+                        return held ? { model: held.name, read: meshes.some(({ material }) => Boolean(material.map)), hangs: Number((item.userData.hangs?.length ?? 0).toFixed(2)) } : null;
+                    }, look),
+                { timeout: 30000, message: look },
+            )
+            .toEqual(expect.objectContaining({ model: expect.stringMatching(/^held:/), read: true }));
+    }
+
+    // (Each as long as its model: the morning star longer than the studded mace)
+    const lengths = await page.evaluate(() => window.lab.character.items.map(({ name, userData }) => [name, userData.hangs?.length ?? null]));
+
+    expect(lengths.find(([name]) => name === "maceMorningStar")?.[1]).toBeGreaterThan(0.6);
+});

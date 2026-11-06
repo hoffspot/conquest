@@ -996,7 +996,7 @@ export function gatesHold(card, at) {
 export function makeUnique(id, level, random) {
     const def = UNIQUES[id];
     const grade = def.graded ? rollGrade(random) : null;
-    const item = { ...rollGear(def.base, "legendary", random, { level, ...(grade === null ? {} : { grade }) }), name: def.name, unique: def.id };
+    const item = { ...rollGear(def.base, "legendary", random, { level, looked: false, ...(grade === null ? {} : { grade }) }), name: def.name, unique: def.id };
 
     if (def.effect) {
         item.effect = def.effect;
