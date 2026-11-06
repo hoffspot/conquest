@@ -1887,11 +1887,12 @@ function shadowShape(gltf, scene, meshes) {
 
 /**
  * A joined shadow's shape (`shape`, shadowShape's, of the model as read, `gltf`) with fewer
- * triangles (SHADOW_DETAIL), over the same corners, made by `lods` from where `caster` (a mesh of it)
- * puts them as it stands now (world metres): a promise of it, made once and kept with the shape (let
- * go of with the model: disposeModel), or of null if it can't be made.
+ * triangles (SHADOW_DETAIL), over the same corners, made by `lods`: a promise of it, made once and
+ * kept with the shape (let go of with the model: disposeModel), or of null if it can't be made. Its
+ * corners are where the pipeline packed them (its skin makes them full size), `perMetre` of them to
+ * a metre of the model as it's made: how far out of place is too far reckoned in them.
  */
-function lowerShape(gltf, shape, caster, lods) {
+function lowerShape(gltf, shape, perMetre, lods) {
     const known = shadowShapes.get(gltf) ?? new Map();
     const key = `lower ${shape.uuid}`;
 
@@ -1899,15 +1900,8 @@ function lowerShape(gltf, shape, caster, lods) {
 
     if (!known.has(key)) {
         const count = shape.attributes.position.count;
-        const positions = new Float32Array(count * 3);
-        const corner = new THREE.Vector3();
-
-        for (let i = 0; i < count; i++) {
-            caster.getVertexPosition(i, corner).toArray(positions, i * 3);
-        }
-
         const making = lods
-            .of(`shadow:${shape.uuid}`, () => ({ indices: shape.index.array, positions, uvs: new Float32Array(count * 2), share: SHADOW_DETAIL.share, error: SHADOW_DETAIL.error, flags: ["Permissive"] }))
+            .of(`shadow:${shape.uuid}`, () => ({ indices: shape.index.array, positions: shape.attributes.position.array, uvs: new Float32Array(count * 2), share: SHADOW_DETAIL.share, error: SHADOW_DETAIL.error * perMetre, flags: ["Permissive"] }))
             .then((triangles) => {
                 if (!triangles?.length || triangles.length >= shape.index.count) {
                     return null;
@@ -1920,7 +1914,6 @@ function lowerShape(gltf, shape, caster, lods) {
                 }
 
                 lower.setIndex(new THREE.BufferAttribute(count > 65535 ? Uint32Array.from(triangles) : Uint16Array.from(triangles), 1));
-                lower.userData.lowerOf = shape;
 
                 return lower;
             })
@@ -2225,7 +2218,14 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
                 return Promise.resolve();
             }
 
-            return lowerShape(gltf, shape, casters[0], lods).then(
+            // (Its packed corners to a metre: as tall as it's made, from its least detail's
+            // height as packed)
+            shape.computeBoundingBox();
+
+            const { min, max } = shape.boundingBox;
+            const perMetre = Math.max(max.x - min.x, max.y - min.y, max.z - min.z) / Math.max(model.made.tall, model.made.long);
+
+            return lowerShape(gltf, shape, perMetre, lods).then(
                 (lower) => {
                     if (lower) {
                         casters[0].geometry = lower;
