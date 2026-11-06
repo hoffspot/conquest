@@ -186,7 +186,7 @@ export const ITEMS = Object.freeze({
     cleaver: { label: "Orc cleaver", slot: "mainHand", model: "cleaver", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.015, hilt: [-0.06, 0.054], hold: HOLDS.sword, sheath: SHEATHS.cleaver },
     // (A mace held as the cleaver is; Vespers, the Prior of the Bell's, his own: core/rare.js
     // UNIQUES, characters/liveries.js UNIQUE_LOOKS)
-    mace: { label: "Mace", slot: "mainHand", model: "mace", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.07, 0.07], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    mace: { label: "Mace", slot: "mainHand", model: "mace", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
     vespers: { label: "Vespers", slot: "mainHand", model: "vespers", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.075, 0.07], hold: HOLDS.sword, sheath: SHEATHS.mace },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },

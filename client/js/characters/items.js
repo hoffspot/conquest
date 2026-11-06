@@ -397,28 +397,30 @@ function warHammer() {
 }
 
 function mace() {
-    // A flanged mace, about 62 cm: a leather-bound grip (held at the origin), an iron pommel under
-    // it, a steel haft up to the head; the head a round steel core with six flanges standing out
-    // from it all round, a knob on top
+    // A flanged mace, about 62 cm: a leather-bound grip (held at the origin), a flat iron cap under
+    // it (no further below the hand than a cleaver's, clear of the other arm as it's put away), a
+    // steel haft up to the head; the head a round steel core about 10 cm across its six flanges,
+    // standing out from it all round, a knob on top
     return assemble([
-        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.14, 10), 0, 0, 0), "leather"],
-        [at(new THREE.SphereGeometry(0.022, 10, 8), 0, -0.085, 0), "iron"],
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.13, 10), 0, 0, 0), "leather"],
+        [at(new THREE.CylinderGeometry(0.019, 0.019, 0.02, 10), 0, -0.07, 0), "iron"],
         [at(new THREE.CylinderGeometry(0.013, 0.015, 0.36, 10), 0, 0.25, 0), "steel"],
         [at(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 10), 0, 0.075, 0), "iron"],
-        [at(new THREE.CylinderGeometry(0.032, 0.032, 0.1, 12), 0, 0.47, 0), "steel"],
+        [at(new THREE.CylinderGeometry(0.024, 0.024, 0.09, 12), 0, 0.47, 0), "steel"],
         ...Array.from({ length: 6 }, (each, k) => {
             const angle = (k * Math.PI) / 3;
 
-            return [at(new THREE.BoxGeometry(0.01, 0.1, 0.04), Math.sin(angle) * 0.045, 0.47, Math.cos(angle) * 0.045, 0, angle, 0), "darkSteel"];
+            return [at(new THREE.BoxGeometry(0.008, 0.09, 0.03), Math.sin(angle) * 0.034, 0.47, Math.cos(angle) * 0.034, 0, angle, 0), "darkSteel"];
         }),
-        [at(new THREE.SphereGeometry(0.025, 10, 8), 0, 0.535, 0), "steel"],
+        [at(new THREE.SphereGeometry(0.02, 10, 8), 0, 0.525, 0), "steel"],
     ], "mace");
 }
 
 function vespers() {
     // Vespers, the Prior of the Bell's mace (core/rare.js UNIQUES): a gilded head cast like a bell
     // turned upside down, its mouth up and crowned with a ring of thorns, a spike rising from its
-    // heart; on a dark steel haft banded in gold, a leather grip and a gilt pommel
+    // heart; on a dark steel haft banded in gold, a leather grip and a gilt cap (no further below
+    // the hand than a cleaver's)
     const bell = new THREE.LatheGeometry([
         new THREE.Vector2(0.016, 0),
         new THREE.Vector2(0.03, 0.012),
@@ -430,8 +432,8 @@ function vespers() {
     ], 16);
 
     return assemble([
-        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.15, 10), 0, 0, 0), "darkLeather"],
-        [at(new THREE.ConeGeometry(0.026, 0.05, 8), 0, -0.1, 0, Math.PI, 0, 0), "gold"],
+        [at(new THREE.CylinderGeometry(0.016, 0.015, 0.13, 10), 0, 0, 0), "darkLeather"],
+        [at(new THREE.CylinderGeometry(0.019, 0.017, 0.02, 10), 0, -0.07, 0), "gold"],
         [at(new THREE.CylinderGeometry(0.013, 0.015, 0.4, 10), 0, 0.27, 0), "darkSteel"],
         ...[0.08, 0.22, 0.36].map((y) => [at(new THREE.CylinderGeometry(0.018, 0.018, 0.018, 10), 0, y, 0), "gold"]),
         [at(bell, 0, 0.44, 0), "gold"],
