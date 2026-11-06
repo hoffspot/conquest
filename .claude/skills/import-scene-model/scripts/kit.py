@@ -6,13 +6,24 @@
 # game's +z), its back at y = 0, so the game sets it against a wall by turning it alone. A material
 # brought in twice (Blender's "M_II_2.001") is made the one material again, as the pipeline's config
 # names it. With the pipeline's Blender Python, from the repository's root:
-#   utilities/blenderpipeline/.venv/bin/python -I .claude/skills/import-scene-model/scripts/kit.py -- <Meshes dir> <pieces.json> <out .blend> [<picture.png>]
+#   utilities/blenderpipeline/.venv/bin/python -I .claude/skills/import-scene-model/scripts/kit.py -- <Meshes dir> <pieces.json> <out .blend> [<picture.png>] [--cells <metres>]
 # pieces.json: [[part, the pack's mesh (its FBX's name), set against a wall], ...]: Bellhaven's keep's
 # is bellhaven-kit.json, beside this. The picture: the parts in a row, in clay.
+# --cells: each part set in the middle of a square of its own, that many metres a side, in rows of
+# five along x (Blender's x; the game's z its -y), for the pipeline to join them, bake their
+# materials onto one atlas and cut them apart again (its config's `join` and `cells` with
+# `bakeFirst`: utilities/blenderpipeline/README.md, *A kit of pieces*), every part then drawn with
+# the one material; which square each is in (its node, "<joined>@<i>,<j>") written beside the
+# .blend, <out>.cells.json.
 import bpy, sys, os, math, json
 from mathutils import Vector, Matrix
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
+cells = None
+if "--cells" in args:
+    at = args.index("--cells")
+    cells = float(args[at + 1])
+    args = args[:at] + args[at + 2:]
 src, listed, out = args[:3]
 picture = args[3] if len(args) > 3 else None
 
@@ -82,6 +93,22 @@ for material in list(bpy.data.materials):
     if "." in material.name and material.users == 0:
         bpy.data.materials.remove(material)
 print("materials", sorted(m.name for m in bpy.data.materials))
+
+# (Each in a square of its own, its middle the square's: what's in each told beside the .blend)
+if cells:
+    squares = {}
+    for k, piece in enumerate(made):
+        me = piece.data
+        xs = [v.co.x for v in me.vertices]; ys = [v.co.y for v in me.vertices]
+        if max(xs) - min(xs) >= cells or max(ys) - min(ys) >= cells:
+            raise SystemExit(f"{piece.name} is {max(xs) - min(xs):.2f} x {max(ys) - min(ys):.2f}: more than a square of {cells:g} m")
+        i, j = k % 5, k // 5
+        me.transform(Matrix.Translation(Vector(((i + 0.5) * cells - (min(xs) + max(xs)) / 2, -(j + 0.5) * cells - (min(ys) + max(ys)) / 2, 0))))
+        me.update()
+        squares[piece.name] = [i, j]
+    with open(out + ".cells.json", "w") as f:
+        json.dump(squares, f, indent=1)
+    print("squares", squares)
 
 # (Laid out in a row, apart, only for the picture; each kept at its own origin in the file)
 bpy.ops.wm.save_as_mainfile(filepath=out)

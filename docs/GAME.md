@@ -593,6 +593,12 @@ are kept.
     velvet and gold: banners either side of the counter; the great swords on a master's tables and
     in its racks (a zweihänder, a knight's sword, claymores), a visored barbute on its counter.
 
+  The humans' shops are furnished from a prop kit, Wind Ways' shop furniture (a licensed model,
+  `world/propkits.js`; docs/LICENSED_MODELS.md *Prop kits*): the counter its panelled counters end
+  to end, the chests by the door its chests and cabinets, a basket on a chest and a lantern on a
+  cabinet; and upstairs at an inn, the side table and the chests by the beds. Till it's read, and
+  without the licensed models, each is drawn as the game's own.
+
   Its keeper (`shopFolkOf`) serves from behind the counter and goes to the shelves or racks on the
   back wall now and then; dressed as a smith (the swordsmith and the armorer), an arcanist (the
   scribe, the Emporium's proprietor), an herbalist (the alchemist) or a quartermaster (the

@@ -457,8 +457,8 @@ const propMaterials = new Map();
 // The colour a solid cut prop's insides are drawn, where it's cut (propMaterial `cut` "solid")
 const CUT_CAP = "vec3(0.11, 0.105, 0.1)";
 
-function propMaterial(name, part, source, tint, cut = false) {
-    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}`;
+function propMaterial(name, part, source, tint, cut = false, double = false) {
+    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}${double ? "|double" : ""}`;
 
     if (propMaterials.has(key)) {
         return propMaterials.get(key);
@@ -476,7 +476,7 @@ function propMaterial(name, part, source, tint, cut = false) {
         opacity: source.opacity ?? 1,
         depthWrite: !source.transparent,
         alphaTest: source.alphaTest ?? 0,
-        side: cut === "solid" ? THREE.DoubleSide : THREE.FrontSide,
+        side: cut === "solid" || double ? THREE.DoubleSide : THREE.FrontSide,
     });
 
     result.name = `prop-${name}`;
@@ -551,7 +551,8 @@ const _corner = new THREE.Vector3();
  * or `fit`: its own length, height and width made these, metres), tint (a colour it's darkened
  * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said), cut
  * (cut away with the rock while the camera's over the roof; "solid", drawn solid where it is:
- * propMaterial), lot (how wide a square of the level its copies are drawn at once in, metres:
+ * propMaterial), double (drawn from both sides: a prop kit's pieces, made to be,
+ * world/propkits.js), lot (how wide a square of the level its copies are drawn at once in, metres:
  * the rock's tile, CAVERNS, if it isn't said) }]), each model's copies in each such square drawn at
  * once (instanced, one for each of its materials), so what's out of sight or of a light's reach
  * isn't drawn; added to
@@ -581,7 +582,7 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
             continue;
         }
 
-        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null, cut = false } = placement;
+        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null, cut = false, double = false } = placement;
         const extent = prop.box.getSize(new THREE.Vector3());
         const each = fit ? [fit[0] / extent.x, fit[1] / extent.y, fit[2] / extent.z] : (placement.scale ?? (size ? size / Math.max(extent.x, extent.y, extent.z) : 1));
         const scale = Array.isArray(each) ? new THREE.Vector3(...each) : new THREE.Vector3(each, each, each);
@@ -601,10 +602,10 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         tops.set(placement, y + box.max.y - box.min.y);
 
         const across = placement.lot ?? CAVERNS.tile;
-        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
+        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${double ? "double|" : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
 
         if (!lots.has(key)) {
-            lots.set(key, { name: placement.model, prop, tint, cut, matrices: [], shadow: false });
+            lots.set(key, { name: placement.model, prop, tint, cut, double, matrices: [], shadow: false });
         }
 
         const lot = lots.get(key);
@@ -613,9 +614,9 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         lot.shadow ||= placement.shadow ?? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) >= SHADOWS_FROM;
     }
 
-    for (const { name, prop, tint, cut, matrices, shadow } of lots.values()) {
+    for (const { name, prop, tint, cut, double, matrices, shadow } of lots.values()) {
         prop.parts.forEach(({ geometry, source }, part) => {
-            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint, cut), matrices.length);
+            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint, cut, double), matrices.length);
 
             matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
             mesh.instanceMatrix.needsUpdate = true;

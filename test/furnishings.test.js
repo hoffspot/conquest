@@ -17,6 +17,7 @@ const { readPlan } = await import("../client/js/core/interiors.js");
 const { CAVERNS } = await import("../client/js/world/caverns.js");
 const { DUNGEON_PROPS, furnish, loadProp } = await import("../client/js/world/dungeons3d.js");
 const { KEEP_KIT } = await import("../client/js/world/keepkit.js");
+const { PROP_KITS } = await import("../client/js/world/propkits.js");
 const { buildInterior } = await import("../client/js/world/interiors3d.js");
 const { PROPS } = await import("../scripts/build-props.js");
 
@@ -45,13 +46,14 @@ describe("the scanned models a dungeon's furnished with (scripts/build-props.js)
     it("are each in the catalog, downloaded only once a dungeon's wanted, a GLB on disk, and small", () => {
         let all = 0;
 
-        // (A set's pieces each a prop of their own, all in their set's file; and besides them only a
-        // licensed kit's pieces, Bellhaven's keep's castle's: world/keepkit.js, test/keepkit.test.js)
+        // (A set's pieces each a prop of their own, all in their set's file; and besides them only
+        // licensed kits' pieces: Bellhaven's keep's castle's (world/keepkit.js, test/keepkit.test.js)
+        // and the prop kits' (world/propkits.js, test/propkits.test.js))
         const names = Object.entries(PROPS).flatMap(([file, { pieces }]) => (pieces ? Object.keys(pieces) : [file]));
         const scanned = Object.keys(DUNGEON_PROPS).filter((name) => !ASSETS.models[DUNGEON_PROPS[name].asset].licensed);
 
         assert.deepEqual(scanned.sort(), names.sort());
-        assert.deepEqual([...new Set(Object.keys(DUNGEON_PROPS).filter((name) => !scanned.includes(name)).map((name) => DUNGEON_PROPS[name].asset))], ["dungeon-prop-bellhaven-keep"]);
+        assert.deepEqual([...new Set(Object.keys(DUNGEON_PROPS).filter((name) => !scanned.includes(name)).map((name) => DUNGEON_PROPS[name].asset))].sort(), [KEEP_KIT.asset, ...Object.values(PROP_KITS).map(({ asset }) => asset)].sort());
 
         for (const [file, { pieces }] of Object.entries(PROPS)) {
             const model = ASSETS.models[`dungeon-prop-${file}`];

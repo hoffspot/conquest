@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "5639ceb821",
+    release: "7632958e71",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2690,6 +2690,83 @@ export const ASSETS = Object.freeze({
                 ],
                 "bellhaven-keep-floor": [
                     "floor"
+                ]
+            }
+        },
+        "dungeon-prop-wind-ways-shop": {
+            "tier": "demand",
+            "label": "The humans' shops' and rooms' furniture: a counter, cupboards, chests and cabinets, a table and chair, a hanging lantern, baskets and trays of goods, a curtain, windows, a rack, a sign post and a door (Wind Ways' medieval shop pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/wind-ways-shop.bin",
+                    "hash": "c4bbd0d72f",
+                    "bytes": 1906548
+                }
+            ],
+            "pieces": {
+                "wind-ways-shop-counter": [
+                    "kit@0,0"
+                ],
+                "wind-ways-shop-shelves": [
+                    "kit@1,0"
+                ],
+                "wind-ways-shop-dresser": [
+                    "kit@2,0"
+                ],
+                "wind-ways-shop-cabinet": [
+                    "kit@3,0"
+                ],
+                "wind-ways-shop-cabinet-tall": [
+                    "kit@4,0"
+                ],
+                "wind-ways-shop-chest-wide": [
+                    "kit@0,1"
+                ],
+                "wind-ways-shop-chest-low": [
+                    "kit@1,1"
+                ],
+                "wind-ways-shop-table": [
+                    "kit@2,1"
+                ],
+                "wind-ways-shop-chair": [
+                    "kit@3,1"
+                ],
+                "wind-ways-shop-lantern": [
+                    "kit@4,1"
+                ],
+                "wind-ways-shop-basket": [
+                    "kit@0,2"
+                ],
+                "wind-ways-shop-goods": [
+                    "kit@1,2"
+                ],
+                "wind-ways-shop-tray": [
+                    "kit@2,2"
+                ],
+                "wind-ways-shop-crate": [
+                    "kit@3,2"
+                ],
+                "wind-ways-shop-curtain": [
+                    "kit@4,2"
+                ],
+                "wind-ways-shop-window": [
+                    "kit@0,3"
+                ],
+                "wind-ways-shop-rack": [
+                    "kit@1,3"
+                ],
+                "wind-ways-shop-bracket": [
+                    "kit@2,3"
+                ],
+                "wind-ways-shop-newel": [
+                    "kit@3,3"
+                ],
+                "wind-ways-shop-sign-post": [
+                    "kit@4,3"
+                ],
+                "wind-ways-shop-door": [
+                    "kit@0,4"
                 ]
             }
         },

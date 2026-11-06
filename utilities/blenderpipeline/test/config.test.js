@@ -130,6 +130,7 @@ describe("an asset's config", () => {
         refuses({ source: "a.fbx", cells: {} }, /cells.size is how many metres a cell is on a side/);
         refuses({ source: "a.fbx", cells: { size: 0 } }, /cells.size is how many metres a cell is on a side/);
         refuses({ source: "a.fbx", cells: { size: 40, lods: 2 } }, /unknown setting cells.lods/);
+        refuses({ source: "a.fbx", cells: { size: 40, bakeFirst: "yes" } }, /cells.bakeFirst is true/);
         refuses({ source: "a.fbx", walk: [1, 0, 1] }, /walk is \{ from: \[x, y, z\], ... \}/);
         refuses({ source: "a.fbx", walk: {} }, /walk.from is where it's walked from/);
         refuses({ source: "a.fbx", walk: { from: [1, 0] } }, /walk.from is where it's walked from/);
@@ -250,6 +251,11 @@ describe("an asset's config", () => {
         const castle = blenderJob(resolveConfig({ source: "castle.fbx", dropMaterials: ["M_Rock*"], cells: { size: 40 } }, file), { out: "/tmp/a.glb", report: "/tmp/a.json" });
 
         assert.deepEqual([castle.dropMaterials, castle.cells], [["M_Rock*"], { size: 40 }]);
+
+        // (A kit's pieces, a cell each, cut once baked)
+        const kit = blenderJob(resolveConfig({ source: "kit.blend", cells: { size: 10, bakeFirst: true } }, file), { out: "/tmp/a.glb", report: "/tmp/a.json" });
+
+        assert.deepEqual(kit.cells, { size: 10, bakeFirst: true });
 
         // (Where it's walked, and some materials simplified by ratios of their own: Node's, not Blender's)
         const walked = resolveConfig({ source: "castle.fbx", walk: { from: [0, 2, -40], climb: 1 }, simplify: { ratio: 0.3, materials: { "M_Rock*": 0.05 } }, tiledTexcoords: true }, file);
