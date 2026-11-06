@@ -8,7 +8,7 @@
 // it's bound to its finder (core/rare.js UNIQUES). Pure: from the player's progress
 // (core/progress.js), no DOM.
 
-import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
+import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearLook, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
 import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, gradeWords, WARD_CHARGE } from "../core/legendary.js";
@@ -19,6 +19,16 @@ import { WEAPONS } from "../core/weapons.js";
 
 /** Each make's name as shown (a common one, none), rarest last; and a unique's (core/rare.js). */
 export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", rare: "Rare", veryRare: "Very rare", legendary: "Legendary", unique: "Unique" });
+
+// What each of a mace's looks is like, as its card says (core/gear.js GEAR mace `looks`: the CC0
+// maces' models, characters/items.js HELD_MODELS)
+const LOOK_WORDS = Object.freeze({
+    ornate: "an ornate mace: a flanged steel head on a twisted haft",
+    studded: "a studded mace: a great square head, its grip bound in red",
+    star: "a star-headed mace, its haft banded in violet",
+    bronze: "a bronze-headed mace, spiked, on a dark haft",
+    morningStar: "a morning star: a spiked steel ball on a long haft",
+});
 
 /**
  * How rare a thing's shown as, its colour's name (styles.css `.rarity-…`): a unique's own
@@ -192,6 +202,12 @@ export function describe(item, progress, { index = null, label = item.id, haggle
         if (unique.graded && Number.isFinite(item.grade)) {
             lines.push({ text: `${gradeWords(item.grade)}: ${Math.round(item.grade * 100)} in 100`, tone: "unique" });
         }
+    }
+
+    // (Which of its kind's looks it has, one that comes in several: a mace's, core/gear.js GEAR
+    // `looks`; a unique looks as its own)
+    if (def.looks && !unique) {
+        lines.push({ text: `Looks like ${LOOK_WORDS[gearLook(item)] ?? "its kind"}`, tone: "note" });
     }
 
     // What it does

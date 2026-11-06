@@ -1025,7 +1025,9 @@ what it doesn't cover.
     mace, a war hammer and a shield; busts, statues and beasts' heads; a fire pit, boulders,
     mossy rocks, stones, pebbles, logs, roots, stumps, branches and bark; a rat;
   - from OpenGameArt (<https://opengameart.org>), CC0: "Human Skull" by CDmir, and "3D dungeon
-    debris: skull and bones" by Paul_Wortmann (after Ouren's bone);
+    debris: skull and bones" by Paul_Wortmann (after Ouren's bone); and the maces a hero's mace may
+    look like: Price's "[W007] Mace", "[W008] Mace" and "[W004] Composite Mace", and Lucian Pavel's
+    "CC0 Morning Star";
   - museums' scans, CC0, through Zenodo's mirror (<https://zenodo.org>): the Hunt Museum's
     Ballyscullion Bronze Cauldron and Sheep Skin, the Minneapolis Institute of Art's Sarcophagus
     of Prince Yuan Mi, the Smithsonian's Kneeling Winged Monster and square lidded ritual wine

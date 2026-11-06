@@ -477,8 +477,8 @@ export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ??
 /**
  * A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
  * level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
- * legendary weapon) its effect, (a unique) which it is and (a graded one) its grade, and (a charm)
- * what was rolled on it. Anything else of it left off.
+ * legendary weapon) its effect, (a unique) which it is and (a graded one) its grade, (a mace) its
+ * look, and (a charm) what was rolled on it. Anything else of it left off.
  */
 export function thingOf(item) {
     const def = ITEMS[item.id];
@@ -525,6 +525,12 @@ export function thingOf(item) {
         if (Number.isFinite(item.grade)) {
             thing.grade = Math.round(Math.max(0, Math.min(1, item.grade)) * 100) / 100;
         }
+    }
+
+    // (Which of its looks it has, one that comes in several: a mace's, gear.js GEAR `looks`; not a
+    // unique's, which looks as its own)
+    if (def?.looks?.includes(item.look) && !thing.unique) {
+        thing.look = item.look;
     }
 
     return thing;
@@ -1032,11 +1038,11 @@ export class Progress {
         });
     }
 
-    /** What's in the main hand, as it's drawn ({ id, unique? }: a unique's own look), or null. */
+    /** What's in the main hand, as it's drawn ({ id, unique?, look? }: a unique's own look, or which of its looks it has), or null. */
     wielded() {
         const piece = this.gear.mainHand;
 
-        return piece ? { id: piece.id, ...(piece.unique ? { unique: piece.unique } : {}) } : null;
+        return piece ? { id: piece.id, ...(piece.unique ? { unique: piece.unique } : {}), ...(piece.look ? { look: piece.look } : {}) } : null;
     }
 
     /**

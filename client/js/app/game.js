@@ -71,8 +71,8 @@ import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
-import { dress, UNIQUE_LOOKS } from "../characters/liveries.js";
-import { GEAR, GEAR_SLOTS, levelOf, offHandFree } from "../core/gear.js";
+import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
+import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -204,16 +204,24 @@ export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
 
 /**
  * Everything a character wears and carries (EQUIPMENT ids): what's under their gear, the weapon
- * in their hand (a WEAPONS key; drawn as `held` is, a unique's own look: Progress wielded), each
- * piece of gear they wear (`pieces`: core/progress.js Progress worn; none given, what a new
- * character starts with on: core/progress.js startingGear), and the parts of their own (a cat's
- * ears and tail).
+ * in their hand (a WEAPONS key; drawn as `held` is, a unique's own look or which of its looks it
+ * has: Progress wielded), each piece of gear they wear (`pieces`: core/progress.js Progress worn;
+ * none given, what a new character starts with on: core/progress.js startingGear), and the parts of
+ * their own (a cat's ears and tail).
  */
 export function heroEquipment(weapon, pieces = null, parts = [], held = null) {
     const worn = pieces ?? new Progress({}, { weapon }).worn();
 
-    return [...new Set([...BASE_OUTFIT, ...(UNIQUE_LOOKS[held?.unique] ?? WEAPONS[weapon].equipment), ...dress(worn), ...parts])];
+    return [...new Set([...BASE_OUTFIT, ...(UNIQUE_LOOKS[held?.unique] ?? heldAs(weapon, held)), ...dress(worn), ...parts])];
 }
+
+// What's held of a weapon (a WEAPONS key) as `held` looks (characters/liveries.js HELD_LOOKS, its
+// first look if it has none: a mace found before they had them), or as its kind is
+const heldAs = (weapon, held) => {
+    const look = held ? HELD_LOOKS[held.id]?.[gearLook(held)] : null;
+
+    return look ? WEAPONS[weapon].equipment.map((id) => (id === held.id ? look : id)) : WEAPONS[weapon].equipment;
+};
 
 /** How a character holds its weapon to fight (actions.js GUARDS, DRAWS), for its WEAPONS key. */
 export const guardOf = (weapon) => weaponOf(weapon)?.attacks[0].animation ?? null;

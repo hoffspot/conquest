@@ -1112,7 +1112,19 @@ sold and carried by the Order of the Bell's mace-brothers, never anyone's to sta
 **mace** (`mace`: about 62 cm, a leather-bound grip capped in iron no further below the hand than a
 cleaver's, a steel haft, a round head about 10 cm across six dark flanges and a knob on top), held, swung, drawn and hung at the
 left hip as the cleaver is (its sheath the cleaver's, `SHEATHS.mace`; its blows the cleaver's,
-app/game.js `HELD_SWINGS`). The Prior of the Bell's own two are drawn in their place when held or
+app/game.js `HELD_SWINGS`). A hero's mace is drawn as its look (core/gear.js GEAR mace `looks`,
+rolled on each; characters/liveries.js `HELD_LOOKS`, by the piece held: core/progress.js
+`wielded`): one of five CC0 maces' models (characters/items.js `HELD_MODELS`, "held:<prop>": the
+catalog's props, client/models/dungeons, scripts/build-props.js), `maceOrnate` (Poly Haven's,
+63 cm), `maceStudded` (Price's [W007], 60 cm, a square head 23 cm across studded with pyramids, its
+grip bound in red), `maceStar` (Price's [W008], 66 cm, a star-cut head on a haft banded in violet),
+`maceBronze` (Price's [W004], 62 cm, a spiked bronze head, made lying down and stood up) and
+`maceMorningStar` (Lucian Pavel's, 74 cm, a spiked steel ball). Each is turned so its haft runs up
+its grip and its grip (about 9 cm up from the end of its haft) is at the hand, the hand closed round
+it as thick as it is (`round`), held, swung, drawn and hung as the mace made here is. That one is
+drawn in its place till its model's read (each read once, shared by all who hold it) and wherever
+it can't be (the motion check, the tests); once read, what hangs at the hip is fitted to the body
+again as long as it is (character.js `resized`, `fitHanging`). The Prior of the Bell's own two are drawn in their place when held or
 worn (characters/liveries.js `UNIQUE_LOOKS`, by the piece's `unique`: core/progress.js `worn`,
 `wielded`), each made as his own are on his model, in pale steel the colour of old bone
 (`paleSteel`), gold kept to its accents: **Vespers** (`vespers`), a long head clustered with thorns

@@ -31,6 +31,7 @@ import { ALL_EXTENSIONS, KHRTextureBasisu } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
 import jpeg from "jpeg-js";
 import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
+import { byBlender, objFrom } from "./lib/blender.js";
 import { encodeKtx2 } from "./lib/ktx2.js";
 import { readObj, readStl } from "./lib/meshes.js";
 import { readPng } from "./lib/png.js";
@@ -52,6 +53,13 @@ const LICENSE = new URL("LICENSE.md", OUT);
  */
 // OpenGameArt's files (each a .zip of a model's files: `member`, the one inside it)
 const opengameart = (file) => (member) => ({ url: `https://opengameart.org/sites/default/files/${file}`, member });
+
+// Maces on OpenGameArt, each a .zip of its model (a Blender file, or an FBX: read by Blender,
+// scripts/lib/blender.js) and its picture: Price's (CC0), and Lucian Pavel's morning star (CC0)
+const W007 = ((pack) => (path) => pack(`[W007] Mace [blend+png]/${path}`))(opengameart("%5BW007%5D%20Mace%20%5Bblend%2Bpng2048px%5D.zip"));
+const W008 = ((pack) => (path) => pack(`[W008] Mace [blend+png2048px]/${path}`))(opengameart("%5BW008%5D%20Mace%20%5Bblend%2Bpng2048px%5D.zip"));
+const W004 = ((pack) => (path) => pack(`[W004] Mace/${path}`))(opengameart("%5BW004%5D%20Mace.zip"));
+const MORNING_STAR = opengameart("Morning%20Star_0.zip");
 const SKULL = opengameart("skull-obj.zip");
 const DEBRIS = ((pack) => (path) => pack(`dungeon_debris_-_skull_and_bones_1/${path}`))(opengameart("dungeon_debris_-_skull_and_bones_1_0.zip"));
 
@@ -128,6 +136,11 @@ export const PROPS = {
     estoc: { id: "antique_estoc", of: "a long sword", pixels: 256, triangles: 1200 },
     dagger: { id: "ornate_medieval_dagger", of: "a dagger and its sheath", pixels: 256, triangles: 1000 },
     mace: { id: "ornate_medieval_mace", of: "a mace", pixels: 256, triangles: 1500 },
+    // (The maces a hero carries look like: characters/equipment.js MACE_LOOKS)
+    "mace-studded": { from: { mesh: W007("W007_Mace.blend"), colour: W007("W007_Mace_texture.png") }, by: "Price's [W007] Mace on OpenGameArt, CC0", of: "a studded mace", size: 0.6, rough: 0.55, metal: 0.35, pixels: 256, triangles: 600 },
+    "mace-star": { from: { mesh: W008("W008_Mace.blend"), colour: W008("W008_Mace_texture.png") }, by: "Price's [W008] Mace on OpenGameArt, CC0", of: "a star-headed mace", size: 0.66, rough: 0.55, metal: 0.35, pixels: 256, triangles: 600 },
+    "mace-bronze": { from: { mesh: W004("[W004] Mace.blend"), colour: W004("W004_texture.png") }, by: "Price's [W004] Composite Mace on OpenGameArt, CC0", of: "a bronze mace", size: 0.62, rough: 0.55, metal: 0.35, pixels: 256, triangles: 800 },
+    "morning-star": { from: { mesh: MORNING_STAR("Morning Star.fbx"), colour: MORNING_STAR("Morning Star.png") }, by: "Lucian Pavel's CC0 Morning Star on OpenGameArt, CC0", of: "a morning star", size: 0.74, rough: 0.45, metal: 0.5, pixels: 256, triangles: 600 },
     "war-hammer": { id: "ornate_war_hammer", of: "a war hammer", pixels: 256, triangles: 1000 },
     saber: { id: "wooden_handle_saber", of: "a sabre", pixels: 256, triangles: 800 },
     "shield-kite": { id: "kite_shield", of: "a kite shield", pixels: 512, triangles: 2500 },
@@ -490,13 +503,14 @@ async function fromGlb(source, { scale, size, up }) {
     return document;
 }
 
-// A model made from its own files (`from`, not Poly Haven's): its mesh (an OBJ or an STL: `mesh`,
-// one node by the model's name; or `meshes`, a node by each one's name), made `scale` times as big
-// and stood up (`up`: "z" if it's made with z up, not y), and its pictures (`colour`, `normal`, a
-// JPEG or PNG each; and `occlusion`, darkening its colour) on one material as rough as `rough`
-// says, of the colour `tint` says (a scan's that has no picture: BONE's, if it's a `bone`). With the
-// picture standing in for its ARM (Poly Haven's: occlusion, roughness, metal), if it has one.
-async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough = 0.8, bone = false, tint = bone ? BONE.map((c) => linear(c / 255)) : [1, 1, 1] }) {
+// A model made from its own files (`from`, not Poly Haven's): its mesh (an OBJ or an STL, or a
+// Blender file or an FBX, which Blender reads: `mesh`, one node by the model's name; or `meshes`, a
+// node by each one's name), made `scale` times as big (or `size` metres at its longest) and stood
+// up (`up`: "z" if it's made with z up, not y), and its pictures (`colour`, `normal`, a JPEG or PNG
+// each; and `occlusion`, darkening its colour) on one material as rough as `rough` says and as metal
+// as `metal`, of the colour `tint` says (a scan's that has no picture: BONE's, if it's a `bone`).
+// With the picture standing in for its ARM (Poly Haven's: occlusion, roughness, metal), if it has one.
+async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough = 0.8, metal = 0, bone = false, tint = bone ? BONE.map((c) => linear(c / 255)) : [1, 1, 1] }) {
     if (from.glb) {
         const document = await fromGlb(from.glb, { scale, size, up });
 
@@ -516,7 +530,7 @@ async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough =
     const document = new Document();
     const buffer = document.createBuffer();
     const scene = document.createScene();
-    const material = document.createMaterial("surface").setRoughnessFactor(rough).setMetallicFactor(0).setBaseColorFactor([...tint, 1]);
+    const material = document.createMaterial("surface").setRoughnessFactor(rough).setMetallicFactor(metal).setBaseColorFactor([...tint, 1]);
     const picture = async (source) => {
         const bytes = new Uint8Array(await fetchSource(source));
 
@@ -536,11 +550,15 @@ async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough =
 
     for (const [node, source] of Object.entries(from.meshes ?? { [name]: from.mesh })) {
         const bytes = await fetchSource(source);
-        const read = /\.stl$/i.test(source.member ?? source.url) ? readStl(bytes) : readObj(Buffer.from(bytes).toString("utf8"));
+        const file = source.member ?? source.url;
+        const read = /\.stl$/i.test(file) ? readStl(bytes) : readObj(byBlender(file) ? await objFrom(bytes, file) : Buffer.from(bytes).toString("utf8"));
         const [positions, normals] = [new Float32Array(read.positions.length), new Float32Array(read.normals.length)];
+        // (`size` metres at its longest, or `scale` times as big as it's made)
+        const extent = (axis) => read.positions.reduce(([least, most], value, k) => (k % 3 === axis ? [Math.min(least, value), Math.max(most, value)] : [least, most]), [Infinity, -Infinity]);
+        const times = size ? size / Math.max(...[0, 1, 2].map((axis) => extent(axis)[1] - extent(axis)[0])) : scale;
 
         for (let at = 0; at < positions.length; at += 3) {
-            positions.set(stood(...read.positions.subarray(at, at + 3)).map((value) => value * scale), at);
+            positions.set(stood(...read.positions.subarray(at, at + 3)).map((value) => value * times), at);
             normals.set(stood(...read.normals.subarray(at, at + 3)), at);
         }
 
@@ -759,9 +777,11 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
 
     const catalog = JSON.parse(await readFile(CATALOG, "utf8"));
 
-    // (The catalog's props made again from PROPS: any no longer in it let go of)
-    for (const entry of Object.keys(catalog.models)) {
-        if (entry.startsWith("dungeon-prop-") && !PROPS[entry.slice("dungeon-prop-".length)]) {
+    // (The catalog's props made again from PROPS: any made here no longer in it let go of. Those
+    // made elsewhere, in this folder's files or not, are kept: Bellhaven's keep's, a bought scene's
+    // pieces, client/models/scenery)
+    for (const [entry, { files = [] }] of Object.entries(catalog.models)) {
+        if (entry.startsWith("dungeon-prop-") && !PROPS[entry.slice("dungeon-prop-".length)] && files.every(({ path }) => path.startsWith("models/dungeons/"))) {
             delete catalog.models[entry];
         }
     }

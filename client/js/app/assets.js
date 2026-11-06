@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "fb65f72a01",
+    release: "c50c49fe24",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2680,6 +2680,50 @@ export const ASSETS = Object.freeze({
                     "floor"
                 ]
             }
+        },
+        "dungeon-prop-mace-studded": {
+            "tier": "demand",
+            "label": "A studded mace (Price's [W007] Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-studded.glb",
+                    "hash": "8466c6d873",
+                    "bytes": 31400
+                }
+            ]
+        },
+        "dungeon-prop-mace-star": {
+            "tier": "demand",
+            "label": "A star-headed mace (Price's [W008] Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-star.glb",
+                    "hash": "b04ec1ebd5",
+                    "bytes": 21444
+                }
+            ]
+        },
+        "dungeon-prop-mace-bronze": {
+            "tier": "demand",
+            "label": "A bronze mace (Price's [W004] Composite Mace on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/mace-bronze.glb",
+                    "hash": "39eead4de6",
+                    "bytes": 64484
+                }
+            ]
+        },
+        "dungeon-prop-morning-star": {
+            "tier": "demand",
+            "label": "A morning star (Lucian Pavel's CC0 Morning Star on OpenGameArt, CC0)",
+            "files": [
+                {
+                    "path": "models/dungeons/morning-star.glb",
+                    "hash": "8c90666e2b",
+                    "bytes": 58588
+                }
+            ]
         }
     },
 });

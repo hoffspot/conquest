@@ -188,6 +188,14 @@ export const ITEMS = Object.freeze({
     // UNIQUES, characters/liveries.js UNIQUE_LOOKS)
     mace: { label: "Mace", slot: "mainHand", model: "mace", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
     vespers: { label: "Vespers", slot: "mainHand", model: "vespers", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.016, hilt: [-0.075, 0.07], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    // (A mace's looks, one rolled on each (core/gear.js GEAR mace `looks`, characters/liveries.js
+    // HELD_LOOKS): the CC0 maces' models (characters/items.js HELD_MODELS), each held as the mace
+    // made here is, the hand closed round its own grip, and hung from the belt as it is)
+    maceOrnate: { label: "Mace (ornate)", slot: "mainHand", model: "held:mace", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.012, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    maceStudded: { label: "Mace (studded)", slot: "mainHand", model: "held:mace-studded", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.02, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    maceStar: { label: "Mace (star-headed)", slot: "mainHand", model: "held:mace-star", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.022, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    maceBronze: { label: "Mace (bronze)", slot: "mainHand", model: "held:mace-bronze", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.022, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
+    maceMorningStar: { label: "Mace (morning star)", slot: "mainHand", model: "held:morning-star", socket: "rightHand", turn: [0.7, 0, 0], grips: true, round: 0.024, hilt: [-0.06, 0.06], hold: HOLDS.sword, sheath: SHEATHS.mace },
     spikedGauntlets: { label: "Spiked gauntlets", slot: "mainHand", model: "knuckleSpikes", socket: "rightHand", grips: true, hold: HOLDS.fist, garment: "gauntlets", sheath: SHEATHS.worn },
     spikedGauntletLeft: { label: "Spiked gauntlet (left)", slot: "offHand", model: "knuckleSpikes", socket: "leftHand", grips: true, hold: HOLDS.fist, sheath: SHEATHS.worn },
     // (Iron on both feet: over the toes, round the heels and down the shins, each on its bone)

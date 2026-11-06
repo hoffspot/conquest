@@ -24,6 +24,9 @@ import { peopleLook } from "../characters/peoples.js";
 import { PRESETS } from "../characters/presets.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
 import { WEAPONS } from "../core/weapons.js";
+import { ASSETS } from "../app/assets.js";
+import { filesOf } from "../app/catalog.js";
+import { readKtx2With } from "../world/art/engine/models.js";
 
 const canvas = document.querySelector("#view");
 const status = document.querySelector("#status");
@@ -34,6 +37,8 @@ const params = new URLSearchParams(location.search);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 
+// (What's held as one of the catalog's models, a mace's looks, read with its KTX2 pictures: items.js HELD_MODELS)
+readKtx2With(renderer, filesOf(ASSETS, "basis-transcoder", document.baseURI));
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
