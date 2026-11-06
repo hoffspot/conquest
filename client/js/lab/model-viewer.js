@@ -447,6 +447,24 @@ const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-p
 const BEAST_MODELS = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins"));
 const COMING = BEAST_MODELS.filter((id) => !Object.values(MODELS).some(({ asset }) => asset === id));
 
+// The catalog's scenes' models (scenery-: Bellhaven, the White Castle, its cells, and as it's
+// seen from afar), each shown whole as it was made (?model=scenery-bellhaven); the page each is
+// walked on as the game draws it
+const SCENES = Object.keys(ASSETS.models).filter((id) => id.startsWith("scenery-") && !id.endsWith("-skins"));
+const WALKED_ON = Object.freeze({ "scenery-bellhaven": "castle-lab.html", "scenery-bellhaven-far": "castle-lab.html" });
+
+// Every creature's and scene's own model as it was made: every part, clip and skin in its file,
+// those drawn in the game as well as those to come (a creature drawn from one is shown as the
+// game draws it too, by its kind)
+const AS_MADE = [...BEAST_MODELS, ...SCENES];
+
+// More parts than are listed one by one (a scene's cells): only how many
+const LISTED_PARTS = 40;
+
+// Each part of a set laid out side by side (true), or as it was made (false): the catalog's sets
+// (`pieces`: each a prop of its own, made in one place, the keep's kit all at its middle)
+let sideBySide = true;
+
 /**
  * A model's other skins (its catalog entry's, "<id>-skins": utilities/blenderpipeline's variants,
  * <name>.<skin>.bin, each only the textures that differ), by name: { dusk: url, ... }.
@@ -460,6 +478,108 @@ const isThing = (id) => /^(item|prop|model):/.test(String(id));
 
 // The props read (their glTFs, by catalog id), to show again at once
 const propsRead = new Map();
+
+/**
+ * The parts of a thing read from a model's file (`object`, its scene: a catalog entry `id`'s), in
+ * the order they're made: each mesh, or the group three.js reads a mesh of several materials as;
+ * none of the lower levels of detail packed in (`userData.lod`), nor its bones. A set's (the
+ * catalog's `pieces`: each a prop of its own, its nodes by name) by its pieces, each named for
+ * itself (the keep's "column", not "bellhaven-keep-column"), then each node in none of them.
+ * Each: { name, nodes }.
+ */
+function partsOf(object, id) {
+    const nodes = [];
+
+    object.traverse((node) => {
+        if (!node.isMesh) {
+            return;
+        }
+
+        const group = node.parent !== object && !node.parent.isBone && node.parent.children.every((child) => child.isMesh) ? node.parent : node;
+
+        for (let up = group; up && up !== object; up = up.parent) {
+            if (up.userData.lod) {
+                return;
+            }
+        }
+
+        if (!nodes.includes(group)) {
+            nodes.push(group);
+        }
+    });
+
+    const nameOf = (node) => node.userData.name ?? node.name;
+    const own = id.replace(/^(dungeon-prop|scenery|beast)-/, "");
+    const parts = Object.entries(ASSETS.models[id]?.pieces ?? {})
+        .map(([piece, names]) => ({ name: piece.startsWith(`${own}-`) ? piece.slice(own.length + 1) : piece, nodes: nodes.filter((node) => names.includes(nameOf(node))) }))
+        .filter(({ nodes: its }) => its.length);
+
+    for (const node of nodes) {
+        if (!parts.some(({ nodes: its }) => its.includes(node))) {
+            parts.push({ name: nameOf(node) || "(unnamed)", nodes: [node] });
+        }
+    }
+
+    return parts;
+}
+
+// Where a part is (its nodes, as they're placed now), drawn or not
+const boxOf = (nodes) => nodes.reduce((box, node) => box.expandByObject(node, true), new THREE.Box3());
+
+// A flat part's materials as seen from either side (the keep's wall, a plane facing into its room,
+// is seen from behind as often as not, laid out): each copied once
+const twoSided = new WeakMap();
+
+/**
+ * A set's parts (`parts` of `object`: partsOf) laid out side by side on the ground in rows, as
+ * near square as they make, each standing on it (a flat one just over the grass), a gap between
+ * each: the lowest in the front row (nearest where the camera starts), the tallest at the back, so
+ * none hides another. The keep's kit is made all in one place, every piece at its middle.
+ */
+function layOut(object, parts) {
+    object.updateMatrixWorld(true);
+
+    const boxes = parts.map(({ nodes }) => boxOf(nodes));
+    const sizes = boxes.map((box) => box.getSize(new THREE.Vector3()));
+    const widths = sizes.map(({ x, z }) => Math.max(x, z)).sort((a, b) => a - b);
+    const gap = Math.max(0.3, widths[Math.floor(widths.length / 2)] * 0.5);
+    const columns = Math.ceil(Math.sqrt(parts.length));
+    const order = parts.map((part, k) => k).sort((a, b) => sizes[a].y - sizes[b].y);
+    let z = 0;
+
+    for (let row = 0; row * columns < order.length; row++) {
+        const its = order.slice(row * columns, (row + 1) * columns);
+        const depth = Math.max(...its.map((k) => sizes[k].z));
+        let x = 0;
+
+        for (const k of its) {
+            const box = boxes[k];
+            const flat = Math.min(sizes[k].x, sizes[k].y, sizes[k].z) < Math.max(sizes[k].x, sizes[k].y, sizes[k].z) * 0.01;
+            const shift = new THREE.Vector3(x - box.min.x, -box.min.y + (flat ? 0.02 : 0), z - depth / 2 - (box.min.z + box.max.z) / 2);
+
+            for (const node of parts[k].nodes) {
+                node.position.copy(node.parent.worldToLocal(node.getWorldPosition(new THREE.Vector3()).add(shift)));
+                node.updateMatrixWorld(true);
+
+                if (flat) {
+                    node.traverse((mesh) => {
+                        if (mesh.isMesh && !Array.isArray(mesh.material)) {
+                            if (!twoSided.has(mesh.material)) {
+                                twoSided.set(mesh.material, Object.assign(mesh.material.clone(), { side: THREE.DoubleSide }));
+                            }
+
+                            mesh.material = twoSided.get(mesh.material);
+                        }
+                    });
+                }
+            }
+
+            x += sizes[k].x + gap;
+        }
+
+        z -= depth + gap;
+    }
+}
 
 // A thing (`object`) shown as a creature is, on the ground in the middle, its clips (if it has
 // any: the chest's opening) played alone as a model's are (`hold`, by name). A creature's model
@@ -678,6 +798,9 @@ function show(id, which = seed) {
     // (Its skins, if it has others: the one chosen worn, if it has that one)
     showSkins();
 
+    // (Its parts, if it has two or more: each shown, a set's side by side)
+    showParts();
+
     // (Who one of the people is, chosen in the panel: of which people, a woman or a man, and with
     // what, if they fight)
     showWho();
@@ -772,15 +895,44 @@ function showThing(id) {
     const read = propsRead.get(name);
     const label = asset.label.replace(/ \(.*$/, "");
     const object = read ? cloneScene(read.scene) : new THREE.Group();
-    const made = kind === "model" ? "A creature's model, not in the game yet: its clips as it was made" : "A prop: one of the catalog's models";
+    const scenery = SCENES.includes(name);
+    const made =
+        kind !== "model"
+            ? "A prop: one of the catalog's models"
+            : scenery
+              ? "A scene's model as it was made: every part of it"
+              : COMING.includes(name)
+                ? "A creature's model, not in the game yet: its clips as it was made"
+                : "A creature's model as it was made: every part, clip and skin in its file";
 
     object.traverse((node) => {
         node.visible = !node.userData.lod;
     });
 
+    // (Its parts, each shown or hidden in the panel; a set's laid out side by side, each of its
+    // pieces a prop of its own: never what's skinned, its parts worn on one body)
+    const parts = read ? partsOf(object, name) : [];
+    let skinned = false;
+
+    object.traverse((node) => {
+        skinned ||= Boolean(node.isSkinnedMesh);
+    });
+
+    const set = Boolean(asset.pieces) && !skinned && parts.length > 1;
+
+    if (set && sideBySide) {
+        layOut(object, parts);
+    }
+
     // (Its clips' sounds downloaded, if they make any)
     sound.want([...new Set(Object.values(CLIP_SOUNDS[name] ?? {}).flatMap((cues) => cues.map(([, which]) => which)))]);
-    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model", beam: read ? BEAMS[name] : null }), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
+    current = {
+        ...thing,
+        avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model" && !scenery, beam: read ? BEAMS[name] : null }),
+        thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)), parts, set, laidOut: set && sideBySide },
+        name: label,
+        about: read ? made : "On its way…",
+    };
 
     if (!read) {
         loadGltf(Object.values(filesOf(ASSETS, name, document.baseURI))[0])
@@ -841,7 +993,7 @@ function fit() {
         return;
     }
 
-    const now = fitted(sizeOf());
+    const now = fitted(current.part ?? sizeOf());
     const offset = camera.position.clone().sub(controls.target).multiplyScalar(now / current.fitted);
 
     camera.position.copy(controls.target).add(offset);
@@ -858,11 +1010,17 @@ function frame() {
     const distance = fitted(size);
 
     current.fitted = distance;
+    current.part = null;
+    current.aim = null;
     fogFor(distance);
     controls.target.set(avatar.object.position.x, height * 0.5, avatar.object.position.z);
     camera.position.set(avatar.object.position.x + distance * 0.75, height * 0.55 + distance * 0.32, avatar.object.position.z + distance * 0.7);
-    controls.minDistance = size * 0.4;
+    // (A thing gone up to close, a scene walked into as near as its parts; a creature no nearer
+    // than its size lets it be seen whole)
+    controls.minDistance = current.thing ? Math.min(size * 0.4, 1.5) : size * 0.4;
     controls.maxDistance = size * 8 + 4;
+    // (The ground under all of it: a castle on its crag bigger than the grass is)
+    ground.scale.setScalar(Math.max(1, size / 200));
 
     const reach = size * 1.6 + 1;
 
@@ -870,6 +1028,32 @@ function frame() {
     sun.target.position.copy(avatar.object.position);
     Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 0.1, far: reach * 6 });
     sun.shadow.camera.updateProjectionMatrix();
+}
+
+// The camera on one part of what's shown (its nodes), its way round kept: far enough back to see
+// all of it, as near as it lets
+function frameOn(nodes) {
+    const box = boxOf(nodes);
+
+    if (box.isEmpty()) {
+        return;
+    }
+
+    const size = Math.max(0.05, ...box.getSize(new THREE.Vector3()).toArray());
+    const middle = box.getCenter(new THREE.Vector3());
+    const distance = fitted(size);
+    const way = camera.position.clone().sub(controls.target).normalize();
+
+    controls.target.copy(middle);
+    camera.position.copy(middle).addScaledVector(way, distance);
+    controls.minDistance = Math.min(size * 0.4, 1.5);
+    current.fitted = distance;
+    // (Kept as near as the view left for it needs as the panel opens or shuts: fit; and on it as
+    // it's drawn on: follow)
+    current.part = size;
+    current.aim = middle.clone().sub(current.avatar.object.position);
+    fogFor(distance);
+    controls.update();
 }
 
 /**
@@ -1178,7 +1362,9 @@ function throwOn(seconds) {
 function follow() {
     const { avatar } = current;
     const { x, y, z } = avatar.object.position;
-    const shift = new THREE.Vector3(x - controls.target.x, y + avatar.character.height * 0.5 - controls.target.y, z - controls.target.z);
+    // (Its middle; or the part of it the camera's been put on, as far from where it stands: frameOn)
+    const aim = current.aim ?? new THREE.Vector3(0, avatar.character.height * 0.5, 0);
+    const shift = new THREE.Vector3(x + aim.x - controls.target.x, y + aim.y - controls.target.y, z + aim.z - controls.target.z);
 
     controls.target.add(shift);
     camera.position.add(shift);
@@ -1469,6 +1655,11 @@ function describe() {
         rows.push(["Skins", `${thing.skins.length} more (${(extra / 1048576).toFixed(1)} MB): ${thing.skins.join(", ")}`]);
     }
 
+    // (Its parts, each in the panel; a set's laid out side by side)
+    if (thing?.parts?.length > 1) {
+        rows.push(["Parts", `${thing.parts.length.toLocaleString("en")}${thing.set ? `, a set: each a prop of its own${thing.laidOut ? ", laid out side by side" : ""}` : ""}`]);
+    }
+
     looks.details.replaceChildren(
         ...rows.flatMap(([name, value]) => {
             const term = document.createElement("dt");
@@ -1493,6 +1684,19 @@ function describe() {
     link.rel = "noopener";
     description.append(link);
     looks.details.append(term, description);
+
+    // (A scene: walked as the game draws it, on its own page)
+    if (WALKED_ON[thing?.asset]) {
+        const walked = document.createElement("dt");
+        const where = document.createElement("dd");
+        const page = document.createElement("a");
+
+        walked.textContent = "Walked";
+        page.href = WALKED_ON[thing.asset];
+        page.textContent = "In the castle lab, as the game draws it";
+        where.append(page);
+        looks.details.append(walked, where);
+    }
 }
 
 // Whose something shown is, and its licence ({ text, href }): a model's, as the catalog says
@@ -1538,11 +1742,24 @@ for (const [label, ids] of groups) {
 }
 
 // (The creatures to come: their models, before they're in the game, with the wilds' own)
+// (A catalog model's name, as its label begins: "The Prior of the Bell")
+const modelName = (id) => ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase());
+
 if (COMING.length) {
     const group = document.createElement("optgroup");
 
     group.label = "Coming to the wilds (models not in the game yet)";
-    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
+    group.append(...COMING.map((id) => new Option(modelName(id), `model:${id}`)));
+    picker.append(group);
+}
+
+// (Every other creature's and scene's model as it was made: every part, clip and skin in its file,
+// the Order's every helm and arm on the one body, the Prior's every skin, the White Castle whole)
+{
+    const group = document.createElement("optgroup");
+
+    group.label = "Every model, as it was made";
+    group.append(...AS_MADE.filter((id) => !COMING.includes(id)).map((id) => new Option(modelName(id), `model:${id}`)));
     picker.append(group);
 }
 
@@ -1666,6 +1883,84 @@ let wearing = 0;
 
 // The textures a skin's material may give, as three.js names them
 const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+
+// The parts of what's shown, in the panel: each shown or hidden, its name to see it alone; All,
+// None; a set's laid out side by side or as they were made
+const parting = {
+    section: document.querySelector("#parting"),
+    list: document.querySelector("#parts"),
+    count: document.querySelector("#parts-count"),
+    side: document.querySelector("#side-by-side"),
+    sideOption: document.querySelector("#side-by-side-option"),
+    all: document.querySelector("#parts-all"),
+    none: document.querySelector("#parts-none"),
+};
+
+// A part (partsOf) shown or hidden, its box ticked or not
+function showPart(part, shown) {
+    for (const node of part.nodes) {
+        node.visible = shown;
+    }
+
+    const box = parting.list.querySelector(`[data-part="${current.thing.parts.indexOf(part)}"] input`);
+
+    if (box) {
+        box.checked = shown;
+    }
+}
+
+// (Shown with what has two parts or more: each listed, unless there are too many to, a scene's
+// cells; whether they're side by side, a set's)
+function showParts() {
+    const parts = current.thing?.parts ?? [];
+    const listed = parts.length <= LISTED_PARTS;
+
+    parting.section.hidden = parts.length < 2;
+    parting.sideOption.hidden = !current.thing?.set;
+    parting.side.checked = sideBySide;
+    parting.all.hidden = parting.none.hidden = !listed;
+    parting.count.textContent = listed ? `${parts.length} parts${current.thing?.laidOut ? ", laid out side by side" : ""}` : `${parts.length.toLocaleString("en")} parts, too many to list: all of them shown`;
+    parting.list.replaceChildren(
+        ...(listed ? parts : []).map((part, k) => {
+            const item = document.createElement("li");
+            const label = document.createElement("label");
+            const box = document.createElement("input");
+            const name = document.createElement("button");
+
+            item.dataset.part = String(k);
+            box.type = "checkbox";
+            box.checked = part.nodes.every((node) => node.visible);
+            box.setAttribute("aria-label", `Show ${part.name}`);
+            box.addEventListener("change", () => showPart(part, box.checked));
+            label.append(box);
+            name.type = "button";
+            name.textContent = part.name;
+            name.title = `${part.name} alone`;
+            name.addEventListener("click", () => onlyPart(k));
+            item.append(label, name);
+
+            return item;
+        }),
+    );
+}
+
+// One part of what's shown alone, the camera on it
+function onlyPart(index) {
+    const { parts } = current.thing;
+
+    parts.forEach((part, k) => showPart(part, k === index));
+    frameOn(parts[index].nodes);
+}
+
+parting.all.addEventListener("click", () => {
+    current.thing.parts.forEach((part) => showPart(part, true));
+    frame();
+});
+parting.none.addEventListener("click", () => current.thing.parts.forEach((part) => showPart(part, false)));
+parting.side.addEventListener("change", () => {
+    sideBySide = parting.side.checked;
+    show(current.id);
+});
 
 // (Shown with what has other skins, the one chosen worn if it has it; not for anything else)
 function showSkins() {
@@ -1883,7 +2178,7 @@ const known = (id) =>
     (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)) || bandOf(id.slice(7)))) ||
     (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) ||
     (id?.startsWith("prop:") && PROPS.includes(id.slice(5))) ||
-    (id?.startsWith("model:") && BEAST_MODELS.includes(id.slice(6)));
+    (id?.startsWith("model:") && AS_MADE.includes(id.slice(6)));
 const start = known(asked) ? asked : "wolf";
 
 show(start);
@@ -1942,6 +2237,19 @@ window.lab = {
         return current.thing?.skin === name;
     },
     watch: () => ({ ...watch, past: rewind.past, kept: rewind.kept.length, bones: bones?.bones.length ?? 0, moves: movesOf().map(({ label }) => label), clips: Object.keys(current.avatar.plan?.lengths ?? {}) }),
+    // (Its parts, as the panel lists them: each one's name, whether it's shown, and where it is
+    // (metres: its box's corners, as it's placed now))
+    parts: () => {
+        current.avatar.object.updateMatrixWorld(true);
+
+        return (current.thing?.parts ?? []).map(({ name, nodes }) => {
+            const box = boxOf(nodes);
+
+            return { name, shown: nodes.every((node) => node.visible), min: box.min.toArray(), max: box.max.toArray() };
+        });
+    },
+    // (Every model the picker offers as it was made: catalog ids)
+    asMade: () => [...picker.querySelectorAll("option")].map(({ value }) => value).filter((value) => value.startsWith("model:")).map((value) => value.slice(6)),
     details: () => detailsOf(current.avatar.object),
     // (Every sound its clips have asked for, as they played: { clip, name, at }; and whether the
     // browser's sound is going)
@@ -1959,7 +2267,7 @@ window.lab = {
 
         return [((at.x + 1) / 2) * canvas.clientWidth, ((1 - at.y) / 2) * canvas.clientHeight];
     },
-    camera: () => ({ distance: camera.position.distanceTo(controls.target), fogFar: scene.fog.far, aspect: camera.aspect, view: camera.view && camera.view.enabled ? { ...camera.view } : null }),
+    camera: () => ({ distance: camera.position.distanceTo(controls.target), target: controls.target.toArray(), fogFar: scene.fog.far, aspect: camera.aspect, view: camera.view && camera.view.enabled ? { ...camera.view } : null }),
     view: ({ turn = 0, lift = 0, zoom = 1, at = null } = {}) => {
         // (Looking at a height, metres: its head, say; or at a point, [x, y, z])
         if (at !== null) {

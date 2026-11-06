@@ -33,8 +33,12 @@ The model viewer, for watching the game's models move, is at
 dungeon's boss or mini-boss, one of the people (an adventurer or a soldier with any weapon of
 theirs, or one of the townsfolk in their role, of any people, a woman or a man), or one of the
 game's things (a works' wagon and its ox, laden as you choose; what's carried and worn; the
-catalog's props, the treasure chest opening), or a bought model as it was made (`?model=`: every
-clip in its file), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
+catalog's props, the treasure chest opening), or any creature's or scene's own model as it was
+made (*Every model, as it was made*, `?model=`: every part, clip and skin in its file, the Order
+of the Bell's every helm and arm, the Prior's every skin, the White Castle whole and as it's seen
+from afar), and it's drawn as the game draws it. Its panel lists a model's parts, each shown or
+hidden or seen alone, and lays a set's out side by side (Bellhaven's keep's kit: its column,
+pilaster, cornice, window, bell, wall, floor, arch and brazier). It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
 the drake and the Dreadthorn fly, come down to land and hover). Its panel plays each of the game's
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
@@ -695,7 +699,8 @@ client/                 The game (static files served to the browser)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
   model-viewer.html     The model viewer: every creature, the people and the things, doing all
-                        they do, watched frame by frame, skeleton, wireframe, clips and details
+                        they do, watched frame by frame, skeleton, wireframe, clips and details;
+                        every model as it was made, each part and skin, a set laid out
   creature-lab.html     The creature lab's old address: sends on to the model viewer
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)

@@ -269,6 +269,36 @@
                 margin: 0;
             }
 
+            /* Each part of what's shown: shown or hidden; its name to see it alone */
+            #parts {
+                list-style: none;
+                margin: 6px 0 0;
+                padding: 0;
+                display: grid;
+                gap: 2px;
+            }
+
+            #parts li {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                min-width: 0;
+            }
+
+            #panel #parts label {
+                min-height: 32px;
+                margin-right: 0;
+            }
+
+            #parts button {
+                flex: 1;
+                min-width: 0;
+                min-height: 32px;
+                padding: 2px 10px;
+                text-align: left;
+                overflow-wrap: anywhere;
+            }
+
             #details {
                 display: grid;
                 grid-template-columns: auto 1fr;
@@ -548,6 +578,16 @@
                 </div>
                 <div class="row" id="skinning" hidden>
                     <select id="skin" aria-label="Skin"></select>
+                </div>
+                <div id="parting" hidden>
+                    <h2 id="partsing">Parts</h2>
+                    <div class="row">
+                        <label id="side-by-side-option" title="A set's parts laid out side by side, or as they were made"><input type="checkbox" id="side-by-side" checked> Side by side</label>
+                        <button type="button" id="parts-all">All</button>
+                        <button type="button" id="parts-none">None</button>
+                    </div>
+                    <p class="note" id="parts-count"></p>
+                    <ul id="parts" aria-labelledby="partsing"></ul>
                 </div>
             </section>
 

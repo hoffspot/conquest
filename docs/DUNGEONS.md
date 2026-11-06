@@ -1102,7 +1102,9 @@ The model viewer (once the creature lab) shows each theme's bosses and mini-boss
 drawn in a dungeon, one group of them for each theme ("Dungeons: caves" and so on), beside the
 creatures of the wild they are. Each is named by its title and rank. Open one straight away with
 `?creature=` and its theme, rank and id: `model-viewer.html?creature=caves:boss:trollKing`.
-WILDS.md, *The model viewer*, says what else it does.
+Bellhaven's keep's kit (*Props*) is laid out there piece by piece, each one shown or hidden or
+seen alone (`?prop=dungeon-prop-bellhaven-keep`). WILDS.md, *The model viewer*, says what else it
+does.
 
 ## The dungeon map (`dungeon-map.html`, `js/lab/dungeon-map.js`)
 
