@@ -6419,8 +6419,13 @@ the Bindings page till one's chosen.
    - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
      bus: sound effects, environment and music (a sound plays as the first two are moved, to
      hear how loud).
-   - **Controls:** the thumb stick, and under it the stick under your thumb; the zoom buttons;
-     and the minimap (off, the compass in its place: above).
+   - **Controls:** the thumb stick, and under it the stick under your thumb; **Tap/Click to Move**
+     (on to start with: a tap or click on the ground walks the player there; off, only the stick,
+     the keys or a controller do, so a tap meant for the stick or a click beside the keys doesn't
+     send them off, while tapping someone, an enemy, a door or what's dropped still goes to it and
+     the minimap and the world map still send them: game.js `tapToMove`; on a touch screen, the
+     stick and it are never both off, the other turned back on: main.js `keepAWayToWalk`); the
+     zoom buttons; and the minimap (off, the compass in its place: above).
    - **Camera:** Camera follows, the battle cam, Find the way through, Camera turning, Camera
      tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it

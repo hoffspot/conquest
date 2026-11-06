@@ -145,7 +145,9 @@ all carried on the next time as it was.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
 **an enemy** to go and fight them: a red ring round it marks it as your target, and its name
-lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
+lights up, until it falls or you're told to go elsewhere. (With **Tap/Click to Move** off in Game
+options, Controls, the ground's left alone: walk with the stick, the keys or a controller, and a
+stray tap won't send you off.) **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
 it uses 1.5 points of **stamina** a second, and anything else gets 1 a second back. You have as
 much stamina as hit points (50). Your name and health are in the bottom right corner; while your
@@ -478,7 +480,7 @@ them off in Game options, Chat and players, **War messengers**.
 **Game options**, in the menu, is a list of groups at the top, each a short page of its own:
 **Action Wheel and Bar** (the Action wheels page, yours, a foe's and your followers', and the
 Action Bar page), **Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**,
-**Controls** (the thumb stick, zoom buttons and minimap), **Camera**
+**Controls** (the thumb stick, Tap/Click to Move, zoom buttons and minimap), **Camera**
 and **Gameplay** (Auto-snag, other players' summons and party invites), then the **Debug log**.
 The arrow in each page's heading, or Back at its foot, goes back a page. Under Sound, turn all the
 sound on or off, and set how loud the effects (50% to start with), the environment (40%) and the

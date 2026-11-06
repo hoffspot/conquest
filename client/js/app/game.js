@@ -1529,6 +1529,11 @@ export class Game {
         // Off, only an enemy whose icon's held is locked on
         this.autoLock = true;
 
+        // Whether a tap or click on the ground walks the player there (Game options, Controls:
+        // Tap/Click to Move). Off, only the stick, the keys or a controller do; tapping someone, a
+        // door or what's dropped still goes to it, and the minimap and the world map still send them
+        this.tapToMove = true;
+
         // The mouse pointer (app/pointer.js), told what a click on the view would do where the
         // mouse is (#aim); where the mouse is over the view (null: off it), and when it was looked at
         this.cursor = null;
@@ -16730,8 +16735,13 @@ export class Game {
         const door = enemy || lectern || sign || shrine ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
         const portal = enemy || door || lectern || sign || shrine ? null : this.#portalAt(clientX, clientY);
         const table = enemy || door || portal || lectern || sign || shrine ? null : this.#warTableAt(clientX, clientY);
-        const ground = enemy || door || portal || table || lectern || sign || shrine ? null : this.view.pickGround(clientX, clientY);
+        const ground = enemy || door || portal || table || lectern || sign || shrine || !this.tapToMove ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
+
+        // (Only the ground there, and Tap/Click to Move off: nothing done, not even a talk ended)
+        if (!enemy && !door && !portal && !table && !lectern && !sign && !shrine && !this.tapToMove) {
+            return;
+        }
 
         this.#order({ enemy, door, portal, table, lectern, sign, shrine, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }

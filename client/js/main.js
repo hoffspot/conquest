@@ -930,6 +930,7 @@ $("#debugswitch").checked = settings.debug;
 $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
 $("#floatswitch").checked = settings.stickFloats;
+$("#tapmoveswitch").checked = settings.tapToMove;
 $("#zoomswitch").checked = settings.zoom;
 $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
@@ -1270,6 +1271,7 @@ async function playing(save, { world, place, war }) {
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
+    game.tapToMove = settings.tapToMove;
     game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
@@ -3080,6 +3082,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
+    game.tapToMove = settings.tapToMove;
     game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
@@ -5543,6 +5546,7 @@ $("#battlecamswitch").addEventListener("change", (event) => applySetting("battle
 $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
 $("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
 $("#chatterswitch").addEventListener("change", (event) => applySetting("chatter", event.target.checked));
+$("#tapmoveswitch").addEventListener("change", (event) => applySetting("tapToMove", event.target.checked));
 $("#enmityswitch").addEventListener("change", (event) => applySetting("showEnmity", event.target.checked));
 // (Whether this world's mercenaries can die: the world's rule, its host's to change, core/host.js RULES mortal)
 $("#mortalswitch").addEventListener("change", (event) => state.game?.setMortal(event.target.checked));
@@ -6245,6 +6249,19 @@ document.addEventListener("visibilitychange", () => {
 
 // --- Settings ---
 
+// On a touch screen, the thumb stick and Tap/Click to Move both off would leave no way to walk:
+// the other one turned back on, whichever was turned off last (`turned`)
+function keepAWayToWalk(turned) {
+    if (settings.stick || settings.tapToMove || !matchMedia("(pointer: coarse)").matches) {
+        return;
+    }
+
+    const other = turned === "stick" ? "tapToMove" : "stick";
+
+    $(other === "stick" ? "#stickswitch" : "#tapmoveswitch").checked = true;
+    applySetting(other, true);
+}
+
 function applySetting(key, value) {
     settings[key] = value;
     saveSettings({ [key]: value });
@@ -6272,6 +6289,13 @@ function applySetting(key, value) {
         showMinimap(value);
     } else if (key === "stick") {
         showStick(value);
+        keepAWayToWalk("stick");
+    } else if (key === "tapToMove") {
+        if (state.game) {
+            state.game.tapToMove = value;
+        }
+
+        keepAWayToWalk("tapToMove");
     } else if (key === "stickFloats") {
         floatStick(value);
     } else if (key === "zoom") {
