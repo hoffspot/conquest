@@ -58,6 +58,8 @@ describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
                 assert.ok(pilasters.length > runs.length / 2, `${seed}/${k}: ${pilasters.length} pilasters`);
                 assert.ok(windows.length > 0, `${seed}/${k}: some windows`);
                 assert.ok(pilasters.every(({ fit }) => Math.abs(fit[1] - (TALL - KIT.cornice)) < 1e-9), "as high as under the cornice");
+                // (What lies flat on the wall casts no shadow: a draw into each of a torch's six for none to see)
+                assert.ok([...cornices, ...pilasters, ...windows].every(({ shadow }) => shadow === false));
 
                 for (const each of placements) {
                     assert.ok(!rock(map, each.x, each.z), `${seed}/${k}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)} on the rock`);

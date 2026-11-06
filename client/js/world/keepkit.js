@@ -42,7 +42,9 @@ export const KIT_PICTURES = Object.freeze({
  * between them in a run at least `windows` long, `window` wide and as high as `high` of the wall
  * under the cornice; a column the hall's height less `under`, `wide` across; the bell `bell` tall,
  * its foot `hang` under the vault. Its stone (all but the bell) drawn a little cooler than the pack
- * has it (`tint`), as white as the castle's outside under the torches' warm light.
+ * has it (`tint`), as white as the castle's outside under the torches' warm light. What lies flat
+ * on the wall (its cornice, pilasters and windows, a hand or less proud of it) casts no shadow:
+ * none to be seen from it, and a draw of its own into each of a torch's six shadows.
  */
 export const KIT = Object.freeze({ cornice: 1.2, deep: 0.5, stretch: 4, every: 4, corner: 1, torch: 0.9, windows: 9, window: 1.2, high: 0.72, under: 0, wide: 0.9, bell: 2.8, hang: 3.4, tint: 0xc4cde0 });
 
@@ -141,7 +143,7 @@ export function kitPlacements(map, { tall }) {
             const [x, z] = onRun(run, along, 0.1);
 
             if (!nearTorch(x, z)) {
-                placements.push({ model: KEEP_KIT.pilaster, x, z, turn, fit: [0.5, under, 0.2], tint: KIT.tint, cut: true });
+                placements.push({ model: KEEP_KIT.pilaster, x, z, turn, fit: [0.5, under, 0.2], tint: KIT.tint, cut: true, shadow: false });
             }
         }
 
@@ -152,7 +154,7 @@ export function kitPlacements(map, { tall }) {
                 const high = under * KIT.high;
 
                 if (!nearTorch(x, z)) {
-                    placements.push({ model: KEEP_KIT.window, x, z, y: (under - high) / 2, turn, fit: [KIT.window, high, 0.14], tint: KIT.tint, cut: true });
+                    placements.push({ model: KEEP_KIT.window, x, z, y: (under - high) / 2, turn, fit: [KIT.window, high, 0.14], tint: KIT.tint, cut: true, shadow: false });
                 }
             }
         }

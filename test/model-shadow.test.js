@@ -45,10 +45,27 @@ function partMesh(name, lod, material, bones, { pack = new THREE.Matrix4(), corn
     const inverses = bones.map((bone) => bone.matrixWorld.clone().invert().multiply(pack));
 
     mesh.name = name;
-    mesh.userData.lod = lod;
     mesh.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
 
     return mesh;
+}
+
+// A part's node as three.js's glTF loader makes it: its level of detail on the node (the pipeline's
+// extras.lod), a part of one material the mesh itself, of several a group round a mesh of each
+function partNode(name, lod, meshes) {
+    const node = meshes.length > 1 ? new THREE.Group() : meshes[0];
+
+    node.name = name;
+
+    if (lod) {
+        node.userData.lod = lod;
+    }
+
+    if (meshes.length > 1) {
+        node.add(...meshes);
+    }
+
+    return node;
 }
 
 // A small model of the Order's: two bones, its body a part of two materials, its cloak packed its
@@ -67,12 +84,12 @@ function orderModel() {
     scene.add(root);
     scene.updateMatrixWorld(true);
 
-    for (const [lod, suffix] of [[0, ""], [1, "lod1"]]) {
-        const body = new THREE.Group();
+    for (const [lod, suffix] of [[0, ""], [1, "lod1"], [2, "lod2"]]) {
+        const body = partNode(`Body${suffix}`, lod, [partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod })]);
+        const cloak = partNode(`Cloak${suffix}`, lod, [partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod })]);
+        const head = partNode(`Head${suffix}`, lod, [partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod })]);
 
-        body.name = `Body${suffix}`;
-        body.add(partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod }));
-        scene.add(body, partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod }), partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod }));
+        scene.add(body, cloak, head);
     }
 
     const model = MODELS.choirKnight;
@@ -137,9 +154,15 @@ describe("a model's shadow (beasts/model.js)", () => {
         const [caster] = plan.casters;
         const shownAt = () => plan.levels.map((meshes) => meshes.every(({ visible }) => visible));
 
-        assert.deepEqual(shownAt(), [true, false]);
+        // (Each level every part it wears, a part of several materials (its body) among them: its
+        // level read from the group round its meshes, where three.js puts its node's extras)
+        assert.deepEqual(
+            plan.levels.map((meshes) => meshes.map(({ name }) => name).sort()),
+            ["", "lod1", "lod2"].map((suffix) => [`Body${suffix}`, `Body${suffix}_1`, `Cloak${suffix}`, `Head${suffix}`]),
+        );
+        assert.deepEqual(shownAt(), [true, false, false]);
 
-        plan.showLevel(1);
+        plan.showLevel(2);
         assert.ok(caster.visible && caster.castShadow);
         assert.equal(plan.levels.at(-1).every(({ visible, material }) => visible && material.colorWrite !== false), true);
 
@@ -149,7 +172,7 @@ describe("a model's shadow (beasts/model.js)", () => {
         assert.ok(!caster.visible);
         plan.castShadows(true);
         assert.ok(caster.visible && caster.castShadow);
-        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, plan.levels[0].length + 1);
+        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, 4 + 1, "its first level's four meshes, and its shadow's");
     });
 
     it("joins one shape for everyone drawn from the model", () => {
@@ -167,10 +190,10 @@ describe("a model's shadow (beasts/model.js)", () => {
         const [caster] = plan.casters;
 
         assert.equal(plan.casters.length, 1);
-        assert.ok(plan.levels.at(-1).includes(caster) && caster.name === "Cloaklod1");
+        assert.ok(plan.levels.at(-1).includes(caster) && caster.name === "Cloaklod2");
         assert.ok(caster.visible && caster.castShadow && caster.material.colorWrite === false);
 
-        plan.showLevel(1);
+        plan.showLevel(2);
 
         const drawn = caster.material;
 
@@ -178,7 +201,7 @@ describe("a model's shadow (beasts/model.js)", () => {
         plan.showLevel(0);
         plan.castShadows(false);
         assert.ok(!caster.visible && !caster.castShadow);
-        plan.showLevel(1);
+        plan.showLevel(2);
         assert.ok(caster.visible && caster.material === drawn);
         plan.showLevel(0);
         plan.castShadows(true);

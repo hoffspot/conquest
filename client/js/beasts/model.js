@@ -1873,6 +1873,21 @@ function shadowShape(gltf, scene, meshes) {
 }
 
 /**
+ * Which of a model's levels of detail a mesh is (the pipeline's `extras.lod`, 0 its own): on its
+ * node, which three.js makes a group round a part of several materials (a mesh of each in it, none
+ * with the node's extras), so read from the nearest of it and its parents that has it.
+ */
+export function levelOf(node) {
+    for (let at = node; at; at = at.parent) {
+        if (at.userData?.lod !== undefined) {
+            return at.userData.lod;
+        }
+    }
+
+    return 0;
+}
+
+/**
  * The part of a model a mesh is (the name its parts were joined under, the pipeline's `join`): its
  * own name or its nearest named parent's, without a lower detail's "lod1" (".lod1" as made: three.js
  * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials.
@@ -1956,7 +1971,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
         node.material = materials.get(node.material.name);
         drawn.set(node, node.material);
-        (levels[node.userData.lod ?? 0] ??= []).push(node);
+        (levels[levelOf(node)] ??= []).push(node);
         node.castShadow = false;
         node.receiveShadow = true;
     });
