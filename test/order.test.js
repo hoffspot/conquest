@@ -120,9 +120,12 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
         assert.ok(SPOILS.priorVane.gold[0] > SPOILS.choirKnight.gold[1]);
     });
 
-    it("is drawn from one model, each kind in what its rank wears, a brother's helm one of four by his seed; a cleric's alb over mail standing in for it till it's read", () => {
-        assert.ok(THE_ORDER.every((kind) => MODELS[kind].asset === "beast-order"));
-        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], ["choir"], ["choir"]]);
+    it("is drawn from one model, each kind in what its rank wears, a brother's helm one of four by his seed, its Prior from a model of his own; a cleric's alb over mail standing in for it till it's read", () => {
+        const ranks = THE_ORDER.filter((kind) => kind !== "priorVane");
+
+        assert.ok(ranks.every((kind) => MODELS[kind].asset === "beast-order"));
+        assert.equal(MODELS.priorVane.asset, "beast-prior");
+        assert.deepEqual(THE_ORDER.map((kind) => MODELS[kind].skins ?? [""]), [["initiate"], [""], [""], [""], ["choir"], [""]]);
         assert.deepEqual(partsOf("bellInitiate", 7), ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"]);
         assert.equal(partsOf("orcKing", 7), null, "(a model drawn whole)");
 
@@ -139,7 +142,11 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.deepEqual([...helms].sort(), ["HelmBar", "HelmFlat", "HelmPlain", "HelmRidge"]);
         assert.ok(partsOf("choirKnight", 3).includes("HelmCross") && partsOf("choirKnight", 3).includes("MorningStar"));
-        assert.ok(MODELS.priorVane.length > MODELS.choirKnight.length && MODELS.choirKnight.length > MODELS.bellBrother.length);
+        // (Each drawn the taller the higher, the Prior a head and more over the heroes' 1.85 metres)
+        const tall = (kind) => (MODELS[kind].made.tall * MODELS[kind].length) / MODELS[kind].made.long;
+
+        assert.ok(tall("priorVane") > tall("choirKnight") && tall("choirKnight") > tall("bellBrother"));
+        assert.ok(tall("priorVane") > 2.4 && tall("priorVane") < 2.8, `the Prior ${tall("priorVane").toFixed(2)} m`);
 
         // (Its stand-ins: people in an alb over mail, the Choir in a breastplate besides, an initiate
         // in a jerkin; a bit bigger the higher)

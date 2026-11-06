@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "41a9e4760f",
+    release: "c855cee342",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2553,6 +2553,40 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/order-mounted.choir.bin",
                     "hash": "db8f2cf245",
                     "bytes": 539936
+                }
+            ]
+        },
+        "beast-prior": {
+            "tier": "demand",
+            "label": "The Prior of the Bell (Alexander Lenski's \"Cathedral Guardian\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/prior.bin",
+                    "hash": "c52d859aaa",
+                    "bytes": 4620740
+                }
+            ]
+        },
+        "beast-prior-skins": {
+            "tier": "demand",
+            "label": "The Prior of the Bell's other skins: umber, pale and iron (Alexander Lenski's \"Cathedral Guardian\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/prior.umber.bin",
+                    "hash": "c7a7bb1d51",
+                    "bytes": 509228
+                },
+                {
+                    "path": "models/beasts/prior.pale.bin",
+                    "hash": "1f0141b913",
+                    "bytes": 485860
+                },
+                {
+                    "path": "models/beasts/prior.iron.bin",
+                    "hash": "cc59f66141",
+                    "bytes": 475948
                 }
             ]
         },

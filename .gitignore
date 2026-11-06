@@ -77,6 +77,10 @@ client/models/beasts/order.initiate.bin
 client/models/beasts/order.choir.bin
 client/models/beasts/order-mounted.bin
 client/models/beasts/order-mounted.choir.bin
+client/models/beasts/prior.bin
+client/models/beasts/prior.umber.bin
+client/models/beasts/prior.pale.bin
+client/models/beasts/prior.iron.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

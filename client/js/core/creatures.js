@@ -520,11 +520,12 @@ export const CREATURES = Object.freeze({
     // (Prior Osric Vane, the Voice of the Bell: the hedge-priest who found the old Order's Rule in a
     // burnt chapter house, came to Bellhaven empty a hundred years, unchained the Great Bell's clapper
     // and rang it, and heard it answer. Master of its keep (dungeons/themes.js keep), in the belfry
-    // under the bell, drawn as the Black Choir's knights are, bigger (beasts/model.js). His morning
-    // star (weapons.js NATURAL priorMace); his toll, his shield driven down and the Bell's voice
-    // ringing out all round him, throwing whoever it catches, shown on the ground first (`moves`);
-    // and as he's worn down, at two thirds and at one third, the Black Choir called to him (`rally`).
-    // His own model and spoils are to come)
+    // under the bell, in gilded plate under a halo of thorns, a head and more taller than those who
+    // come against him (beasts/model.js). His war mace and shield (weapons.js NATURAL priorMace);
+    // his toll, his mace raised over his head and driven into the floor, the Bell's voice ringing
+    // out all round him, throwing whoever it catches, shown on the ground for the long moment it's
+    // raised (`moves`); and as he's worn down, at two thirds and at one third, the Black Choir
+    // called to him (`rally`). His own spoils are to come)
     priorVane: {
         name: "Prior of the Bell",
         hp: 150,
@@ -543,7 +544,7 @@ export const CREATURES = Object.freeze({
         perilous: true,
         steady: true,
         sight: 20,
-        moves: [{ id: "toll", kind: "melee", reach: 0, damage: [12, 19], hitAt: 640, duration: 1300, interval: 1600, stagger: 500, reaction: "crush", animation: "toll", first: 6000, every: 12000, least: 0, most: 4, quake: { ahead: 0, radius: 4, toss: 0.9, kind: "bellToll", element: null }, telegraph: true }],
+        moves: [{ id: "toll", kind: "melee", reach: 0, damage: [12, 19], hitAt: 1550, duration: 2400, interval: 2800, stagger: 500, reaction: "crush", animation: "toll", first: 6000, every: 12000, least: 0, most: 4, quake: { ahead: 0, radius: 4, toss: 0.9, kind: "bellToll", element: null }, telegraph: true }],
         rally: [
             { below: 2 / 3, animation: "rally", hitAt: 1200, duration: 2900, call: { kind: "choirKnight", count: [1, 1], most: 2, down: 1, told: "cries out to the Bell: a knight of the Black Choir answers!" } },
             { below: 1 / 3, animation: "rally", hitAt: 1200, duration: 2900, call: { kind: "choirKnight", count: [2, 2], most: 3, down: 1, told: "cries out to the Bell again: the Black Choir answers!" } },

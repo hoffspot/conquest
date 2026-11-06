@@ -1,0 +1,187 @@
+// A model's shadow (client/js/beasts/model.js modelBody): cast from its least detailed level, of
+// the parts its `shade` names, those meshes joined into one (shadowShape) where there's more than
+// one, a draw for it and no more; each mesh's corners where its own skin put them, whatever packing
+// its skin undid (the pipeline's: each mesh's positions packed small, its skin's inverses making
+// them full size again); none cast, nor drawn unseen, while it's too small for its shadow to show
+// (castShadows). Made here from a small model of the Order's in code: no licensed model needed.
+
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import * as THREE from "three";
+
+const { MODELS, modelBody } = await import("../client/js/beasts/model.js");
+
+// A skinned mesh of a part (`name`), at a level of detail (`lod`), in a material (`material`): a
+// few corners weighted between the two bones, its positions packed by `pack` (a matrix: its skin's
+// inverses made to undo it, as the pipeline's are), or not
+function partMesh(name, lod, material, bones, { pack = new THREE.Matrix4(), corners = 6, seed = 1 } = {}) {
+    const unpack = pack.clone().invert();
+    const positions = [];
+    const indices = [];
+    const weights = [];
+    const joints = [];
+    const v = new THREE.Vector3();
+
+    for (let i = 0; i < corners; i++) {
+        v.set(Math.sin(seed + i) * 0.3, 0.2 + i * 0.25, Math.cos(seed * 2 + i) * 0.2).applyMatrix4(unpack);
+        positions.push(v.x, v.y, v.z);
+        joints.push(0, 1, 0, 0);
+        weights.push(1 - i / corners, i / corners, 0, 0);
+    }
+
+    for (let i = 0; i + 2 < corners; i++) {
+        indices.push(i, i + 1, i + 2);
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("normal", new THREE.Float32BufferAttribute(positions.map(() => 0), 3));
+    geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(joints, 4));
+    geometry.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
+    geometry.setIndex(indices);
+
+    const mesh = new THREE.SkinnedMesh(geometry, material);
+    const inverses = bones.map((bone) => bone.matrixWorld.clone().invert().multiply(pack));
+
+    mesh.name = name;
+    mesh.userData.lod = lod;
+    mesh.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
+
+    return mesh;
+}
+
+// A small model of the Order's: two bones, its body a part of two materials, its cloak packed its
+// own way, its head; each at its first level and its least detailed, as the pipeline packs them
+function orderModel() {
+    const scene = new THREE.Group();
+    const root = new THREE.Bone();
+    const spine = new THREE.Bone();
+    const materials = Object.fromEntries(["M_Chainmail", "M_Cloth", "M_Head"].map((name) => [name, Object.assign(new THREE.MeshStandardMaterial(), { name })]));
+    const cloakPack = new THREE.Matrix4().compose(new THREE.Vector3(0.1, 0.9, -0.05), new THREE.Quaternion(), new THREE.Vector3(0.6, 1.1, 0.5));
+
+    root.name = "pelvis";
+    spine.name = "spine_03";
+    spine.position.set(0, 1, 0);
+    root.add(spine);
+    scene.add(root);
+    scene.updateMatrixWorld(true);
+
+    for (const [lod, suffix] of [[0, ""], [1, "lod1"]]) {
+        const body = new THREE.Group();
+
+        body.name = `Body${suffix}`;
+        body.add(partMesh(`Body${suffix}`, lod, materials.M_Chainmail, [root, spine], { seed: 1 + lod }), partMesh(`Body${suffix}_1`, lod, materials.M_Cloth, [root, spine], { seed: 2 + lod }));
+        scene.add(body, partMesh(`Cloak${suffix}`, lod, materials.M_Cloth, [root, spine], { pack: cloakPack, seed: 3 + lod }), partMesh(`Head${suffix}`, lod, materials.M_Head, [root, spine], { seed: 4 + lod }));
+    }
+
+    const model = MODELS.choirKnight;
+    const names = new Set([...Object.values(model.clips), ...Object.values(model.specials), ...Object.values(model.rests)]);
+    const animations = [...names].map((name) => new THREE.AnimationClip(name, 1, []));
+
+    return { scene, animations };
+}
+
+// Where a skinned mesh puts its corner `i`, in the world
+const cornerOf = (mesh, i) => mesh.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(mesh.matrixWorld);
+
+// Its meshes, of a level, by what's drawn of them
+const meshesOf = (plan) => {
+    const meshes = [];
+
+    plan.object.traverse((node) => node.isSkinnedMesh && meshes.push(node));
+
+    return meshes;
+};
+
+describe("a model's shadow (beasts/model.js)", () => {
+    it("is cast from its least detailed level's body and cloak joined into one, each corner where its own skin put it, however the figure's posed", () => {
+        const plan = modelBody("choirKnight", orderModel(), { parts: ["Body", "Cloak", "Head"] });
+        const [caster] = plan.casters;
+        const least = plan.levels.at(-1);
+        const shading = least.filter((mesh) => !mesh.name.startsWith("Head"));
+
+        assert.equal(plan.casters.length, 1);
+        assert.ok(caster.isSkinnedMesh && caster.castShadow && caster.visible && !caster.receiveShadow);
+        assert.equal(caster.material.colorWrite, false);
+        assert.ok(plan.levels.flat().every((mesh) => !mesh.castShadow), "none of its own meshes casts it");
+        assert.equal(shading.length, 3);
+        assert.equal(caster.geometry.attributes.position.count, 18);
+        assert.ok(!caster.geometry.attributes.uv && !caster.geometry.attributes.normal, "where its corners are and how they're weighted, no more");
+
+        // (Posed: its spine bent, the figure turned and moved; the shadow's corners where the
+        // meshes' own skins put theirs)
+        const spine = plan.object.getObjectByName("spine_03");
+
+        spine.rotation.set(0.4, -0.7, 0.25);
+        plan.object.position.set(3, 0.5, -2);
+        plan.object.rotation.y = 1.1;
+        plan.object.updateMatrixWorld(true);
+
+        let at = 0;
+
+        for (const mesh of shading) {
+            for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+                const own = cornerOf(mesh, i);
+                const cast = cornerOf(caster, at + i);
+
+                assert.ok(own.distanceTo(cast) < 1e-5, `${mesh.name} ${i}: ${own.toArray()} ${cast.toArray()}`);
+            }
+
+            at += mesh.geometry.attributes.position.count;
+        }
+    });
+
+    it("is drawn unseen at every level while it's cast, and not at all while it isn't; its levels shown one at a time all the same", () => {
+        const plan = modelBody("choirKnight", orderModel(), { parts: ["Body", "Cloak", "Head"] });
+        const [caster] = plan.casters;
+        const shownAt = () => plan.levels.map((meshes) => meshes.every(({ visible }) => visible));
+
+        assert.deepEqual(shownAt(), [true, false]);
+
+        plan.showLevel(1);
+        assert.ok(caster.visible && caster.castShadow);
+        assert.equal(plan.levels.at(-1).every(({ visible, material }) => visible && material.colorWrite !== false), true);
+
+        plan.castShadows(false);
+        assert.ok(!caster.visible && !caster.castShadow);
+        plan.showLevel(0);
+        assert.ok(!caster.visible);
+        plan.castShadows(true);
+        assert.ok(caster.visible && caster.castShadow);
+        assert.equal(meshesOf(plan).filter(({ visible }) => visible).length, plan.levels[0].length + 1);
+    });
+
+    it("joins one shape for everyone drawn from the model", () => {
+        const gltf = orderModel();
+        const one = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+        const other = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+
+        assert.equal(one.casters[0].geometry, other.casters[0].geometry);
+        assert.notEqual(one.casters[0], other.casters[0]);
+    });
+
+    it("of a single mesh, is cast from that mesh itself: unseen while another level's shown, drawn as it is at its own; hidden with its level while none's cast, and cast again after", () => {
+        // (Its cloak alone of the parts the Order's shadows are cast from: its body, cloak and horse)
+        const plan = modelBody("bellBrother", orderModel(), { parts: ["Cloak", "Head"] });
+        const [caster] = plan.casters;
+
+        assert.equal(plan.casters.length, 1);
+        assert.ok(plan.levels.at(-1).includes(caster) && caster.name === "Cloaklod1");
+        assert.ok(caster.visible && caster.castShadow && caster.material.colorWrite === false);
+
+        plan.showLevel(1);
+
+        const drawn = caster.material;
+
+        assert.ok(caster.visible && drawn.colorWrite !== false && drawn.name === "M_Cloth");
+        plan.showLevel(0);
+        plan.castShadows(false);
+        assert.ok(!caster.visible && !caster.castShadow);
+        plan.showLevel(1);
+        assert.ok(caster.visible && caster.material === drawn);
+        plan.showLevel(0);
+        plan.castShadows(true);
+        assert.ok(caster.visible && caster.castShadow && caster.material.colorWrite === false);
+    });
+});

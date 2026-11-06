@@ -853,6 +853,52 @@ test("and the Stone Golem, the first rare card's world boss: all 25 of its own c
     }
 });
 
+test("and the Prior of the Bell, the keep's master: all 25 of its own clips, its mace and shield on the bones that hold them, its three materials, each of its skins put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-prior&clip=Attack%204");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack 1",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Death 1",
+        "Death 2",
+        "Death 3",
+        "Dodge",
+        "Hit 1",
+        "Hit 2",
+        "Hit 3",
+        "Idle",
+        "Idle 2",
+        "Idle 3",
+        "Idle 4",
+        "Jog",
+        "Jog Back",
+        "Jog Left",
+        "Jog Right",
+        "Turn 180",
+        "Walk",
+        "Walk Back",
+        "Walk Left",
+        "Walk Right",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack 4", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Prior of the Bell");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ triangles: 50568, bones: 81, materials: 3 });
+    await expect(page.locator("#details")).toContainText("Alexander Lenski's \"Cathedral Guardian\", bought on Fab: used with the permission its Standard License gives");
+
+    // (Each of its skins put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Umber", "Pale", "Iron"]);
+
+    for (const skin of ["umber", "pale", "iron"]) {
+        await page.getByLabel("Skin").selectOption(skin);
+        await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
+});
+
 test("the Stone Golem as the game draws it: a stone-grey brute till its model's read, then the golem, four metres tall, its hammer three ways, a boulder torn up and heaved, held in its hand from the crouch till it's let go, then thrown on and down onto the ground ahead", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=stoneGolem");

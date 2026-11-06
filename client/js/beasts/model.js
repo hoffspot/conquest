@@ -4,7 +4,8 @@
 // (its `plan`): the model's clips posed each frame from what the game asks of a body (poseOf:
 // walking, attacking, flinching, resting, flying, dying), its detail packed into it (one level
 // shown at a time: showLevel), its shadow cast by its least detailed one only (drawn unseen when
-// it isn't the one shown), and its fire breathed from its mouth (beasts/breath.js).
+// it isn't the one shown; its meshes joined into one for it: shadowShape), and its fire breathed
+// from its mouth (beasts/breath.js).
 
 import * as THREE from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
@@ -713,9 +714,7 @@ export const MODELS = Object.freeze({
     // spear-brother: helmed, spear and kite shield. A bowman: in a flat-topped helm or a plain
     // one, his bow and quiver. A knight of the Black Choir: in plate, cuirass and gauntlets under
     // the Choir's black and its cloak, the crossed great helm, morning star and heater shield;
-    // drawn a little bigger. Prior Osric Vane, the Voice of the Bell, the keep's master: as the
-    // Choir's knights are, bigger again, his shield driven in as he lunges ringing out as the
-    // Bell's voice does (his toll), and on guard as he calls the Choir to him (his rally))
+    // drawn a little bigger. Prior Osric Vane, the keep's master, has a model of his own (below))
     bellInitiate: order({ parts: ["Body", "Head", "Surcoat", "Knife", "KnifeSheath"], arms: "sword", skins: ["initiate"], scale: 0.98 }),
     bellBrother: order({ parts: ["Body", "Head", "Surcoat", "Sword", "HeaterShield", "SwordSheath"], choose: [BROTHERS_HELMS], arms: "sword" }),
     bellSpearman: order({ parts: ["Body", "Head", "Surcoat", "Spear", "KiteShield"], choose: [BROTHERS_HELMS], arms: "spear" }),
@@ -726,13 +725,32 @@ export const MODELS = Object.freeze({
     // Choir in the great helm and black)
     bellRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmBar", "SwordSheath", "Sword", "KiteShield", "Horse"]),
     choirRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmCross", "SwordSheath", "Sword", "KiteShield", "Horse"], ["choir"]),
-    priorVane: order({
-        parts: ["Body", "Head", "Plate", "Cuirass", "Gauntlets", "Surcoat", "Cloak", "HelmCross", "MorningStar", "HeaterShield"],
-        arms: "sword",
-        skins: ["choir"],
-        scale: 1.12,
-        specials: { toll: "Sword Attack 1", rally: "Sword Idle 2" },
-        spans: { toll: [0, 1.3], rally: [0, 2.9] },
+    // (Prior Osric Vane, the Voice of the Bell, master of Bellhaven's keep (creatures.js priorVane):
+    // Alexander Lenski's Cathedral Guardian (the catalog's beast-prior), in plate gilded and black,
+    // a halo of thorns over his helm, a war mace and a shield on the bones that hold them; made 2.08
+    // metres tall to the halo's top and drawn 1.25 times that, a head and more over any who come
+    // against him, in his own gilt (his umber, pale and iron skins kept for something else). His
+    // blows his own clips' (weapons.js NATURAL priorMace): a swing wound up from behind (his cut,
+    // Attack 2), a swing and a blow back (his slash, Attack 1), two blows from on high (his flurry,
+    // Attack 3) and four together (his combo, Attack 5), each played from where it starts to where
+    // it's done; his mace raised over his head and driven into the floor as the Bell's voice rings
+    // out (his toll, Attack 4); and standing tall as he calls the Choir to him (his rally, Idle 4).
+    // His feet slide back at 1.25 m/s walking and 3.4 jogging as he's made)
+    priorVane: Object.freeze({
+        asset: "beast-prior",
+        length: 0.94,
+        made: Object.freeze({ long: 0.75, tall: 2.08 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Jog", react: "Hit 1", dead: "Death 1" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ cut: "Attack 2", slash: "Attack 1", flurry: "Attack 3", combo: "Attack 5", toll: "Attack 4", rally: "Idle 4" }),
+        spans: deepFreeze({ cut: [0.1, 2.1], slash: [0.2, 2.2], flurry: [0, 1.6], combo: [0, 2.6], toll: [0.2, 2.6], rally: [0, 2.9] }),
+        rests: Object.freeze({ look: "Idle 2", shift: "Idle 3", stretch: "Idle 4" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+        mouth: null,
+        pace: 1.56,
+        runPace: 4.25,
+        flinch: 0.6,
     }),
     // (The River of Fire's master (dungeons/themes.js `hell`), the Lord of the Pit's before: the
     // Greater Demon, made 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves
@@ -1352,6 +1370,12 @@ export function releaseModel(id, now = performance.now()) {
 function disposeModel(gltf) {
     const materials = new Set(Object.values(gltf.skins ?? {}).flat());
 
+    for (const shape of shadowShapes.get(gltf)?.values() ?? []) {
+        shape?.dispose();
+    }
+
+    shadowShapes.delete(gltf);
+
     gltf.scene.traverse((node) => {
         node.geometry?.dispose();
 
@@ -1725,6 +1749,129 @@ export function breathing(model, attack, lengths, aloft = false) {
     return seconds >= window[0] && seconds <= window[1];
 }
 
+// The shapes models' shadows are cast from, joined from their meshes (shadowShape): by the model as
+// read, and by which of its meshes they were joined from; one for everyone drawn from it, let go of
+// with it (disposeModel)
+const shadowShapes = new WeakMap();
+
+/**
+ * One shape for a model's shadow, joined from the meshes it's cast from (`meshes`: its least
+ * detailed level's, each a part of it in one of its materials, in `scene`, one drawn from it): one
+ * draw for its shadow, not one a part and material. Just where their corners are and how their
+ * skins weight them, all a shadow needs; each mesh's corners put where the first's skin puts them
+ * where its own would (the pipeline packs each mesh's positions small, its skin's inverses making
+ * them full size again: the same bones, other inverses). Null if they can't be joined: a bone
+ * weighted that the first's skin hasn't, or a skin that puts a mesh elsewhere than the first's
+ * would, bone by bone.
+ */
+function shadowShape(gltf, scene, meshes) {
+    const known = shadowShapes.get(gltf) ?? new Map();
+    const key = meshes.map(({ geometry }) => geometry.uuid).join(" ");
+
+    shadowShapes.set(gltf, known);
+
+    if (known.has(key)) {
+        return known.get(key);
+    }
+
+    const [first] = meshes;
+    const bones = first.skeleton.bones;
+    const to = new THREE.Matrix4();
+    const from = new THREE.Matrix4();
+    const between = new THREE.Matrix4();
+    const alike = (a, b) => a.elements.every((value, n) => Math.abs(value - b.elements[n]) <= 1e-4 * Math.max(1, Math.abs(value)));
+    // (How far a mesh has been moved since it was bound to its skin)
+    const since = (mesh) => new THREE.Matrix4().multiplyMatrices(mesh.matrixWorld, mesh.bindMatrixInverse);
+    const each = [];
+
+    scene.updateMatrixWorld(true);
+
+    for (const mesh of meshes) {
+        // (Where its skin puts it, bone by bone, against where the first's does: the same for
+        // every bone, or it isn't joined; it and the first moved alike since they were bound)
+        const into = mesh.skeleton.bones.map((bone) => bones.indexOf(bone));
+        let moved = alike(since(mesh), since(first)) ? null : false;
+
+        for (const [k, j] of into.entries()) {
+            if (moved === false) {
+                break;
+            }
+
+            if (j < 0) {
+                continue;
+            }
+
+            to.copy(first.skeleton.boneInverses[j]).multiply(first.bindMatrix).invert();
+            from.copy(mesh.skeleton.boneInverses[k]).multiply(mesh.bindMatrix);
+            between.multiplyMatrices(to, from);
+
+            if (!moved) {
+                moved = between.clone();
+            } else if (!alike(between, moved)) {
+                moved = false;
+            }
+        }
+
+        if (!moved) {
+            known.set(key, null);
+
+            return null;
+        }
+
+        each.push({ mesh, into, moved });
+    }
+
+    const corners = each.reduce((sum, { mesh }) => sum + mesh.geometry.attributes.position.count, 0);
+    const indices = each.reduce((sum, { mesh }) => sum + (mesh.geometry.index?.count ?? mesh.geometry.attributes.position.count), 0);
+    const position = new Float32Array(corners * 3);
+    const skinIndex = new Uint16Array(corners * 4);
+    const skinWeight = new Float32Array(corners * 4);
+    const index = corners > 65535 ? new Uint32Array(indices) : new Uint16Array(indices);
+    const corner = new THREE.Vector3();
+    let at = 0;
+    let next = 0;
+
+    for (const { mesh, into, moved } of each) {
+        const { attributes, index: own } = mesh.geometry;
+        const { position: where, skinIndex: by, skinWeight: weight } = attributes;
+
+        for (let i = 0; i < where.count; i++) {
+            corner.fromBufferAttribute(where, i).applyMatrix4(moved);
+            corner.toArray(position, (at + i) * 3);
+
+            for (let c = 0; c < 4; c++) {
+                const share = weight.getComponent(i, c);
+                const bone = into[by.getComponent(i, c)] ?? -1;
+
+                if (share > 0 && bone < 0) {
+                    known.set(key, null);
+
+                    return null;
+                }
+
+                skinIndex[(at + i) * 4 + c] = Math.max(bone, 0);
+                skinWeight[(at + i) * 4 + c] = share;
+            }
+        }
+
+        for (let i = 0; i < (own?.count ?? where.count); i++) {
+            index[next++] = at + (own ? own.getX(i) : i);
+        }
+
+        at += where.count;
+    }
+
+    const shape = new THREE.BufferGeometry();
+
+    shape.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    shape.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
+    shape.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4));
+    shape.setIndex(new THREE.BufferAttribute(index, 1));
+    known.set(key, shape);
+
+    return shape;
+}
+
 /**
  * The part of a model a mesh is (the name its parts were joined under, the pipeline's `join`): its
  * own name or its nearest named parent's, without a lower detail's "lod1" (".lod1" as made: three.js
@@ -1827,31 +1974,68 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         });
     }
 
-    // (Its shadow from its least detailed level only: there all the time, casting it; not its own
-    // level shown, drawn leaving nothing on the screen. A layer of its own won't do: three.js casts
-    // only what the camera that's drawing sees. A model whose parts are kept apart casts it from
-    // the parts its `shade` names alone, the rest of that level hidden when it isn't shown, as the
-    // other levels are: each of its parts a draw, twice over, all the time)
+    // (Its shadow from its least detailed level only, of the parts its `shade` names (all of them if
+    // it names none): there all the time, casting it; not its own level shown, drawn leaving
+    // nothing on the screen. A layer of its own won't do: three.js casts only what the camera
+    // that's drawing sees. Those meshes joined into one where there's more than one (a part of
+    // several materials; the Order's body, its cloak: shadowShape), a draw twice over and no more,
+    // in place of one a part and material; else each cast from, drawn as it is when its level's
+    // the one shown. None cast, nor drawn unseen, while it's too small on the screen for its shadow
+    // to show (castShadows: BeastAvatar's))
     const least = levels.at(-1);
-    const shadows = model.shade ? least.filter((mesh) => model.shade.includes(partOf(mesh))) : least;
+    const shading = model.shade ? least.filter((mesh) => model.shade.includes(partOf(mesh))) : least;
     const unseen = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+    const shape = shading.length > 1 ? shadowShape(gltf, scene, shading) : null;
+    const casters = shape ? [new THREE.SkinnedMesh(shape, unseen)] : shading;
+    let shown = 0;
+    let shadowed = true;
 
-    for (const mesh of shadows) {
+    if (shape) {
+        const [first] = shading;
+        const [caster] = casters;
+
+        caster.name = "shadow";
+        caster.position.copy(first.position);
+        caster.quaternion.copy(first.quaternion);
+        caster.scale.copy(first.scale);
+        caster.receiveShadow = false;
+        first.parent.add(caster);
+        caster.bind(first.skeleton, first.bindMatrix);
+    }
+
+    for (const mesh of casters) {
         mesh.castShadow = true;
     }
 
     const showLevel = (level) => {
-        const shown = Math.min(level, levels.length - 1);
+        shown = Math.min(level, levels.length - 1);
 
         levels.forEach((meshes, i) => {
             for (const mesh of meshes) {
-                if (mesh.castShadow) {
-                    mesh.material = i === shown ? drawn.get(mesh) : unseen;
-                } else {
-                    mesh.visible = i === shown;
-                }
+                mesh.visible = i === shown;
+                mesh.material = drawn.get(mesh);
             }
         });
+
+        for (const mesh of casters) {
+            if (shape) {
+                mesh.visible = shadowed;
+            } else if (shadowed && shown !== levels.length - 1) {
+                mesh.visible = true;
+                mesh.material = unseen;
+            }
+        }
+    };
+
+    // (Its shadow cast, or not)
+    const castShadows = (on) => {
+        shadowed = on;
+
+        for (const mesh of casters) {
+            mesh.castShadow = on;
+        }
+
+        showLevel(shown);
     };
 
     showLevel(0);
@@ -1884,7 +2068,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
     idle.setEffectiveWeight(0);
     sphere.radius *= 1.8;
 
-    for (const mesh of levels.flat()) {
+    for (const mesh of [...levels.flat(), ...casters]) {
         mesh.boundingSphere = sphere;
     }
 
@@ -1954,6 +2138,9 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         lurks: Boolean(model.lurk),
         levels,
         showLevel,
+        // (What its shadow's cast from, and its shadow cast or not: BeastAvatar.castShadows)
+        casters,
+        castShadows,
         breath,
         beam,
         lengths,

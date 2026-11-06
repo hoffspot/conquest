@@ -157,13 +157,14 @@ export const LOOKS = Object.freeze({
     orcBloodtusk: { body: "humanoid", scale: [1.14, 1.16] },
     orcRaider: { body: "humanoid", scale: [0.98, 1.06] },
     // (The Order of the Bell: men and women in mail under the order's alb, until the bought model of
-    // their own is read: humanoidLook. The Black Choir bigger, their Prior bigger again)
+    // their own is read: humanoidLook. The Black Choir bigger, their Prior bigger again: as tall
+    // as his own model's drawn, 2.6 metres to its halo's top)
     bellInitiate: { body: "humanoid", scale: [0.96, 1.02] },
     bellBrother: { body: "humanoid", scale: [1, 1.05] },
     bellSpearman: { body: "humanoid", scale: [1, 1.05] },
     bellArcher: { body: "humanoid", scale: [0.98, 1.03] },
     choirKnight: { body: "humanoid", scale: [1.05, 1.1] },
-    priorVane: { body: "humanoid", scale: [1.12, 1.12] },
+    priorVane: { body: "humanoid", scale: [1.35, 1.35] },
     // (Its riders: a grey warhorse in steel barding, its rider left to the bought model)
     bellRider: {
         body: "quadruped",

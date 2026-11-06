@@ -518,10 +518,13 @@ dungeon's way in (`wild: false`), and there's one a world.
   4. **The Belfry** (`axial`): the bell-ringers' hall, the knights' hall, the tower, the Black
      Choir's own (its knights in pairs, with brothers, with spear-brothers, and bowmen). The
      Bell-ringer or the Precentor among them. Its master in the bell chamber, before his hoard at
-     its head: **Prior Osric Vane, the Voice of the Bell** (`priorVane`, the Choir about him): his
-     morning star, his toll (his shield driven down and the Bell's voice ringing out all round him,
-     throwing whoever it catches, shown on the ground first), and at two thirds and at one third of
-     his strength the Choir called to him. His own model and spoils are still to come. The keep's
+     its head: **Prior Osric Vane, the Voice of the Bell** (`priorVane`, the Choir about him), in
+     gilded plate under a halo of thorns and a head and more taller than the heroes (Alexander
+     Lenski's Cathedral Guardian, drawn 2.6 metres tall): his war mace and shield, a swing wound up
+     from behind, a swing and a blow back, two blows from on high and four together; his toll (his
+     mace raised over his head and driven into the floor, the Bell's voice ringing out all round
+     him, throwing whoever it catches, shown on the ground while it's raised); and at two thirds
+     and at one third of his strength the Choir called to him. His own spoils are still to come. The keep's
      made again once its hoard's been taken and everyone's left, as any dungeon is, the Prior its
      master again, so it can be fought up again.
 - **Each warden bars its floor's stair up** till it falls (its flight's `seal`, refused as
