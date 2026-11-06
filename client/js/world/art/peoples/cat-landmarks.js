@@ -219,6 +219,7 @@ export async function tavern(piece) {
         doorway: { width: m(1.8), height: m(2.3) },
         plinth: m(0.3),
         roofHouse: false,
+        stoop: true,
         keep: ({ bayTop, length }) => [
             [length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.15), bayTop + m(0.15) + (boardOf(length) * 9) / 56],
             [signU(length) - m(0.3), signU(length) + m(0.3), m(1.8), m(3.7)],
@@ -491,7 +492,7 @@ export async function guild(piece) {
 
     toned(solid, random, [m(5.5)]);
 
-    const house = townHouse(solid, m(0.4), m(0.5), W - m(0.4), front, { storeys, name, random, wealth: 0.9, paint: null, doorway: { width: m(2.2), height: m(2.6) }, plinth: m(0.3), roofHouse: false, parapet: m(1), keep: ({ bayTop, length }) => [[length / 2 - m(0.6), length / 2 + m(0.6), bayTop + m(0.1), bayTop + m(1.3)]] });
+    const house = townHouse(solid, m(0.4), m(0.5), W - m(0.4), front, { storeys, name, random, wealth: 0.9, paint: null, doorway: { width: m(2.2), height: m(2.6) }, plinth: m(0.3), roofHouse: false, parapet: m(1), stoop: true, keep: ({ bayTop, length }) => [[length / 2 - m(0.6), length / 2 + m(0.6), bayTop + m(0.1), bayTop + m(1.3)]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
 
@@ -557,7 +558,7 @@ export async function hall(piece) {
     toned(solid, random, [m(6.7)]);
 
     const boardOf = (length) => Math.min(m(4.4), length - m(5.2));
-    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 1, paint: random.pick(PAINTS), doorway: { width: m(2), height: m(2.5) }, plinth: m(0.3), roofHouse: true, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 1, paint: random.pick(PAINTS), doorway: { width: m(2), height: m(2.5) }, plinth: m(0.3), roofHouse: true, stoop: true, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
 
@@ -597,7 +598,7 @@ export async function barracks(piece) {
     toned(solid, random, [storeys.reduce((a, b) => a + b, 0) + m(0.5)]);
 
     const boardOf = (length) => Math.min(m(3.6), length - m(5.2));
-    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 0.6, paint: null, doorway: { width: m(1.8), height: m(2.4) }, plinth: m(0.3), roofHouse: false, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), front, { storeys, name, random, wealth: 0.6, paint: null, doorway: { width: m(1.8), height: m(2.4) }, plinth: m(0.3), roofHouse: false, stoop: true, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
     const boardWidth = boardOf(house.front.length);
@@ -791,7 +792,7 @@ export async function shop(piece) {
     toned(solid, random, [storeys.reduce((a, b) => a + b, 0) + m(0.5)]);
 
     const boardOf = (length) => Math.min(m(front.name.length > 12 ? 4.4 : 3.6), length - m(4.4));
-    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), face, { storeys, name: mud, random, wealth: 0.7, paint: null, doorway: { width: m(1.6), height: m(2.3) }, plinth: m(0.3), roofHouse: false, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
+    const house = townHouse(solid, m(0.5), m(0.5), W - m(0.5), face, { storeys, name: mud, random, wealth: 0.7, paint: null, doorway: { width: m(1.6), height: m(2.3) }, plinth: m(0.3), roofHouse: false, stoop: true, keep: ({ bayTop, length }) => [[length / 2 - boardOf(length) / 2, length / 2 + boardOf(length) / 2, bayTop + m(0.1), bayTop + m(0.1) + (boardOf(length) * 9) / 56]] });
     const at = wallPoint(house.front, { lean: house.lean });
     const middle = house.front.length / 2;
     const boardWidth = boardOf(house.front.length);

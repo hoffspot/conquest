@@ -27,6 +27,7 @@ import {
     roundedRect,
     southSide,
     squircle,
+    steps,
     thatchCone,
     wallPoint,
     weathering,
@@ -384,14 +385,22 @@ function block(solid, x0, z0, x1, z1, { wall, name, random, wealth, paint }) {
 }
 
 /**
+ * The steps up a public building's plinth to its door (townHouse's `stoop`): how high each (about:
+ * metres, as many as come nearest the plinth's height), how deep, and how far they're sunk into
+ * the ground.
+ */
+const STOOP = Object.freeze({ riser: m(0.15), tread: m(0.32), under: m(0.3) });
+
+/**
  * A Sahel town house of two storeys (x0..x1 by z0..z1): battered walls, buttresses up its front
  * rising into pinnacles past its parapet, rows of toron, a raised door bay with studded leaves,
  * small grilled windows upstairs and slits below, spouts off its flat roof, and on a better house
  * a stair-house on the roof and ears on every pinnacle. What's to go on its front (`keep`: given
  * its door bay's top and its front's length, the places [u0, u1, v0, v1] of its name board, its
- * sign) is kept clear of toron.
+ * sign) is kept clear of toron. A building folk go into (`stoop`) has steps up its plinth to the
+ * door, as wide as its door bay.
  */
-function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale", doorway = { width: m(1.2), height: m(2.3) }, recess = m(0.35), plinth = m(0.25), parapet = m(0.85), roofHouse = wealth > 0.45, keep = () => [] }) {
+function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, random, wealth, paint, trim = "mud-pale", doorway = { width: m(1.2), height: m(2.3) }, recess = m(0.35), plinth = m(0.25), parapet = m(0.85), roofHouse = wealth > 0.45, keep = () => [], stoop = false }) {
     const outline = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
     const lean = 0.045;
     const height = storeys.reduce((a, b) => a + b, 0);
@@ -484,6 +493,19 @@ function townHouse(solid, x0, z0, x1, z1, { storeys = [m(3), m(2.8)], name, rand
     solid.facing([at(du1, door.v1, 0), at(du1, door.v1, proud), at(du1, bayTop, proud), at(du1, bayTop, 0)], front.across, material(surround));
     ears(solid, at((du0 + du1) / 2, bayTop, proud / 2), [-1, 0], m(0.3), m(0.5), surround);
     studded(solid, front, [door.u0, door.u1, door.v1], door.depth);
+
+    // Steps up its plinth to the door, out from the door bay's frame (sunk a little into the
+    // ground, so none shows under them where it falls away); the sill between the frame's sides
+    if (stoop) {
+        const out = [front.out[0], front.out[2]];
+        const rises = Math.max(1, Math.round(plinth / STOOP.riser));
+        const [sill0, sill1] = [at(du0, 0, 0), at(du1, 0, 0)];
+        const [edge0, edge1] = [at(du0, 0, proud), at(du1, 0, proud)];
+        const foot = at(width / 2, 0, proud + STOOP.tread * rises);
+
+        solid.extrude([[sill0[0], sill0[2]], [sill1[0], sill1[2]], [edge1[0], edge1[2]], [edge0[0], edge0[2]]], -STOOP.under, plinth, material("mud-dark"), { top: material("mud-pale") });
+        steps(solid, foot[0], foot[2], 0, plinth, [-out[0], -out[1]], du1 - du0, "mud-pale", { tread: STOOP.tread, riser: plinth / rises, under: -STOOP.under });
+    }
 
     // Buttresses between the bays of the front, rising past the parapet into pinnacles
     const rise = parapet + m(random.range(0.6, 1.1));

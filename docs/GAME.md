@@ -3869,7 +3869,9 @@ a city's chunks of each people, and less garbage to collect.
   spikes (toron) and pinnacles, walled compounds, their walls battered and whitewashed in bands;
   a court tavern, a Djenné-style temple, a smithy with its clay furnace, a domed guild hall, a
   town hall with stone cats, a kasbah keep and a mat-roofed market; the sun temple, pride rock
-  and the watering hole; a kasbah castle, mud walls, gatehouse and bastions.
+  and the watering hole; a kasbah castle, mud walls, gatehouse and bastions. The tavern, guild,
+  town hall, barracks and shops, Sahel town houses on a plinth, have two steps up it to the door,
+  as wide as the door bay and sunk a little into the ground (cat.js `STOOP`).
 - **The orcs** (orc.js, orc-places.js): bow-sided longhouses of hide on battered basalt, round
   hide huts on rings of stone, basalt block houses and hide tents; a grog hall, a broch temple, a
   great forge, the war council's and chieftain's halls, a broch keep and a loot market; the war
