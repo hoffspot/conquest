@@ -463,16 +463,17 @@ the town are heard from where you stand: quieter further away, and to the left o
 convoy or supply wagons on the road, their works or a guard tower, our works or a town under
 threat, our reserve or army in the field), a messenger comes to find you, from your people's
 ruler, the nearest lord or a general, at most once every ten minutes and never in a fight (if
-you're indoors, they wait outside). They walk up and tell you what's asked and what it pays: gold,
-standing and your pick of three pieces from the armoury, more and finer the higher your rank.
+you're indoors, they wait outside). They walk up and hail you; tap them, and they tell you what's
+asked and what it pays: gold, standing and your pick of three pieces from the armoury, more and
+finer the higher your rank.
 Take it or turn it down (that costs nothing, and none comes again for a while). Taken, it's in
 your journal under **War missions** and marked on the world map with a red ring and a star; done,
 you're paid on the spot and choose your piece (or Later, from the journal). Giving one up, or
 failing it, costs a little standing. Sent to stand with our reserve or march with our army, its
-commander walks up when you get there to brief you: how many are coming and under whom, your
-part, and an objective worth more (their commander, or their standard). In a party, one messenger
-comes for you all, and a mission taken is each of yours, at your own rank. Turn them off in Game
-options, Chat and players, **War messengers**.
+commander walks up when you get there; tap them to be briefed: how many are coming and under
+whom, your part, and an objective worth more (their commander, or their standard). In a party,
+one messenger comes for you all, and a mission taken is each of yours, at your own rank. Turn
+them off in Game options, Chat and players, **War messengers**.
 
 **Game options**, in the menu, is a list of groups at the top, each a short page of its own:
 **Action Wheel and Bar** (the Action wheels page, yours, a foe's and your followers', and the

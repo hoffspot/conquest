@@ -11511,7 +11511,8 @@ export class Game {
     }
 
     // A messenger, or a commander come to brief: coming (said), arrived (what they say kept for
-    // the talk, and the talk opened for the one they walked to, if they're free to talk), or gone
+    // the talk, and the one they walked to hailed: tapped, they talk; the talk isn't opened on its
+    // own, over whatever the player's doing), or gone
     #messengerHeard(event) {
         // (Drawn for anyone about as they come, as a stranger by the road is: #strangerSaid; and
         // let go of once they're gone)
@@ -11538,8 +11539,10 @@ export class Game {
 
             const npc = this.battle.actor(event.folk);
 
-            if (event.lead === this.me && npc && !this.talking && !this.wheel?.open && document.body.dataset.screen === "hud") {
-                this.#talkTo(npc);
+            if (event.lead === this.me && npc) {
+                const title = event.mission?.from?.title;
+
+                this.hud.message(event.kind === "briefing" ? `${title ? `${title} ` : ""}${npc.name} has come to brief you. Tap them to hear it.` : `${npc.name}, a messenger from ${senderName(event.mission.from)}, has found you. Tap them to hear what they bring.`, 5);
             }
         } else if (event.change === "gone") {
             this.messengerSaid.delete(event.folk);

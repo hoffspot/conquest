@@ -1940,10 +1940,12 @@ the last (`standing.messengerAt`), with none already on the way.
 **The messenger** (`#putMessenger`): one of the player's people's folk, in a tunic and jerkin, a cap
 or hood, with a ledger in hand (characters/folk.js `messenger`), put 40 m off (`MESSENGER.from`) the way
 from whoever sent them, and walking up. The player's told "A messenger from King Redhelm of the
-Kingdom of Mardenmoor is coming to find you." Within 3.5 m (`hail`) they hail them: the talk opens
-by itself, if the player's free to talk (the "messenger" tree, core/dialogue.js): who sends them,
-what's asked, and what it pays at the player's rank and what the next rank would have, with "The
-higher your rank with us, the more we give." The player takes it ("Tell them it will be done.") or
+Kingdom of Mardenmoor is coming to find you." Within 3.5 m (`hail`) they hail them, and wait: "Ralf
+Holt, a messenger from King Redhelm of the Kingdom of Mardenmoor, has found you. Tap them to hear
+what they bring." (The talk isn't opened over whatever the player's doing.) Tapped, they talk (the
+"messenger" tree, core/dialogue.js): who sends them, what's asked, and what it pays at the
+player's rank and what the next rank would have, with "The higher your rank with us, the more we
+give." The player takes it ("Tell them it will be done.") or
 turns it down ("Not this time.", free; none comes again for ten turns). A messenger left
 unanswered waits a minute (`wait`), following a player who walks off and giving up past 120 m
 (`far`); five minutes if the player's gone indoors or underground (`outside`), where they went in;
@@ -1973,7 +1975,8 @@ standing (`MISSION_FAILED`).
 
 **The briefing.** Sent to stand with the reserve or march with the army, once the player's within
 80 m of it (`BRIEFING_REACH`) its commander (the general, as the battle names them: `#generalOf`)
-walks out to them and briefs them (the "briefing" tree; `briefingOf`): how many are coming and under
+walks out to them and hails them ("General Kendrick has come to brief you. Tap them to hear it.");
+tapped, they brief them (the "briefing" tree; `briefingOf`): how many are coming and under
 whom; how many we are; the player's part (hold our left flank, our right or our centre, or stand
 with our archers and keep their soldiers off them); and an objective that makes the whole worth
 40% more (`BONUS`): bring down their commander, by name, or their standard-bearer. Heard, it's

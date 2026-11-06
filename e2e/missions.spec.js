@@ -1,9 +1,9 @@
 import { expect, test } from "./fixtures.js";
 
 // The war's messengers and the missions they bring (core/missions.js, core/host.js, app/game.js),
-// in a real browser: one sent to a player near an enemy camp walks up, drawn, and the talk opens
-// itself; taken, it's in the journal's War missions and on the world map; the camp broken, it's
-// paid on the spot and the pick of the armoury offered, the piece picked in the pack; and the
+// in a real browser: one sent to a player near an enemy camp walks up, drawn, and hails them, and
+// tapped, talks; taken, it's in the journal's War missions and on the world map; the camp broken,
+// it's paid on the spot and the pick of the armoury offered, the piece picked in the pack; and the
 // Game options switch that turns messengers away
 
 test.beforeEach(async ({ page }) => {
@@ -39,6 +39,8 @@ async function playUntil(page, done, seconds = 30) {
 }
 
 test("a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked", async ({ page }) => {
+    // (The messenger's walk up played out, and the camp's end: past the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
     // (The switch in Game options, Chat and players: on to start with)
@@ -74,19 +76,36 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
         return { at };
     });
 
-    // The messenger comes, drawn, and the talk opens itself as they get there: from the King,
-    // what's asked, what it pays at the player's rank and that it pays more the higher it is
-    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 90)).toBe(true);
+    // The messenger comes, drawn, and hails the player as they get there (the talk not opened
+    // over whatever they're doing); tapped, they talk: from the King, what's asked, what it pays
+    // at the player's rank and that it pays more the higher it is
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.messengerSaid?.size), 90)).toBe(true);
+    await expect(page.locator("#banner")).toContainText(/, a messenger from (King|Queen) .+, has found you\. Tap them to hear what they bring\./);
+    expect(await page.evaluate(() => Boolean(window.pellagos.game.talking))).toBe(false);
 
-    const messenger = await page.evaluate(() => {
-        const { game } = window.pellagos;
+    const messenger = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
         const [one] = [...game.host.messengers.values()];
 
-        return { folk: one.folk, drawn: game.avatars.has(one.folk) || game.enlisting.includes(one.folk), talking: game.talking.id };
+        // (Drawn: their figure made as they came, the frames drawn to see them by)
+        for (let k = 0; k < 30 && !game.avatars.has(one.folk); k++) {
+            game.advance(1 / 30);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        game.advance(1 / 30);
+
+        const drawn = game.avatars.has(one.folk);
+        const spot = session.view.toScreen(game.avatars.get(one.folk).point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+
+        return { folk: one.folk, drawn };
     });
 
     expect(messenger.drawn).toBe(true);
-    expect(messenger.talking).toBe(messenger.folk);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 10)).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.talking.id)).toBe(messenger.folk);
 
     const talk = page.locator("#talkline");
 
