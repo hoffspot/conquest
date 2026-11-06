@@ -77,7 +77,7 @@ client/models/beasts/order.initiate.bin
 client/models/beasts/order.choir.bin
 client/models/beasts/order-mounted.bin
 client/models/beasts/order-mounted.choir.bin
-client/models/beasts/prior-2.bin
+client/models/beasts/prior-3.bin
 client/models/beasts/prior.umber.bin
 client/models/beasts/prior.pale.bin
 client/models/beasts/prior.iron.bin
@@ -89,6 +89,7 @@ client/models/beasts/werewolf.russet.bin
 client/models/beasts/werewolf.moonfang.bin
 client/models/beasts/werewolf.rotten.bin
 client/models/beasts/prior.bin
+client/models/beasts/prior-2.bin
 client/models/scenery/bellhaven.bin
 client/models/scenery/bellhaven-far.bin
 client/models/scenery/bellhaven-far-2.bin
