@@ -40,6 +40,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, formationsOfBody, holdOf, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
+import { briefingOf, checkMission, gearChoices, MESSENGER_EVERY, MISSION_FAILED, MISSIONS, missionOf, missionsNear, MOST_MISSIONS, rewardOf as missionReward, THERE as MISSION_THERE } from "./missions.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
@@ -186,6 +187,16 @@ export const WAGON_NEAR = Object.freeze({ near: 150, far: 300, ahead: 16, worth:
  * marching on it till their fronts are `close`, then closing with it as a line does.
  */
 export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close: 20, most: 80, pace: 1.4, past: 8 });
+
+/**
+ * The war's messengers to a player (core/missions.js), and a commander come to brief one: how far
+ * off one's put out (metres), how near they come to hail them, how long they wait for an answer
+ * once there (ms), how long they wait outside for one gone in somewhere (ms), how far the player
+ * can go before they give up (metres), how far off they're let go of as they leave (metres), how
+ * long they're given to get there (ms), how often a way to the player's looked at again (ms),
+ * and how often the players are looked at for a messenger to send (ms).
+ */
+export const MESSENGER = Object.freeze({ from: 40, hail: 3.5, wait: 60000, outside: 300000, far: 120, gone: 60, leave: 30000, reroute: 1500, every: 3000 });
 
 /**
  * A storm near a player (docs/WAR.md *A storm near a player*): an army's camp held and stormed in
@@ -1461,6 +1472,16 @@ export class Host {
          * null), fight (once they've been refused) }.
          */
         this.strangers = new Map();
+
+        /**
+         * The war's messengers out to players, and the commanders come to brief them (core/
+         * missions.js), by id: { id, kind ("messenger" or "briefing"), folk (their id among the
+         * folk), record (their folk record), players (whom they've come to), lead (the one they
+         * walk to), mission (offered; a briefing's: its id), state ("coming", "waiting",
+         * "leaving"), since, from (where they came from) }.
+         */
+        this.messengers = new Map();
+        this.nextMessenger = 1;
         this.nextStranger = 1;
 
         /**
@@ -2212,6 +2233,9 @@ export class Host {
                 return this.#setRule(player, command.rule, command.value);
             case "effect":
                 return this.#effect(player, actor, command.effect);
+            // (A war mission's pick of the armoury, or one given up: core/missions.js)
+            case "mission":
+                return this.#missionCommand(player, command);
             case "camp":
                 return this.#camp(player, actor, command.until ?? null);
             case "clear":
@@ -2749,6 +2773,9 @@ export class Host {
             this.#wilds();
             this.#sighting();
             this.#watchRequests();
+            this.#watchMissions();
+            this.#sendMessengers();
+            this.#messengersAbout();
         }
 
         const own = this.events;
@@ -3031,6 +3058,7 @@ export class Host {
             ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
             ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
             ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
+            ...(this.nextMessenger > 1 ? { messengers: structuredClone([...this.messengers.entries()]), nextMessenger: this.nextMessenger } : {}),
             ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
             ...(this.nextAmbush > 1 ? { ambushes: structuredClone([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
             ground: structuredClone([...this.ground.values()]),
@@ -3226,6 +3254,14 @@ export class Host {
             if (stranger.folk) {
                 host.folk.set(stranger.folk.id, stranger.folk);
             }
+        }
+
+        // (The war's messengers out, and commanders come to brief: core/missions.js)
+        host.messengers = new Map(structuredClone(snapshot.messengers ?? []));
+        host.nextMessenger = snapshot.nextMessenger ?? 1;
+
+        for (const one of host.messengers.values()) {
+            host.folk.set(one.record.id, one.record);
         }
 
         // (What's across the way, over its squares in the world)
@@ -3559,6 +3595,7 @@ export class Host {
         }
 
         this.#give(player, structuredClone(piece));
+        this.#missionBonus(player, "commander");
         this.#event("engagement", { change: "trophy", player: player.id, commander: fallen.id, name: fallen.name, gold: TROPHY.bounty, merit, piece });
     }
 
@@ -6633,9 +6670,12 @@ export class Host {
             }
 
             const odd = [...`${engagement.id}:${player.id}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 7) & 1;
-            const kind = banner && !banner.dead && odd ? "banner" : "hold";
+            // (Briefed by their commander for it, a war mission's: the part they were given)
+            const briefed = this.#briefedPart(player);
+            const given = briefed && side.bodies.find(({ part, alive, state }) => part === briefed && alive > 0 && state !== "broken" && state !== "gone");
+            const kind = !given && banner && !banner.dead && odd ? "banner" : "hold";
 
-            engagement.jobs[player.id] = { kind, side: k, part: kind === "hold" ? nearest.body.part : null, target: kind === "banner" ? banner.id : null, done: null };
+            engagement.jobs[player.id] = { kind, side: k, part: kind === "hold" ? (given?.part ?? nearest.body.part) : null, target: kind === "banner" ? banner.id : null, done: null };
             this.#event("engagement", { id: engagement.id, ...told, change: "job", player: player.id, kind, part: engagement.jobs[player.id].part, target: engagement.jobs[player.id].target, by: commander.name });
         }
     }
@@ -6655,6 +6695,10 @@ export class Host {
 
         job.done = this.battle.time;
         player.progress.gold += this.#won(player, JOB.gold);
+
+        if (job.kind === "banner") {
+            this.#missionBonus(player, "standard");
+        }
 
         for (const up of player.standing.earn(merit)) {
             this.#event("guild", { id: player.id, change: "rank", ...up });
@@ -6690,6 +6734,8 @@ export class Host {
     // A standard-bearer in a battle felled by a player (or one of theirs): their job, if it was
     // (#jobs), done
     #bannerFelled(player, fallen) {
+        this.#missionBonus(player, "standard");
+
         for (const engagement of this.engagements()) {
             const job = engagement.jobs?.[player.id];
 
@@ -7182,7 +7228,6 @@ export class Host {
     #promote(id, members, { not = null } = {}) {
         const met = this.armies.get(id);
         const people = this.war.force(id)?.realm ?? met.people;
-        const random = createRandom([...`${id}:general`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
         const adjective = ADJECTIVES[people] ?? people;
         const titled = (name) => `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`;
         let banner = members.some(({ id: each }) => each === met.banner) ? met.banner : null;
@@ -7203,7 +7248,8 @@ export class Host {
             actor.armor = (actor.armor ?? 0) + armor;
             actor.power.melee = power;
             record.power = power;
-            actor.name = leads ? `${COMMANDERS.army.title} ${random.pick(COMMANDERS.army.names.filter((name) => `${COMMANDERS.army.title} ${name}` !== not))}` : titled(bears ? STANDARD : COMMANDERS.army.guard);
+            // (The general as a war mission named them, if one did: #generalOf)
+            actor.name = leads ? `${COMMANDERS.army.title} ${this.#generalOf(id, not).name}` : titled(bears ? STANDARD : COMMANDERS.army.guard);
 
             if (leads) {
                 Object.assign(record, { commander: true, chief: true });
@@ -15747,6 +15793,11 @@ export class Host {
             return refuse("talking");
         }
 
+        // (A war messenger answered, or a commander's briefing heard: core/missions.js)
+        if (effect.mission || effect.briefed) {
+            return this.#messengerAnswer(player, actor, effect);
+        }
+
         // (Work asked for or taken on, word of it brought, the armoury, counsel, signing up at a
         // guild: an official's)
         if (effect.work || effect.report || effect.armoury || effect.counsel || effect.guild) {
@@ -16835,6 +16886,484 @@ export class Host {
             player.standing.earn(-GUILD_FAILED);
         } else {
             player.standing.gain(-FAILED);
+        }
+    }
+
+    // --- War missions (core/missions.js): messengers, the missions carried, briefings ---
+
+    // The players a messenger would come to together: each party (its first the one it walks to),
+    // or each player alone
+    #missionGroups() {
+        const seen = new Set();
+        const groups = [];
+
+        for (const player of this.players.values()) {
+            if (seen.has(player.id)) {
+                continue;
+            }
+
+            const members = (this.partyFor(player.id)?.members ?? [player.id]).map((id) => this.players.get(id)).filter(Boolean);
+
+            members.forEach((each) => seen.add(each.id));
+            groups.push(members.length ? members : [player]);
+        }
+
+        return groups;
+    }
+
+    // Whether a player's in a fight: set on someone, or someone near set on them
+    #beset(actor) {
+        return actor.target !== null || this.battle.actors.some((other) => !other.dead && other.target === actor.id && other.map === actor.map && hypot(other.x - actor.x, other.y - actor.y) <= 40);
+    }
+
+    // Whether a messenger may come to a player now: alive, out in the world, not in a fight, with
+    // room for another mission, their people still standing, and messengers not turned away (Game
+    // options: their own settings, as their game said them)
+    #mayHearMessenger(player) {
+        const actor = this.battle.actor(player.id);
+
+        return Boolean(actor && !actor.dead && actor.map === "town" && player.own?.settings?.messengers !== false && this.war?.realm(player.realm)?.alive && player.standing.missions.filter((mission) => mission.state !== "won").length < MOST_MISSIONS && !this.#beset(actor));
+    }
+
+    // An army's general as the battle names them when it comes to one (#promote), so a mission's
+    // sender, the commander who briefs and the general in the fight are one: { name, title }
+    #generalOf(forceId, not = null) {
+        const random = createRandom([...`${forceId}:general`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
+        const name = random.pick(COMMANDERS.army.names.filter((each) => `${COMMANDERS.army.title} ${each}` !== not));
+
+        return { name, title: COMMANDERS.army.title };
+    }
+
+    // A messenger sent to each party or player that may hear one (#mayHearMessenger), every one of
+    // them MESSENGER_EVERY war turns since the last, with no messenger already on the way: about
+    // the nearest thing of the war within reach of whoever they walk to (core/missions.js
+    // missionsNear), at their rank
+    #sendMessengers() {
+        const war = this.war;
+
+        if (!war || this.battle.time < (this.messengersAt ?? 0)) {
+            return;
+        }
+
+        this.messengersAt = this.battle.time + MESSENGER.every;
+
+        const out = new Set([...this.messengers.values()].flatMap(({ players }) => players));
+
+        for (const group of this.#missionGroups()) {
+            const lead = group.find((player) => this.#mayHearMessenger(player));
+
+            if (!lead || group.some((player) => out.has(player.id) || (player.standing.messengerAt !== null && war.turn - player.standing.messengerAt < MESSENGER_EVERY))) {
+                continue;
+            }
+
+            const actor = this.battle.actor(lead.id);
+            const [found] = missionsNear({ war, realm: lead.realm, at: [actor.x, actor.y], held: group.flatMap((player) => player.standing.missions) });
+
+            if (!found) {
+                continue;
+            }
+
+            const mission = missionOf({ war, realm: lead.realm, ...found, rank: lead.standing.rank() });
+
+            if (mission.from.kind === "general") {
+                Object.assign(mission.from, this.#generalOf(found.target.force));
+            }
+
+            const liege = war.liege(lead.realm);
+
+            this.#putMessenger("messenger", group.filter((player) => war.liege(player.realm) === liege), lead, mission);
+        }
+    }
+
+    // A messenger (or, `kind` "briefing", a commander come to brief) put out MESSENGER.from off the
+    // one they walk to (`lead`), the way they'd come from (whoever sends them; a commander, from
+    // their army), walking to them
+    #putMessenger(kind, players, lead, mission, { from = null } = {}) {
+        const actor = this.battle.actor(lead.id);
+        const toward = from ?? mission.from?.at ?? mission.target.at;
+        const angle = toward && hypot(toward[0] - actor.x, toward[1] - actor.y) > 1 ? atan2(toward[0] - actor.x, toward[1] - actor.y) : this.random.next() * Math.PI * 2;
+        const reach = kind === "briefing" && from ? Math.min(MESSENGER.from, hypot(from[0] - actor.x, from[1] - actor.y)) : MESSENGER.from;
+        let square;
+
+        try {
+            square = this.#spots()([actor.x + sin(angle) * reach, actor.y + cos(angle) * reach]);
+        } catch {
+            return null;
+        }
+
+        const id = `messenger-${this.nextMessenger++}`;
+        const briefing = kind === "briefing";
+        const sex = briefing ? "m" : this.random.chance(0.5) ? "f" : "m";
+        const seed = this.random.int(1, 0x7fffffff);
+        const people = this.war.liege(lead.realm);
+        const [{ name }] = briefing ? [{ name: mission.from.name }] : namePeople([{ sex }], seed, people);
+        const record = {
+            id: `${id}/${kind}`,
+            local: kind,
+            title: briefing ? mission.from.title : "Messenger",
+            role: kind,
+            look: briefing ? "commander" : "messenger",
+            talk: kind,
+            sex,
+            seed,
+            name,
+            people,
+            map: "town",
+            square,
+            facing: angle + Math.PI,
+            routine: { order: "cycle", wait: [4000, 8000], stops: [{ square, facing: angle + Math.PI }] },
+            messenger: id,
+        };
+
+        if (!this.#addFolk(record, null)) {
+            return null;
+        }
+
+        const one = { id, kind, folk: record.id, record, players: players.map((player) => player.id), lead: lead.id, mission: briefing ? mission.id : mission, state: "coming", since: this.battle.time, from: [...square], routed: -Infinity };
+
+        this.messengers.set(id, one);
+
+        if (!briefing) {
+            for (const player of players) {
+                player.standing.messengerAt = this.war.turn;
+            }
+        }
+
+        this.#event("messenger", { change: "coming", messenger: id, kind, folk: record.id, players: [...one.players], from: briefing ? null : structuredClone(mission.from) });
+
+        return one;
+    }
+
+    // The messengers and commanders out: walking to the one they've come to (their way looked at
+    // again as they go), hailing them once near (the "messenger" event "arrived": their game opens
+    // the talk), waiting a while for an answer, outside for one gone in somewhere; giving up on one
+    // who's gone off, or dead; leaving once answered, and let go of once out of sight
+    #messengersAbout() {
+        for (const one of [...this.messengers.values()]) {
+            const me = this.battle.actor(one.folk);
+            const lead = this.players.get(one.lead);
+            const them = lead ? this.battle.actor(lead.id) : null;
+
+            if (!me || me.dead) {
+                this.#messengerGone(one);
+                continue;
+            }
+
+            if (one.state === "leaving") {
+                const far = !this.#nearAnyPlayer([me.x, me.y], MESSENGER.gone);
+
+                if (far || this.battle.time - one.since > MESSENGER.leave) {
+                    this.#messengerGone(one);
+                }
+
+                continue;
+            }
+
+            if (!them || them.dead) {
+                this.#messengerLeaves(one, "gone");
+                continue;
+            }
+
+            // (Gone in somewhere: waiting outside, where they are, a while)
+            if (them.map !== "town") {
+                if (one.state !== "outside") {
+                    one.state = "outside";
+                    one.since = this.battle.time;
+                    this.battle.reroute(me.id, { order: "cycle", wait: [4000, 8000], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
+                } else if (this.battle.time - one.since > MESSENGER.outside) {
+                    this.#messengerLeaves(one, "gone");
+                }
+
+                continue;
+            }
+
+            const far = hypot(them.x - me.x, them.y - me.y);
+
+            if (one.state === "outside") {
+                one.state = "coming";
+                one.routed = -Infinity;
+            }
+
+            if (one.state === "coming") {
+                if (far <= MESSENGER.hail) {
+                    one.state = "waiting";
+                    one.since = this.battle.time;
+                    me.facing = atan2(them.x - me.x, them.y - me.y);
+                    this.battle.reroute(me.id, { order: "cycle", wait: [MESSENGER.wait, MESSENGER.wait], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
+                    this.#event("messenger", { change: "arrived", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players], ...this.#messengerSays(one) });
+                } else if (far > MESSENGER.far + MESSENGER.from) {
+                    this.#messengerLeaves(one, "gone");
+                } else if (this.battle.time - one.routed >= MESSENGER.reroute) {
+                    one.routed = this.battle.time;
+
+                    const step = Math.max(0, far - MESSENGER.hail * 0.6) / Math.max(far, 1e-6);
+
+                    this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(me.x + (them.x - me.x) * step), Math.floor(me.y + (them.y - me.y) * step)], facing: atan2(them.x - me.x, them.y - me.y) }] });
+                }
+            } else if (one.state === "waiting") {
+                if (far > MESSENGER.far || this.battle.time - one.since > MESSENGER.wait) {
+                    this.#messengerLeaves(one, "gone");
+                } else if (far > MESSENGER.hail * 3 && this.battle.actor(lead.id).talkingTo !== one.folk) {
+                    one.state = "coming";
+                    one.routed = -Infinity;
+                }
+            }
+        }
+    }
+
+    // What a messenger or commander says as they arrive, for the talk: the mission offered (a
+    // messenger's), or the briefing (a commander's)
+    #messengerSays(one) {
+        if (one.kind === "briefing") {
+            const mission = this.players.get(one.lead)?.standing.findMission(one.mission);
+
+            return { mission: mission ? structuredClone(mission) : null };
+        }
+
+        return { mission: structuredClone(one.mission) };
+    }
+
+    // Whether any player's within `reach` metres of a point out in the world
+    #nearAnyPlayer(at, reach) {
+        return [...this.players.values()].some((player) => {
+            const actor = this.battle.actor(player.id);
+
+            return actor && actor.map === "town" && hypot(actor.x - at[0], actor.y - at[1]) <= reach;
+        });
+    }
+
+    // A messenger or commander leaving (answered, or given up on: `how`), back the way they came
+    #messengerLeaves(one, how) {
+        const me = this.battle.actor(one.folk);
+
+        one.state = "leaving";
+        one.since = this.battle.time;
+
+        if (me) {
+            this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(one.from[0]), Math.floor(one.from[1])], facing: me.facing }] });
+        }
+
+        // (A commander given up on before they'd said it: one comes again, if the player's still there)
+        if (one.kind === "briefing" && how !== "briefed") {
+            const mission = this.players.get(one.lead)?.standing.findMission(one.mission);
+
+            if (mission?.briefing && !mission.briefing.heard) {
+                mission.briefing = null;
+            }
+        }
+
+        this.#event("messenger", { change: "left", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players], how });
+    }
+
+    // A messenger or commander let go of, out of sight
+    #messengerGone(one) {
+        this.battle.remove(one.folk);
+        this.folk.delete(one.folk);
+        this.messengers.delete(one.id);
+        this.#event("messenger", { change: "gone", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players] });
+    }
+
+    // A messenger answered (the talk's `mission`: "accept" or "decline") by one they came to; or a
+    // commander's briefing heard (`briefed`). Accepted, it's taken by each they came to who has room
+    // for it, theirs at their own rank (core/missions.js rewardOf: missionReward here)
+    #messengerAnswer(player, actor, effect) {
+        const one = [...this.messengers.values()].find((each) => each.folk === actor.talkingTo);
+
+        if (!one || one.state === "leaving" || !one.players.includes(player.id)) {
+            return refuse("talking");
+        }
+
+        if (effect.briefed) {
+            const mission = player.standing.findMission(one.mission);
+
+            if (mission?.briefing) {
+                mission.briefing.heard = true;
+                this.#event("mission", { id: player.id, change: "briefed", mission: structuredClone(mission) });
+            }
+
+            this.#messengerLeaves(one, "briefed");
+
+            return { ok: true };
+        }
+
+        if (effect.mission === "decline") {
+            this.#messengerLeaves(one, "declined");
+
+            return { ok: true };
+        }
+
+        if (effect.mission !== "accept" || one.kind !== "messenger") {
+            return refuse("command");
+        }
+
+        let mine = null;
+
+        for (const id of one.players) {
+            const each = this.players.get(id);
+            const rank = each?.standing.rank() ?? 0;
+            const taken = each?.standing.takeMission({ ...one.mission, rank, reward: missionReward(one.mission.kind, rank) });
+
+            if (taken) {
+                mine = each === player ? taken : mine;
+                this.#event("mission", { id: each.id, change: "taken", mission: structuredClone(taken), by: player.id });
+            }
+        }
+
+        this.#messengerLeaves(one, "accepted");
+
+        return mine ? { ok: true, mission: structuredClone(mine) } : refuse("missions");
+    }
+
+    // A mission's pick of the armoury made (`which`: 0 to 2), or a mission given up
+    #missionCommand(player, { act, id, which } = {}) {
+        const mission = typeof id === "string" ? player.standing.findMission(id) : null;
+
+        if (!mission) {
+            return refuse("command");
+        }
+
+        if (act === "pick") {
+            const piece = Number.isInteger(which) ? mission.gear?.[which] : null;
+
+            if (mission.state !== "won" || !piece) {
+                return refuse("command");
+            }
+
+            this.#give(player, structuredClone(piece));
+
+            const done = player.standing.closeMission(id, "done");
+
+            this.#event("mission", { id: player.id, change: "done", mission: structuredClone(done), piece: structuredClone(piece) });
+
+            return { ok: true, piece: structuredClone(piece) };
+        }
+
+        if (act === "giveUp" && mission.state === "open") {
+            this.#missionSettled(player, mission, "failed");
+
+            return { ok: true };
+        }
+
+        return refuse("command");
+    }
+
+    // Each player's war missions looked at as the war moves (core/missions.js checkMission): been
+    // there (told), a commander sent to brief them once they're with an army or reserve they've
+    // come to join, done (paid), failed or come to nothing
+    #watchMissions() {
+        const war = this.war;
+
+        if (!war) {
+            return;
+        }
+
+        const townAt = (town) => {
+            const place = this.#placeOf(town.id);
+
+            return { middle: place ? this.#middleOf(place) : town.at, radius: SETTLEMENT_KINDS[place?.kind]?.radius ?? 0 };
+        };
+
+        for (const player of this.players.values()) {
+            const at = this.#whereIs(player);
+            const near = (point, reach) => Boolean(at && point) && hypot(at[0] - point[0], at[1] - point[1]) <= reach;
+
+            for (const mission of [...player.standing.missions]) {
+                if (mission.state !== "open") {
+                    continue;
+                }
+
+                const was = mission.there;
+                const change = checkMission(mission, { war, realm: player.realm, near, townAt });
+
+                if (mission.there && !was) {
+                    this.#event("mission", { id: player.id, change: "there", mission: structuredClone(mission) });
+                }
+
+                if (!change && MISSIONS[mission.kind].briefing && mission.briefing === null && near(mission.target.at, MISSION_THERE.force)) {
+                    this.#brief(player, mission);
+                }
+
+                if (change) {
+                    this.#missionSettled(player, mission, change);
+                }
+            }
+        }
+    }
+
+    // A mission done (paid: #missionWon), failed (MISSION_FAILED standing lost) or come to nothing
+    #missionSettled(player, mission, change) {
+        if (change === "ready") {
+            this.#missionWon(player, mission);
+
+            return;
+        }
+
+        const closed = player.standing.closeMission(mission.id, change);
+
+        if (change === "failed") {
+            player.standing.gain(-MISSION_FAILED);
+        }
+
+        this.#event("mission", { id: player.id, change, mission: structuredClone(closed) });
+    }
+
+    // A mission done: paid on the spot, at the rank it was taken at (more with the commander's own
+    // objective done besides: core/missions.js BONUS), in gold and standing, and three pieces from
+    // their people's armoury rolled for them to pick one of (core/missions.js gearChoices)
+    #missionWon(player, mission) {
+        const reward = missionReward(mission.kind, mission.rank ?? 0, { bonus: Boolean(mission.bonusDone) });
+        const gear = player.progress.gear ?? {};
+        const seed = [...`${mission.id}:${player.id}:${mission.given}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0;
+
+        player.progress.gold += this.#won(player, reward.gold);
+
+        for (const up of player.standing.gain(reward.standing)) {
+            this.#event("standing", { id: player.id, ...up });
+        }
+
+        mission.gear = gearChoices({ weapon: gear.mainHand?.id ?? player.hero?.weapon, worn: gear, quality: reward.quality, level: levelOf(this.mightFor(player.id)), people: this.war.liege(player.realm), seed });
+        mission.state = "won";
+        mission.paid = { gold: reward.gold, standing: reward.standing, bonus: Boolean(mission.bonusDone) };
+        this.#event("mission", { id: player.id, change: "won", mission: structuredClone(mission), reward });
+    }
+
+    // A player come to an army or reserve they're joining (a mission with a briefing): what they
+    // face and their part (core/missions.js briefingOf), and its commander sent to tell them, from
+    // where it is
+    #brief(player, mission) {
+        const war = this.war;
+        const ours = war.force(mission.target.force);
+        const against = mission.kind === "reserve" ? war.force(mission.target.against) : null;
+        const objective = mission.kind === "attack" ? (war.town(mission.target.objective) ?? war.workAt(mission.target.objective) ?? war.camp(mission.target.objective) ?? war.fort?.(mission.target.objective)) : null;
+        const general = against ? this.#generalOf(against.id, `${mission.from.title} ${mission.from.name}`) : null;
+        const enemy = { realm: mission.target.enemy, size: against?.size ?? objective?.garrison ?? objective?.guard ?? null, commander: general ? `${general.title} ${general.name}` : null, engines: 0 };
+        const seed = [...`${mission.id}:${player.id}:briefing`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0;
+
+        mission.briefing = { ...briefingOf({ mission, enemy, ours: { size: ours?.size ?? null }, seed }), heard: false };
+
+        const met = this.armies.get(mission.target.force);
+
+        if (!this.#putMessenger("briefing", [player], player, mission, { from: met?.at ?? ours?.at ?? mission.target.at })) {
+            mission.briefing = null;
+        }
+    }
+
+    // A player's part in a battle, as their commander briefed them (a mission's): the body to hold
+    // (one of left, centre and right), or null
+    #briefedPart(player) {
+        const mission = player.standing.missions.find((each) => each.state === "open" && each.briefing?.heard);
+
+        return ["left", "centre", "right"].includes(mission?.briefing.part) ? mission.briefing.part : null;
+    }
+
+    // A commander's own objective done by a player on a mission they were briefed for (their
+    // standard-bearer, or their commander, brought down: `what`): BONUS more when it's done
+    #missionBonus(player, what) {
+        for (const mission of player.standing.missions) {
+            if (mission.state === "open" && mission.briefing?.bonus === what) {
+                mission.bonusDone = true;
+                this.#event("mission", { id: player.id, change: "bonus", mission: structuredClone(mission) });
+            }
         }
     }
 

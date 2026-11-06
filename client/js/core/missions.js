@@ -304,7 +304,7 @@ export function missionOf({ war, realm, kind, key, target, rank = 0 }) {
         until: def.turns === null ? null : war.turn + def.turns,
         rank,
         reward,
-        briefing: def.briefing ? null : undefined,
+        ...(def.briefing ? { briefing: null } : {}),
         there: false,
         state: "offered",
     };

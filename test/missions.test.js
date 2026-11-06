@@ -5,6 +5,7 @@
 // nothing), and a commander's briefing.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Standing } from "../client/js/core/standing.js";
 import { BONUS, briefingOf, checkMission, gearChoices, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
 
 // Just enough of a war (core/war/war.js): humans at war with orcs, at peace with elves
@@ -242,6 +243,32 @@ describe("how a mission stands", () => {
         assert.equal(checkMission(mission, { war, realm: "human", near: () => false }), "ready");
         war.log.push({ type: "abandoned", fort: "fort-1" });
         assert.equal(checkMission(mission, { war, realm: "human", near: () => false }), "void");
+    });
+});
+
+describe("missions carried (core/standing.js Standing)", () => {
+    it("takes so many at once, not the same twice, sets them down done or failed, and keeps them all", () => {
+        const war = warOf();
+        const standing = new Standing();
+        const offered = (key) => missionOf({ war, realm: "human", kind: "tower", key, target: { fort: key, realm: "orc", at: [1200, 0], name: "the orcish guard tower" } });
+        const first = standing.takeMission(offered("fort-1"));
+
+        assert.equal(first.id, "mission-1");
+        assert.equal(first.state, "open");
+        assert.equal(standing.takeMission(offered("fort-1")), null);
+        assert.ok(standing.takeMission(offered("fort-2")));
+        assert.equal(standing.takeMission(offered("fort-3")), null);
+        standing.findMission("mission-1").state = "won";
+        assert.ok(standing.takeMission(offered("fort-3")));
+        assert.equal(standing.closeMission("mission-2", "failed").state, "failed");
+        standing.messengerAt = 12;
+
+        const back = new Standing(JSON.parse(JSON.stringify(standing.toJSON())));
+
+        assert.deepEqual(back.toJSON(), standing.toJSON());
+        assert.deepEqual(back.missionsDone.map(({ id }) => id), ["mission-2"]);
+        assert.equal(back.messengerAt, 12);
+        assert.deepEqual(new Standing({ missions: [{ kind: "nonsense", id: "x" }, { kind: "rout" }] }).missions, []);
     });
 });
 
