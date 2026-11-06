@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 
@@ -897,6 +898,110 @@ test("and the Prior of the Bell, the keep's master: all 25 of its own clips, its
         await page.getByLabel("Skin").selectOption(skin);
         await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
     }
+});
+
+test("every creature's and scene's own model in the picker, as it was made: those in the game (the Order's, the Prior's), those to come, and the White Castle near and far", async ({ page }) => {
+    await openViewer(page, "/model-viewer.html");
+
+    const catalog = JSON.parse(await readFile(new URL("../client/models/assets.json", import.meta.url), "utf8"));
+    const own = Object.keys(catalog.models).filter((id) => /^(beast|scenery)-/.test(id) && !id.endsWith("-skins"));
+    const offered = await page.evaluate(() => window.lab.asMade());
+
+    expect([...offered].sort()).toEqual([...own].sort());
+    expect(offered).toEqual(expect.arrayContaining(["beast-order", "beast-order-mounted", "beast-prior", "scenery-bellhaven", "scenery-bellhaven-far"]));
+    expect(await page.locator("#picker optgroup[label='Every model, as it was made'] option").allTextContents()).toEqual(expect.arrayContaining(["Prior of the Bell", "Bellhaven, the White Castle: its crag, chasm, bridge and castle in cells, for its own map"]));
+});
+
+test("every part of a model: the White Castle's keep's kit, its nine parts listed and laid out side by side, none on another, one shown alone, and as it was made, all in one place; the Order's, every helm and arm on the one body, each shown and hidden; the castle whole, too many parts to list", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await openViewer(page, "/model-viewer.html?prop=dungeon-prop-bellhaven-keep");
+    await page.waitForFunction(() => window.lab.current().thing.read, null, { timeout: 60000 });
+
+    // (Each piece the keep's built from, and its arch and brazier, each a part)
+    const parts = () => page.evaluate(() => window.lab.parts());
+    const kit = ["column", "pilaster", "cornice", "window", "bell", "wall", "floor", "arch", "brazier"];
+
+    expect((await parts()).map(({ name }) => name)).toEqual(kit);
+    await expect(page.locator("#parts li")).toHaveCount(9);
+    await expect(page.locator("#parts-count")).toHaveText("9 parts, laid out side by side");
+    await expect(page.locator("#details")).toContainText("9, a set: each a prop of its own, laid out side by side");
+
+    // Side by side, each on the ground: no two of them over the same ground
+    const apart = (laid) =>
+        laid.every((one, k) =>
+            laid.slice(k + 1).every((other) => {
+                const across = Math.min(one.max[0], other.max[0]) - Math.max(one.min[0], other.min[0]);
+                const along = Math.min(one.max[2], other.max[2]) - Math.max(one.min[2], other.min[2]);
+
+                return across <= 0.001 || along <= 0.001;
+            }),
+        );
+
+    expect(apart(await parts())).toBe(true);
+
+    for (const { min } of await parts()) {
+        expect(min[1]).toBeGreaterThanOrEqual(-0.001);
+        expect(min[1]).toBeLessThan(0.05);
+    }
+
+    // One alone, by its name: the bell, the rest hidden, the camera on it (and kept on it as it's
+    // drawn on), near enough to see it whole
+    await page.locator("#parts").getByRole("button", { name: "bell", exact: true }).click();
+    expect((await parts()).filter(({ shown }) => shown).map(({ name }) => name)).toEqual(["bell"]);
+    await page.waitForTimeout(500);
+
+    const bell = (await parts()).find(({ name }) => name === "bell");
+    const { target, distance } = await page.evaluate(() => window.lab.camera());
+
+    for (let k = 0; k < 3; k++) {
+        expect(target[k]).toBeCloseTo((bell.min[k] + bell.max[k]) / 2, 1);
+    }
+
+    expect(distance).toBeLessThan(15);
+
+    // Ticked and unticked; all and none
+    await page.getByLabel("Show wall").check();
+    expect((await parts()).filter(({ shown }) => shown).map(({ name }) => name)).toEqual(["bell", "wall"]);
+    await page.getByRole("button", { name: "None", exact: true }).click();
+    expect((await parts()).some(({ shown }) => shown)).toBe(false);
+    await page.getByRole("button", { name: "All", exact: true }).click();
+    expect((await parts()).every(({ shown }) => shown)).toBe(true);
+
+    // As it was made: every piece in one place, its column and its bell over the same ground
+    await page.getByLabel("Side by side").uncheck();
+    await expect(page.locator("#parts-count")).toHaveText("9 parts");
+
+    const made = await parts();
+
+    expect(apart(made)).toBe(false);
+    await page.getByLabel("Side by side").check();
+    await expect(page.locator("#parts-count")).toHaveText("9 parts, laid out side by side");
+    expect(apart(await parts())).toBe(true);
+
+    // The Order's model as it was made: all 22 of its parts worn at once, never laid out (they're
+    // worn on one body), each shown and hidden
+    await page.locator("#picker").selectOption("model:beast-order");
+    await page.waitForFunction(() => window.lab.current().thing.read, null, { timeout: 60000 });
+
+    const order = await parts();
+
+    expect(order.map(({ name }) => name)).toEqual(expect.arrayContaining(["Body", "Head", "HelmBar", "HelmCross", "HelmFlat", "HelmPlain", "HelmRidge", "MorningStar", "Spear", "Bow", "KiteShield", "HeaterShield", "Cloak"]));
+    expect(order).toHaveLength(22);
+    await expect(page.locator("#side-by-side-option")).toBeHidden();
+    await page.getByLabel("Show HelmCross").uncheck();
+    expect((await parts()).find(({ name }) => name === "HelmCross").shown).toBe(false);
+    expect((await parts()).filter(({ shown }) => shown)).toHaveLength(21);
+
+    // The White Castle whole, its cells too many to list, and where it's walked
+    await page.locator("#picker").selectOption("model:scenery-bellhaven");
+    await page.waitForFunction(() => window.lab.current().thing.read, null, { timeout: 120000 });
+    await expect(page.locator("#parts-count")).toHaveText(/^\d+ parts, too many to list: all of them shown$/);
+    await expect(page.locator("#parts li")).toHaveCount(0);
+    expect((await parts()).every(({ shown }) => shown)).toBe(true);
+    expect(await page.evaluate(() => window.lab.avatar().size.x)).toBeGreaterThan(300);
+    await expect(page.locator("#details").getByRole("link", { name: "In the castle lab, as the game draws it" })).toHaveAttribute("href", "castle-lab.html");
+    await expect(page.locator("#about")).toHaveText("A scene's model as it was made: every part of it");
 });
 
 test("the Stone Golem as the game draws it: a stone-grey brute till its model's read, then the golem, four metres tall, its hammer three ways, a boulder torn up and heaved, held in its hand from the crouch till it's let go, then thrown on and down onto the ground ahead", async ({ page }) => {

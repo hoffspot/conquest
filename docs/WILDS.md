@@ -3002,8 +3002,17 @@ one of a band invading a town, or its chief: WAR.md, *Invasions*), or one of the
 (WAR.md, *Convoys on the roads*: of a people's timber, laden with wood, stone or metal, or
 empty); what's carried and worn that's a model of its own, built in code (characters/items.js:
 the weapons, shields, helms and hats, quivers and packs, the tusks and tails); and the catalog's
-props (app/assets.js: the dungeons' and the shops' furniture, wares and dressing, and the
-treasure chest, its opening its one clip). Drag to
+props (app/assets.js: the dungeons' and the shops' furniture, wares and dressing, Bellhaven's
+keep's kit, and the treasure chest, its opening its one clip). And under **Every model, as it was
+made**, every creature's and scene's own model in the catalog (`beast-*` and `scenery-*`), as it
+is in its file, in the game or not: every part of it at once (the Order of the Bell's body with
+every helm, arm and shield it has, its riders' horse and rider), every clip, and every skin (the
+Prior's umber, pale and iron; the Order's olive and black), whatever the game's kinds wear of it;
+and the White Castle whole, its crag, chasm, bridge and castle (`scenery-bellhaven`, 350 m
+across: the ground made as big, the camera let in as near as its parts), and as it's seen from
+afar (`scenery-bellhaven-far`), each linked to the castle lab, where it's walked as the game
+draws it. Those to come (no kind drawn from them yet) are under *Coming to the wilds*
+instead. Drag to
 go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
 attack, be struck, rest, die or be knocked down, and fly, land or hover if it can; over it,
 **playback** (below). Its panel (**Inspect**) is beside it on a screen wider than it's tall, and
@@ -3025,7 +3034,17 @@ The panel and playback:
   over and over (**Loop**) or once. Stepping back
   goes through the last ten seconds as they were drawn (`Rewind`: each bone where it was), and on
   again to just where it was.
-- **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
+- **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off; a
+  model's other skins (`?skin=`); and its **parts**, a thing read from a model's file that has two
+  or more (`partsOf`: each mesh, or the group three.js reads one of several materials as, none of
+  the lower levels of detail packed in): each ticked to be shown or not, **All** and **None**, and
+  each one's name to see it alone, the camera on it. A set (the catalog's `pieces`, each a prop of
+  its own: Bellhaven's keep's kit, made all in one place, its column, pilaster, cornice, window,
+  bell, wall and floor, its arch and brazier; the barrels, goblets, candleholders and rocks) is
+  laid out **side by side** on the ground (`layOut`: in rows as near square as they make, the
+  lowest at the front, a flat one just over the grass and seen from either side), or as it was
+  made with that unticked; never what's skinned, its parts worn on one body. More than 40 (the
+  castle's cells) are only counted, all of them shown.
 - **Person** (one of the people): of which people, a woman or a man, and, an adventurer, a
   soldier or an invader, with which weapon (an adventurer any a player may start with, or an
   orc's cleaver; a soldier their people's; an invader any of their band's, its chief their own,
@@ -3054,6 +3073,9 @@ The panel and playback:
 `?creature=` opens it on one, `&action=` doing something, `&clip=` playing one of its model's clips
 (once the model's read); `?person=` one of the people (`adventurer`, `soldier`, or a role: `smith`),
 `&people=`, `&sex=` (`f` or `m`) and `&weapon=` who they are; `?item=` one of the things carried
-and worn (an EQUIPMENT id: `sword`), `?prop=` one of the catalog's props (`chest`); and the ox's
-wagon, `?creature=ox&load=stone&people=orc`. `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
+and worn (an EQUIPMENT id: `sword`), `?prop=` one of the catalog's props (`chest`), `?model=` a
+creature's or scene's own model as it was made (`beast-prior`, `scenery-bellhaven`); and the ox's
+wagon, `?creature=ox&load=stone&people=orc`. `window.lab.parts()` says each part's name, whether
+it's shown and where it is; `window.lab.asMade()`, every model the picker offers as it was made.
+`e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
 covers what it says of a model, its wireframe, and stepping back and on.
