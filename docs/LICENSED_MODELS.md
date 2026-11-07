@@ -292,8 +292,11 @@ Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
 The humans' houses in their towns, cities and capitals (timber, brick and cottage: the stone
 ones are the game's own) are built of a bought kit of half-timbered pieces, Meshsmith Foundry's
 half-timbered building kit from Fab: frames and braces, the plaster and brick between, windows,
-doors, corner posts, footings, gables row on row, finials. The villages keep the game's own
-(but for a master's shop kept in one: below), and something more rustic is to come for them.
+doors, corner posts, footings, gables row on row, finials. About a quarter of those it could
+build are the game's own all the same, so no street is all the kit's: none round the market,
+few on the main streets, more down the lanes and out behind (`kithouse.js` `KIT_MIX`, each
+house's own draw from its seed). The villages keep the game's own (but for a master's shop kept
+in one: below), and something more rustic is to come for them.
 
 - **One file, a piece to a square.** `.claude/skills/import-scene-model/scripts/housekit.py` sets
   each piece in a square of its own (3 m) keeping the pack's own pivot (a wall piece's inner face
@@ -342,8 +345,9 @@ doors, corner posts, footings, gables row on row, finials. The villages keep the
   shops with them (a village with a master's shop asks for the kit too). The building lab shows
   both (`&kit=0`, `&detail=near`), and every shop on lots of every size (`show=shops`).
 - **Checked:** `test/kithouse.test.js` (the catalog, the runs, every piece the kit's, inside its
-  lot, the slopes on the line, the dormers and wings), `test/kitshop.test.js` (the shops: their
-  looks, doors, boards, signs, awnings, goods and neighbours), `e2e/building-lab.spec.js` (the
+  lot, the slopes on the line, the dormers and wings, the game's own mixed in),
+  `test/kitshop.test.js` (the shops: their looks, doors, boards, signs, awnings, goods and
+  neighbours), `e2e/building-lab.spec.js` (the
   draws, both ways, the street and the shops); the fits by rays and measure in Blender while it was made (the gables, the
   dormers' and the wings' within 8.4 cm of their line, no holes in walls, inner corners, gables,
   dormers' knees and cheeks or eaves, nothing through the roof).

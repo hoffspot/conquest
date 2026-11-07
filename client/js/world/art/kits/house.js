@@ -194,6 +194,11 @@ function facesOf([x0, x1, z0, z1], y) {
 
 const at = ({ origin, across }, u, v, w = 0, out = [0, 0, 0]) => [origin[0] + across[0] * u - out[0] * w, origin[1] + v, origin[2] + across[2] * u - out[2] * w];
 
+// The places whose houses' roofs are tiled, never thatched (the house kit's: kithouse.js
+// HOUSE_KIT.settlements), and the tiles a thatch is laid as there
+const TILED_PLACES = Object.freeze(["town", "city", "capital"]);
+const TILED_FOR = Object.freeze({ thatch: "clay", "thatch-grey": "slate" });
+
 /**
  * How a house will be built, worked out from its piece of the layout (the same every time for
  * the same piece): { style, seed, wealth, storeys ([{ y, height, box: [x0, x1, z0, z1] }], world
@@ -207,7 +212,7 @@ const at = ({ origin, across }, u, v, w = 0, out = [0, 0, 0]) => [origin[0] + ac
  * board upstairs), `ground` (its ground floor's walls), `jettied` (true or false, not by chance)
  * and `lofty` (the least height of its ground floor: room for a name over the door).
  */
-export function planHouse({ w, h, style = "timber", variant = 0, back = false, storeys: asked = null, use = null, seed = null, x = 0, y = 0, facing = 0, front: frontAt = null, entrance = null, board = null, ground = null, jettied: forceJetty = null, lofty = null }) {
+export function planHouse({ w, h, style = "timber", variant = 0, back = false, storeys: asked = null, use = null, seed = null, x = 0, y = 0, facing = 0, front: frontAt = null, entrance = null, board = null, ground = null, jettied: forceJetty = null, lofty = null, settlement = null }) {
     const barn = back && (use === "barn" || use === "stable");
     const look = barn ? BARN : STYLES[style] ?? STYLES.timber;
     const random = createRandom(seed ?? seedOf(`${x.toFixed?.(2) ?? x},${y.toFixed?.(2) ?? y}-${w}x${h}-${style}-${variant}`));
@@ -241,7 +246,10 @@ export function planHouse({ w, h, style = "timber", variant = 0, back = false, s
     const [tx0, tx1, tz0, tz1] = top.box;
     const ridge = tz1 - tz0 > tx1 - tx0 + m(0.4) ? "z" : tx1 - tx0 > tz1 - tz0 + m(0.4) ? "x" : variant % 2 ? "z" : "x";
     const kind = back ? random.pick(["gable", "gable", "hip"]) : random.pickWeighted(look.kinds, ([, weight]) => weight)[0];
-    const roofName = barn && look.roofs.includes(STYLES[style]?.roofs[0]) ? STYLES[style].roofs[0] : random.pick(look.roofs);
+    const drawn = barn && look.roofs.includes(STYLES[style]?.roofs[0]) ? STYLES[style].roofs[0] : random.pick(look.roofs);
+    // (A town's, city's or capital's roofs are tiles, not thatch, so a fire's not to run from roof
+    // to roof: a cottage's or a barn's there tiled instead, the rest of it as ever)
+    const roofName = TILED_PLACES.includes(settlement) ? (TILED_FOR[drawn] ?? drawn) : drawn;
     const wallName = random.pick(look.walls);
     const frame = look.frame ? random.pick(look.frame) : null;
     const stoneGround = ground ?? (frame && random.chance(look.stoneGround ?? 0) ? random.pick(["stone-warm", "stone"]) : null);

@@ -22,7 +22,8 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const { planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
-const { HOUSE_KIT, KIT, kitBuilt, kitHouse, ROOFS, runOf, SPANS, spanFor } = await import("../client/js/world/art/kits/kithouse.js");
+const { HOUSE_KIT, KIT, KIT_MIX, kitBuilt, kitHouse, ownHouse, ROOFS, runOf, SPANS, spanFor } = await import("../client/js/world/art/kits/kithouse.js");
+const { layoutTown } = await import("../client/js/core/setpieces/town.js");
 
 const CATALOG = JSON.parse(readFileSync(new URL("../client/models/assets.json", import.meta.url))).models;
 const EPSILON = 1e-6;
@@ -98,11 +99,16 @@ describe("The house kit (world/art/kits/kithouse.js)", () => {
         assert.equal(spanFor(3), 4);
     });
 
-    it("builds the humans' timber, brick and cottage houses of a town, a city or a capital, on their streets and out behind; not a village's, nor another people's, nor stone", () => {
+    it("builds the humans' timber, brick and cottage houses of a town, a city or a capital, on their streets and out behind (but for the game's own mixed in); not a village's, nor another people's, nor stone", () => {
         for (const settlement of ["town", "city", "capital"]) {
             for (const style of ["timber", "brick", "cottage"]) {
-                assert.equal(kitBuilt({ kind: "house", style }, settlement), true, `${settlement} ${style}`);
-                assert.equal(kitBuilt({ kind: "house", style, back: true }, settlement), true);
+                assert.equal(kitBuilt({ kind: "house", style, street: "market" }, settlement), true, `${settlement} ${style}`);
+
+                for (let seed = 1; seed <= 40; seed++) {
+                    const behind = { kind: "house", style, back: true, seed };
+
+                    assert.equal(kitBuilt(behind, settlement), !ownHouse(behind));
+                }
             }
 
             assert.equal(kitBuilt({ kind: "house", style: "stone" }, settlement), false);
@@ -113,6 +119,65 @@ describe("The house kit (world/art/kits/kithouse.js)", () => {
         for (const settlement of ["village", "hamlet", "farmstead", undefined]) {
             assert.equal(kitBuilt({ kind: "house", style: "timber" }, settlement), false);
         }
+    });
+
+    it("mixes the game's own houses in with the kit's, about a quarter of them in a town, a city or a capital: none round the market, few on the main streets, more down the lanes and out behind; each the same every time; none in a village", () => {
+        const tally = {};
+
+        for (const settlement of ["town", "city", "capital"]) {
+            let [own, all] = [0, 0];
+
+            for (let seed = 1; seed <= 8; seed++) {
+                for (const piece of layoutTown({ seed, kind: settlement }).pieces) {
+                    if (piece.kind !== "house" || !HOUSE_KIT.styles.includes(piece.style ?? "timber")) {
+                        continue;
+                    }
+
+                    // (Every house on a street knows which, and one out behind is behind)
+                    const where = piece.back ? "back" : piece.street;
+
+                    assert.ok(where in KIT_MIX, `${settlement} ${seed}: ${where}`);
+                    assert.equal(kitBuilt({ ...piece }, settlement), kitBuilt(piece, settlement));
+                    assert.equal(kitBuilt(piece, settlement), !ownHouse(piece));
+                    assert.equal(kitBuilt(piece, "village"), false);
+
+                    tally[where] ??= [0, 0];
+                    tally[where][0] += ownHouse(piece) ? 1 : 0;
+                    tally[where][1] += 1;
+                    own += ownHouse(piece) ? 1 : 0;
+                    all += 1;
+                }
+            }
+
+            assert.ok(own / all > 0.18 && own / all < 0.32, `${settlement}: ${own} of ${all} the game's own`);
+        }
+
+        const share = (where) => tally[where][0] / tally[where][1];
+
+        assert.equal(tally.market?.[0] ?? 0, 0);
+        assert.ok(share("main") < 0.15, `main streets ${share("main")}`);
+        assert.ok(share("lane") > 2 * share("main") && share("back") > 2 * share("main"), JSON.stringify(tally));
+    });
+
+    it("tiles a town's, a city's or a capital's roofs, never thatch: a cottage's or a barn's there clay or slate, a village's still thatched", () => {
+        const roofs = (settlement, style, back = false) =>
+            new Set(Array.from({ length: 60 }, (_, seed) => planHouse({ w: 2, h: 2, style, seed: seed + 1, back, use: back ? "barn" : null, settlement }).roof));
+
+        for (const settlement of ["town", "city", "capital"]) {
+            for (const [style, back] of [["cottage", false], ["cottage", true], ["timber", true]]) {
+                const tiled = roofs(settlement, style, back);
+
+                assert.ok(![...tiled].some((name) => name.startsWith("thatch")), `${settlement} ${style}${back ? "'s barn" : ""}: ${[...tiled]}`);
+            }
+
+            // (The rest as ever: a timber house's roof the same wherever it stands)
+            for (let seed = 1; seed <= 20; seed++) {
+                assert.equal(planHouse({ w: 2, h: 2, style: "timber", seed, settlement }).roof, planHouse({ w: 2, h: 2, style: "timber", seed }).roof);
+            }
+        }
+
+        assert.ok([...roofs("village", "cottage")].includes("thatch"));
+        assert.ok([...roofs(null, "cottage")].includes("thatch"));
     });
 
     it("lays every roof the plans give its houses with one of its tiles", () => {
