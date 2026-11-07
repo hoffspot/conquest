@@ -1132,9 +1132,27 @@ function wingRoof({ box, top, span, join, slopes, trims, over }) {
 }
 
 /**
+ * How likely a house the kit could build is the game's own instead (kits/house.js), by where it
+ * stands (setpieces/town.js: a house's `street`, or out `back`): none round the market, few on the
+ * main streets, more down the lanes and behind, so the kit sets a street's look and the game's
+ * own houses mix in with it the further back one goes; about a quarter of them in all, in a town,
+ * a city or a capital alike (test/kithouse.test.js).
+ */
+export const KIT_MIX = Object.freeze({ market: 0, main: 0.08, lane: 0.3, back: 0.3 });
+
+/** Whether a house the kit could build is the game's own instead (KIT_MIX): its own draw, from its seed, the same every time. */
+export function ownHouse(piece) {
+    const share = KIT_MIX[piece.back ? "back" : (piece.street ?? "main")] ?? 0;
+    const seed = piece.seed ?? Math.round((piece.x ?? 0) * 31 + (piece.y ?? 0) * 17 + 7);
+
+    return share > 0 && createRandom((seed ^ 0x6f3d) >>> 0).range(0, 1) < share;
+}
+
+/**
  * Whether a house of the layout is built of the kit: a human town's, city's or capital's timber,
- * brick or cottage house, on its street or out behind (a workshop, a shed: most of a city's).
+ * brick or cottage house, on its street or out behind (a workshop, a shed: most of a city's), but
+ * for those that are the game's own (ownHouse).
  */
 export function kitBuilt(piece, settlement) {
-    return piece.kind === "house" && HOUSE_KIT.styles.includes(piece.style ?? "timber") && HOUSE_KIT.settlements.includes(settlement) && (piece.people ?? "human") === "human";
+    return piece.kind === "house" && HOUSE_KIT.styles.includes(piece.style ?? "timber") && HOUSE_KIT.settlements.includes(settlement) && (piece.people ?? "human") === "human" && !ownHouse(piece);
 }
