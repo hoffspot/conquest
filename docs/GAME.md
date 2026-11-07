@@ -3573,7 +3573,11 @@ facing south; each is turned about its middle to face the way the layout says:
   sagging; a roof open beneath, over the well or a shelter on posts, has the underside of its
   boards drawn under every slope instead, so it isn't seen through from below), the gables
   carried up under it (framed on a timber house, with a little window), the chimney stack (up a
-  gable end outside, or through the roof) and dormers. A stack outside never goes up the front
+  gable end outside, or through the roof) and dormers, each with its own gable over its window.
+  Nothing at the roof's top is seen through from the street: the ridge and hip tiles sit on the
+  slopes, closed beneath and at their ends (a ridge's run on a little past a gable's verges), a
+  thatched ridge's band has its scalloped edge cut down into the thatch, and the bargeboards are
+  boards all round, seen from behind where they stand up past the roof. A stack outside never goes up the front
   gable, across the door and the name board or sign over it: a house with its gable to the street
   has it up the back one.
 

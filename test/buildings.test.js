@@ -32,6 +32,7 @@ const { buildHouse, house, planHouse, STYLES } = await import("../client/js/worl
 const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
 const { prop, PROP_NAMES } = await import("../client/js/world/art/kits/props.js");
+const { pitchedRoof } = await import("../client/js/world/art/kits/roofs.js");
 const { merge, partsOf } = await import("../client/js/world/town3d.js");
 
 const M = 5;
@@ -168,6 +169,58 @@ describe("houses (kits/house.js)", () => {
         }
 
         assert.ok(most > 1000, `the biggest house is ${most} triangles`);
+    });
+
+    it("close a dormer's front up under its roof: looked at square on, its gable met at its front, not the roof behind it", () => {
+        let dormers = 0;
+
+        for (const piece of houses) {
+            const plan = planHouse(piece);
+
+            // (Dormers on the front's slope of a tiled roof, its ridge along the front, as kits/house.js puts them)
+            if (!plan.dormers || /thatch/.test(plan.roof) || plan.ridge === "z" || plan.kind === "hip") {
+                continue;
+            }
+
+            const [x0, x1, z0, z1] = plan.levels.at(-1).box;
+            const zFront = z1 - ((z1 - z0) / 2) * 0.42;
+            const top = plan.eaves + ((z1 - z0) / 2 - Math.abs(zFront - (z0 + z1) / 2)) * plan.pitch - 0.1 * M + 1.35 * M;
+            const count = x1 - x0 > 7 * M ? 2 : 1;
+            const triangles = [];
+
+            house(piece).traverse((node) => {
+                const position = node.geometry?.attributes.position;
+
+                for (let k = 0; node.isMesh && k < position.count; k += 3) {
+                    const [a, b, c] = [k, k + 1, k + 2].map((i) => new THREE.Vector3().fromBufferAttribute(position, i));
+
+                    triangles.push({ a, b, c, normal: b.clone().sub(a).cross(c.clone().sub(a)) });
+                }
+            });
+
+            for (let k = 0; k < count; k++) {
+                const cx = x0 + ((x1 - x0) * (k + 1)) / (count + 1);
+
+                // (Inside the least a dormer's gable is: half a metre either side of its middle, under its roof)
+                for (const [dx, dy] of [[-0.2, 0.05], [0, 0.05], [0.2, 0.05], [0, 0.15]]) {
+                    const ray = new THREE.Ray(new THREE.Vector3(cx + dx * M, top + dy * M, z1 + 20 * M), new THREE.Vector3(0, 0, -1));
+                    const hit = new THREE.Vector3();
+                    let met = -Infinity;
+
+                    for (const { a, b, c, normal } of triangles) {
+                        if (normal.z > 0 && ray.intersectTriangle(a, b, c, true, hit)) {
+                            met = Math.max(met, hit.z);
+                        }
+                    }
+
+                    assert.ok(met > zFront - 0.05 * M, `${piece.key}: the sky under a dormer's roof, ${((zFront - met) / M).toFixed(2)} m behind its front`);
+                }
+
+                dormers++;
+            }
+        }
+
+        assert.ok(dormers > 5, `${dormers} dormers`);
     });
 
     it("build barns and stables behind the houses of boards, and other back buildings as houses", () => {
@@ -699,6 +752,89 @@ describe("shapes turned about an axis (Solid.lathe), lofted, swept and stood up"
         assert.deepEqual(top.map(([x, z]) => [Math.round(x * 1e6) / 1e6, Math.round(z * 1e6) / 1e6]), [[2, 2], [18, 2], [18, 18], [2, 18]]);
         assert.ok(Math.abs(areaFacingUp(solid) - 16 * 16) < 1e-3);
         assert.deepEqual(inset(square, -1).map(([x, z]) => [Math.round(x), Math.round(z)]), [[-1, -1], [21, -1], [21, 21], [-1, 21]]);
+    });
+});
+
+describe("roofs (kits/roofs.js)", () => {
+    // A roof's triangles, each with the way its front faces
+    const trianglesOfSolid = (solid) => {
+        const triangles = [];
+
+        solid.toObject().traverse((node) => {
+            const position = node.geometry?.attributes.position;
+
+            for (let k = 0; node.isMesh && k < position.count; k += 3) {
+                const [a, b, c] = [k, k + 1, k + 2].map((i) => new THREE.Vector3().fromBufferAttribute(position, i));
+
+                triangles.push({ a, b, c, normal: b.clone().sub(a).cross(c.clone().sub(a)) });
+            }
+        });
+
+        return triangles;
+    };
+    // Whether a ray from `from` going `way` meets the front of a triangle within `reach`
+    const stopped = (triangles, from, way, reach) => {
+        const [origin, direction] = [new THREE.Vector3(...from), new THREE.Vector3(...way).normalize()];
+        const hit = new THREE.Vector3();
+
+        return triangles.some(({ a, b, c, normal }) => normal.dot(direction) < 0 && new THREE.Ray(origin, direction).intersectTriangle(a, b, c, true, hit) && hit.distanceTo(origin) <= reach);
+    };
+
+    it("caps the ridge and the hips with tiles sitting on the slopes, closed beneath, and a thatched ridge with its band cut down into the thatch: no light under them, however low they're seen from", () => {
+        // (Art pixels, five to a metre: a house 12 m by 6 m, its eaves 5 m up, a millimetre over the tiles)
+        const [x0, x1, z0, z1, eaves, overhang, hair] = [0, 60, 0, 30, 25, 2.5, 0.005];
+        const [half, mid] = [(z1 - z0) / 2, (z0 + z1) / 2];
+        let rays = 0;
+
+        for (const [kind, thatch] of [["gable", false], ["hip", false], ["half-hip", false], ["gable", true], ["hip", true]]) {
+            for (const pitch of [0.8, 1.2, 1.45]) {
+                const solid = new Solid();
+                const roof = pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, verge: 1.5, thickness: thatch ? 1.5 : 1, kind, cover: thatch ? "thatch" : "slate", under: thatch ? "thatch" : "planks-dark", cap: thatch ? null : "ridge", thatch });
+                const triangles = trianglesOfSolid(solid);
+                const ye = eaves - overhang * pitch;
+                const slope = Math.hypot(1, pitch);
+
+                // Up each slope from 1 m short of the ridge, a hair over the tiles, across it
+                for (let x = 20; x <= 40; x += 2.5) {
+                    for (const side of [1, -1]) {
+                        const from = [x, roof.top - pitch * 5 + hair, mid + side * 5];
+
+                        assert.ok(stopped(triangles, from, [0, pitch, -side], 5 * slope + 5), `${thatch ? "thatched " : ""}${kind} at ${pitch}: light under the ridge's ${thatch ? "band" : "tiles"} at ${x}, from ${side > 0 ? "the back" : "the front"}`);
+                        rays++;
+                    }
+                }
+
+                // ...and across each hip, from its side's slope and its end's, towards it
+                if (kind === "hip" && !thatch) {
+                    for (const [ex, rx] of [[x0 - overhang, x0 - overhang + half + overhang], [x1 + overhang, x1 + overhang - half - overhang]]) {
+                        for (const ze of [z0 - overhang, z1 + overhang]) {
+                            const [low, high] = [new THREE.Vector3(ex, ye, ze), new THREE.Vector3(rx, roof.top, mid)];
+                            const along = high.clone().sub(low).normalize();
+                            const normals = [new THREE.Vector3(0, 1, Math.sign(ze - mid) * pitch), new THREE.Vector3(Math.sign(ex - rx) * pitch, 1, 0)].map((n) => n.normalize());
+
+                            for (const normal of normals) {
+                                // (Across the slope, away from the hip: into it, not off its edge; the side's
+                                // slope runs on along the ridge, the end's towards its middle)
+                                const out = normal.clone().cross(along).normalize();
+
+                                if (out.dot(normal.x ? new THREE.Vector3(0, 0, mid - ze) : new THREE.Vector3(rx - ex, 0, 0)) < 0) {
+                                    out.negate();
+                                }
+
+                                for (let t = 0.2; t <= 0.81; t += 0.15) {
+                                    const from = low.clone().lerp(high, t).addScaledVector(out, 4).addScaledVector(normal, hair);
+
+                                    assert.ok(stopped(triangles, from.toArray(), out.clone().negate().toArray(), 9), `${kind} at ${pitch}: light under a hip's tiles at ${from.toArray().map((v) => v.toFixed(1))}`);
+                                    rays++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        assert.ok(rays > 200, `${rays} rays`);
     });
 });
 
