@@ -284,7 +284,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/kits/house.js", 42348, "1614e0a059"],
             ["js/world/art/kits/ivy.js", 15023, "68c30a1108"],
             ["js/world/art/kits/kithouse.js", 62090, "6928190a89"],
-            ["js/world/art/kits/kitshop.js", 23191, "1227f93a2b"],
+            ["js/world/art/kits/kitshop.js", 23407, "a74cac878e"],
             ["js/world/art/kits/landmarks.js", 43840, "eb8d6b2bd6"],
             ["js/world/art/kits/leftovers.js", 9284, "c2ac933a91"],
             ["js/world/art/kits/neutral.js", 110935, "aae59bfb57"],

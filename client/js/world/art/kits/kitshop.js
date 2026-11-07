@@ -172,8 +172,8 @@ export const SHOP_LOOKS = Object.freeze({
  * for the door), the deepest it's built, its name board (its foot over the first floor's sill,
  * the most it's tall, how far out its back stands from the wall's inner face (in front of its
  * plaster, its posts and braces, all 0.19 m out or less) and how deep it is (its face so in front
- * of the frame's, 0.33 m out), the widest it is for a long name and a short, and how far its frame
- * stays in from the corners' posts), its sign (how
+ * of the frame's, 0.33 m out), the widest it is for a long name and a short, the narrowest, and
+ * how far it stays in from the corners' posts), its sign (how
  * far its bracket's top is over the first floor's foot, its board's size, its bracket's reach, its
  * stay's reach up the post), the goods' stand out from the frame (shopfront.js dressShop's 0.55 m)
  * and how far under an awning over them they stay, a master's banners' (either side of the way
@@ -185,7 +185,7 @@ export const SHOP_FRONT = Object.freeze({
     back: 0.35,
     spans: Object.freeze([4, 6, 8, 10]),
     deepest: 8,
-    board: Object.freeze({ over: 0.35, tallest: 0.8, back: 0.2, depth: 0.2, wide: 5, narrow: 4, corner: 0.45 }),
+    board: Object.freeze({ over: 0.35, tallest: 0.8, back: 0.2, depth: 0.2, wide: 5, narrow: 4, least: 2.4, corner: 0.9 }),
     sign: Object.freeze({ top: 1.85, width: 0.9, height: 1.08, reach: 1.35, above: 0.4 }),
     goods: 0.55,
     under: 0.15,
@@ -442,7 +442,9 @@ export function kitShop(piece) {
     const name = piece.name;
     const length = gx1 - gx0;
     const { board: B, sign: S } = SHOP_FRONT;
-    const wide = Math.min(SHOPNAMES_LONG.includes(name) ? B.wide : B.narrow, length - 2 * B.corner - 0.24);
+    // (Well in from the corners, where the sign hangs; on a narrow front no narrower than 2.4 m,
+    // to be read, and still clear of them)
+    const wide = Math.max(Math.min(SHOPNAMES_LONG.includes(name) ? B.wide : B.narrow, length - 2 * B.corner - 0.24), Math.min(B.least, length - B.corner - 0.24));
     const y0 = first + B.over;
     const board = { x0: middle - wide / 2, x1: middle + wide / 2, y0, y1: y0 + Math.min((wide * 9) / 56, B.tallest), z: faceOf(1) - KIT.out + B.back, depth: B.depth };
 
