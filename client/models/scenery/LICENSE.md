@@ -102,25 +102,27 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## meshsmith-houses.bin
+## meshsmith-houses-2.bin
 
 **Meshsmith Foundry's half-timbered building kit** (its modular pieces: wall frames, braces and
-the plaster and brick between them, windows and doors, corner posts, footings, the gables' rows,
-finials, beams and wood floors, and its roof pieces; its Unreal Engine files exported by this
-repository's owner), by **Meshsmith Foundry**, bought on **Fab** by this repository's owner under
-**Fab's Standard License**: the humans' town houses in their towns, cities and capitals
-(`client/js/world/art/kits/kithouse.js` lays each out of its pieces, `client/js/world/kithouses3d.js`
-draws it), and the wood floors of the humans' insides.
+the plaster and brick between them, windows and doors, corner posts outer and inner, footings, the
+gables' rows, dormers' knees, finials, beams and wood floors, and its roof pieces; its Unreal
+Engine files exported by this repository's owner), by **Meshsmith Foundry**, bought on **Fab** by
+this repository's owner under **Fab's Standard License**: the humans' town houses in their towns,
+cities and capitals, with their dormers and wings (`client/js/world/art/kits/kithouse.js` lays each
+out of its pieces, `client/js/world/kithouses3d.js` draws it), and the wood floors of the humans'
+insides.
 
-Its 162 pieces were set a square each (3 m) in Blender, each keeping the pack's own pivot, and its
+Its 168 pieces were set a square each (3 m) in Blender, each keeping the pack's own pivot, and its
 red and slate roofs' tiles baked flat into a seamless repeat of each
 (`.claude/skills/import-scene-model/scripts/housekit.py`, its list and the tiles' pictures kept
 out of the repository with the bought files), then put through `utilities/blenderpipeline`
-(`private/meshsmith-houses.json`): joined, their materials baked onto one atlas (1,024 pixels;
+(`private/meshsmith-houses-2.json`): joined, their materials baked onto one atlas (1,024 pixels;
 normals 512; KTX2) and cut apart again, each piece's frame (`walls`), plaster (`fills`) and glass
-(`glass`) a node of its square, and a lower detail packed in. Its `phone` build is 1,895,012 bytes
-scrambled; the kit's lower detail is 5,032 triangles in all, a town house of it about 3,000 to
-9,000.
+(`glass`) a node of its square, and a lower detail packed in. Its `phone` build is 1,912,276 bytes
+scrambled; the kit's lower detail is 5,172 triangles in all, a town house of it about 3,000 to
+12,000. It replaces `meshsmith-houses.bin`, the same kit with six pieces fewer (a dormer's knee
+frame, its half fills with windows, and the beam of an inner corner).
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,

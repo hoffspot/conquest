@@ -285,7 +285,9 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   cottage houses, on the streets and behind them, of a bought kit of half-timbered pieces
   (Meshsmith Foundry's: docs/LICENSED_MODELS.md, *The house kit*), its frames, plaster or brick,
   windows and doors on its own 2 metre grid, the gables row on row and the roofs' tiles on the
-  line their rafters rise along; on some fronts a gable of their own rising through the roof. Their
+  line their rafters rise along; on some fronts a gable of their own rising through the roof,
+  dormers on some roofs, and behind some houses a wing (or behind a gable-fronted one, a lower
+  range against its back gable). Their
   stone houses, and every village's, hamlet's and farmstead's, are the game's own (kits/house.js),
   as they all are without the licensed models.
 - **Landmarks**: the tavern, church, smithy and guild (and in a city, the market hall) facing
