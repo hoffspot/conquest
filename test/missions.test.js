@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Standing } from "../client/js/core/standing.js";
-import { BONUS, briefingOf, checkMission, gearChoices, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
+import { BONUS, briefingOf, checkMission, gearChoices, INTERCEPT_TURNS, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
+import { REINFORCE } from "../client/js/core/war/armies.js";
 
 // Just enough of a war (core/war/war.js): humans at war with orcs, at peace with elves
 function warOf(parts = {}) {
@@ -75,6 +76,31 @@ describe("what's near a player", () => {
         assert.ok(!found.some(({ key }) => key === "far-1"));
         assert.ok(!missionsNear({ war, realm: "human", at, held: [{ kind: "rout", key: "camp-1" }] }).some(({ kind }) => kind === "rout"));
         assert.deepEqual(missionsNear({ war, realm: "elf", at }).map(({ kind }) => kind), []);
+
+        // (Each as it's offered, found at once with the player nowhere near: still to do, none
+        // settled, as a messenger's offer is checked when it's taken on: core/host.js #overtaken)
+        for (const { kind, key, target } of found) {
+            assert.equal(checkMission(missionOf({ war, realm: "human", kind, key, target }), { war, realm: "human", near: () => false }), null, kind);
+        }
+    });
+
+    it("doesn't offer to cut off reinforcements fewer than two turns' march from their army: they'd be with it before the player got there", () => {
+        const march = INTERCEPT_TURNS * REINFORCE.speed + REINFORCE.join;
+        const offered = (apart) => {
+            const war = warOf({
+                forces: [
+                    { id: "column-1", realm: "orc", kind: "reinforcement", size: 9, at: [1100, 0], target: "army-1" },
+                    { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "attack", target: "calbury", at: [1100 + apart, 0] },
+                ],
+            });
+
+            return missionsNear({ war, realm: "human", at }).some(({ kind }) => kind === "intercept");
+        };
+
+        assert.equal(INTERCEPT_TURNS, 2);
+        assert.equal(offered(march + 20), true);
+        assert.equal(offered(march - 20), false);
+        assert.equal(offered(200), false);
     });
 
     it("finds their own works taken from them, and their own convoy with an enemy army about", () => {
@@ -190,6 +216,40 @@ describe("how a mission stands", () => {
         const through = missionOf({ war, realm: "human", kind: "wagons", key: "supply-9", target: { force: "supply-9", realm: "orc", at: [100, 100] } });
 
         assert.equal(checkMission(through, { war, realm: "human", near: () => false }), "failed");
+    });
+
+    it("cutting off reinforcements: followed into another column for the same army they've banded with on the march, still to do; their army gone, come to nothing; got through to it, failed", () => {
+        const army = { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "attack", target: "calbury", at: [4000, 0] };
+        const offer = { force: "column-1", realm: "orc", at: [1600, 0], size: 9, to: "army-1" };
+
+        // Taken into column-2 (before the mission was taken on, as the messenger came, and again
+        // after: column-2 into column-3): followed, its place kept up with, still to do
+        const war = warOf({ forces: [army, { id: "column-3", realm: "orc", kind: "reinforcement", size: 20, at: [1900, 0], target: "army-1" }] });
+
+        war.log.push({ type: "banded", realm: "orc", from: "column-1", into: "column-2", at: [1700, 0], turn: 9 });
+        war.log.push({ type: "banded", realm: "orc", from: "column-2", into: "column-3", at: [1800, 0], turn: 11 });
+
+        const banded = missionOf({ war, realm: "human", kind: "intercept", key: "column-1", target: { ...offer } });
+
+        assert.equal(checkMission(banded, { war, realm: "human", near: () => false }), null);
+        assert.equal(banded.target.force, "column-3");
+        assert.deepEqual(banded.target.at, [1900, 0]);
+
+        // Cut off in it, with the player there: done
+        war.forces = [army];
+        war.log.push({ type: "intercepted", realm: "orc", by: "human", at: [1950, 0], turn: 12 });
+        banded.there = true;
+        assert.equal(checkMission(banded, { war, realm: "human", near: () => false }), "ready");
+
+        // Gone with their army gone too (beaten, disbanded): gone home, come to nothing
+        const home = missionOf({ war: warOf(), realm: "human", kind: "intercept", key: "column-1", target: { ...offer } });
+
+        assert.equal(checkMission(home, { war: warOf(), realm: "human", near: () => false }), "void");
+
+        // Gone, their army still there: with it, failed
+        const joined = missionOf({ war: warOf({ forces: [army] }), realm: "human", kind: "intercept", key: "column-1", target: { ...offer } });
+
+        assert.equal(checkMission(joined, { war: warOf({ forces: [army] }), realm: "human", near: () => false }), "failed");
     });
 
     it("standing with the reserve and marching with the army: done once the enemy's beaten with the player there; failed if ours were", () => {
