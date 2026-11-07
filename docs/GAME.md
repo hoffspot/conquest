@@ -3692,8 +3692,41 @@ facing south; each is turned about its middle to face the way the layout says:
     storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
     dark red board just over it (its ground floor 4 m tall), the sign of the town's keys past
     the board's end, and a lantern either side of the door, under the board.
-  - **The shops** (art/kits/shopfront.js; the specialists' and the masters'): the house it was, in
-    its street's look (a cottage's made timber, its eaves clear of the name), its door in the
+  - **The shops of the house kit** (art/kits/kitshop.js; the humans', in every settlement they
+    stand in, a village's master's as a city's): each built of the kit (docs/LICENSED_MODELS.md,
+    *The house kit*) in a look of its own, the same on every lot, so a shop's known by its
+    building from town to town: walls of a colour and an awning of stripes no house has
+    (painters.js TINTS, cloth.js `SHOP_AWNINGS`), its fill, roof, storeys and timbers' figure
+    (`SHOP_LOOKS`). The swordsmith's brick sooted dark over a stone ground floor under red clay,
+    its eaves to the street, square panels, a broad forge stack at one end smoking thick, red and
+    black stripes; the armorer's limewash blued like steel over stone, a slate hipped roof, close
+    studding, steel blue and white; the Occult Scriptorium's oxblood plaster, three jettied storeys
+    under a tall slate gable to the street with a finial, leaded glass, purple and black; the
+    alchemist's sage green under an orange half-hipped roof with a dormer, X braces, its chimney
+    smoking green (smoke.js: a chimney's own colour), green and cream. The masters' are their
+    trade's look grander: the Master Swordsmith's three storeys, close studded, finials on its
+    gables; the Master Armorer's three storeys, a gable over its door rising through its hipped
+    roof where there's room; the Mystic Emporium's violet, three jettied storeys, leaded glass, a
+    gable over its door or a dormer, violet and gold. Its door is the kit's (1.05 m by 2.06 m
+    over the plinth: core/insides.js `SHOP_DOORS`, and the glow round it), in the middle of a 2 m
+    module in the middle of its front, its leaf where the game has its door (1.8 m in), up a
+    step; its front laid out symmetrically about it (`centredRun`): a shop window either side
+    under its awning, what it sells set out under them (no higher than the awnings over them).
+    Its name's on a board on the first floor's wall over the door (the ground floor's storey has
+    no room over the kit's door under its band), standing in front of the frame, over the sill
+    and under the windows either side; its sign hangs from an iron bracket on the first floor's
+    front corner post (either corner: the door's in the middle), its board across the front so
+    it's seen from up and down the street, under the eaves and any jetty, over the awnings, a
+    master's banners (either side of the way in, out in front of the awnings) and the Emporium's
+    lanterns (by the door), within its own lot clear of its neighbours' eaves
+    (`test/kitshop.test.js` measures them all on lots of every size, and in laid-out villages,
+    towns, cities and capitals). Till the kit's read, and without the licensed models, the game's
+    own below, in its look's walls, roof and storeys, with the kit's door. Each people's shops
+    have looks of their own: any other people's are its own kit's (below) till theirs are set out
+    in `SHOP_LOOKS` and built (world/kithouses3d.js `SHOP_KITS`).
+  - **The shops** (art/kits/shopfront.js; the specialists' and the masters', the game's own): the
+    house it was, in its look's walls, roof and storeys (kitshop.js; a people's with none, its
+    street's look, a cottage's made timber, its eaves clear of the name), its door in the
     middle of its front up a step, its name on a board just over it, however many storeys it has
     ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master Swordsmith", "Master
     Armorer", "Mystic Emporium"; landmarks.js `OVER_DOOR`: its foot 2.72 m up from the floor,

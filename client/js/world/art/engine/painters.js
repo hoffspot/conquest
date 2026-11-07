@@ -1277,6 +1277,14 @@ export const TINTS = {
     "plaster-red": { from: "plaster-white", tint: [0.68, 0.25, 0.18] },
     "plaster-blue": { from: "plaster-white", tint: [0.45, 0.62, 0.7] },
     "plaster-jade": { from: "plaster-white", tint: [0.4, 0.62, 0.5] },
+    // (The shops' own, no house's: kits/kitshop.js SHOP_LOOKS; a swordsmith's brick sooted by
+    // its forge, an armorer's limewash blued as steel is, a scriptorium's oxblood, an alchemist's
+    // sage, the Mystic Emporium's violet)
+    "brick-soot": { from: "brick", tint: [0.6, 0.5, 0.48] },
+    "plaster-steel": { from: "plaster-white", tint: [0.5, 0.62, 0.84] },
+    "plaster-oxblood": { from: "plaster-white", tint: [0.42, 0.13, 0.12] },
+    "plaster-sage": { from: "plaster-white", tint: [0.46, 0.62, 0.38] },
+    "plaster-violet": { from: "plaster-white", tint: [0.44, 0.3, 0.6] },
     "leafscale-sage": { from: "leafscale", tint: [1.1, 1.02, 1.3] },
     "leafscale-silver": { from: "leafscale", tint: [1.15, 0.98, 1.6] },
     "leafscale-gold": { from: "leafscale", tint: [1.5, 1.05, 0.6] },

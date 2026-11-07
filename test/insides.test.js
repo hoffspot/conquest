@@ -18,7 +18,7 @@ const { EQUIPMENT } = await import("../client/js/characters/equipment.js");
 const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
 const { TALK_CALLINGS } = await import("../client/js/core/rare.js");
-const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_INSIDES, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
+const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, entranceSpecOf, SHOP_DOORS, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_INSIDES, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
 const { crosses, squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
@@ -28,7 +28,7 @@ const { PLACE_BANDS } = await import("../client/js/core/places.js");
 const PLACE_GUARD = PLACE_BANDS.guard;
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
 const { ROLES } = await import("../client/js/core/roles.js");
-const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
+const { PLOT, SHOP_LANDMARKS } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
 const { buildInterior, buildingInterior, doorways } = await import("../client/js/world/interiors3d.js");
 
@@ -73,7 +73,10 @@ describe("a building's door (insides.js)", () => {
             for (const facing of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
                 const piece = { kind: "landmark", name, x: 40, y: 30, w: 4, h: 3, facing };
                 const { door, front, outside, clear, size } = entranceOf(piece, [100, 200]);
-                const spec = ENTRANCES[name];
+                // (A shop's as its people's are built: the humans' the house kit's door, SHOP_DOORS)
+                const spec = entranceSpecOf(piece);
+
+                assert.equal(spec, SHOP_LANDMARKS.includes(name) ? SHOP_DOORS.human : ENTRANCES[name]);
 
                 assert.deepEqual(size, [4 * PLOT, 3 * PLOT]);
                 assert.equal(door.width, spec.width);
