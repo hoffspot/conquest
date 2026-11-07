@@ -299,7 +299,7 @@ something more rustic is to come for them.
   each piece in a square of its own (3 m) keeping the pack's own pivot (a wall piece's inner face
   at its foot), splits a window's glass from its frame, and lays a plane of each of the two roof
   tiles' repeats (2 m by ten rows, baked seamless from the pack's roof pieces); the pipeline
-  (`private/meshsmith-houses.json`) bakes the pieces onto one atlas and cuts them apart again,
+  (`private/meshsmith-houses-2.json`) bakes the pieces onto one atlas and cuts them apart again,
   each kind (`walls`, `fills`, `glass`) a node of its square, with a lower detail packed in. Its
   catalog entry (`scenery-meshsmith-houses`) maps each piece's name to its nodes (`pieces`).
 - **The rules** (`client/js/world/art/kits/kithouse.js`, pure): a house planned as ever
@@ -309,7 +309,16 @@ something more rustic is to come for them.
   gables row on row along the line their rafters rise along (0.518 m over the walls' top, 1.2 m a
   metre), the roof's slopes laid with its tiles on that line (gable, hip, half-hip), the eaves'
   course, verges and soffits, a ridge cap of its tiles, and on some fronts a gable of its own
-  rising through the roof. Each house has a dark inside (its walls, floors and roof's underside
+  rising through the roof.
+- **Dormers and wings.** Dormers light the roof's rooms on a gabled or half-hipped roof's seen
+  sides (spans of 5 m or more): each rises from its eaves' wall over a 2 m module on a knee of the
+  kit's 1 m frames of a gable's lowest row (1.5 m), a window in each, under the kit's gable for a
+  2 m span; its own eaves' course along its sides, its cheeks hung with the roof's tiles, its
+  roof meeting the main slope in valleys. Some street houses have a wing behind: across a
+  house's ridge, set in from its ends, its roof meeting the back slope in valleys; behind a
+  gable-fronted house, a range a metre in either side, its roof stopped against the house's back
+  gable. Where a wing meets the house, the kit's inner corner pieces (its post, beams and footing)
+  every storey. Each house has a dark inside (its walls, floors and roof's underside
   facing in), as the pack's plaster is open round its windows.
 - **Drawn in the game** (`client/js/world/kithouses3d.js`): each house one mesh of the kit's
   own material for its pieces and roof (red or slate tiles by a corner's `roof`), merged with its
@@ -321,9 +330,10 @@ something more rustic is to come for them.
   those drawn then are built again once it is (`town.rebuild`, `Chunks` #rebuildWhere). The
   building lab shows both (`&kit=0`, `&detail=near`).
 - **Checked:** `test/kithouse.test.js` (the catalog, the runs, every piece the kit's, inside its
-  lot, the slopes on the line), `e2e/building-lab.spec.js` (the draws, both ways); the fits by
-  rays and measure in Blender while it was made (the gables within 8 cm of their line, no holes
-  in walls, gables or eaves, nothing through the roof).
+  lot, the slopes on the line, the dormers and wings), `e2e/building-lab.spec.js` (the draws,
+  both ways); the fits by rays and measure in Blender while it was made (the gables, the
+  dormers' and the wings' within 8.4 cm of their line, no holes in walls, inner corners, gables,
+  dormers' knees and cheeks or eaves, nothing through the roof).
 
 ## Changing the key
 

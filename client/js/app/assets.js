@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "f36ba50906",
+    release: "f16e6a47eb",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2664,9 +2664,9 @@ export const ASSETS = Object.freeze({
             "licensed": true,
             "files": [
                 {
-                    "path": "models/scenery/meshsmith-houses.bin",
-                    "hash": "077826c229",
-                    "bytes": 1895012
+                    "path": "models/scenery/meshsmith-houses-2.bin",
+                    "hash": "ca8b20f38b",
+                    "bytes": 1912276
                 }
             ],
             "pieces": {
@@ -3162,11 +3162,29 @@ export const ASSETS = Object.freeze({
                 "WallFrame_Beams_01_Single": [
                     "walls@1,16"
                 ],
+                "WallFrame_1m_RoofMiddle_Lower": [
+                    "walls@2,16"
+                ],
+                "WallFill_Stone_1m_Half_Window_2x2": [
+                    "fills@3,16"
+                ],
+                "WallFill_Stone_1m_Half_Window_1x2": [
+                    "fills@4,16"
+                ],
+                "WallFill_Brick_1m_Half_Window_2x2": [
+                    "fills@5,16"
+                ],
+                "WallFill_Brick_1m_Half_Window_1x2": [
+                    "fills@6,16"
+                ],
+                "WallFrame_Beams_01_CornerInner": [
+                    "walls@7,16"
+                ],
                 "RoofTiles_Red": [
-                    "RoofTiles_Red@2,16"
+                    "RoofTiles_Red@8,16"
                 ],
                 "RoofTiles_Slate": [
-                    "RoofTiles_Slate@3,16"
+                    "RoofTiles_Slate@9,16"
                 ]
             }
         },

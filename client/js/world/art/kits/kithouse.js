@@ -59,6 +59,8 @@ export const KIT = Object.freeze({
     phase: 0.2,
     filler: 0.2,
     band: 2.3,
+    // (A dormer's knee: the kit's 1 m frames of a gable's lowest row, 1.5 m, their face 0.19 m out)
+    knee: Object.freeze({ height: 1.5, depth: 0.19 }),
 });
 
 // The wall's slope's length for a metre of its run
@@ -72,6 +74,19 @@ const SHELL = 0.03;
 // the tiles its sides stand there, how far over the tiles' meeting it rises, and how much of a
 // tile's width (of the tiles' repeat) it shows across each side
 const RIDGE = Object.freeze({ width: 0.16, lift: 0.015, rise: 0.1, across: 0.06 });
+
+// A dormer's cheeks: how far out from its knee's ends they're hung, and how far down into the
+// main roof they reach (metres)
+const CHEEK = 0.01;
+const CHEEK_SUNK = 0.02;
+
+// A wing behind the house: its spans, how deep it is inside (at least its side walls' inner
+// corner and a module more; at most), how far in from the house's ends its walls stand at least,
+// and where a range's eaves stop against the main gable's face (metres)
+const WING = Object.freeze({ spans: Object.freeze([4, 5, 6]), depth: 2.2, deepest: 6, margin: 1.2, face: 0.22 });
+
+// How often a street house is built with a wing behind, room allowing
+const WINGED = 0.6;
 
 /** The spans (metres across, between the eaves' walls) its gables are built for. */
 export const SPANS = Object.freeze([4, 5, 6, 8, 10]);
@@ -93,6 +108,8 @@ const HOLES = Object.freeze({
     "1m_Window_2x3": [[-0.25, 0.25, 1.115, 1.72]],
     "1m_Window_2x4": [[-0.25, 0.25, 1.115, 1.88]],
     "1m_RoofPeak_Window_1x1": [[-0.157, 0.157, 0.025, 0.31]],
+    "1m_Half_Window_1x2": [[-0.157, 0.157, 0.475, 0.92]],
+    "1m_Half_Window_2x2": [[-0.25, 0.25, 0.475, 0.92]],
     "2m_DoorCenter": [[-0.525, 0.525, 0, 1.864]],
     "2m_DoorLeft": [[-0.9, 0.121, 0, 1.868]],
     "2m_DoorRight": [[-0.121, 0.9, 0, 1.868]],
@@ -232,8 +249,44 @@ export function kitHouse(plan) {
     const ridge = plan.ridge;
     const roomX = bx1 - bx0 - 2 * KIT.out;
     const roomZ = bz1 - bz0 - 2 * KIT.out;
-    const span = spanFor(ridge === "x" ? roomZ : roomX);
-    const long = Math.max(span, onGrid(ridge === "x" ? roomX : roomZ));
+    // (Its shape drawn from its own stream, so the rest of it's the same: a wing, where, dormers)
+    const shape = createRandom((plan.seed ^ 0x7a11) >>> 0);
+    const winged = !plan.back && shape.chance(WINGED);
+    let span = spanFor(ridge === "x" ? roomZ : roomX);
+    let long = Math.max(span, onGrid(ridge === "x" ? roomX : roomZ));
+    let wing = null;
+
+    // A wing behind a house across the street, its ridge across the house's and no higher, its
+    // roof meeting the house's back slope in valleys: the house no deeper than 6 m, the wing in
+    // the room left behind it, set in from the house's ends (in its middle, or nearer one end)
+    if (winged && ridge === "x") {
+        const main = [6, 5].find((one) => one <= span && roomZ - one >= WING.depth - EPSILON);
+        const spans = WING.spans.filter((one) => one <= (main ?? 0) && one <= long - 2 * WING.margin + EPSILON);
+
+        if (main && spans.length) {
+            const wide = shape.pick(spans);
+            const room = long - wide;
+            const at = plan.kind === "hip" ? room / 2 : shape.pick([room / 2, WING.margin, room - WING.margin]);
+
+            wing = { join: "valley", span: wide, depth: Math.min(WING.deepest, onGrid(roomZ - main)), at: Math.max(WING.margin, Math.min(room - WING.margin, onGrid(at + EPSILON))) };
+            span = main;
+        }
+    }
+
+    const kind = plan.kind === "half-hip" && span < 6 ? "gable" : plan.kind;
+
+    // ...and behind a gable-fronted house, a range a metre in from its eaves' walls either side,
+    // its own gable behind, its roof stopped against the house's back gable
+    if (winged && ridge === "z" && kind === "gable" && SPANS.includes(span - 2) && span - 2 >= 4) {
+        const front = onGrid(Math.max(span, 5, long * shape.range(0.55, 0.7)));
+        const deep = Math.min(WING.deepest, onGrid(long - front));
+
+        if (deep >= WING.depth - EPSILON) {
+            wing = { join: "wall", span: span - 2, depth: deep, at: 1 };
+            long = front;
+        }
+    }
+
     const [width, depth] = ridge === "x" ? [long, span] : [span, long];
     const gx0 = (bx0 + bx1) / 2 - width / 2;
     const gz1 = bz1 - KIT.out;
@@ -241,7 +294,8 @@ export function kitHouse(plan) {
     const jetty = plan.jetty > 0 && n > 1 ? Math.min(0.6, Math.max(KIT.filler, Math.round(plan.jetty / P / KIT.filler) * KIT.filler)) : 0;
     const boxes = Array.from({ length: n }, (_, s) => [gx0, gx0 + width, gz0, gz1 - jetty * (n - 1 - s)]);
     const top = KIT.plinth + n * KIT.storey;
-    const kind = plan.kind === "half-hip" && span < 6 ? "gable" : plan.kind;
+    // (The wing's walls' inner faces, behind the house's back wall, every storey the same)
+    const wingBox = wing ? [gx0 + wing.at, gx0 + wing.at + wing.span, gz0 - wing.depth, gz0] : null;
     const gableSides = kind === "hip" ? [] : ridge === "x" ? ["left", "right"] : ["front", "back"];
 
     // The plan's openings in the lot's frame, each by where its middle is
@@ -381,6 +435,42 @@ export function kitHouse(plan) {
         }
     }
 
+    // The runs of wall round a storey: the house's four sides, and with a wing, its back either side
+    // of the wing and the wing's own three; where a run meets the other at an inner corner, its
+    // last metre's the kit's corner piece's (a metre of wall either way from the corner, its post
+    // at the corner)
+    const runsOf = (box) => {
+        const runs = ["front", "back", "left", "right"].map((side) => ({ wall: sideOf(box, side), side, main: true }));
+
+        if (!wingBox) {
+            return runs;
+        }
+
+        const [x0, x1, z0] = box;
+        const [wx0, wx1] = wingBox;
+        const back = runs[1].wall;
+
+        runs.splice(1, 1, { wall: { ...back, length: x1 - wx1 }, side: "back", last: true }, { wall: { ...back, origin: [wx0, z0], length: wx0 - x0 }, side: "back", first: true });
+        runs.push({ wall: sideOf(wingBox, "back"), side: "back" }, { wall: sideOf(wingBox, "left"), side: "left", last: true }, { wall: sideOf(wingBox, "right"), side: "right", first: true });
+
+        return runs;
+    };
+    // (The corners: the house's own and the wing's outer ones, each its post with its turn; the
+    // inner ones where the wing meets the house)
+    const cornersOf = (box) => {
+        const [x0, x1, z0, z1] = box;
+        const outer = [[x1, z1, 0], [x1, z0, 1], [x0, z0, 2], [x0, z1, 3]];
+
+        if (!wingBox) {
+            return { outer, inner: [] };
+        }
+
+        const [wx0, wx1, wz0] = wingBox;
+
+        return { outer: [...outer, [wx1, wz0, 1], [wx0, wz0, 2]], inner: [[wx1, z0, 1], [wx0, z0, 2]] };
+    };
+    const legs = ({ first, last }) => [first ? 1 : 0, last ? 1 : 0];
+
     // The storeys' walls, posts at their corners, and the plinth under the ground floor's
     for (const [s, box] of boxes.entries()) {
         const y = KIT.plinth + s * KIT.storey;
@@ -388,27 +478,39 @@ export function kitHouse(plan) {
 
         fillLook = plain ? "stone" : "fill";
 
-        for (const side of ["front", "back", "left", "right"]) {
-            const wall = sideOf(box, side);
-            const stepped = jetty > 0 && (side === "left" || side === "right") && s < n - 1;
-            const run = runOf(wall.length, { fillers: stepped ? "end" : "both" });
+        for (const run of runsOf(box)) {
+            const { wall, side } = run;
+            const [start, end] = legs(run);
+            const length = wall.length - start - end;
+            const stepped = jetty > 0 && run.main && (side === "left" || side === "right") && s < n - 1;
 
             // (The right-hand wall runs from the front: its fillers, where a jetty's made it, at its start)
-            const laid = stepped && side === "right" ? runOf(wall.length, { fillers: "end" }).map((m) => ({ ...m, at: wall.length - m.at - m.width })).reverse() : run;
+            const laid = (stepped && side === "right" ? runOf(length, { fillers: "end" }).map((m) => ({ ...m, at: length - m.at - m.width })).reverse() : runOf(length, { fillers: stepped ? "end" : "both" })).map((m) => ({ ...m, at: m.at + start }));
             const kinds = kindsOf(wall, laid, side, s);
             const big = laid.filter(({ width }) => width >= 1);
 
             laid.forEach((m, k) => module(wall, m, y, kinds[k], { storey: s, first: m === big[0], last: m === big.at(-1), plain }));
+
+            // (An inner corner's metre of this wall: its plaster, the corner piece its timbers)
+            for (const u of [...(start ? [0.5] : []), ...(end ? [wall.length - 0.5] : [])]) {
+                put(`WallFill_${fill}_1m`, along(wall, u), y + KIT.sill, wall.turn, "fill");
+            }
         }
 
-        const [x0, x1, z0, z1] = box;
+        const { outer, inner } = cornersOf(box);
 
-        for (const [x, z, turn] of [[x1, z1, 0], [x1, z0, 1], [x0, z0, 2], [x0, z1, 3]]) {
+        for (const [x, z, turn] of outer) {
             put("WallFrame_CornerOuter_01", [x, z], y, turn, "frame");
+        }
+
+        for (const [x, z, turn] of inner) {
+            put("WallFrame_CornerInner", [x, z], y, turn, "frame");
+            put("WallFrame_Beams_01_CornerInner", [x, z], y + KIT.band, turn, "frame");
         }
 
         // A jettied storey's joists under its overhang, and the overhang's underside
         if (s > 0 && jetty > 0) {
+            const [x0, x1, , z1] = box;
             const under = boxes[s - 1][3];
 
             for (let x = x0 + 0.25; x < x1 - 0.1; x += 0.5) {
@@ -419,23 +521,28 @@ export function kitHouse(plan) {
         }
     }
 
-    const [x0, x1, z0, z1] = boxes[0];
+    for (const run of runsOf(boxes[0])) {
+        const { wall } = run;
+        const [start, end] = legs(run);
+        let at = start;
 
-    for (const side of ["front", "back", "left", "right"]) {
-        const wall = sideOf(boxes[0], side);
-        let at = 0;
-
-        while (at < wall.length - EPSILON) {
-            const piece = wall.length - at >= 2 - EPSILON ? 2 : 1;
-            const width = Math.min(piece, wall.length - at);
+        while (at < wall.length - end - EPSILON) {
+            const piece = wall.length - end - at >= 2 - EPSILON ? 2 : 1;
+            const width = Math.min(piece, wall.length - end - at);
 
             put(`Foundation_Smooth_Edge_${piece}m`, along(wall, at + width / 2), 0, wall.turn, "foundation", width < piece - EPSILON ? { scale: [width / piece, 1, 1] } : {});
             at += width;
         }
     }
 
-    for (const [x, z, turn] of [[x1, z1, 0], [x1, z0, 1], [x0, z0, 2], [x0, z1, 3]]) {
+    const { outer, inner } = cornersOf(boxes[0]);
+
+    for (const [x, z, turn] of outer) {
         put("Foundation_Smooth_CornerOuter", [x, z], 0, turn, "foundation");
+    }
+
+    for (const [x, z, turn] of inner) {
+        put("Foundation_Smooth_CornerInner", [x, z], 0, turn, "foundation");
     }
 
     fillLook = "fill";
@@ -528,6 +635,11 @@ export function kitHouse(plan) {
         gable(sideOf(boxes.at(-1), side), span);
     }
 
+    // The wing's own gable, at its back
+    if (wing) {
+        gable(sideOf(wingBox, "back"), wing.span, true);
+    }
+
     // (Its front's middle modules, two or three 2 m ones, or two about its 1 m one, its walls'
     // own going on either side of it, no wider than the main gables: so its ridge is no higher)
     let cross = null;
@@ -551,14 +663,75 @@ export function kitHouse(plan) {
         }
     }
 
-    roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross });
+    // Dormers lighting the roof's rooms, on the sides of a gabled or half-hipped roof that are seen
+    // (a house across the street's front, if it has no cross gable; a gable-fronted house's either
+    // side): each rising from its eaves' wall over one of its 2 m modules, not at its ends, on a knee
+    // of the kit's 1 m frames of a gable's lowest row (1.5 m) with a window in each, under its own
+    // gable (the kit's for a 2 m span; no finial, too big for it), its roof meeting the main slope
+    // in valleys well under the ridge (so the span's 5 m or more); two on a side only with a module or more between them
+    const dormers = [];
 
-    // Its inside, dark: each storey's walls, floor and ceiling facing in, and its roof's underside
-    // (the kit's plaster is open round its windows, and the house is hollow: through one, seen
-    // from the side, the ground under it showed, or the sky through a gable's)
-    const shell = [];
+    if (plan.dormers && (kind === "gable" || kind === "half-hip") && span >= 5) {
+        const size = shape.pick(["2x2", "1x2"]);
+        const paired = shape.chance(0.5);
+        const name = `1m_Half_Window_${size}`;
+        const [hx0, hx1, hy0, hy1] = HOLES[name][0];
+        const [ox0, ox1, oy0, oy1] = WINDOWS[size];
 
-    for (const [s, [x0, x1, z0, z1]] of boxes.entries()) {
+        for (const side of ridge === "x" ? (cross ? [] : ["front"]) : ["left", "right"]) {
+            const wall = sideOf(boxes.at(-1), side);
+            const twos = runOf(wall.length).filter(({ width: w, at }) => w === 2 && at >= 2 - EPSILON && wall.length - at - 2 >= 2 - EPSILON);
+            const apart = (p, q) => q.at - p.at - 2 >= 1.4 - EPSILON;
+            const ends = twos.length >= 2 && apart(twos[0], twos.at(-1)) ? [twos[0], twos.at(-1)] : null;
+            // (The same on either side of a gable-fronted house: both ends, or the middle one; of
+            // two side by side, the one nearer the street, or the left one)
+            const middleOf = ({ at }) => along(wall, at + 1)[ridge === "x" ? 0 : 1];
+            const nearer = [...twos].sort((p, q) => (ridge === "x" ? middleOf(p) - middleOf(q) : middleOf(q) - middleOf(p)))[0];
+            const chosen = !twos.length ? [] : twos.length % 2 ? (ends && paired ? ends : [twos[(twos.length - 1) / 2]]) : (ends ?? [nearer]);
+
+            for (const { at } of chosen) {
+                const t = wall.turn;
+                const [p, q] = [along(wall, at), along(wall, at + 2)];
+                const [from, to] = ridge === "x" ? [Math.min(p[0], q[0]), Math.max(p[0], q[0])] : [Math.min(p[1], q[1]), Math.max(p[1], q[1])];
+
+                for (const u of [at + 0.5, at + 1.5]) {
+                    put("WallFrame_1m_RoofMiddle_Lower", along(wall, u), top, t, "frame");
+                    put(`WallFill_${fill}_${name}`, along(wall, u), top + KIT.sill, t, "fill");
+                    put(`Window_Opaque_${size}`, along(wall, u + (hx0 + hx1) / 2 - (ox0 + ox1) / 2), top + KIT.sill + (hy0 + hy1) / 2 - (oy0 + oy1) / 2, t, "window");
+                }
+
+                put("WallFrame_2m_RoofPeak_Lower", along(wall, at + 1), top + KIT.knee.height, t, "frame");
+                put(`WallFill_${fill}_2m_RoofPeak`, along(wall, at + 1), top + KIT.knee.height + KIT.sill, t, "fill");
+
+                dormers.push({ side: side === "front" || side === "right" ? 1 : 0, from, to });
+            }
+        }
+    }
+
+    // The roof, stopped either side of what rises from or joins its long sides, its valleys; the
+    // wing's own
+    const cuts = [
+        ...(cross ? [{ type: "cross", ...cross }] : []),
+        ...dormers.map((dormer) => ({ type: "dormer", ...dormer, lift: KIT.knee.height })),
+        ...(wing?.join === "valley" ? [{ type: "wing", side: 0, from: wingBox[0], to: wingBox[1] }] : []),
+    ];
+    const inside = [];
+
+    roofOver({ boxes, ridge, span, kind, top, slopes, trims, cuts, inside });
+
+    if (wing) {
+        const [wx0, wx1, wz0, wz1] = wingBox;
+
+        wingRoof({ box: wingBox, top, span: wing.span, join: wing.join, slopes, trims, over: wing.join === "valley" ? [wx0, wx1, wz0, wz1 + wing.span / 2] : wingBox });
+    }
+
+    // Its inside, dark: each storey's walls, floor and ceiling facing in (the wing's too), and its
+    // roof's underside (the kit's plaster is open round its windows, and the house is hollow:
+    // through one, seen from the side, the ground under it showed, or the sky through a gable's)
+    const shell = [...inside];
+
+    for (const [s, box] of [...boxes.entries(), ...(wingBox ? boxes.map((_, s) => [s, wingBox]) : [])]) {
+        const [x0, x1, z0, z1] = box;
         const [a, b, c, d] = [x0 + SHELL, x1 - SHELL, z0 + SHELL, z1 - SHELL];
         const y0 = KIT.plinth + s * KIT.storey;
         const y1 = y0 + KIT.storey;
@@ -573,12 +746,11 @@ export function kitHouse(plan) {
         );
     }
 
-    // (The roof's underside only over the walls: its slopes' corners brought in to the top storey's
-    // walls, on its slope, so it's never seen under the verges' and eaves' soffits)
-    const [wx0, wx1, wz0, wz1] = boxes.at(-1);
-
-    for (const { points, under } of slopes) {
+    // (The roof's underside only over the walls: its slopes' corners brought in to the walls under
+    // each, on its slope, so it's never seen under the verges' and eaves' soffits)
+    for (const { points, under, over = boxes.at(-1) } of slopes) {
         if (under) {
+            const [wx0, wx1, wz0, wz1] = over;
             // (Its plane, its normal from all its corners, Newell's way)
             const n = [0, 0, 0];
 
@@ -598,13 +770,20 @@ export function kitHouse(plan) {
         }
     }
 
+    // A chimney on the ridge, clear of what rises through or joins the roof
     if (plan.chimney) {
         const [rx, rz] = ridge === "x" ? [gx0 + width * random.range(0.2, 0.8), gz0 + depth / 2 + random.range(-0.6, 0.6)] : [gx0 + width / 2 + random.range(-0.6, 0.6), gz0 + depth * random.range(0.2, 0.8)];
-        // (Clear of a cross gable's roof)
-        const [cx] = cross && rx > cross.from - 0.8 && rx < cross.to + 0.8 ? [rx < (cross.from + cross.to) / 2 ? cross.from - 0.8 : cross.to + 0.8] : [rx];
+        const a = ridge === "x" ? rx : rz;
+        const [a0, a1] = ridge === "x" ? [gx0, gx0 + width] : [gz0, gz1];
+        const clear = (v) => v > a0 + 0.4 && v < a1 - 0.4 && cuts.every(({ from, to }) => v <= from - 0.8 || v >= to + 0.8);
+        const at = clear(a) ? a : cuts.flatMap(({ from, to }) => [from - 0.8, to + 0.8]).filter(clear).sort((p, q) => Math.abs(p - a) - Math.abs(q - a))[0];
 
-        extras.chimney = { x: cx, z: rz, base: top, height: top + KIT.line + KIT.tiles + KIT.pitch * span / 2 + 0.9 };
+        if (at !== undefined) {
+            extras.chimney = { x: ridge === "x" ? at : rx, z: ridge === "x" ? rz : at, base: top, height: top + KIT.line + KIT.tiles + KIT.pitch * span / 2 + 0.9 };
+        }
     }
+
+    const [ux0, ux1, uz0, uz1] = wingBox ? [Math.min(gx0, wingBox[0]), Math.max(gx0 + width, wingBox[1]), wingBox[2], gz1] : [gx0, gx0 + width, gz0, gz1];
 
     return {
         pieces,
@@ -612,29 +791,30 @@ export function kitHouse(plan) {
         trims,
         shell,
         extras,
-        box: [gx0 - KIT.out, gx0 + width + KIT.out, gz0 - KIT.out, gz1 + KIT.out],
+        box: [ux0 - KIT.out, ux1 + KIT.out, uz0 - KIT.out, uz1 + KIT.out],
         height: top + KIT.line + KIT.tiles + KIT.pitch * span / 2,
         look: { fill, roof: ROOFS[plan.roof] ? plan.roof : "clay", tiles: roof.tiles, roofTint: roof.tint, plaster: plan.walls, frame: plan.frame, stone: plan.stoneGround, glazing: plan.glazing, tint: plan.tint },
         ridge,
         span,
+        long,
         kind,
         cross,
+        dormers,
+        wing: wing && { join: wing.join, span: wing.span, box: wingBox },
+        main: [gx0, gx0 + width, gz0, gz1],
         storeys: n,
         jetty,
     };
 }
 
-// The roof: its slopes laid with tiles on the gables' line (their undersides on it), the eaves'
-// course kicked out past the walls, the soffits and edges under and round them, and its ridge
-// tiles. Faces are given as their corners alone: the drawer turns each to face up (a slope), down (a
-// soffit) or away from the house (an edge).
-function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }) {
-    // The roof's own frame: `a` along the ridge (the gables' walls at a0 and a1), `c` across it
-    // (the eaves' walls at c0 and c1); `s` how far in from an eave
-    const [x0, x1, z0, z1] = boxes.at(-1);
+// A roof's own frame and what lays its faces: `a` along its ridge (its ends at a0 and a1), `c`
+// across it (its eaves' walls' inner faces at c0 and c1), its walls' top `top`. Faces are given
+// as their corners alone: the drawer turns each to face up (a slope), down (a soffit), or `out`.
+// Its main slopes' dark undersides are kept over `over` (kitHouse's shell).
+function roofFrame({ ridge, box, top, slopes, trims, over = box }) {
+    const [x0, x1, z0, z1] = box;
     const [a0, a1, c0, c1] = ridge === "x" ? [x0, x1, z0, z1] : [z0, z1, x0, x1];
     const point = (a, c, y) => (ridge === "x" ? [a, y, c] : [c, y, a]);
-    const half = span / 2;
     const { verge, lip, kick, tiles, line, pitch } = KIT;
     const underAt = (s) => top + line + pitch * s;
     const tileAt = (s) => underAt(s) + tiles;
@@ -644,26 +824,38 @@ function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }
     const vOf = (s) => ((s - KIT.phase) * SLOPE) / KIT.repeat[1];
     const uOf = (u) => u / KIT.repeat[0];
 
-    // Points on a long side's slope (`side` 0 rises from c0, 1 from c1), given (a, s)
+    // Points on a long side's slope (`side` 0 rises from c0, 1 from c1), given (a, s): s how far in
+    // from its eaves' wall; and the way out of the house from that side, and from an end
     const cOf = (side, s) => (side ? c1 - s : c0 + s);
+    const aOf = (end, s) => (end ? a1 - s : a0 + s);
+    const outOf = (side) => point(0, side ? 1 : -1, 0);
+    const endOut = (end) => point(end ? 1 : -1, 0, 0);
+    // (Where a slope rises from and which way: its eaves' line, at its tiles' height there)
+    const riseOf = (side, base) => ({ at: point(a0, cOf(side, 0), 0).filter((_, k) => k !== 1), way: point(0, side ? -1 : 1, 0).filter((_, k) => k !== 1), base });
     // (A corner the same as the one before it left out: a cross gable as wide as the house's own
     // makes the main slope over it a triangle)
-    const distinct = (corners) => corners.filter(([a, s], k) => k === 0 || Math.abs(a - corners[k - 1][0]) > EPSILON || Math.abs(s - corners[k - 1][1]) > EPSILON);
-    const tiled = (side, corners, height = tileAt) => slopes.push({ points: distinct(corners).map(([a, s]) => point(a, cOf(side, s), height(s))), uvs: distinct(corners).map(([a, s]) => [uOf(side ? -a : a), vOf(s)]), under: height === tileAt });
-    // ...and on an end's (`end` 0 rises from a0, 1 from a1), given (c, s), from `rise` at its wall
-    const aOf = (end, s) => (end ? a1 - s : a0 + s);
-    const tiledEnd = (end, corners, rise) => slopes.push({ points: corners.map(([c, s]) => point(aOf(end, s), c, rise + pitch * s)), uvs: corners.map(([c, s]) => [uOf(end ? c : -c), vOf(s + (rise - tileAt(0)) / pitch)]), under: true });
-    const trim = (look, points) => trims.push({ look, points });
+    const distinct = (corners) => corners.filter((corner, k) => k === 0 || corner.some((v, i) => Math.abs(v - corners[k - 1][i]) > EPSILON)).filter((corner, k, all) => k < all.length - 1 || all.length < 2 || corner.some((v, i) => Math.abs(v - all[0][i]) > EPSILON));
+    const tiled = (side, corners, height = tileAt) => {
+        const kept = distinct(corners);
+        const main = height === tileAt;
 
-    // An eave's course along a long side from a = from to a = to (out past its corners by `mitre`)
-    const eaves = (side, from, to, mitre = 0) => {
-        const out = [[from - mitre, reach], [to + mitre, reach], [to, 0], [from, 0]];
+        slopes.push({ points: kept.map(([a, s]) => point(a, cOf(side, s), height(s))), uvs: kept.map(([a, s]) => [uOf(side ? -a : a), vOf(s)]), under: main, ...(main ? { over, rise: riseOf(side, tileAt(0)) } : {}) });
+    };
+    // ...and on an end's (`end` 0 rises from a0, 1 from a1), given (c, s), from `rise` at its wall
+    const tiledEnd = (end, corners, rise) => slopes.push({ points: corners.map(([c, s]) => point(aOf(end, s), c, rise + pitch * s)), uvs: corners.map(([c, s]) => [uOf(end ? c : -c), vOf(s + (rise - tileAt(0)) / pitch)]), under: true, over });
+    const trim = (look, points, out = null) => trims.push({ look, points, ...(out ? { out } : {}) });
+
+    // An eave's course along a long side from a = from to a = to: mitred at an end out past the
+    // corner (a hip's, `mitre` kick.reach) or in to a valley (a wing's, -kick.reach)
+    const eaves = (side, from, to, mitreFrom = 0, mitreTo = 0) => {
+        const out = [[from - mitreFrom, reach], [to + mitreTo, reach], [to, 0], [from, 0]];
+        const [lipFrom, lipTo] = [Math.sign(mitreFrom) * lip, Math.sign(mitreTo) * lip];
 
         tiled(side, out, (s) => kickTop(s));
         trim("soffit", out.map(([a, s]) => point(a, cOf(side, s), kickUnder(s))));
-        trim("edge", [point(from - mitre, cOf(side, reach), kickUnder(reach)), point(to + mitre, cOf(side, reach), kickUnder(reach)), point(to + mitre, cOf(side, reach), kickTop(reach)), point(from - mitre, cOf(side, reach), kickTop(reach))]);
+        trim("edge", [point(from - mitreFrom, cOf(side, reach), kickUnder(reach)), point(to + mitreTo, cOf(side, reach), kickUnder(reach)), point(to + mitreTo, cOf(side, reach), kickTop(reach)), point(from - mitreFrom, cOf(side, reach), kickTop(reach))], outOf(side));
         // (the main tiles' lip standing over it)
-        slopes.push({ points: [point(from - (mitre ? lip : 0), cOf(side, -lip), kickTop(-lip)), point(to + (mitre ? lip : 0), cOf(side, -lip), kickTop(-lip)), point(to + (mitre ? lip : 0), cOf(side, -lip), tileAt(-lip)), point(from - (mitre ? lip : 0), cOf(side, -lip), tileAt(-lip))], uvs: [[0, 0], [uOf(to - from), 0], [uOf(to - from), 0.12], [0, 0.12]] });
+        slopes.push({ points: [point(from - lipFrom, cOf(side, -lip), kickTop(-lip)), point(to + lipTo, cOf(side, -lip), kickTop(-lip)), point(to + lipTo, cOf(side, -lip), tileAt(-lip)), point(from - lipFrom, cOf(side, -lip), tileAt(-lip))], uvs: [[0, 0], [uOf(to - from), 0], [uOf(to - from), 0.12], [0, 0.12]], out: outOf(side) });
     };
 
     // ...and an end's (a hip's, or a half-hip's over its gable's first row), its wall's top at
@@ -676,8 +868,8 @@ function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }
 
         slopes.push({ points: out.map(([c, s]) => point(aOf(end, s), c, kickOf(s))), uvs: out.map(([c, s]) => [uOf(c), vOf(s)]) });
         trim("soffit", out.map(([c, s]) => point(aOf(end, s), c, underOf(s))));
-        trim("edge", [point(aOf(end, reach), from - kick.reach, underOf(reach)), point(aOf(end, reach), to + kick.reach, underOf(reach)), point(aOf(end, reach), to + kick.reach, kickOf(reach)), point(aOf(end, reach), from - kick.reach, kickOf(reach))]);
-        slopes.push({ points: [point(aOf(end, -lip), from - lip, kickOf(-lip)), point(aOf(end, -lip), to + lip, kickOf(-lip)), point(aOf(end, -lip), to + lip, tileOf(-lip)), point(aOf(end, -lip), from - lip, tileOf(-lip))], uvs: [[0, 0], [uOf(to - from), 0], [uOf(to - from), 0.12], [0, 0.12]] });
+        trim("edge", [point(aOf(end, reach), from - kick.reach, underOf(reach)), point(aOf(end, reach), to + kick.reach, underOf(reach)), point(aOf(end, reach), to + kick.reach, kickOf(reach)), point(aOf(end, reach), from - kick.reach, kickOf(reach))], endOut(end));
+        slopes.push({ points: [point(aOf(end, -lip), from - lip, kickOf(-lip)), point(aOf(end, -lip), to + lip, kickOf(-lip)), point(aOf(end, -lip), to + lip, tileOf(-lip)), point(aOf(end, -lip), from - lip, tileOf(-lip))], uvs: [[0, 0], [uOf(to - from), 0], [uOf(to - from), 0.12], [0, 0.12]], out: endOut(end) });
     };
 
     // A verge out past a gable (`end` 0 at a0, 1 at a1), up to s = `upTo` on each side: the
@@ -688,66 +880,118 @@ function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }
 
         for (const side of [0, 1]) {
             trim("soffit", [point(at, cOf(side, -lip), underAt(-lip)), point(at, cOf(side, upTo), underAt(upTo)), point(outer, cOf(side, upTo), underAt(upTo)), point(outer, cOf(side, -lip), underAt(-lip))]);
-            trim("edge", [point(outer, cOf(side, -lip), underAt(-lip)), point(outer, cOf(side, upTo), underAt(upTo)), point(outer, cOf(side, upTo), tileAt(upTo)), point(outer, cOf(side, -lip), tileAt(-lip))]);
+            trim("edge", [point(outer, cOf(side, -lip), underAt(-lip)), point(outer, cOf(side, upTo), underAt(upTo)), point(outer, cOf(side, upTo), tileAt(upTo)), point(outer, cOf(side, -lip), tileAt(-lip))], endOut(end));
         }
     };
 
-    // A ridge's cap along a level line (from [x, z] to [x, z]) where two slopes' tiles meet at
-    // `apex` high: its sides from a little up off each slope to over their meeting, laid with the
-    // tiles' rows along it (the kit's own ridge pieces are hundreds of triangles a metre), and its
-    // ends closed
-    const capAlong = ([x0, z0], [x1, z1], apex) => {
-        const { width, lift, rise, across } = RIDGE;
-        const length = Math.hypot(x1 - x0, z1 - z0);
-        const [dx, dz] = [(x1 - x0) / length, (z1 - z0) / length];
-        const foot = apex - pitch * width + lift;
-        const high = apex + rise;
-        const v = length / KIT.repeat[1];
-
-        for (const way of [1, -1]) {
-            const [px, pz] = [-dz * width * way, dx * width * way];
-
-            slopes.push({ points: [[x0 + px, foot, z0 + pz], [x1 + px, foot, z1 + pz], [x1, high, z1], [x0, high, z0]], uvs: [[0, 0], [0, v], [across, v], [across, 0]] });
-        }
-
-        for (const [[ex, ez], way] of [[[x0, z0], -1], [[x1, z1], 1]]) {
-            const [px, pz] = [-dz * width, dx * width];
-
-            slopes.push({ points: [[ex + px, foot, ez + pz], [ex - px, foot, ez - pz], [ex, high, ez]], uvs: [[0, 0], [2 * across, 0], [across, 0.04]], out: [dx * way, 0, dz * way] });
-        }
-    };
     const flat = (a, c) => {
         const [x, , z] = point(a, c, 0);
 
         return [x, z];
     };
-    const ridgeTiles = (from, to) => capAlong(flat(from, (c0 + c1) / 2), flat(to, (c0 + c1) / 2), tileAt(half));
 
-    if (kind === "hip") {
-        // Four slopes from the eaves all round, the long ones to the ridge, the ends to its ends
-        // (or all four to a point); the eaves' course round all four, mitred at the corners
-        const rise = half;
-        const ridgeFrom = a0 + rise;
-        const ridgeTo = a1 - rise;
+    return { slopes, trims, over, a0, a1, c0, c1, point, underAt, tileAt, kickTop, kickUnder, reach, vOf, uOf, cOf, aOf, outOf, endOut, distinct, tiled, tiledEnd, trim, eaves, endEaves, verges, flat };
+}
 
-        for (const side of [0, 1]) {
-            tiled(side, [[a0 - lip, -lip], [a1 + lip, -lip], [ridgeTo, rise], [ridgeFrom, rise]]);
-            eaves(side, a0, a1, kick.reach);
+// A ridge's cap along a level line (from [x, z] to [x, z]) where two slopes' tiles meet at `apex`
+// high: its sides from a little up off each slope to over their meeting, laid with the tiles' rows
+// along it (the kit's own ridge pieces are hundreds of triangles a metre), and its ends closed
+function capAlong(slopes, [x0, z0], [x1, z1], apex) {
+    const { width, lift, rise, across } = RIDGE;
+    const length = Math.hypot(x1 - x0, z1 - z0);
+    const [dx, dz] = [(x1 - x0) / length, (z1 - z0) / length];
+    const foot = apex - KIT.pitch * width + lift;
+    const high = apex + rise;
+    const v = length / KIT.repeat[1];
+
+    for (const way of [1, -1]) {
+        const [px, pz] = [-dz * width * way, dx * width * way];
+
+        slopes.push({ points: [[x0 + px, foot, z0 + pz], [x1 + px, foot, z1 + pz], [x1, high, z1], [x0, high, z0]], uvs: [[0, 0], [0, v], [across, v], [across, 0]] });
+    }
+
+    for (const [[ex, ez], way] of [[[x0, z0], -1], [[x1, z1], 1]]) {
+        const [px, pz] = [-dz * width, dx * width];
+
+        slopes.push({ points: [[ex + px, foot, ez + pz], [ex - px, foot, ez - pz], [ex, high, ez]], uvs: [[0, 0], [2 * across, 0], [across, 0.04]], out: [dx * way, 0, dz * way] });
+    }
+}
+
+// The roof: its slopes laid with tiles on the gables' line (their undersides on it), the eaves'
+// course kicked out past the walls, the soffits and edges under and round them, and its ridge
+// tiles; and where something rises from or joins a long side (`cuts`: a cross gable, a dormer, a
+// wing), that side's slope and eaves stopped either side of it, the slope going on over it above
+// the valleys where the two roofs meet.
+function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cuts = [], inside = [] }) {
+    const frame = roofFrame({ ridge, box: boxes.at(-1), top, slopes, trims });
+    const { a0, a1, c0, c1, tileAt, tiled, tiledEnd, eaves, endEaves, verges, trim, point, cOf, aOf, flat, kickUnder, kickTop, reach } = frame;
+    const half = span / 2;
+    const { verge, lip, kick, line, pitch } = KIT;
+    const ridgeTiles = (from, to) => capAlong(slopes, flat(from, (c0 + c1) / 2), flat(to, (c0 + c1) / 2), tileAt(half));
+
+    // Each long side's slope, from its left end's line (at a0) to its right end's (at a1), each
+    // from its eaves (s = -lip) up to the ridge; its eaves from end to end, mitred as its ends are
+    const ends = {
+        gable: { left: [[a0 - verge, -lip], [a0 - verge, half]], right: [[a1 + verge, -lip], [a1 + verge, half]], eaves: [a0 - verge, a1 + verge, 0] },
+        hip: { left: [[a0 - lip, -lip], [a0 + half, half]], right: [[a1 + lip, -lip], [a1 - half, half]], eaves: [a0, a1, kick.reach] },
+    };
+
+    if (kind === "half-hip") {
+        const cut = KIT.storey / pitch;
+
+        ends["half-hip"] = { left: [[a0 - verge, -lip], [a0 - verge, cut - verge], [a0 + (half - cut), half]], right: [[a1 + verge, -lip], [a1 + verge, cut - verge], [a1 - (half - cut), half]], eaves: [a0 - verge, a1 + verge, 0] };
+    }
+
+    const { left, right, eaves: [eaveFrom, eaveTo, mitre] } = ends[kind];
+
+    for (const side of [0, 1]) {
+        const here = cuts.filter((cut) => cut.side === side).sort((p, q) => p.from - q.from);
+        // (The line a slope's part ends on beside a cut, from its eaves up: straight up past a
+        // gable or dormer rising from the wall; along the valley where a wing's roof meets it)
+        const before = (cut) => (cut.type === "wing" ? [[cut.from - lip, -lip], [(cut.from + cut.to) / 2, (cut.to - cut.from) / 2], [(cut.from + cut.to) / 2, half]] : [[cut.from, -lip], [cut.from, half]]);
+        const after = (cut) => (cut.type === "wing" ? [[cut.to + lip, -lip], [(cut.from + cut.to) / 2, (cut.to - cut.from) / 2], [(cut.from + cut.to) / 2, half]] : [[cut.to, -lip], [cut.to, half]]);
+        const lines = [left, ...here.flatMap((cut) => [before(cut), after(cut)]), right];
+
+        for (let k = 0; k < lines.length; k += 2) {
+            tiled(side, [...lines[k + 1], ...[...lines[k]].reverse()]);
         }
 
+        // Over a gable or dormer, the slope above the valleys (`lift` how much higher its eaves are)
+        for (const cut of here.filter(({ type }) => type !== "wing")) {
+            const middle = (cut.from + cut.to) / 2;
+            const rise = (cut.to - cut.from) / 2;
+            const up = (cut.lift ?? 0) / pitch;
+
+            tiled(side, [[cut.from, up], [middle, up + rise], [middle, half], [cut.from, half]]);
+            tiled(side, [[middle, up + rise], [cut.to, up], [cut.to, half], [middle, half]]);
+        }
+
+        // The eaves' course: stopped against a gable or dormer, its ends closed; mitred into a
+        // wing's valleys
+        const stops = [{ at: eaveFrom, mitre }, ...here.flatMap((cut) => [{ at: cut.from, mitre: cut.type === "wing" ? -kick.reach : 0, cap: cut.type !== "wing" ? 1 : 0 }, { at: cut.to, mitre: cut.type === "wing" ? -kick.reach : 0, cap: cut.type !== "wing" ? -1 : 0 }]), { at: eaveTo, mitre }];
+
+        for (let k = 0; k < stops.length; k += 2) {
+            const [from, to] = [stops[k], stops[k + 1]];
+
+            eaves(side, from.at, to.at, from.mitre, to.mitre);
+
+            for (const { at, cap } of [from, to].filter(({ cap }) => cap)) {
+                trims.push({ look: "edge", points: [point(at, cOf(side, 0), kickUnder(0)), point(at, cOf(side, reach), kickUnder(reach)), point(at, cOf(side, reach), kickTop(reach)), point(at, cOf(side, 0), kickTop(0))], out: point(cap, 0, 0) });
+            }
+        }
+    }
+
+    if (kind === "hip") {
+        // The ends' slopes to the ridge's ends (or all four to a point); their eaves mitred at the corners
         for (const end of [0, 1]) {
-            tiledEnd(end, [[c0 - lip, -lip], [c1 + lip, -lip], [(c0 + c1) / 2, rise]], tileAt(0));
+            tiledEnd(end, [[c0 - lip, -lip], [c1 + lip, -lip], [(c0 + c1) / 2, half]], tileAt(0));
             endEaves(end, top, c0, c1);
         }
 
-        if (ridgeTo > ridgeFrom + EPSILON) {
-            ridgeTiles(ridgeFrom, ridgeTo);
+        if (a1 - half > a0 + half + EPSILON) {
+            ridgeTiles(a0 + half, a1 - half);
         }
-
-        return;
-    }
-
-    if (kind === "half-hip") {
+    } else if (kind === "half-hip") {
         // Gabled up to the top of the gables' first row, cut back above it: an end slope from
         // that row's top plate (2.7 m over the walls' top), its underside as high over the plate as
         // the long slopes' are over the walls, so they meet where they're that high (s = 2.7 / 1.2
@@ -755,14 +999,7 @@ function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }
         // far as the verges, and a board across the gable's face from the plate up to the roof
         const wall = top + KIT.storey;
         const cut = KIT.storey / pitch;
-        const from = a0 + (half - cut);
-        const to = a1 - (half - cut);
         const endUnder = (s) => wall + line + pitch * s;
-
-        for (const side of [0, 1]) {
-            tiled(side, [[a0 - verge, -lip], [a1 + verge, -lip], [a1 + verge, cut - verge], [to, half], [from, half], [a0 - verge, cut - verge]]);
-            eaves(side, a0 - verge, a1 + verge);
-        }
 
         for (const end of [0, 1]) {
             const reachOut = -verge;
@@ -770,77 +1007,112 @@ function roofOver({ boxes, ridge, span, kind, top, slopes, trims, cross = null }
             const plate = (KIT.storey - line) / pitch;
             const face = aOf(end, -0.22);
 
-            tiledEnd(end, [[e0, reachOut], [e1, reachOut], [(c0 + c1) / 2, half - cut]], wall + line + tiles);
+            tiledEnd(end, [[e0, reachOut], [e1, reachOut], [(c0 + c1) / 2, half - cut]], wall + line + KIT.tiles);
             verges(end, cut - verge);
             trim("soffit", [point(face, cOf(0, cut - 0.22), endUnder(-0.22)), point(face, cOf(1, cut - 0.22), endUnder(-0.22)), point(aOf(end, reachOut), e1, endUnder(reachOut)), point(aOf(end, reachOut), e0, endUnder(reachOut))]);
-            trim("edge", [point(aOf(end, reachOut), e0, endUnder(reachOut)), point(aOf(end, reachOut), e1, endUnder(reachOut)), point(aOf(end, reachOut), e1, endUnder(reachOut) + tiles), point(aOf(end, reachOut), e0, endUnder(reachOut) + tiles)]);
+            trim("edge", [point(aOf(end, reachOut), e0, endUnder(reachOut)), point(aOf(end, reachOut), e1, endUnder(reachOut)), point(aOf(end, reachOut), e1, endUnder(reachOut) + KIT.tiles), point(aOf(end, reachOut), e0, endUnder(reachOut) + KIT.tiles)], frame.endOut(end));
             // (The board: from the plate, where the long slopes' rafters leave it, up to the roofs'
             // undersides over the gable's face)
-            trim("edge", [point(face, cOf(0, plate), wall), point(face, cOf(1, plate), wall), point(face, cOf(1, cut - 0.22), endUnder(-0.22)), point(face, cOf(0, cut - 0.22), endUnder(-0.22))]);
+            trim("edge", [point(face, cOf(0, plate), wall), point(face, cOf(1, plate), wall), point(face, cOf(1, cut - 0.22), endUnder(-0.22)), point(face, cOf(0, cut - 0.22), endUnder(-0.22))], frame.endOut(end));
         }
 
-        ridgeTiles(from, to);
-
-        return;
+        ridgeTiles(a0 + (half - cut), a1 - (half - cut));
+    } else {
+        verges(0, half);
+        verges(1, half);
+        ridgeTiles(a0 - verge, a1 + verge);
     }
 
-    // A gable roof: two slopes from the eaves to the ridge, out over the verges
-    for (const side of [0, 1]) {
-        if (cross?.side === side) {
+    for (const cut of cuts.filter(({ type }) => type !== "wing")) {
+        gableRoof(frame, cut, inside);
+    }
+}
+
+// The roof of a gable rising from a long side's wall (kitHouse's cross gable, or a dormer `lift`
+// metres over the walls' top on its knee), from a = from to a = to: its two slopes from its walls'
+// line out over its verge, back to the valleys where they meet the main slope, as high as it is
+// there; its verge's soffits and edge, and its ridge's cap. A dormer's own eaves along its sides,
+// and its cheeks hung with tiles from its knee's face back to the main slope.
+function gableRoof(frame, { side, from, to, lift = 0 }, inside) {
+    const { point, cOf, tileAt, underAt, kickTop, kickUnder, reach, vOf, uOf, flat, slopes, trims } = frame;
+    const { verge, lip, pitch, tiles, line } = KIT;
+    const middle = (from + to) / 2;
+    const rise = (to - from) / 2;
+    const up = lift / pitch;
+    const out = (s) => cOf(side, s);
+    const front = out(-verge);
+    const [tile, under] = [(t) => tileAt(t) + lift, (t) => underAt(t) + lift];
+
+    for (const [edge, way] of [[from, 1], [to, -1]]) {
+        const at = (t) => edge + way * t;
+        // (Its corners: [a, c, t], t how far in from its own eaves' line)
+        const corners = [[at(-lip), front, -lip], [middle, front, rise], [middle, out(rise + up), rise], [edge, out(up), 0], [at(-lip), out(up - lip), -lip]];
+
+        slopes.push({ points: corners.map(([a, c, t]) => point(a, c, tile(t))), uvs: corners.map(([, c, t]) => [uOf(c), vOf(t)]), under: true, over: frame.over, rise: { at: flat(edge, out(0)), way: flat(way, 0).map((v, k) => v - flat(0, 0)[k]), base: tile(0) } });
+        // (Its verge: the rafters' underside out to it, and its edge)
+        trims.push({ look: "soffit", points: [point(at(-lip), out(0), under(-lip)), point(middle, out(0), under(rise)), point(middle, front, under(rise)), point(at(-lip), front, under(-lip))] });
+        trims.push({ look: "edge", points: [point(at(-lip), front, under(-lip)), point(middle, front, under(rise)), point(middle, front, tile(rise)), point(at(-lip), front, tile(-lip))], out: frame.outOf(side) });
+
+        if (!lift) {
             continue;
         }
 
-        tiled(side, [[a0 - verge, -lip], [a1 + verge, -lip], [a1 + verge, half], [a0 - verge, half]]);
-        eaves(side, a0 - verge, a1 + verge);
+        // A dormer's eaves' course along its side, out from its knee to `reach`, from its verge
+        // back to where each of its faces meets the main slope (s where the main tiles are as high)
+        const meets = (height) => (height - tileAt(0)) / pitch;
+        const kickOf = (t) => kickTop(t) + lift;
+        const underOf = (t) => kickUnder(t) + lift;
+        const course = [[at(reach), front, kickOf(reach)], [at(0), front, kickOf(0)], [at(0), out(meets(kickOf(0))), kickOf(0)], [at(reach), out(meets(kickOf(reach))), kickOf(reach)]];
+
+        slopes.push({ points: course.map(([a, c, y]) => point(a, c, y)), uvs: course.map(([a, c]) => [uOf(c), vOf(way * (a - edge))]) });
+        trims.push({ look: "soffit", points: [point(at(reach), front, underOf(reach)), point(at(0), front, underOf(0)), point(at(0), out(meets(underOf(0))), underOf(0)), point(at(reach), out(meets(underOf(reach))), underOf(reach))] });
+        trims.push({ look: "edge", points: [point(at(reach), front, underOf(reach)), point(at(reach), front, kickOf(reach)), point(at(reach), out(meets(kickOf(reach))), kickOf(reach)), point(at(reach), out(meets(underOf(reach))), underOf(reach))], out: point(-way, 0, 0) });
+        // (its own tiles' lip standing over it)
+        slopes.push({ points: [point(at(-lip), front, kickOf(-lip)), point(at(-lip), front, tile(-lip)), point(at(-lip), out(up - lip), tile(-lip)), point(at(-lip), out(meets(kickOf(-lip))), kickOf(-lip))], uvs: [[0, 0], [0, 0.12], [uOf(up + verge), 0.12], [uOf(up + verge), 0]], out: point(-way, 0, 0) });
+
+        // Its cheek, hung with tiles: from the knee's face back to the main slope, from a little
+        // into the main roof (its eaves' course before the main tiles' lip, then the tiles) up to
+        // under its own eaves
+        const cheek = at(-CHEEK);
+        const topOf = underOf(-CHEEK);
+        const sunk = (y) => y - CHEEK_SUNK;
+        const hung = (points) => slopes.push({ points: points.map(([c, y]) => point(cheek, c, y)), uvs: points.map(([c, y]) => [uOf(c), y / KIT.repeat[1]]), out: point(-way, 0, 0) });
+        const face = -KIT.knee.depth;
+
+        hung([[out(face), sunk(kickTop(face))], [out(-lip), sunk(kickTop(-lip))], [out(-lip), topOf], [out(face), topOf]]);
+        hung([[out(-lip), sunk(tileAt(-lip))], [out(meets(topOf + CHEEK_SUNK)), topOf], [out(-lip), topOf]]);
+    }
+
+    capAlong(slopes, flat(middle, front), flat(middle, out(rise + up)), tile(rise));
+
+    // (A dormer's inside, dark behind its knee: its windows' openings show nothing through them)
+    if (lift) {
+        inside.push({ points: [point(from + SHELL, out(SHELL), tileAt(0) - tiles - line), point(to - SHELL, out(SHELL), tileAt(0) - tiles - line), point(to - SHELL, out(SHELL), tileAt(0) - tiles - line + lift + KIT.line), point(from + SHELL, out(SHELL), tileAt(0) - tiles - line + lift + KIT.line)], out: frame.outOf(side) });
+    }
+}
+
+// A wing's roof, its ridge across the main one's, from its gable at a0 to where it joins the main
+// roof at a1: `join` "valley", its slopes run on into the main slope's, meeting it in valleys
+// (the main roof's `cuts` leave room for them); "wall", they stop against the main gable's face.
+function wingRoof({ box, top, span, join, slopes, trims, over }) {
+    const frame = roofFrame({ ridge: "z", box, top, slopes, trims, over });
+    const { a0, a1, c0, c1, tiled, eaves, verges, flat, tileAt } = frame;
+    const { verge, lip, kick } = KIT;
+    const half = span / 2;
+    const face = a1 - WING.face;
+
+    for (const side of [0, 1]) {
+        if (join === "valley") {
+            tiled(side, [[a0 - verge, -lip], [a1 - lip, -lip], [a1 + half, half], [a0 - verge, half]]);
+            eaves(side, a0 - verge, a1, 0, -kick.reach);
+        } else {
+            tiled(side, [[a0 - verge, -lip], [a1, -lip], [a1, half], [a0 - verge, half]]);
+            eaves(side, a0 - verge, face);
+        }
     }
 
     verges(0, half);
-    verges(1, half);
-    ridgeTiles(a0 - verge, a1 + verge);
-
-    if (cross) {
-        crossRoof(cross);
-    }
-
-    // A gable rising from the eaves' wall (`side`), from a = from to a = to (kitHouse's `cross`):
-    // the main slope either side of it, and over it from the valleys where its own roof meets it;
-    // its roof's two slopes from its walls' line out over its verge, back to the valleys, where
-    // they're as high as the main slope (as far in from its eaves as that is from its own); the
-    // main eaves' course stopped either side of it, its ends closed; its verge's soffits and edge,
-    // and its ridge's cap
-    function crossRoof({ side, from, to }) {
-        const middle = (from + to) / 2;
-        const rise = (to - from) / 2;
-        const out = (s) => cOf(side, s);
-
-        tiled(side, [[a0 - verge, -lip], [from, -lip], [from, half], [a0 - verge, half]]);
-        tiled(side, [[to, -lip], [a1 + verge, -lip], [a1 + verge, half], [to, half]]);
-        tiled(side, [[from, 0], [middle, rise], [middle, half], [from, half]]);
-        tiled(side, [[middle, rise], [to, 0], [to, half], [middle, half]]);
-        eaves(side, a0 - verge, from);
-        eaves(side, to, a1 + verge);
-
-        // (The eaves' course's ends, against its walls)
-        for (const [a, way] of [[from, 1], [to, -1]]) {
-            trims.push({ look: "edge", points: [point(a, out(0), kickUnder(0)), point(a, out(reach), kickUnder(reach)), point(a, out(reach), kickTop(reach)), point(a, out(0), kickTop(0))], out: point(way, 0, 0) });
-        }
-
-        // Its slopes, each rising from its own eaves' line (`edge`, `way` in): t how far in
-        const front = out(-verge);
-        const valley = (t) => out(t);
-
-        for (const [edge, way] of [[from, 1], [to, -1]]) {
-            const at = (t) => edge + way * t;
-            const corners = [[at(-lip), front, -lip], [middle, front, rise], [middle, valley(rise), rise], [edge, valley(0), 0], [at(-lip), out(-lip), -lip]];
-
-            slopes.push({ points: corners.map(([a, c, t]) => point(a, c, tileAt(t))), uvs: corners.map(([, c, t]) => [uOf(c), vOf(t)]), under: true });
-            // (Its verge: the rafters' underside out to it, and its edge)
-            trims.push({ look: "soffit", points: [point(at(-lip), out(0), underAt(-lip)), point(middle, out(0), underAt(rise)), point(middle, front, underAt(rise)), point(at(-lip), front, underAt(-lip))] });
-            trims.push({ look: "edge", points: [point(at(-lip), front, underAt(-lip)), point(middle, front, underAt(rise)), point(middle, front, tileAt(rise)), point(at(-lip), front, tileAt(-lip))] });
-        }
-
-        capAlong(flat(middle, front), flat(middle, valley(rise)), tileAt(rise));
-    }
+    capAlong(slopes, flat(a0 - verge, (c0 + c1) / 2), flat(join === "valley" ? a1 + half : a1 - RIDGE.width, (c0 + c1) / 2), tileAt(half));
 }
 
 /**
