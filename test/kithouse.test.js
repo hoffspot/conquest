@@ -161,16 +161,25 @@ describe("The house kit (world/art/kits/kithouse.js)", () => {
         assert.ok(count > 100);
     });
 
-    it("lays the roof's main slopes on the line its gables rise along: 1.2 m a metre, the tiles' undersides 0.518 m over the walls' top at the eaves' wall", () => {
-        for (const { plan } of houses(20)) {
+    it("lays every main slope on the line its gables rise along, 1.2 m a metre: the house's from its eaves' walls, a cross gable's and a dormer's from their own walls (a dormer's on its knee, 1.5 m up), a wing's from its own", () => {
+        let checked = 0;
+
+        for (const { plan } of houses(30)) {
             const built = kitHouse(plan);
             const top = KIT.plinth + built.storeys * KIT.storey;
+            const tiles = top + KIT.line + KIT.tiles;
+            const [x0, x1, z0, z1] = built.main;
+            // (Where each slope rises from: a line, the way it rises, and the tiles' height there)
+            const lines = [
+                ...(built.ridge === "x" ? [[[0, z0], [0, 1], tiles], [[0, z1], [0, -1], tiles]] : [[[x0, 0], [1, 0], tiles], [[x1, 0], [-1, 0], tiles]]),
+                ...[...(built.cross ? [{ ...built.cross, lift: 0 }] : []), ...built.dormers.map((dormer) => ({ ...dormer, lift: KIT.knee.height }))].flatMap(({ from, to, lift }) =>
+                    built.ridge === "x" ? [[[from, 0], [1, 0], tiles + lift], [[to, 0], [-1, 0], tiles + lift]] : [[[0, from], [0, 1], tiles + lift], [[0, to], [0, -1], tiles + lift]],
+                ),
+                ...(built.wing ? [[[built.wing.box[0], 0], [1, 0], tiles], [[built.wing.box[1], 0], [-1, 0], tiles]] : []),
+            ];
 
-            for (const { points, under } of built.slopes.filter(({ under }) => under)) {
-                assert.ok(under);
-
-                // (A face's slope from its corners, its normal Newell's way: its rise over its run,
-                // along its steepest way)
+            for (const { points, rise } of built.slopes.filter(({ under, rise }) => under && rise)) {
+                // (A face's slope from its corners, its normal Newell's way: its rise over its run)
                 const n = [0, 0, 0];
 
                 for (const [k, a] of points.entries()) {
@@ -181,27 +190,111 @@ describe("The house kit (world/art/kits/kithouse.js)", () => {
                     n[2] += (a[0] - b[0]) * (a[1] + b[1]);
                 }
 
-                const pitch = Math.hypot(n[0], n[2]) / Math.abs(n[1]);
+                assert.ok(Math.abs(Math.hypot(n[0], n[2]) / Math.abs(n[1]) - KIT.pitch) < 1e-6, `${built.kind}: its pitch`);
 
-                assert.ok(Math.abs(pitch - KIT.pitch) < 1e-6, `${built.kind}: ${pitch}`);
+                // (Rising from one of the lines it should, at the tiles' height there, every corner on it)
+                const [at, way, base] = lines.find(([[lx, lz], [wx, wz], height]) => Math.abs(wx - rise.way[0]) < EPSILON && Math.abs(wz - rise.way[1]) < EPSILON && Math.abs(height - rise.base) < 1e-6 && (wx ? Math.abs(lx - rise.at[0]) < 1e-6 : Math.abs(lz - rise.at[1]) < 1e-6)) ?? [];
 
-                // (And every corner of a long side's on the line: as high over the walls' top as
-                // the line is where it is, the tiles over it; a cross gable's slopes on its own,
-                // from its own walls)
-                if (built.kind === "gable") {
-                    const alongRidge = built.ridge === "x" ? Math.abs(n[0]) : Math.abs(n[2]);
-                    const acrossRidge = built.ridge === "x" ? Math.abs(n[2]) : Math.abs(n[0]);
+                assert.ok(at, `${built.kind} ${built.ridge}: a slope rising from ${rise.at} ${rise.way} at ${rise.base}, none of its walls'`);
 
-                    for (const [x, y, z] of points) {
-                        const [a, across] = built.ridge === "x" ? [x, z] : [z, x];
-                        const [c0, c1] = built.ridge === "x" ? [built.box[2] + KIT.out, built.box[3] - KIT.out] : [built.box[0] + KIT.out, built.box[1] - KIT.out];
-                        const s = alongRidge > acrossRidge ? Math.min(a - built.cross.from, built.cross.to - a) : Math.min(across - c0, c1 - across);
+                for (const [x, y, z] of points) {
+                    const s = (x - at[0]) * way[0] + (z - at[1]) * way[1];
 
-                        assert.ok(Math.abs(y - (top + KIT.line + KIT.tiles + KIT.pitch * s)) < 1e-6, `${y} at ${s}`);
-                    }
+                    assert.ok(Math.abs(y - (base + KIT.pitch * s)) < 1e-6, `${y} at ${s}`);
                 }
+
+                checked++;
             }
         }
+
+        assert.ok(checked > 500, `${checked}`);
+    });
+
+    it("builds dormers on a gabled or half-hipped roof's seen sides, each over a 2 m module of its wall, clear of the wall's ends and of each other, its knee and gable of the kit's pieces, its valleys well under the ridge", () => {
+        let count = 0;
+
+        for (const { plan } of houses(60)) {
+            const built = kitHouse(plan);
+            const top = KIT.plinth + built.storeys * KIT.storey;
+            const [x0, x1, z0, z1] = built.main;
+            const [a0, a1] = built.ridge === "x" ? [x0, x1] : [z0, z1];
+
+            if (!built.dormers.length) {
+                continue;
+            }
+
+            assert.ok(plan.dormers && ["gable", "half-hip"].includes(built.kind) && built.span >= 5);
+            assert.ok(KIT.knee.height / KIT.pitch + 1 <= built.span / 2 - 0.25 + EPSILON, "its valleys under the ridge");
+
+            for (const [k, { side, from, to }] of built.dormers.entries()) {
+                count++;
+                assert.ok(Math.abs(to - from - 2) < EPSILON);
+                assert.ok(from - a0 >= 2 - EPSILON && a1 - to >= 2 - EPSILON, `${from}..${to} in ${a0}..${a1}`);
+                assert.ok(built.ridge === "z" || side === 1, "a house across the street's at its front");
+                assert.ok(!(built.cross && side === built.cross.side));
+
+                for (const other of built.dormers.slice(k + 1).filter((one) => one.side === side)) {
+                    assert.ok(other.from - to >= 1.4 - EPSILON || from - other.to >= 1.4 - EPSILON, "apart");
+                }
+
+                // (Its knee's two frames and its gable, on its wall's line)
+                const wall = built.ridge === "x" ? z1 : side ? x1 : x0;
+                const onIt = ({ at: [x, , z] }) => Math.abs((built.ridge === "x" ? z : x) - wall) < EPSILON && (built.ridge === "x" ? x : z) > from && (built.ridge === "x" ? x : z) < to;
+                const mine = built.pieces.filter(onIt);
+
+                assert.equal(mine.filter(({ piece, at }) => piece === "WallFrame_1m_RoofMiddle_Lower" && Math.abs(at[1] - top) < EPSILON).length, 2);
+                assert.equal(mine.filter(({ piece }) => /^WallFill_(Stone|Brick)_1m_Half_Window_/.test(piece)).length, 2);
+                assert.equal(mine.filter(({ piece, at }) => piece === "WallFrame_2m_RoofPeak_Lower" && Math.abs(at[1] - top - KIT.knee.height) < EPSILON).length, 1);
+            }
+        }
+
+        assert.ok(count > 40, `${count} dormers`);
+    });
+
+    it("builds a wing behind some street houses: across a house's ridge, its roof meeting the back slope in valleys; behind a gable-fronted one, a range a metre in either side against its back gable; the kit's inner corners where they meet, every storey", () => {
+        const kinds = {};
+
+        for (const { plan, h } of houses(80)) {
+            const built = kitHouse(plan);
+
+            if (!built.wing) {
+                continue;
+            }
+
+            const { join, span, box: [wx0, wx1, wz0, wz1] } = built.wing;
+            const [x0, x1, z0] = built.main;
+            const top = KIT.plinth + built.storeys * KIT.storey;
+
+            kinds[`${built.ridge} ${join}`] = (kinds[`${built.ridge} ${join}`] ?? 0) + 1;
+            assert.ok(!plan.back);
+            assert.ok(Math.abs(wz1 - z0) < EPSILON, "behind the house's back wall");
+            assert.ok(wz1 - wz0 >= 2.2 - EPSILON && wz0 - KIT.out >= -EPSILON && wz0 - KIT.out <= h * 4, "deep enough, inside its lot");
+            assert.ok(Math.abs(wx1 - wx0 - span) < EPSILON && [4, 5, 6].includes(span) && span <= built.span);
+
+            if (join === "valley") {
+                assert.equal(built.ridge, "x");
+                assert.ok(wx0 - x0 >= 1.2 - EPSILON && x1 - wx1 >= 1.2 - EPSILON, "set in from the house's ends");
+            } else {
+                assert.equal(built.ridge, "z");
+                assert.equal(built.kind, "gable");
+                assert.ok(Math.abs(wx0 - x0 - 1) < EPSILON && Math.abs(x1 - wx1 - 1) < EPSILON, "a metre in either side");
+                assert.equal(span, built.span - 2);
+            }
+
+            // (Its inner corners: the kit's corner piece, its beam and its foundation, every storey)
+            for (const [x, turn] of [[wx0, 2], [wx1, 1]]) {
+                const at = ({ at: [px, , pz], turn: t }) => Math.abs(px - x) < EPSILON && Math.abs(pz - z0) < EPSILON && t === turn;
+
+                assert.equal(built.pieces.filter((piece) => piece.piece === "WallFrame_CornerInner" && at(piece)).length, built.storeys);
+                assert.equal(built.pieces.filter((piece) => piece.piece === "WallFrame_Beams_01_CornerInner" && at(piece)).length, built.storeys);
+                assert.equal(built.pieces.filter((piece) => piece.piece === "Foundation_Smooth_CornerInner" && at(piece)).length, 1);
+            }
+
+            // (No wall of the house's storeys left between the wing's: it's open into the wing)
+            assert.ok(!built.pieces.some(({ piece, at: [px, py, pz] }) => /^WallFrame_(2m|1m|02m)/.test(piece) && py < top - EPSILON && Math.abs(pz - z0) < EPSILON && px > wx0 + EPSILON && px < wx1 - EPSILON));
+        }
+
+        assert.ok(kinds["x valley"] > 5 && kinds["z wall"] > 5, JSON.stringify(kinds));
     });
 
     it("raises a gable from the fronts of some of its gabled houses of two storeys or more, its middle modules', no wider than its main gables", () => {

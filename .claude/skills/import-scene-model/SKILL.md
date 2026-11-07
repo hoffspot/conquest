@@ -330,6 +330,18 @@ scene (docs/LICENSED_MODELS.md, *The house kit*). What it took, for the next mod
   inside and its soffits in the art's material cast the house's shadow.
 - **A dark inside**: a pack made for Unreal leaves its plaster open round its windows, and a
   hollow house shows the ground through them.
+- **Look for the pieces that join things before building round them.** The kit's inner corner
+  (a metre of wall either way from its post, with its own beam and footing) makes a wing meet a
+  house as cleanly as its outer corners do; the 1 m frames of a gable's lowest row (1.5 m) and
+  their half fills with windows make a dormer's knee. Measure them as the rest (sections at a few
+  heights, `pieces.py`), and rebuild the kit under a new name to add them.
+- **Roofs that meet**: two slopes of one pitch from walls of one height meet in a valley that
+  runs at 45 degrees in plan from where the walls' inner faces meet; a roof whose walls stand
+  higher (a dormer on its knee) meets the main slope that much further up it (the knee's height
+  over the pitch). Lay each roof's parts to that line, and stop the main roof's eaves and slope
+  either side of what rises from it; a dormer's own eaves end where they meet the main tiles.
+- **Check the new joins by rays as well**: in at 45 degrees to inner corners, sideways at a
+  dormer's cheeks, in at its knee, up under its eaves, and the main gable above a range's roof.
 
 ## Rules learnt the hard way
 
