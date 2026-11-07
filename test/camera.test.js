@@ -294,7 +294,7 @@ describe("the camera following the player (camera.js)", () => {
         assert.ok(Math.hypot(camera.focus.x - 7, camera.focus.z - 1) < 0.25);
     });
 
-    it("asked to, swings round behind the player, tilted as it starts, smoothly and whether it follows or not; a drag takes over from it", () => {
+    it("asked to, swings round behind the player, tilted low over their shoulder, smoothly and whether it follows or not; a drag takes over from it", () => {
         for (const follows of [false, true]) {
             const camera = new CameraFollow({ x: 0, z: 0, yaw: 0.3, pitch: 70 });
             let fastest = 0;
@@ -310,10 +310,18 @@ describe("the camera following the player (camera.js)", () => {
             }
 
             assert.ok(Math.abs(wrap(camera.yaw - Math.PI)) < 0.03, `yaw ${camera.yaw.toFixed(3)}`);
-            assert.ok(Math.abs(camera.pitch - PITCH.start) < 1, `pitch ${camera.pitch.toFixed(1)}`);
+            assert.ok(Math.abs(camera.pitch - PITCH.behind) < 1, `pitch ${camera.pitch.toFixed(1)}`);
             assert.ok(fastest <= 4.2 + 1e-6, `never snapping: ${fastest.toFixed(2)} rad/s`);
             assert.equal(camera.recentring, null);
         }
+
+        // (Already behind them, looking down steeply: still tilted all the way)
+        const above = new CameraFollow({ x: 0, z: 0, yaw: Math.PI, pitch: 60 });
+
+        above.recentre(Math.PI);
+        stand(above, { x: 0, z: 0 }, 2.5);
+        assert.ok(Math.abs(above.pitch - PITCH.behind) < 0.5, `pitch ${above.pitch.toFixed(1)}`);
+        assert.equal(above.recentring, null);
 
         // (Turned only, its tilt let be: finding the way through a tunnel, game.js #openWay)
         const along = new CameraFollow({ x: 0, z: 0, yaw: 0, pitch: 60 });

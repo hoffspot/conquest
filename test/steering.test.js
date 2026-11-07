@@ -31,7 +31,7 @@ globalThis.requestAnimationFrame = (callback) => page.frames.push(callback);
 globalThis.cancelAnimationFrame = () => {};
 performance.now = () => page.ms;
 
-const { RUN_AGAIN, Steering } = await import("../client/js/app/steering.js");
+const { RUN_AGAIN, STICK_TAP, Steering } = await import("../client/js/app/steering.js");
 
 // A frame `ms` on: what's waiting for it run
 function frame(ms = 16) {
@@ -51,6 +51,7 @@ function steered() {
     const lost = [];
     const player = { breath: 1 };
     const zone = { ...listening(), classList: { add() {}, remove() {} }, getBoundingClientRect: () => ({ x: 0, y: 0, width: 100, height: 100 }) };
+    const tapped = [];
     const steering = new Steering({
         zone,
         knob: { style: {} },
@@ -59,10 +60,14 @@ function steered() {
         stop: () => sent.push("stop"),
         breath: () => player.breath,
         lost: (each) => lost.push(each),
+        tapped: () => tapped.push(page.ms),
     });
 
-    return { steering, sent, player, zone, lost };
+    return { steering, sent, player, zone, lost, tapped };
 }
+
+// A thumb (pointer `id`) at a point on the stick (its middle at 50, 50)
+const thumbAt = (zone, type, id, [x, y]) => zone.dispatch(type, { pointerId: id, pointerType: "touch", clientX: x, clientY: y, preventDefault() {} });
 
 // A thumb (pointer `id`) down on the stick, pushed up it (`up` px: past its run, or not), or lifted
 const thumb = (zone, type, id, up = 0, kind = "touch") => zone.dispatch(type, { pointerId: id, pointerType: kind, clientX: 50, clientY: 50 - up, preventDefault() {} });
@@ -157,6 +162,50 @@ describe("steering by held input (steering.js)", () => {
         thumb(zone, "pointerup", 2, 20);
         assert.equal(sent.at(-1), "stop");
         assert.equal(steering.steering, false);
+        steering.dispose();
+    });
+
+    it("a tap on the knob (let go of quickly, not slid) asks for the camera behind the player, walking nowhere; down on it off its middle, held there till it slides; slid, held long, down on the rim or taken away, no tap", () => {
+        const { steering, sent, tapped, zone } = steered();
+
+        // (On the knob, off its middle: not pushed, and a tap)
+        thumbAt(zone, "pointerdown", 1, [65, 60]);
+        page.ms += 120;
+        thumbAt(zone, "pointerup", 1, [67, 61]);
+        assert.equal(tapped.length, 1);
+        assert.ok(!sent.includes("walk") && !sent.includes("run"), sent.join());
+
+        // (Slid from where it came down on the knob: pushed that way, and no tap)
+        thumbAt(zone, "pointerdown", 2, [60, 50]);
+        thumbAt(zone, "pointermove", 2, [60, 20]);
+        assert.equal(sent.at(-1), "walk");
+        thumbAt(zone, "pointerup", 2, [60, 20]);
+        assert.equal(tapped.length, 1);
+
+        // (Held too long, still, on the knob)
+        thumbAt(zone, "pointerdown", 3, [50, 50]);
+        page.ms += STICK_TAP.ms + 50;
+        thumbAt(zone, "pointerup", 3, [50, 50]);
+        assert.equal(tapped.length, 1);
+
+        // (Down on the rim: pushed that way at once, as ever, and no tap)
+        thumbAt(zone, "pointerdown", 4, [50, 15]);
+        assert.equal(sent.at(-1), "walk");
+        page.ms += 100;
+        thumbAt(zone, "pointerup", 4, [50, 15]);
+        assert.equal(tapped.length, 1);
+
+        // (Taken away by the browser, not lifted)
+        thumbAt(zone, "pointerdown", 5, [50, 50]);
+        thumbAt(zone, "pointercancel", 5, [50, 50]);
+        assert.equal(tapped.length, 1);
+
+        // (Floating, anywhere it lands)
+        steering.floating = true;
+        thumbAt(zone, "pointerdown", 6, [20, 80]);
+        page.ms += 100;
+        thumbAt(zone, "pointerup", 6, [22, 79]);
+        assert.equal(tapped.length, 2);
         steering.dispose();
     });
 

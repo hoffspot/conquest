@@ -8045,9 +8045,10 @@ export class Game {
     }
 
     /**
-     * Swing the camera round behind the player, the way they face (R, or the player's own mark on
-     * the minimap tapped), as if turned by hand: a fight the battle cam framed is let be, as after a
-     * drag (#battleFoe).
+     * Put the camera back behind the player, the way they face (R, a tap on the thumb stick, or
+     * the player's own mark on the minimap tapped): swung round, low over their shoulder and close
+     * (camera.js PITCH.behind, view.js DISTANCE.behind), as if turned by hand: a fight the battle
+     * cam framed is let be, as after a drag (#battleFoe).
      */
     recentre() {
         const me = this.avatars.get(this.me);
@@ -8061,9 +8062,12 @@ export class Game {
             this.battleCamOn = null;
         }
 
-        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again)
+        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again;
+        // elsewhere, zoomed in close behind them)
         if (this.dungeonCamera) {
             Object.assign(this.dungeonCamera, { nudge: 0, zoom: 1 });
+        } else {
+            this.view.zoomToDistance(DISTANCE.behind);
         }
 
         // (The way they face, or are turning to face)
@@ -15996,6 +16000,8 @@ export class Game {
                     this.#command({ type: "ahead", facing, run, reach: HELD_REACH });
                 },
                 stop: () => this.#command({ type: "stop" }),
+                // (Tapped: the camera put back behind them)
+                tapped: () => this.recentre(),
                 lost: (lost) => this.#pressLost("stick", lost),
                 breath: () => {
                     const player = this.battle.actor(this.me);

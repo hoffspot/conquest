@@ -83,10 +83,11 @@ export function detectQuality() {
 }
 
 // The camera looks down this far from the horizon to start with (degrees: low enough to see well
-// ahead of the player), from this far away (metres), zooming between; at a point this high above
-// the ground (metres: the player's middle)
+// ahead of the player), from this far away (metres), zooming between; put back behind the player
+// (R, a tap on the thumb stick: game.js recentre), from `behind`, close over their shoulder; at a
+// point this high above the ground (metres: the player's middle)
 export const PITCH = 35;
-export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
+export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32, behind: 5.5 });
 const LOOK_UP = 0.8;
 
 // How far above the horizon the camera can look (degrees): outdoors, up into the sky; indoors,
@@ -1382,6 +1383,11 @@ export class View {
     /** Zoom in (factor < 1) or out, eased in over a moment as the camera's next placed (ZOOM_EASE: a wheel's notch, a zoom button). */
     zoomSmoothly(factor) {
         this.zoomTo = Math.min(DISTANCE.most, Math.max(DISTANCE.least, (this.zoomTo ?? this.distance) * factor));
+    }
+
+    /** Zoom to `distance` metres away, eased in as zoomSmoothly's (the camera put back behind the player). */
+    zoomToDistance(distance) {
+        this.zoomTo = Math.min(DISTANCE.most, Math.max(DISTANCE.least, distance));
     }
 
     #place() {

@@ -524,22 +524,21 @@ describe("saving (save.js)", () => {
         assert.equal(loadSettings().cameraFollows, true);
     });
 
-    it("on a touch screen, follows by default, following saved off when it was off for everyone forgotten once for it; with a mouse, what was saved kept", () => {
+    it("doesn't follow by default, touched or pointed at; following saved under any camera defaults before today's forgotten once, the rest kept", () => {
         const items = useStorage();
 
-        assert.equal(loadSettings({ touch: true }).cameraFollows, true, "a phone's, new");
-        assert.equal(loadSettings({ touch: false }).cameraFollows, false, "a mouse's, new");
+        assert.equal(loadSettings().cameraFollows, false, "new");
 
-        items.set("pellagos.settings", JSON.stringify({ minimap: false, cameraFollows: false, cameraDefaults: 2 }));
-        assert.deepEqual([loadSettings({ touch: true }).cameraFollows, loadSettings({ touch: true }).minimap], [true, false]);
+        // (Saved under each earlier camera defaults, on a phone or with a mouse: today's, off)
+        for (const cameraDefaults of [undefined, 2, 3]) {
+            items.set("pellagos.settings", JSON.stringify({ minimap: false, cameraFollows: true, cameraDefaults }));
+            assert.deepEqual([loadSettings().cameraFollows, loadSettings().minimap], [false, false], `under ${cameraDefaults}`);
+        }
 
-        items.set("pellagos.settings", JSON.stringify({ cameraFollows: true, cameraDefaults: 2 }));
-        assert.equal(loadSettings({ touch: false }).cameraFollows, true, "a mouse's own choice kept");
-
-        // (Once only: turned off again on the phone, it stays off)
-        items.set("pellagos.settings", JSON.stringify({ cameraFollows: false, cameraDefaults: 2 }));
-        items.set("pellagos.settings", JSON.stringify({ ...JSON.parse(items.get("pellagos.settings")), ...loadSettings({ touch: true }), cameraFollows: false }));
-        assert.equal(loadSettings({ touch: true }).cameraFollows, false);
+        // (Once only: turned on again since, it stays on)
+        saveSettings({ cameraFollows: true });
+        assert.equal(JSON.parse(items.get("pellagos.settings")).cameraDefaults, 4);
+        assert.equal(loadSettings().cameraFollows, true);
     });
 
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {

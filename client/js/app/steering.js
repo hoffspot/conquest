@@ -49,6 +49,12 @@ const REACH = 56;
 const DEADZONE = 10;
 export const RUN_AT = 0.7;
 
+// A thumb come down on the knob (within `knob` px of the stick's middle: the knob's own size) holds
+// it where it landed, not pushed till it slides; and a tap on it (or anywhere, floating), let go of
+// within `ms` without sliding more than `slop` px, is the player asking for the camera behind them
+// (how.tapped: game.js recentre)
+export const STICK_TAP = Object.freeze({ knob: 29, ms: 300, slop: 12 });
+
 // Out of breath (the battle has a runner with no stamina left walk: battle.js #move, "exhausted"),
 // held input walks on till this share of their stamina is back, and only then runs again. Asked to
 // run again at once, they'd sprint a moment on the little got back since, run out again and
@@ -92,6 +98,7 @@ export class Steering {
      *   another thumb down on the stick; "bare": every finger off the screen).
      * @param {() => object} [how.keys] - The keys as the player's set them (app/keys.js keysOf):
      *   which go each way, and which walks; as they come if not told.
+     * @param {() => void} [how.tapped] - Told of a tap on the stick (STICK_TAP).
      */
     constructor(how) {
         this.#how = how;
@@ -113,7 +120,7 @@ export class Steering {
         // (The stick no longer keeping the pointer: after a lift or a cancel, as the browser lets go
         // of it, the thumb's already gone; otherwise, it's lost)
         for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
-            this.#on(how.zone, type, (event) => this.#thumbUp(event));
+            this.#on(how.zone, type, (event) => this.#thumbUp(event, type));
         }
 
         for (const type of ["touchend", "touchcancel"]) {
@@ -251,17 +258,22 @@ export class Steering {
         }
 
         // The stick stays put, so the way it's pushed is measured from its middle, wherever the
-        // thumb went down inside it (down on the rim is already pointing that way); floating, it
-        // comes to the thumb, its middle where it went down
+        // thumb went down inside it (down on the rim is already pointing that way), but for down
+        // on the knob: held where it landed, pushed only as the thumb slides (STICK_TAP); floating,
+        // it comes to the thumb, its middle where it went down
         const rect = this.#how.zone.getBoundingClientRect();
         const ring = this.#how.ring;
-        const [x, y] = this.floating ? [event.clientX, event.clientY] : [rect.x + rect.width / 2, rect.y + rect.height / 2];
+        const middle = [rect.x + rect.width / 2, rect.y + rect.height / 2];
+        const onKnob = Math.hypot(event.clientX - middle[0], event.clientY - middle[1]) <= STICK_TAP.knob;
+        const [x, y] = this.floating || onKnob ? [event.clientX, event.clientY] : middle;
 
         if (this.floating && ring) {
             Object.assign(ring.style, { left: `${x - rect.x - ring.offsetWidth / 2}px`, top: `${y - rect.y - ring.offsetHeight / 2}px`, bottom: "auto" });
         }
 
-        this.#stick = { id: event.pointerId, kind: event.pointerType, at: performance.now(), x, y, right: 0, forward: 0, far: 0 };
+        // (When it came down, as the event says: on a slow device, a lift can be heard long after
+        // it happened, the page busy; `at`, as heard, for a lift lost)
+        this.#stick = { id: event.pointerId, kind: event.pointerType, at: performance.now(), when: event.timeStamp ?? performance.now(), x, y, right: 0, forward: 0, far: 0, down: [event.clientX, event.clientY], tap: this.floating || onKnob };
 
         try {
             this.#how.zone.setPointerCapture?.(event.pointerId);
@@ -282,6 +294,11 @@ export class Steering {
 
         const [across, down] = [event.clientX - this.#stick.x, event.clientY - this.#stick.y];
         const far = Math.hypot(across, down);
+
+        // (Slid: not a tap)
+        if (Math.hypot(event.clientX - this.#stick.down[0], event.clientY - this.#stick.down[1]) > STICK_TAP.slop) {
+            this.#stick.tap = false;
+        }
         const held = Math.min(far, REACH);
         const share = held > 0 ? held / far : 0;
 
@@ -295,14 +312,22 @@ export class Steering {
         this.#work();
     }
 
-    #thumbUp(event) {
+    #thumbUp(event, type) {
         if (this.#stick?.id !== event.pointerId) {
             return;
         }
 
+        // (Lifted: a tap if it came down where one may, quickly, and never slid; not a pointer
+        // the browser took away)
+        const tapped = type === "pointerup" && this.#stick.tap && (event.timeStamp ?? performance.now()) - this.#stick.when <= STICK_TAP.ms;
+
         this.#letGoOfStick();
         this.#halt();
         event.preventDefault();
+
+        if (tapped) {
+            this.#how.tapped?.();
+        }
     }
 
     // Every finger off the screen: a moment after (for the thumb's own lift to be heard first), a

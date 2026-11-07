@@ -186,9 +186,10 @@ or after you, you put it away again. The orc does the same, on its patrol.
 **Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it. Pinch
 or scroll to zoom. In the town, when a building would stand between you and the camera, it comes
 in closer than the building, or rises over it. Holding a phone upright, it looks down more steeply
-from further back, so you see more round you. Turn **Camera follows** on in Game options and,
-walking away from it or across its view, it swings round smoothly (over about a second) to look
-from behind you the way you're going; walking back towards it, it backs away rather than turning
+from further back, so you see more round you. **Tap the thumb stick** (or press **R**) to put it
+back close behind you, low over your shoulder. Turn **Camera follows** on in Game options (it's
+off to start with) and, walking away from it or across its view, it swings round smoothly (over
+about a second) to look from behind you the way you're going; walking back towards it, it backs away rather than turning
 round, coming round only as you go by it; dragged, it stays where you leave it while you stand,
 and once you've walked a moment it swings back round behind you. Game options can also change how
 far a drag turns it, invert its tilt, and stop spells shaking it. Pushed right up to you by a wall

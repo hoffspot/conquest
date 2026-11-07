@@ -2191,6 +2191,56 @@ test("W, A, S, D steer the player the way the camera looks, running, two of them
     expect((await told(page)).order).toBe(null);
 });
 
+test("the thumb stick's knob tapped (let go of at once, not slid): the camera put back close behind the player, low over their shoulder, and the player not moved", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The stick on; the camera looking at the player from in front, tilted steeply and zoomed out
+    const start = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const switched = document.querySelector("#stickswitch");
+
+        switched.checked = true;
+        switched.dispatchEvent(new Event("change"));
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.cameraFollow.yaw = game.battle.actor("player").facing;
+        game.cameraFollow.pitch = 55;
+        game.view.distance = 16;
+
+        return { square: [...game.battle.actor("player").square] };
+    });
+    const zone = await page.locator("#stickzone").boundingBox();
+    const [x, y] = [zone.x + zone.width / 2, zone.y + zone.height / 2];
+
+    // (Pressed and let go of 90 ms apart, as said with the input: a page drawing without a GPU
+    // hears input seconds apart)
+    const cdp = await page.context().newCDPSession(page);
+    const at = Date.now() / 1000;
+
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, timestamp: at });
+    await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1, timestamp: at + 0.01 });
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1, timestamp: at + 0.1 });
+    await cdp.detach();
+
+    // (The game stepped on by hand to see it come round, as a phone's frames would turn it)
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        game.advance(3);
+        game.start();
+
+        const off = game.cameraFollow.yaw - (player.facing + Math.PI);
+
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), pitch: game.cameraFollow.pitch, distance: game.view.distance, square: [...player.square] };
+    });
+
+    expect(after.off).toBeLessThan(0.05);
+    expect(after.pitch).toBeCloseTo(15, 0);
+    expect(after.distance).toBeCloseTo(5.5, 1);
+    expect(after.square).toEqual(start.square);
+});
+
 test("the thumb stick, asked to float, springs up under the thumb where it lands in the bottom left, walks the player the way it's pushed from there, and goes back to its corner let go", async ({ page }) => {
     await playing(page, "/?play&seed=1");
     await clearestWayAhead(page);
@@ -3761,7 +3811,7 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.kept).toBeLessThan(0.1);
 });
 
-test("on a PC, Q and E turn the camera round the player while held, and R swings it round behind them; nothing else moves", async ({ page }) => {
+test("on a PC, Q and E turn the camera round the player while held, and R puts it back close behind them, low over their shoulder; nothing else moves", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -3799,17 +3849,26 @@ test("on a PC, Q and E turn the camera round the player while held, and R swings
     // E held: back the other way
     expect(await press("e", 0.5)).toBeLessThan(-0.8);
 
-    // R: swung round behind the player, the way they face
+    // R, the camera tilted steeply and zoomed out first: swung round behind the player, the way
+    // they face, tilted down 15 degrees and zoomed in to 5.5 m
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.cameraFollow.pitch = 55;
+        game.view.distance = 16;
+    });
     await press("r", 2.5);
 
     const behind = await page.evaluate(() => {
         const { game } = window.pellagos;
         const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
 
-        return Math.abs(Math.atan2(Math.sin(off), Math.cos(off)));
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), pitch: game.cameraFollow.pitch, distance: game.view.distance };
     });
 
-    expect(behind).toBeLessThan(0.05);
+    expect(behind.off).toBeLessThan(0.05);
+    expect(behind.pitch).toBeCloseTo(15, 0);
+    expect(behind.distance).toBeCloseTo(5.5, 1);
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
