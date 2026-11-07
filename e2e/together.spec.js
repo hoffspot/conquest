@@ -1445,10 +1445,13 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     await guest.waitForFunction(() => window.pellagos.game.crowds?.members.size > 0, null, { timeout: 180000, polling: 1000 });
     await guest.waitForFunction(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length >= 3, null, { timeout: 180000, polling: 1000 });
 
-    // (Those fallen by now; and a second and a half on, the line looked at again since)
+    // (Those fallen by now; and a second and a half on by the game's own clock, the line looked at
+    // again since: the marshal looks by it, twice a second, MARSHAL.every, and a second and a half
+    // by the wall on a loaded runner was less than one of its looks, one fallen still waiting)
     const fell = await guest.evaluate(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).map(({ id }) => id));
+    const counted = await guest.evaluate(() => window.pellagos.game.clock);
 
-    await guest.waitForTimeout(1500);
+    await guest.waitForFunction((from) => window.pellagos.game.clock >= from + 1.5, counted, { timeout: 60000, polling: 250 });
 
     const later = await held(fell);
 
