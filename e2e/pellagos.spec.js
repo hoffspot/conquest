@@ -7196,15 +7196,19 @@ test.describe("drawn at the screen's own pixels", () => {
         expect(out.soldiers.map(({ name }) => name)).toContain("Human patrol");
         expect(out.banners).toBeGreaterThanOrEqual(1);
 
-        // Tapping a guard: the player walks up to talk to them, and they tell of their town (the
-        // camera looking down on them: overlook)
-        await overlook(page);
-
+        // Tapping a guard: the player walks up to talk to them, and they tell of their town
         const guard = out.soldiers.find(({ id }) => id.endsWith("/guard-0"));
         const tapped = await page.evaluate((id) => {
             const { game, session } = window.pellagos;
             const soldier = game.battle.actor(id);
             const player = game.battle.actor("player");
+
+            // (The camera looking down on them from higher and further back, as overlook, but set
+            // as the world's played on here: what's drawn in full, and who casts a shadow, as the
+            // test below of how often each is posed was made for)
+            game.cameraFollow.pitch = 35;
+            session.view.distance = 10.5;
+            session.view.zoomTo = null;
 
             // (A few steps out in front of them: they face out of the town)
             const [x, y] = [soldier.square[0] + Math.round(Math.sin(soldier.post) * 4), soldier.square[1] + Math.round(Math.cos(soldier.post) * 4)];
