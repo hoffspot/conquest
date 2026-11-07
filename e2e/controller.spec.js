@@ -4,7 +4,7 @@ import { BUTTONS } from "../client/js/app/gamepad.js";
 // Playing with a game controller (app/padplay.js), in a real browser. A test can't pair a real one,
 // so the page is given a stand-in: navigator.getGamepads gives a controller of the standard layout,
 // named as a PS5 controller is, whose buttons and sticks the test sets (`pad`). The game reads it
-// once a frame, and frames are slow without a GPU, so a press is down for one reading exactly, and
+// once a frame, and frames are slow without a GPU, so a press is down for one frame exactly, and
 // up for the next; and what's waited on is what the game does.
 
 test.beforeEach(async ({ page }) => {
@@ -29,17 +29,30 @@ async function standIn(page, { settings = { sound: false, quality: "low" }, save
             }
 
             const pad = { id: "DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)", index: 0, connected: true, mapping: "standard", timestamp: 0, axes: [0, 0, 0, 0], buttons: names.map(() => ({ pressed: false, touched: false, value: 0 })) };
+            // (The frames, counted at the start of each, before the game's own work in it: what's
+            // read in a frame, by the game or by a page of Game options asking whether it can rumble,
+            // and what's read between frames, is the same, as a real controller's is. Taps counted
+            // by the read, a page reading it once more as the game's frame worked a press could let
+            // that tap go before the game's next frame, and the next tap be taken for it still held)
+            let frame = 0;
+            const count = () => {
+                frame += 1;
+                requestAnimationFrame(count);
+            };
+
+            requestAnimationFrame(count);
 
             window.standIn = {
                 pad,
                 reads: 0,
+                frame: -1,
                 connected: false,
                 taps: new Map(),
                 set(name, value) {
                     pad.buttons[names.indexOf(name)] = { pressed: value > 0.5, touched: value > 0, value };
                 },
-                // (Down for the next reading alone, up again for the one after: a tap, however
-                // slow the frames or the test)
+                // (Down for the next frame's reading alone, up again for the one after: a tap,
+                // however slow the frames or the test)
                 tap(name) {
                     this.set(name, 1);
                     this.taps.set(name, 1);
@@ -50,24 +63,31 @@ async function standIn(page, { settings = { sound: false, quality: "low" }, save
                 },
             };
             navigator.getGamepads = () => {
-                for (const [name, left] of window.standIn.taps) {
-                    if (left > 0) {
-                        window.standIn.taps.set(name, left - 1);
-                    } else {
-                        window.standIn.set(name, 0);
-                        window.standIn.taps.delete(name);
+                const standIn = window.standIn;
+
+                // (A frame's first reading: taps go on to it; those read since let go)
+                if (standIn.frame !== frame) {
+                    standIn.frame = frame;
+
+                    for (const [name, left] of standIn.taps) {
+                        if (left > 0) {
+                            standIn.taps.set(name, left - 1);
+                        } else {
+                            standIn.set(name, 0);
+                            standIn.taps.delete(name);
+                        }
                     }
+
+                    standIn.reads += 1;
                 }
 
-                window.standIn.reads += 1;
-
-                return window.standIn.connected ? [pad] : [];
+                return standIn.connected ? [pad] : [];
             };
         },
         [BUTTONS, settings, save],
     );
 
-    // (Till the game's read the controller `times` more times)
+    // (Till the controller's been read in `times` more frames)
     const read = async (times = 2) => {
         const from = await page.evaluate(() => window.standIn.reads);
 
@@ -76,8 +96,8 @@ async function standIn(page, { settings = { sound: false, quality: "low" }, save
 
     return {
         connect: () => page.evaluate(() => window.standIn.connect()),
-        // (Down for one reading, so slow frames never make it a hold or the D-pad's repeat, and
-        // read up twice after)
+        // (Down for one frame, so slow frames never make it a hold or the D-pad's repeat, and
+        // read up in two after)
         async press(name) {
             await page.evaluate((name) => window.standIn.tap(name), name);
             await read(3);

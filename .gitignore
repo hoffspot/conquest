@@ -86,7 +86,6 @@ client/models/scenery/bellhaven-2.bin
 client/models/scenery/bellhaven-keep.bin
 client/models/scenery/timber-forts-2.bin
 client/models/scenery/wind-ways-shop.bin
-client/models/scenery/meshsmith-houses.bin
 client/models/scenery/meshsmith-houses-2.bin
 # Builds superseded and deleted from the private repository: still ignored, as a copy of each
 # may be left behind in a contributor's client/ (docs/LICENSED_MODELS.md, Remaking a licensed model)
@@ -103,3 +102,4 @@ client/models/scenery/bellhaven.bin
 client/models/scenery/bellhaven-far.bin
 client/models/scenery/bellhaven-far-2.bin
 client/models/scenery/timber-forts.bin
+client/models/scenery/meshsmith-houses.bin

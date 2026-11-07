@@ -14961,7 +14961,7 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(ran.done).toBe(true);
 });
 
-test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered; off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button, its needle turned so too, folds it away into the compass", async ({ page }) => {
+test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -15061,6 +15061,19 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(minimap).toBeHidden();
     expect(await page.evaluate(() => ({ enabled: window.pellagos.session.sound.enabled, music: window.pellagos.session.sound.volumes.music }))).toEqual({ enabled: false, music: 0.6 });
     await expect(page.locator("#musicvolume")).toHaveValue("60");
+});
+
+test("the minimap off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button, its needle turned so too, folds it away into the compass", async ({ page }) => {
+    // (Frames drawn in software are slow, and the compass is turned a frame after the camera, each
+    // turn waited for: more than the usual time)
+    test.setTimeout(180000);
+    // (Turned off in Game options, as the test before this does, and the game started with it off)
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ minimap: false, sound: false })));
+    await playing(page, "/?play&seed=1");
+
+    const minimap = page.locator("#minimap");
+
+    await expect(minimap).toBeHidden();
 
     // Off, a compass in its corner, the party's column under it; turned as the camera turns (a
     // quarter turn of the camera, a quarter turn of the compass), its N north

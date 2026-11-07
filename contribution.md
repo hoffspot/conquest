@@ -238,8 +238,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   `e2e/broker.spec.js` does) gives the same rule. A test that needs a world server runs its own.
 - A test can't pair a game controller: `e2e/controller.spec.js` gives the page a stand-in
   (`standIn`: `navigator.getGamepads` replaced before the page loads, its buttons and sticks set
-  by the test). The game reads it once a frame, so a press is held till it's been read, not for a
-  set time. Do the same in a new test of the controller.
+  by the test). The game reads it once a frame, so a press is held for one frame, not for a set
+  time; whatever else reads it in that frame or between frames (a page of Game options asking
+  whether it can rumble) is given the same, as a real controller's would be. Do the same in a new
+  test of the controller.
 - Time the tests by how long they took on CI, so its split stays even: once a run's done, its
   ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
   Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit
