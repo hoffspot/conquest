@@ -816,7 +816,7 @@ function roofOver(solid, plan, random) {
 
             solid.wall(face, width, height, [cutFor(plan, opening, plan.walls)], walls);
             dress(solid, plan, face, opening, plan.walls, random);
-            pitchedRoof(solid, {
+            const own = pitchedRoof(solid, {
                 x0: box[2],
                 x1: zFront,
                 z0: box[0],
@@ -834,6 +834,14 @@ function roofOver(solid, plan, random) {
                 thatch: thatched,
                 swap: true,
             });
+
+            // Its gable over the front, up under its roof (a thatched one's hipped): without it,
+            // the sky showed through under its roof from the street
+            if (!thatched) {
+                const rise = own.gableTop - (base + height);
+
+                solid.wall({ ...face, origin: [box[0], base + height, zFront] }, width, rise, [], walls, { line: [[0, 0], [width / 2, rise], [width, 0]] });
+            }
         }
     }
 }
