@@ -383,7 +383,13 @@ the bottom of the screen, your name and the zoom buttons lifted above them. Tap 
 in it at once: an attack, a hex or a blow on the enemy you're fighting, and anything else (Vigor,
 a ward, a draught) on yourself. Attacks are greyed while no enemy's set on, and each is greyed
 over while it cools down, as on the wheels. You start with Vigor, Stun, Burn and a healing
-draught; hold a slot (or go to **Game options, Action Wheel and Bar, Action Bar**) to choose what's in it. Flick a
+draught; hold a slot (or go to **Game options, Action Wheel and Bar, Action Bar**) to choose what's in it:
+tabs list them by kind (On an enemy, Heals, Buffs, Cures, Summons, Travel...), each says whom it's
+for, a school's spells are one entry (its best tier, the others under it), and on a PC you can type
+a name. **Cure** casts the cure for whatever's on you (or on the friend you've chosen to help):
+whatever slows you first, then whatever would hurt most, with a cure spell you know or a cure you
+carry; its slot shows which. **Buff all** casts each of your buffs that's off or running out, one
+after another (not Light, Surge or Invisibility). Flick a
 spell up or down to turn it to the next or last spell of its school that you know (Mend Wounds
 down to Vigor, up to Detraumatize); it rolls round like a slot machine's reel, and bounces at
 either end. **Six across**, in the Action Bar options, shows six slots instead of four, with smaller
@@ -396,7 +402,8 @@ hand makes spells stronger, by 10% to (very rarely) 100%. Other spells are learn
 now and then found on the wild's creatures with hands, or given by the adventurers' guilds for
 their harder work: wards and cures, Teleport, Invisibility, Summon (a creature, or another player:
 with **Resist all summons** in Game options you'll always say no), Zombify, Fear, Polymorph and
-more. The **spellbook** (its button, or B) shows it all, and puts a spell on a wheel. See
+more. The **spellbook** (its button, or B) shows it all, and puts a spell on a wheel or the Action
+Bar. See
 [docs/MAGIC.md](docs/MAGIC.md).
 
 **Gear.** You've a slot for each part of you: head, amulet, cloak, chest, bracers, gloves, belt,
@@ -757,6 +764,8 @@ client/                 The game (static files served to the browser)
                         their icons, and every item's; wheelsetup.js sets what's on them
     quickbar.js         The Action Bar: four slots up from the bottom in a fight, tapped to
                         use on the foe or the player; quicksetup.js sets what's in them
+    choices.js          What can go in a slot of the Action Bar or a wheel, to choose from: by
+                        kind, whom each is for, a school's tiers as one, found by name
     minimap.js          The minimap: the map the player is on from above (out in the world, the
                         patch round them), with everyone on it, and how far round to turn the
                         compass it folds into; mapicons.js the buildings' icons
@@ -853,6 +862,8 @@ client/                 The game (static files served to the browser)
                         it stands, and a commander's briefing
     spells.js           Magic: the schools and their tiers, the hexes, and the tomes' spells
                         (docs/MAGIC.md)
+    smartcast.js        Cure (the cure for whatever's on someone) and Buff all (each buff
+                        that's off or running out): what each would cast as things are
     roles.js            Classes of people (barkeep, patron...): their titles and five rests each
     dialogue.js         Conversations: trees of what's said and the replies, conditions, effects
     names.js            People's names, drawn from the world's seed

@@ -15874,8 +15874,8 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(false);
     await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 3");
     await expect(page.locator('#quicksetup .quick-slot[data-slot="2"]')).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On your foe");
-    await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("On yourself");
+    await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On an enemy");
+    await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("Anyone");
     await page.locator('#quicksetup .wheels-choice[data-action="rumble"]').click();
     expect(await page.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(["vigor", "stun", "rumble", "item:potion", null, null]);
     await expect(page.locator('#quicksetup .quick-slot[data-slot="2"] .quick-label')).toHaveText("Rumble");
@@ -15892,6 +15892,184 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
     await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar 1, slot 1");
     await page.locator("#quickback").click();
     await expect(page.locator("#menuactions")).toBeVisible();
+});
+
+test("what can go in an Action Bar slot is listed by kind (All, On an enemy, Heals, Buffs, Cures...), each saying whom it's for; a school's spells as one, its other tiers opened under it; what can't be used as things are greyed, last; fewer shown bigger; found by name on a PC; Cure and Buff all among them; and the spellbook puts a spell on the Action Bar", async ({ page }) => {
+    // (Through the menus to the Action Bar's options and back, and the spellbook: more than the
+    // usual time, on a machine drawing in software)
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const setup = page.locator("#quicksetup");
+    const choices = setup.locator(".wheels-choice");
+    const listed = () => choices.evaluateAll((all) => all.map((each) => each.dataset.action));
+
+    // Healing's second and third spells come to, Fire's tome read, two cures, two wards and Reflect
+    // (no wand in hand) learnt, an antidote carried
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const id of ["mendWounds", "detraumatize", "burn", "quench", "curePoison", "resistFire", "resistWater", "reflect"]) {
+            game.progress.learn(id);
+        }
+
+        game.progress.stow({ id: "antidote" }, 1);
+    });
+
+    // Game options, Action Wheel and Bar, Action Bar: its third slot (Burn in it)
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#actionsbutton").click();
+    await page.locator("#quickbutton").click();
+    await setup.locator('.quick-slot[data-slot="2"]').click();
+    await expect(setup.locator(".wheels-heading")).toHaveText("Action Bar 1, slot 3");
+
+    // By kind, only those there are; each saying whom it's for
+    await expect(setup.locator(".choice-role")).toHaveText(["All", "On an enemy", "Heals", "Buffs", "Cures", "Orders", "Emotes", "Items"]);
+    await expect(setup.locator('.choice-role[aria-selected="true"]')).toHaveText("All");
+
+    for (const [action, whom] of Object.entries({ burn: "On an enemy", detraumatize: "Anyone", resistFire: "You or a friend", cure: "You or a friend", buffAll: "On yourself", "item:antidote": "On yourself", camp: "Where you are" })) {
+        await expect(setup.locator(`.wheels-choice[data-action="${action}"] small`)).toHaveText(whom);
+    }
+
+    // Healing as one, its highest tier (Detraumatize), the two below it opened under it and closed
+    const all = await listed();
+
+    expect(all).toContain("detraumatize");
+    expect(all).not.toContain("vigor");
+    expect(all).not.toContain("mendWounds");
+    await setup.locator(".choice-open").click();
+    await expect(setup.locator(".wheels-choice.tier")).toHaveCount(2);
+    expect((await listed()).slice(all.indexOf("detraumatize"), all.indexOf("detraumatize") + 3)).toEqual(["detraumatize", "mendWounds", "vigor"]);
+    await setup.locator(".choice-open").click();
+    await expect(setup.locator(".wheels-choice.tier")).toHaveCount(0);
+
+    // Reflect, with no wand in hand: greyed, after the rest
+    await expect(setup.locator('.wheels-choice[data-action="reflect"]')).toHaveClass(/unready/);
+    expect(all.at(-1)).toBe("reflect");
+
+    // Cures: Detraumatize (it stems bleeding too), the two cure spells, Cure, and the antidote;
+    // few, so shown bigger
+    await setup.locator('.choice-role[data-role="cures"]').click();
+    expect(await listed()).toEqual(["", "detraumatize", "curePoison", "quench", "cure", "item:antidote"]);
+    await expect(setup.locator(".wheels-choices")).toHaveClass(/roomy/);
+
+    // All again, and found by name (a PC: the box to type in shown); a lower tier's name opens its school
+    await setup.locator('.choice-role[data-role="all"]').click();
+    await expect(setup.locator(".choice-search")).toBeVisible();
+    await setup.locator(".choice-search").fill("resist");
+    expect(await listed()).toEqual(["", "resistFire", "resistWater"]);
+    await setup.locator(".choice-search").fill("mend");
+    expect(await listed()).toEqual(["", "detraumatize", "mendWounds", "vigor"]);
+    await setup.locator(".choice-search").fill("");
+
+    // Cure in the third slot, Buff all in the fourth
+    await setup.locator('.wheels-choice[data-action="cure"]').click();
+    await setup.locator('.quick-slot[data-slot="3"]').click();
+    await setup.locator('.wheels-choice[data-action="buffAll"]').click();
+    expect(await page.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(["vigor", "stun", "cure", "buffAll", null, null]);
+
+    // Back to the game; the spellbook: Quench put on the Action Bar (Action Bar 1's four shown all
+    // full, Action Bar 2's first slot), and again, there already
+    await page.locator("#quickback").click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#optionstitle")).toBeVisible();
+    await page.locator("#optionsback").click();
+    await page.locator("#resumebutton").click();
+    await page.locator("#spellbookbutton").click();
+    await page.locator('.spellbook button[aria-label="Put Quench on the Action Bar"]').click();
+    await expect(page.locator("#banner")).toHaveText("Quench put on Action Bar 2, slot 1.");
+    expect(await page.evaluate(() => window.pellagos.game.wheels.quickTwo[0])).toBe("quench");
+    await page.locator('.spellbook button[aria-label="Put Quench on the Action Bar"]').click();
+    await expect(page.locator("#banner")).toHaveText("Quench is on Action Bar 2, slot 1 already.");
+});
+
+test("Cure on the Action Bar casts the cure for what's on the player, shown in its slot and ringed on their plate: what slows them first, then what will do the most harm; with nothing to cure, its own icon, greyed, and said so. Buff all casts each buff that's off them in turn; again, all up, said so", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+
+    // Three cures and three buffs learnt; Cure and Buff all on the Action Bar, shown out of a
+    // fight; slowed (5 s), burnt (8 s: ten blows to come) and poisoned (9 s: six)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (const id of ["unbind", "quench", "curePoison", "resistFire", "resistWater", "swole"]) {
+            game.progress.learn(id);
+        }
+
+        game.setQuick(["vigor", "stun", "cure", "buffAll", null, null]);
+        game.quickAlways = true;
+        battle.afflict(game.me, "slow", { ms: 5000 });
+        battle.afflict(game.me, "burn", { ms: 8000 });
+        battle.afflict(game.me, "poison", { ms: 9000 });
+        game.advance(0.1);
+        game.start();
+    });
+
+    // (Pressed, the game going: keys are heard only then; then played on past the cast and the
+    // spells' shared moment after it)
+    const press = async (key) => {
+        await page.keyboard.press(key);
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            game.stop();
+
+            for (let k = 0; k < 6; k++) {
+                game.advance(0.25);
+            }
+
+            game.start();
+        });
+    };
+    const ailing = () => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).afflictions.map(({ kind }) => kind).sort());
+
+    // Unbind first (slowed), ringed on the plate; then Quench (more harm to come than the poison);
+    // then Cure Poison
+    await expect(slot(2)).toHaveAttribute("data-action", "unbind");
+    await expect(page.locator("#playerplate .ail.curing")).toHaveClass(/ail-slow/);
+    await press("3");
+    expect(await ailing()).toEqual(["burn", "poison"]);
+    await expect(slot(2)).toHaveAttribute("data-action", "quench");
+    await expect(page.locator("#playerplate .ail.curing")).toHaveClass(/ail-burn/);
+    await press("3");
+    expect(await ailing()).toEqual(["poison"]);
+    await expect(slot(2)).toHaveAttribute("data-action", "curePoison");
+    await press("3");
+    expect(await ailing()).toEqual([]);
+
+    // Nothing to cure: Cure's own icon, greyed, and said so pressed
+    await expect(slot(2)).toHaveAttribute("data-action", "cure");
+    await expect(slot(2)).toHaveClass(/off/);
+    await page.keyboard.press("3");
+    await expect(page.locator("#banner")).toHaveText("Nothing there you can cure");
+
+    // Buff all: the two wards and Swole, cast one after another
+    await page.keyboard.press("4");
+    await expect(page.locator("#banner")).toHaveText("Buffing: 3 buffs");
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.25);
+        }
+
+        game.start();
+    });
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).buffs.map(({ kind }) => kind).sort())).toEqual(["resistFire", "resistWater", "swole"]);
+
+    // Again, all up: said so
+    await page.keyboard.press("4");
+    await expect(page.locator("#banner")).toHaveText("Your buffs are all up");
 });
 
 test("a Prismatic chain: an element's spell cast from the Action Bar rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
@@ -16617,17 +16795,19 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
-    // What can go on it: nothing, the healing spells known, making camp, the emotes and the
-    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's), Stun and
-    // Attack, and no draughts or emotes
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
+    // What can go on it: nothing, the healing spells known (as one, Mend Wounds, Vigor opened under
+    // it while it's in the slice), making camp, the emotes and the draughts carried; a foe's has
+    // those spells, the elements' spells learnt (Fire's), Stun and Attack, and no draughts or emotes
+    const names = setup.locator(".wheels-choice .choice-name");
+
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Vigor", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun", "Attack"]);
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Burn", "Stun", "Attack"]);
 
     // Their followers': the healing to cast on them, what to tell them (their own ability among
     // it) and the draughts to give them; Attack my target at the top
     await setup.getByRole("tab", { name: "Your followers" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Cover me", "Their own ability", "Dismiss", "Draught"]);
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Cover me", "Their own ability", "Dismiss", "Draught"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
     await setup.getByRole("tab", { name: "Yourself" }).click();
 

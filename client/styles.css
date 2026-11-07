@@ -4311,6 +4311,12 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .plate .ail-slow { box-shadow: 0 0 0 1px #9ad0f0, 0 0 6px rgba(154, 208, 240, 0.55); }
 .plate .ail-fear { box-shadow: 0 0 0 1px #c8a8e8, 0 0 6px rgba(200, 168, 232, 0.6); }
 
+/* (The one the player's Cure would cure next: ringed in white, wider than the rest) */
+.plate .ail.curing {
+    outline: 2px solid #f4fbff;
+    outline-offset: 2px;
+}
+
 /* What does them good: a sapphire tile rimmed in gold, steady, a little apart from the harms */
 .plate .ail.buff {
     border-radius: 22%;
@@ -5341,6 +5347,14 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     opacity: 0.55;
 }
 
+/* (Put on a wheel, put on the Action Bar: side by side, or one over the other where there isn't room) */
+.spellbook-puts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+}
+
 .spellbook-spell.unknown .spellbook-icon {
     filter: grayscale(0.8);
 }
@@ -5408,9 +5422,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
     .spellbook-spell .journal-button,
     .spellbook-at {
-        margin-left: 54px;
         max-width: none;
         text-align: left;
+    }
+
+    .spellbook-puts,
+    .spellbook-at {
+        margin-left: 54px;
     }
 }
 
@@ -7544,12 +7562,117 @@ dialog#menu.wide {
     background: rgba(236, 200, 130, 0.18);
 }
 
-/* (Who a quick action's used on, under its name) */
+/* (Whom an action's used on, under its name) */
 .wheels-choice small {
     display: block;
     font-weight: 500;
     font-size: 11px;
     color: var(--muted);
+}
+
+/* (Can't be used as things are, a wand not in hand: after the rest, greyed) */
+.wheels-choice.unready {
+    opacity: 0.55;
+}
+
+/* (A school's lower tiers, opened under its highest) */
+.wheels-choice.tier {
+    border-style: dashed;
+    background: transparent;
+}
+
+/* A school's highest tier, with the button that opens its others at its right */
+.choice-group {
+    position: relative;
+    display: grid;
+}
+
+.choice-group .wheels-choice {
+    padding-right: 52px;
+}
+
+.choice-open {
+    position: absolute;
+    top: 50%;
+    right: 5px;
+    transform: translateY(-50%);
+    padding: 3px 6px;
+    border: 1px solid var(--field-border);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--muted);
+    font: 600 10px var(--font-ui);
+    cursor: pointer;
+}
+
+.choice-open[aria-expanded="true"] {
+    border-color: var(--gold);
+    color: var(--gold-bright);
+}
+
+/* What kind (All, On an enemy, Heals...): a row of tabs, scrolled across if they don't fit */
+.choice-roles {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.choice-roles[hidden] {
+    display: none;
+}
+
+.choice-role {
+    flex: none;
+    padding: 5px 9px;
+    border: 1px solid var(--field-border);
+    border-radius: 999px;
+    background: var(--field);
+    color: var(--ink);
+    font: 600 12px var(--font-ui);
+    cursor: pointer;
+}
+
+.choice-role[aria-selected="true"] {
+    border-color: var(--gold);
+    background: linear-gradient(180deg, var(--gold-bright), var(--gold));
+    color: #2a1d0b;
+}
+
+/* (Found by name: on a PC only, where there's a keyboard to type with) */
+.choice-search {
+    display: none;
+    box-sizing: border-box;
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 6px 9px;
+    border: 1px solid var(--field-border);
+    border-radius: 8px;
+    background: var(--field);
+    color: var(--ink);
+    font: 500 13px var(--font-ui);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .choice-search {
+        display: block;
+    }
+}
+
+/* (Few of them, as a filter leaves: shown bigger, easier to tap) */
+.wheels-choices.roomy {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.wheels-choices.roomy .wheels-choice {
+    padding: 9px 10px;
+    font-size: 14px;
+}
+
+.wheels-choices.roomy .wheels-choice svg {
+    width: 38px;
+    height: 38px;
 }
 
 /* The Quick actions options: the four slots (or six), as they rise in a fight, one picked */
