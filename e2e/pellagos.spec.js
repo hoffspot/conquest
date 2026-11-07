@@ -4721,6 +4721,154 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
+test("Tap/Click to Move (Game options, Controls, on to start with): off, a tap on the ground leaves the player where they are, tapping an enemy still sets on them; on a touch screen, the thumb stick and it never both off", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const controls = async () => {
+        await page.locator("#menubutton").click();
+        await page.locator("#optionsbutton").click();
+        await page.locator("#controlsbutton").click();
+    };
+    const resume = async () => {
+        for (const button of ["#controlsback", "#optionsback", "#resumebutton"]) {
+            await page.locator(button).click();
+        }
+
+        await expect(page.locator("#menu")).toBeHidden();
+    };
+    const tapMove = page.locator("#tapmoveswitch");
+    const stick = page.locator("#stickswitch");
+
+    await controls();
+    await expect(tapMove).toBeChecked();
+    expect(await page.evaluate(() => window.pellagos.game.tapToMove)).toBe(true);
+
+    // (On a touch screen, as the page sees it: the stick turned off with it off turns it back on,
+    // and it turned off with the stick off, the stick)
+    const stickAtFirst = await stick.isChecked();
+
+    await page.evaluate(() => {
+        const real = window.matchMedia.bind(window);
+
+        window.realMatchMedia = real;
+        window.matchMedia = (query) => (query === "(pointer: coarse)" ? { matches: true, media: query } : real(query));
+    });
+
+    if (!stickAtFirst) {
+        await page.locator("label:has(#stickswitch)").click();
+    }
+
+    await page.locator("label:has(#tapmoveswitch)").click();
+    await expect(tapMove).not.toBeChecked();
+    await expect(stick).toBeChecked();
+    await page.locator("label:has(#stickswitch)").click();
+    await expect(stick).not.toBeChecked();
+    await expect(tapMove).toBeChecked();
+    await page.locator("label:has(#tapmoveswitch)").click();
+    await expect(tapMove).not.toBeChecked();
+    await expect(stick).toBeChecked();
+
+    // (With a mouse and keys, both may be off; turned off, and kept)
+    await page.evaluate(() => {
+        window.matchMedia = window.realMatchMedia;
+    });
+
+    if (!stickAtFirst) {
+        await page.locator("label:has(#stickswitch)").click();
+        await expect(tapMove).not.toBeChecked();
+    }
+
+    expect(await page.evaluate(() => [window.pellagos.game.tapToMove, JSON.parse(localStorage.getItem("pellagos.settings")).tapToMove])).toEqual([false, false]);
+    await resume();
+
+    // (The orders the player gives, as the host has them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const command = host.command;
+
+        window.orders = [];
+        host.command = function (id, order) {
+            window.orders.push(order.type);
+
+            return command.call(this, id, order);
+        };
+        // (The orc 6 m north of the player, stunned where it stands)
+        const orc = game.battle.actor("orc");
+        const player = game.battle.actor("player");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const [x, y] = [0, 1, -1, 2, -2].map((dx) => [px + dx, py - 6]).find(([sx, sy]) => !squares.blocked(sx, sy));
+
+        game.stop();
+        Object.assign(orc, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null, stunnedUntil: Infinity });
+        game.advance(0.5);
+    });
+
+    // A tap on the ground 3 m north: nothing; one on the orc beyond: set on it
+    const tapped = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const avatar = game.avatars.get("player");
+        const start = [player.x, player.y];
+        const spot = session.view.toScreen(avatar.object.position.clone().setZ(avatar.object.position.z - 3));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+        game.advance(3);
+
+        return { start, end: [player.x, player.y], orders: [...window.orders] };
+    });
+
+    expect(tapped.orders).toEqual([]);
+    expect(tapped.end).toEqual(tapped.start);
+
+    const set = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const spot = session.view.toScreen(game.avatars.get("orc").point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 20000 });
+        game.advance(0.2);
+
+        return { orders: [...window.orders], order: player.order && { ...player.order } };
+    });
+
+    expect(set.orders).toEqual(["engage"]);
+    expect(set.order).toMatchObject({ type: "engage", target: "orc" });
+
+    // On again: a tap on the ground walks them there
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.command("player", { type: "stop" });
+        game.start();
+    });
+    await controls();
+    await page.locator("label:has(#tapmoveswitch)").click();
+    await expect(tapMove).toBeChecked();
+    await resume();
+
+    const walked = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const avatar = game.avatars.get("player");
+
+        game.stop();
+        game.advance(0.2);
+
+        const start = [player.x, player.y];
+        const spot = session.view.toScreen(avatar.object.position.clone().setZ(avatar.object.position.z - 3));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 40000 });
+        game.advance(4);
+
+        return { start, end: [player.x, player.y] };
+    });
+
+    expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
+});
+
 test("tapping an enemy rings it as the player's target, until they're told to walk away (with Auto target lock off; on, still ringed)", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -15083,7 +15231,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
         actions: ["#wheelsbutton", "#quickbutton"],
         graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
-        controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch"],
+        controls: ["#stickswitch", "#floatswitch", "#tapmoveswitch", "#zoomswitch", "#minimapswitch"],
         camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
         gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
         chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#refuseswitch", "#messengerswitch", "#blockedbutton"],

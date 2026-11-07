@@ -11,10 +11,11 @@
 import * as THREE from "three";
 
 /**
- * How they look: how near the player one's drawn (`seen`, metres), and the colours of their rock,
- * ash, burnt and weathered wood, bones, rag, rust and leather.
+ * How they look: how near the player one's drawn (`seen`, metres), how far out a campsite's ring of
+ * stones reaches (`hearth`, metres: the tall grass kept clear inside it), and the colours of their
+ * rock, ash, burnt and weathered wood, bones, rag, rust and leather.
  */
-export const FIND_LOOK = Object.freeze({ seen: 140, rock: 0x77706a, ash: 0x55524e, char: 0x1d1814, wood: 0x6a5238, bone: 0xd6cdb8, rag: 0x3a3a30, rust: 0x6e4a32, leather: 0x5a3c22 });
+export const FIND_LOOK = Object.freeze({ seen: 140, hearth: 1.05, rock: 0x77706a, ash: 0x55524e, char: 0x1d1814, wood: 0x6a5238, bone: 0xd6cdb8, rag: 0x3a3a30, rust: 0x6e4a32, leather: 0x5a3c22 });
 
 // A number from 0 up to 1, the same for a seed and a step (a find's own dice)
 function dice(seed) {
@@ -68,6 +69,14 @@ export class FindProps {
                 this.shown.set(find.id, group);
             }
         }
+    }
+
+    /**
+     * Where the tall grass is kept clear (grass.js setClearings): inside each campsite's ring of
+     * stones, its fire's at its middle. [{ x, z, radius }], metres.
+     */
+    clearings() {
+        return [...this.shown.values()].filter(({ userData }) => userData.kind === "campsite").map(({ position }) => ({ x: position.x, z: position.z, radius: FIND_LOOK.hearth }));
     }
 
     dispose() {
@@ -188,6 +197,7 @@ export class FindProps {
         }
 
         group.name = `find ${id}`;
+        group.userData.kind = kind;
         group.position.set(x, base, z);
 
         return group;

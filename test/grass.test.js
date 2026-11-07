@@ -2,15 +2,18 @@
 // it round the player): the same every time, only on open grass, as thick and as tall as its land
 // grows it and varied across it, gathered round what stands, trodden beside the ways, drier on the
 // sunny side; drawn in bands round the player as far as each quality asks, none on low, thinning
-// out to its edge; past where it's drawn (and on low) the ground takes its look, and the fields are
-// seen from afar
+// out to its edge, and none inside the campfires' rings near them; past where it's drawn (and on
+// low) the ground takes its look, and the fields are seen from afar
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ALONG, CROP_ODDS, FIELDS, NARROWEST } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK, WET } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
-import { GRASS_BANDS, GRASS_END, TallGrass } from "../client/js/world/grass.js";
+import * as THREE from "three";
+import { Camps } from "../client/js/world/camps3d.js";
+import { FIND_LOOK, FindProps } from "../client/js/world/finds3d.js";
+import { GRASS_BANDS, GRASS_CLEARINGS, GRASS_END, TallGrass } from "../client/js/world/grass.js";
 import { CROP_STANDS, GRASS_LANDS, GRASS_PATHS, GRASS_RINGS, grassLooks, grassMap } from "../client/js/world/grassmap.js";
 import { FIELDS_GLSL, GRASS_UNDER, landColours, STRAW } from "../client/js/world/ground.js";
 import { facingSun, SUN_FROM } from "../client/js/world/sun.js";
@@ -321,6 +324,70 @@ describe("the tall grass drawn (world/grass.js)", () => {
         assert.equal(farOnly.grassShape.value.z, 1);
         assert.equal(GRASS_UNDER.reach.value, 28);
         grass.dispose();
+    });
+
+    it("keeps it clear inside the rings of the campfires nearest the player, trodden short round them, every band alike", () => {
+        const grass = new TallGrass(overworld);
+        const uniforms = (mesh) => {
+            const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <beginnormal_vertex>\n#include <begin_vertex>", fragmentShader: "" };
+
+            mesh.material.onBeforeCompile(shader);
+
+            return shader;
+        };
+
+        grass.setQuality(QUALITY.high.grass);
+
+        // (Each band reads the same clearings, and looks at where each blade's foot is)
+        const shaders = grass.object.children.map(uniforms);
+
+        assert.ok(shaders.every(({ uniforms: { grassClear } }) => grassClear.value === grass.clearings));
+        assert.ok(shaders.every(({ vertexShader }) => vertexShader.includes(`uniform vec3 grassClear[${GRASS_CLEARINGS.most}]`) && vertexShader.includes("grassCleared(foot)")));
+        assert.ok(GRASS_CLEARINGS.trodden > 0 && GRASS_CLEARINGS.shortest > 0 && GRASS_CLEARINGS.shortest < 1);
+
+        // (None at first)
+        assert.ok(grass.clearings.every(({ z }) => z === 0));
+
+        // (A few: each as it's given)
+        grass.setClearings([{ x: 10, z: 20, radius: 1.05 }, { x: 30, z: 40, radius: 0.7 }], [0, 0]);
+        assert.deepEqual(grass.clearings.slice(0, 3).map((clearing) => clearing.toArray()), [[10, 20, 1.05], [30, 40, 0.7], [0, 0, 0]]);
+
+        // (More than it can keep: the nearest the player; and the rest let go)
+        const far = Array.from({ length: GRASS_CLEARINGS.most + 4 }, (_, k) => ({ x: 100 + k * 10, z: 0, radius: 0.6 }));
+
+        grass.setClearings([...far].reverse(), [100, 0]);
+        assert.deepEqual(grass.clearings.map(({ x }) => x), far.slice(0, GRASS_CLEARINGS.most).map(({ x }) => x));
+        grass.setClearings([]);
+        assert.ok(grass.clearings.every(({ z }) => z === 0));
+        grass.dispose();
+    });
+
+    it("is told where the campfires' rings are: an old campsite's (not a fallen adventurer's remains), and a camp's", () => {
+        const scene = new THREE.Scene();
+        const finds = new FindProps(scene);
+        const camps = new Camps(scene);
+
+        finds.set(
+            [
+                { id: "find-1", kind: "campsite", x: 5, z: 6 },
+                { id: "find-2", kind: "remains", x: 9, z: 9 },
+            ],
+            () => 2,
+        );
+        camps.pitch("camp-1", "human", { fire: [3, 4], tents: [] });
+
+        assert.deepEqual(finds.clearings(), [{ x: 5, z: 6, radius: FIND_LOOK.hearth }]);
+
+        const [camp] = camps.clearings();
+
+        assert.deepEqual([camp.x, camp.z], [3, 4]);
+        assert.ok(camp.radius > 0.5 && camp.radius < FIND_LOOK.hearth);
+
+        // (Gone with them)
+        finds.set([], () => 0);
+        camps.strike("camp-1");
+        assert.deepEqual([...finds.clearings(), ...camps.clearings()], []);
+        finds.dispose();
     });
 
     it("maps the nine chunks round the player into their blocks once they and the chunks round them are drawn, and none that aren't", () => {
