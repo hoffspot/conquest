@@ -44,6 +44,7 @@ import { Blocks, DUNGEON_CUT, DUNGEON_PROPS, furnish, lifeMaterial, loadProp, RO
 import { ASSETS } from "../app/assets.js";
 import { KEEP_KIT, KIT_PICTURES, kitPlacements } from "./keepkit.js";
 import { kitPiece, kitsFor } from "./propkits.js";
+import { houseKitRead, kitFloors, readyHouseKit } from "./kithouses3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
 import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeometry, ribPaths, veinsOn } from "./flesh.js";
@@ -194,6 +195,10 @@ let lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] }
 // the kit's read and without the licensed models (buildingInterior puts it away once it's in)
 let kitting = null;
 let standIns = null;
+
+// The humans' floorboards laid in the inside being built (art pixels: [x0, z0, x1, z1, top]), to
+// be laid over with the house kit's wood floor (floorboards); null for another people's
+let boarding = null;
 
 // The piece of a kit that stands in for a furnishing of `role` in the inside being built, or none
 const kitted = (role, seed = 0) => (kitting ? kitPiece(role, { ...kitting, seed }) : null);
@@ -843,6 +848,13 @@ function chest(solid, x, z) {
 }
 
 // A rug: a border and a field
+// Floorboards, from y0 up to `top` (art pixels): the humans' laid over with the house kit's wood
+// floor once it's read (`boarding`: kithouses3d.js kitFloors)
+function floorboards(solid, x0, y0, z0, x1, top, z1) {
+    solid.box(x0, y0, z0, x1, top, z1, material("planks"));
+    boarding?.push([x0, z0, x1, z1, top]);
+}
+
 function rug(solid, x0, z0, x1, z1) {
     solid.box(x0, 0, z0, x1, 0.08, z1, material("rug-border"));
     solid.box(x0 + 1.2, 0.08, z0 + 1.2, x1 - 1.2, 0.12, z1 - 1.2, material("rug"));
@@ -1579,9 +1591,9 @@ function upstairs(map) {
     const [well0, well1] = [m(stair.y), m(stair.y + stair.h)];
 
     // Floorboards, with the stairwell open: the stairs going down in it, a rail round it
-    solid.box(-m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3), material("planks"));
-    solid.box(hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
-    solid.box(hole0, -0.5, well1, hole1, 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3));
+    floorboards(solid, hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
+    floorboards(solid, hole0, -0.5, well1, hole1, 0, h + m(0.3));
     stairs(solid, hole0, hole1, well0, well1, -m(STOREY), 0, well1);
 
     for (const x of [hole0, hole0 + (hole1 - hole0) / 3, hole0 + ((hole1 - hole0) * 2) / 3]) {
@@ -2032,7 +2044,7 @@ function guild(map) {
     const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
 
     // Floorboards, timber-framed plaster walls, the door in the middle of the south wall
-    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
 
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
@@ -2368,7 +2380,7 @@ function hall(map) {
     const [w, h] = [m(map.width), m(map.height)];
     const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
 
-    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
 
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
@@ -3540,9 +3552,9 @@ function towerTop(map) {
     const stair = map.pieces.find((piece) => piece.kind === "stairs");
     const [hole0, hole1, well0, well1] = [m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h)];
 
-    solid.box(-m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3), material("planks"));
-    solid.box(hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
-    solid.box(hole0, -0.5, well1, hole1, 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), hole0, 0, h + m(0.3));
+    floorboards(solid, hole1, -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
+    floorboards(solid, hole0, -0.5, well1, hole1, 0, h + m(0.3));
     stairs(solid, hole0, hole1, well0, well1, -m(STOREY), 0, well1);
 
     // (The stairwell down a dark well: the floor below, and its walls)
@@ -5604,7 +5616,7 @@ function barracks(map) {
     const [w, h] = [m(map.width), m(map.height)];
     const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
 
-    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
 
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
@@ -5852,7 +5864,7 @@ function shop(map) {
     const [w, h] = [m(map.width), m(map.height)];
     const at = (piece) => map.pieces.filter((each) => each.kind === piece);
 
-    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("planks"));
+    floorboards(solid, -m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3));
 
     const doors = map.marks.D;
     const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
@@ -6373,6 +6385,9 @@ export function* buildingInterior(map) {
 
     kitting = kitsFor(place).length ? place : null;
     standIns = kitting ? new Solid() : null;
+    boarding = !own && !map.dungeon ? [] : null;
+
+    let boards = null;
 
     try {
         built = (BUILDERS[map.style ?? map.id] ?? (map.dungeon ? dungeon : null))(map);
@@ -6383,11 +6398,13 @@ export function* buildingInterior(map) {
         }
     } finally {
         lit = lighting;
+        boards = boarding;
         palette = null;
         framed = true;
         people = null;
         kitting = null;
         standIns = null;
+        boarding = null;
         lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
     }
 
@@ -6430,6 +6447,23 @@ export function* buildingInterior(map) {
         standing.add(joined(partsOf(wrapped, { atlas: (stuff) => atlasInside(stuff.userData.cut) })));
         standing.name = "kit-stand-ins";
         object.add(standing);
+    }
+
+    // (The humans' floorboards laid with the house kit's wood floor, once it's read: kithouses3d.js)
+    if (boards?.length) {
+        const laid = () => {
+            const floor = kitFloors(boards.map(([x0, z0, x1, z1, top]) => [x0 / M, z0 / M, x1 / M, z1 / M, top / M]));
+
+            if (floor) {
+                object.add(floor);
+            }
+        };
+
+        if (houseKitRead()) {
+            laid();
+        } else {
+            readyHouseKit()?.ready.then(() => houseKitRead() && laid());
+        }
     }
 
     // (Its rock's roof, how high over a point of the level: caverns.js)

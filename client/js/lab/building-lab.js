@@ -14,7 +14,9 @@
 // draw its rocks as that quality does), or show=home for the
 // middle of the people's homeland. &burnt=burning|burnt|framed|roofed shows a street's or a
 // town's houses as the Behemoth of the Rift leaves them and as they're built again (core/burnt.js,
-// world/art/kits/burnt.js). window.buildingLab is there for tests.
+// world/art/kits/burnt.js). The humans' timber and brick houses of a town, city or capital (and
+// the street's) are built of the house kit once it's read (world/kithouses3d.js), the game's own
+// with &kit=0 (and its nearer detail with &detail=near). window.buildingLab is there for tests.
 
 import * as THREE from "three";
 import { ASSETS } from "../app/assets.js";
@@ -42,6 +44,7 @@ import { buildGround, landColour } from "../world/ground.js";
 import { PEOPLE_KITS } from "../world/art/peoples/index.js";
 import { readKtx2With } from "../world/art/engine/models.js";
 import { buildTown } from "../world/town3d.js";
+import { KIT_HOUSES, readyHouseKit } from "../world/kithouses3d.js";
 import { BURNT } from "../core/burnt.js";
 import { View } from "../world/view.js";
 
@@ -56,6 +59,10 @@ const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
     burnt: BURNT.stages.includes(params.get("burnt")) ? params.get("burnt") : null,
+    // (The humans' town houses built of the house kit once it's read, unless &kit=0: the game's own)
+    kit: params.get("kit") !== "0",
+    // (&detail=near: the kit's near detail, not the lower the world's drawn in)
+    detail: params.get("detail") === "near" ? "near" : "far",
     show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", "forts", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
@@ -319,6 +326,10 @@ async function build() {
 
     await prepareAtlas();
 
+    // (The house kit read first, so a town's or city's houses are built of it from the start)
+    Object.assign(KIT_HOUSES, { on: state.kit, detail: state.detail });
+    await readyHouseKit()?.ready;
+
     // A stretch of a land, as the game draws it
     if (state.show.startsWith("wilds-") || state.show === "home") {
         const world = buildWorld({ seed: state.seed });
@@ -476,8 +487,10 @@ async function build() {
 
     if (!settlement) {
         const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
+        // (The street's houses a town's, to be built of the house kit, or a village's, the game's own)
+        const kind = state.kit ? "town" : "village";
 
-        Object.assign(world, { town: { ...world.town, pieces: street.pieces, yards: [] }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
+        Object.assign(world, { town: { ...world.town, kind, pieces: street.pieces, yards: [] }, trees: [], width: street.width, height: street.height, stamp: null, origin: 0 });
     }
 
     const group = new THREE.Group();
@@ -511,7 +524,7 @@ function finish(pieces) {
     }));
     $("#status").hidden = true;
     state.ready = true;
-    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}${state.burnt ? `&burnt=${state.burnt}` : ""}`);
+    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}${state.burnt ? `&burnt=${state.burnt}` : ""}${state.kit ? "" : "&kit=0"}${state.detail === "near" ? "&detail=near" : ""}`);
 }
 
 function place() {

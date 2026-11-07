@@ -26,6 +26,7 @@ import { PLOT } from "../core/world.js";
 import { gatehouse, keep, RUINED, tower, wall } from "./art/kits/castle.js";
 import { citadelPart } from "./art/kits/citadel.js";
 import { house } from "./art/kits/house.js";
+import { kitHouseObject } from "./kithouses3d.js";
 import { landmark } from "./art/kits/landmarks.js";
 import { neutral } from "./art/kits/neutral.js";
 import { builderFor } from "./art/peoples/index.js";
@@ -46,7 +47,7 @@ export const PIXEL = PLOT / 20;
 
 // What builds each kind of piece (castle pieces too, for towns with walls one day; and each part
 // of a hill citadel: kits/citadel.js)
-export const BUILDERS = { house, landmark, prop, tree, wall, tower, gatehouse, keep, neutral, yard, citadel: citadelPart };
+export const BUILDERS = { house: (piece) => kitHouseObject(piece) ?? house(piece), landmark, prop, tree, wall, tower, gatehouse, keep, neutral, yard, citadel: citadelPart };
 
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
@@ -153,7 +154,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
             continue;
         }
 
-        const object = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf });
+        const object = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf, settlement: world.town.kind });
 
         if (object) {
             // (Trees a piece grows round itself, as the elves build into great trees: planted with
@@ -304,7 +305,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
                 group.scale.setScalar(PIXEL);
 
                 for (const { piece, index } of block.pieces) {
-                    const made = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf });
+                    const made = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf, settlement: world.town.kind });
 
                     if (made) {
                         group.add(made);
@@ -347,8 +348,10 @@ async function breathe() {
 // turned to face its street (or the market) about its middle, standing on the ground (metres: the
 // town's corner at `origin`), in world pixels; or null if nothing builds it, or it fails to build
 // (the town drawn without it rather than not at all)
-async function townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf }) {
-    const spec = piece.kind ? piece : catalog.get(piece.key);
+async function townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf, settlement = null }) {
+    const laid = piece.kind ? piece : catalog.get(piece.key);
+    // (A house knows the kind of place it's in: a town's, city's or capital's are the house kit's)
+    const spec = laid.kind === "house" && settlement ? { ...laid, settlement } : laid;
     const burnt = spec.kind === "house" && index !== null ? burntOf(index) : null;
     const build = builderOf(burnt ? { ...spec, burnt } : spec);
 
@@ -601,7 +604,8 @@ export function partsOf(root, { atlas = false } = {}) {
         }
 
         const materials = Array.isArray(node.material) ? node.material : [node.material];
-        const source = node.geometry.index ? node.geometry.toNonIndexed() : node.geometry.clone();
+        // (A licensed kit's pieces kept as they're indexed, sharing their corners: kithouses3d.js)
+        const source = node.geometry.index && !node.userData.indexed ? node.geometry.toNonIndexed() : node.geometry.clone();
 
         source.applyMatrix4(node.matrixWorld);
 
@@ -620,7 +624,8 @@ export function partsOf(root, { atlas = false } = {}) {
             const lit = atlas === true && !drawn ? toGlow(part, own) : null;
             const [geometry, material] = drawn ? [drawn, atlas === true ? atlasMaterial() : atlas(own)] : lit ? [lit, glowMaterial()] : [part, own];
             const key = drawn && atlas === true ? "atlas" : lit ? "glow" : materialKey(material);
-            const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : [])];
+            // (And any a material of a licensed kit's draws with: kithouses3d.js kitRoof's `slate`)
+            const keep = drawn ? ["position", "normal", "uv", "color", "layer"] : ["position", "normal", "uv", ...(material.vertexColors ? ["color"] : []), ...(material.userData.attributes ?? [])];
 
             for (const name of Object.keys(geometry.attributes)) {
                 if (!keep.includes(name)) {
@@ -669,7 +674,7 @@ export function joined(parts) {
         mesh.castShadow = material.userData.shadow !== false;
         mesh.receiveShadow = true;
         mesh.matrixAutoUpdate = false;
-        mesh.userData.far = geometries.reduce((count, geometry) => count + geometry.attributes.position.count, 0);
+        mesh.userData.far = geometries.reduce((count, geometry) => count + (geometry.index ? geometry.index.count : geometry.attributes.position.count), 0);
         result.add(mesh);
     }
 

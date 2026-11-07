@@ -310,6 +310,27 @@ The owner asked for the keep as a dungeon of four floors going up, in the castle
   model and the horizon, it's under 300 at High (`e2e/bellhaven.spec.js`).
 - Pictures: `floorshots.cjs` (`LOOK=1` for the balconies' views). Look from each side.
 
+## A kit of building pieces: the house kit
+
+Meshsmith Foundry's half-timbered building kit came in as a kit the game builds houses of, not a
+scene (docs/LICENSED_MODELS.md, *The house kit*). What it took, for the next modular kit:
+
+- **Keep the pack's own pivots** (`scripts/housekit.py`): a modular kit's pieces snap on its grid
+  by their pivots (a wall's inner face at its foot), so each sits in a square of its own with its
+  pivot in the middle, and the game takes the square's middle away again (kithouses3d.js).
+- **Measure every fit from the pieces, never guess**: each frame's height and where its posts
+  stop, the gables' rafters' line, the fills' holes and the windows' extents, the roof pieces'
+  rows. Then check the rules' houses in Blender by rays (into every wall and gable, down onto the
+  roof, up under the eaves) and the gables' tops against their line, and picture them.
+- **Roofs from the kit's tiles, not its roof pieces**: thousands of pieces, simplified, tear
+  apart. Bake one seamless repeat of each tile flat (the pack's tiles are 2 m strips: a repeat
+  must be a whole number of them) and lay planes with it on the measured line.
+- **One material, no shadows of its own**: the kit's pieces and roofs in one material (a
+  corner's attribute picking the roof's tiles) is one more draw a block; its plaster, a dark
+  inside and its soffits in the art's material cast the house's shadow.
+- **A dark inside**: a pack made for Unreal leaves its plaster open round its windows, and a
+  hollow house shows the ground through them.
+
 ## Rules learnt the hard way
 
 - **Merging `main`: never take "ours" for `client/index.html`.** Take main's and regenerate:
@@ -340,6 +361,10 @@ In `scripts/`, run from the repository's root:
 - `render.py -- <prefix> file.fbx [width] [samples]`: clay pictures from three sides.
 - `kit.py -- <Meshes dir> <pieces.json> <out.blend> [picture.png]`: a kit's parts in one `.blend`
   for the pipeline. `bellhaven-kit.json` is Bellhaven's list.
+- `housekit.py -- <Meshes dir> <pieces.json> <tiles dir> <out.blend> [--cells 3]`: a modular
+  building kit's pieces in one `.blend`, each keeping its pivot, a square each, its windows' glass
+  apart and its roof tiles' repeats as planes; which square each is in (`<out>.cells.json`) and
+  what each joins into (`<out>.joins.json`, the config's `join`).
 - `means.py -- texture ...`: each texture's mean colour in linear light.
 - `walkpic.mjs <walk.json | walk.js> <out.png> [scale] [level] [x,z ...]`: the walk as a picture.
 - `heights.mjs <scene> <x> <z> [half] [step]`: how high it stands round a point.
