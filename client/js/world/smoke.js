@@ -48,12 +48,15 @@ uniform float wander;
 uniform float share;
 attribute vec2 corner;
 attribute vec4 puff;
+attribute vec3 tint;
 varying vec2 vCorner;
 varying float vAge;
 varying float vSeed;
+varying vec3 vTint;
 void main() {
     vCorner = corner;
     vSeed = puff.w;
+    vTint = tint;
     // (Puffs past the quality's share not drawn: put out of sight)
     if (puff.w > share) {
         vAge = 1.0;
@@ -89,6 +92,7 @@ uniform float glowNight;
 varying vec2 vCorner;
 varying float vAge;
 varying float vSeed;
+varying vec3 vTint;
 void main() {
     float r = length(vCorner);
     if (r > 1.0) discard;
@@ -99,7 +103,8 @@ void main() {
     float alpha = body * smoothstep(0.0, 0.06, vAge) * (1.0 - smoothstep(0.25, 1.0, vAge)) * thick;
     if (alpha < 0.01) discard;
     // (Lit from above, in shade below; greyer as it thins; as the sky's light is, dark at night)
-    vec3 colour = mix(shadeColour, sunColour, 0.45 + 0.4 * vCorner.y + 0.15 * vAge) * skyGlow;
+    // (Its own colour, if it has one: an alchemist's green, greying as it thins)
+    vec3 colour = mix(shadeColour, sunColour, 0.45 + 0.4 * vCorner.y + 0.15 * vAge) * mix(vTint, vec3(1.0), vAge * 0.6) * skyGlow;
     // (A fire under it lighting it from below, most low down and on its underside)
     colour += fireGlow * mix(1.0, windowLight.x, glowNight) * (1.0 - vAge) * (1.0 - vAge) * (0.6 - 0.4 * vCorner.y);
     gl_FragColor = vec4(colour, alpha);
@@ -157,9 +162,10 @@ const hash = (x, y, z) => {
 };
 
 /**
- * The smoke rising from chimney tops (`tops`: [[x, y, z, strength]], metres, in the world: a
- * strength over 1 always lit, and as much higher, a little wider), those whose hearths are lit: a
- * mesh (in the world's coordinates), or null if none is.
+ * The smoke rising from chimney tops (`tops`: [[x, y, z, strength, tint?]], metres, in the world: a
+ * strength over 1 always lit, and as much higher, a little wider; a tint its own colour, sRGB, as
+ * an alchemist's green), those whose hearths are lit: a mesh (in the world's coordinates), or null
+ * if none is.
  */
 export function smokeMesh(tops, kind = "chimney") {
     const smoke = SMOKES[kind];
@@ -173,11 +179,15 @@ export function smokeMesh(tops, kind = "chimney") {
     const positions = new Float32Array(count * 12);
     const corners = new Float32Array(count * 8);
     const puffs = new Float32Array(count * 16);
+    const tints = new Float32Array(count * 12).fill(1);
     const indices = new Uint32Array(count * 6);
+    const colour = new THREE.Color();
     let n = 0;
 
-    for (const [x, y, z, strength = 1] of lit) {
+    for (const [x, y, z, strength = 1, tint = null] of lit) {
         const seed = hash(z, x, y);
+        // (Its tint over the smoke's own grey, as bright: white leaves it as it is)
+        const own = tint === null ? [1, 1, 1] : colour.set(tint).toArray().map((c) => c * 1.6);
 
         for (let k = 0; k < smoke.puffs; k++, n++) {
             // (Evenly through the rise, each column starting its own way; the share drops every
@@ -188,6 +198,7 @@ export function smokeMesh(tops, kind = "chimney") {
                 positions.set([x, y, z], (n * 4 + c) * 3);
                 corners.set([c % 2 ? 1 : -1, c < 2 ? -1 : 1], (n * 4 + c) * 2);
                 puffs.set(puff, (n * 4 + c) * 4);
+                tints.set(own, (n * 4 + c) * 3);
             }
 
             indices.set([n * 4, n * 4 + 1, n * 4 + 2, n * 4 + 2, n * 4 + 1, n * 4 + 3], n * 6);
@@ -199,6 +210,7 @@ export function smokeMesh(tops, kind = "chimney") {
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("corner", new THREE.BufferAttribute(corners, 2));
     geometry.setAttribute("puff", new THREE.BufferAttribute(puffs, 4));
+    geometry.setAttribute("tint", new THREE.BufferAttribute(tints, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     geometry.computeBoundingSphere();
     // (Reaching as high as the strongest smoke rises (strength 1.4, and as much again as a puff's
@@ -223,9 +235,9 @@ export function chimneysOf(object) {
     const point = new THREE.Vector3();
 
     object.traverse((node) => {
-        for (const [x, y, z, strength = 1] of node.userData.smoke ?? []) {
+        for (const [x, y, z, strength = 1, ...tint] of node.userData.smoke ?? []) {
             point.set(x, y, z).applyMatrix4(node.matrixWorld);
-            tops.push([point.x, point.y, point.z, strength]);
+            tops.push([point.x, point.y, point.z, strength, ...tint]);
         }
     });
 

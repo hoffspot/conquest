@@ -92,7 +92,7 @@ const WINGED = 0.6;
 export const SPANS = Object.freeze([4, 5, 6, 8, 10]);
 
 // Each fill's openings (Stone's and Brick's alike): [x0, x1, y0, y1] in the piece's own metres
-const HOLES = Object.freeze({
+export const HOLES = Object.freeze({
     "2m_RoofL_Window_1x2": [[0.442, 0.757, 1.175, 1.62]],
     "2m_RoofR_Window_1x2": [[-0.757, -0.442, 1.175, 1.62]],
     "2m_RoofPeak_Window_1x2": [[-0.157, 0.157, 0.375, 0.82]],
@@ -118,7 +118,7 @@ const HOLES = Object.freeze({
 });
 
 // The windows' own extents: [x0, x1, y0, y1]
-const WINDOWS = Object.freeze({
+export const WINDOWS = Object.freeze({
     "1x1": [-0.197, 0.197, 0, 0.33],
     "1x2": [-0.197, 0.197, 0.05, 0.54],
     "1x3": [-0.197, 0.197, -0.01, 0.64],
@@ -228,16 +228,18 @@ export function kitHouse(plan) {
 
     const fill = plan.style === "brick" ? "Brick" : "Stone";
     const figures = FIGURES[plan.figure] ?? FIGURES.braced;
-    const ends = random.pick(figures.ends);
-    const between = random.pick(figures.between);
-    const one = random.pick(figures.one);
-    const gableFigure = random.pick(GABLES);
-    const door = random.pick(DOORS);
-    const ground = random.pick(["2x3", "2x4", "2x3"]);
-    const upper = random.pick(["2x3", "2x2", "1x3", "2x3"]);
-    const doubled = plan.wealth > 0.6 && random.chance(0.7);
-    const sills = random.chance(0.6);
-    const finial = plan.wealth > 0.45 ? random.pick(FINIALS) : null;
+    // (A shop's own, the same in every town: kitshop.js; a house's as its seed falls)
+    const own = plan.braces ?? {};
+    const ends = own.ends ?? random.pick(figures.ends);
+    const between = own.between ?? random.pick(figures.between);
+    const one = own.one ?? random.pick(figures.one);
+    const gableFigure = own.gable ?? random.pick(GABLES);
+    const door = own.door ?? random.pick(DOORS);
+    const ground = own.ground ?? random.pick(["2x3", "2x4", "2x3"]);
+    const upper = own.upper ?? random.pick(["2x3", "2x2", "1x3", "2x3"]);
+    const doubled = own.doubled ?? (plan.wealth > 0.6 && random.chance(0.7));
+    const sills = own.sills ?? random.chance(0.6);
+    const finial = "finial" in plan ? plan.finial : plan.wealth > 0.45 ? random.pick(FINIALS) : null;
     const roof = ROOFS[plan.roof] ?? ROOFS.clay;
 
     // Its storeys: the planned top storey's box, its walls' outer faces kept inside it, on the
@@ -251,7 +253,7 @@ export function kitHouse(plan) {
     const roomZ = bz1 - bz0 - 2 * KIT.out;
     // (Its shape drawn from its own stream, so the rest of it's the same: a wing, where, dormers)
     const shape = createRandom((plan.seed ^ 0x7a11) >>> 0);
-    const winged = !plan.back && shape.chance(WINGED);
+    const winged = !plan.back && plan.wing !== false && shape.chance(WINGED);
     let span = spanFor(ridge === "x" ? roomZ : roomX);
     let long = Math.max(span, onGrid(ridge === "x" ? roomX : roomZ));
     let wing = null;
@@ -385,7 +387,8 @@ export function kitHouse(plan) {
         }
 
         if (kind === "door") {
-            const where = random.pick(["Center", "Center", "Left", "Right"]);
+            // (A shop's in the middle of its module, the middle of its front: on its entrance)
+            const where = plan.front ? "Center" : random.pick(["Center", "Center", "Left", "Right"]);
             const lit = where !== "Center" && random.chance(0.5);
             const name = `2m_Door${where}${lit ? "_Window_1x3" : ""}`;
             const [hx0, hx1] = HOLES[name][0];
@@ -422,7 +425,7 @@ export function kitHouse(plan) {
             }
 
             if (kind === "shop") {
-                extras.awnings.push({ at: centre, out: wall.out, across: wall.across, width: 2, y: lift + HOLES[name][0][3] + 0.1 });
+                extras.awnings.push({ at: centre, out: wall.out, across: wall.across, width: 2, y: lift + HOLES[name][0][3] + 0.1, ...(plan.awning ? { look: plan.awning } : {}) });
             }
 
             return;
@@ -430,7 +433,8 @@ export function kitHouse(plan) {
 
         put(`WallFill_${fill}_2m`, centre, lift, t, "fill");
 
-        if (!plain) {
+        // (Behind a shop's name board, plain: kitshop.js)
+        if (!plain && kind !== "board") {
             put(`WallPattern_2m_${first || last ? ends : between}`, centre, lift, t, "pattern");
         }
     }
@@ -485,8 +489,10 @@ export function kitHouse(plan) {
             const stepped = jetty > 0 && run.main && (side === "left" || side === "right") && s < n - 1;
 
             // (The right-hand wall runs from the front: its fillers, where a jetty's made it, at its start)
-            const laid = (stepped && side === "right" ? runOf(length, { fillers: "end" }).map((m) => ({ ...m, at: length - m.at - m.width })).reverse() : runOf(length, { fillers: stepped ? "end" : "both" })).map((m) => ({ ...m, at: m.at + start }));
-            const kinds = kindsOf(wall, laid, side, s);
+            // (A shop's front as kitshop.js lays it, its door in the middle)
+            const shopFront = Boolean(plan.front) && run.main && side === "front";
+            const laid = shopFront ? plan.front.runs[s] : (stepped && side === "right" ? runOf(length, { fillers: "end" }).map((m) => ({ ...m, at: length - m.at - m.width })).reverse() : runOf(length, { fillers: stepped ? "end" : "both" })).map((m) => ({ ...m, at: m.at + start }));
+            const kinds = shopFront ? plan.front.kinds[s] : kindsOf(wall, laid, side, s);
             const big = laid.filter(({ width }) => width >= 1);
 
             laid.forEach((m, k) => module(wall, m, y, kinds[k], { storey: s, first: m === big[0], last: m === big.at(-1), plain }));
@@ -644,9 +650,13 @@ export function kitHouse(plan) {
     // own going on either side of it, no wider than the main gables: so its ridge is no higher)
     let cross = null;
 
-    if (kind === "gable" && ridge === "x" && n > 1 && !plan.back && random.chance(plan.wealth > 0.5 ? 0.6 : 0.3)) {
+    // (A shop's if its look has one, over the modules about its door, clear of a hipped roof's
+    // hips: kitshop.js)
+    const crossing = plan.front ? plan.front.cross && ridge === "x" && n > 1 && kind !== "half-hip" : kind === "gable" && ridge === "x" && n > 1 && !plan.back && random.chance(plan.wealth > 0.5 ? 0.6 : 0.3);
+
+    if (crossing) {
         const front = sideOf(boxes.at(-1), "front");
-        const run = runOf(front.length);
+        const run = plan.front ? plan.front.runs.at(-1) : runOf(front.length);
         const big = run.filter(({ width: w }) => w >= 1);
         const count = big.length % 2 ? 3 : 2;
 
@@ -654,7 +664,11 @@ export function kitHouse(plan) {
             const chosen = big.slice((big.length - count) / 2, (big.length + count) / 2);
             const width = chosen.reduce((sum, { width: w }) => sum + w, 0);
 
-            if (width <= span + EPSILON) {
+            // (A hipped roof's hips reach the ridge half its span in from its ends: the gable's
+            // valleys no nearer its ends than that)
+            const hipped = kind === "hip" && (chosen[0].at < span / 2 - EPSILON || front.length - chosen.at(-1).at - chosen.at(-1).width < span / 2 - EPSILON);
+
+            if (width <= span + EPSILON && !hipped) {
                 const from = chosen[0].at;
 
                 cross = { side: 1, from: front.origin[0] + from, to: front.origin[0] + from + width };
@@ -678,9 +692,11 @@ export function kitHouse(plan) {
         const [hx0, hx1, hy0, hy1] = HOLES[name][0];
         const [ox0, ox1, oy0, oy1] = WINDOWS[size];
 
-        for (const side of ridge === "x" ? (cross ? [] : ["front"]) : ["left", "right"]) {
+        for (const side of ridge === "x" ? (cross && !plan.front ? [] : ["front"]) : ["left", "right"]) {
             const wall = sideOf(boxes.at(-1), side);
-            const twos = runOf(wall.length).filter(({ width: w, at }) => w === 2 && at >= 2 - EPSILON && wall.length - at - 2 >= 2 - EPSILON);
+            // (On a shop's front, its own modules, clear of its cross gable: kitshop.js)
+            const clearOfCross = ({ at }) => !cross || wall.origin[0] + at + 2 <= cross.from - 1 + EPSILON || wall.origin[0] + at >= cross.to + 1 - EPSILON;
+            const twos = (plan.front && side === "front" ? plan.front.runs.at(-1) : runOf(wall.length)).filter(({ width: w, at }) => w === 2 && at >= 2 - EPSILON && wall.length - at - 2 >= 2 - EPSILON).filter(clearOfCross);
             const apart = (p, q) => q.at - p.at - 2 >= 1.4 - EPSILON;
             const ends = twos.length >= 2 && apart(twos[0], twos.at(-1)) ? [twos[0], twos.at(-1)] : null;
             // (The same on either side of a gable-fronted house: both ends, or the middle one; of
@@ -1116,9 +1132,27 @@ function wingRoof({ box, top, span, join, slopes, trims, over }) {
 }
 
 /**
+ * How likely a house the kit could build is the game's own instead (kits/house.js), by where it
+ * stands (setpieces/town.js: a house's `street`, or out `back`): none round the market, few on the
+ * main streets, more down the lanes and behind, so the kit sets a street's look and the game's
+ * own houses mix in with it the further back one goes; about a quarter of them in all, in a town,
+ * a city or a capital alike (test/kithouse.test.js).
+ */
+export const KIT_MIX = Object.freeze({ market: 0, main: 0.08, lane: 0.3, back: 0.3 });
+
+/** Whether a house the kit could build is the game's own instead (KIT_MIX): its own draw, from its seed, the same every time. */
+export function ownHouse(piece) {
+    const share = KIT_MIX[piece.back ? "back" : (piece.street ?? "main")] ?? 0;
+    const seed = piece.seed ?? Math.round((piece.x ?? 0) * 31 + (piece.y ?? 0) * 17 + 7);
+
+    return share > 0 && createRandom((seed ^ 0x6f3d) >>> 0).range(0, 1) < share;
+}
+
+/**
  * Whether a house of the layout is built of the kit: a human town's, city's or capital's timber,
- * brick or cottage house, on its street or out behind (a workshop, a shed: most of a city's).
+ * brick or cottage house, on its street or out behind (a workshop, a shed: most of a city's), but
+ * for those that are the game's own (ownHouse).
  */
 export function kitBuilt(piece, settlement) {
-    return piece.kind === "house" && HOUSE_KIT.styles.includes(piece.style ?? "timber") && HOUSE_KIT.settlements.includes(settlement) && (piece.people ?? "human") === "human";
+    return piece.kind === "house" && HOUSE_KIT.styles.includes(piece.style ?? "timber") && HOUSE_KIT.settlements.includes(settlement) && (piece.people ?? "human") === "human" && !ownHouse(piece);
 }

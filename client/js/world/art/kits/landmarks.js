@@ -6,6 +6,7 @@
 // shops (shopfront.js). Each is built facing south;
 // the town turns it to face its street.
 
+import { entranceSpecOf } from "../../../core/insides.js";
 import { GODS } from "../../../core/lore/gods.js";
 import { createRandom } from "../../../core/random.js";
 import { flagpole } from "../../cloth.js";
@@ -14,6 +15,7 @@ import { Solid } from "../engine/solid.js";
 import { churchBody } from "./church.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, paintBothFaces, signMaterial, TAVERN_NAME } from "./signs.js";
+import { shopLookOf } from "./kitshop.js";
 import { dressShop, SHOP_NAMES, SHOPFRONTS } from "./shopfront.js";
 import { fireLight, lanternLight, torch } from "./torches.js";
 
@@ -70,7 +72,7 @@ const seedOf = (piece) => piece.seed ?? Math.round((piece.x ?? 0) * 31 + (piece.
 // Solid.wall's), `u` along it, its top `top` up it: the bracket and its stay, two rings, the board.
 // The stay ties the bracket up to the wall above it (`above` metres, where there's that much wall),
 // or else props it from below short of the board, never across the board
-function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height = 0.96, reach = 1.35, above = 0.5 } = {}) {
+export function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height = 0.96, reach = 1.35, above = 0.5 } = {}) {
     const { out } = face;
     const along = (d, v) => [face.origin[0] + face.across[0] * u + out[0] * d, face.origin[1] + v, face.origin[2] + face.across[2] * u + out[2] * d];
     const iron = material("iron");
@@ -95,12 +97,13 @@ function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height =
 }
 
 // A name board on a wall's face: `u0` to `u1` along it, `v0` to `v1` up it, in a timber frame
-function nameBoard(solid, face, [u0, u1, v0, v1], texture, name, frame) {
+// standing `proud` out from the face (world pixels), its picture just in front of it
+export function nameBoard(solid, face, [u0, u1, v0, v1], texture, name, frame, { proud = 0.45 } = {}) {
     const { out } = face;
     const at = (u, v, d = 0) => [face.origin[0] + face.across[0] * u + out[0] * d, face.origin[1] + v, face.origin[2] + face.across[2] * u + out[2] * d];
 
-    solid.member(at(u0 - 0.6, (v0 + v1) / 2), at(u1 + 0.6, (v0 + v1) / 2), out, v1 - v0 + 1.2, 0.45, material(frame));
-    solid.facing([at(u0, v0, 0.5), at(u1, v0, 0.5), at(u1, v1, 0.5), at(u0, v1, 0.5)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.member(at(u0 - 0.6, (v0 + v1) / 2), at(u1 + 0.6, (v0 + v1) / 2), out, v1 - v0 + 1.2, proud, material(frame));
+    solid.facing([at(u0, v0, proud + 0.05), at(u1, v0, proud + 0.05), at(u1, v1, proud + 0.05), at(u0, v1, proud + 0.05)], out, signMaterial(texture, name), [[0, 0], [1, 0], [1, 1], [0, 1]]);
 }
 
 // The front of a house's storey (as house.js lays it out), as a face
@@ -783,14 +786,18 @@ export async function shop(piece) {
 
     const front = SHOPFRONTS[piece.name];
     const { w, h } = piece;
-    // (In its street's look, but timber where it was a cottage: a cottage's rooms above are in its
-    // thatch, its eaves down over where the name would go)
-    const style = HOUSE_STYLES[piece.style] && piece.style !== "cottage" ? piece.style : "timber";
+    // (In its own look, as its kit's built (kitshop.js SHOP_LOOKS): its fill, walls, roof and
+    // storeys, its door the kit's; or, a people's with none, its street's, but timber where it was
+    // a cottage: a cottage's rooms above are in its thatch, its eaves down over where the name
+    // would go)
+    const look = shopLookOf(piece);
+    const style = look ? (look.style === "brick" ? "brick" : "timber") : HOUSE_STYLES[piece.style] && piece.style !== "cottage" ? piece.style : "timber";
     const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(front.name.length > 12 ? 5.4 : 4.4), width - m(3.2));
-    const storeys = piece.storeys ?? 1;
-    const door = m(2.3);
+    const storeys = look?.storeys ?? piece.storeys ?? 1;
+    const entry = entranceSpecOf(piece);
+    const door = m(entry.height);
     const plan = planHouse({
         w,
         h,
@@ -801,10 +808,15 @@ export async function shop(piece) {
         y: piece.y,
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
-        entrance: { width: m(1.6), height: door },
+        entrance: { width: m(entry.width), height: door },
         jettied: false,
         lofty: m(storeys < 2 ? 4 : OVER_DOOR.ground.shop),
     });
+
+    if (look) {
+        Object.assign(plan, { walls: look.walls, roof: look.roof, kind: look.kind, stoneGround: look.stone, glazing: look.glazing === "leaded" ? "leaded" : "glass" });
+    }
+
     const solid = buildHouse(plan);
     const oak = plan.frame ?? "timber";
     const ground = plan.levels[0];

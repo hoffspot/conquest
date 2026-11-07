@@ -12,9 +12,8 @@ import { readHumanFiles } from "../scripts/lib/human-data.js";
 
 // The most the game may download before it starts. Raising it is a choice to make in review: a
 // heavy model goes in the catalog (client/models/assets.json), downloaded as it's wanted
-// (generated/asset_streaming_plan.md, section 2). 16 MB since November 2026: main was within
-// 3.5 KB of 15 MB, the camera's close start view took it 4.5 KB over, nearly all of it the game's
-// code, with no model left to move to the catalog, and the owner chose the room
+// (generated/asset_streaming_plan.md, section 2). (16 MB from November 2026, the owner's choice,
+// as the game's code grew past 15 MB with the kit's shops)
 const BOOT_BUDGET = 16 * 1024 * 1024;
 
 const hashOf = async (path) => createHash("sha256").update(await readFile(new URL(`../client/${path}`, import.meta.url))).digest("hex").slice(0, 10);

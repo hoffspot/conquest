@@ -110,8 +110,9 @@ gables' rows, dormers' knees, finials, beams and wood floors, and its roof piece
 Engine files exported by this repository's owner), by **Meshsmith Foundry**, bought on **Fab** by
 this repository's owner under **Fab's Standard License**: the humans' town houses in their towns,
 cities and capitals, with their dormers and wings (`client/js/world/art/kits/kithouse.js` lays each
-out of its pieces, `client/js/world/kithouses3d.js` draws it), and the wood floors of the humans'
-insides.
+out of its pieces, `client/js/world/kithouses3d.js` draws it), their shops in every settlement of
+theirs, each in a look of its own (`client/js/world/art/kits/kitshop.js`), and the wood floors of
+the humans' insides.
 
 Its 168 pieces were set a square each (3 m) in Blender, each keeping the pack's own pivot, and its
 red and slate roofs' tiles baked flat into a seamless repeat of each

@@ -5,7 +5,7 @@
 // world, drawn in its chunks as the game draws it. Draw calls and triangles are counted as the
 // game's debug mode counts them.
 //
-// ?seed=N&people=human|elf|darkElf|cat|lizard|orc&show=street|landmarks|structures|insides|town|
+// ?seed=N&people=human|elf|darkElf|cat|lizard|orc&show=street|landmarks|shops|structures|insides|town|
 // village|hamlet|farmstead|city|capital choose (another people's settlements laid out on their
 // own), or show=place&site=mine (or any kind of the people's sites: lumber mill, quarry, their own
 // places) for the first of it, or
@@ -15,8 +15,9 @@
 // middle of the people's homeland. &burnt=burning|burnt|framed|roofed shows a street's or a
 // town's houses as the Behemoth of the Rift leaves them and as they're built again (core/burnt.js,
 // world/art/kits/burnt.js). The humans' timber and brick houses of a town, city or capital (and
-// the street's) are built of the house kit once it's read (world/kithouses3d.js), the game's own
-// with &kit=0 (and its nearer detail with &detail=near). window.buildingLab is there for tests.
+// the street's) are built of the house kit once it's read (world/kithouses3d.js), as are the
+// humans' shops, each in its own look (show=shops: art/kits/kitshop.js), the game's own with &kit=0
+// (and its nearer detail with &detail=near). window.buildingLab is there for tests.
 
 import * as THREE from "three";
 import { ASSETS } from "../app/assets.js";
@@ -63,7 +64,7 @@ const state = {
     kit: params.get("kit") !== "0",
     // (&detail=near: the kit's near detail, not the lower the world's drawn in)
     detail: params.get("detail") === "near" ? "near" : "far",
-    show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", "forts", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
+    show: ["town", "landmarks", "shops", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", "forts", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
     stats: null,
@@ -162,6 +163,30 @@ const FINGERPOST = [
     { name: "Mardenmoor", km: 1.4, angle: 0.5 },
     { name: "Gorgash", km: 2.3, angle: -0.9 },
 ];
+
+// The specialists' and the masters' shops (art/kits/kitshop.js), each in a row of its own on lots
+// of the sizes the houses they're made over from have (setpieces/town.js), from a village's
+// narrowest to a city's widest: each its own look, the same on every lot (built of the house kit
+// once it's read; the game's own with &kit=0), so they can be told apart down a street
+const SHOP_LOTS = Object.freeze([[1.6, 1.7], [2, 2.2], [2.2, 2.6], [2.5, 2.4], [2.75, 3.25]]);
+
+function shopsOf(people = "human") {
+    const pieces = [];
+    let width = 0;
+
+    for (const [row, name] of SHOP_NAMES.entries()) {
+        let x = 4;
+
+        for (const [k, [w, h]] of SHOP_LOTS.entries()) {
+            pieces.push({ kind: "landmark", key: `landmark-${name}`, name, style: "timber", storeys: 2, w, h, x: x + (w * 4) / 2, y: 6 + row * 40 + (h * 4) / 2, facing: 0, seed: row * 10 + k, ...(people === "human" ? {} : { people }) });
+            x += w * 4 + 2;
+        }
+
+        width = Math.max(width, x + 4);
+    }
+
+    return { width: Math.ceil(width), height: 6 + SHOP_NAMES.length * 40, pieces };
+}
 
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep;
@@ -429,7 +454,7 @@ async function build() {
     // castle, or its first special place, where the world sets it down (sites.js)
     const sited = state.show === "castle" || state.show === "place";
 
-    if (sited || !["street", "landmarks", "structures", "insides", "town"].includes(state.show)) {
+    if (sited || !["street", "landmarks", "shops", "structures", "insides", "town"].includes(state.show)) {
         const world = buildWorld({ seed: state.seed });
         const overworld = world.maps.town;
         const distance = ({ at }) => Math.hypot(at[0] - world.start.at[0], at[1] - world.start.at[1]);
@@ -482,11 +507,11 @@ async function build() {
         return;
     }
 
-    const settlement = !["street", "landmarks", "structures"].includes(state.show);
+    const settlement = !["street", "landmarks", "shops", "structures"].includes(state.show);
     const world = generateWorld({ seed: state.seed, ...(settlement ? { kind: state.show, people: state.people } : {}) });
 
     if (!settlement) {
-        const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : landmarksOf(state.seed, state.people);
+        const street = state.show === "street" ? (state.people !== "human" ? peopleStreetOf(state.seed, state.people) : streetOf(state.seed)) : state.show === "structures" ? structuresOf(state.seed, state.people) : state.show === "shops" ? shopsOf(state.people) : landmarksOf(state.seed, state.people);
         // (The street's houses a town's, to be built of the house kit, or a village's, the game's own)
         const kind = state.kit ? "town" : "village";
 

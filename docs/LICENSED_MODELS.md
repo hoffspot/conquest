@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; and the humans' town houses, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -292,8 +292,11 @@ Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
 The humans' houses in their towns, cities and capitals (timber, brick and cottage: the stone
 ones are the game's own) are built of a bought kit of half-timbered pieces, Meshsmith Foundry's
 half-timbered building kit from Fab: frames and braces, the plaster and brick between, windows,
-doors, corner posts, footings, gables row on row, finials. The villages keep the game's own, and
-something more rustic is to come for them.
+doors, corner posts, footings, gables row on row, finials. About a quarter of those it could
+build are the game's own all the same, so no street is all the kit's: none round the market,
+few on the main streets, more down the lanes and out behind (`kithouse.js` `KIT_MIX`, each
+house's own draw from its seed). The villages keep the game's own (but for a master's shop kept
+in one: below), and something more rustic is to come for them.
 
 - **One file, a piece to a square.** `.claude/skills/import-scene-model/scripts/housekit.py` sets
   each piece in a square of its own (3 m) keeping the pack's own pivot (a wall piece's inner face
@@ -326,12 +329,26 @@ something more rustic is to come for them.
   soffits in the game's own materials; one more draw a block, and no shadows of its own (the
   plaster, the dark inside and the soffits cast the house's). Its lower detail in the world, its
   windows only near. The humans' insides' floorboards are laid with its wood floor.
+- **The shops** (`client/js/world/art/kits/kitshop.js`, pure; drawn by kithouses3d.js
+  `kitShopObject`): the humans' specialists' and masters' shops, in every settlement of theirs
+  (a village's master's too), are built of the kit as a house is, each in a look of its own the
+  same on every lot (`SHOP_LOOKS`: walls and awning stripes no house has, fill, roof, storeys,
+  jetties, timbers' figure, chimney, finial), their front laid out about the kit's door in the
+  middle (`centredRun`), its leaf where the game has the shop's door (core/insides.js
+  `SHOP_DOORS`); its name board on the first floor over the door and its sign on the first
+  floor's front corner post. GAME.md, *The shops of the house kit*, has them in full;
+  `test/kitshop.test.js` measures every fit. Each people's are their own: any other people's
+  shops are their own kits' till a look of theirs is set out (`SHOP_LOOKS`) and a kit builds them
+  (`SHOP_KITS`).
 - **Till it's read, and without the licensed models,** the game's own houses (kits/house.js);
-  those drawn then are built again once it is (`town.rebuild`, `Chunks` #rebuildWhere). The
-  building lab shows both (`&kit=0`, `&detail=near`).
+  those drawn then are built again once it is (`town.rebuild`, `Chunks` #rebuildWhere), and the
+  shops with them (a village with a master's shop asks for the kit too). The building lab shows
+  both (`&kit=0`, `&detail=near`), and every shop on lots of every size (`show=shops`).
 - **Checked:** `test/kithouse.test.js` (the catalog, the runs, every piece the kit's, inside its
-  lot, the slopes on the line, the dormers and wings), `e2e/building-lab.spec.js` (the draws,
-  both ways); the fits by rays and measure in Blender while it was made (the gables, the
+  lot, the slopes on the line, the dormers and wings, the game's own mixed in),
+  `test/kitshop.test.js` (the shops: their looks, doors, boards, signs, awnings, goods and
+  neighbours), `e2e/building-lab.spec.js` (the
+  draws, both ways, the street and the shops); the fits by rays and measure in Blender while it was made (the gables, the
   dormers' and the wings' within 8.4 cm of their line, no holes in walls, inner corners, gables,
   dormers' knees and cheeks or eaves, nothing through the roof).
 
