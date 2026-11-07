@@ -45,6 +45,8 @@ import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { kitBuilt } from "./art/kits/kithouse.js";
+import { houseKitRead, readyHouseKit } from "./kithouses3d.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolMaterial, poolsMesh } from "./windowpools.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
@@ -210,8 +212,13 @@ export class Chunks {
      * they are.
      */
     rebuild(place) {
+        this.#rebuildWhere((piece) => piece.place === place);
+    }
+
+    // The buildings of the chunks drawn that any piece `which` says is in built again
+    #rebuildWhere(which) {
         for (const drawn of this.drawn.values()) {
-            if (!drawn.drawing && (drawn.job || drawn.buildings) && this.#piecesOf(drawn.cx, drawn.cy).some((piece) => piece.place === place)) {
+            if (!drawn.drawing && (drawn.job || drawn.buildings) && this.#piecesOf(drawn.cx, drawn.cy).some(which)) {
                 this.building = this.building.filter((other) => other !== drawn);
                 drawn.job = null;
                 this.#queue(drawn);
@@ -867,6 +874,7 @@ export class Chunks {
     /** Throw everything away. */
     dispose() {
         this.drawing = null;
+        this.disposed = true;
 
         for (const drawn of [...this.drawn.values()]) {
             this.#forget(drawn);
@@ -1157,10 +1165,18 @@ export class Chunks {
     // a house burnt by the Behemoth of the Rift marked how far on it is (`burnt`: burntOf)
     #piecesOf(cx, cy) {
         const yards = (this.overworld.settlements?.yardsIn?.(cx, cy) ?? []).map((yard) => ({ ...yard, lie: lieOf(yard, this.groundAt) }));
-        const settled = (this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []).map((piece) => {
-            const burnt = piece.kind === "house" ? this.burntOf(piece.place, piece.index) : null;
+        const settlements = this.overworld.settlements;
+        const settled = (settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []).map((piece) => {
+            if (piece.kind !== "house") {
+                return piece;
+            }
 
-            return burnt ? { ...piece, burnt } : piece;
+            // (A house knows the kind of place it's in: a town's, city's or capital's are the
+            // house kit's, kithouses3d.js)
+            const burnt = this.burntOf(piece.place, piece.index);
+            const settlement = settlements.laid?.get(piece.place)?.town.kind ?? null;
+
+            return { ...piece, settlement, ...(burnt ? { burnt } : {}) };
         });
 
         return [...settled, ...yards, ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
@@ -1173,6 +1189,13 @@ export class Chunks {
 
         if (!pieces.length) {
             return;
+        }
+
+        // (The house kit asked for the first time a house of it's to be drawn: the game's own
+        // drawn till it's read, and those of it drawn again then)
+        if (!this.kitAsked && !houseKitRead() && pieces.some((piece) => kitBuilt(piece, piece.settlement))) {
+            this.kitAsked = true;
+            readyHouseKit()?.ready.then(() => !this.disposed && houseKitRead() && this.#rebuildWhere((piece) => kitBuilt(piece, piece.settlement)));
         }
 
         const group = new THREE.Group();
