@@ -15895,6 +15895,9 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
 });
 
 test("what can go in an Action Bar slot is listed by kind (All, On an enemy, Heals, Buffs, Cures...), each saying whom it's for; a school's spells as one, its other tiers opened under it; what can't be used as things are greyed, last; fewer shown bigger; found by name on a PC; Cure and Buff all among them; and the spellbook puts a spell on the Action Bar", async ({ page }) => {
+    // (Through the menus to the Action Bar's options and back, and the spellbook: more than the
+    // usual time, on a machine drawing in software)
+    test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
     const setup = page.locator("#quicksetup");
