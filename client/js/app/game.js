@@ -172,7 +172,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
-import { CameraFollow, PITCH } from "./camera.js";
+import { CameraFollow, PITCH, startPitch } from "./camera.js";
 import { Doors } from "./doors.js";
 import { VaultDoors } from "../world/vault3d.js";
 import { Readying } from "./readying.js";
@@ -1541,6 +1541,12 @@ export class Game {
         // door or what's dropped still goes to it, and the minimap and the world map still send them
         this.tapToMove = true;
 
+        // Whether the camera flies in from high overhead as the player comes into the world (Game
+        // options, Camera: Opening fly-in; view.js fly), and whether this world's had its flight
+        this.flyIn = true;
+        this.flown = false;
+        this.flightListeners = [];
+
         // The mouse pointer (app/pointer.js), told what a click on the view would do where the
         // mouse is (#aim); where the mouse is over the view (null: off it), and when it was looked at
         this.cursor = null;
@@ -2337,10 +2343,11 @@ export class Game {
             this.#place(actor);
         }
 
-        // The camera starts on the player, looking north
+        // The camera starts on the player, looking north, tilted as it starts for how the screen's
+        // held (startPitch)
         const start = this.avatars.get(this.me).object.position;
 
-        this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
+        this.cameraFollow = new CameraFollow({ x: start.x, z: start.z, pitch: startPitch(this.view.heldUpright) });
         this.#follow(0);
 
         // (A world kept or joined in the thick of a fight: the figures of the kinds of soldiers near
@@ -3029,6 +3036,15 @@ export class Game {
         this.running = true;
         this.lastFrame = performance.now();
         this.steppedAt = this.lastFrame;
+
+        // (Coming into the world, out of doors: the opening fly-in, once)
+        if (!this.flown) {
+            this.flown = true;
+
+            if (this.flyIn && this.mapId === "town") {
+                this.#flyIn();
+            }
+        }
         telemetry.playing = true;
         telemetry.graphics = this.view.renderer.info;
         telemetry.madeFor = (programs) => this.#madeFor(programs);
@@ -3152,6 +3168,7 @@ export class Game {
     /** Take everything out of the scene (before building another game). */
     dispose() {
         this.stop();
+        this.landFlight();
         this.sound?.setAmbient(false);
         this.sound?.setAmbience({});
         this.sound?.setPlace("town");
@@ -8046,10 +8063,36 @@ export class Game {
         }
     }
 
+    // The opening fly-in (view.js fly): from high overhead down to behind the player, till it's
+    // there or the player does anything at all: a key, the wheel, a tap or click let go of (after
+    // it's done what it was for, aimed as the flying camera saw it), the stick or the keys
+    // steering (#steerable), or a controller (padplay.js)
+    #flyIn() {
+        this.view.fly();
+
+        const land = () => this.landFlight();
+
+        for (const [type, options] of [["keydown", true], ["wheel", { capture: true, passive: true }], ["pointerup", false]]) {
+            document.addEventListener(type, land, options);
+            this.flightListeners.push([type, land, options]);
+        }
+    }
+
+    /** Come down at once from the opening fly-in, if it's flying (the player doing anything). */
+    landFlight() {
+        this.view.land();
+
+        for (const [type, listener, options] of this.flightListeners.splice(0)) {
+            document.removeEventListener(type, listener, options);
+        }
+    }
+
     /**
-     * Swing the camera round behind the player, the way they face (R, or the player's own mark on
-     * the minimap tapped), as if turned by hand: a fight the battle cam framed is let be, as after a
-     * drag (#battleFoe).
+     * Put the camera back behind the player, the way they face (R, a tap on the thumb stick, or
+     * the player's own mark on the minimap tapped): swung round, close behind them, as it starts
+     * for how the screen's held (camera.js startPitch, view.js DISTANCE.start), as if turned by
+     * hand: a fight
+     * the battle cam framed is let be, as after a drag (#battleFoe).
      */
     recentre() {
         const me = this.avatars.get(this.me);
@@ -8063,13 +8106,16 @@ export class Game {
             this.battleCamOn = null;
         }
 
-        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again)
+        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again;
+        // elsewhere, zoomed in close behind them)
         if (this.dungeonCamera) {
             Object.assign(this.dungeonCamera, { nudge: 0, zoom: 1 });
+        } else {
+            this.view.zoomToDistance(DISTANCE.start);
         }
 
         // (The way they face, or are turning to face)
-        this.cameraFollow.recentre((this.battle.actor(this.me)?.facing ?? me.facing) + Math.PI);
+        this.cameraFollow.recentre((this.battle.actor(this.me)?.facing ?? me.facing) + Math.PI, { tilt: startPitch(this.view.heldUpright) });
     }
 
     #battleFoe(foe, me) {
@@ -15992,12 +16038,21 @@ export class Game {
                 knob,
                 keys: () => this.keys,
                 ring: this.hud.root.querySelector("#stick"),
-                looking: () => this.#steerable(),
+                // (Steering: down from the opening fly-in first, the way to go the camera's own)
+                looking: () => {
+                    if (this.view.flying) {
+                        this.landFlight();
+                    }
+
+                    return this.#steerable();
+                },
                 go: (facing, run) => {
                     this.#wake();
                     this.#command({ type: "ahead", facing, run, reach: HELD_REACH });
                 },
                 stop: () => this.#command({ type: "stop" }),
+                // (Tapped: the camera put back behind them)
+                tapped: () => this.recentre(),
                 lost: (lost) => this.#pressLost("stick", lost),
                 breath: () => {
                     const player = this.battle.actor(this.me);

@@ -20,12 +20,19 @@
 // where the player is and how fast they're going, and puts the view's camera where this says.
 
 /**
- * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts, and
- * how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep it lower
- * still: view.js lowestPitch, indoors); and walking, the least it eases back down to if it was
- * looking higher (to see where they're going), at `settle` a second.
+ * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts,
+ * close behind the player (from view.js DISTANCE.start; and put back there by R or a tap on the
+ * thumb stick: recentre), on a screen held sideways or a computer's (`start`: over their head,
+ * the way ahead in view above them) or a phone held upright (`upright`, which view.js PORTRAIT
+ * frames more steeply from further back: about 21 degrees from 7 m, low over their shoulder:
+ * startPitch); how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep
+ * it lower still: view.js lowestPitch, indoors); and walking, the least it eases back down to if
+ * it was looking higher (to see where they're going), at `settle` a second.
  */
-export const PITCH = Object.freeze({ least: -45, start: 35, most: 75, walking: 15, settle: 2.5 });
+export const PITCH = Object.freeze({ least: -45, start: 25, upright: 15, most: 75, walking: 10, settle: 2.5 });
+
+/** Where the camera starts looking down from (degrees: PITCH), on a screen held upright or not. */
+export const startPitch = (upright) => (upright ? PITCH.upright : PITCH.start);
 
 // Going faster than this (m/s) is going somewhere
 const MOVING = 0.4;
@@ -44,9 +51,10 @@ const TURN_SPEED = 4.2;
 // camera about
 const STEADY = 0.35;
 
-// Swung round behind the player when asked (recentre): its tilt eased back to PITCH.start at
-// `pitch` a second, and there once it's within `near` radians, turning slower than `still`
-const RECENTRE = Object.freeze({ pitch: 4, near: 0.02, still: 0.1 });
+// Swung round behind the player when asked (recentre): its tilt eased to where it starts
+// (startPitch) at `pitch` a second, and there once it's within `near` radians, turning slower than `still`, and tilted
+// within `tilted` degrees (already behind them, it's still tilted all the way)
+const RECENTRE = Object.freeze({ pitch: 4, near: 0.02, still: 0.1, tilted: 0.5 });
 
 // How hard it swings round behind them by how far it is from behind them (radians): all the way
 // within `full` (walking away from it or across it), none past `none` (walking at all towards it:
@@ -114,13 +122,13 @@ export class CameraFollow {
     }
 
     /**
-     * Swing round to look from `yaw` (radians: behind the player, the way they face), tilted as
-     * it starts (PITCH.start; or as it is, `tilt` false), turned by its spring whether it follows
-     * or not; then left there, as a drag leaves it (a drag takes over from it).
+     * Swing round to look from `yaw` (radians: behind the player, the way they face), tilted to
+     * `tilt` degrees (PITCH.start; startPitch for a phone held upright; or as it is, `tilt` false), turned by its spring whether it
+     * follows or not; then left there, as a drag leaves it (a drag takes over from it).
      */
-    recentre(yaw, { tilt = true } = {}) {
+    recentre(yaw, { tilt = PITCH.start } = {}) {
         this.recentring = wrap(yaw);
-        this.recentreTilts = tilt;
+        this.recentreTilt = tilt === false ? null : tilt;
     }
 
     /**
@@ -189,16 +197,16 @@ export class CameraFollow {
         if (this.recentring !== null) {
             const off = wrap(this.recentring - this.yaw);
 
-            this.pitch += this.recentreTilts ? (PITCH.start - this.pitch) * ease(RECENTRE.pitch, dt) : 0;
+            this.pitch += this.recentreTilt !== null ? (this.recentreTilt - this.pitch) * ease(RECENTRE.pitch, dt) : 0;
             this.turning += (SPRING * SPRING * off - 2 * SPRING * this.turning) * dt;
             this.turning = Math.max(-TURN_SPEED, Math.min(TURN_SPEED, this.turning));
             this.yaw = wrap(this.yaw + this.turning * dt);
 
-            if (Math.abs(off) < RECENTRE.near && Math.abs(this.turning) < RECENTRE.still) {
+            if (Math.abs(off) < RECENTRE.near && Math.abs(this.turning) < RECENTRE.still && (this.recentreTilt === null || Math.abs(this.recentreTilt - this.pitch) < RECENTRE.tilted)) {
                 this.recentring = null;
                 this.turning = 0;
                 // (Swung round behind them as asked, as a drag leaves it; only turned, as it was)
-                this.waiting = this.recentreTilts ? BEHIND.after : this.waiting;
+                this.waiting = this.recentreTilt !== null ? BEHIND.after : this.waiting;
             }
 
             return this;

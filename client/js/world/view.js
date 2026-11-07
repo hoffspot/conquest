@@ -82,11 +82,14 @@ export function detectQuality() {
     return touch ? "medium" : "high";
 }
 
-// The camera looks down this far from the horizon to start with (degrees: low enough to see well
-// ahead of the player), from this far away (metres), zooming between; at a point this high above
-// the ground (metres: the player's middle)
+// How far down from the horizon a phone held upright's framing is measured against (degrees:
+// PORTRAIT, framed: it looks down all the more steeply the nearer it's asked to this, none looking
+// level); and how far away the camera is (metres): to start with (and put back by R or a tap on
+// the thumb stick: game.js recentre), close behind the player, tilted as camera.js startPitch says
+// for how the screen's held, and zooming between; at a point this high above the ground (metres:
+// the player's middle)
 export const PITCH = 35;
-export const DISTANCE = Object.freeze({ least: 5, start: 10.5, most: 32 });
+export const DISTANCE = Object.freeze({ least: 5, start: 5.5, most: 32 });
 const LOOK_UP = 0.8;
 
 // How far above the horizon the camera can look (degrees): outdoors, up into the sky; indoors,
@@ -325,7 +328,7 @@ const overCeiling = (room, y, pitch, distance) => !room.rock && pitch > 0 && y +
 // staying `margin` metres clear of it (along the camera's line, and `wide` metres either side of
 // it: the lens is wider than a line), or rising over it (up to `highest` degrees), whichever leaves
 // the camera furthest from the player, a degree higher counting as `lift` metres nearer; never
-// nearer than `least` metres. Turning, it looks as far round as it'll have turned in `ahead`
+// nearer than `least` metres, and never left in the building there if rising clears it. Turning, it looks as far round as it'll have turned in `ahead`
 // seconds (`most` radians at most), so it's in already as a wall comes round into the way. Coming
 // in (and rising) this quickly, going back out this slowly (per second), and only once it's been
 // clear for `hold` seconds, so a row of houses with gaps between doesn't pump it in and out; not
@@ -443,6 +446,18 @@ const CUT_SPEED = 5;
 // A wheel's notch or a zoom button's press eased in (zoomSmoothly), half the way there in this
 // long (seconds), there once within `near` metres; a pinch follows the fingers as they go (zoom)
 const ZOOM_EASE = Object.freeze({ half: 0.035, near: 0.01 });
+
+/**
+ * The opening fly-in, as a player comes into a world (fly: game.js): from `distance` metres off,
+ * looking `pitch` degrees down (as near straight down as the camera goes: PULL.highest), north up
+ * as on the map, down to where the camera's asked to be, over `seconds`, eased in and out; no frame
+ * taking it on more than `step` seconds, so a slow first frame or two (the world's first drawing)
+ * doesn't skip it.
+ */
+export const FLIGHT = Object.freeze({ distance: 110, pitch: 85, seconds: 4, step: 0.1 });
+
+// The way through a flight (0 to 1, eased in and out)
+const eased = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 
 // How far round something's middle it's taken to reach, times its height, when asking whether
 // it was in view (heightOnScreen): generous, for what it holds out and the camera's turning
@@ -641,6 +656,8 @@ export class View {
         this.distance = DISTANCE.start;
         // (A zoom being eased in: the distance it's going to, or null: zoomSmoothly)
         this.zoomTo = null;
+        // (The opening fly-in: how far through it is (0 to 1, eased: FLIGHT), or null: fly)
+        this.flight = null;
 
         // How far it's come to a phone held upright's framing (0 to 1: PORTRAIT), eased as it's
         // turned; and how much further back it draws for a big foe (BIG_FOE: asked, and eased to)
@@ -1056,6 +1073,13 @@ export class View {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (this.renderScale ?? 1) * this.adaptiveScale);
     }
 
+    /** Whether the screen's held upright (taller than it's wide, as a phone's held: PORTRAIT). */
+    get heldUpright() {
+        const { clientWidth: width, clientHeight: height } = this.canvas;
+
+        return width && height ? width < height : this.camera.aspect < 1;
+    }
+
     /** Fit the drawing to the canvas's size on the page (if it has changed). */
     resize() {
         this.rect = null;
@@ -1090,6 +1114,21 @@ export class View {
         this.yaw = yaw;
         this.pitch = pitch;
 
+        // (Flying in: on its way round from north up to the way it's asked to look)
+        if (this.flight) {
+            if (Number.isFinite(dt)) {
+                this.flight.t = Math.min(1, this.flight.t + Math.min(dt, FLIGHT.step) / this.flight.seconds);
+            }
+
+            const way = eased(this.flight.t);
+
+            this.yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw)) * way;
+
+            if (this.flight.t >= 1) {
+                this.land();
+            }
+        }
+
         if (this.zoomTo !== null) {
             this.distance += (this.zoomTo - this.distance) * (1 - 2 ** (-dt / ZOOM_EASE.half));
 
@@ -1109,7 +1148,34 @@ export class View {
     // The pitch and distance the camera's placed by: those asked for, held upright looked down more
     // steeply from further back, out of doors (framed, PORTRAIT)
     #framed() {
-        return framed(this.room ? this.pitch : this.pitch - this.lowered, this.distance, this.room ? 0 : this.upright, this.room ? 1 : this.back);
+        const asked = framed(this.room ? this.pitch : this.pitch - this.lowered, this.distance, this.room ? 0 : this.upright, this.room ? 1 : this.back);
+
+        // (Flying in: from high overhead down to it)
+        if (this.flight) {
+            const way = eased(this.flight.t);
+
+            return { pitch: FLIGHT.pitch + (asked.pitch - FLIGHT.pitch) * way, distance: FLIGHT.distance + (asked.distance - FLIGHT.distance) * way };
+        }
+
+        return asked;
+    }
+
+    /**
+     * Fly in from high overhead (FLIGHT), north up, down to where the camera's asked to be, over
+     * `seconds`: as a player comes into a world (game.js).
+     */
+    fly(seconds = FLIGHT.seconds) {
+        this.flight = { t: 0, seconds };
+    }
+
+    /** Whether it's flying in (fly). */
+    get flying() {
+        return this.flight !== null;
+    }
+
+    /** Come down at once from a flight (fly), as the player does anything. */
+    land() {
+        this.flight = null;
     }
 
     /**
@@ -1321,8 +1387,12 @@ export class View {
             let best = -Infinity;
 
             for (let lift = 0; Math.max(0, pitch) + lift <= PULL.highest; lift += 5) {
-                const reach = Math.max(PULL.least, Math.min(distance, clearance(Math.max(0, pitch) + lift)));
-                const score = reach - PULL.lift * lift;
+                const room = clearance(Math.max(0, pitch) + lift);
+                const reach = Math.max(PULL.least, Math.min(distance, room));
+                // (Still in the building at its nearest, PULL.least: taken only if rising no
+                // higher clears it. From close by, rising high over a house costs more than its
+                // few metres, and it would sooner stay in the house)
+                const score = reach - PULL.lift * lift - (room < PULL.least ? distance + PULL.highest * PULL.lift : 0);
 
                 if (score > best) {
                     best = score;
@@ -1382,6 +1452,11 @@ export class View {
     /** Zoom in (factor < 1) or out, eased in over a moment as the camera's next placed (ZOOM_EASE: a wheel's notch, a zoom button). */
     zoomSmoothly(factor) {
         this.zoomTo = Math.min(DISTANCE.most, Math.max(DISTANCE.least, (this.zoomTo ?? this.distance) * factor));
+    }
+
+    /** Zoom to `distance` metres away, eased in as zoomSmoothly's (the camera put back behind the player). */
+    zoomToDistance(distance) {
+        this.zoomTo = Math.min(DISTANCE.most, Math.max(DISTANCE.least, distance));
     }
 
     #place() {
