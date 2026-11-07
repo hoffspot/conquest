@@ -182,7 +182,10 @@ you tap an enemy to fight it:
 It takes a moment before you can strike. Ten seconds after the fight, once no enemy is in sight
 or after you, you put it away again. The orc does the same, on its patrol.
 
-**The camera** keeps up with you from your first step, staying turned the way you leave it.
+**The camera** comes down from high overhead as you come into a world, so you see what's round
+you, and settles close behind you, low over your shoulder (tap or press anything to bring it
+down at once; Game options, Camera, Opening fly-in turns it off). It keeps up with you from your
+first step, staying turned the way you leave it.
 **Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it. Pinch
 or scroll to zoom. In the town, when a building would stand between you and the camera, it comes
 in closer than the building, or rises over it. Holding a phone upright, it looks down more steeply
@@ -597,7 +600,8 @@ npm start
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
 <http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town,
-`&people=elf` for one of another people, or `&quality=low`). `?join=ABCD` opens Join a World on another Device with a
+`&people=elf` for one of another people, `&quality=low`, or `&flyin` for the opening fly-in, which
+the quick start leaves out). `?join=ABCD` opens Join a World on another Device with a
 world's code in it.
 
 The server also carries the relay that games playing together talk through (at `/relay`: a

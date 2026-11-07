@@ -2052,8 +2052,8 @@ test("swiping up from the player turns them the way the camera looks and sends t
         return { order, pitch, facing, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    // (A swipe, not a drag: the camera's not tilted)
-    expect(moved.pitch).toBe(35);
+    // (A swipe, not a drag: the camera's not tilted from where it starts, low over the shoulder)
+    expect(moved.pitch).toBe(15);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -2522,7 +2522,7 @@ test("with following turned on (Game options), the camera follows from the first
     });
 
     expect(camera.start.yaw).toBe(0);
-    expect(camera.start.pitch).toBe(35);
+    expect(camera.start.pitch).toBe(15);
     expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
     expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
@@ -15304,7 +15304,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
         graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
         controls: ["#stickswitch", "#floatswitch", "#tapmoveswitch", "#zoomswitch", "#minimapswitch"],
-        camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
+        camera: ["#followswitch", "#flyinswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
         gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
         chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#refuseswitch", "#messengerswitch", "#blockedbutton"],
     };
@@ -15359,6 +15359,75 @@ test("Game options: its groups at the top, each a page of its own, short enough 
 
     await expect(page.locator("#menu")).toBeHidden();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
+test("coming into a world, the camera flies down from high overhead, north up, to close behind the player; anything the player does brings it down at once; Opening fly-in in Game options, on at first", async ({ page }) => {
+    // (The quick start leaves it out, unless asked for: &flyin)
+    await playing(page, "/?play&seed=1&flyin");
+
+    // Under way: still high over the player, looking almost straight down, and coming down
+    const high = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const view = game.view;
+
+        game.stop();
+
+        const camera = view.camera.position;
+        const player = game.avatars.get("player").object.position;
+        const at = { flying: view.flying, way: view.flight?.t ?? 1, above: camera.y - player.y, away: Math.hypot(camera.x - player.x, camera.z - player.z) };
+
+        game.advance(0.5);
+
+        return { ...at, lower: view.camera.position.y - player.y };
+    });
+
+    expect(high.flying).toBe(true);
+    expect(high.way).toBeLessThan(0.6);
+    expect(high.above).toBeGreaterThan(40);
+    expect(high.above).toBeGreaterThan(high.away * 2);
+    expect(high.lower).toBeLessThan(high.above);
+
+    // A key pressed: down at once, close behind the player, low over their shoulder
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("Shift");
+
+    const landed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(0.1);
+
+        const camera = game.view.camera.position;
+        const player = game.avatars.get("player").object.position;
+
+        return { flying: game.view.flying, above: camera.y - player.y, distance: game.view.distance, pitch: game.cameraFollow.pitch };
+    });
+
+    expect(landed).toMatchObject({ flying: false, distance: 5.5, pitch: 15 });
+    expect(landed.above).toBeLessThan(5);
+
+    // Left alone, it comes down by itself in about 4 seconds
+    const alone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.view.fly();
+        game.advance(2);
+
+        const midway = game.view.flying;
+
+        game.advance(2.5);
+
+        return { midway, after: game.view.flying };
+    });
+
+    expect(alone).toEqual({ midway: true, after: false });
+
+    // Its switch: Game options, Camera, on at first
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Camera/ }).click();
+    await expect(page.getByRole("switch", { name: /Opening fly-in/ })).toBeChecked();
 });
 
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam and finding the way through on at first; a drag turns and tilts it as far as chosen, each its own, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {

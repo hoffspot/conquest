@@ -154,6 +154,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     cameraFollows: false,
     battleCam: true,
     cameraDefaults: 4,
+    // The opening fly-in: coming into a world, the camera flies down from high overhead to behind
+    // the player (app/game.js `flyIn`, world/view.js fly): on to start with
+    flyIn: true,
     openWay: true,
     dragSpeed: 1,
     tiltSpeed: 1,

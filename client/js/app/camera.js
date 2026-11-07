@@ -20,14 +20,14 @@
 // where the player is and how fast they're going, and puts the view's camera where this says.
 
 /**
- * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts, and
- * how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep it lower
- * still: view.js lowestPitch, indoors); walking, the least it eases back down to if it was
- * looking higher (to see where they're going), at `settle` a second; and put back behind the
- * player (R, a tap on the thumb stick: recentre), low over their shoulder, the street ahead of
- * them in view (`behind`; at view.js DISTANCE.behind).
+ * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts, low
+ * over the player's shoulder, the street ahead of them in view (from view.js DISTANCE.start; and
+ * put back there by R or a tap on the thumb stick: recentre), and how far a drag can tilt it (up
+ * to 45 degrees above the horizon; the view may keep it lower still: view.js lowestPitch,
+ * indoors); and walking, the least it eases back down to if it was looking higher (to see where
+ * they're going), at `settle` a second.
  */
-export const PITCH = Object.freeze({ least: -45, start: 35, most: 75, walking: 15, settle: 2.5, behind: 15 });
+export const PITCH = Object.freeze({ least: -45, start: 15, most: 75, walking: 10, settle: 2.5 });
 
 // Going faster than this (m/s) is going somewhere
 const MOVING = 0.4;
@@ -46,7 +46,7 @@ const TURN_SPEED = 4.2;
 // camera about
 const STEADY = 0.35;
 
-// Swung round behind the player when asked (recentre): its tilt eased to PITCH.behind at `pitch`
+// Swung round behind the player when asked (recentre): its tilt eased to PITCH.start at `pitch`
 // a second, and there once it's within `near` radians, turning slower than `still`, and tilted
 // within `tilted` degrees (already behind them, it's still tilted all the way)
 const RECENTRE = Object.freeze({ pitch: 4, near: 0.02, still: 0.1, tilted: 0.5 });
@@ -118,10 +118,10 @@ export class CameraFollow {
 
     /**
      * Swing round to look from `yaw` (radians: behind the player, the way they face), tilted to
-     * `tilt` degrees (PITCH.behind; or as it is, `tilt` false), turned by its spring whether it
+     * `tilt` degrees (PITCH.start; or as it is, `tilt` false), turned by its spring whether it
      * follows or not; then left there, as a drag leaves it (a drag takes over from it).
      */
-    recentre(yaw, { tilt = PITCH.behind } = {}) {
+    recentre(yaw, { tilt = PITCH.start } = {}) {
         this.recentring = wrap(yaw);
         this.recentreTilt = tilt === false ? null : tilt;
     }

@@ -176,12 +176,12 @@ describe("the camera following the player (camera.js)", () => {
         assert.equal(camera.pitch, 31);
     });
 
-    it("starts looking 35 degrees down, and dragged, looks up into the sky, 45 degrees over the horizon at most", () => {
+    it("starts looking 15 degrees down, and dragged, looks up into the sky, 45 degrees over the horizon at most", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
-        assert.equal(camera.pitch, 35);
+        assert.equal(camera.pitch, 15);
         camera.grab();
-        camera.turn(0, -60);
+        camera.turn(0, -40);
         assert.equal(camera.pitch, -25);
         camera.turn(0, -60);
         assert.equal(camera.pitch, -45);
@@ -191,7 +191,7 @@ describe("the camera following the player (camera.js)", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
         camera.grab();
-        camera.turn(0, -70);
+        camera.turn(0, -50);
         camera.release();
         stand(camera, { x: 0, z: 0 }, 2);
         assert.equal(camera.pitch, -35);
@@ -228,7 +228,7 @@ describe("the camera following the player (camera.js)", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
         camera.follows = false;
-        camera.turn(0.4, -55);
+        camera.turn(0.4, -35);
 
         const player = walk(camera, { from: { x: 0, z: 0 }, vx: 1.7, vz: 0, seconds: 3, away: 10 });
 
@@ -310,7 +310,7 @@ describe("the camera following the player (camera.js)", () => {
             }
 
             assert.ok(Math.abs(wrap(camera.yaw - Math.PI)) < 0.03, `yaw ${camera.yaw.toFixed(3)}`);
-            assert.ok(Math.abs(camera.pitch - PITCH.behind) < 1, `pitch ${camera.pitch.toFixed(1)}`);
+            assert.ok(Math.abs(camera.pitch - PITCH.start) < 1, `pitch ${camera.pitch.toFixed(1)}`);
             assert.ok(fastest <= 4.2 + 1e-6, `never snapping: ${fastest.toFixed(2)} rad/s`);
             assert.equal(camera.recentring, null);
         }
@@ -320,7 +320,7 @@ describe("the camera following the player (camera.js)", () => {
 
         above.recentre(Math.PI);
         stand(above, { x: 0, z: 0 }, 2.5);
-        assert.ok(Math.abs(above.pitch - PITCH.behind) < 0.5, `pitch ${above.pitch.toFixed(1)}`);
+        assert.ok(Math.abs(above.pitch - PITCH.start) < 0.5, `pitch ${above.pitch.toFixed(1)}`);
         assert.equal(above.recentring, null);
 
         // (Turned only, its tilt let be: finding the way through a tunnel, game.js #openWay)
@@ -534,7 +534,7 @@ describe("a phone held upright (world/view.js framed)", () => {
 
         // (Upright: 35 down becomes 50, from 1.3 times as far; half as far down, half as much more;
         // looking up, none)
-        assert.deepEqual(framed(PITCH.start, 10.5, 1), { pitch: 50, distance: 13.65 });
+        assert.deepEqual(framed(35, 10.5, 1), { pitch: 50, distance: 13.65 });
         assert.equal(framed(17.5, 10.5, 1).pitch, 25);
         assert.equal(framed(-20, 10.5, 1).pitch, -20);
 
