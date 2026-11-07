@@ -99,17 +99,18 @@ const ZOOM_OUT = 1.6;
 
 /**
  * How near the camera may come to the character (#nearest), so it never cuts into them: along its
- * line to what it looks at, `margin` metres further out than the last of them within `side` metres
- * of that line, as they're shaped, dressed and posed then; and, while it's being turned, further
- * out than that where it's going and `ahead` radians past it, so it eases back before an arm or a
- * shield comes between. Where they are is measured (pointsOf) from every corner of what's drawn of
+ * line to what it looks at, no nearer than `margin` metres to any of them (clearAlong; each point
+ * measured standing for the `grain`-metre cube it was kept for, so as much further as the cube's
+ * across), as they're shaped, dressed and posed then; and, while it's being turned, as far out as
+ * that where it's going and `ahead` radians past it, so it eases back before an arm or a shield
+ * comes between. Where they are is measured (pointsOf) from every corner of what's drawn of
  * them, each triangle wider than `spacing` metres filled in, a point kept in each `grain`-metre
  * cube, `budget` ms a frame (some 150 ms in all), once they're first drawn and again `settle` ms
  * after they're last changed; till they're first measured, the camera comes no nearer than the tab
  * frames them from. While a weapon's swung, the camera keeps out of its sweep too: as far from
  * what it looks at as `arm` of their height and the longest thing they hold.
  */
-const NEAREST = Object.freeze({ margin: 0.1, side: 0.08, ahead: 0.25, spacing: 0.06, grain: 0.02, budget: 4, settle: 300, arm: 0.6 });
+const NEAREST = Object.freeze({ margin: 0.1, ahead: 0.25, spacing: 0.06, grain: 0.02, budget: 4, settle: 300, arm: 0.6 });
 
 // How many points of a character's measured between looks at the time (pointsOf)
 const POINTS_A_STEP = 1500;
@@ -208,19 +209,23 @@ function* pointsOf(object, { spacing, grain }) {
 
 /**
  * How far from `look` (THREE.Vector3) along the line to a camera round it at `angle` (radians,
- * looking down at `pitch`) the last of `points` (pointsOf's) within `side` metres of that line is
- * (metres; 0 if none are). A pure function.
+ * looking down at `pitch`) the camera must stand to be at least `reach` metres from every one of
+ * `points` (pointsOf's): metres, 0 if none are within `reach` of that line. A point off the line
+ * holds the camera out past where it is along it by as much of `reach` as its being off the line
+ * leaves, so a sphere of `reach` round the camera (its near plane well inside it) is clear of
+ * them all, not only of those nearest the line. A pure function.
  */
-export function clearAlong(points, look, angle, pitch, side) {
+export function clearAlong(points, look, angle, pitch, reach) {
     const [ux, uy, uz] = [Math.sin(angle) * Math.cos(pitch), Math.sin(pitch), Math.cos(angle) * Math.cos(pitch)];
     let last = 0;
 
     for (let i = 0; i < points.length; i += 3) {
         const [x, y, z] = [points[i] - look.x, points[i + 1] - look.y, points[i + 2] - look.z];
         const along = x * ux + y * uy + z * uz;
+        const off = x * x + y * y + z * z - along * along;
 
-        if (along > last && x * x + y * y + z * z - along * along < side * side) {
-            last = along;
+        if (off < reach * reach) {
+            last = Math.max(last, along + Math.sqrt(reach * reach - off));
         }
     }
 
@@ -722,8 +727,10 @@ export class Creator {
         }
 
         const { points, longest } = measured;
-        const { margin, side, ahead } = NEAREST;
-        const along = (angle) => clearAlong(points, look, angle, orbit.pitch, side) + margin;
+        const { margin, ahead, grain } = NEAREST;
+        // (Each point kept for its cube: any of them in it as much as the cube's across from it)
+        const reach = margin + grain * Math.sqrt(3);
+        const along = (angle) => clearAlong(points, look, angle, orbit.pitch, reach);
         // (Swinging: out of reach of their arm and what they hold)
         const sweep = this.step === "weapon" ? avatar.character.height * NEAREST.arm + longest + margin : 0;
         const here = Math.max(sweep, along(orbit.angle));
