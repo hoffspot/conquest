@@ -30,7 +30,7 @@
 
 import { ICONS, useDefs } from "./icons.js";
 import { BARE_MS, Press } from "./press.js";
-import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
+import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN, whomFor } from "./wheel.js";
 
 export { QUICK_HOLD_MS } from "./press.js";
 
@@ -48,6 +48,9 @@ export const QUICK_REFUSALS = Object.freeze({
     untargeted: "Tap a foe first: that's used on them",
     none: "You've none left",
     weapon: "Not with that weapon",
+    // (Cure, and Buff all: core/smartcast.js)
+    uncured: "Nothing there you can cure",
+    buffed: "Your buffs are all up",
 });
 
 /**
@@ -97,7 +100,7 @@ export function fillSlot(slot, key, count = 0) {
         shown.textContent = counted;
     }
 
-    const said = action ? `${label}, on ${offensive(key) ? "your foe" : "yourself"}${action.item ? `, ${count} left` : ""}` : "Empty";
+    const said = action ? `${label}, ${whomFor(key).replace(/^./, (first) => first.toLowerCase())}${action.item ? `, ${count} left` : ""}` : "Empty";
 
     if (slot.getAttribute("aria-label") !== said) {
         slot.setAttribute("aria-label", said);

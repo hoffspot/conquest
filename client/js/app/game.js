@@ -106,7 +106,8 @@ import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt, scenesIn } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
-import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
+import { buffsDue, cureFor } from "../core/smartcast.js";
+import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELL_COOLDOWN, SPELLS, TOMES } from "../core/spells.js";
 import { nextOf, sigilSpell } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
@@ -376,6 +377,10 @@ const AIM_MS = 100;
 // Holding this long (ms) on the player or an enemy opens the action wheel; a finger this far
 // (pixels) from where it opened is in one of its slices
 const HOLD_MS = 400;
+
+// What the player does themselves that lets Buff all's buffs still to come go (#command): walking,
+// stopping, casting or using anything else, setting on a foe, making camp
+const BUFF_STOPS = Object.freeze(["move", "stop", "cast", "ability", "use", "engage", "camp", "emote"]);
 const FLICK = 30;
 // (A wheel opened by a mouse and kept open to be clicked: how long the click after a press it takes
 // is kept from what's under it, ms: #lingerWheel)
@@ -2398,6 +2403,7 @@ export class Game {
         };
         this.spellbook = new SpellbookPanel(this.hud.root);
         this.spellbook.onWheel = (id) => this.#putOnWheel(id, ACTIONS[id]?.on === "enemy" ? "enemy" : "self");
+        this.spellbook.onBar = (id) => this.#putOnBar(id);
         this.spellbook.onClose = () => this.closeSpellbook();
         this.pack.onClose = () => this.closePack();
         this.pack.onPage = () => this.sound?.play("pageTurn");
@@ -4117,6 +4123,7 @@ export class Game {
         this.effects.setAlly(helped?.object ?? null, helped ? Math.max(0.5, helped.character.height * 0.33) : 0.6);
         this.#partyIcons();
         this.#quickActions(target);
+        this.#buffOn();
         this.sigil.show(this.#prism(), this.battle.time);
         this.charge.show(this.#charging(), this.battle.time);
         this.#sizeUp(dt);
@@ -12977,6 +12984,41 @@ export class Game {
         }
     }
 
+    // A spell put on the Action Bar from the spellbook: in the first empty slot shown of Action
+    // Bar 1, else of Action Bar 2, and said where (or that it's there already, or that both are
+    // full)
+    #putOnBar(key) {
+        const label = actionOf(key)?.label ?? key;
+        const bars = [this.wheels.quick, this.wheels.quickTwo];
+        const where = (bar, slot) => `Action Bar ${bar + 1}, slot ${slot + 1}`;
+
+        for (const [bar, slots] of bars.entries()) {
+            const slot = slots.indexOf(key);
+
+            if (slot >= 0) {
+                this.hud.message(`${label} is on ${where(bar, slot)} already.`, 3);
+
+                return;
+            }
+        }
+
+        for (const [bar, slots] of bars.entries()) {
+            const slot = slots.slice(0, this.quickShown).findIndex((each) => !each);
+
+            if (slot >= 0) {
+                const quick = [...slots];
+
+                quick[slot] = key;
+                this.setQuick(quick, bar);
+                this.hud.message(`${label} put on ${where(bar, slot)}.`, 3);
+
+                return;
+            }
+        }
+
+        this.hud.message("Both Action Bars are full: change them in Game options, Action Wheel and Bar, Action Bar, or hold a slot in a fight.", 3.5);
+    }
+
     #putOnWheel(key, wheel = "self") {
         // (A spell's scroll by its own name, not its spell's: "Scroll of Fireball")
         const action = actionOf(key);
@@ -15684,6 +15726,9 @@ export class Game {
             }
         }
 
+        // (Cure on the Action Bar or their wheel: what it would cure ringed, on whom)
+        const cure = this.#curing() ? this.#cureNow() : null;
+
         for (const actor of battle.actors) {
             if ((!actor.afflictions?.length && !actor.buffs?.length && !(actor.kind === "player" && boonsOf(actor).length)) || actor.dead) {
                 continue;
@@ -15701,7 +15746,7 @@ export class Game {
             const soonest = (a, b) => a.until - b.until;
 
             hud.setAfflictions(actor.id, [
-                ...[...actor.afflictions].sort(soonest).map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1) })),
+                ...[...actor.afflictions].sort(soonest).map(({ kind, until, look }) => ({ kind, ...ailmentOf(kind, look), left: (until - battle.time) / (AFFLICTIONS[kind]?.ms ?? 1), curing: cure?.id === actor.id && cure.kind === kind })),
                 ...[
                     ...(actor.buffs ?? []).map(({ kind, until }) => ({ kind, icon: kind, label: SPELLS[kind]?.label ?? kind, until, left: (until - battle.time) / (SPELLS[kind]?.lasts ?? 1), buff: true })),
                     ...(actor.kind === "player" ? boonsOf(actor) : []).map(({ id, label, until, ms }) => ({ kind: id, icon: id, label, until, left: (until - battle.time) / ms, buff: true })),
@@ -17451,7 +17496,28 @@ export class Game {
     act(action, target, { refused = null } = {}) {
         this.#wake();
 
-        const { spell, order, ability, item, emote, unit } = actionOf(action) ?? {};
+        const { spell, order, ability, item, emote, unit, smart } = actionOf(action) ?? {};
+
+        // (Cure: the cure for whatever's on them cast in its place; Buff all: each buff that's off
+        // or running out, cast in turn: core/smartcast.js)
+        if (smart === "cure") {
+            const cure = this.#cureNow(target);
+
+            if (!cure) {
+                this.hud.message(QUICK_REFUSALS.uncured, 1.4);
+                this.sound?.play("denied");
+                refused?.();
+
+                return { ok: false, reason: "uncured" };
+            }
+
+            return this.act(cure.key, cure.on, { refused });
+        }
+
+        if (smart === "buffAll") {
+            return this.#buffAll(refused);
+        }
+
         const on = target === "self" ? null : target;
 
         // (Somewhere to go, picked on the world map; someone to summon, chosen)
@@ -17512,6 +17578,128 @@ export class Game {
         }
 
         return this.battle.cooldown(this.me, spell) > 0 ? "cooldown" : needs && actor?.weapon !== needs ? needs : null;
+    }
+
+    // What Cure would cast now, and on whom (core/smartcast.js cureFor): on `target` ("self", or
+    // someone's id: held on them); or, from the Action Bar (no `target`), on the party member the
+    // player's chosen to help (#ally) if they've something on them the player can cure, else on
+    // the player. { key (a cure spell; or "item:" and a cure carried, for the player only), on
+    // ("self" or an id), id (theirs), kind (what it cures) }, or null: nothing that can be
+    #cureNow(target = null) {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead) {
+            return null;
+        }
+
+        const now = this.battle.time;
+        const known = this.progress.known();
+        const carried = this.progress.carried();
+        // (A cure spell cooling down of its own: the spells' shared moment just after another's
+        // cast isn't counted, or a cure carried would be spent rather than wait a moment)
+        const ready = (spell) => now >= (me.spellsReadyAt?.[spell] ?? 0);
+        const cureOn = (actor) => {
+            const self = actor === me;
+            const found = actor && !actor.dead ? cureFor(actor.afflictions ?? [], { now, known, ready, carried, self }) : null;
+
+            return found && { key: found.spell ?? `item:${found.item}`, on: self ? "self" : actor.id, id: actor.id, kind: found.kind };
+        };
+
+        if (target) {
+            return cureOn(target === "self" ? me : this.battle.actor(target));
+        }
+
+        const ally = this.#ally();
+
+        return (ally && ally !== me && cureOn(ally)) || cureOn(me);
+    }
+
+    // Whether Cure's on the Action Bar (either bar) or the player's own wheel: their afflictions
+    // shown with the one it would cure ringed (#ailing)
+    #curing() {
+        const { quick, quickTwo, self } = this.wheels;
+
+        return [...quick, ...quickTwo, ...self.flatMap((side) => Object.values(side))].includes("cure");
+    }
+
+    // What Buff all would cast now (core/smartcast.js buffsDue): each buff of the player's that's
+    // off them or running out, and those left out for want of what they need in hand
+    #buffsDue() {
+        const me = this.battle.actor(this.me);
+
+        return buffsDue(me?.buffs ?? [], { now: this.battle.time, known: this.progress.known(), holds: (needs) => me?.weapon === needs });
+    }
+
+    // Buff all: each buff that's off the player or running out cast in turn (#buffOn, each
+    // frame), said how many; refused (and `refused` told: the slot it came from) if all are up.
+    // What's left out for want of what it needs in hand is said
+    #buffAll(refused = null) {
+        const { due, lacking } = this.#buffsDue();
+        const left = lacking.map(({ spell, needs }) => `${SPELLS[spell].label} needs a ${needs} in hand`).join("; ");
+
+        if (!due.length) {
+            this.hud.message(left || QUICK_REFUSALS.buffed, 1.6);
+            this.sound?.play("denied");
+            refused?.();
+
+            return { ok: false, reason: "buffed" };
+        }
+
+        this.buffing = { queue: [...due], sentAt: -Infinity, waiting: false };
+        this.hud.message(`Buffing: ${due.length === 1 ? SPELLS[due[0]].label : `${due.length} buffs`}${left ? ` (${left})` : ""}`, 1.6);
+        this.#buffOn();
+
+        return { ok: true };
+    }
+
+    // Buff all's next buff, cast once the player's free to: not casting, and the spells' shared
+    // moment since the last past (core/spells.js SPELL_COOLDOWN); each frame while there's one to
+    // come, any cooling down of its own passed over. A stun or a stagger, a cast refused, or
+    // anything else they do (#command) lets the rest go: pressed again, it carries on with
+    // whatever's still off or running out
+    #buffOn() {
+        const buffing = this.buffing;
+        const me = this.battle.actor(this.me);
+        const now = this.battle.time;
+
+        if (!buffing) {
+            return;
+        }
+
+        while (buffing.queue.length && now < (me?.spellsReadyAt?.[buffing.queue[0]] ?? 0)) {
+            buffing.queue.shift();
+        }
+
+        if (!me || me.dead || now < me.stunnedUntil || now < me.staggeredUntil || !buffing.queue.length) {
+            this.buffing = null;
+
+            return;
+        }
+
+        if (buffing.waiting || me.casting || now < me.spellReadyAt || now < buffing.sentAt + SPELL_COOLDOWN) {
+            return;
+        }
+
+        const spell = buffing.queue.shift();
+
+        Object.assign(buffing, { waiting: true, sentAt: now });
+        this.buffCasting = true;
+
+        try {
+            this.#command({ type: "cast", spell, target: null }, (result) => {
+                buffing.waiting = false;
+
+                if (!result.ok) {
+                    this.#castHeard(result);
+
+                    if (this.buffing === buffing) {
+                        this.buffing = null;
+                    }
+                }
+            });
+        } finally {
+            this.buffCasting = false;
+        }
     }
 
     // Told why a spell wasn't cast (or nothing, if it was)
@@ -17686,7 +17874,7 @@ export class Game {
             // (A thing all used up; an ability not learnt; a blow for another kind of weapon; held
             // on someone else who isn't an enemy, anything but a spell that can be cast on them,
             // and on one of their own, a thing to give them besides)
-            const notForThem = (friendly || commands) && (action?.spell ? !forFriends(action.spell) : action?.item ? !(commands && action.give) : action?.unit ? !commands : Boolean(action));
+            const notForThem = (friendly || commands) && (action?.smart ? action.smart !== "cure" : action?.spell ? !forFriends(action.spell) : action?.item ? !(commands && action.give) : action?.unit ? !commands : Boolean(action));
             // (Told to do what they're doing already: following, waiting or guarding; or to use an
             // ability they haven't)
             const already = commands && ((action?.unit === "wait" && waiting) || (action?.unit === "follow" && !waiting && !unit?.assist && !stance.guarding) || (action?.unit === "guard" && !waiting && stance.guarding) || (action?.unit === "ability" && !ability));
@@ -17905,7 +18093,9 @@ export class Game {
 
         const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
 
-        return { wheels: structuredClone(this.wheels), choices: Object.fromEntries(SETTABLE.map((wheel) => [wheel, assignable(wheel, { learnt, carries })])), counts };
+        const choices = Object.fromEntries(SETTABLE.map((wheel) => [wheel, assignable(wheel, { learnt, carries })]));
+
+        return { wheels: structuredClone(this.wheels), choices, counts, unready: this.#unusable([...new Set(Object.values(choices).flat())]) };
     }
 
     /** Put things on the player's action wheels (as the Action wheels options have them), and keep them. */
@@ -18172,7 +18362,19 @@ export class Game {
     #quickKeys() {
         const prism = this.#prism();
         const chain = {};
+        const smart = {};
         const keys = this.#quickBarShown().map((key, slot) => {
+            // (Cure: the cure it would cast as things are, and on whom, in its place: #cureNow)
+            if (actionOf(key)?.smart === "cure") {
+                const cure = this.#cureNow();
+
+                if (cure) {
+                    smart[slot] = cure;
+                }
+
+                return cure?.key ?? key;
+            }
+
             const element = SPELLS[actionOf(key)?.spell]?.school;
             const next = nextOf(prism, element);
 
@@ -18185,7 +18387,7 @@ export class Game {
             return next;
         });
 
-        return { keys, chain };
+        return { keys, chain, smart };
     }
 
     // Why an Action Bar action can't be used as things are, but for cooling down (or null): nothing in
@@ -18197,6 +18399,15 @@ export class Game {
 
         if (!action) {
             return "empty";
+        }
+
+        // (Cure, nothing on them it can cure; Buff all, every buff up: core/smartcast.js)
+        if (action.smart === "cure") {
+            return "uncured";
+        }
+
+        if (action.smart === "buffAll") {
+            return this.#buffsDue().due.length ? null : "buffed";
         }
 
         if (action.spell) {
@@ -18306,7 +18517,8 @@ export class Game {
      * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
      */
     quick(slot) {
-        const key = this.#quickKeys().keys[slot] ?? null;
+        const { keys, smart } = this.#quickKeys();
+        const key = keys[slot] ?? null;
         const target = this.#target();
         const why = this.#quickRefusal(key, target) ?? ((this.#cooldowns({ slot: key }).slot ?? 0) > 0 ? "cooldown" : null);
 
@@ -18327,9 +18539,10 @@ export class Game {
         this.quickBar?.mark(slot, "chosen");
         this.sound?.play("quickAction");
 
-        // (Healing or a ward, with one of the party chosen to help: on them)
+        // (Healing or a ward, with one of the party chosen to help: on them; Cure's cure, on whom
+        // it's for)
         const ally = this.#ally();
-        const on = offensive(key) ? target.id : ally && forFriends(actionOf(key)?.spell) ? ally.id : "self";
+        const on = smart[slot]?.on ?? (offensive(key) ? target.id : ally && forFriends(actionOf(key)?.spell) ? ally.id : "self");
 
         return this.act(key, on, { refused: () => this.quickBar?.mark(slot, "refused") });
     }
@@ -18363,8 +18576,16 @@ export class Game {
     quickSetup() {
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
         const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
+        const choices = assignable("quick", { learnt, carries: this.progress.carried() });
 
-        return { quick: [...this.wheels.quick], quickTwo: [...this.wheels.quickTwo], choices: assignable("quick", { learnt, carries: this.progress.carried() }), counts };
+        return { quick: [...this.wheels.quick], quickTwo: [...this.wheels.quickTwo], choices, counts, unready: this.#unusable(choices) };
+    }
+
+    // Which of these (`keys`) can't be used as things are, listed after the rest in the options,
+    // greyed: a spell needing a wand or grimoire not in hand, a blow for another kind of weapon,
+    // none left of a thing to use (not for want of a foe set on, a cure needed, a buff run out)
+    #unusable(keys) {
+        return keys.filter((key) => !["untargeted", "uncured", "buffed", null].includes(this.#quickRefusal(key, null)));
     }
 
     /**
@@ -18690,6 +18911,11 @@ export class Game {
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
+        // (Anything else the player does themselves lets Buff all's buffs still to come go)
+        if (!this.buffCasting && BUFF_STOPS.includes(command.type)) {
+            this.buffing = null;
+        }
+
         // (Anything the player does themselves ends running somewhere far: not resisting a
         // summons, done for them; and walking up to the portal, the war table, a lectern, a sign or
         // a shrine)
