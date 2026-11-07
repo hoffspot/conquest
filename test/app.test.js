@@ -28,7 +28,7 @@ import { BOUGHT } from "../client/js/core/host.js";
 import { UNIT_ORDERS } from "../client/js/core/followers.js";
 import { distanceLabel, iconAbout } from "../client/js/app/worldmap.js";
 import { ICON_KINDS, ICON_NAMES } from "../client/js/app/mapicons.js";
-import { weaponNumbers } from "../client/js/app/creator.js";
+import { clearAlong, weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 
@@ -947,6 +947,48 @@ describe("a hero's kit (game.js, creator.js)", () => {
         assert.equal(weaponNumbers("sword", true), "3.5–7.5 damage up close (kicks or the weapon)");
         assert.equal(weaponNumbers("bow", true), "3–7 damage up close (kicks) · 1.0 a second; 5–10 damage 13.5 m · 0.7 a second");
         assert.equal(weaponNumbers("boots"), "3–7 damage up close · 1.0 a second");
+    });
+
+    it("keeps the camera making a character a sphere's reach from every point of them, not only from those on its line to what it looks at (clearAlong)", () => {
+        const look = { x: 0, y: 1.6, z: 0 };
+        const reach = 0.1;
+        // (Points about the face: the camera's line runs out along +z, level)
+        const points = [];
+
+        for (let k = 0; k < 400; k++) {
+            const [u, v] = [(k % 20) / 19 - 0.5, Math.floor(k / 20) / 19 - 0.5];
+
+            points.push(u * 0.3, 1.6 + v * 0.3, 0.1 - (u * u + v * v) * 0.4);
+        }
+
+        // A nose on the line; and a lock of hair 8.5 cm off it, standing out further than the nose
+        // (a band of 8 cm about the line, the camera 10 cm past the last in it, came within 8.6 cm
+        // of it: within the near plane, once the points' own cubes are counted)
+        const nose = [0, 1.6, 0.14];
+        const lock = [0.085, 1.6, 0.23];
+
+        points.push(...nose);
+        assert.ok(Math.abs(clearAlong(points, look, 0, 0, reach) - 0.24) < 1e-6, "the nose its reach past its tip");
+        points.push(...lock);
+
+        for (const [angle, pitch] of [[0, 0], [0.3, 0.2], [-0.2, -0.1]]) {
+            const distance = clearAlong(points, look, angle, pitch, reach);
+            const camera = [Math.sin(angle) * Math.cos(pitch) * distance, 1.6 + Math.sin(pitch) * distance, Math.cos(angle) * Math.cos(pitch) * distance];
+            let gap = Infinity;
+
+            for (let i = 0; i < points.length; i += 3) {
+                gap = Math.min(gap, Math.hypot(points[i] - camera[0], points[i + 1] - camera[1], points[i + 2] - camera[2]));
+            }
+
+            // As near as it may come: a hair's breadth further from the nearest of them than its reach
+            assert.ok(gap >= reach - 1e-9, `${angle}, ${pitch}: ${gap}`);
+            assert.ok(gap < reach + 1e-6, `${angle}, ${pitch}: ${gap}`);
+        }
+
+        // Straight on, the lock holds it out past the nose's reach; and with nothing within its
+        // reach of the line, it may come as near as what it looks at
+        assert.ok(Math.abs(clearAlong(points, look, 0, 0, reach) - (0.23 + Math.sqrt(reach * reach - 0.085 * 0.085))) < 1e-6);
+        assert.equal(clearAlong([0, 1.6, -0.5, 0.5, 1.6, 0.5], look, 0, 0, reach), 0);
     });
 });
 
