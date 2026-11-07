@@ -162,6 +162,7 @@ import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { HOUSE_KIT, kitBuilt } from "../world/art/kits/kithouse.js";
+import { kitShopBuilt } from "../world/art/kits/kitshop.js";
 import { houseKitRead, readyHouseKit } from "../world/kithouses3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
@@ -2086,7 +2087,8 @@ export class Game {
         // The buildings' textures, painted in workers while the land is laid
         const atlas = prepareAtlas();
         // (And the house kit, if the start town's houses are built of it: kithouses3d.js)
-        const houseKit = HOUSE_KIT.settlements.includes(world.town.kind) ? readyHouseKit() : null;
+        // (Or a shop of it, a village's master's: kitshop.js)
+        const houseKit = HOUSE_KIT.settlements.includes(world.town.kind) || world.town.pieces.some(kitShopBuilt) ? readyHouseKit() : null;
 
         // The town's trees, for hearing their leaves (and the world's, as it's drawn)
         this.townTrees = treesOf(world).map(({ x, y }) => ({ x, z: y }));
@@ -2159,7 +2161,7 @@ export class Game {
         view.scene.add(this.town.object);
 
         if (houseKit && !houseKitRead()) {
-            const houses = world.town.pieces.flatMap((piece, index) => (kitBuilt(piece, world.town.kind) ? [index] : []));
+            const houses = world.town.pieces.flatMap((piece, index) => (kitBuilt(piece, world.town.kind) || kitShopBuilt(piece) ? [index] : []));
 
             houseKit.ready.then(() => houseKitRead() && this.town?.rebuild?.(houses));
         }

@@ -19,7 +19,11 @@ import { material } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { planHouse } from "./art/kits/house.js";
 import { HOUSE_KIT, kitBuilt, kitHouse, ROOFS } from "./art/kits/kithouse.js";
+import { AWNING, kitShop, kitShopBuilt, shopLookOf } from "./art/kits/kitshop.js";
+import { hangingSign, nameBoard } from "./art/kits/landmarks.js";
 import { chimney } from "./art/kits/roofs.js";
+import { dressShop, SHOPFRONTS } from "./art/kits/shopfront.js";
+import { emblemSignTexture, loadSignFont, nameBoardTexture } from "./art/kits/signs.js";
 import { awning, AWNINGS } from "./cloth.js";
 import { roomLit } from "./roomlight.js";
 import { createRandom } from "../core/random.js";
@@ -85,6 +89,56 @@ export function kitHouseObject(piece, { detail = KIT_HOUSES.detail } = {}) {
 
     return object;
 }
+
+/**
+ * A shop of the layout built of the kit (kitshop.js: a specialist's or a master's of a people whose
+ * shops are the kit's, in the look of its own its people's shops of its kind all have), as
+ * kitHouseObject builds a house, and its front dressed: its name on its board over the door, its
+ * sign hung from its corner post, its awnings, what it sells set out under them, a master's
+ * banners, the Mystic Emporium's lanterns, the step at its door. A promise of a group in world
+ * pixels, or null if it isn't one, or the kit isn't read (the game's own's drawn: landmarks.js).
+ */
+export async function kitShopObject(piece, { detail = KIT_HOUSES.detail } = {}) {
+    if (!KIT_HOUSES.on || !kitShopBuilt(piece)) {
+        return null;
+    }
+
+    const gltf = sceneryOf(HOUSE_KIT.asset);
+
+    if (!gltf) {
+        return null;
+    }
+
+    await loadSignFont();
+
+    const library = libraryOf(gltf);
+    const shop = kitShop(piece);
+    const object = buildKitHouse(shop.built, shop.plan, library, detail);
+    const solid = new Solid();
+    const front = SHOPFRONTS[piece.name];
+    const { board, sign, goods, step } = shop;
+    const across = (z) => ({ origin: [0, 0, z * P], across: [1, 0, 0], out: [0, 0, 1] });
+
+    nameBoard(solid, across(board.z), [board.x0 * P, board.x1 * P, board.y0 * P, board.y1 * P], nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark }), `board ${piece.name}`, shop.look.frame, { proud: board.depth * P });
+    hangingSign(solid, across(sign.z), sign.x * P, sign.top * P, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: sign.width, height: sign.height, reach: sign.reach, above: sign.above });
+    solid.box(step[0] * P, 0, step[3] * P, step[1] * P, step[2] * P, step[4] * P, material("stone"));
+    dressShop(solid, piece.name, { x0: goods.x0 * P, z: goods.z * P, seed: shop.plan.seed & 0xffff, aside: goods.aside, under: goods.under, banners: goods.banners ?? false, lanterns: goods.lanterns });
+    object.add(solid.toObject());
+    object.name = `${piece.name} (${HOUSE_KIT.asset})`;
+    object.userData.kit = { kind: shop.built.kind, storeys: shop.built.storeys, pieces: shop.built.pieces.length, shop: piece.name };
+
+    return object;
+}
+
+/**
+ * Each people's shops built of a kit (kitshop.js SHOP_LOOKS has their looks), by people: a promise
+ * of the shop's group, or of null where it isn't built so (its kit not read yet). The humans' are
+ * the house kit's; any other people's are its own kit's (art/peoples) till theirs are added here.
+ */
+export const SHOP_KITS = Object.freeze({ human: kitShopObject });
+
+/** What builds a layout's shop of a kit (SHOP_KITS), if it's one a kit builds: else null. */
+export const shopKitOf = (piece) => (piece.kind === "landmark" && shopLookOf(piece) && SHOP_KITS[piece.people ?? "human"]) || null;
 
 /**
  * A house built of the kit (kitHouse's) drawn: a group in world pixels. Its meshes: the kit's own
@@ -170,14 +224,19 @@ export function buildKitHouse(built, plan, library, detail = "far") {
     const solid = new Solid();
     const random = createRandom((plan.seed ^ 0x7a11) >>> 0);
 
+    // (A shop's its own: a forge's broad, smoking thick; an alchemist's smoking green: kitshop.js)
     if (built.extras.chimney) {
-        const { x, z, base, height } = built.extras.chimney;
+        const { x, z, base, height, w = 0.7, d = 0.7, name = plan.look.stack ?? "stone", smoke = 1, tint = null } = built.extras.chimney;
 
-        chimney(solid, { x: x * P, z: z * P, w: 0.7 * P, d: 0.7 * P, base: base * P, height: height * P, name: plan.look.stack ?? "stone", pots: random.pick([0, 1, 2]) });
+        chimney(solid, { x: x * P, z: z * P, w: w * P, d: d * P, base: base * P, height: height * P, name, pots: random.pick([0, 1, 2]), smoke, tint });
     }
 
-    for (const { at: [x, z], out, width, y } of built.extras.awnings) {
-        awning(solid, [(x + out[0] * 0.36) * P, y * P, (z + out[1] * 0.36) * P], [out[0], 0, out[1]], { width: (width - 0.2) * P, depth: 0.9 * P, fall: 0.35 * P, skirt: 0.2 * P, look: random.pick(Object.keys(AWNINGS)) });
+    // (A house's of any of the houses' stripes; a shop's its own: cloth.js SHOP_AWNINGS)
+    for (const { at: [x, z], out, width, y, look } of built.extras.awnings) {
+        const { back, depth, fall, skirt } = AWNING;
+        const stripes = random.pick(Object.keys(AWNINGS));
+
+        awning(solid, [(x + out[0] * back) * P, y * P, (z + out[1] * back) * P], [out[0], 0, out[1]], { width: (width - 0.2) * P, depth: depth * P, fall: fall * P, skirt: skirt * P, look: look ?? stripes });
     }
 
     group.add(solid.toObject());

@@ -299,7 +299,7 @@ export function pitchedRoof(solid, { x0, x1, z0, z1, eaves, pitch, overhang, ver
  * of `name` (brick or stone), with a corbelled cap and, sometimes, pots; its top listed in the
  * solid's `smoke` (Solid.toObject).
  */
-export function chimney(solid, { x, z, w, d, base, height, name, pots = 0 }) {
+export function chimney(solid, { x, z, w, d, base, height, name, pots = 0, smoke = 1, tint = null }) {
     const stack = material(name);
 
     solid.box(x - w / 2, base, z - d / 2, x + w / 2, height, z + d / 2, stack);
@@ -311,6 +311,7 @@ export function chimney(solid, { x, z, w, d, base, height, name, pots = 0 }) {
         solid.cylinder(px, z, height, height + m(0.4), m(0.11), m(0.09), material("clay"), { segments: 6 });
     }
 
-    // (Its top, where its smoke rises from: smoke.js)
-    (solid.smoke ??= []).push([x, height + (pots ? m(0.4) : m(0.05)), z, 1]);
+    // (Its top, where its smoke rises from, as strong as `smoke`, its own colour `tint` if it has
+    // one: smoke.js)
+    (solid.smoke ??= []).push([x, height + (pots ? m(0.4) : m(0.05)), z, smoke, ...(tint === null ? [] : [tint])]);
 }

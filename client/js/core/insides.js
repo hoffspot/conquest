@@ -55,6 +55,20 @@ export const ENTRANCES = Object.freeze({
     ...Object.fromEntries(SHOP_LANDMARKS.map((name) => [name, { depth: 1.8, offset: 0, width: 1.6, height: 2.3, floor: 0.3 }])),
 });
 
+/**
+ * Each people's shops' front doors (the specialists' and the masters': pieces.js SHOP_LANDMARKS)
+ * where theirs are built to a door of their own, as ENTRANCES has them: the humans', of the house
+ * kit (art/kits/kitshop.js), its door in the middle of a 2 m module of the kit's (kithouse.js
+ * HOLES: 1.05 m wide, its head 2.06 m over its sill on the kit's plinth, 0.2 m), its leaf where
+ * ENTRANCES' is; any other people's as ENTRANCES has them, till their own shops are built.
+ */
+export const SHOP_DOORS = Object.freeze({
+    human: Object.freeze({ depth: 1.8, offset: 0, width: 1.05, height: 2.06, floor: 0.2 }),
+});
+
+/** Where a building's front door is (ENTRANCES), a shop's as its people's are built (SHOP_DOORS). */
+export const entranceSpecOf = (piece) => (SHOP_LANDMARKS.includes(piece.name) && SHOP_DOORS[piece.people ?? "human"]) || ENTRANCES[piece.name];
+
 /** The kinds that can be gone into. */
 export const ENTERABLE = Object.freeze(["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks", ...SHOP_LANDMARKS]);
 
@@ -130,7 +144,7 @@ const WAY_IN = Object.freeze({ across: 1.2, behind: 0.4, out: 1 });
  * both); its door where its kind's is (ENTRANCES), or where `spec` has it (STRUCTURE_DOORS: a
  * people's own place).
  */
-export function entranceOf(piece, origin = 0, spec = ENTRANCES[piece.name]) {
+export function entranceOf(piece, origin = 0, spec = entranceSpecOf(piece)) {
     const [ox, oy] = Array.isArray(origin) ? origin : [origin, origin];
     const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
     const { facing } = piece;

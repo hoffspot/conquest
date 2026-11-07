@@ -46,6 +46,7 @@ import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from ".
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
 import { kitBuilt } from "./art/kits/kithouse.js";
+import { kitShopBuilt } from "./art/kits/kitshop.js";
 import { houseKitRead, readyHouseKit } from "./kithouses3d.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolMaterial, poolsMesh } from "./windowpools.js";
@@ -1193,9 +1194,11 @@ export class Chunks {
 
         // (The house kit asked for the first time a house of it's to be drawn: the game's own
         // drawn till it's read, and those of it drawn again then)
-        if (!this.kitAsked && !houseKitRead() && pieces.some((piece) => kitBuilt(piece, piece.settlement))) {
+        const ofKit = (piece) => kitBuilt(piece, piece.settlement) || kitShopBuilt(piece);
+
+        if (!this.kitAsked && !houseKitRead() && pieces.some(ofKit)) {
             this.kitAsked = true;
-            readyHouseKit()?.ready.then(() => !this.disposed && houseKitRead() && this.#rebuildWhere((piece) => kitBuilt(piece, piece.settlement)));
+            readyHouseKit()?.ready.then(() => !this.disposed && houseKitRead() && this.#rebuildWhere(ofKit));
         }
 
         const group = new THREE.Group();

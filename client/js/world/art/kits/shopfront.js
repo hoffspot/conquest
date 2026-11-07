@@ -186,23 +186,25 @@ function bottles(solid, x, z, random) {
 }
 
 // Herbs hung to dry from a pole on two brackets: bunches, heads down
-function herbs(solid, x, z, random) {
+function herbs(solid, x, z, random, under = null) {
     const iron = material("iron");
+    // (Its rail 2.1 m up, or lower under an awning, its stays under it too: `under` metres)
+    const rail = Math.min(m(2.1), under === null ? Infinity : m(under) - m(0.44));
 
-    solid.box(x - m(0.75), m(2.1), z - m(0.03), x + m(0.75), m(2.14), z + m(0.03), material("timber"));
+    solid.box(x - m(0.75), rail, z - m(0.03), x + m(0.75), rail + m(0.04), z + m(0.03), material("timber"));
 
     // (Its brackets back to the wall behind it)
     for (const side of [-1, 1]) {
-        solid.beam([x + side * m(0.75), m(2.12), z], [x + side * m(0.75), m(2.12), z - m(0.55)], m(0.03), m(0.03), iron);
-        solid.beam([x + side * m(0.75), m(2.12), z - m(0.2)], [x + side * m(0.75), m(2.5), z - m(0.55)], m(0.025), m(0.025), iron);
+        solid.beam([x + side * m(0.75), rail + m(0.02), z], [x + side * m(0.75), rail + m(0.02), z - m(0.55)], m(0.03), m(0.03), iron);
+        solid.beam([x + side * m(0.75), rail + m(0.02), z - m(0.2)], [x + side * m(0.75), rail + m(0.4), z - m(0.55)], m(0.025), m(0.025), iron);
     }
 
     for (let k = 0; k < 6; k++) {
         const hx = x - m(0.62) + k * m(0.25);
         const drop = m(random.range(0.35, 0.55));
 
-        solid.beam([hx, m(2.1), z], [hx, m(2.1) - m(0.08), z], m(0.01), m(0.01), material("rope"));
-        solid.lathe(hx, z, [[0, m(2.02) - drop], [m(0.1), m(2.02) - drop * 0.6], [m(0.04), m(2.02)], [0, m(2.02)]], material(random.pick(["greens", "leaves", "flowers", "flowers-gold"])), { segments: 5 });
+        solid.beam([hx, rail, z], [hx, rail - m(0.08), z], m(0.01), m(0.01), material("rope"));
+        solid.lathe(hx, z, [[0, rail - m(0.08) - drop], [m(0.1), rail - m(0.08) - drop * 0.6], [m(0.04), rail - m(0.08)], [0, rail - m(0.08)]], material(random.pick(["greens", "leaves", "flowers", "flowers-gold"])), { segments: 5 });
     }
 
     // (And a barrel of roots under them)
@@ -250,7 +252,7 @@ const PIECES = Object.freeze({ blades, whetstone, harness, shields, lectern, tom
  * banners outside them, the Emporium's lanterns; each a little out from the wall. `seed`: the
  * shop's, for its colours and how its blades stand.
  */
-export function dressShop(solid, name, { x0, z, room = 3.2, seed = 1, sides = [-1, 1], aside = null }) {
+export function dressShop(solid, name, { x0, z, room = 3.2, seed = 1, sides = [-1, 1], aside = null, under = null, banners = null, lanterns = null }) {
     const front = SHOPFRONTS[name];
     const random = createRandom(seed * 13 + 101);
     const out = m(aside ?? Math.min(room - 0.9, 2.4));
@@ -259,17 +261,25 @@ export function dressShop(solid, name, { x0, z, room = 3.2, seed = 1, sides = [-
         return;
     }
 
+    // (What's set out no higher than `under` metres, where there's an awning over it (kitshop.js);
+    // a master's banners `banners.aside` metres either side of the middle and `banners.out` out,
+    // where a kit's shop has them clear of its awnings (false: none), or just past what's set out,
+    // room allowing; the lanterns as `lanterns` has them, or by the door)
     for (const side of sides) {
-        PIECES[side < 0 ? front.left : front.right](solid, x0 + side * out, z + m(0.55), random);
+        PIECES[side < 0 ? front.left : front.right](solid, x0 + side * out, z + m(0.55), random, under);
 
-        if (front.master && out / M + 1.35 <= room) {
+        if (front.master && banners) {
+            banner(solid, x0 + side * m(banners.aside), z + m(banners.out), front.master);
+        } else if (front.master && banners === null && out / M + 1.35 <= room) {
             banner(solid, x0 + side * (out + m(1.05)), z + m(0.45), front.master);
         }
     }
 
     if (front.lanterns) {
+        const [beside, before] = lanterns ? [m(lanterns.aside), m(lanterns.out)] : [m(1.2), m(0.5)];
+
         for (const side of [-1, 1]) {
-            lantern(solid, x0 + side * m(1.2), z + m(0.5), side < 0 ? "glass-violet" : "glass-green");
+            lantern(solid, x0 + side * beside, z + before, side < 0 ? "glass-violet" : "glass-green");
         }
     }
 }
