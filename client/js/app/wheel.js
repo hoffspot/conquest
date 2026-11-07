@@ -30,6 +30,7 @@
 import { EMOTES } from "../core/emotes.js";
 import { givable, UNIT_ABILITIES } from "../core/followers.js";
 import { ITEMS } from "../core/progress.js";
+import { knowsABuff, knowsACure } from "../core/smartcast.js";
 import { RENAMED, SCHOOLS, SPELLS } from "../core/spells.js";
 import { ICONS, ITEM_ICONS, useDefs } from "./icons.js";
 
@@ -62,10 +63,14 @@ const ON = Object.freeze({ enemy: "enemy", any: "any", friend: "friend" });
  * longer one it's listed by to choose, `listed`); and whose wheel it goes on (`on`: the player's
  * own ("self"), an enemy's, "any": any of them, as healing, which can be cast on anyone,
  * "friend": the player's own, cast on them or on a friend held on, and their followers', or
- * "unit": their followers').
+ * "unit": their followers'). Two choose what to cast as things are (`smart`: core/smartcast.js):
+ * Cure, the cure for whatever's on someone, and Buff all, each buff that's off or running out;
+ * each theirs once they know a spell it casts (`knows`).
  */
 export const ACTIONS = Object.freeze({
     ...Object.fromEntries(Object.entries(SPELLS).map(([id, { label, target }]) => [id, { label, spell: id, learnt: id, on: ON[target] ?? "self" }])),
+    cure: { label: "Cure", smart: "cure", knows: knowsACure, on: "friend" },
+    buffAll: { label: "Buff all", smart: "buffAll", knows: knowsABuff, on: "self" },
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
     shieldBash: { label: "Shield bash", ability: "shieldBash", learnt: "shieldBash", on: "enemy" },
@@ -320,11 +325,137 @@ export function assignable(wheel, { learnt = [], carries = [] } = {}) {
     }
 
     const actions = Object.entries(ACTIONS)
-        .filter(([, action]) => goesOn(action, wheel) && (!action.learnt || learnt.includes(action.learnt)))
+        .filter(([, action]) => goesOn(action, wheel) && (!action.learnt || learnt.includes(action.learnt)) && (!action.knows || action.knows(learnt)))
         .map(([key]) => key);
     const items = [...new Set(carries)].map((id) => `item:${id}`).filter((key) => goesOn(actionOf(key), wheel));
 
     return [...actions, ...items];
+}
+
+/**
+ * The kinds of action the pickers list what can go in a slot by (app/choices.js), each with its
+ * name: worked out from what each does (rolesOf), never set by hand. A filter, never a lock: any
+ * kind can go in any slot it could before.
+ */
+export const ROLES = Object.freeze([
+    ["enemy", "On an enemy"],
+    ["heals", "Heals"],
+    ["buffs", "Buffs"],
+    ["cures", "Cures"],
+    ["summons", "Summons"],
+    ["travel", "Travel"],
+    ["abilities", "Abilities"],
+    ["orders", "Orders"],
+    ["emotes", "Emotes"],
+    ["items", "Items"],
+]);
+
+// The spell a thing to use casts (a scroll's), or an action's own
+function spellOf(action) {
+    const id = action?.spell ?? ITEMS[action?.item]?.use?.cast;
+
+    return SPELLS[id] ? { id, ...SPELLS[id] } : null;
+}
+
+// The spells that take the caster somewhere, or call something to them, cast on themselves:
+// nothing else in core/spells.js says so (core/host.js casts them)
+const TRAVELS = Object.freeze(["teleport", "wordOfRecall", "wizardsWalk"]);
+const CALLS = Object.freeze(["attraction"]);
+
+/** What kinds of action one is (ROLES ids, in their order; an ACTIONS key, or "item:" and a thing to use). */
+export function rolesOf(key) {
+    const action = actionOf(key);
+
+    if (!action) {
+        return [];
+    }
+
+    const spell = spellOf(action);
+    const use = action.item ? ITEMS[action.item]?.use : null;
+    const roles = new Set([
+        ...(action.on === "enemy" || spell?.target === "enemy" ? ["enemy"] : []),
+        ...(spell?.heal || spell?.full ? ["heals"] : []),
+        ...(action.smart === "buffAll" || (spell?.lasts && ["self", "friend"].includes(spell.target)) ? ["buffs"] : []),
+        ...(action.smart === "cure" || spell?.cures || use?.cure ? ["cures"] : []),
+        ...(["corpse", "summon"].includes(spell?.target) || CALLS.includes(spell?.id) ? ["summons"] : []),
+        ...(TRAVELS.includes(spell?.id) ? ["travel"] : []),
+        ...(action.ability ? ["abilities"] : []),
+        ...(action.order || action.unit ? ["orders"] : []),
+        ...(action.emote ? ["emotes"] : []),
+        ...(action.item ? ["items"] : []),
+    ]);
+
+    return ROLES.map(([id]) => id).filter((id) => roles.has(id));
+}
+
+// Whom each kind of spell's cast on, as a picker says (core/spells.js target)
+const WHOM = Object.freeze({ enemy: "On an enemy", any: "Anyone", friend: "You or a friend", self: "On yourself", corpse: "On a body", summon: "Called to your side", place: "To a place" });
+
+/** Whom an action's used on (or what it is), as a picker says under its name. */
+export function whomFor(key) {
+    const action = actionOf(key);
+    const spell = spellOf(action);
+
+    if (!action) {
+        return "";
+    }
+
+    if (action.smart === "cure") {
+        return "You or a friend";
+    }
+
+    if (action.emote) {
+        return "An emote";
+    }
+
+    if (action.unit) {
+        return "Your followers";
+    }
+
+    if (action.order === "camp") {
+        return "Where you are";
+    }
+
+    return TRAVELS.includes(spell?.id) ? WHOM.place : spell ? WHOM[spell.target] : action.on === "enemy" ? "On an enemy" : "On yourself";
+}
+
+/**
+ * The entries a picker lists for what can go in a slot (`keys`, as assignable gives them): a
+ * school's spells (core/spells.js SCHOOLS) as one, its highest tier there, the rest under it
+ * (`tiers`, highest first: the school opened, or flicked through on the Action Bar); anything
+ * else as itself. [{ key, tiers }]
+ */
+export function pickerEntries(keys = []) {
+    const entries = [];
+    const schools = new Map();
+
+    for (const key of keys) {
+        const spell = actionOf(key)?.item ? null : actionOf(key)?.spell;
+        const school = SCHOOLS[SPELLS[spell]?.school] ? SPELLS[spell].school : null;
+
+        if (!school) {
+            entries.push({ key, tiers: [] });
+            continue;
+        }
+
+        if (!schools.has(school)) {
+            const entry = { key, tiers: [] };
+
+            schools.set(school, entry);
+            entries.push(entry);
+        }
+
+        schools.get(school).tiers.push(key);
+    }
+
+    for (const [school, entry] of schools) {
+        const order = SCHOOLS[school].tiers;
+        const tiers = entry.tiers.sort((a, b) => order.indexOf(actionOf(b).spell) - order.indexOf(actionOf(a).spell));
+
+        Object.assign(entry, { key: tiers[0], tiers: tiers.slice(1) });
+    }
+
+    return entries;
 }
 
 // Sizes (pixels): the wheel's outer and inner radii, the gap between slices (radians), where

@@ -544,8 +544,8 @@ export class Hud {
     /**
      * Show what's lingering on a character (the player's plate, or over another's bar): an icon
      * for each ([{ kind, icon (an ICONS key), label, left (the share of its time still to go),
-     * buff (what does them good: a spell lasting on them, a boon; not an affliction) }]), or
-     * none.
+     * buff (what does them good: a spell lasting on them, a boon; not an affliction), curing (the
+     * one the player's Cure would cure: ringed) }]), or none.
      */
     setAfflictions(id, ailments) {
         const plate = this.#plateOf(id);
@@ -569,7 +569,7 @@ export class Hud {
 
         // (Made again only when what's on them, or its order, changes; how long each has to go,
         // every time)
-        const key = ailments.map(({ kind, icon }) => `${kind}:${icon}`).join(",");
+        const key = ailments.map(({ kind, icon, curing = false }) => `${kind}:${icon}${curing ? ":curing" : ""}`).join(",");
 
         if (row.dataset.key !== key) {
             const more = element("span", "ail more", "…");
@@ -581,10 +581,10 @@ export class Hud {
             more.setAttribute("role", "img");
             row.dataset.key = key;
             row.replaceChildren(
-                ...ailments.map(({ kind, icon, label, buff = false }) => {
-                    const each = element("span", `ail ail-${kind}${buff ? " buff" : ""}`);
+                ...ailments.map(({ kind, icon, label, buff = false, curing = false }) => {
+                    const each = element("span", `ail ail-${kind}${buff ? " buff" : ""}${curing ? " curing" : ""}`);
 
-                    each.title = label;
+                    each.title = curing ? `${label}: Cure's next` : label;
                     each.setAttribute("role", "img");
                     each.setAttribute("aria-label", label);
                     each.innerHTML = `<svg viewBox="-24 -24 48 48" aria-hidden="true">${ICONS[icon] ?? ""}</svg>`;

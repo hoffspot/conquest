@@ -287,6 +287,25 @@ export const ICONS = Object.freeze({
         <path d="${star(-15, 14, 3.2, 0.9, 4, 0)}" fill="#e9fff0"/>
         <path d="${star(16, 13, 3.6, 1, 4, 0)}" fill="#b8ffcc"/>`,
 
+    // A clear drop with a green cross in it, in a ring of light: Cure, the cure for whatever's on
+    // someone (core/smartcast.js; the slot shows the cure it would cast, this while there's none)
+    cure: `
+        <circle r="21" fill="url(#icon-heal-glow)" opacity="0.8"/>
+        <circle r="17" fill="none" stroke="#e6fbff" stroke-width="1.5" stroke-dasharray="2.5 3" opacity="0.8"/>
+        <path d="M0,-15 C6,-6 11,-1 11,5 A11,11 0 0 1 -11,5 C-11,-1 -6,-6 0,-15 z" fill="#c9f1ff" stroke="#1d5f78" stroke-width="1.4" filter="url(#icon-glow)"/>
+        <path d="M-1.5,-0.5 h3 v3 h3 v3 h-3 v3 h-3 v-3 h-3 v-3 h3 z" fill="#1d8a4e"/>
+        <path d="${star(15, -13, 3.6, 1, 4, 0)}" fill="#e9fff0"/>
+        <path d="${star(-15, 13, 3, 0.9, 4, 0)}" fill="#e9fff0"/>`,
+
+    // Three wards, one over another, rising: Buff all, every buff that's off or running out
+    buffAll: `
+        <circle r="21" fill="url(#icon-heal-glow)" opacity="0.5"/>
+        <g stroke-linejoin="round" stroke-width="1.4">
+            <path d="M-15,10 L0,2 L15,10 L15,15 L0,7 L-15,15 z" fill="#ffd36a" stroke="#7a4b00"/>
+            <path d="M-15,0 L0,-8 L15,0 L15,5 L0,-3 L-15,5 z" fill="#9fe3ff" stroke="#1d5f78"/>
+            <path d="M-15,-10 L0,-18 L15,-10 L15,-5 L0,-13 L-15,-5 z" fill="#d6b8ff" stroke="#3d1f78" filter="url(#icon-glow)"/>
+        </g>`,
+
     // The dazed head bound round with chains: the hold
     hold: `
         <circle cy="4" r="12" fill="url(#icon-stun-head)" stroke="#2c1363" stroke-width="1.4"/>
