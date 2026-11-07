@@ -111,6 +111,8 @@ export function tell(event, war) {
             return `The ${own(event.realm)} army has been put to the sword to the last.`;
         case "intercepted":
             return `Soldiers on their way to join the ${own(event.realm)} army were cut down on the road by ${people(event.by)}.`;
+        case "banded":
+            return `Two columns of soldiers on their way to join the ${own(event.realm)} army have met on the road and march on as one.`;
         case "crushed":
             return `${People(event.realm)} rose in ${town(event.town)}, and ${people(event.from)} put the rising down.`;
         case "ordered":
@@ -246,7 +248,7 @@ export function tell(event, war) {
 const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "subjugated", "fallen", "rebelled", "restless", "risen", "victory", "undone"]);
 
 // What isn't talked of in the taverns
-const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned", "mended", "scattered"]);
+const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "banded", "supplied", "provisioned", "mended", "scattered"]);
 
 // Whether an event's talked of at `at` ([x, y] metres): what's happened within `reach` metres of
 // it, and what's heard everywhere (not what's never talked of); and wherever it happened, what

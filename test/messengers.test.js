@@ -146,6 +146,22 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.ok(player.progress.pack.some((stack) => stack?.id === picked.piece.id) || [...host.ground.values()].some(({ bundle }) => bundle.items.some(({ id }) => id === picked.piece.id)));
     });
 
+    it("over while the messenger came (the camp broken): taken, said too late, nothing carried, and no standing lost for it", () => {
+        const host = hosted();
+        const { war, camp } = camped(host);
+        const player = host.players.get(HOST_PLAYER);
+        const arrived = hailed(host);
+        const points = player.standing.points;
+
+        war.camps.splice(war.camps.indexOf(camp), 1);
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: arrived.folk }).ok, true);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } }), { ok: false, reason: "overtaken" });
+        assert.equal(player.standing.missions.length, 0);
+        assert.equal(player.standing.missionsDone.length, 0);
+        assert.equal(player.standing.points, points);
+        assert.equal([...host.messengers.values()][0]?.state, "leaving");
+    });
+
     it("turned down, none comes again for a while; a mission given up costs a little standing", () => {
         const host = hosted();
         const { war } = camped(host);

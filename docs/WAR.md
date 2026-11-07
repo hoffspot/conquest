@@ -1503,7 +1503,9 @@ A vassal's towns raise only for its own.
 **Reinforcements** (`REINFORCE`). Those raised for an army or reserve that isn't at their town go
 out to it as a column:
 - 250 m a turn, straight for where it is now;
-- two columns for the same within 150 m of each other band together;
+- two columns for the same within 150 m of each other band together, the one nearer it taking the
+  other in, which is told (`banded`: which it was and which it's in now, never talked of in the
+  taverns), so a war mission about it follows it;
 - they join it within 60 m;
 - an enemy's army within 120 m falls on them on the road;
 - theirs gone, they go into the nearest of their people's towns.
@@ -1916,7 +1918,7 @@ requests (M4), which stay as they are.
 | `rout` | Break the camp | the ruler | an enemy camp | it's gone (fails if the town it's before falls) |
 | `plunder` | Fall on their convoy | the ruler | an enemy convoy of the works' goods | ambushed by the player's people, as they were there |
 | `wagons` | Raid their supply wagons | the ruler | an enemy army's supply wagons | lost to the player's people, within 400 m of where they were |
-| `intercept` | Cut off their reinforcements | the ruler | fresh soldiers on the road to an enemy army | cut off by the player's people (it fails if they get through) |
+| `intercept` | Cut off their reinforcements | the ruler | fresh soldiers on the road to an enemy army, two turns' march or more from it (`INTERCEPT_TURNS`) | cut off by the player's people (it fails if they get through; comes to nothing if their army's gone); banded on the march with another column for the same army (the war's `banded`), followed into that one |
 | `seize` | Take their works | the ruler | an enemy's works (a quarry, a lumber mill...) | seized or cleared by the player's people, played |
 | `tower` | Bring down their tower | the ruler | an enemy guard tower or forward garrison | razed by the player's people |
 | `retake` | Win back the works | the nearest lord | works of ours taken | won back |
@@ -1928,7 +1930,11 @@ requests (M4), which stay as they are.
 
 Each is done only if the player was there first (within 150 m of it, 120 m of a town's edge:
 `THERE`); done by others before they got there, it comes to nothing (`void`), at no cost. A
-mission given is only one the player's not already carrying (`held`).
+mission given is only one the player's not already carrying (`held`). One that's over by the time
+its messenger finds the player (the reinforcements with their army, the camp broken: settled the
+moment it would be taken on, `#overtaken`) isn't taken on when they say yes: they're told "Too
+late: what the messenger came about is over already.", the messenger leaves, and nothing's lost
+for it (what two games share changed with it and the war's `banded`: `NET_VERSION` 213).
 
 **Who may hear one** (`#mayHearMessenger`): alive, out in the world (not indoors or in a dungeon),
 not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than

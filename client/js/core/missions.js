@@ -18,6 +18,7 @@ import { rollGear } from "./gear.js";
 import { namePeople } from "./names.js";
 import { ITEMS } from "./progress.js";
 import { createRandom } from "./random.js";
+import { REINFORCE } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /** How near something must be (metres) for a messenger to come about it. */
@@ -44,6 +45,13 @@ const QUALITY_LADDER = Object.freeze(["common", "fine", "masterwork", "rare", "v
 
 /** How near (metres) a player must come to each kind of thing for a mission's to count them there. */
 export const THERE = Object.freeze({ camp: 150, force: 150, works: 150, town: 120, fort: 150 });
+
+/**
+ * Reinforcements fewer than this many war turns' march from their army (core/war/armies.js
+ * REINFORCE: its speed, a turn's), where they join it, aren't offered to cut off: they'd be with
+ * it before a messenger had found the player (a turn or so) and they'd got there (another).
+ */
+export const INTERCEPT_TURNS = 2;
 
 /** How near (metres) a player comes to a friendly army or reserve before its commander briefs them. */
 export const BRIEFING_REACH = 80;
@@ -142,6 +150,12 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
         }
     };
     const forces = war.forces ?? [];
+    // (How far reinforcements have still to march before they join their army: none, theirs gone)
+    const marchLeft = (column) => {
+        const army = war.force(column.target);
+
+        return army ? apart(column.at, army.at) - REINFORCE.join : 0;
+    };
 
     // An enemy's camp; and, one before a town of theirs, the town held
     for (const camp of war.camps ?? []) {
@@ -171,7 +185,7 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
             }
         } else if (force.kind === "supply" && hostile(force.realm)) {
             add("wagons", force.id, force.at, { force: force.id, realm: force.realm, at: [...force.at], name: `the ${peopleOf(force.realm)} supply wagons`, army: force.target });
-        } else if (force.kind === "reinforcement" && hostile(force.realm)) {
+        } else if (force.kind === "reinforcement" && hostile(force.realm) && marchLeft(force) > INTERCEPT_TURNS * REINFORCE.speed) {
             add("intercept", force.id, force.at, { force: force.id, realm: force.realm, at: [...force.at], name: `the ${peopleOf(force.realm)} reinforcements`, to: force.target, size: force.size });
         } else if (force.kind === "reserve" && ours(force.realm) && force.mission === "defend") {
             const against = war.force(force.target);
@@ -460,6 +474,19 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
             return "failed";
         }
         case "intercept": {
+            // (Taken into another column for the same army on the way, before or since it was
+            // taken on: followed into that one, the soldiers marching on in it: core/war/war.js
+            // "banded")
+            for (let hops = 0; hops < 8 && !war.force(target.force); hops++) {
+                const banded = log.findLast((event) => event.type === "banded" && event.from === target.force);
+
+                if (!banded) {
+                    break;
+                }
+
+                target.force = banded.into;
+            }
+
             const column = war.force(target.force);
 
             if (column) {
@@ -475,8 +502,9 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 return cut.by && war.liege(cut.by) === liege && mission.there ? "ready" : "void";
             }
 
-            // (Gone, and not cut off: it got through to its army)
-            return "failed";
+            // (Gone, and not cut off: its army gone too, beaten or disbanded, it went home, come to
+            // nothing; else it got through to it)
+            return target.to && !war.force(target.to) ? "void" : "failed";
         }
         case "seize":
         case "retake": {

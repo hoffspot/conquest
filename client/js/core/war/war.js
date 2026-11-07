@@ -2452,8 +2452,9 @@ export class War {
 
     // Reinforcements where they've got to: theirs gone, into the nearest of their people's towns;
     // there, joining it; else banding with another column for it near them, the one nearer it
-    // taking the other in (not one a player's near taken in: it goes on as it's seen to go).
-    // Returns whether they're done (gone, or joined, or taken in)
+    // taking the other in (not one a player's near taken in: it goes on as it's seen to go), and
+    // told ("banded": which it was, and which it's in now, for a war mission about it to follow:
+    // core/missions.js checkMission). Returns whether they're done (gone, or joined, or taken in)
     #reinforced(column) {
         const band = (each) => !this.watched.has(each.id);
         const force = this.force(column.target);
@@ -2484,6 +2485,7 @@ export class War {
 
             keep.size += merged.size;
             this.forces.splice(this.forces.indexOf(merged), 1);
+            this.#emit("banded", { realm: keep.realm, from: merged.id, into: keep.id, at: [...keep.at] });
 
             return merged === column;
         }

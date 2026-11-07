@@ -970,6 +970,7 @@ const BODILY = new Set(["blade", "marksman", "endurance"]);
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
     missions: "You're carrying as many war missions as you can.",
+    overtaken: "Too late: what the messenger came about is over already.",
     player: "No such player.",
     dead: "The dead can't do that.",
     command: "Nothing that can be done.",
@@ -17202,6 +17203,14 @@ export class Host {
             return refuse("command");
         }
 
+        // (Over while the messenger came: the reinforcements with their army, the camp gone...
+        // said so, and nothing taken on, nor lost for it: #overtaken)
+        if (this.#overtaken(one.mission, player)) {
+            this.#messengerLeaves(one, "overtaken");
+
+            return refuse("overtaken");
+        }
+
         let mine = null;
 
         for (const id of one.players) {
@@ -17218,6 +17227,19 @@ export class Host {
         this.#messengerLeaves(one, "accepted");
 
         return mine ? { ok: true, mission: structuredClone(mine) } : refuse("missions");
+    }
+
+    // Whether a mission offered (`offer`, as core/missions.js missionOf made it when the messenger
+    // set out) has come to an end since, as it would be found the moment it was taken on
+    // (checkMission, on a copy, `player` nowhere near): done, failed or come to nothing
+    #overtaken(offer, player) {
+        const war = this.war;
+
+        if (!war || !offer) {
+            return false;
+        }
+
+        return checkMission({ ...structuredClone(offer), there: false }, { war, realm: player.realm, near: () => false }) !== null;
     }
 
     // A mission's pick of the armoury made (`which`: 0 to 2), or a mission given up
