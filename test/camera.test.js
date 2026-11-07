@@ -4,8 +4,8 @@
 // (client/js/world/view.js framed)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { CameraFollow, PITCH } from "../client/js/app/camera.js";
-import { backFor, BIG_FOE, framed, PORTRAIT, toneOf } from "../client/js/world/view.js";
+import { CameraFollow, PITCH, startPitch } from "../client/js/app/camera.js";
+import { backFor, BIG_FOE, DISTANCE, framed, PORTRAIT, toneOf } from "../client/js/world/view.js";
 
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -176,12 +176,14 @@ describe("the camera following the player (camera.js)", () => {
         assert.equal(camera.pitch, 31);
     });
 
-    it("starts looking 15 degrees down, and dragged, looks up into the sky, 45 degrees over the horizon at most", () => {
+    it("starts looking 25 degrees down (on a phone held upright, 15: startPitch), and dragged, looks up into the sky, 45 degrees over the horizon at most", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
-        assert.equal(camera.pitch, 15);
+        assert.equal(camera.pitch, 25);
+        assert.equal(startPitch(false), 25);
+        assert.equal(startPitch(true), 15);
         camera.grab();
-        camera.turn(0, -40);
+        camera.turn(0, -50);
         assert.equal(camera.pitch, -25);
         camera.turn(0, -60);
         assert.equal(camera.pitch, -45);
@@ -191,7 +193,7 @@ describe("the camera following the player (camera.js)", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
         camera.grab();
-        camera.turn(0, -50);
+        camera.turn(0, -60);
         camera.release();
         stand(camera, { x: 0, z: 0 }, 2);
         assert.equal(camera.pitch, -35);
@@ -228,7 +230,7 @@ describe("the camera following the player (camera.js)", () => {
         const camera = new CameraFollow({ x: 0, z: 0 });
 
         camera.follows = false;
-        camera.turn(0.4, -35);
+        camera.turn(0.4, -45);
 
         const player = walk(camera, { from: { x: 0, z: 0 }, vx: 1.7, vz: 0, seconds: 3, away: 10 });
 
@@ -537,6 +539,11 @@ describe("a phone held upright (world/view.js framed)", () => {
         assert.deepEqual(framed(35, 10.5, 1), { pitch: 50, distance: 13.65 });
         assert.equal(framed(17.5, 10.5, 1).pitch, 25);
         assert.equal(framed(-20, 10.5, 1).pitch, -20);
+
+        // (Where it starts, upright: low over the player's shoulder, about 21 degrees down from 7 m)
+        const start = framed(startPitch(true), DISTANCE.start, 1);
+
+        assert.ok(Math.abs(start.pitch - 21.4) < 0.1 && Math.abs(start.distance - 7.15) < 0.01, JSON.stringify(start));
 
         // (Drawn back for a big or far foe, as asked)
         assert.deepEqual(framed(35, 10, 0, 1.5), { pitch: 35, distance: 15 });

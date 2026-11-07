@@ -171,7 +171,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
-import { CameraFollow, PITCH } from "./camera.js";
+import { CameraFollow, PITCH, startPitch } from "./camera.js";
 import { Doors } from "./doors.js";
 import { VaultDoors } from "../world/vault3d.js";
 import { Readying } from "./readying.js";
@@ -2341,10 +2341,11 @@ export class Game {
             this.#place(actor);
         }
 
-        // The camera starts on the player, looking north
+        // The camera starts on the player, looking north, tilted as it starts for how the screen's
+        // held (startPitch)
         const start = this.avatars.get(this.me).object.position;
 
-        this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
+        this.cameraFollow = new CameraFollow({ x: start.x, z: start.z, pitch: startPitch(this.view.heldUpright) });
         this.#follow(0);
 
         // (A world kept or joined in the thick of a fight: the figures of the kinds of soldiers near
@@ -8086,8 +8087,9 @@ export class Game {
 
     /**
      * Put the camera back behind the player, the way they face (R, a tap on the thumb stick, or
-     * the player's own mark on the minimap tapped): swung round, low over their shoulder and close,
-     * as it starts (camera.js PITCH.start, view.js DISTANCE.start), as if turned by hand: a fight
+     * the player's own mark on the minimap tapped): swung round, close behind them, as it starts
+     * for how the screen's held (camera.js startPitch, view.js DISTANCE.start), as if turned by
+     * hand: a fight
      * the battle cam framed is let be, as after a drag (#battleFoe).
      */
     recentre() {
@@ -8111,7 +8113,7 @@ export class Game {
         }
 
         // (The way they face, or are turning to face)
-        this.cameraFollow.recentre((this.battle.actor(this.me)?.facing ?? me.facing) + Math.PI);
+        this.cameraFollow.recentre((this.battle.actor(this.me)?.facing ?? me.facing) + Math.PI, { tilt: startPitch(this.view.heldUpright) });
     }
 
     #battleFoe(foe, me) {

@@ -183,8 +183,9 @@ It takes a moment before you can strike. Ten seconds after the fight, once no en
 or after you, you put it away again. The orc does the same, on its patrol.
 
 **The camera** comes down from high overhead as you come into a world, so you see what's round
-you, and settles close behind you, low over your shoulder (tap or press anything to bring it
-down at once; Game options, Camera, Opening fly-in turns it off). It keeps up with you from your
+you, and settles close behind you: low over your shoulder on a phone held upright, a little
+higher, over your head, on a PC or a phone held sideways (tap or press anything to bring it down
+at once; Game options, Camera, Opening fly-in turns it off). It keeps up with you from your
 first step, staying turned the way you leave it.
 **Drag** (a finger, or the mouse held down) to turn it round you, and up or down to tilt it. Pinch
 or scroll to zoom. In the town, when a building would stand between you and the camera, it comes
