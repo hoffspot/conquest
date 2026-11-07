@@ -5603,7 +5603,8 @@ everything else starts empty, until the player puts something there in **Game op
 Wheel and Bar, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel (Yourself, A
 foe, Your followers) and which side;
 the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
-(`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as
+(`assignable`): "Nothing", and what's been learnt and is carried, listed as the Action Bar
+options list it (app/choices.js: below). Tapping S turns it over, as
 flicking it does. What's on the wheels is kept with the character (save.js `pellagos.<id>.wheels`),
 and read back safely (`readWheels`: only what goes on each wheel, in its seven slices). A skill
 ranking up with an ability says to put it on a wheel.
@@ -5701,8 +5702,30 @@ pauses (when no one else is playing in the world) at **Game options, Action Whee
 Action Bar in Game options has two tabs over its slots, **Action Bar 1** and **Action Bar 2** (as the
 action wheels' sides have), opened on Action Bar 1 from Game options; a tab shows that bar's slots,
 the same slot chosen, the heading saying which ("Action Bar 2, slot 3"). It shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
-learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
-used on ("On your foe", "On yourself"). The click a browser fires as the finger's lifted lands on
+learnt and carried that can go on either wheel (`assignable("quick")`), Cure and Buff all among
+them once a spell each casts is known (docs/MAGIC.md, *Cure and Buff all*). **The list**
+(app/choices.js, the wheels' too):
+- **By kind**, tabs over it: All, then only the kinds there are of On an enemy, Heals, Buffs,
+  Cures, Summons, Travel, Abilities, Orders, Emotes and Items (wheel.js `ROLES`, `rolesOf`),
+  worked out from what each does (its target, healing, cures, how long it lasts...; the spells
+  that take the caster somewhere or call something to them, named). A filter, never a lock:
+  anything goes in any slot it could before, and one can be of more than one kind (an antidote's
+  a cure and an item; Renewal heals and cures).
+- **Whom each is for**, under its name (`whomFor`): On an enemy, Anyone (healing, the cures), You
+  or a friend (the wards, Cure), On yourself, On a body, Called to your side, To a place, Where you
+  are (making camp), Your followers, An emote. A slot says the same to a screen reader.
+- **A school's spells as one** (`pickerEntries`): its highest tier known, with a button beside it
+  ("3 tiers") that opens the rest under it, highest first, dashed; opened of itself while one of
+  them is in the slot or what's typed is one of their names, and closed again by the button.
+  Flicking the slot in play goes through them as before.
+- **What can't be used as things are** (a spell needing a wand or grimoire not in hand, a blow
+  for another kind of weapon, none left: game.js `#unusable`) after the rest, greyed.
+- **Fewer, bigger**: eight or fewer shown (a kind chosen, a name typed: `ROOMY`), each is drawn
+  bigger, easier to tap.
+- **Found by name** on a PC (a fine pointer that hovers): a box over the list, the list narrowed
+  as it's typed in; hidden on a touch screen.
+
+The click a browser fires as the finger's lifted lands on
 whatever's under it by then: after a hold (the Action Bar options opened over the finger still down) or an
 empty slot's tap, that's the Action Bar options, its **Back to the game** lying over the slot at the foot of
 a phone's screen, and it closed again at once. A click within 0.7 s of a finger's lift from a slot
