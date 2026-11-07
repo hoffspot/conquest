@@ -327,6 +327,36 @@ bars: if more are on someone than fit, the last that fits is an ellipsis. Hold t
 (half a second) and it grows to show them all, row on row; tap it, and it's one row again.
 Cast again, one lasts from then. They end at death.
 
+### Cure and Buff all (core/smartcast.js)
+
+Two actions choose what to cast as things are, so a player whose spells have outgrown the Action
+Bar's slots needn't keep each cure and buff on it. Each goes on the Action Bar and the player's own
+wheel like a spell (app/wheel.js `ACTIONS`: `cure`, `buffAll`), offered once a spell it casts is
+known.
+
+- **Cure** casts the cure for whatever's on someone. From the Action Bar, the party member chosen to
+  help (if there's something on them the player can cure), else the player; from a wheel, whoever
+  it's held on. What hinders first (slowed, a venom's cramps: `AFFLICTIONS` speed), then whatever
+  will do the most harm before it wears off (its blows still to come), then the longest left
+  (`cureOrder`). For each, a known cure spell that isn't cooling down of its own (the tomes'
+  seven: `CURE_SPELLS`; the spells' shared moment just after another cast isn't counted), else,
+  on the player, a cure they carry (the draught or salve for it); never a healing spell, so
+  Renewal's and Astral Heal's long waits aren't spent on a burn that's over in 4 seconds
+  (`cureFor`). Its slot shows the cure it would cast, and casts it, on whom it's for (game.js
+  `#quickKeys`, `#cureNow`); with nothing to cure, its own icon (a clear drop with a green cross),
+  greyed, and pressed, "Nothing there you can cure". On the plate, the affliction it would cure
+  next is ringed in white (`curing`). The seven cure spells stay, each still learnt and put on a
+  slot as before: Cure only ever casts one the player knows.
+- **Buff all** casts each buff the player knows that's off them or has less than a fifth of its
+  time left (`buffsDue`, `REFRESH`), on themselves, one after another: each once they're free to
+  (not casting, and the spells' shared second since the last past), so seven wards take about
+  seven seconds (game.js `#buffAll`, `#buffOn`). Not Light (casting it again puts it out), Surge
+  (they take more harm under it) nor Invisibility (anything else cast ends it): those are choices,
+  not chores (`BUFF_ALL_LEAVES`). Reflect without a wand in hand is left out, and said why. A stun
+  or a stagger, a cast refused, or anything else they do (walking, casting, using, setting on a
+  foe) lets the rest go; pressed again, it carries on with whatever's still off or running out.
+  All up, it says "Your buffs are all up".
+
 - A **ward** (`WARD`: 0.7) takes 30% off what it's against (an element's attack spells, a
   creature's blows of it, afflictions: both how much they hurt and how long they last) and
   shortens a stun or a knockdown from it.
@@ -419,7 +449,9 @@ same for everyone playing (docs/GAME.md: hosting and joining):
 The book button (top right) or B opens it: the wand or grimoire in hand and its boost; each school,
 its tier and how far to the next (an element not yet learnt: which tome opens it, and where
 it's sold), and its spells, known (to put on a wheel: the enemy wheel for those cast at enemies,
-the self wheel for the rest) or still to come, and at what experience (or from what tome); the
+the self wheel for the rest; or on the Action Bar, in the first empty slot shown of Action Bar 1,
+else of Action Bar 2, and said where: game.js `#putOnBar`) or still to come, and at what
+experience (or from what tome); the
 hexes; and the spells learnt from tomes, with how far each that grows has grown, and how many
 more there are to find. Each spell has its icon (app/spellicons.js: its school's colours, what it
 does drawn plainly), what it does, its cooldown, how long it takes to cast and whom it's cast on.

@@ -8,7 +8,7 @@ import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
 import { memberKind, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
-import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, sectorPath, wheelPlace, WHEELS } from "../client/js/app/wheel.js";
+import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, flickReach, FLIP, iconOf, offensive, pickerEntries, PLACES, QUICK, QUICK_SHOWN, QUICK_TWO, readWheels, ROLES, rolesOf, sectorPath, wheelPlace, WHEELS, whomFor } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
@@ -1306,7 +1306,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
-            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order) || EMOTES[action.emote] || UNIT_ORDERS.includes(action.unit) || action.unit === "stance", id);
+            assert.ok(SPELLS[action.spell] || ABILITIES[action.ability] || ["engage", "camp"].includes(action.order) || EMOTES[action.emote] || UNIT_ORDERS.includes(action.unit) || action.unit === "stance" || ["cure", "buffAll"].includes(action.smart), id);
             assert.equal(typeof action.label, "string");
             assert.ok(["self", "any", "friend", "enemy", "provoke", "unit"].includes(action.on), id);
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${id} has an icon`);
@@ -1521,6 +1521,82 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         assert.deepEqual(assignable("quick", { learnt, carries: ["potion", "sword", "potion"] }), ["vigor", "mendWounds", "camp", ...emotes, "item:potion", "burn", "stun", "powerStrike", "attack"]);
         assert.deepEqual(assignable("quick"), ["camp", ...emotes, "attack"]);
+    });
+
+    it("offers Cure once the player knows a cure spell, and Buff all once they know a buff it casts, on their own wheel, their followers' and the Action Bar", () => {
+        assert.ok(!assignable("quick", { learnt: ["vigor", "light"] }).some((key) => ["cure", "buffAll"].includes(key)));
+
+        const learnt = ["vigor", "quench", "resistFire"];
+
+        for (const wheel of ["quick", "self", "unit"]) {
+            assert.ok(assignable(wheel, { learnt }).includes("cure"), wheel);
+        }
+
+        assert.ok(assignable("quick", { learnt }).includes("buffAll"));
+        assert.ok(assignable("self", { learnt }).includes("buffAll"));
+        assert.ok(!assignable("enemy", { learnt }).some((key) => ["cure", "buffAll"].includes(key)));
+        assert.equal(offensive("cure"), false);
+        assert.deepEqual(readWheels({ quick: ["cure", "buffAll", null, null, null, null] }).quick.slice(0, 2), ["cure", "buffAll"], "kept on the Action Bar");
+    });
+
+    it("lists what can go in a slot by what kind it is, worked out from what it does; each saying whom it's used on", () => {
+        assert.deepEqual(
+            ROLES.map(([id]) => id),
+            ["enemy", "heals", "buffs", "cures", "summons", "travel", "abilities", "orders", "emotes", "items"],
+        );
+
+        const kinds = {
+            burn: ["enemy"],
+            stun: ["enemy"],
+            fear: ["enemy"],
+            vigor: ["heals"],
+            renewal: ["heals", "cures"],
+            resistFire: ["buffs"],
+            light: ["buffs"],
+            evaluate: ["buffs"],
+            quench: ["cures"],
+            cure: ["cures"],
+            buffAll: ["buffs"],
+            summon: ["summons"],
+            zombify: ["summons"],
+            attraction: ["summons"],
+            teleport: ["travel"],
+            wizardsWalk: ["travel"],
+            powerStrike: ["enemy", "abilities"],
+            warCry: ["abilities"],
+            attack: ["enemy", "orders"],
+            camp: ["orders"],
+            "unit:follow": ["orders"],
+            "emote:wave": ["emotes"],
+            "item:potion": ["items"],
+            "item:antidote": ["cures", "items"],
+        };
+
+        for (const [key, roles] of Object.entries(kinds)) {
+            assert.deepEqual(rolesOf(key), roles, key);
+        }
+
+        const whom = { burn: "On an enemy", vigor: "Anyone", resistFire: "You or a friend", swole: "On yourself", cure: "You or a friend", buffAll: "On yourself", zombify: "On a body", teleport: "To a place", camp: "Where you are", "emote:wave": "An emote", "unit:follow": "Your followers", "item:potion": "On yourself", powerStrike: "On an enemy" };
+
+        for (const [key, said] of Object.entries(whom)) {
+            assert.equal(whomFor(key), said, key);
+        }
+
+        assert.deepEqual(rolesOf("nothing at all"), []);
+    });
+
+    it("lists a school's spells as one, its highest tier there, the rest under it (highest first); scrolls and anything else as themselves", () => {
+        const keys = ["vigor", "mendWounds", "detraumatize", "quench", "item:potion", "burn", "fireball", "stun", "item:scrollFireball"];
+
+        assert.deepEqual(pickerEntries(keys), [
+            { key: "detraumatize", tiers: ["mendWounds", "vigor"] },
+            { key: "quench", tiers: [] },
+            { key: "item:potion", tiers: [] },
+            { key: "fireball", tiers: ["burn"] },
+            { key: "stun", tiers: [] },
+            { key: "item:scrollFireball", tiers: [] },
+        ]);
+        assert.deepEqual(pickerEntries([]), []);
     });
 
     it("draws a side: its slices, what's in each with a count for things to use, and S to turn it over", () => {

@@ -53,8 +53,9 @@ export class SpellbookPanel {
         this.panel.append(header, this.body);
         root.append(this.panel);
 
-        /** What the player asks (the game does it): a spell put on an action wheel (its id). */
+        /** What the player asks (the game does it): a spell put on an action wheel, or on the Action Bar (its id). */
         this.onWheel = () => {};
+        this.onBar = () => {};
         this.onClose = () => {};
     }
 
@@ -152,12 +153,19 @@ export class SpellbookPanel {
         row.append(icon, text);
 
         if (known) {
+            // (On an action wheel, or the Action Bar: its first empty slot)
+            const puts = element("span", "spellbook-puts");
             const put = element("button", "journal-button", "Put on a wheel");
+            const bar = element("button", "journal-button", "Put on Action Bar");
 
             put.type = "button";
             put.setAttribute("aria-label", `Put ${label} on an action wheel`);
             put.addEventListener("click", () => this.onWheel(id));
-            row.append(put);
+            bar.type = "button";
+            bar.setAttribute("aria-label", `Put ${label} on the Action Bar`);
+            bar.addEventListener("click", () => this.onBar(id));
+            puts.append(put, bar);
+            row.append(puts);
         } else {
             row.append(element("span", "spellbook-at", from ? `From ${from}` : `At ${at}`));
         }
