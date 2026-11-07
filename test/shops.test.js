@@ -26,7 +26,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const THREE = await import("three");
 const { keepsShops, layoutTown, SETTLEMENT_KINDS } = await import("../client/js/core/setpieces/town.js");
 const { ENTERED, MASTER_SHOPS, SHOP_LANDMARKS, SPECIALISTS } = await import("../client/js/core/setpieces/pieces.js");
-const { ENTERABLE, ENTRANCES, SHOP_INSIDES, shopFolkOf, shopRooms } = await import("../client/js/core/insides.js");
+const { ENTERABLE, ENTRANCES, entranceSpecOf, SHOP_INSIDES, shopFolkOf, shopRooms } = await import("../client/js/core/insides.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { planWorld } = await import("../client/js/core/worldplan/plan.js");
 const { RACES } = await import("../client/js/core/worldplan/races.js");
@@ -184,6 +184,8 @@ describe("a shop inside (core/insides.js, core/dialogue.js)", () => {
         for (const name of SHOP_LANDMARKS) {
             assert.ok(ENTERED.includes(name) && ENTERABLE.includes(name), name);
             assert.ok(ENTRANCES[name].width >= 1.6 && ENTRANCES[name].depth > 1, name);
+            // (A human's built of the house kit: its door the kit's, where ENTRANCES has the rest's)
+            assert.deepEqual(entranceSpecOf({ kind: "landmark", name }), { ...ENTRANCES[name], width: 1.05, height: 2.06, floor: 0.2 }, name);
         }
     });
 

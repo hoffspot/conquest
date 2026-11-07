@@ -165,6 +165,57 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     expect(built.names).toContain("cloth");
 });
 
+test("builds every shop in its own look on lots of every size, of the house kit where it's read: its name over its door, its sign hung from its corner post, its awnings", async ({ page }) => {
+    test.setTimeout(180000);
+    await page.goto("/building-lab.html?seed=7&show=shops");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 150000 });
+
+    const built = await page.evaluate(() => {
+        const names = new Set();
+        const meshes = { kit: 0, blocks: 0 };
+        let green = 0;
+
+        window.buildingLab.state.built.traverse((node) => {
+            if (node.isMesh) {
+                [node.material].flat().forEach(({ name }) => names.add(name));
+                meshes.kit += node.material.name === "kit house" ? 1 : 0;
+                meshes.blocks += node.material.name === "atlas" ? 1 : 0;
+            }
+
+            // (The alchemists' chimneys' smoke, green: smoke.js)
+            const tint = node.name === "chimney smoke" ? node.geometry.attributes.tint : null;
+
+            for (let k = 0; tint && k < tint.count; k += 4) {
+                green += tint.getY(k) > tint.getX(k) * 2 ? 1 : 0;
+            }
+        });
+
+        return { stats: window.buildingLab.state.stats, names: [...names], meshes, green, address: location.search };
+    });
+
+    // (The seven shops on five lots each: each its board and its sign, its awnings and a master's
+    // banners in the breeze)
+    expect(built.stats.pieces).toBe(35);
+    expect(built.address).toBe("?seed=7&show=shops");
+
+    for (const name of ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium"]) {
+        expect(built.names).toEqual(expect.arrayContaining([`board ${name}`, `sign ${name}`]));
+    }
+
+    expect(built.names).toContain("cloth");
+
+    // Each built of the house kit with the licensed models, one mesh of it a block of the town, in
+    // a few draw calls a block, the alchemists' smoke green; without them, the art's own
+    if (licensedModelsHere()) {
+        expect(built.meshes.kit).toBeGreaterThan(0);
+        expect(built.meshes.kit).toBe(built.meshes.blocks);
+        expect(built.green).toBeGreaterThan(0);
+        expect(built.stats.calls).toBeLessThan(140);
+    } else {
+        expect(built.meshes.kit).toBe(0);
+    }
+});
+
 test("stands a fingerpost among a people's own places: a board for each town, lettered on both faces", async ({ page }) => {
     await page.goto("/building-lab.html?seed=7&show=structures");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });

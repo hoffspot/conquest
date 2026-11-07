@@ -26,7 +26,7 @@ import { PLOT } from "../core/world.js";
 import { gatehouse, keep, RUINED, tower, wall } from "./art/kits/castle.js";
 import { citadelPart } from "./art/kits/citadel.js";
 import { house } from "./art/kits/house.js";
-import { kitHouseObject } from "./kithouses3d.js";
+import { kitHouseObject, shopKitOf } from "./kithouses3d.js";
 import { landmark } from "./art/kits/landmarks.js";
 import { neutral } from "./art/kits/neutral.js";
 import { builderFor } from "./art/peoples/index.js";
@@ -54,10 +54,14 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 /**
  * What builds a piece: its people's kit if it's theirs (peoples/index.js), the castle's pieces
  * left to ruin if it's a ruined castle's (kits/castle.js RUINED), or the builder for its kind;
- * a house burnt by the Behemoth of the Rift made over as it is now (`burnt`: kits/burnt.js).
+ * a shop of a people whose shops are a kit's built of it once it's read (kithouses3d.js
+ * SHOP_KITS), else as the rest; a house burnt by the Behemoth of the Rift made over as it is now
+ * (`burnt`: kits/burnt.js).
  */
 export function builderOf(piece) {
-    const build = builderFor(piece) ?? (piece.ruined ? RUINED[piece.kind] : null) ?? BUILDERS[piece.kind];
+    const own = builderFor(piece) ?? (piece.ruined ? RUINED[piece.kind] : null) ?? BUILDERS[piece.kind];
+    const kit = shopKitOf(piece);
+    const build = kit && own ? (one) => kit(one).then((object) => object ?? own(one)) : own;
 
     if (!build || !piece.burnt) {
         return build;

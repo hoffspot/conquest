@@ -200,11 +200,27 @@ export const AWNINGS = Object.freeze({
     "awning-gold": ["#c4892c", "#5a3a24"],
 });
 
+/**
+ * The shops' own awnings' stripes, no house's or stall's (kits/kitshop.js SHOP_LOOKS): a
+ * swordsmith's red and black, an armorer's steel blue and white, a scriptorium's purple and black,
+ * an alchemist's green and cream, the Mystic Emporium's violet and gold.
+ */
+export const SHOP_AWNINGS = Object.freeze({
+    "awning-forge": ["#8e2a22", "#1f1b1a"],
+    "awning-steel": ["#4f6f92", "#eef0ee"],
+    "awning-ink": ["#4b2457", "#16121a"],
+    "awning-herb": ["#2f6b3c", "#ece2c2"],
+    "awning-violet": ["#5b3a8c", "#d4a73c"],
+});
+
+// Every awning's stripes, the houses' and the shops'
+const STRIPES = Object.freeze({ ...AWNINGS, ...SHOP_AWNINGS });
+
 /** The share of an awning's picture its valance takes, at its foot. */
 export const VALANCE = 0.2;
 
 /** The cloths drawn from the one picture, in order: each people's, then the plain ones, then the awnings. */
-export const LOOKS = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc", "plain", "square", "ragged", "pennant", ...Object.keys(AWNINGS)]);
+export const LOOKS = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc", "plain", "square", "ragged", "pennant", ...Object.keys(STRIPES)]);
 
 // (Washing on a line hangs as a banner from a bar does, drawn in fewer squares: it's small; a
 // valance too, swinging less, its kind a quarter so the shader tells it from a banner)
@@ -264,7 +280,7 @@ function paintPlain(look, paint, x0) {
 // cut in scallops, one to a stripe
 function paintAwning(look, paint, x0) {
     const { width, height } = PICTURE;
-    const [colour, ground] = AWNINGS[look];
+    const [colour, ground] = STRIPES[look];
     const stripes = 8;
     const hem = height * (1 - VALANCE);
     const scallop = width / stripes / 2;
@@ -322,7 +338,7 @@ export function clothPicture() {
         LOOKS.forEach((look, k) => {
             if (EMBLEMS[look]) {
                 paint.drawImage(paintCloth(look), k * PICTURE.width, 0);
-            } else if (AWNINGS[look]) {
+            } else if (STRIPES[look]) {
                 paintAwning(look, paint, k * PICTURE.width);
             } else {
                 paintPlain(look, paint, k * PICTURE.width);
@@ -599,8 +615,8 @@ export function clothOf(object) {
  * A striped awning on a kit's `solid` (in its pixels), and its valance: its back edge's middle at
  * `back` ([x, y, z]), reaching `depth` out the way `out` faces ([x, y, z], level) and falling
  * `fall` as it goes, `width` across, a valance `skirt` deep hanging from its front edge; in the
- * colours of `look` (one of AWNINGS). Pinned at its corners, it lifts and settles on the breeze,
- * its valance flapping.
+ * colours of `look` (one of AWNINGS, or a shop's own: SHOP_AWNINGS). Pinned at its corners, it
+ * lifts and settles on the breeze, its valance flapping.
  */
 export function awning(solid, back, out, { width, depth, fall, skirt, look }) {
     const length = Math.hypot(out[0], out[2]) || 1;
