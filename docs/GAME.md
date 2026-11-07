@@ -289,7 +289,11 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   dormers on some roofs, and behind some houses a wing (or behind a gable-fronted one, a lower
   range against its back gable). Their
   stone houses, and every village's, hamlet's and farmstead's, are the game's own (kits/house.js),
-  as they all are without the licensed models.
+  as they all are without the licensed models. About a quarter of the rest are the game's own
+  too, mixed in so no street is all the kit's: none round the market, few on the main streets,
+  more down the lanes and out behind (kithouse.js `KIT_MIX`: each house's own draw from its seed,
+  the same every time). A town's, a city's and a capital's roofs are all tiled: a cottage's or a
+  barn's thatch is clay or slate there, and only a village's are thatched.
 - **Landmarks**: the tavern, church, smithy and guild (and in a city, the market hall) facing
   the market, slid along its edge if need be but never round its corner (or, failing that,
   facing a main street near it); a well and stalls on it, clear of where the main streets leave;
@@ -3545,7 +3549,7 @@ The art kits build every piece of the town's layout in the art's world pixels, f
 facing south; each is turned about its middle to face the way the layout says:
 
 - **Houses** (kits/house.js) in four styles, each house its own from its seed: whitewashed
-  cottages under thick thatch (half-hipped or hipped, pitched over 50 degrees, their eaves
+  cottages under thick thatch (tiles in a town, a city or a capital; half-hipped or hipped, pitched over 50 degrees, their eaves
   rounded and their ridges a raised block with a scalloped edge), timber-framed houses (their
   upper floors jettied out 30 to 55 cm on a bressummer, with joists' ends and brackets under
   it), brick houses with stone quoins, bands and dressings, and stone houses with deep-set

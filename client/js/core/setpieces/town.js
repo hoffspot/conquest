@@ -758,7 +758,8 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         const kind = other && !farm.back ? typeFor(people, rect, length(dx, dy) / radius, street, wet, own, look) : null;
 
         mark(rect, 0, USE.building);
-        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...farm, ...(kind ? { type: kind } : {}), ...(wet ? { water: true } : {}) });
+        // (A house on a street knows which: round the market, on a main street, or down a lane)
+        place(rect, { key: houseKey(rect.w / PLOT, rect.d / PLOT, style, variant), kind: "house", style, variant, ...farm, ...(farm.back ? {} : { street }), ...(kind ? { type: kind } : {}), ...(wet ? { water: true } : {}) });
         yard(rect);
 
         return "built";
