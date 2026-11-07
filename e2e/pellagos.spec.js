@@ -15945,9 +15945,10 @@ test("what can go in an Action Bar slot is listed by kind (All, On an enemy, Hea
     await expect(setup.locator('.wheels-choice[data-action="reflect"]')).toHaveClass(/unready/);
     expect(all.at(-1)).toBe("reflect");
 
-    // Cures: the two spells, Cure, and the antidote; few, so shown bigger
+    // Cures: Detraumatize (it stems bleeding too), the two cure spells, Cure, and the antidote;
+    // few, so shown bigger
     await setup.locator('.choice-role[data-role="cures"]').click();
-    expect(await listed()).toEqual(["", "curePoison", "quench", "cure", "item:antidote"]);
+    expect(await listed()).toEqual(["", "detraumatize", "curePoison", "quench", "cure", "item:antidote"]);
     await expect(setup.locator(".wheels-choices")).toHaveClass(/roomy/);
 
     // All again, and found by name (a PC: the box to type in shown); a lower tier's name opens its school
@@ -16791,17 +16792,19 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("Vigor");
 
-    // What can go on it: nothing, the healing spells known, making camp, the emotes and the
-    // draughts carried; a foe's has those spells, the elements' spells learnt (Fire's), Stun and
-    // Attack, and no draughts or emotes
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
+    // What can go on it: nothing, the healing spells known (as one, Mend Wounds, Vigor opened under
+    // it while it's in the slice), making camp, the emotes and the draughts carried; a foe's has
+    // those spells, the elements' spells learnt (Fire's), Stun and Attack, and no draughts or emotes
+    const names = setup.locator(".wheels-choice .choice-name");
+
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Vigor", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun", "Attack"]);
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Burn", "Stun", "Attack"]);
 
     // Their followers': the healing to cast on them, what to tell them (their own ability among
     // it) and the draughts to give them; Attack my target at the top
     await setup.getByRole("tab", { name: "Your followers" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Cover me", "Their own ability", "Dismiss", "Draught"]);
+    await expect(names).toHaveText(["Nothing", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Cover me", "Their own ability", "Dismiss", "Draught"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
     await setup.getByRole("tab", { name: "Yourself" }).click();
 

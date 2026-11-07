@@ -1,8 +1,9 @@
 // What can go in an Action Bar slot or a wheel's slice, to choose from (app/quicksetup.js,
 // app/wheelsetup.js): Nothing first, then each by its icon, its name and whom it's used on
 // (wheel.js whomFor); a school's spells as one, its highest tier, with a button to open the
-// rest under it (wheel.js pickerEntries: opened of itself while one of them is what's there, or
-// what's typed is one of them's name); what can't be used as things are (a spell needing a wand
+// rest under it (wheel.js pickerEntries: opened of itself while what's typed is one of their
+// names, or, unless closed by hand, while one of them is what's there); what can't be used as
+// things are (a spell needing a wand
 // not in hand, a blow for another weapon) after the rest, greyed. Filtered by what kind of action
 // it is (wheel.js ROLES: only the kinds there are, All first) and, on a PC, by what's typed; shown
 // bigger the fewer there are.
@@ -91,8 +92,9 @@ export class ChoiceList {
         const choices = [this.#choice(null, { label: "Nothing", now, onPick })];
 
         for (const { key, tiers } of [...entries.filter(ready), ...entries.filter((entry) => !ready(entry))]) {
-            // (Opened by hand; or, unless closed by hand, while a lower tier's there, or typed)
-            const open = tiers.length > 0 && (this.opened.has(key) || (!this.closed.has(key) && (tiers.includes(now) || Boolean(this.query && !named(key)))));
+            // (Opened by hand, or a lower tier's name typed; or, unless closed by hand, while a lower
+            // tier's there)
+            const open = tiers.length > 0 && (this.opened.has(key) || Boolean(this.query && !named(key)) || (!this.closed.has(key) && tiers.includes(now)));
 
             choices.push(this.#choice(key, { label: label(key), now, onPick, unready: unready.includes(key), tiers, open }));
 
