@@ -99,18 +99,20 @@ const ZOOM_OUT = 1.6;
 
 /**
  * How near the camera may come to the character (#nearest), so it never cuts into them: along its
- * line to what it looks at, no nearer than `margin` metres to any of them (clearAlong; each point
+ * line to what it looks at, no nearer than `clear` metres to any of them (clearAlong; each point
  * measured standing for the `grain`-metre cube it was kept for, so as much further as the cube's
- * across), as they're shaped, dressed and posed then; and, while it's being turned, as far out as
- * that where it's going and `ahead` radians past it, so it eases back before an arm or a shield
- * comes between. Where they are is measured (pointsOf) from every corner of what's drawn of
- * them, each triangle wider than `spacing` metres filled in, a point kept in each `grain`-metre
- * cube, `budget` ms a frame (some 150 ms in all), once they're first drawn and again `settle` ms
- * after they're last changed; till they're first measured, the camera comes no nearer than the tab
- * frames them from. While a weapon's swung, the camera keeps out of its sweep too: as far from
- * what it looks at as `arm` of their height and the longest thing they hold.
+ * across: 12 cm from each), its near plane (5 cm off, its corners 5.4 cm) well inside that and
+ * room for them to stir as they stand, as they're shaped, dressed and posed then; and, while it's
+ * being turned, as far out as that where it's going and `ahead` radians past it, so it eases back
+ * before an arm or a shield comes between. Where they are is measured (pointsOf) from every
+ * corner of what's drawn of them, each triangle wider than `spacing` metres filled in, a point
+ * kept in each `grain`-metre cube, `budget` ms a frame (some 150 ms in all), once they're first
+ * drawn and again `settle` ms after they're last changed; till they're first measured, the camera
+ * comes no nearer than the tab frames them from. While a weapon's swung, the camera keeps out of
+ * its sweep too: as far from what it looks at as `arm` of their height and the longest thing they
+ * hold, and `margin` metres more.
  */
-const NEAREST = Object.freeze({ margin: 0.1, ahead: 0.25, spacing: 0.06, grain: 0.02, budget: 4, settle: 300, arm: 0.6 });
+const NEAREST = Object.freeze({ clear: 0.085, margin: 0.1, ahead: 0.25, spacing: 0.06, grain: 0.02, budget: 4, settle: 300, arm: 0.6 });
 
 // How many points of a character's measured between looks at the time (pointsOf)
 const POINTS_A_STEP = 1500;
@@ -727,9 +729,9 @@ export class Creator {
         }
 
         const { points, longest } = measured;
-        const { margin, ahead, grain } = NEAREST;
+        const { clear, margin, ahead, grain } = NEAREST;
         // (Each point kept for its cube: any of them in it as much as the cube's across from it)
-        const reach = margin + grain * Math.sqrt(3);
+        const reach = clear + grain * Math.sqrt(3);
         const along = (angle) => clearAlong(points, look, angle, orbit.pitch, reach);
         // (Swinging: out of reach of their arm and what they hold)
         const sweep = this.step === "weapon" ? avatar.character.height * NEAREST.arm + longest + margin : 0;

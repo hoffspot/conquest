@@ -6248,12 +6248,13 @@ the Bindings page till one's chosen.
    head and shoulders for colours and hair. A finger (or the mouse) dragged across the view walks
    round them; two fingers spread apart come nearer, brought together stand further off (as the
    mouse wheel does), out to half as far again as the tab frames them from, and in as near as the
-   camera can come without cutting into them. It's kept 10 cm from every one of them, not only
-   those on its line to what it looks at (`clearAlong`: a sphere round it, its near plane well
-   inside), measured from every corner of what's drawn of them as they stand (each triangle wider
-   than 6 cm filled in, one point kept in each 2 cm cube, and each counted as its cube, so the
-   camera stays the cube's 3.5 cm across further off: `pointsOf`, 4 ms a frame), once they're drawn
-   and again once they've settled after a change. (Kept 10 cm beyond the last of them within 8 cm
+   camera can come without cutting into them. It's kept 8.5 cm from every one of them, not only
+   those on its line to what it looks at (`clearAlong`: a sphere round it, its near plane 5 cm off
+   and well inside, with room for them to stir as they stand), measured from every corner of
+   what's drawn of them as they stand (each triangle wider than 6 cm filled in, one point kept in
+   each 2 cm cube, and each counted as its cube, so the camera stays the cube's 3.5 cm across
+   further off, 12 cm from each point kept: `pointsOf`, 4 ms a frame), once they're drawn and again
+   once they've settled after a change. (Kept 10 cm beyond the last of them within 8 cm
    of its line, it once came 4.9 cm from the back of a character's head, inside its near plane.) Turning, it
    eases back before an arm or a shield comes between; while a weapon's swung, it keeps out of its
    sweep. The screen's layer lets what's pressed beside its panel through to the view. The body tab starts with their people (human, elf,
