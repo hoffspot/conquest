@@ -83,6 +83,10 @@ const PLACING = 1;
  */
 export const UNDERGROWTH = Object.freeze({ grow: 64, ahead: 8, drop: 84 });
 
+// How far out an old campfire's ring of stones in the undergrowth reaches, of its size (metres:
+// kits/wilds.js campfire's)
+const HEARTH = 0.66;
+
 /**
  * A chunk's buildings are drawn whole while its nearest edge is within this many metres of the
  * player, and without what's only worth drawing near further off (a timber's sides, a few
@@ -169,9 +173,10 @@ export class Chunks {
         // pieces, index, group, waiting, trees, built, parts }), buildings (once they're built,
         // merged) and far (whether they're drawn as from far off: #detail), growth (its
         // undergrowth while it's being grown: its steps), sown (where its undergrowth grows,
-        // once that's found: a Growth, its tiles those not yet built), undergrowth (its tiles'
-        // meshes, those built), cliffs (its cliffs' mesh, if it has any: setCliffs), arches (its
-        // arches of rock's mesh, if it has any), features (its land's own: its rocks drawn again
+        // once that's found: a Growth, its tiles those not yet built), hearths (its undergrowth's
+        // old campfires: hearths()), undergrowth (its tiles' meshes, those built), cliffs (its
+        // cliffs' mesh, if it has any: setCliffs), arches (its arches of rock's mesh, if it has
+        // any), features (its land's own: its rocks drawn again
         // from them), rocks (how they're drawn: ROCK_TIERS'), stones (their mesh, if it has any),
         // refinement (its rocks being drawn again, its steps: #rocksNear) }; the steps of the one
         // being drawn; those whose buildings are being built, in turn; those whose undergrowth is
@@ -470,6 +475,14 @@ export class Chunks {
         }
     }
 
+    /**
+     * The old campfires in the undergrowth grown round the player, the tall grass kept clear
+     * inside their rings (grass.js setClearings): [{ x, z, radius }], metres.
+     */
+    hearths() {
+        return [...this.drawn.values()].flatMap(({ hearths }) => hearths ?? []);
+    }
+
     /** Whether a chunk (cx, cy) is drawn, all of it (its ground in sight). */
     isDrawn(cx, cy) {
         const drawn = this.drawn.get(key(cx, cy));
@@ -601,6 +614,9 @@ export class Chunks {
 
         yield* undergrowthLooks(items);
 
+        // (Its old campfires' rings, the tall grass kept clear inside them: hearths)
+        drawn.hearths = items.filter(({ kind }) => kind === "campfire").map(({ x, y, size }) => ({ x, z: y, radius: HEARTH * size }));
+
         return new Growth(items, [chunk.x0, chunk.y0]);
     }
 
@@ -636,6 +652,7 @@ export class Chunks {
         this.growing = this.growing.filter((other) => other !== drawn);
         drawn.growth = null;
         drawn.sown = null;
+        drawn.hearths = null;
 
         for (const mesh of drawn.undergrowth ?? []) {
             mesh.removeFromParent();
@@ -959,7 +976,7 @@ export class Chunks {
         const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
-        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, sown: null, undergrowth: null, cliffs: null, arches: null };
+        const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, sown: null, hearths: null, undergrowth: null, cliffs: null, arches: null };
         // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
         const standing = (boxes) => {
             for (const { min, max, top } of boxes) {

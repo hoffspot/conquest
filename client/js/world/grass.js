@@ -81,6 +81,14 @@ export const GRASS_END = Object.freeze({ shortest: 0.15, from: 0.6, by: 0.6, col
  */
 export const GRASS_GUSTS = Object.freeze({ lean: 0.5, pressed: 0.25, paler: 0.6 });
 
+/**
+ * The grass kept clear round a campfire (an old campsite's, a camp's, one left in the
+ * undergrowth: setClearings): none in its ring of stones (each its own `radius`), and trodden
+ * short round it, growing back to its full height over `trodden` metres from `shortest` of it; as
+ * many as `most` at once, the nearest the player.
+ */
+export const GRASS_CLEARINGS = Object.freeze({ most: 8, trodden: 1.2, shortest: 0.3 });
+
 // One clump's blades, as the vertex shader builds them: for each corner, which side of its blade
 // it's on (-1, 1; 0 at its tip), how far up it (0 to 1), and which blade; and the triangles
 // between them (a blade bent in two: its foot's corners, its middle's and its tip; or one
@@ -115,6 +123,7 @@ uniform vec3 grassShape;
 uniform vec2 grassFocus;
 uniform vec2 grassPlain;
 uniform float grassTime;
+uniform vec3 grassClear[${GRASS_CLEARINGS.most}];
 varying vec3 vGrassColour;
 
 // A hash of a cell (and which of its numbers), from 0 to 1
@@ -124,6 +133,19 @@ float grassHash(ivec2 cell, int which) {
     h *= 0x5bd1e995u;
     h ^= h >> 15u;
     return float(h >> 8u) / 16777216.0;
+}
+
+// How tall the grass grows at a point for the campfires round it (0 to 1): none in a fire's ring,
+// short round it, all of its height past that (GRASS_CLEARINGS)
+float grassCleared(vec2 p) {
+    float grows = 1.0;
+    for (int k = 0; k < ${GRASS_CLEARINGS.most}; k++) {
+        vec3 clearing = grassClear[k];
+        if (clearing.z > 0.0) {
+            grows = min(grows, smoothstep(clearing.z, clearing.z + ${GRASS_CLEARINGS.trodden.toFixed(3)}, distance(p, clearing.xy)));
+        }
+    }
+    return grows;
 }
 
 // The ground's height at a point (metres), between the corners round it as the ground's drawn
@@ -170,6 +192,9 @@ int blade = int(position.z);
 float angle = grassHash(cell, 7 + blade * 4) * 6.2832;
 vec2 foot = centre + vec2(cos(angle), sin(angle)) * sqrt(grassHash(cell, 8 + blade * 4)) * grassLattice.z * 0.6;
 float tall = grass.g * 2.0 * shrink * mix(0.6 + 0.75 * grassHash(cell, 9 + blade * 4), 0.9 + 0.2 * grassHash(cell, 9 + blade * 4), sown);
+// (None in a campfire's ring, trodden short round it)
+float cleared = grassCleared(foot);
+tall *= cleared > 0.0 ? mix(${GRASS_CLEARINGS.shortest.toFixed(3)}, 1.0, cleared) : 0.0;
 float facing = grassHash(cell, 10 + blade * 4) * 6.2832;
 vec2 across = vec2(cos(facing), sin(facing));
 vec2 outward = foot - centre;
@@ -239,6 +264,8 @@ export class TallGrass {
         this.working = null;
         this.focus = new THREE.Vector2();
         this.plain = new THREE.Vector2();
+        // (The campfires the grass is kept clear round: x, z and radius, metres; none at radius 0)
+        this.clearings = Array.from({ length: GRASS_CLEARINGS.most }, () => new THREE.Vector3());
         this.bands = [];
         this.quality = undefined;
     }
@@ -304,6 +331,7 @@ export class TallGrass {
             grassShape: { value: new THREE.Vector3(shape.width, shape.salt, shrinks ? 1 : 0) },
             grassFocus: { value: this.focus },
             grassPlain: { value: this.plain },
+            grassClear: { value: this.clearings },
             grassTime: TREE_WIND.time,
         };
         const material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
@@ -331,6 +359,16 @@ export class TallGrass {
         mesh.receiveShadow = true;
 
         return { mesh, uniforms, cell: shape.cell, ahead: reach * AHEAD };
+    }
+
+    /**
+     * The campfires to keep the grass clear round (`spots`: [{ x, z, radius }], metres), the
+     * nearest `at` ([x, z]) first, as many as GRASS_CLEARINGS.most.
+     */
+    setClearings(spots, [x, z] = [this.focus.x, this.focus.y]) {
+        const nearest = spots.length > this.clearings.length ? [...spots].sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z)) : spots;
+
+        this.clearings.forEach((clearing, k) => (nearest[k] ? clearing.set(nearest[k].x, nearest[k].z, nearest[k].radius) : clearing.set(0, 0, 0)));
     }
 
     /**

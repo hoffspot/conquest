@@ -20,9 +20,9 @@ import { lightsMesh } from "./lights.js";
 // A tent's size (metres): its width across, its length front to back, its ridge's height
 const TENT = Object.freeze({ width: 2.2, length: 2.8, height: 1.7 });
 
-// The fire: its ring of stones (how many, how far out), its logs, and how high its flames stand
-// from (metres: on the logs)
-const FIRE = Object.freeze({ stones: 9, ring: 0.55, logs: 3, foot: 0.14 });
+// The fire: its ring of stones (how many, how far out, how big each), its logs, and how high its
+// flames stand from (metres: on the logs)
+const FIRE = Object.freeze({ stones: 9, ring: 0.55, stone: 0.13, logs: 3, foot: 0.14 });
 
 // Canvas: undyed, with a little of the people's colour in it
 const CANVAS = new THREE.Color(0xd8ccae);
@@ -64,7 +64,7 @@ export class Camps {
         this.tent = tentGeometry();
         this.door = doorGeometry();
         this.pole = new THREE.CylinderGeometry(0.03, 0.03, TENT.height + 0.25, 5).translate(0, (TENT.height + 0.25) / 2, 0);
-        this.stone = new THREE.DodecahedronGeometry(0.13, 0);
+        this.stone = new THREE.DodecahedronGeometry(FIRE.stone, 0);
         this.log = new THREE.CylinderGeometry(0.07, 0.08, 1, 6).rotateZ(Math.PI / 2);
         this.materials = {
             wood: new THREE.MeshStandardMaterial({ color: 0x5a3e26, roughness: 0.9 }),
@@ -228,6 +228,14 @@ export class Camps {
         }
 
         return this.storesObject;
+    }
+
+    /**
+     * Where the tall grass is kept clear (grass.js setClearings): inside each camp's ring of stones
+     * round its fire. [{ x, z, radius }], world metres.
+     */
+    clearings() {
+        return [...this.camps.values()].map(({ light: { x, z } }) => ({ x, z, radius: FIRE.ring + FIRE.stone }));
     }
 
     /** The camps' fires as lights (lights.js: world metres), lighting what's round them at night. */

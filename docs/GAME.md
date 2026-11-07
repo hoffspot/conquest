@@ -3059,6 +3059,12 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
       shows.
     - It's never drawn further than its map reaches: a chunk's width every way from the player
       (*Its map*, below).
+  - **Clear round a campfire** (`GRASS_CLEARINGS`; `TallGrass.setClearings`): none grows inside
+    the ring of stones of a fire near the player (a camp's, `camps3d.js clearings`; an old
+    campsite's, `finds3d.js clearings`; one left in the undergrowth, `chunks3d.js hearths`), and
+    round it it's trodden short, from 30% of its height at the stones back to all of it 1.2 m
+    out. Up to eight at once, the nearest the player, sent each frame; each blade looks at where
+    its foot is in the vertex shader.
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
     gaps between the blades read as more grass (`ground.js GRASS_UNDER`), out to the distant
     band's edge.
@@ -3872,7 +3878,9 @@ a city's chunks of each people, and less garbage to collect.
   spikes (toron) and pinnacles, walled compounds, their walls battered and whitewashed in bands;
   a court tavern, a Djenné-style temple, a smithy with its clay furnace, a domed guild hall, a
   town hall with stone cats, a kasbah keep and a mat-roofed market; the sun temple, pride rock
-  and the watering hole; a kasbah castle, mud walls, gatehouse and bastions.
+  and the watering hole; a kasbah castle, mud walls, gatehouse and bastions. The tavern, guild,
+  town hall, barracks and shops, Sahel town houses on a plinth, have two steps up it to the door,
+  as wide as the door bay and sunk a little into the ground (cat.js `STOOP`).
 - **The orcs** (orc.js, orc-places.js): bow-sided longhouses of hide on battered basalt, round
   hide huts on rings of stone, basalt block houses and hide tents; a grog hall, a broch temple, a
   great forge, the war council's and chieftain's halls, a broch keep and a loot market; the war
@@ -6420,8 +6428,13 @@ the Bindings page till one's chosen.
    - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
      bus: sound effects, environment and music (a sound plays as the first two are moved, to
      hear how loud).
-   - **Controls:** the thumb stick, and under it the stick under your thumb; the zoom buttons;
-     and the minimap (off, the compass in its place: above).
+   - **Controls:** the thumb stick, and under it the stick under your thumb; **Tap/Click to Move**
+     (on to start with: a tap or click on the ground walks the player there; off, only the stick,
+     the keys or a controller do, so a tap meant for the stick or a click beside the keys doesn't
+     send them off, while tapping someone, an enemy, a door or what's dropped still goes to it and
+     the minimap and the world map still send them: game.js `tapToMove`; on a touch screen, the
+     stick and it are never both off, the other turned back on: main.js `keepAWayToWalk`); the
+     zoom buttons; and the minimap (off, the compass in its place: above).
    - **Camera:** Camera follows, the battle cam, Find the way through, Camera turning, Camera
      tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it

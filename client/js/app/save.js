@@ -98,6 +98,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     largePointer: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
+    // Tap/Click to Move: a tap or click on the ground walks the player there (app/game.js
+    // `tapToMove`); off, only the thumb stick, the keys or a controller do, so a tap meant for the
+    // stick or a click beside the keys doesn't send them off. On to start with
+    tapToMove: true,
     // Six actions on the Action Bar across the bottom in a fight, not four with their names (app/quickbar.js):
     // on a narrow screen their names smaller, or only their icons
     quickSix: false,
