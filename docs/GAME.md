@@ -1380,11 +1380,25 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
 
 A WebGL renderer with ACES tone mapping, a sky and fog, light from all round (below) and a sun
 whose shadow map follows the player (a little ahead of them, where more of the ground is in view,
-the further out the more: up to 12 of its 24 metres). The camera looks
-down from 35 degrees above the horizon to start with (low enough to see well ahead of the
-player, high enough to see a little of the sky over the rooftops: `pitch`), zooming between 5 and
-32 metres away, from any side (`yaw`: from the south, looking north, to start with), at the
-player's middle (0.8 metres up).
+the further out the more: up to 12 of its 24 metres). The camera starts close behind the player,
+5.5 metres away (view.js `DISTANCE.start`): on a PC or a screen held sideways looking down 25
+degrees from the horizon, over their head, the way ahead in view above them (camera.js
+`PITCH.start`); on a phone held upright, 15 (`PITCH.upright`, `startPitch`), which the upright
+framing (below) makes about 21 degrees from 7 metres, low over their shoulder. (Lower still,
+sideways, the player's own head and shoulders hid what was straight ahead of them 5 to 25 metres
+off, and looking out to the horizon it drew twice as much a frame.) It zooms between 5 and 32
+metres, from any side (`yaw`: from the south, looking north, to start with), at the player's
+middle (0.8 metres up). On a phone held upright it looks down more steeply from further back
+(below), measured against 35 degrees (view.js `PITCH`). **The opening fly-in** (view.js `fly`,
+`FLIGHT`; game.js `#flyIn`): as a player comes into a world (a new game, Continue or joining
+one; not after a death, a door or a dungeon, and only out of doors), the camera starts 110 metres
+off, looking 85 degrees down (as steeply as it goes), north up as on the map, and comes down to
+its place behind the player over 4 seconds, eased in and out (no frame taking it on more than
+0.1 s, so a slow first frame doesn't skip it).
+Anything the player does brings it down at once: a key, the wheel, a tap or click let go of
+(after it's done what it was for, aimed as the flying camera saw it), the stick or the keys
+steering, or a controller (padplay.js). Game options, Camera, **Opening fly-in** (on) turns it
+off; the quick start straight into a game, `?play`, leaves it out unless `&flyin` is added.
 
 **The sky** (world/sky.js), outdoors, at the time of day (Day and night, below): deep blue
 overhead paling to the haze at the horizon (the fog's colour, so the world's far edge melts into
@@ -1817,8 +1831,9 @@ change) greyed the lamplit taproom and dulled the painted colours, and Khronos N
 taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
-with them, and with **Camera follows** turned on (Game options; on to start with on a touch
-screen, off with a mouse: save.js `loadSettings`, below) swings round behind them as follows. Turned off, it keeps the way it's turned and its tilt as they walk,
+with them, and with **Camera follows** turned on (Game options; off to start with, on a touch
+screen and with a mouse alike: save.js `cameraDefaults` 4, below) swings round behind them as
+follows. Turned off, it keeps the way it's turned and its tilt as they walk,
 only keeping up with them (and in a fight, framing it as below). Following, it keeps up with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
 keeping them in view at its distance (the camera study's recommendation 2, as Cinemachine's lazy
 follow does). Walking across its view, it swings round after them; walking towards it, it backs
@@ -1837,10 +1852,17 @@ it, as far as Camera turning and Camera tilting say (Game options: each its own,
 twice as far), and the browser's own menu never opens over the world or the world map ("Save
 image as" and the like: a player on a PC found it opening as they turned the camera with the
 right button: view.js, worldmap.js). On a PC, **Q** and **E** turn it while held (2 radians a
-second, times Camera turning: game.js `KEY_TURN`, `#keyTurn`), as a drag does, and **R** swings
-it round behind the player, the way they face, tilted as it starts (35 degrees down), on its
-spring (camera.js `recentre`); on a phone, so does tapping the player's own mark on the minimap
-(within a tap's reach of them, where walking there would go nowhere: game.js `mapTap`). A fight
+second, times Camera turning: game.js `KEY_TURN`, `#keyTurn`), as a drag does, and **R** puts it
+back behind the player, the way they face, close behind them as it starts: swung round on its
+spring and tilted down as it starts for how the screen's held (25 degrees sideways, 15 upright:
+camera.js `recentre`, `startPitch`; it's done only once it's tilted too, not as soon as it's round),
+zoomed in to 5.5 m (view.js `DISTANCE.start`, `zoomToDistance`; in a dungeon's level, its own
+framing again). On a phone, so does a tap on the thumb stick (its knob,
+let go of within 0.3 s without sliding more than 12 px; anywhere it lands, with Stick under your
+thumb: steering.js `STICK_TAP`, `tapped`). A thumb come down on the knob holds it where it
+landed, pushed only as it slides, so the tap walks nowhere; down on the rim, it's pushed that way
+at once, as ever. Tapping the player's own mark on the minimap does too (within a tap's reach of
+them, where walking there would go nowhere: game.js `mapTap`). A fight
 the battle cam framed is let be after either, as after a drag. Held keys are let go of as the game
 stops listening (the menu opened), so a key let go of meanwhile can't leave it turning. The wheel
 and the zoom buttons zoom eased in (half the way there in 35 ms: view.js `zoomSmoothly`); a pinch
@@ -2108,12 +2130,12 @@ once (by its shader: the fragment's own depth, so no transparency, nothing drawn
 their shadows whole), as they're put on.
 
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
-follows** (on a touch screen on, with a mouse off: touched, the camera's turned by hand less
-readily, and phone games ship it on): on, it swings round behind the player as they walk
-(above); off, it keeps the way it's turned and its tilt as they walk, only keeping up with them
-(following saved before it was off to start with is forgotten once, for the new default; and
-saved off when it was off for everyone, forgotten once on a touch screen: save.js
-`cameraDefaults`); **Battle cam** (on): in a fight, once the player and their foe are both wholly
+follows** (off, on a touch screen and with a mouse alike; R or a tap on the thumb stick puts it
+back behind the player: above): on, it swings round behind the player as they walk (above); off,
+it keeps the way it's turned and its tilt as they walk, only keeping up with them (following
+saved under any earlier defaults, when it was on for everyone, off for everyone, or on only on a
+touch screen, is forgotten once, for today's: save.js `cameraDefaults` 4); **Opening fly-in**
+(on): coming into a world, the camera comes down from high overhead (above); **Battle cam** (on): in a fight, once the player and their foe are both wholly
 on the screen, it frames it three-quarters on (above); **Find the way through** (on): where walls
 crowd it as the player walks, it turns to look along the way through (above); **Camera turning**
 (50 to 200%, 100): how far a drag turns it, and how fast Q and E do; **Camera tilting** (50 to
@@ -2146,8 +2168,9 @@ player's head; going back out of doors, it's as far off and tilted as it was bef
 (game.js `#arrive`). Zoomed out far enough, it goes over the ceiling, looking down into the room.
 While held, it doesn't turn itself; let go, it stays where it was
 turned while the player stands, and once they've walked a second, it swings back round behind
-them, facing the way they go (keeping its tilt, unless it was looking up past 15 degrees down:
-then it eases back down to 35 to see where they're going); turned round in front of them, as
+them, facing the way they go (keeping its tilt, unless it was looking up past 10 degrees down:
+then it eases back down past 10 to see where they're going: camera.js `PITCH.walking`); turned
+round in front of them, as
 they go by it.
 A drag that starts on the player and sets off mostly upwards is a swipe (straight ahead the way
 the camera looks), not a turn; two fingers are a pinch (zoom). Tilting costs nothing: the town is a few merged meshes,
@@ -2231,6 +2254,9 @@ gatehouses and keeps, not props or trees) and, finding one in the way, comes in 
 (staying 0.6 metres clear of it), or rises over it (up to 85 degrees), whichever leaves the
 camera furthest from the player, a degree higher counting as 0.15 metres nearer, and never nearer
 than 2.6 metres: a building a little way behind brings it in, one right behind lifts it over.
+Never nearer than 2.6 metres and still in the building there counts only if rising doesn't clear
+it: from close by, rising high over a house costs more than its few metres, and it sat in the
+house.
 It looks along three lines, its own and one a quarter metre either side of it (the lens is wider
 than a line: view.js `PULL.wide`), and turning, as far round as it'll have turned in a quarter of
 a second too (15 degrees at most), so it's in already as a wall comes round into the way. It comes
@@ -5850,7 +5876,7 @@ prompts (CSS `zoom`: 1.15 Large, 1.35 Larger, for a TV), never the game's view.
 **Every key can be set.** Each of the game's actions (`KEY_ACTIONS`, in groups: moving, the
 camera, doing and fighting, the Action Bar, panels and the menu, talking, reading a book) has two
 keys, a main one and a spare, as they come: W, A, S, D and the arrows walk; Shift held walks rather
-than runs; Q and E turn the camera, R swings it behind; = and - (or the number pad's + and -) zoom;
+than runs; Q and E turn the camera, R puts it back behind; = and - (or the number pad's + and -) zoom;
 F does what's in front (as a controller's ✕: talk, open, pick up, fight), C stops, V lets go of
 the foe; Tab and Shift+Tab the next and last foe nearest first, X and Z the enemies list's; G held
 your own wheel and T held theirs, the keys that move aiming it as a stick does; 1 to 6 (or the
@@ -6476,8 +6502,8 @@ the Bindings page till one's chosen.
      the minimap and the world map still send them: game.js `tapToMove`; on a touch screen, the
      stick and it are never both off, the other turned back on: main.js `keepAWayToWalk`); the
      zoom buttons; and the minimap (off, the compass in its place: above).
-   - **Camera:** Camera follows, the battle cam, Find the way through, Camera turning, Camera
-     tilting and Invert tilt (*The camera's settings*, above).
+   - **Camera:** Camera follows, Opening fly-in, the battle cam, Find the way through, Camera
+     turning, Camera tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
      takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
      *Locked on*, under *Those attacking the player*); Show whom foes are on (on to start with:
@@ -7104,8 +7130,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   through a path's corners, staying where it's turned when they stand; dragged, turning and
   tilting, no lower than the view allows nor higher than 75 degrees, holding while they stand,
   not turning itself while held even as they walk, and swinging back behind them once let go and
-  walking; starting 35 degrees down and looking up to 45 degrees over the horizon at most, easing
-  back down once they walk if it was looking up; catching up without turning when the player
+  walking; starting 25 degrees down (15 on a phone held upright: `startPitch`, framed to about 21
+  from 7 m) and looking up to 45 degrees over the horizon at most, easing
+  back down to 10 once they walk if it was looking up; catching up without turning when the player
   comes back to life elsewhere, and leaning towards a foe. With the battle cam, in a fight
   (following turned off or on), swinging round to see them both 60 degrees from behind the
   player; round the other way, or nearer behind them or further round, where what stands there

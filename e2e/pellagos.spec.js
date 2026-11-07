@@ -186,6 +186,22 @@ async function toldOf(page, pattern) {
     return page.evaluate(([source, flags]) => window.pellagos.game.messages.map(({ text }) => text).find((text) => new RegExp(source, flags).test(text)) ?? null, [pattern.source, pattern.flags]);
 }
 
+// The camera looking down on the player from higher and further back (35 degrees from 10.5 m, as
+// it started before it started close behind them: camera.js startPitch, view.js DISTANCE.start),
+// for a test of tapping or holding on what's about them: seen from close behind them, what's a
+// few metres straight ahead of them, the way the camera looks, is behind them on the screen, and
+// a tap on it is on them. (Played on a frame, so the camera's there)
+async function overlook(page) {
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+
+        game.cameraFollow.pitch = 35;
+        session.view.distance = 10.5;
+        session.view.zoomTo = null;
+        game.advance(1 / 30);
+    });
+}
+
 // Where a spot so many metres north of the player is on the screen
 async function spotNorth(page, metres) {
     return page.evaluate((metres) => {
@@ -2052,8 +2068,9 @@ test("swiping up from the player turns them the way the camera looks and sends t
         return { order, pitch, facing, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    // (A swipe, not a drag: the camera's not tilted)
-    expect(moved.pitch).toBe(35);
+    // (A swipe, not a drag: the camera's not tilted from where it starts, close behind them,
+    // sideways 25 degrees down: camera.js startPitch)
+    expect(moved.pitch).toBe(25);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -2189,6 +2206,56 @@ test("W, A, S, D steer the player the way the camera looks, running, two of them
     await page.keyboard.up("KeyW");
     await page.keyboard.up("Shift");
     expect((await told(page)).order).toBe(null);
+});
+
+test("the thumb stick's knob tapped (let go of at once, not slid): the camera put back close behind the player, as it starts, and the player not moved", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The stick on; the camera looking at the player from in front, tilted steeply and zoomed out
+    const start = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const switched = document.querySelector("#stickswitch");
+
+        switched.checked = true;
+        switched.dispatchEvent(new Event("change"));
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.cameraFollow.yaw = game.battle.actor("player").facing;
+        game.cameraFollow.pitch = 55;
+        game.view.distance = 16;
+
+        return { square: [...game.battle.actor("player").square] };
+    });
+    const zone = await page.locator("#stickzone").boundingBox();
+    const [x, y] = [zone.x + zone.width / 2, zone.y + zone.height / 2];
+
+    // (Pressed and let go of 90 ms apart, as said with the input: a page drawing without a GPU
+    // hears input seconds apart)
+    const cdp = await page.context().newCDPSession(page);
+    const at = Date.now() / 1000;
+
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y, timestamp: at });
+    await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1, timestamp: at + 0.01 });
+    await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1, timestamp: at + 0.1 });
+    await cdp.detach();
+
+    // (The game stepped on by hand to see it come round, as a phone's frames would turn it)
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        game.advance(3);
+        game.start();
+
+        const off = game.cameraFollow.yaw - (player.facing + Math.PI);
+
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), pitch: game.cameraFollow.pitch, distance: game.view.distance, square: [...player.square] };
+    });
+
+    expect(after.off).toBeLessThan(0.05);
+    expect(after.pitch).toBeCloseTo(25, 0);
+    expect(after.distance).toBeCloseTo(5.5, 1);
+    expect(after.square).toEqual(start.square);
 });
 
 test("the thumb stick, asked to float, springs up under the thumb where it lands in the bottom left, walks the player the way it's pushed from there, and goes back to its corner let go", async ({ page }) => {
@@ -2472,7 +2539,7 @@ test("with following turned on (Game options), the camera follows from the first
     });
 
     expect(camera.start.yaw).toBe(0);
-    expect(camera.start.pitch).toBe(35);
+    expect(camera.start.pitch).toBe(25);
     expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
     expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
@@ -3761,7 +3828,7 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.kept).toBeLessThan(0.1);
 });
 
-test("on a PC, Q and E turn the camera round the player while held, and R swings it round behind them; nothing else moves", async ({ page }) => {
+test("on a PC, Q and E turn the camera round the player while held, and R puts it back close behind them, as it starts; nothing else moves", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -3799,17 +3866,26 @@ test("on a PC, Q and E turn the camera round the player while held, and R swings
     // E held: back the other way
     expect(await press("e", 0.5)).toBeLessThan(-0.8);
 
-    // R: swung round behind the player, the way they face
+    // R, the camera tilted steeply and zoomed out first: swung round behind the player, the way
+    // they face, tilted down 25 degrees (sideways: camera.js startPitch) and zoomed in to 5.5 m
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.cameraFollow.pitch = 55;
+        game.view.distance = 16;
+    });
     await press("r", 2.5);
 
     const behind = await page.evaluate(() => {
         const { game } = window.pellagos;
         const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
 
-        return Math.abs(Math.atan2(Math.sin(off), Math.cos(off)));
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), pitch: game.cameraFollow.pitch, distance: game.view.distance };
     });
 
-    expect(behind).toBeLessThan(0.05);
+    expect(behind.off).toBeLessThan(0.05);
+    expect(behind.pitch).toBeCloseTo(25, 0);
+    expect(behind.distance).toBeCloseTo(5.5, 1);
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
@@ -3911,7 +3987,8 @@ test("dragged up, the camera looks up into the sky (clouds and the sun in it, bi
     expect(sky.up.sky).toBe(true);
     expect(sky.up.birds).toBeGreaterThan(0);
     expect(sky.up.drawn).toBe(sky.up.birds);
-    expect(sky.walking).toBeGreaterThanOrEqual(15);
+    // (Down to at least camera.js PITCH.walking, 10 degrees)
+    expect(sky.walking).toBeGreaterThanOrEqual(10);
 });
 
 test("in the town, the camera comes in closer than a building in the way, or rises over it; a well in the way it sees round", async ({ page }) => {
@@ -4628,6 +4705,8 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
     // on a slow machine without a GPU, as CI's can be)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
+    // (The camera looking down on them, so the ground ahead isn't behind them on the screen)
+    await overlook(page);
 
     const bar = page.locator("#playerplate .bar.stamina");
     const spot = await spotNorth(page, 4);
@@ -6052,6 +6131,8 @@ test("the townsfolk past the bodies' room, or far from the camera, drawn in thei
     // (Seed 2's town on Low: its townsfolk and its crier about the start)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
     await playing(page, "/?play&seed=2");
+    // (The camera from higher and further back, as overlook: who's far from it as before)
+    await overlook(page);
 
     const seen = await page.evaluate(async () => {
         const { game, session } = window.pellagos;
@@ -7121,6 +7202,13 @@ test.describe("drawn at the screen's own pixels", () => {
             const { game, session } = window.pellagos;
             const soldier = game.battle.actor(id);
             const player = game.battle.actor("player");
+
+            // (The camera looking down on them from higher and further back, as overlook, but set
+            // as the world's played on here: what's drawn in full, and who casts a shadow, as the
+            // test below of how often each is posed was made for)
+            game.cameraFollow.pitch = 35;
+            session.view.distance = 10.5;
+            session.view.zoomTo = null;
 
             // (A few steps out in front of them: they face out of the town)
             const [x, y] = [soldier.square[0] + Math.round(Math.sin(soldier.post) * 4), soldier.square[1] + Math.round(Math.cos(soldier.post) * 4)];
@@ -12157,8 +12245,13 @@ const WARY_WILDS = async ({ metres, nerve }) => {
     battle.place("wary-wolf", "town", square);
     battle.actor("wary-wolf").chance = { next: () => 0, int: (low) => low, state: 0 };
     battle.nerve = () => nerve;
+    // (The camera looking at it past the player, from higher and further back, as overlook: from
+    // close behind them and low, it'd be behind them on the screen)
     game.cameraFollow.yaw = Math.atan2(player.x - battle.actor("wary-wolf").x, player.y - battle.actor("wary-wolf").y);
     game.cameraFollow.turning = 0;
+    game.cameraFollow.pitch = 35;
+    game.view.distance = 10.5;
+    game.view.zoomTo = null;
 
     // (Told of as the host tells of those it puts out, and played on till it's drawn: its kind's
     // model fetched and made, a step at a time), not minded till then
@@ -12916,11 +13009,15 @@ test("the wilds director lays a fallen tree across the way: drawn over its squar
         }
 
         // (Come near, 8 m off its middle on the way it was coming: said, drawn; the camera looking
-        // at it past the player)
+        // at it past the player, from higher and further back, as overlook: from close behind
+        // them and low, it'd be behind them on the screen, and a hold on it on them)
         goTo(obstacle.at[0] + 0.5, y1 + 8.5);
         await window.settle(4, true);
         game.cameraFollow.yaw = Math.atan2(player.x - obstacle.at[0], player.y - obstacle.at[1]);
         game.cameraFollow.turning = 0;
+        game.cameraFollow.pitch = 35;
+        session.view.distance = 10.5;
+        session.view.zoomTo = null;
         await window.settle(4, true);
 
         const group = game.obstacleProps.shown.get(obstacle.id);
@@ -15245,7 +15342,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
         graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
         controls: ["#stickswitch", "#floatswitch", "#tapmoveswitch", "#zoomswitch", "#minimapswitch"],
-        camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
+        camera: ["#followswitch", "#flyinswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
         gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
         chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#refuseswitch", "#messengerswitch", "#blockedbutton"],
     };
@@ -15300,6 +15397,75 @@ test("Game options: its groups at the top, each a page of its own, short enough 
 
     await expect(page.locator("#menu")).toBeHidden();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
+test("coming into a world, the camera flies down from high overhead, north up, to close behind the player; anything the player does brings it down at once; Opening fly-in in Game options, on at first", async ({ page }) => {
+    // (The quick start leaves it out, unless asked for: &flyin)
+    await playing(page, "/?play&seed=1&flyin");
+
+    // Under way: still high over the player, looking almost straight down, and coming down
+    const high = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const view = game.view;
+
+        game.stop();
+
+        const camera = view.camera.position;
+        const player = game.avatars.get("player").object.position;
+        const at = { flying: view.flying, way: view.flight?.t ?? 1, above: camera.y - player.y, away: Math.hypot(camera.x - player.x, camera.z - player.z) };
+
+        game.advance(0.5);
+
+        return { ...at, lower: view.camera.position.y - player.y };
+    });
+
+    expect(high.flying).toBe(true);
+    expect(high.way).toBeLessThan(0.6);
+    expect(high.above).toBeGreaterThan(40);
+    expect(high.above).toBeGreaterThan(high.away * 2);
+    expect(high.lower).toBeLessThan(high.above);
+
+    // A key pressed: down at once, close behind the player, as it starts (sideways, 25 degrees down)
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("Shift");
+
+    const landed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(0.1);
+
+        const camera = game.view.camera.position;
+        const player = game.avatars.get("player").object.position;
+
+        return { flying: game.view.flying, above: camera.y - player.y, distance: game.view.distance, pitch: game.cameraFollow.pitch };
+    });
+
+    expect(landed).toMatchObject({ flying: false, distance: 5.5, pitch: 25 });
+    expect(landed.above).toBeLessThan(5);
+
+    // Left alone, it comes down by itself in about 4 seconds
+    const alone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.view.fly();
+        game.advance(2);
+
+        const midway = game.view.flying;
+
+        game.advance(2.5);
+
+        return { midway, after: game.view.flying };
+    });
+
+    expect(alone).toEqual({ midway: true, after: false });
+
+    // Its switch: Game options, Camera, on at first
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Camera/ }).click();
+    await expect(page.getByRole("switch", { name: /Opening fly-in/ })).toBeChecked();
 });
 
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam and finding the way through on at first; a drag turns and tilts it as far as chosen, each its own, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
@@ -15407,13 +15573,15 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     // running beside it)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
+    await overlook(page);
 
     const wheel = page.locator(".action-wheel");
     const up = wheel.locator('.slice[data-direction="n"]');
     const left = wheel.locator('.slice[data-direction="w"]');
 
     // The orc standing a few squares from the player, who's hurt (to the right and a little ahead,
-    // clear of the minimap along the top), held low on its body, well off its middle
+    // clear of the minimap along the top, the camera looking down on them: overlook, its wheel
+    // wholly on the screen there), held low on its body, well off its middle
     const orcAt = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const { battle } = game;
@@ -17156,7 +17324,9 @@ test.describe("on a phone", () => {
             }
         });
 
-        // The ground double-tapped: the player runs there
+        // The ground double-tapped: the player runs there (the camera looking down on them, so the
+        // ground ahead isn't behind them on the screen: overlook)
+        await overlook(page);
         await doubleTap(page, await spotNorth(page, 4), { touch: true });
 
         expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);

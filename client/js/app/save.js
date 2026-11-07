@@ -143,17 +143,20 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // falls or is 40 m off; off, only an enemy's icon held locks on: app/game.js `autoLock`)
     autoLock: true,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
-    // walk (off: it stays turned the way it's left; on a touch screen, on: loadSettings); whether
-    // in a fight it frames it, three-quarters on and clear of what stands round (the battle cam);
-    // whether it turns to look along the way through where walls crowd it (`openWay`); how far a
-    // drag turns it and tilts it (1, as it's always been: half round across the screen, 60 degrees
-    // up or down it); whether dragging up looks down; whether the greater spells shake it. And
-    // which camera defaults they were saved under: following saved under the first (when it was
-    // on for everyone) is forgotten, for today's, and under the second (off for everyone) on a
-    // touch screen
+    // walk (off, for everyone: it stays turned the way it's left, and R or a tap on the thumb stick
+    // puts it back behind them); whether in a fight it frames it, three-quarters on and clear of
+    // what stands round (the battle cam); whether it turns to look along the way through where
+    // walls crowd it (`openWay`); how far a drag turns it and tilts it (1, as it's always been:
+    // half round across the screen, 60 degrees up or down it); whether dragging up looks down;
+    // whether the greater spells shake it. And which camera defaults they were saved under:
+    // following saved under any before today's (on for everyone; off for everyone; on only on a
+    // touch screen) is forgotten, for today's
     cameraFollows: false,
     battleCam: true,
-    cameraDefaults: 3,
+    cameraDefaults: 4,
+    // The opening fly-in: coming into a world, the camera flies down from high overhead to behind
+    // the player (app/game.js `flyIn`, world/view.js fly): on to start with
+    flyIn: true,
     openWay: true,
     dragSpeed: 1,
     tiltSpeed: 1,
@@ -1278,20 +1281,8 @@ export function clearSave() {
     remove(WORLDS_KEY);
 }
 
-// Whether this device's screen is touched rather than pointed at with a mouse (a phone, a tablet)
-function touchScreen() {
-    try {
-        return Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches);
-    } catch {
-        return false;
-    }
-}
-
-/**
- * The settings (defaults for anything not set). On a touch screen (`touch`), Camera follows starts
- * on: touched, the camera's turned by hand less readily than with a mouse.
- */
-export function loadSettings({ touch = touchScreen() } = {}) {
+/** The settings (defaults for anything not set). */
+export function loadSettings() {
     const saved = { ...read(SETTINGS_KEY) };
 
     if (saved.volumeScale !== SETTINGS_DEFAULTS.volumeScale) {
@@ -1301,11 +1292,7 @@ export function loadSettings({ touch = touchScreen() } = {}) {
     }
 
     if (saved.cameraDefaults !== SETTINGS_DEFAULTS.cameraDefaults) {
-        // (Kept only where it was off for everyone and is so still: pointed at with a mouse)
-        if (saved.cameraDefaults !== 2 || touch) {
-            delete saved.cameraFollows;
-        }
-
+        delete saved.cameraFollows;
         delete saved.cameraDefaults;
     }
 
@@ -1314,7 +1301,7 @@ export function loadSettings({ touch = touchScreen() } = {}) {
         delete saved.stickDefaults;
     }
 
-    return { ...SETTINGS_DEFAULTS, cameraFollows: touch, ...saved, blocked: blocksOf(saved.blocked) };
+    return { ...SETTINGS_DEFAULTS, ...saved, blocked: blocksOf(saved.blocked) };
 }
 
 /** Change some settings, keeping the rest. Returns them all. */

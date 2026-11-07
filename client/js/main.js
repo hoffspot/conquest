@@ -931,6 +931,7 @@ $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
 $("#floatswitch").checked = settings.stickFloats;
 $("#tapmoveswitch").checked = settings.tapToMove;
+$("#flyinswitch").checked = settings.flyIn;
 $("#zoomswitch").checked = settings.zoom;
 $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
@@ -1272,6 +1273,8 @@ async function playing(save, { world, place, war }) {
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
     game.tapToMove = settings.tapToMove;
+    // (The opening fly-in; not for the quick start straight into a game, ?play, unless &flyin)
+    game.flyIn = settings.flyIn && (!params.has("play") || params.has("flyin"));
     game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
@@ -3083,6 +3086,8 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
     game.tapToMove = settings.tapToMove;
+    // (The opening fly-in; not for the quick start straight into a game, ?play, unless &flyin)
+    game.flyIn = settings.flyIn && (!params.has("play") || params.has("flyin"));
     game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
@@ -5547,6 +5552,7 @@ $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSi
 $("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
 $("#chatterswitch").addEventListener("change", (event) => applySetting("chatter", event.target.checked));
 $("#tapmoveswitch").addEventListener("change", (event) => applySetting("tapToMove", event.target.checked));
+$("#flyinswitch").addEventListener("change", (event) => applySetting("flyIn", event.target.checked));
 $("#enmityswitch").addEventListener("change", (event) => applySetting("showEnmity", event.target.checked));
 // (Whether this world's mercenaries can die: the world's rule, its host's to change, core/host.js RULES mortal)
 $("#mortalswitch").addEventListener("change", (event) => state.game?.setMortal(event.target.checked));

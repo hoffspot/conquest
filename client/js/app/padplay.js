@@ -335,6 +335,9 @@ export class PadPlay {
             }
 
             this.#pickUp();
+
+            // (Down from the opening fly-in, at anything done with it)
+            this.how.game()?.landFlight?.();
         }
 
         if (reading.pressed.size > 0) {
