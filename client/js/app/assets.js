@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "8960d62ade",
+    release: "8ae90c45ed",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3274,9 +3274,110 @@ export const ASSETS = Object.freeze({
                 ]
             }
         },
+        "dungeon-prop-medieval-tavern": {
+            "tier": "demand",
+            "label": "Every people's taverns' furniture, lights and tableware: trestle tables and benches, a settle, casks, beds, chests, a carved cabinet, a chandelier, wall sconces, candlesticks and a candelabrum, mugs, plates, a jug, a bottle and a cup, pictures, antlers and trophies, carpets and firewood (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/medieval-tavern.bin",
+                    "hash": "c8b6bedc9e",
+                    "bytes": 1537120
+                }
+            ],
+            "pieces": {
+                "medieval-tavern-table": [
+                    "kit@0,0"
+                ],
+                "medieval-tavern-table-small": [
+                    "kit@1,0"
+                ],
+                "medieval-tavern-bench": [
+                    "kit@2,0"
+                ],
+                "medieval-tavern-settle": [
+                    "kit@3,0"
+                ],
+                "medieval-tavern-cask": [
+                    "kit@4,0"
+                ],
+                "medieval-tavern-bed": [
+                    "kit@0,1"
+                ],
+                "medieval-tavern-bed-plain": [
+                    "kit@1,1"
+                ],
+                "medieval-tavern-chest": [
+                    "kit@2,1"
+                ],
+                "medieval-tavern-chest-small": [
+                    "kit@3,1"
+                ],
+                "medieval-tavern-cabinet": [
+                    "kit@4,1"
+                ],
+                "medieval-tavern-chandelier": [
+                    "kit@0,2"
+                ],
+                "medieval-tavern-sconce": [
+                    "kit@1,2"
+                ],
+                "medieval-tavern-candlestick": [
+                    "kit@2,2"
+                ],
+                "medieval-tavern-candelabrum": [
+                    "kit@3,2"
+                ],
+                "medieval-tavern-mug": [
+                    "kit@4,2"
+                ],
+                "medieval-tavern-tankard": [
+                    "kit@0,3"
+                ],
+                "medieval-tavern-plate": [
+                    "kit@1,3"
+                ],
+                "medieval-tavern-jug": [
+                    "kit@2,3"
+                ],
+                "medieval-tavern-bottle": [
+                    "kit@3,3"
+                ],
+                "medieval-tavern-cup": [
+                    "kit@4,3"
+                ],
+                "medieval-tavern-picture": [
+                    "kit@0,4"
+                ],
+                "medieval-tavern-picture-wide": [
+                    "kit@1,4"
+                ],
+                "medieval-tavern-picture-tall": [
+                    "kit@2,4"
+                ],
+                "medieval-tavern-antlers": [
+                    "kit@3,4"
+                ],
+                "medieval-tavern-skull": [
+                    "kit@4,4"
+                ],
+                "medieval-tavern-shield": [
+                    "kit@0,5"
+                ],
+                "medieval-tavern-carpet-runner": [
+                    "kit@1,5"
+                ],
+                "medieval-tavern-carpet": [
+                    "kit@2,5"
+                ],
+                "medieval-tavern-firewood": [
+                    "kit@3,5"
+                ]
+            }
+        },
         "dungeon-prop-wind-ways-shop": {
             "tier": "demand",
-            "label": "The humans' shops' and rooms' furniture: a counter, cupboards, chests and cabinets, a table and chair, a hanging lantern, baskets and trays of goods, a curtain, windows, a rack, a sign post and a door (Wind Ways' medieval shop pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "label": "The humans' shops' furniture: a counter, cupboards, chests and cabinets, a table and chair, a hanging lantern, baskets and trays of goods, a curtain, windows, a rack, a sign post and a door (Wind Ways' medieval shop pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
             "licensed": true,
             "files": [
                 {

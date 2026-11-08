@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; every people's taverns' furniture, lights and tableware from Dragon Motion's Medieval Props Kit from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -266,8 +266,12 @@ scrambled copy's hash with the catalog's.
 ## Prop kits
 
 A bought pack's loose furniture and things (a shop's counters, cupboards and lanterns) can stand
-in for the game's own wherever it suits, a piece for each kind of furnishing. The first is Wind
-Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
+in for the game's own wherever it suits, a piece for each kind of furnishing. The first was Wind
+Ways' shop furniture, in the humans' shops. The second is Dragon Motion's Medieval Props Kit's
+tavern furniture, lights and tableware, in every people's taprooms and the rooms upstairs: their
+tables, benches, casks, beds, chests, counters and settles, chandeliers, wall sconces,
+candlesticks and a candelabrum, mugs, plates, jugs, bottles and cups, carpets, pictures, antlers
+and trophies on the walls, logs by the hearth.
 
 - **One file, a node a piece, one atlas.** Its pieces are set a square each in a `.blend`
   (`.claude/skills/import-scene-model/scripts/kit.py ... --cells 8`), then joined, baked onto one
@@ -283,9 +287,24 @@ Ways' shop furniture, in the humans' shops and the rooms upstairs at their inns.
   is set out fitted to the furnishing's squares, and the game's own furnishing there is drawn
   apart (its stand-in), put away once the kit's read. Without the licensed models, or for a
   people or kind of inside no kit's for, the game's own is all there is.
-- **Tests:** `test/propkits.test.js` (the catalog, the choosing, the shops and upstairs set out,
-  the licensed file's nodes and its one material), and `test/furnishings.test.js` (only the
-  registered kits' pieces among the licensed props).
+- **Every people's, toned to theirs.** A kit made for every people (the tavern kit) is drawn
+  towards each people's own colours (`propkits.js` `TONES`, `dungeons3d.js` furnish's `tone`):
+  the humans' as the pack made it, the cat folk's sun-bleached, the orcs' charred dark, the lizard
+  folk's pale as bamboo, the elves' silvered, the dark elves' violet-black.
+- **Lights burn where their candles are.** A chandelier's, a sconce's or a candlestick's candles'
+  tips are measured when the kit's made (kit.py `candles`) and kept with the piece (`candles`);
+  the game lights a flame at each (`flamesOf`), sized and turned as the piece is, and draws its
+  own candles there meanwhile, so the flames are where the candles are whether or not the kit's
+  read. The chandelier's chain is cut at its hub (kit.py `trim`) and it hangs from the ceiling.
+- **Read whole.** The pipeline stores a kit's points as 16-bit whole numbers (meshopt's
+  quantization), its node's scale and place making them metres. Put into the points as they
+  were, anything more than a metre from the file's middle wrapped round: the shop counter's top
+  folded into its front, read for a while as a glass case. `dungeons3d.js` `partsOf` makes them
+  plain numbers first.
+- **Tests:** `test/propkits.test.js` (the catalog, the choosing, the shops and every people's
+  taprooms and rooms upstairs set out, the flames where the candles are, the tones, a quantized
+  piece read whole, the licensed file's nodes and its one material), and
+  `test/furnishings.test.js` (only the registered kits' pieces among the licensed props).
 
 ## The house kit
 

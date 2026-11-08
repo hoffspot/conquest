@@ -86,7 +86,7 @@ chests, a table and a chair, a lantern, a basket and trays of goods, a curtain, 
 sign bracket and a sign post, a newel and a door; its Unreal Engine files exported by this
 repository's owner), by **Wind Ways**, bought on **Fab** by this repository's owner under **Fab's
 Standard License**: the first of the game's prop kits (`client/js/world/propkits.js`), furnishing
-the humans' shops and the rooms upstairs at their inns.
+the humans' shops (and, till the tavern kit below, the rooms upstairs at their inns).
 
 Its 21 pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
 --cells 8`, its list `private/wind-ways-shop/kit.json`) and put through `utilities/blenderpipeline`
@@ -94,6 +94,34 @@ Its 21 pieces were set a square each in Blender (`.claude/skills/import-scene-mo
 joined, their materials baked onto one atlas (2,048 pixels; normals 1,024; KTX2) and cut apart
 again (`cells.bakeFirst`), each piece a node of its own (`kit@<i>,<j>`), its `phone` build:
 24,954 triangles in all, one material for every piece.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.
+
+## medieval-tavern.bin
+
+**Dragon Motion's "Medieval Props Kit"** (29 of its pieces: a trestle table and a small table, a
+long bench and a settle, a cask on its blocks, a canopied bed and a plain one, two chests, a
+carved cabinet, a chandelier (its chain cut at its hub), a wall sconce, a candlestick and a
+candelabrum, two mugs, a plate, a jug, a bottle and a cup, three pictures, antlers, a bull's skull,
+a shield, a carpet and a runner, and a stack of firewood; its Unreal Engine files exported by this
+repository's owner), by **Dragon Motion**, bought on **Fab** by this repository's owner under
+**Fab's Standard License**: the game's second prop kit (`client/js/world/propkits.js`
+`medieval-tavern`), furnishing every people's taprooms and the rooms upstairs, toned to each
+people's own.
+
+Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/medieval-tavern/pieces.json`; the chandelier's chain cut at its hub,
+its lights' candles' tips measured, faces mapped to a point of their textures spread over a few
+texels) and put through `utilities/blenderpipeline` (`private/medieval-tavern.json`), both of
+which stay out of the repository with the bought files: joined, their materials baked onto one
+atlas (2,048 pixels; normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a
+node of its own (`kit@<i>,<j>`), its `phone` build: 16,124 triangles in all, one material for
+every piece, 1.5 MB.
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
