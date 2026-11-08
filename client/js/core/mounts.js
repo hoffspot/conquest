@@ -1,7 +1,10 @@
-// Horses: bought at a stable (core/stables.js), each kept as a mount whistle (core/progress.js
+// Horses: bought at a stable (host.js #stableService), each kept as a mount whistle (core/progress.js
 // ITEMS mountWhistle) that calls it up out of a magic circle and sends it back down; ridden, it
 // carries its rider faster and takes the blows aimed at them, till it falls and throws them
 // (battle.js mount, #ride; host.js #whistle). Everything here is the same on every machine.
+
+/** The model a horse is drawn from (beasts/model.js MODELS: no creature, but a player's mount). */
+export const HORSE_MODEL = "horse";
 
 /** What a stable asks: for a horse, and to bring a fallen one back (gold). */
 export const STABLE = Object.freeze({ price: 400, revive: 100 });

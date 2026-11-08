@@ -104,10 +104,10 @@ const PARTS = {
         f: { wear: [["chemise"], ["kirtle"], ["boots"], ["handbell"]], hair: ["topknot", "bob", "long"], build: { weight: [0.45, 0.75], muscle: [0.38, 0.5], bust: [0.45, 0.85] } },
     },
     // A town's stablemaster (core/townsfolk.js stablemasterOf): in a leather jerkin and gloves for
-    // the work, a straw hat against the sun now and then
+    // the work, bare-headed
     stablemaster: {
-        m: { wear: [["shirt"], ["jerkin"], ["breeches", "trousers"], ["boots"], ["belt"], ["gloves"], ["strawHat", null, null]], hair: ["short", "buzz", "swept"], beard: ["short", "stubble", "full"], build: { weight: [0.45, 0.75], muscle: [0.55, 0.8], belly: [0, 0.4] } },
-        f: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"], ["strawHat", null, null]], hair: ["ponytail", "topknot", "bob"], build: { weight: [0.4, 0.65], muscle: [0.5, 0.7], bust: [0.4, 0.7] } },
+        m: { wear: [["shirt"], ["jerkin"], ["breeches", "trousers"], ["boots"], ["belt"], ["gloves"]], hair: ["short", "buzz", "swept"], beard: ["short", "stubble", "full"], build: { weight: [0.45, 0.75], muscle: [0.55, 0.8], belly: [0, 0.4] } },
+        f: { wear: [["shirt"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["gloves"]], hair: ["ponytail", "topknot", "bob"], build: { weight: [0.4, 0.65], muscle: [0.5, 0.7], bust: [0.4, 0.7] } },
     },
     // A keep's: the ruler crowned, in velvet and a gown, or in mail with a sword; their steward;
     // the councillors in robes; the sentries in mail with sword and shield

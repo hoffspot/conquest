@@ -14,7 +14,7 @@ import * as THREE from "three";
 import { BeastAvatar } from "../beasts/beast.js";
 import { modelOf, wantClips, wantModel } from "../beasts/model.js";
 import { MOUNTING, RiderClips, SEAT } from "../characters/riding.js";
-import { MANES, MOUNT } from "../core/mounts.js";
+import { HORSE_MODEL, MANES, MOUNT } from "../core/mounts.js";
 
 /**
  * How a horse comes and goes: how far under the ground it is before it's risen and once it's sunk
@@ -63,7 +63,7 @@ export class Mounts {
         }
 
         this.asked = true;
-        wantModel("horse", "now");
+        wantModel(HORSE_MODEL, "now");
         wantClips("beast-horse-rider", "now")?.then((gltf) => {
             if (gltf) {
                 this.clips = new RiderClips(gltf);
@@ -99,7 +99,7 @@ export class Mounts {
         this.#want();
 
         // (A new horse, or its model read since it was made: made afresh)
-        const model = Boolean(modelOf("horse"));
+        const model = Boolean(modelOf(HORSE_MODEL));
 
         if (!one || one.horse !== mount.horse.id || one.model !== model) {
             if (one) {
@@ -261,7 +261,7 @@ export class Mounts {
     #make(horse, model) {
         const mane = MANES[horse.mane] ?? MANES.dark;
         const seed = [...horse.id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 7) >>> 0;
-        const beast = new BeastAvatar("horse", { seed, skin: SKINS[horse.coat] ?? "", parts: ["Body", "Saddle", mane.part] });
+        const beast = new BeastAvatar(HORSE_MODEL, { seed, skin: SKINS[horse.coat] ?? "", parts: ["Body", "Saddle", mane.part] });
 
         if (model) {
             const material = MANE_MATERIALS[horse.mane];

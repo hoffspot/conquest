@@ -282,7 +282,7 @@ export const ROLES = Object.freeze({
         title: "Stablemaster",
         rests: [
             { name: "arms folded", hitAt: 1.2, duration: 3.6 },
-            { name: "wiping the brow", hitAt: 1, duration: 2.8 },
+            { name: "stretching the back", hitAt: 1, duration: 2.6 },
             { name: "looking down the road", hitAt: 1, duration: 3.4 },
             { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
             { name: "a glance back", hitAt: 1, duration: 2.2 },

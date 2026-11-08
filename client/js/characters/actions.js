@@ -1413,8 +1413,9 @@ const KEYED_RESTS = {
     // (A crier's: his bell rung high, the news cried, looking over the square, and the
     // townsfolk's, his bell kept in his right)
     crier: [RINGING, CRYING_OUT, LOOKING_OVER_THE_SQUARE, ADVENTURER_RESTS[4], GLANCING_BACK],
-    // (A stablemaster before their stable: arms folded, the brow wiped, looking down the road in)
-    stablemaster: [renamed(BARKEEP_RESTS[3], "arms folded"), renamed(BARMAID_RESTS[0], "wiping the brow"), renamed(LOOKING_OVER_THE_SQUARE, "looking down the road"), renamed(BARKEEP_RESTS[4], "rubbing the neck"), GLANCING_BACK],
+    // (A stablemaster before their stable: arms folded, the back stretched after the work,
+    // looking down the road in)
+    stablemaster: [renamed(BARKEEP_RESTS[3], "arms folded"), renamed(BARMAID_RESTS[4], "stretching the back"), renamed(LOOKING_OVER_THE_SQUARE, "looking down the road"), renamed(BARKEEP_RESTS[4], "rubbing the neck"), GLANCING_BACK],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars
