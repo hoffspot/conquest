@@ -81,8 +81,8 @@ import { atLevel, shopPrice } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
-import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
-import { MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
+import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, handInAt, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
+import { MISSIONS, MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
@@ -10278,7 +10278,7 @@ export class Game {
 
         if (event.type === "request") {
             const { change, request } = event;
-            const back = `Back to ${request.from.name} in ${request.from.townName}.`;
+            const back = `Back to ${handInAt(request).name} in ${handInAt(request).townName}.`;
             const told = {
                 taken: `New request: ${request.title}. (J for your journal.)`,
                 shared: `${event.by} shared a request with you: ${request.title}. (J for your journal.)`,
@@ -10296,6 +10296,7 @@ export class Game {
                 done: `${request.title}: done.${event.reward?.gold ? ` ${event.reward.gold} gold.` : ""}${event.reward?.tome ? ` And the Tome of ${SPELLS[event.reward.tome].label}.` : ""}`,
                 failed: `${request.title}: failed. ${request.from.post === "guild" ? "The guild marks it on your card." : "Your standing suffers."}`,
                 void: `${request.title}: it's come to nothing.`,
+                sent: `${request.from.townName} is lost to us. ${request.title}: tell ${handInAt(request).name} in ${handInAt(request).townName} instead.`,
                 abandoned: `${request.title}: given up.`,
             }[change];
 
@@ -11743,7 +11744,8 @@ export class Game {
                     text: request.text,
                     progress: progressOf(request),
                     where: where.at && at ? bearing(at, where.at) : "",
-                    left: request.until === null || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
+                    // (Done, it's only to be told of: no time left to run out)
+                    left: request.until === null || request.state === "done" || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
                     shared: request.shared ?? null,
                 };
             }),
@@ -11756,7 +11758,8 @@ export class Game {
                 state: mission.state,
                 progress: mission.there ? "You're there" : "On the way",
                 where: mission.target?.at && at ? bearing(at, mission.target.at) : "",
-                left: mission.until === null || mission.until === undefined || !war ? "" : `${Math.max(0, mission.until - war.turn)} min left`,
+                // (One to stand with their own in, once they're there: as long as it lasts)
+                left: mission.until === null || mission.until === undefined || (MISSIONS[mission.kind]?.stay && mission.there) || !war ? "" : `${Math.max(0, mission.until - war.turn)} min left`,
                 briefing: mission.briefing?.heard ? mission.briefing.lines : null,
             })),
             missionsDone: (standing.missionsDone ?? []).slice(0, 4).map(({ title, from: sender, state }) => ({ title, from: senderName(sender), state })),

@@ -860,6 +860,9 @@ client/                 The game (static files served to the browser)
     missions.js         The war's missions, brought by messenger: what's near a player, who
                         sends it, what it pays at their rank, the armoury's three pieces, how
                         it stands, and a commander's briefing
+    hurry.js            A fair chance at what's asked: how soon a player could get somewhere,
+                        what on the road they could meet before its end, and from when they're
+                        held to it (docs/WAR.md *A fair chance*)
     spells.js           Magic: the schools and their tiers, the hexes, and the tomes' spells
                         (docs/MAGIC.md)
     smartcast.js        Cure (the cure for whatever's on someone) and Buff all (each buff

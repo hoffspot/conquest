@@ -1621,8 +1621,8 @@ test("a request shared with the party from the journal: in a party, each request
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
-    // A bounty the host carries, part done (the same in both worlds, the host's and the guest's as
-    // it's sent it)
+    // A bounty the host carries, part done, at war with the orcs as a reeve asks for one only in a
+    // war (the same in both worlds, the host's and the guest's as it's sent it)
     const { name, home } = await host.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -1633,11 +1633,14 @@ test("a request shared with the party from the journal: in a party, each request
         host,
         guest,
         (town) => {
-            window.pellagos.game.host.players
+            const { host: hosting } = window.pellagos.game;
+
+            hosting.war.relations["human|orc"] = { state: "hostile", since: 0 };
+            hosting.players
                 .get("player")
                 .standing.take({ kind: "bounty", title: "Thin their numbers", from: { id: "reeve", name: "Ann Hale", title: "Reeve", town: town.id, townName: town.name, post: "hall" }, given: 0, state: "open", count: 2, key: "orc", target: { realm: "orc", need: 4 }, text: "Bring down 4 of the orcs.", until: 999, reward: { standing: 28, gold: 16 } });
         },
-        () => window.pellagos.game.host.players.get("player").standing.requests.some(({ title }) => title === "Thin their numbers"),
+        () => window.pellagos.game.host.war.hostile("human", "orc") && window.pellagos.game.host.players.get("player").standing.requests.some(({ title }) => title === "Thin their numbers"),
         home,
     );
 

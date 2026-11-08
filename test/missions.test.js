@@ -6,7 +6,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Standing } from "../client/js/core/standing.js";
-import { BONUS, briefingOf, checkMission, gearChoices, INTERCEPT_TURNS, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
+import { BONUS, briefingOf, chanceOf, checkMission, gearChoices, INTERCEPT_TURNS, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
+import { dueAt, GRACE, onTheRoad, turnsTo } from "../client/js/core/hurry.js";
 import { REINFORCE } from "../client/js/core/war/armies.js";
 
 // Just enough of a war (core/war/war.js): humans at war with orcs, at peace with elves
@@ -52,14 +53,15 @@ describe("what's near a player", () => {
     it("finds each kind of thing of the war within reach, the nearest first, those far off and those held left out", () => {
         const war = warOf({
             camps: [{ id: "camp-1", realm: "orc", at: [1300, 200], toward: "calbury", guard: 12 }],
+            // (Each on its road, as the war has them: core/hurry.js, what could be met on it)
             forces: [
-                { id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [900, 300], cargo: { stone: 30 }, home: "works-2" },
-                { id: "supply-1", realm: "orc", kind: "supply", size: 2, at: [1100, -100], target: "army-1" },
-                { id: "column-1", realm: "orc", kind: "reinforcement", size: 9, at: [1600, 0], target: "army-1" },
+                { id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [900, 300], path: [[900, 300], [9000, 0]], leg: 0, cargo: { stone: 30 }, home: "works-2" },
+                { id: "supply-1", realm: "orc", kind: "supply", size: 2, at: [1100, -100], path: [[1100, -100], [2200, 0]], leg: 0, target: "army-1" },
+                { id: "column-1", realm: "orc", kind: "reinforcement", size: 9, at: [800, 50], path: [[800, 50], [2200, 0]], leg: 0, target: "army-1" },
                 { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "attack", target: "works-1", at: [2200, 0] },
                 { id: "reserve-1", realm: "human", kind: "reserve", size: 40, mission: "defend", target: "army-1", at: [500, 0] },
                 { id: "army-2", realm: "human", kind: "army", size: 50, mission: "attack", target: "camp-1", at: [800, 100] },
-                { id: "far-1", realm: "orc", kind: "supply", size: 2, at: [6000, 0], target: "army-1" },
+                { id: "far-1", realm: "orc", kind: "supply", size: 2, at: [6000, 0], path: [[6000, 0], [2200, 0]], leg: 0, target: "army-1" },
             ],
             works: [
                 { id: "works-1", name: "Calbury", kind: "lumber mill", owner: "human", race: "human", at: [1700, 100] },
@@ -106,7 +108,7 @@ describe("what's near a player", () => {
     it("finds their own works taken from them, and their own convoy with an enemy army about", () => {
         const war = warOf({
             forces: [
-                { id: "convoy-2", realm: "human", kind: "convoy", size: 6, at: [1200, 0], cargo: { wood: 30 }, home: "works-3" },
+                { id: "convoy-2", realm: "human", kind: "convoy", size: 6, at: [1200, 0], path: [[1200, 0], [0, 0]], leg: 0, cargo: { wood: 30 }, home: "works-3" },
                 { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "camp", at: [2600, 0] },
             ],
             works: [{ id: "works-3", name: "Ashford", kind: "mine", owner: "orc", race: "human", at: [900, 400] }],
@@ -204,7 +206,7 @@ describe("how a mission stands", () => {
         assert.equal(checkMission(late, { war: { ...warOf({ camps: [{ id: "camp-3", realm: "orc", at: [1300, 200] }] }), turn: 999 }, realm: "human", near: () => false }), "failed");
     });
 
-    it("raiding wagons and cutting off reinforcements: done when they're lost to the player's people near where they were, with the player there; failed if they got through", () => {
+    it("raiding wagons and cutting off reinforcements: done when they're lost to the player's people near where they were, with the player there; failed if they got through; their army gone with them, come to nothing", () => {
         const war = warOf({ forces: [{ id: "column-1", realm: "orc", kind: "reinforcement", size: 9, at: [1600, 0], target: "army-1" }] });
         const mission = missionOf({ war, realm: "human", kind: "intercept", key: "column-1", target: { force: "column-1", realm: "orc", at: [1600, 0], size: 9 } });
 
@@ -213,8 +215,12 @@ describe("how a mission stands", () => {
         war.log.push({ type: "intercepted", realm: "orc", by: "human", at: [1620, 10], turn: 11 });
         assert.equal(checkMission(mission, { war, realm: "human", near: () => false }), "ready");
 
-        const through = missionOf({ war, realm: "human", kind: "wagons", key: "supply-9", target: { force: "supply-9", realm: "orc", at: [100, 100] } });
+        // (Gone with their army gone too: the wagons with it, come to nothing. At their army, its
+        // load theirs: got through, failed)
+        const through = missionOf({ war, realm: "human", kind: "wagons", key: "supply-9", target: { force: "supply-9", realm: "orc", at: [100, 100], army: "army-9" } });
 
+        assert.equal(checkMission(through, { war, realm: "human", near: () => false }), "void");
+        war.log.push({ type: "supplied", realm: "orc", army: "army-9", from: "skull", turn: 11 });
         assert.equal(checkMission(through, { war, realm: "human", near: () => false }), "failed");
     });
 
@@ -303,6 +309,135 @@ describe("how a mission stands", () => {
         assert.equal(checkMission(mission, { war, realm: "human", near: () => false }), "ready");
         war.log.push({ type: "abandoned", fort: "fort-1" });
         assert.equal(checkMission(mission, { war, realm: "human", near: () => false }), "void");
+    });
+});
+
+describe("a fair chance (docs/WAR.md *A fair chance*)", () => {
+    // (Peace made between the humans and the orcs)
+    const atPeace = (war) => Object.assign(war, { hostile: () => false });
+    const open = (war, kind, key, target, more = {}) => ({ ...missionOf({ war, realm: "human", kind, key, target }), state: "open", ...more });
+    const check = (war, mission, near = () => false) => checkMission(mission, { war, realm: "human", near });
+
+    it("offers nothing on the road they couldn't meet before its end: coming their way, yes; going away, its road's end before they'd catch up, no", () => {
+        const war = warOf({
+            forces: [
+                { id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [2500, 0], path: [[2500, 0], [-3000, 0]], leg: 0, cargo: { stone: 30 }, home: "works-2" },
+                { id: "convoy-2", realm: "orc", kind: "convoy", size: 6, at: [1900, 0], path: [[1900, 0], [3500, 0]], leg: 0, cargo: { stone: 30 }, home: "works-2" },
+                { id: "column-1", realm: "orc", kind: "reinforcement", size: 9, at: [1500, 0], path: [[1500, 0], [5000, 0]], leg: 0, target: "army-1" },
+                { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "camp", at: [5000, 0] },
+            ],
+        });
+        const found = missionsNear({ war, realm: "human", at }).map(({ key }) => key);
+
+        assert.deepEqual(found, ["convoy-1"]);
+        assert.equal(onTheRoad(at, war.force("convoy-2"), war.turn).met, false);
+        assert.equal(onTheRoad(at, war.force("column-1"), war.turn, { short: REINFORCE.join }).met, false);
+    });
+
+    it("starts a mission's time when it's taken on, the way there besides, and holds them to it from when they'd have got there", () => {
+        const war = warOf({
+            camps: [{ id: "camp-1", realm: "orc", at: [1300, 200], toward: "calbury" }],
+            forces: [{ id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [2500, 0], path: [[2500, 0], [-3000, 0]], leg: 0, cargo: { stone: 30 }, home: "works-2" }],
+        });
+        const rout = missionOf({ war, realm: "human", kind: "rout", key: "camp-1", target: { force: "camp-1", realm: "orc", at: [1300, 200], town: "calbury" } });
+        const plunder = missionOf({ war, realm: "human", kind: "plunder", key: "convoy-1", target: { force: "convoy-1", realm: "orc", at: [2500, 0], name: "the orcish convoy of stone" } });
+
+        war.turn = 14;
+        assert.deepEqual(chanceOf(war, rout, at), { until: 14 + MISSIONS.rout.turns + turnsTo(at, [1300, 200]), due: dueAt(at, [1300, 200], 14), met: true });
+        assert.deepEqual(chanceOf(war, plunder, at), { until: null, ...onTheRoad(at, war.force("convoy-1"), 14) });
+        assert.equal(chanceOf(war, plunder, at).due > 14 + GRACE, true);
+
+        // (Gone too far on for them to meet it now: not met)
+        Object.assign(war.force("convoy-1"), { at: [-2000, 0] });
+        assert.equal(chanceOf(war, plunder, at).met, false);
+    });
+
+    it("lost before they could have got there: come to nothing; once they could have, or with them there, failed", () => {
+        // (A town to hold, taken before they could have got there; after; with them there)
+        const war = warOf({ camps: [{ id: "camp-1", realm: "orc", at: [1300, 200], toward: "calbury" }] });
+        const defend = open(war, "defend", "calbury", { town: "calbury", name: "Calbury", at: [1500, 0], camp: "camp-1", realm: "orc" }, { due: 20 });
+
+        war.towns[1].owner = "orc";
+        assert.equal(check(war, { ...defend }), "void");
+        assert.equal(check({ ...war, turn: 21 }, { ...defend }), "failed");
+        assert.equal(check(war, { ...defend, there: true }), "failed");
+
+        // (A camp to break that took the town first; works to guard, fallen)
+        const rout = open(war, "rout", "camp-1", { force: "camp-1", realm: "orc", at: [1300, 200], town: "calbury" }, { due: 20 });
+
+        war.camps = [];
+        assert.equal(check(war, { ...rout }), "void");
+        assert.equal(check({ ...war, turn: 21 }, { ...rout }), "failed");
+
+        const works = warOf({ works: [{ id: "works-1", name: "Calbury", kind: "lumber mill", owner: "orc", race: "human", at: [1700, 100] }] });
+        const guard = open(works, "guard", "works-1", { works: "works-1", realm: "human", at: [1700, 100], name: "the Calbury lumber mill", threat: "army-1", enemy: "orc" }, { due: 20 });
+
+        assert.equal(check(works, { ...guard }), "void");
+        assert.equal(check(works, { ...guard, there: true }), "failed");
+
+        // (Our convoy fallen on before they could have met it: come to nothing; after, failed)
+        const convoy = open(warOf(), "convoy", "convoy-2", { force: "convoy-2", realm: "human", at: [1200, 0], name: "our convoy of wood" }, { due: 20 });
+        const fallen = warOf({ log: [{ type: "ambushed", realm: "human", by: "orc", force: "convoy-2", beaten: false, turn: 12 }] });
+
+        assert.equal(check(fallen, { ...convoy }), "void");
+        assert.equal(check({ ...fallen, turn: 21 }, { ...convoy }), "failed");
+
+        // (Reinforcements with their army before they could have got to them: come to nothing)
+        const army = { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "attack", target: "calbury", at: [4000, 0] };
+        const joined = open(warOf({ forces: [army] }), "intercept", "column-1", { force: "column-1", realm: "orc", at: [1600, 0], size: 9, to: "army-1" }, { due: 20 });
+
+        assert.equal(check(warOf({ forces: [army] }), { ...joined }), "void");
+        assert.equal(check({ ...warOf({ forces: [army] }), turn: 21 }, { ...joined }), "failed");
+    });
+
+    it("comes to nothing when what it's against is no longer at war with them, or its goods were lost where no one on the road could stop it", () => {
+        const war = atPeace(
+            warOf({
+                camps: [{ id: "camp-1", realm: "orc", at: [1300, 200], toward: "calbury" }],
+                forces: [{ id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [900, 300], cargo: { stone: 30 }, home: "works-2" }],
+                works: [{ id: "works-2", name: "Gravel", kind: "quarry", owner: "orc", race: "orc", at: [2500, 0] }],
+                forts: [{ id: "fort-1", realm: "orc", kind: "tower", at: [2800, 0] }],
+            }),
+        );
+
+        assert.equal(check(war, open(war, "rout", "camp-1", { force: "camp-1", realm: "orc", at: [1300, 200], town: "calbury" })), "void");
+        assert.equal(check(war, open(war, "plunder", "convoy-1", { force: "convoy-1", realm: "orc", at: [900, 300], name: "the orcish convoy of stone" })), "void");
+        assert.equal(check(war, open(war, "seize", "works-2", { works: "works-2", realm: "orc", at: [2500, 0], name: "the Gravel quarry" })), "void");
+        assert.equal(check(war, open(war, "tower", "fort-1", { fort: "fort-1", realm: "orc", at: [2800, 0], name: "the orcish guard tower" })), "void");
+        assert.equal(check(war, open(war, "defend", "calbury", { town: "calbury", name: "Calbury", at: [1500, 0], camp: "camp-1", realm: "orc" }, { there: true })), "ready");
+
+        // (Our convoy come to our seat, lost to the orcs while it was on the road: its goods taken
+        // there, come to nothing)
+        const seat = warOf({ log: [{ type: "plundered", realm: "human", by: "orc", force: "convoy-2", turn: 12 }] });
+
+        assert.equal(check(seat, open(seat, "convoy", "convoy-2", { force: "convoy-2", realm: "human", at: [1200, 0], name: "our convoy of wood" }, { there: true })), "void");
+    });
+
+    it("keeps them with their own as long as it lasts once they're there; an army sent off elsewhere comes to nothing, one beaten back with them there fails", () => {
+        const war = warOf({
+            forces: [
+                { id: "army-1", realm: "orc", kind: "army", size: 60, mission: "attack", target: "works-1", at: [1800, 0] },
+                { id: "army-2", realm: "human", kind: "army", size: 50, mission: "attack", target: "skull", at: [8000, 0] },
+            ],
+            works: [{ id: "works-1", name: "Calbury", kind: "lumber mill", owner: "human", race: "human", at: [1700, 100] }],
+        });
+        const guard = open(war, "guard", "works-1", { works: "works-1", realm: "human", at: [1700, 100], name: "the Calbury lumber mill", threat: "army-1", enemy: "orc" });
+        const attack = open(war, "attack", "army-2", { force: "army-2", realm: "human", at: [8000, 0], objective: "skull", objectiveKind: "town", objectiveName: "Skullcrag", enemy: "orc" });
+        const late = { ...war, turn: guard.until + 50 };
+
+        // (Their time gone: still with their own, not failed; never got there, failed)
+        assert.equal(check(late, { ...guard, there: true }), null);
+        assert.equal(check(late, { ...guard }), "failed");
+        assert.equal(check(late, { ...attack, there: true }), null);
+
+        // (Sent off after something else by its rulers: come to nothing. Turned back from it,
+        // beaten, with them there: failed)
+        war.forces[1].target = "glade";
+        assert.equal(check(war, { ...attack, there: true }), "void");
+        war.forces[1].target = null;
+        war.log.push({ type: "fellBack", realm: "human", army: "army-2", from: "skull", turn: 12 });
+        assert.equal(check(war, { ...attack, there: true }), "failed");
+        assert.equal(check(war, { ...attack }), "void");
     });
 });
 

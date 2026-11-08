@@ -933,20 +933,52 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Thin their numbers | in a war | so many of the enemy's soldiers are brought down | 4 and 8, and 6 and 6 for each |
 | Clear the roads | always | so many of the wild are brought down | 6 and 8, and 8 and 5 for each |
 | Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 30 |
-| Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 60 |
+| Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs; failed if it falls | 50 and 60 |
 | Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 80 |
-| See the envoy there | from a Knight, at the keep, with one of their envoys on the road (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 80 |
-| Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road (M7) | they're waylaid by the player's people; failed if they get there | 70 and 100 |
-| See the convoy in | from a Retainer, at the keep, with one of their convoys on the road laden (M13) | the player was with it (within 60 m) and its goods are in; failed if it's fallen on | 45 and 60 |
-| Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 80 |
+| See the envoy there | from a Knight, at the keep, with one of their envoys on the road a player setting out could meet (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 80 |
+| Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road a player setting out could meet (M7) | they're waylaid by the player's people; failed if they get there | 70 and 100 |
+| See the convoy in | from a Retainer, at the keep, with one of their convoys on the road laden, one a player setting out could meet (M13) | the player was with it (within 60 m) and its goods are in; failed if it's fallen on | 45 and 60 |
+| Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden, one a player setting out could meet (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 80 |
 | Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 70 |
 | Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 90 |
 | Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put its whole garrison to the sword, its guards, patrols, and its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 160 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
-goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
-to whoever asked (a letter, to whoever it's for) for its reward. The keep's are worth half as
-much again, and it asks the weightier things.
+goes; scouting, breaking a camp, winning back or taking works and taking a town longer by the way
+there from where it's asked: *A fair chance*), and fails when it runs out; one whose target's gone
+comes to nothing. What's done is told to whoever asked (a letter, to whoever it's for) for its
+reward, however long that takes: its time was for the doing, not the way back. The town that asked
+it lost to the player's people since, it's told of at the nearest of their towns with someone to
+tell instead, a town's reeve or a capital's steward (`back`: the host's `#sendBack`, the journal
+and the map saying where, and "Calbury is lost to us. Clear the roads: tell the reeve in Ashby
+instead."; `standing.js handInAt`). The keep's are worth half as much again, and it asks the
+weightier things.
+
+**A fair chance** (`core/hurry.js`). What's asked by the halls and the keep, and what the
+messengers bring (*War missions by messenger*), can be done, and isn't failed by what the player
+couldn't have stopped:
+- **The way there counts.** A player's counted on to cover 80 m a war turn going somewhere
+  (`PACE`, less than a walk, for the way round what's in it), and 250 hurrying, running while
+  their breath lasts and walking while it comes back (`HURRY`). Of what's on the road (an envoy
+  at 400 m a turn, a convoy at 200, supply wagons and reinforcements at 250: `ON_THE_ROAD`), only
+  what a player setting out at once, hurrying, could meet on its road before its end (within
+  150 m of it, where the world plays it out round them: `MEET`) is asked for (`onTheRoad`,
+  `meetAt`). One with a time to do it in has the way there in it besides (`turnsTo`): scouting a
+  town 6 km off is 40 turns and 75 more.
+- **Nothing's failed before they could have got there.** Each that something else can end (a
+  town to hold, a camp before a town, an envoy, a convoy; and the missions' wagons and
+  reinforcements, works to guard) has the turn they'd have had their chance by (`due`: the way
+  there at `PACE`, or the turn they'd meet it on its road, or, as they wouldn't, the turn it's at
+  its end; and 3 turns more, `GRACE`). Lost or got through before then, with them not there yet,
+  it comes to nothing, at no cost (`hadChance`); after, or with them there, it's failed. One kept
+  from before there were any (`due` unset) is held to it as it was.
+- **No longer at war, it's over.** Their enemy's soldiers to bring down, a camp to break or a town
+  to hold against, an envoy to stop, a convoy to fall on, works or a town to take, a tower: the
+  people it's against at peace with theirs now (a truce, an alliance), or fallen, it comes to
+  nothing. Their soldiers gone under another's banner, still at war with them, still count.
+- **What no one on the road could stop.** A convoy come to its seat with the seat lost meanwhile
+  has its goods taken there: come to nothing, not failed. An envoy gone with its people fallen,
+  the same.
 
 **The armoury** gives a gift for each rank from a Retainer up, once: a fine mail shirt; a
 masterwork of the player's own weapon; a masterwork kite shield (or mail, with a weapon that takes
@@ -966,8 +998,9 @@ for 20 turns or until it's acted on:
 - their card from the adventurers' guilds (M8): its rank, how much more merit to the next, and
   what each gives; or that they've not registered, and where to;
 - each request they carry: who asked, what, how far it's come, which way and how far to go, how
-  long's left, and who of their party shared it with them (each can be given up; and, in a party
-  of players, shared with it: *Parties*, *Requests shared*);
+  long's left (none once it's done: it's only to be told of), and who of their party shared it
+  with them (each can be given up; and, in a party of players, shared with it: *Parties*,
+  *Requests shared*);
 - their people: who rules them and from where, whom they're at war with and allied to, how many
   towns they hold;
 - what's lately done, failed or given up;
@@ -1916,25 +1949,30 @@ requests (M4), which stay as they are.
 | Kind | Title | From | What | Done when |
 | --- | --- | --- | --- | --- |
 | `rout` | Break the camp | the ruler | an enemy camp | it's gone (fails if the town it's before falls) |
-| `plunder` | Fall on their convoy | the ruler | an enemy convoy of the works' goods | ambushed by the player's people, as they were there |
-| `wagons` | Raid their supply wagons | the ruler | an enemy army's supply wagons | lost to the player's people, within 400 m of where they were |
-| `intercept` | Cut off their reinforcements | the ruler | fresh soldiers on the road to an enemy army, two turns' march or more from it (`INTERCEPT_TURNS`) | cut off by the player's people (it fails if they get through; comes to nothing if their army's gone); banded on the march with another column for the same army (the war's `banded`), followed into that one |
+| `plunder` | Fall on their convoy | the ruler | an enemy convoy of the works' goods, one they could meet on its road (*A fair chance*) | ambushed by the player's people, as they were there (fails if it gets in) |
+| `wagons` | Raid their supply wagons | the ruler | an enemy army's supply wagons, ones they could meet on their road | lost to the player's people, within 400 m of where they were (fails if they get through; come to nothing if their army or depot's gone, the wagons with it) |
+| `intercept` | Cut off their reinforcements | the ruler | fresh soldiers on the road to an enemy army, two turns' march or more from it (`INTERCEPT_TURNS`), that they could meet on the way | cut off by the player's people (it fails if they get through; comes to nothing if their army's gone); banded on the march with another column for the same army (the war's `banded`), followed into that one |
 | `seize` | Take their works | the ruler | an enemy's works (a quarry, a lumber mill...) | seized or cleared by the player's people, played |
 | `tower` | Bring down their tower | the ruler | an enemy guard tower or forward garrison | razed by the player's people |
 | `retake` | Win back the works | the nearest lord | works of ours taken | won back |
-| `guard` | Guard our works | the nearest lord | works of ours an enemy army's after | still ours when it's gone |
-| `convoy` | See our convoy in | the nearest lord | a convoy of ours on the road | delivered |
+| `guard` | Guard our works | the nearest lord | works of ours an enemy army's after | still ours when it's gone (fails if they fall) |
+| `convoy` | See our convoy in | the nearest lord | a convoy of ours on the road, one they could meet on it | delivered (fails if it's fallen on) |
 | `defend` | Hold the town | the nearest lord | an enemy camp within a march of a town of ours | the camp gone, the town still ours |
 | `reserve` | Stand with the reserve | a general | our reserve out against an enemy army | their army beaten or turned back, ours still standing |
-| `attack` | March with the army | a general | our army marching on an objective | the objective ours (fails if our army's beaten or sent elsewhere) |
+| `attack` | March with the army | a general | our army marching on an objective | the objective ours (fails if our army's beaten, or turned back from it beaten, with the player there; comes to nothing if its rulers send it after something else) |
 
 Each is done only if the player was there first (within 150 m of it, 120 m of a town's edge:
-`THERE`); done by others before they got there, it comes to nothing (`void`), at no cost. A
-mission given is only one the player's not already carrying (`held`). One that's over by the time
-its messenger finds the player (the reinforcements with their army, the camp broken: settled the
-moment it would be taken on, `#overtaken`) isn't taken on when they say yes: they're told "Too
-late: what the messenger came about is over already.", the messenger leaves, and nothing's lost
-for it (what two games share changed with it and the war's `banded`: `NET_VERSION` 213).
+`THERE`); done by others before they got there, it comes to nothing (`void`), at no cost. What
+fails it fails it only once they could have got there (M4, *A fair chance*: lost or got through
+before then, with them not there yet, it comes to nothing), and against a people no longer at war
+with theirs it comes to nothing too. A mission given is only one the player's not already carrying
+(`held`). One that's over by the time its messenger finds the player (the reinforcements with
+their army, the camp broken: settled the moment it would be taken on, `#overtaken`), or what it's
+about on the road too far on by then for them to meet before its end (`chanceOf`: `met`), isn't
+taken on when they say yes: they're told "Too late: what the messenger came about is over
+already, or too far gone to catch.", the messenger leaves, and nothing's lost for it (what two
+games share changed with it and the war's `banded`: `NET_VERSION` 213; and with the fair chance,
+`NET_VERSION` 214).
 
 **Who may hear one** (`#mayHearMessenger`): alive, out in the world (not indoors or in a dungeon),
 not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than
@@ -1968,9 +2006,14 @@ people's make and suited to their level (`gearChoices`, gear.js `rollGear`).
 `mission-N`), the journal's **War missions** (who sent it, what's asked, how far and which way,
 the time left, Give up), and marked on the world map and the minimap (a red ring with a star,
 app/mapicons.js `drawMissionMark`; the map's key). Each has its time (`turns`: 30 or 40 war
-turns). The host looks at it each step (`#watchMissions`, `checkMission`): there (told), done
-(`ready`), failed (out of time, or the war's gone the other way) or come to nothing (`void`: done
-by others before the player got there, no loss).
+turns) from when it's taken on, and the way there from where each who takes it is besides
+(`chanceOf`); and the turn they'd have had their chance by (`due`). To stand with their own
+(guard our works, stand with the reserve, march with the army: `stay`), the time's only to get
+there in: once there, it lasts as long as what it's about. The host looks at it each step
+(`#watchMissions`, `checkMission`): there (told), done (`ready`), failed (out of time, or the war's
+gone the other way once they could have been there) or come to nothing (`void`: done by others
+before the player got there, lost before they could have been, or against a people no longer at
+war with theirs: no loss).
 
 **Paid on the spot** (`#missionWon`): the gold (less what the player's hired adventurers take, as
 for anything won) and the standing, with "Break the camp: done! 120 gold and 60 standing. Choose

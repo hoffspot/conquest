@@ -27,6 +27,7 @@ const { STEP_MS } = await import("../client/js/core/battle.js");
 const { CONVOY_NEAR, HOST_PLAYER, Host } = await import("../client/js/core/host.js");
 const { buildWorld } = await import("../client/js/core/overworld.js");
 const { createRandom } = await import("../client/js/core/random.js");
+const { turnsTo } = await import("../client/js/core/hurry.js");
 const { OPENS, offerRequest, progressOf, STANDINGS, whereTo } = await import("../client/js/core/standing.js");
 const { CONVOY } = await import("../client/js/core/war/war.js");
 const { decode, encode } = await import("../client/js/core/wire.js");
@@ -219,20 +220,24 @@ describe("convoys on the roads near a player (host.js, war.js)", () => {
 describe("the keep's requests about the convoys and the works (standing.js, host.js)", () => {
     const giver = { id: "steward", name: "Wat Steward", title: "the steward" };
 
-    // The humans at war with the orcs; a convoy of each on the road; one of the humans' works
-    // held by brigands, and one of the orcs' to take
+    // The humans at war with the orcs; a convoy of each on the road, as a player setting out from
+    // the keep could meet it (core/hurry.js meetAt): theirs on its way home past the keep, ours on
+    // its road in to it, by the player's town; one of the humans' works held by brigands, and one
+    // of the orcs' to take
     function atWar() {
         const host = hosted();
         const war = host.war;
+        const seat = war.town(war.realm("human").seat).at;
         const { convoy: ours } = onTheRoad(host, { length: 40 });
-        const theirs = { ...structuredClone(ours), id: "force-971", realm: "orc", target: war.realm("orc").seat, home: war.works.find(({ owner }) => owner === "orc").id, cargo: { stone: 30 } };
+        const past = [seat[0] + 120, seat[1]];
+        const theirs = { ...structuredClone(ours), id: "force-971", realm: "orc", target: war.realm("orc").seat, home: war.works.find(({ owner }) => owner === "orc").id, cargo: { stone: 30 }, at: [...past], path: [past, [...war.town(war.realm("orc").seat).at]], leg: 0 };
 
+        ours.path.push([...seat]);
         war.forces.push(theirs);
         war.relations["human|orc"] = { state: "hostile", since: 0 };
         war.known.push("human|orc");
 
         // (Of theirs, the one nearest the keep: the one it asks for)
-        const seat = war.town(war.realm("human").seat).at;
         const lost = war.works.find(({ owner }) => owner === "human");
         const taken = war.works.filter(({ owner }) => owner === "orc").sort((a, b) => Math.hypot(a.at[0] - seat[0], a.at[1] - seat[1]) - Math.hypot(b.at[0] - seat[0], b.at[1] - seat[1]))[0];
 
@@ -278,7 +283,8 @@ describe("the keep's requests about the convoys and the works (standing.js, host
         assert.match(plunder.text, /convoy of stone/);
         assert.equal(retake.target.works, lost.id);
         assert.match(retake.text, /^Brigands hold the /);
-        assert.equal(retake.until, war.turn + 40);
+        // (Its time, and the way there from the keep besides)
+        assert.equal(retake.until, war.turn + 40 + turnsTo(war.town(capital).at, lost.at));
         assert.equal(seize.target.works, taken.id);
         assert.equal(progressOf(seize), `Get to the ${taken.name} ${taken.kind}.`);
         assert.deepEqual(whereTo(seize, war).at, taken.at);
@@ -293,6 +299,8 @@ describe("the keep's requests about the convoys and the works (standing.js, host
         const convoy = player.standing.take(ask(war, capital, "convoy", 5));
         const plunder = player.standing.take(ask(war, capital, "plunder", 5));
 
+        // (By the time they're with ours, it's at the last of its road: by the player's town)
+        ours.path.pop();
         run(host, 1000);
         assert.ok(player.standing.find(convoy.id).there, "found it");
         run(host, 60000);

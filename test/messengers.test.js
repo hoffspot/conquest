@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, MESSENGER } from "../client/js/core/host.js";
-import { MESSENGER_EVERY, MISSION_FAILED, rewardOf } from "../client/js/core/missions.js";
+import { MESSENGER_EVERY, MISSION_FAILED, MISSIONS, rewardOf } from "../client/js/core/missions.js";
+import { dueAt, turnsTo } from "../client/js/core/hurry.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { STAGES } from "../client/js/core/war/war.js";
@@ -108,9 +109,15 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "talk", with: arrived.folk }).ok, true);
 
         const answer = host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } });
+        const me = host.battle.actor(HOST_PLAYER);
 
         assert.equal(answer.ok, true);
         assert.equal(answer.mission.state, "open");
+
+        // (Its time from now, the way to the camp besides; held to it from when they'd have got
+        // there: core/missions.js chanceOf)
+        assert.equal(answer.mission.until, war.turn + MISSIONS.rout.turns + turnsTo([me.x, me.y], answer.mission.target.at));
+        assert.equal(answer.mission.due, dueAt([me.x, me.y], answer.mission.target.at, war.turn));
         assert.equal(player.standing.missions.length, 1);
         assert.equal(player.standing.messengerAt, war.turn);
         host.command(HOST_PLAYER, { type: "talk", with: null });
@@ -160,6 +167,30 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(player.standing.missionsDone.length, 0);
         assert.equal(player.standing.points, points);
         assert.equal([...host.messengers.values()][0]?.state, "leaving");
+    });
+
+    it("too far gone to catch by the time they answer (a convoy, on near the end of its road): said too late, nothing carried, and no standing lost for it", () => {
+        const host = hosted();
+        const war = host.war;
+        const middle = host.world.stamp.middle;
+        const at = [middle[0] + SETTLEMENT_KINDS[host.world.start.kind].radius + 400, middle[1] + 5];
+        const convoy = { id: "force-990", realm: "orc", kind: "convoy", size: 7, at: [...at], path: [[...at], [at[0] + 3000, at[1]]], leg: 0, target: war.realm("orc").seat, home: war.works.find(({ owner }) => owner === "orc").id, mission: null, about: null, cargo: { stone: 30 }, back: false, since: war.turn };
+        const player = host.players.get(HOST_PLAYER);
+
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.stage = STAGES.length - 1;
+        war.forces.push(convoy);
+        put(host.battle.actor(HOST_PLAYER), [Math.floor(at[0] - 250), Math.floor(at[1])]);
+
+        const arrived = hailed(host);
+        const points = player.standing.points;
+
+        assert.equal(arrived.mission.kind, "plunder");
+        Object.assign(convoy, { at: [at[0] + 2900, at[1]] });
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: arrived.folk }).ok, true);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } }), { ok: false, reason: "overtaken" });
+        assert.equal(player.standing.missions.length, 0);
+        assert.equal(player.standing.points, points);
     });
 
     it("turned down, none comes again for a while; a mission given up costs a little standing", () => {

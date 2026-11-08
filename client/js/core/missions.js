@@ -15,11 +15,13 @@
 
 import { hypot } from "./exact.js";
 import { rollGear } from "./gear.js";
+import { dueAt, hadChance, ON_THE_ROAD, onTheRoad, turnsTo } from "./hurry.js";
 import { namePeople } from "./names.js";
 import { ITEMS } from "./progress.js";
 import { createRandom } from "./random.js";
 import { REINFORCE } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
+import { SUPPLY } from "./war/supply.js";
 
 /** How near something must be (metres) for a messenger to come about it. */
 export const MISSION_REACH = 2000;
@@ -62,8 +64,10 @@ export const BONUS = 0.4;
 /**
  * The missions: each kind's title, who sends it (`from`: "ruler", "lord" or "general"), what it
  * pays a Commoner (gold and standing), how hard it is (`hard`: its gear a make better from 2), how
- * long there is (war turns; null: as long as what it's about lasts), and whether its commander
- * briefs the player when they come (`briefing`).
+ * long there is (war turns, from when it's taken on, the way there besides: chanceOf; null: as
+ * long as what it's about lasts), whether that's only to get there in (`stay`: once there, it
+ * lasts as long as what it's about, the player standing with their own till it's over), and
+ * whether its commander briefs the player when they come (`briefing`).
  */
 export const MISSIONS = Object.freeze({
     rout: { title: "Break the camp", from: "ruler", gold: 120, standing: 60, hard: 1, turns: 40 },
@@ -73,12 +77,16 @@ export const MISSIONS = Object.freeze({
     seize: { title: "Take their works", from: "ruler", gold: 150, standing: 75, hard: 2, turns: 40 },
     tower: { title: "Bring down their tower", from: "ruler", gold: 140, standing: 70, hard: 2, turns: 40 },
     retake: { title: "Win back the works", from: "lord", gold: 130, standing: 65, hard: 1, turns: 40 },
-    guard: { title: "Guard our works", from: "lord", gold: 110, standing: 55, hard: 1, turns: 30 },
+    guard: { title: "Guard our works", from: "lord", gold: 110, standing: 55, hard: 1, turns: 30, stay: true },
     convoy: { title: "See our convoy in", from: "lord", gold: 90, standing: 45, hard: 0, turns: null },
     defend: { title: "Hold the town", from: "lord", gold: 120, standing: 60, hard: 1, turns: null },
-    reserve: { title: "Stand with the reserve", from: "general", gold: 140, standing: 70, hard: 1, turns: 30, briefing: true },
-    attack: { title: "March with the army", from: "general", gold: 160, standing: 80, hard: 2, turns: 40, briefing: true },
+    reserve: { title: "Stand with the reserve", from: "general", gold: 140, standing: 70, hard: 1, turns: 30, stay: true, briefing: true },
+    attack: { title: "March with the army", from: "general", gold: 160, standing: 80, hard: 2, turns: 40, stay: true, briefing: true },
 });
+
+// How far short of its road's end each kind of thing on it is done (metres): where reinforcements
+// join their army, and supply wagons are at theirs
+const SHORT = Object.freeze({ reinforcement: REINFORCE.join, supply: SUPPLY.reach });
 
 const apart = ([ax, ay], [bx, by]) => hypot(ax - bx, ay - by);
 const peopleOf = (realm) => ADJECTIVES[realm] ?? realm;
@@ -150,6 +158,8 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
         }
     };
     const forces = war.forces ?? [];
+    // (What's on the road, only if they could meet it before it's at its end: core/hurry.js)
+    const meets = (force) => onTheRoad(at, force, war.turn, { short: SHORT[force.kind] ?? 0 }).met;
     // (How far reinforcements have still to march before they join their army: none, theirs gone)
     const marchLeft = (column) => {
         const army = war.force(column.target);
@@ -172,6 +182,10 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
 
     for (const force of forces) {
         if (!(force.size > 0) && force.kind !== "envoy") {
+            continue;
+        }
+
+        if (ON_THE_ROAD[force.kind] && !meets(force)) {
             continue;
         }
 
@@ -206,7 +220,7 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
     for (const works of war.works ?? []) {
         if (!works.held && hostile(works.owner) && !ours(works.race)) {
             add("seize", works.id, works.at, { works: works.id, realm: works.owner, at: [...works.at], name: worksName(works) });
-        } else if (ours(works.race) && (works.held || !ours(works.owner))) {
+        } else if (ours(works.race) && (works.held || hostile(works.owner))) {
             add("retake", works.id, works.at, { works: works.id, realm: works.owner, at: [...works.at], name: worksName(works) });
         } else if (ours(works.owner) && !works.held) {
             const threat = forces.find((force) => force.kind === "army" && force.size > 0 && hostile(force.realm) && (force.target === works.id || apart(force.at, works.at) <= THERE.works * 4));
@@ -325,6 +339,29 @@ export function missionOf({ war, realm, kind, key, target, rank = 0 }) {
 }
 
 // What's asked, in the sender's words
+/**
+ * A mission (as missionOf made it) as it's taken on by a player at `at` ([x, y] metres) now (docs/
+ * WAR.md *A fair chance*): its time from now, with the way there besides (`until`; null: as long
+ * as what it's about lasts); and the turn they'd have had their chance by (`due`: the way there,
+ * to a town to hold, a camp to break or works to guard; to something on the road, the turn they'd
+ * meet it, or, as they'd never meet it, it's at its end; none, of what's theirs to do once they're
+ * there). `met`: whether they could meet what's on the road before its end (or there's none).
+ */
+export function chanceOf(war, mission, at) {
+    const def = MISSIONS[mission.kind];
+    const { target } = mission;
+    const force = target.force ? war.force(target.force) : null;
+    const until = !def || def.turns === null ? null : war.turn + def.turns + turnsTo(at, target.at);
+
+    if (force && ON_THE_ROAD[force.kind]) {
+        return { until, ...onTheRoad(at, force, war.turn, { short: SHORT[force.kind] ?? 0 }) };
+    }
+
+    const kept = mission.kind === "defend" || mission.kind === "rout" || mission.kind === "guard";
+
+    return { until, ...(kept ? { due: dueAt(at, target.at, war.turn) } : {}), met: true };
+}
+
 function missionText(war, kind, target, them) {
     switch (kind) {
         case "rout":
@@ -406,8 +443,14 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
     const after = (event) => event.turn === undefined || event.turn >= mission.given;
     const log = war.log ?? [];
     const near400 = (point) => Boolean(point && target.at) && apart(point, target.at) <= 400;
+    // (Lost or got away before they could have got there: come to nothing; once they could have,
+    // failed: core/hurry.js hadChance. And against a people no longer at war with theirs, or gone:
+    // come to nothing)
+    const lost = () => (hadChance(mission, war.turn) ? "failed" : "void");
+    const atWar = (other) => Boolean(war.realm(other)?.alive) && war.hostile(liege, other);
 
-    if (mission.until !== null && mission.until !== undefined && war.turn > mission.until) {
+    // (Its time run out; one to stand with their own in, only while they're not there yet)
+    if (mission.until !== null && mission.until !== undefined && war.turn > mission.until && !(MISSIONS[mission.kind]?.stay && mission.there)) {
         return "failed";
     }
 
@@ -418,23 +461,23 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
             if (camp) {
                 been(camp.at, THERE.camp);
 
-                return null;
+                return atWar(target.realm) ? null : "void";
             }
 
-            return target.town && war.town(target.town)?.owner === target.realm ? "failed" : mission.there ? "ready" : "void";
+            return target.town && war.town(target.town)?.owner === target.realm ? lost() : mission.there ? "ready" : "void";
         }
         case "defend": {
             const town = war.town(target.town);
 
             if (!town || war.liege(town.owner) !== liege) {
-                return "failed";
+                return lost();
             }
 
             const { middle, radius } = townAt(town);
 
             been(middle, radius + THERE.town);
 
-            return war.camp(target.camp) ? null : mission.there ? "ready" : "void";
+            return war.camp(target.camp) && atWar(target.realm) ? null : mission.there ? "ready" : "void";
         }
         case "plunder":
         case "convoy": {
@@ -444,16 +487,18 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 target.at = [...convoy.at];
                 been(convoy.at, THERE.force);
 
-                return null;
+                return mission.kind === "plunder" && !atWar(target.realm) ? "void" : null;
             }
 
+            // (Come to a seat its people had lost, its goods taken there, as no one on the road
+            // could have stopped: come to nothing)
             const end = log.findLast(({ force, type, beaten }) => force === target.force && (type === "delivered" || type === "plundered" || (type === "ambushed" && !beaten)));
 
             if (mission.kind === "convoy") {
-                return end?.type === "delivered" ? (mission.there ? "ready" : "void") : end ? "failed" : "void";
+                return end?.type === "delivered" ? (mission.there ? "ready" : "void") : end?.type === "ambushed" ? lost() : "void";
             }
 
-            return end?.type === "ambushed" && end.played && end.by && war.liege(end.by) === liege ? (mission.there ? "ready" : "void") : end?.type === "delivered" ? "failed" : "void";
+            return end?.type === "ambushed" && end.played && end.by && war.liege(end.by) === liege ? (mission.there ? "ready" : "void") : end?.type === "delivered" ? lost() : "void";
         }
         case "wagons": {
             const wagons = war.force(target.force);
@@ -462,16 +507,20 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 target.at = [...wagons.at];
                 been(wagons.at, THERE.force);
 
-                return null;
+                return atWar(target.realm) ? null : "void";
             }
 
-            const lost = log.findLast((event) => event.type === "wagonLost" && event.realm === target.realm && after(event) && near400(event.at));
+            const taken = log.findLast((event) => event.type === "wagonLost" && event.realm === target.realm && after(event) && near400(event.at));
 
-            if (lost) {
-                return lost.by && war.liege(lost.by) === liege && mission.there ? "ready" : "void";
+            if (taken) {
+                return taken.by && war.liege(taken.by) === liege && mission.there ? "ready" : "void";
             }
 
-            return "failed";
+            // (At their army or depot, its load theirs: got through. Else theirs gone, the wagons
+            // with it: come to nothing)
+            const through = log.findLast((event) => after(event) && ((event.type === "supplied" && event.army === target.army) || (event.type === "provisioned" && event.depot === target.army)));
+
+            return through ? lost() : "void";
         }
         case "intercept": {
             // (Taken into another column for the same army on the way, before or since it was
@@ -493,7 +542,7 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 target.at = [...column.at];
                 been(column.at, THERE.force);
 
-                return null;
+                return atWar(target.realm) ? null : "void";
             }
 
             const cut = log.findLast((event) => event.type === "intercepted" && event.realm === target.realm && after(event) && near400(event.at));
@@ -504,7 +553,7 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
 
             // (Gone, and not cut off: its army gone too, beaten or disbanded, it went home, come to
             // nothing; else it got through to it)
-            return target.to && !war.force(target.to) ? "void" : "failed";
+            return target.to && !war.force(target.to) ? "void" : lost();
         }
         case "seize":
         case "retake": {
@@ -522,7 +571,7 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 return mission.there ? "ready" : "void";
             }
 
-            if (!works.held && war.liege(works.owner) === liege) {
+            if (!works.held && (war.liege(works.owner) === liege || !atWar(works.owner))) {
                 return "void";
             }
 
@@ -532,13 +581,13 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
             const works = war.workAt(target.works);
 
             if (!works || works.held || war.liege(works.owner) !== liege) {
-                return "failed";
+                return works ? lost() : "void";
             }
 
             been(works.at, THERE.works);
 
             const threat = war.force(target.threat);
-            const still = threat && threat.size > 0 && (threat.target === works.id || apart(threat.at, works.at) <= THERE.works * 4);
+            const still = threat && threat.size > 0 && atWar(threat.realm) && (threat.target === works.id || apart(threat.at, works.at) <= THERE.works * 4);
 
             return still ? null : mission.there ? "ready" : "void";
         }
@@ -548,7 +597,7 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
             if (fort) {
                 been(fort.at, THERE.fort);
 
-                return null;
+                return atWar(fort.realm) ? null : "void";
             }
 
             const end = log.findLast((event) => event.fort === target.fort && (event.type === "razed" || event.type === "abandoned"));
@@ -565,6 +614,11 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
             }
 
             if (enemy && enemy.size > 0) {
+                // (Theirs from a people no longer at war with ours: come to nothing)
+                if (!atWar(enemy.realm)) {
+                    return "void";
+                }
+
                 // (Ours beaten, or gone off after something else)
                 if (!reserve || !(reserve.size > 0)) {
                     return mission.there ? "failed" : "void";
@@ -590,9 +644,21 @@ export function checkMission(mission, { war, realm, near, townAt = (town) => ({ 
                 return mission.there ? "ready" : "void";
             }
 
-            // (Ours beaten, or sent off elsewhere, with what it was after still the enemy's)
-            if (!army || !(army.size > 0) || army.target !== target.objective) {
+            // (What it was after held by a people no longer at war with ours: come to nothing)
+            if (!atWar(objective.realm)) {
+                return "void";
+            }
+
+            // (Ours beaten, with them there: failed. Turned back from it, beaten, the same; sent
+            // off after something else by its rulers, it's come to nothing)
+            if (!army || !(army.size > 0)) {
                 return mission.there ? "failed" : "void";
+            }
+
+            if (army.target !== target.objective) {
+                const fell = log.some((event) => event.type === "fellBack" && event.army === army.id && after(event));
+
+                return fell && mission.there ? "failed" : "void";
             }
 
             return null;
