@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 import { STOREY } from "../world/interiors3d.js";
+import { standsAt } from "../world/town3d.js";
 
 // The glow: a bright line round the edge and a softer band either side (metres wide), pulsing
 // this many times a second, fading in and out this fast (per second); a tap lights it for at
@@ -64,9 +65,12 @@ function shapeOf(world, link, end) {
         const across = [Math.cos(door.facing), -Math.sin(door.facing)];
         const half = door.width / 2 + 0.08;
 
-        // (Its floor over the ground its building stands on: the ground at its middle)
-        const middle = world.interiors?.buildings?.get(link.building)?.at ?? [door.x - out[0], door.z - out[1]];
-        const base = map.heightAt?.(middle[0], middle[1]) ?? 0;
+        // (Its floor over the ground its building stands on, as it's built there (town3d.js
+        // standsAt): on a slope, the ground at its door's foot; the ground at its middle else. A
+        // site's way in has no lot: the ground before it)
+        const building = world.interiors?.buildings?.get(link.building);
+        const middle = building?.at ?? [door.x - out[0], door.z - out[1]];
+        const base = !map.heightAt ? 0 : building?.piece?.kind ? standsAt(building.piece, (x, y) => map.heightAt(x, y), [middle[0] - building.piece.x, middle[1] - building.piece.y]) : map.heightAt(middle[0], middle[1]);
         const [bottom, top] = [base + door.floor - 0.06, base + door.floor + door.height + 0.1];
         const at = (a, y, o = 0.3) => [door.x + across[0] * a + out[0] * o, y, door.z + across[1] * a + out[1] * o];
         const corners = [at(-half, bottom), at(half, bottom), at(half, top), at(-half, top)];

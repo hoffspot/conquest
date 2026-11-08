@@ -21,6 +21,7 @@ import { material } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { createRandom } from "../core/random.js";
 import { pieceCatalog } from "../core/setpieces/pieces.js";
+import { entranceSpecOf } from "../core/insides.js";
 import { footprint } from "../core/setpieces/town.js";
 import { PLOT } from "../core/world.js";
 import { gatehouse, keep, RUINED, tower, wall } from "./art/kits/castle.js";
@@ -93,9 +94,11 @@ const BUILT = new Set(["house", "landmark", "structure", "wall", "tower", "gateh
 
 /**
  * Foundations: how far the ground under what's built may rise or fall across it (metres) before
- * it's stood on a foundation, and how far into the ground below its lowest corner that goes.
+ * it's stood on a foundation, and how far into the ground below its lowest corner that goes; and
+ * how far either side of a gatehouse's middle its way through is kept clear of one (a share of its
+ * width: every people's way is within it, the humans' 3.6 m of a 12 m lot).
  */
-const FOUNDATION = Object.freeze({ from: 0.3, below: 0.3 });
+const FOUNDATION = Object.freeze({ from: 0.3, below: 0.3, way: 0.3 });
 
 // What each people builds its foundations of (as they build the rest): the humans' plain stone
 const FOUNDED = Object.freeze({ cat: "mud-dark", elf: "stone-moon", darkElf: "stone-black", orc: "basalt", lizard: "stone-lime" });
@@ -428,15 +431,44 @@ export function placed(built, piece, [ox, oz] = [0, 0], y = 0) {
 }
 
 /**
- * How high a piece stands (metres): its own `base` if it has one (a citadel's part, on its ward's
- * terrace); else the ground under its middle (`groundAt(x, y)`, metres, from
- * `origin`); a house on stilts over a lagoon (`water`), the lowest of its ground, the lagoon's bed
- * under it; or, for what's built on ground that rises or falls more than FOUNDATION.from across
- * it (a settlement lying with a slope), its highest corner's, a foundation added to it (as the
- * art kits built it, before it's placed: of its people's stone, or the cat folk's mud brick) from
- * there down past its lowest corner, under all of it but its eaves.
+ * Where people walk on a piece, in its lot's own frame (metres; facing south, `u` across from its
+ * west side, `v` from its back): a gatehouse's way through its middle (FOUNDATION.way of its width
+ * either side, its whole depth), the ground under it sampled at `feet`; a building that can be
+ * gone into, the strip before its door (from its door's line, `front`, out to its lot's front),
+ * the ground at its door's foot (half a metre out) its `feet`. Null for anything else.
  */
-export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
+export function walkedOf(piece) {
+    const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
+
+    if (piece.kind === "gatehouse") {
+        const half = width * FOUNDATION.way;
+
+        return { across: [width / 2 - half, width / 2 + half], front: null, feet: [-1, 0, 1].flatMap((a) => [0, 0.25, 0.5, 0.75, 1].map((b) => [width / 2 + a * half, b * depth])) };
+    }
+
+    const spec = piece.kind === "landmark" ? entranceSpecOf(piece) : null;
+
+    if (!spec) {
+        return null;
+    }
+
+    const [u, v] = [width / 2 + spec.offset, depth - spec.depth];
+
+    return { across: null, front: v, feet: [[u, v + 0.5]] };
+}
+
+/**
+ * How high a piece stands (metres): its own `base` if it has one (a citadel's part, on its ward's
+ * terrace); else the ground under its middle (`groundAt(x, y)`, metres, from `origin`); a house on
+ * stilts over a lagoon (`water`), the lowest of its ground, the lagoon's bed under it; or, for
+ * what's built on ground that rises or falls more than FOUNDATION.from across it (a settlement
+ * lying with a slope), its highest corner's, on a foundation (grounded). But what people walk
+ * into or through (walkedOf: a gatehouse's way, a building's door) stands on the ground they walk
+ * on there: a gatehouse on the lowest of it under its way through, a building gone into on the
+ * ground at its door's foot, the rest of it sunk into the ground as it rises behind; so nobody's
+ * feet are ever under a foundation's top, nor its door over their heads.
+ */
+export function standsAt(piece, groundAt, [ox, oz] = [0, 0]) {
     // (A citadel's part stands on its ward's terrace, and reaches down its face itself)
     if (piece.base !== undefined) {
         return piece.base;
@@ -449,7 +481,8 @@ export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
         return middle;
     }
 
-    const heights = footprint(piece).map(([x, y]) => groundAt(ox + x, oz + y));
+    const corners = footprint(piece);
+    const heights = corners.map(([x, y]) => groundAt(ox + x, oz + y));
     const [low, high] = [Math.min(middle, ...heights), Math.max(middle, ...heights)];
 
     // (A house on stilts over a lagoon stands on its bed, its stilts going down into the water)
@@ -461,21 +494,64 @@ export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
         return middle;
     }
 
-    // (Under what's built, as far as its plot: a little in from its widest, past which the eaves
-    // reach)
-    built.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(built);
-    const [x0, x1] = [Math.max(0, box.min.x) + 2, Math.min(piece.w * 20, box.max.x) - 2];
-    const [z0, z1] = [Math.max(0, box.min.z) + 2, Math.min(piece.h * 20, box.max.z) - 2];
+    const walked = walkedOf(piece);
 
-    if (x1 > x0 && z1 > z0) {
-        const solid = new Solid();
-
-        solid.box(x0, -(high - low + FOUNDATION.below) / PIXEL, z0, x1, 0.05 / PIXEL, z1, material(FOUNDED[piece.people] ?? "stone"));
-        built.add(solid.toObject());
+    if (!walked) {
+        return high;
     }
 
-    return high;
+    // (A point of its lot, from its corners as it's turned: north-west, north-east, south-east,
+    // south-west)
+    const [[ax, ay], [bx, by], , [dx, dy]] = corners;
+    const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
+    const at = ([u, v]) => groundAt(ox + ax + ((bx - ax) * u) / width + ((dx - ax) * v) / depth, oz + ay + ((by - ay) * u) / width + ((dy - ay) * v) / depth);
+
+    return Math.min(...walked.feet.map(at));
+}
+
+/**
+ * How high a piece stands (standsAt), and a foundation added to what's built on a slope (as the
+ * art kits built it, before it's placed: of its people's stone, or the cat folk's mud brick) from
+ * there down past its lowest corner, under all of it but its eaves; but never under where people
+ * walk on it (walkedOf: a gatehouse's way through, the strip before a building's door), its top
+ * over their feet.
+ */
+export function grounded(built, piece, groundAt, [ox, oz] = [0, 0]) {
+    const y = standsAt(piece, groundAt, [ox, oz]);
+
+    if (piece.base !== undefined || !BUILT.has(piece.kind) || piece.kind === "neutral" || piece.water) {
+        return y;
+    }
+
+    const middle = groundAt(ox + piece.x, oz + piece.y);
+    const heights = footprint(piece).map(([px, py]) => groundAt(ox + px, oz + py));
+    const [low, high] = [Math.min(middle, ...heights), Math.max(middle, ...heights)];
+
+    if (high - low < FOUNDATION.from) {
+        return y;
+    }
+
+    // (Under what's built, as far as its plot: a little in from its widest, past which the eaves
+    // reach; and not under its way through, nor before its door)
+    built.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(built);
+    const walked = walkedOf(piece);
+    const [x0, x1] = [Math.max(0, box.min.x) + 2, Math.min(piece.w * 20, box.max.x) - 2];
+    const z0 = Math.max(0, box.min.z) + 2;
+    const z1 = Math.min(piece.h * 20, box.max.z, walked?.front === null || walked?.front === undefined ? Infinity : walked.front / PIXEL + 2) - 2;
+    const spans = walked?.across ? [[x0, Math.min(x1, walked.across[0] / PIXEL)], [Math.max(x0, walked.across[1] / PIXEL), x1]] : [[x0, x1]];
+
+    // (Each its own, a gatehouse's either side of its way)
+    for (const [a, b] of spans) {
+        if (b > a && z1 > z0) {
+            const solid = new Solid();
+
+            solid.box(a, -(y - Math.min(low, y) + FOUNDATION.below) / PIXEL, z0, b, 0.05 / PIXEL, z1, material(FOUNDED[piece.people] ?? "stone"));
+            built.add(solid.toObject());
+        }
+    }
+
+    return y;
 }
 
 /**

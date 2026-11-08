@@ -9,7 +9,9 @@ import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
 import { RACES } from "../client/js/core/worldplan/races.js";
 import { MATERIALS, paintLayer } from "../client/js/world/art/engine/painters.js";
 import * as THREE from "three";
-import { BUILDERS, heightMap, PIXEL } from "../client/js/world/town3d.js";
+import { BUILDERS, grounded, heightMap, PIXEL, standsAt, walkedOf } from "../client/js/world/town3d.js";
+import { entranceSpecOf } from "../client/js/core/insides.js";
+import { PLOT } from "../client/js/core/world.js";
 import { View } from "../client/js/world/view.js";
 
 describe("the town in 3D (town3d.js)", () => {
@@ -25,6 +27,119 @@ describe("the town in 3D (town3d.js)", () => {
 
     it("builds to the world's measure: five art pixels to a metre", () => {
         assert.equal(PIXEL, 0.2);
+    });
+});
+
+describe("what's built on a slope (town3d.js grounded, standsAt)", () => {
+    // (What a kit builds, as it builds it: a block filling its lot, facing south, in art pixels)
+    const builtFor = (piece) => {
+        const group = new THREE.Group();
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(piece.w * 20, 40, piece.h * 20));
+
+        mesh.position.set(piece.w * 10, 20, piece.h * 10);
+        group.add(mesh);
+
+        return group;
+    };
+    // (A point of a piece's lot, in its own frame facing south, in the world: as insides.js
+    // entranceOf turns it)
+    const worldOf = (piece, [u, v]) => {
+        const [du, dv] = [u - (piece.w * PLOT) / 2, v - (piece.h * PLOT) / 2];
+
+        return [piece.x + du * Math.cos(piece.facing) + dv * Math.sin(piece.facing), piece.y - du * Math.sin(piece.facing) + dv * Math.cos(piece.facing)];
+    };
+    // (The foundation added, as boxes in the lot's own frame, metres: [u0, u1, v0, v1] and its top)
+    const foundationOf = (built) =>
+        built.children.slice(1).flatMap((object) => {
+            const boxes = [];
+
+            object.traverse((node) => {
+                if (node.isMesh) {
+                    const box = new THREE.Box3().setFromObject(node);
+
+                    boxes.push({ u0: box.min.x * PIXEL, u1: box.max.x * PIXEL, v0: box.min.z * PIXEL, v1: box.max.z * PIXEL, top: box.max.y * PIXEL });
+                }
+            });
+
+            return boxes;
+        });
+    // (Every point of a lot, half a metre apart)
+    const points = (piece) => Array.from({ length: piece.w * PLOT * 2 + 1 }, (_, i) => Array.from({ length: piece.h * PLOT * 2 + 1 }, (_, j) => [i / 2, j / 2])).flat();
+
+    it("stands a building that can be gone into on the ground at its door's foot, and lays no foundation before its door, where people walk", () => {
+        // (Falling 1.2 m from its back to its front, and across it)
+        const ground = (x, y) => -0.1 * y - 0.04 * x;
+
+        for (const name of ["tavern", "guild", "hall", "church", "barracks", "blacksmith", "swordsmith"]) {
+            for (const facing of [0, Math.PI / 2, Math.PI, 0.4]) {
+                const piece = { kind: "landmark", name, people: "cat", x: 60, y: 60, w: 3, h: 3, facing };
+                const spec = entranceSpecOf(piece);
+                const built = builtFor(piece);
+                const y = grounded(built, piece, ground);
+                const foot = worldOf(piece, [(piece.w * PLOT) / 2 + spec.offset, piece.h * PLOT - spec.depth + 0.5]);
+
+                assert.ok(Math.abs(y - ground(...foot)) < 1e-9, `${name} ${facing}: stands at its door's foot`);
+                assert.equal(standsAt(piece, ground), y, "the door's glow stands with it");
+
+                const foundation = foundationOf(built);
+                const front = piece.h * PLOT - spec.depth;
+
+                assert.ok(foundation.length > 0, `${name} ${facing}: on a foundation`);
+
+                for (const box of foundation) {
+                    assert.ok(box.v1 <= front + 1e-6, `${name} ${facing}: none before its door's line (${box.v1} > ${front})`);
+                }
+
+                // (Wherever it lies under the building, its top no higher than where it stands; and
+                // down past the lowest ground under it)
+                for (const [u, v] of points(piece).filter(([, v]) => v >= front)) {
+                    assert.ok(!foundation.some((box) => u > box.u0 && u < box.u1 && v > box.v0 && v < box.v1), `${name}: no foundation at ${u}, ${v}`);
+                }
+            }
+        }
+    });
+
+    it("stands a gatehouse on the lowest ground under its way through, and lays its foundation either side of it, never under it", () => {
+        const ground = (x, y) => 0.15 * x + 0.1 * y;
+
+        for (const facing of [0, Math.PI / 2, 0.3, -1.2]) {
+            const piece = { kind: "gatehouse", people: "cat", x: 60, y: 60, w: 3, h: 2, facing };
+            const built = builtFor(piece);
+            const y = grounded(built, piece, ground);
+            const { across } = walkedOf(piece);
+            const way = points(piece).filter(([u]) => u >= across[0] && u <= across[1]);
+
+            // (Under its way, nowhere lower than it stands, so its way's floor is the ground)
+            assert.ok(way.every((point) => ground(...worldOf(piece, point)) >= y - 1e-9), `${facing}: no ground under its way lower than it stands`);
+            assert.ok(way.some((point) => ground(...worldOf(piece, point)) < y + 0.2), `${facing}: on the lowest of it`);
+
+            const foundation = foundationOf(built);
+
+            assert.equal(foundation.length, 2, `${facing}: a foundation under each side`);
+
+            for (const box of foundation) {
+                assert.ok(box.u1 <= across[0] + 1e-6 || box.u0 >= across[1] - 1e-6, `${facing}: none under its way (${box.u0}–${box.u1})`);
+                assert.ok(box.top - y <= 0.05 + 1e-6);
+            }
+        }
+    });
+
+    it("stands what's never walked into on its highest corner, on a foundation under all of it; and anything on level ground on the ground at its middle, on none", () => {
+        const slope = (x, y) => -0.1 * y;
+        const house = { kind: "house", people: "cat", x: 60, y: 60, w: 3, h: 3, facing: 0 };
+        const built = builtFor(house);
+
+        assert.ok(Math.abs(grounded(built, house, slope) - slope(60, 54)) < 1e-9, "its highest corner, its back");
+        assert.equal(foundationOf(built).length, 1);
+        assert.ok(foundationOf(built)[0].v1 > house.h * PLOT - 1, "under all of it");
+
+        for (const piece of [house, { kind: "landmark", name: "tavern", people: "cat", x: 60, y: 60, w: 3, h: 3, facing: 0 }, { kind: "gatehouse", people: "cat", x: 60, y: 60, w: 3, h: 2, facing: 0 }]) {
+            const level = (x, y) => 2 + 0.01 * y;
+            const flat = builtFor(piece);
+
+            assert.equal(grounded(flat, piece, level), level(60, 60), piece.kind);
+            assert.equal(foundationOf(flat).length, 0, piece.kind);
+        }
     });
 });
 
