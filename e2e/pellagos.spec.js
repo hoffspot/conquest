@@ -15269,6 +15269,11 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
     expect(await full()).toBe(true);
 
+    // (The camera looking down on the player, as overlook, so a tap on the world is on the ground
+    // by them: from the start view, looking out across the land, it can be on someone walking
+    // about the market, whose talk it opens instead)
+    await overlook(page);
+
     // Left by the player (Escape, the browser's own button, Android's back): paused
     await page.evaluate(() => document.exitFullscreen());
     await expect(page.locator("#menu")).toBeVisible();
