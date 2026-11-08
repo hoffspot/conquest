@@ -1976,8 +1976,8 @@ their army, the camp broken: settled the moment it would be taken on, `#overtake
 about on the road too far on by then for them to meet before its end (`chanceOf`: `met`), isn't
 taken on when they say yes: they're told "Too late: what the messenger came about is over
 already, or too far gone to catch.", the messenger leaves, and nothing's lost for it (what two
-games share changed with it and the war's `banded`: `NET_VERSION` 213; and with the fair chance,
-`NET_VERSION` 214).
+games share changed with it and the war's `banded`: `NET_VERSION` 213; with the fair chance,
+`NET_VERSION` 214; and with the guild's and the time to finish what they were at, 215).
 
 **Who may hear one** (`#mayHearMessenger`): alive, out in the world (not indoors or in a dungeon),
 not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than
