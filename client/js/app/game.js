@@ -75,7 +75,7 @@ import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
-import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { ABILITIES, bound, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
@@ -1031,6 +1031,9 @@ const SHAKE_DIES = 4;
 
 // A place's crier, by his id (core/townsfolk.js crierOf)
 const CRIER = /^crier:/;
+
+// A horse's coat as it's told (core/mounts.js COATS)
+const COAT_WORDS = Object.freeze({ bay: "bay", gray: "grey", dapple: "dapple-grey", palomino: "palomino", white: "white" });
 
 // How near the player the war's news happens (metres, out in the world) to be told them there and
 // then, in a message box; further off, a town's crier cries it (#crierOf: news.js newsSince)
@@ -8310,6 +8313,9 @@ export class Game {
         const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
         const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length + this.host.mendingOf(this.me).length;
         const recall = one?.role === "receptionist" ? this.host.recallOffer(this.me) : null;
+        // (A stablemaster's: what a horse costs, and bringing back the first of theirs fallen, as
+        // it stands now: core/host.js stableOffer)
+        const stable = npc.role === "stablemaster" ? () => this.host.stableOffer(this.me) : null;
 
         if (hire) {
             names.hirePrice = String(hire.price);
@@ -8326,6 +8332,12 @@ export class Game {
         if (recall) {
             names.mending = recall.name;
             names.recallPrice = String(recall.price);
+        }
+
+        if (stable) {
+            const { price, revive, fallen } = stable();
+
+            Object.assign(names, { horsePrice: String(price), revivePrice: String(revive), fallenHorse: fallen[0]?.name ?? "", revivedHorse: "" });
         }
 
         // (Hungry bandits: the gold they want)
@@ -8376,6 +8388,12 @@ export class Game {
                                 ? Boolean(recall) === condition.mending
                               : "recallPurse" in condition
                                 ? (this.progress.gold >= (recall?.price ?? 0)) === condition.recallPurse
+                              : stable && "horsePurse" in condition
+                                ? (this.progress.gold >= stable().price) === condition.horsePurse
+                              : stable && "revivePurse" in condition
+                                ? (this.progress.gold >= stable().revive) === condition.revivePurse
+                              : stable && "fallen" in condition
+                                ? (stable().fallen.length > 0) === condition.fallen
                               : "wounded" in condition
                                 ? Boolean(following?.wounds) === condition.wounded
                               : "waiting" in condition
@@ -8420,12 +8438,21 @@ export class Game {
                     return;
                 }
 
+                // (A fallen horse brought back: named as it was, the next fallen named after)
+                if (effect.stable === "revive") {
+                    names.revivedHorse = names.fallenHorse;
+                }
+
                 // (What can't be paid for, said; what is, the gold heard counted out)
                 this.#command({ type: "effect", effect }, (result) => {
+                    if (stable) {
+                        names.fallenHorse = stable().fallen[0]?.name ?? "";
+                    }
+
                     if (!result.ok) {
                         this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
                         this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
-                    } else if (effect.price || effect.pay || effect.toll === "gold") {
+                    } else if (effect.price || effect.pay || effect.toll === "gold" || effect.stable) {
                         this.hud.setGold(this.progress.gold);
                         this.onProgress(this.progress);
                         this.sound?.play("coins");
@@ -12303,7 +12330,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !stack.unique && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: Boolean(stack.unique), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null, giveTo: stack.unique ? [] : this.#wearers(stack) };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null, giveTo: bound(stack) ? [] : this.#wearers(stack) };
         });
         const me = this.battle.actor(this.me);
         const might = this.host.mightFor(this.me);
@@ -15058,6 +15085,31 @@ export class Game {
                 }
 
                 break;
+            // (A horse bought or brought back at a stable, one fallen under them, and a mount
+            // whistle blown: core/host.js #stableService, #horseFell, #whistle)
+            case "horse":
+                if (event.id === this.me) {
+                    this.hud.message(event.change === "bought" ? `You've bought ${event.horse.name}, a ${COAT_WORDS[event.horse.coat] ?? event.horse.coat} horse. Blow their whistle under the open sky to call them.` : `${event.horse.name} is on their feet again.`, 4);
+                    this.onProgress(this.progress);
+                }
+
+                break;
+            case "horseFell":
+                if (event.id === this.me) {
+                    this.hud.message(`${event.name} has fallen! Any stable can bring them back.`, 4);
+                    this.onProgress(this.progress);
+                }
+
+                break;
+            case "whistle": {
+                const avatar = this.avatars.get(event.id);
+
+                if (avatar) {
+                    this.sound?.play("mountWhistle", { at: avatar.object.position });
+                }
+
+                break;
+            }
             case "learnt":
                 // (A spell learnt from a tome: known now, and kept; its sounds downloaded)
                 if (event.id === this.me) {

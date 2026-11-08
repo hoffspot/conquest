@@ -93,7 +93,8 @@ export function errandsOf(layout, [ox, oy], free, { burnt = null } = {}) {
         }
 
         seen.add(`${square[0]},${square[1]}`);
-        errands[kind].push({ square, facing: facingTo([square[0] + 0.5 - ox, square[1] + 0.5 - oy], looking) });
+        // (A stable's: its stablemaster's alone, no one else's to linger at: stablemasterOf)
+        (errands[kind] ??= []).push({ square, facing: facingTo([square[0] + 0.5 - ox, square[1] + 0.5 - oy], looking) });
     };
     // (In front of a piece: its middle, out along the way it faces past its lot's front)
     const before = (piece, out) => {
@@ -128,6 +129,9 @@ export function errandsOf(layout, [ox, oy], free, { burnt = null } = {}) {
             add(piece.use ? "trade" : "home", before(piece, FRONT), [piece.x, piece.y]);
         } else if (piece.kind === "landmark" && DOORS.has(piece.name)) {
             add(piece.name === "church" ? "church" : piece.name, before(piece, FRONT), [piece.x, piece.y]);
+        } else if (piece.kind === "landmark" && piece.name === "stable") {
+            // (Where its stablemaster stands: before its doors, facing out to the street)
+            add("stable", before(piece, STABLE_FRONT), before(piece, STABLE_FRONT + 4));
         }
     }
 
@@ -280,6 +284,30 @@ export function crierOf({ place, kind, people = "human", name = "", errands, see
     const crier = { id: `crier:${place}`, local: "crier", title, role: "crier", look: "crier", sex, seed: hashOf(`${place}/crier|${seed}`), people, map: "town", square: [...stops[0].square], facing: stops[0].facing, routine: { order: "alternate", wait: [4000, 10000], stops }, place, townName: name };
 
     return namePeople([crier], hashOf(`${place}|crier's name|${seed}`), people)[0];
+}
+
+// How far before a stable its stablemaster stands (metres)
+const STABLE_FRONT = 1.6;
+
+/**
+ * A place's stablemaster (core/mounts.js; docs/GAME.md *Riding*), as the host keeps its folk
+ * (townsfolkOf's, their role "stablemaster", their id `stablemaster:${place}`): out before its
+ * stable (errandsOf's "stable"), by the road in, whoever comes near, selling horses and bringing
+ * back fallen ones; or null where there's none (a village, a hamlet: no stable). Who they are
+ * comes from the place and the world's seed, as the townsfolk's does.
+ * @param {object} options - As crierOf's.
+ */
+export function stablemasterOf({ place, people = "human", name = "", errands, seed }) {
+    const [stand] = errands.stable ?? [];
+
+    if (!stand) {
+        return null;
+    }
+
+    const sex = createRandom(hashOf(`${place}|stablemaster|${seed}`)).pick(["m", "m", "f"]);
+    const one = { id: `stablemaster:${place}`, local: "stablemaster", title: "Stablemaster", role: "stablemaster", look: "stablemaster", sex, seed: hashOf(`${place}/stablemaster|${seed}`), people, map: "town", square: [...stand.square], facing: stand.facing, routine: { order: "alternate", wait: [6000, 14000], stops: [{ ...stand, group: "stable", wait: [30000, 60000] }] }, place, townName: name };
+
+    return namePeople([one], hashOf(`${place}|stablemaster's name|${seed}`), people)[0];
 }
 
 /**

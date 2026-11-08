@@ -1005,6 +1005,60 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A town's stablemaster before their stable, by the road in (core/townsfolk.js
+    // stablemasterOf; docs/GAME.md *Riding*): a horse sold, its mount whistle with it ({horsePrice}:
+    // core/mounts.js STABLE; what's paid, the host's: host.js #stableService), and a fallen one
+    // brought back, whichever stable it was bought at ({fallenHorse}, the first of theirs fallen,
+    // {revivedHorse} once it's back; {revivePrice}); whether they've the gold for each ({
+    // horsePurse }, { revivePurse }), and a horse fallen ({ fallen })
+    stablemaster: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { fallen: true }, lines: ["You've the look of someone who's lost a horse. {fallenHorse}, was it? Don't fret: I can bring them back.", "Lost {fallenHorse} out there? It happens to the best riders. For {revivePrice} gold I'll have them on their feet again."] },
+                    { lines: ["Good horses, every one of them. Looking to ride?", "Mind the muck, friend. You'll be wanting a horse, then?", "Steady, steady... Not you: the mare. What can I do for you?"] },
+                ],
+                choices: "more",
+            },
+            more: {
+                say: ["Anything else?", "What'll it be?", "Yes?"],
+                choices: [
+                    { if: { horsePurse: true }, say: "I'd like to buy a horse. ({horsePrice} gold)", next: "sold", do: [{ stable: "buy" }] },
+                    { if: { horsePurse: false }, say: "What does a horse cost?", next: "short" },
+                    { if: { all: [{ fallen: true }, { revivePurse: true }] }, say: "Bring back {fallenHorse}, please. ({revivePrice} gold)", next: "revived", do: [{ stable: "revive" }] },
+                    { if: { all: [{ fallen: true }, { revivePurse: false }] }, say: "Could you bring back {fallenHorse}? ({revivePrice} gold)", next: "reviveShort" },
+                    { say: "How does the whistle work?", next: "whistle" },
+                    { say: "What if my horse falls?", next: "falls" },
+                    FAREWELL,
+                ],
+            },
+            sold: {
+                say: ["There: yours, and this whistle with them. Every horse of mine knows its own whistle's note, and only that one.", "A fine choice. Here's their whistle: keep it close, and they'll never be far."],
+                choices: [{ say: "How do I call them?", next: "whistle" }, { say: "Thank you.", next: "more" }],
+            },
+            short: {
+                say: "{horsePrice} gold, and worth every coin. Come back when your purse is heavier.",
+                choices: [{ say: "I'll be back.", next: "more" }],
+            },
+            revived: {
+                say: ["There. {revivedHorse}'s on their feet and none the worse. Blow the whistle and they'll come.", "Done. A good rub down, a bit of something in the feed, and {revivedHorse}'s ready for the road again."],
+                choices: [{ say: "Thank you.", next: "more" }],
+            },
+            reviveShort: {
+                say: "It's {revivePrice} gold for bringing a horse back, friend. I've the feed and the healer to pay.",
+                choices: [{ say: "I'll be back.", next: "more" }],
+            },
+            whistle: {
+                say: "Blow it out under the open sky, never indoors or underground, and your horse comes up out of the ground in a ring of light, ready for the saddle. Blow it again and you're down, and away they go the same way. Not with foes on you, mind: no horse comes to a fight.",
+                choices: "more",
+            },
+            falls: {
+                say: "Blows meant for you land on your horse while you're up on it. Take enough and it'll fall and throw you. Bring its whistle to me, or to any stable, and I'll bring it back for {revivePrice} gold. And get down before you fight: a horse is for riding, not for war.",
+                choices: "more",
+            },
+        },
+    },
     // A place's crier in its square (core/townsfolk.js crierOf): the war's news since the player
     // last listened to any crier, how much there is ({newsCount}), then a few pieces of it at a
     // time ({news}: each `hear` of it heard, app/game.js #crierOf); whether there's more ({ news }),

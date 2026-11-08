@@ -276,6 +276,18 @@ export const ROLES = Object.freeze({
             { name: "a glance back", hitAt: 1, duration: 2.2 },
         ],
     },
+    // A town's stablemaster before their stable, by the road in (core/townsfolk.js
+    // stablemasterOf), selling horses and bringing fallen ones back (core/mounts.js)
+    stablemaster: {
+        title: "Stablemaster",
+        rests: [
+            { name: "arms folded", hitAt: 1.2, duration: 3.6 },
+            { name: "wiping the brow", hitAt: 1, duration: 2.8 },
+            { name: "looking down the road", hitAt: 1, duration: 3.4 },
+            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "a glance back", hitAt: 1, duration: 2.2 },
+        ],
+    },
     sentry: {
         title: "Sentry",
         fights: true,
