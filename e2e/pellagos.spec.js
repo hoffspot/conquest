@@ -3906,14 +3906,16 @@ test("dragging turns the camera round the player and tilts it; it holds while th
         return { yaw: session.view.yaw, pitch: session.view.pitch, square: [...player.square], width: session.view.canvas.clientWidth, height: session.view.canvas.clientHeight };
     });
 
-    // A drag from off to the side of the player: right and up
-    const [x, y] = [before.width * 0.2, before.height * 0.75];
+    // A drag from off to the side of the player: right and down (down, not up: from the start's 12
+    // degrees, dragged up it'd look within 10 of the horizon, which walking eases it back down
+    // from: camera.js PITCH.walking, the next test)
+    const [x, y] = [before.width * 0.2, before.height * 0.65];
 
     await page.mouse.move(x, y);
     await page.mouse.down();
 
     for (let k = 1; k <= 10; k++) {
-        await page.mouse.move(x + k * 18, y - k * 6);
+        await page.mouse.move(x + k * 18, y + k * 6);
     }
 
     await page.mouse.up();
@@ -3934,10 +3936,10 @@ test("dragging turns the camera round the player and tilts it; it holds while th
 
     const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
-    // Dragged right, it looks further right (turning clockwise from above); dragged up, it looks
-    // further up (tilting lower), by as much as the drag
+    // Dragged right, it looks further right (turning clockwise from above); dragged down, it looks
+    // further down (tilting higher), by as much as the drag
     expect(wrap(dragged.yaw - before.yaw)).toBeCloseTo((-180 / before.width) * Math.PI, 1);
-    expect(dragged.pitch).toBeLessThan(before.pitch - 3);
+    expect(dragged.pitch).toBeGreaterThan(before.pitch + 3);
     expect(dragged.order).toBe(null);
     expect(dragged.held.yaw).toBeCloseTo(dragged.yaw, 5);
     expect(dragged.held.pitch).toBeCloseTo(dragged.pitch, 5);
