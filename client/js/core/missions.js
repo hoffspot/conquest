@@ -26,8 +26,14 @@ import { SUPPLY } from "./war/supply.js";
 /** How near something must be (metres) for a messenger to come about it. */
 export const MISSION_REACH = 2000;
 
-/** How long between messengers to a player or their party (war turns: a minute's play each). */
-export const MESSENGER_EVERY = 10;
+/**
+ * How long between messengers to a player or their party: half an hour of play (ms of the world's
+ * own clock as it's played, the same on every copy of it; not its war turns, which a night's sleep
+ * runs on by hours). Kept by the world for each player who's heard one (core/host.js
+ * `messengersHeard`), so it holds however they come and go: joined again, or with a character
+ * kept elsewhere.
+ */
+export const MESSENGER_EVERY = 30 * 60 * 1000;
 
 /** The most war missions a player carries at once. */
 export const MOST_MISSIONS = 2;
