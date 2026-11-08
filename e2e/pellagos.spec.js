@@ -3528,7 +3528,8 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && window.pellagos.game.avatars.has([...window.pellagos.game.host.companions.keys()][0]), { seconds: 60 })).toBe(true);
 
     // Its icon, its likeness once it's drawn (a tenth of a second at a time: each look draws a
-    // frame, slow on a slow runner, and the likeness waits half a second of play)
+    // frame, slow on a slow runner, slower looking out across the land from the start view, and
+    // the likeness waits half a second of play)
     await page.waitForFunction(
         () => {
             window.pellagos.game.advance(0.1);
@@ -3536,7 +3537,7 @@ test("the player's party: a creature called to their side has an icon down the l
             return document.querySelector("#party .member.summon.painted");
         },
         null,
-        { timeout: 20000 },
+        { timeout: 60000 },
     );
 
     const icon = await page.evaluate(() => {
