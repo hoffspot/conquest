@@ -258,7 +258,7 @@ describe("riding (battle.js mount)", () => {
     });
 
     it("gets its rider down first when they go to fight, quickly, and they strike once they're down", () => {
-        const { battle, me } = riding();
+        const { battle } = riding();
 
         battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [22, 30], hp: 500 }).stunnedUntil = 1e9;
         battle.command("me", { type: "engage", target: "orc" });
