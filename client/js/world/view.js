@@ -101,18 +101,23 @@ export const startDistance = (upright) => (upright ? DISTANCE.upright : DISTANCE
 // head (`sideways`), so they stand in the lower middle of the picture with what's above the way
 // ahead in it (a name board over a door they've walked up to; the camera looking over their head
 // at the ground from 7 m on); nearer them (zoomed in, or drawn in by a wall behind them), coming
-// down to their middle (`middle`) with it, so they're kept in the picture; eased to their middle
-// as a phone's turned upright (PORTRAIT: as its framing is); and their middle indoors, under the
+// down to their middle (`middle`) with it, so they're kept in the picture; looking out across the
+// land, `level` degrees down from the horizon or less (the start's tilt, camera.js PITCH.start),
+// over their head, and tilted down onto them, coming down to their middle with it, there from
+// `down` degrees down (the higher view the camera once started in); eased to their middle as a
+// phone's turned upright (PORTRAIT: as its framing is); and their middle indoors, under the
 // ceilings (lookUpFor)
-export const LOOK_UP = Object.freeze({ sideways: 2.4, middle: 0.8 });
+export const LOOK_UP = Object.freeze({ sideways: 2.4, middle: 0.8, level: 12, down: 35 });
 
 /**
- * What the camera looks at from `distance` metres back (metres over the ground the player stands
- * on: LOOK_UP), `upright` of the way (0 to 1) to a phone held upright's framing, indoors (`room`)
- * or out.
+ * What the camera looks at from `distance` metres back, looking `pitch` degrees down from the
+ * horizon (metres over the ground the player stands on: LOOK_UP), `upright` of the way (0 to 1) to
+ * a phone held upright's framing, indoors (`room`) or out.
  */
-export function lookUpFor(distance, upright = 0, room = false) {
-    const out = room ? 0 : Math.max(0, Math.min(1, distance / DISTANCE.start)) * (1 - upright);
+export function lookUpFor(distance, upright = 0, room = false, pitch = LOOK_UP.level) {
+    const back = Math.max(0, Math.min(1, distance / DISTANCE.start));
+    const across = Math.max(0, Math.min(1, (LOOK_UP.down - pitch) / (LOOK_UP.down - LOOK_UP.level)));
+    const out = room ? 0 : back * across * (1 - upright);
 
     return LOOK_UP.middle + (LOOK_UP.sideways - LOOK_UP.middle) * out;
 }
@@ -1098,9 +1103,9 @@ export class View {
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio) * (this.renderScale ?? 1) * this.adaptiveScale);
     }
 
-    /** What the camera looks at from `distance` metres back, how far over the ground the player stands on (metres: lookUpFor). */
-    lookUpAt(distance = this.distance) {
-        return lookUpFor(distance, this.upright, Boolean(this.room));
+    /** What the camera looks at from `distance` metres back, `pitch` degrees down, how far over the ground the player stands on (metres: lookUpFor). */
+    lookUpAt(distance = this.distance, pitch = this.pitch) {
+        return lookUpFor(distance, this.upright, Boolean(this.room), pitch);
     }
 
     /** Whether the screen's held upright (taller than it's wide, as a phone's held: PORTRAIT). */
@@ -1254,7 +1259,7 @@ export class View {
         const tilt = (pitch * Math.PI) / 180;
         const [across, up] = [Math.cos(tilt), Math.sin(tilt)];
         const [dx, dz] = [Math.sin(yaw) * across, Math.cos(yaw) * across];
-        const [x0, y0, z0] = [this.focus.x, this.focus.y + this.lookUpAt(distance), this.focus.z];
+        const [x0, y0, z0] = [this.focus.x, this.focus.y + this.lookUpAt(distance, pitch), this.focus.z];
         let nearest = Infinity;
 
         for (const side of [0, -PULL.wide, PULL.wide]) {
@@ -1497,7 +1502,7 @@ export class View {
         // (Looking up, the camera comes down behind the player to just over the ground where they
         // stand, then tilts up from there)
         const floor = this.ground ? this.ground(focus.x, focus.z) : 0;
-        const up = this.lookUpAt(distance);
+        const up = this.lookUpAt(distance, asked.pitch);
         const tilted = Math.max(looking, Math.asin(Math.max(-1, Math.min(0, (floor + CAMERA_FLOOR - focus.y - up) / distance))));
         let pitch = tilted;
 
@@ -2371,7 +2376,7 @@ export class View {
         const { occluders, props } = this;
         const heights = props ? { at: (x, z) => Math.max(occluders.at(x, z), props.at(x, z)) } : occluders;
 
-        _eye.set(this.focus.x + Math.sin(yaw) * across, this.focus.y + this.lookUpAt(distance) + Math.sin(tilt) * distance, this.focus.z + Math.cos(yaw) * across);
+        _eye.set(this.focus.x + Math.sin(yaw) * across, this.focus.y + this.lookUpAt(distance, pitch) + Math.sin(tilt) * distance, this.focus.z + Math.cos(yaw) * across);
 
         // (Each seen at its knees as well as its chest: a prop hides the one, a building both)
         return points.filter((point) => this.hidden(point, _eye, heights) || this.hidden(_knee.copy(point).setY(point.y - 0.6), _eye, heights)).length;

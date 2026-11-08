@@ -1392,7 +1392,10 @@ far back as the screen's held (view.js `startDistance`):
   of the door. And from 5.5 metres 15 degrees down at their middle, their own head and shoulders
   hid what was straight ahead of them 5 to 25 metres off.) It looks that far up from the start's
   distance or further; nearer them, zoomed in or drawn in by a wall behind them, the point comes
-  down to their middle with the camera, so they're kept in the picture.
+  down to their middle with the camera, so they're kept in the picture. And it looks that far up
+  looking out across the land, 12 degrees down or less (`LOOK_UP.level`); tilted down onto them,
+  the point comes down to their middle, there from 35 degrees down (`LOOK_UP.down`, the higher
+  view the camera once started in).
 - **On a phone held upright,** 5.5 metres back (`DISTANCE.upright`), looking down 15 degrees
   (`PITCH.upright`, `startPitch`) at their middle (0.8 metres up: `LOOK_UP.middle`), which the
   upright framing (below) makes about 21 degrees from 7 metres, low over their shoulder.

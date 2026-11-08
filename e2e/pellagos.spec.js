@@ -186,12 +186,12 @@ async function toldOf(page, pattern) {
     return page.evaluate(([source, flags]) => window.pellagos.game.messages.map(({ text }) => text).find((text) => new RegExp(source, flags).test(text)) ?? null, [pattern.source, pattern.flags]);
 }
 
-// The camera looking down on the player from higher (35 degrees from 10.5 m, as it started before
-// it started close behind them, then 12 degrees down from as far, over their head: camera.js
-// startPitch, view.js startDistance),
-// for a test of tapping or holding on what's about them: seen from close behind them, what's a
-// few metres straight ahead of them, the way the camera looks, is behind them on the screen, and
-// a tap on it is on them. (Played on a frame, so the camera's there)
+// The camera looking down on the player from higher (35 degrees from 10.5 m, at their middle: as it
+// started before it started close behind them, and then 12 degrees down from as far, over their
+// head: camera.js startPitch, view.js startDistance, lookUpFor), for a test of tapping or holding
+// on what's about them: seen from close behind them, what's a few metres straight ahead of them,
+// the way the camera looks, is behind them on the screen, and a tap on it is on them. (Played on a
+// frame, so the camera's there)
 async function overlook(page) {
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
