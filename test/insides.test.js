@@ -31,6 +31,7 @@ const { ROLES } = await import("../client/js/core/roles.js");
 const { PLOT, SHOP_LANDMARKS } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
 const { buildInterior, buildingInterior, doorways } = await import("../client/js/world/interiors3d.js");
+const { standsAt } = await import("../client/js/world/town3d.js");
 
 const { reachable } = await import("./helpers.js");
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -590,6 +591,30 @@ describe("the buildings (insides.js Interiors)", () => {
                 assert.ok(interior.object.children.length > 0, `${kind}: ${id}`);
                 assert.deepEqual(inDoorways(world.maps[id], interior), [], `${kind}: ${id}`);
                 interior.dispose();
+            }
+        }
+
+        // (Each front door's glow standing on its floor as its building's built (town3d.js
+        // standsAt: on a slope, the ground at its door's foot); a site's way in, with no lot, on
+        // the ground before it)
+        doors.sync();
+
+        const town = world.maps.town;
+        const fronts = doors.targets.filter(({ link, map }) => link.kind === "door" && map === "town");
+
+        assert.ok(fronts.length > 10);
+
+        for (const { link, end, box } of fronts) {
+            const building = interiors.buildings.get(link.building);
+            const door = end.door ?? world.tavern.door;
+
+            assert.ok([box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z].every(Number.isFinite), link.id);
+
+            if (building?.piece?.kind) {
+                const [x, y] = building.at;
+                const stands = standsAt(building.piece, (px, py) => town.heightAt(px, py), [x - building.piece.x, y - building.piece.y]);
+
+                assert.ok(Math.abs(box.min.y - (stands + door.floor - 0.06)) < 1e-6, link.id);
             }
         }
     });
