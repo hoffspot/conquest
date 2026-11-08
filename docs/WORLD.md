@@ -1053,7 +1053,14 @@ The world is played on the land's height with what's built levelled into it (`Gr
   steeper than 8 % (`PAD_TILT`); half of seed 1's settlements tilt 1.5 % or less, and nine are held
   to 8 %. The lizard folk's stay level, round their lagoons' water. Where the ground under what's
   built rises or falls 0.3 m or more across it, it stands at its highest corner on a stone
-  foundation down past its lowest (`world/town3d.js grounded`).
+  foundation down past its lowest (`world/town3d.js grounded`; the cat folk's of mud brick). But
+  never a foundation under where people walk: a building that can be gone into stands on the
+  ground at its door's foot (half a metre out), its foundation stopping at its door's line and the
+  rest of it sunk into the ground as it rises behind; and a gatehouse stands on the lowest ground
+  under its way through (the middle 60 % of its width), its foundation either side of the way
+  (`standsAt`, `walkedOf`). Before, the strip before a door and a gate's way had a foundation's
+  top over the ground they're walked on, and whoever walked there stood in it to the knees. The
+  light at a door (`app/doors.js`) stands as its building does.
 - **Pads and roads:** on a pad, its own height; off them, the roads are levelled into the land as
   the pads have eased it (a road's own height is its profile's, which has the settlements' pads
   in it already), so no road's surface is eased twice. The sites no people keeps lie with the
