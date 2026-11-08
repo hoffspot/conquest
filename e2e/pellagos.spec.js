@@ -16861,7 +16861,12 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await page.locator("#resumebutton").click();
     await expect(menu).toBeHidden();
 
-    // Held on the player: wheel one; flicked down, wheel two, opened again under the finger
+    // Held on the player (the camera looking down on them, as overlook: from the start view,
+    // looking out across the land, a frame drawn in software takes long enough that the wheel
+    // shown a moment after the hold may not be looked at in time): wheel one; flicked down, wheel
+    // two, opened again under the finger
+    await overlook(page);
+
     const me = await page.evaluate(() => {
         const { game, session } = window.pellagos;
 
