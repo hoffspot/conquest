@@ -408,6 +408,9 @@ nowhere, and `?gaze=camera`).
   (`actions.fall`); and dead, it doesn't look at anything, easing back to as it's posed.
 - **Not behind it.** Anything further round than 110° (`behind`) it doesn't look at: ahead
   instead.
+- **Not craning at someone close.** Someone nearer than a metre across the ground (`near`) is
+  looked up or down at as if they were a metre off: a little taller and right beside it, they're
+  not craned up at, as a messenger did at a player who'd walked up to them.
 - **Glancing** (`glance`): with nothing to look at, every 1.2 to 4.5 seconds it looks somewhere
   new, half the time straight ahead, else up to 20° to either side, 6° up or 12° down.
 - **The eyes turn in their own shader** (`lookingEyes`): there are no bones for them (Mixamo's

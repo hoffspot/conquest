@@ -1991,8 +1991,11 @@ and go: joined again, or with a character kept from before or elsewhere (their s
 `messengerAt` is only the war's turn it came on).
 
 **The messenger** (`#putMessenger`): one of the player's people's folk, in a tunic and jerkin, a cap
-or hood, with a ledger in hand (characters/folk.js `messenger`), put 40 m off (`MESSENGER.from`) the way
-from whoever sent them, and walking up. The player's told "A messenger from King Redhelm of the
+or hood, with a ledger in hand (characters/folk.js `messenger`), and a scroll floating over their
+head so it's plain at a glance who they are: a roll of parchment, its rods' ends dark wood, a red
+ribbon and seal round its middle, bobbing up and down a little and turning slowly, glowing faintly
+to be seen at dusk (world/scroll3d.js `SCROLL`; game.js `#scrollOver`). Put 40 m off
+(`MESSENGER.from`) the way from whoever sent them, and walking up. The player's told "A messenger from King Redhelm of the
 Kingdom of Mardenmoor is coming to find you." Within 3.5 m (`hail`) they hail them, and wait: "Ralf
 Holt, a messenger from King Redhelm of the Kingdom of Mardenmoor, has found you. Tap them to hear
 what they bring." (The talk isn't opened over whatever the player's doing.) Tapped, they talk (the
@@ -2000,10 +2003,16 @@ what they bring." (The talk isn't opened over whatever the player's doing.) Tapp
 player's rank and what the next rank would have, with "The higher your rank with us, the more we
 give." The player takes it ("Tell them it will be done.") or
 turns it down ("Not this time.", free; none comes again for half an hour of play). A messenger left
-unanswered waits a minute (`wait`; while the player's in a fight, till it's over and a minute
-after: `#beset`), following a player who walks off and giving up past 120 m
-(`far`); five minutes if the player's gone indoors or underground (`outside`), where they went in;
-then goes back the way they came, let go of once 60 m from every player (`gone`) or after 30 s.
+unanswered follows the player about for a minute from when they found them (`follow`; or from
+when they set out, if they never did), going after them again whenever they're more than 10.5 m
+off (`apart`), and no further than 120 m (`far`). Then they stay where they've got to for three
+minutes more (`stay`; the "staying" state, the player told "Ralf Holt will wait for you there a
+little while."), for the player to come back to; and five minutes outside, where they went in, if
+the player's gone indoors or underground (`outside`). While the player's in a fight, their clocks
+stop (`#beset`): what they were doing is finished first. Then they go back the way they came, let
+go of once 60 m from every player (`gone`) or after 30 s. A messenger standing close by looks at
+the player's face as if they were a metre off (characters/gaze.js `GAZE.near`), not craning up at
+one a little taller beside them.
 
 **What it pays** (`rewardOf`): each kind's gold and standing (80 to 160 gold, 40 to 80 standing),
 30% more for each rank above the first (`RANK_PAY`), and the pick of three pieces from the
@@ -2051,9 +2060,11 @@ same people, at each one's own rank, each paid and choosing their own piece (`#m
 
 **Kept.** The messengers out are in the host's snapshot (`messengers`, `nextMessenger`;
 `SNAPSHOT_VERSION` 49, none in a world kept before), the folk record with them; and when one last
-came for each player (`messengersHeard`: `SNAPSHOT_VERSION` 50, none in a world kept before). What
-two games share changed (`NET_VERSION` 212: the `mission` command, `pick` and `giveUp`; the
-`messenger` and `mission` events; and with the half hour between them, 216).
+came for each player (`messengersHeard`: `SNAPSHOT_VERSION` 50, none in a world kept before), and
+each one's clocks (`found`, `arrived`: `SNAPSHOT_VERSION` 51, from when they last set out or came
+up in a world kept before). What two games share changed (`NET_VERSION` 212: the `mission`
+command, `pick` and `giveUp`; the `messenger` and `mission` events; with the half hour between
+them, 216; and with their following, then staying, and the `messenger` event's "staying", 217).
 
 ### The war table (M21)
 

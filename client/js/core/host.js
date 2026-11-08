@@ -191,13 +191,16 @@ export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close:
 
 /**
  * The war's messengers to a player (core/missions.js), and a commander come to brief one: how far
- * off one's put out (metres), how near they come to hail them, how long they wait for an answer
- * once there (ms), how long they wait outside for one gone in somewhere (ms), how far the player
- * can go before they give up (metres), how far off they're let go of as they leave (metres), how
- * long they're given to get there (ms), how often a way to the player's looked at again (ms),
- * and how often the players are looked at for a messenger to send (ms).
+ * off one's put out (metres), how near they come to hail them; how long they follow the player
+ * about for an answer (ms, from when they first found them, or set out, if they never did: going
+ * after them again once they're `apart` metres off, and no further than `far` metres), and then
+ * how long they stay where they've got to, waiting (ms), the clock stopped while the player's in a
+ * fight; how long they wait outside for one gone in somewhere (ms); how far off they're let go of
+ * as they leave (metres), and how long they're given to get there (ms); how often a way to the
+ * player's looked at again (ms), and how often the players are looked at for a messenger to send
+ * (ms).
  */
-export const MESSENGER = Object.freeze({ from: 40, hail: 3.5, wait: 60000, outside: 300000, far: 120, gone: 60, leave: 30000, reroute: 1500, every: 3000 });
+export const MESSENGER = Object.freeze({ from: 40, hail: 3.5, follow: 60000, apart: 10.5, far: 120, stay: 180000, outside: 300000, gone: 60, leave: 30000, reroute: 1500, every: 3000 });
 
 /**
  * A storm near a player (docs/WAR.md *A storm near a player*): an army's camp held and stormed in
@@ -720,7 +723,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 50;
+export const SNAPSHOT_VERSION = 51;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -891,6 +894,10 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 50: when a messenger last came for each player, by the world's own clock (none kept before:
     // each player's next no later for it than it would have been)
     49: (snapshot) => ({ ...snapshot, version: 50, ...(snapshot.messengers ? { messengersHeard: [] } : {}) }),
+    // 51: each messenger's clocks (core/host.js #messengersAbout): when they first found the one
+    // they came to (as it would have been: when they last set out or came up to them), and
+    // whether they had
+    50: (snapshot) => ({ ...snapshot, version: 51, ...(snapshot.messengers ? { messengers: snapshot.messengers.map(([id, one]) => [id, { ...one, found: one.found ?? one.since, arrived: one.arrived ?? one.state !== "coming" }]) } : {}) }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -17130,9 +17137,13 @@ export class Host {
 
     // The messengers and commanders out: walking to the one they've come to (their way looked at
     // again as they go), hailing them once near (the "messenger" event "arrived": their game opens
-    // the talk), waiting a while for an answer, outside for one gone in somewhere; giving up on one
-    // who's gone off, or dead; leaving once answered, and let go of once out of sight
+    // the talk); following them about a while for an answer (MESSENGER.follow), then staying where
+    // they've got to a while longer (`stay`, the "staying" state), their clocks stopped while the
+    // player's in a fight; waiting outside for one gone in somewhere; leaving once answered, given
+    // up on, or the one they came to dead, and let go of once out of sight
     #messengersAbout() {
+        const now = this.battle.time;
+
         for (const one of [...this.messengers.values()]) {
             const me = this.battle.actor(one.folk);
             const lead = this.players.get(one.lead);
@@ -17146,7 +17157,7 @@ export class Host {
             if (one.state === "leaving") {
                 const far = !this.#nearAnyPlayer([me.x, me.y], MESSENGER.gone);
 
-                if (far || this.battle.time - one.since > MESSENGER.leave) {
+                if (far || now - one.since > MESSENGER.leave) {
                     this.#messengerGone(one);
                 }
 
@@ -17158,13 +17169,25 @@ export class Host {
                 continue;
             }
 
+            // (Their clocks stopped while the player's in a fight: what they were doing finished
+            // first)
+            const passed = now - (one.checked ?? now);
+
+            one.checked = now;
+            one.found ??= one.since;
+
+            if (this.#beset(them)) {
+                one.found += passed;
+                one.since += passed;
+            }
+
             // (Gone in somewhere: waiting outside, where they are, a while)
             if (them.map !== "town") {
                 if (one.state !== "outside") {
                     one.state = "outside";
-                    one.since = this.battle.time;
-                    this.battle.reroute(me.id, { order: "cycle", wait: [4000, 8000], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
-                } else if (this.battle.time - one.since > MESSENGER.outside) {
+                    one.since = now;
+                    this.#messengerStands(me);
+                } else if (now - one.since > MESSENGER.outside) {
                     this.#messengerLeaves(one, "gone");
                 }
 
@@ -17173,6 +17196,23 @@ export class Host {
 
             const far = hypot(them.x - me.x, them.y - me.y);
 
+            // (Done following them: staying where they are, a while longer)
+            if (one.state === "staying") {
+                if (now - one.since > MESSENGER.stay) {
+                    this.#messengerLeaves(one, "gone");
+                }
+
+                continue;
+            }
+
+            if (now - one.found > MESSENGER.follow || far > MESSENGER.far + (one.state === "coming" ? MESSENGER.from : 0)) {
+                one.state = "staying";
+                one.since = now;
+                this.#messengerStands(me);
+                this.#event("messenger", { change: "staying", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players] });
+                continue;
+            }
+
             if (one.state === "outside") {
                 one.state = "coming";
                 one.routed = -Infinity;
@@ -17180,34 +17220,35 @@ export class Host {
 
             if (one.state === "coming") {
                 if (far <= MESSENGER.hail) {
+                    // (Found: following them from now on, if they'd not found them before)
+                    if (!one.arrived) {
+                        one.found = now;
+                        one.arrived = true;
+                    }
+
                     one.state = "waiting";
-                    one.since = this.battle.time;
+                    one.since = now;
                     me.facing = atan2(them.x - me.x, them.y - me.y);
-                    this.battle.reroute(me.id, { order: "cycle", wait: [MESSENGER.wait, MESSENGER.wait], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
+                    this.#messengerStands(me);
                     this.#event("messenger", { change: "arrived", messenger: one.id, kind: one.kind, folk: one.folk, players: [...one.players], lead: one.lead, ...this.#messengerSays(one) });
-                } else if (far > MESSENGER.far + MESSENGER.from) {
-                    this.#messengerLeaves(one, "gone");
-                } else if (this.battle.time - one.routed >= MESSENGER.reroute) {
-                    one.routed = this.battle.time;
+                } else if (now - one.routed >= MESSENGER.reroute) {
+                    one.routed = now;
 
                     const step = Math.max(0, far - MESSENGER.hail * 0.6) / Math.max(far, 1e-6);
 
                     this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(me.x + (them.x - me.x) * step), Math.floor(me.y + (them.y - me.y) * step)], facing: atan2(them.x - me.x, them.y - me.y) }] });
                 }
-            } else if (one.state === "waiting") {
-                // (While they're in a fight, they wait till it's over, and their while after it)
-                if (this.#beset(them)) {
-                    one.since = this.battle.time;
-                }
-
-                if (far > MESSENGER.far || this.battle.time - one.since > MESSENGER.wait) {
-                    this.#messengerLeaves(one, "gone");
-                } else if (far > MESSENGER.hail * 3 && this.battle.actor(lead.id).talkingTo !== one.folk) {
-                    one.state = "coming";
-                    one.routed = -Infinity;
-                }
+            } else if (one.state === "waiting" && far > MESSENGER.apart && this.battle.actor(lead.id).talkingTo !== one.folk) {
+                // (Walked off: after them)
+                one.state = "coming";
+                one.routed = -Infinity;
             }
         }
+    }
+
+    // A messenger stood where they are, facing as they face, till they're sent on
+    #messengerStands(me) {
+        this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
     }
 
     // What a messenger or commander says as they arrive, for the talk: the mission offered (a
