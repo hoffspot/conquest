@@ -720,7 +720,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 49;
+export const SNAPSHOT_VERSION = 50;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -888,6 +888,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 49: the war's messengers out to players and the commanders come to brief them (none yet);
     // each player's war missions are kept with their standing (core/standing.js: none yet)
     48: (snapshot) => ({ ...snapshot, version: 49, messengers: [], nextMessenger: 1 }),
+    // 50: when a messenger last came for each player, by the world's own clock (none kept before:
+    // each player's next no later for it than it would have been)
+    49: (snapshot) => ({ ...snapshot, version: 50, ...(snapshot.messengers ? { messengersHeard: [] } : {}) }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1489,6 +1492,8 @@ export class Host {
          */
         this.messengers = new Map();
         this.nextMessenger = 1;
+        // (When a messenger last came for each player, by the world's own clock: #sendMessengers)
+        this.messengersHeard = new Map();
         this.nextStranger = 1;
 
         /**
@@ -3065,7 +3070,7 @@ export class Host {
             ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
             ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
             ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
-            ...(this.nextMessenger > 1 ? { messengers: structuredClone([...this.messengers.entries()]), nextMessenger: this.nextMessenger } : {}),
+            ...(this.nextMessenger > 1 ? { messengers: structuredClone([...this.messengers.entries()]), nextMessenger: this.nextMessenger, messengersHeard: [...this.messengersHeard.entries()] } : {}),
             ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
             ...(this.nextAmbush > 1 ? { ambushes: structuredClone([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
             ground: structuredClone([...this.ground.values()]),
@@ -3266,6 +3271,7 @@ export class Host {
         // (The war's messengers out, and commanders come to brief: core/missions.js)
         host.messengers = new Map(structuredClone(snapshot.messengers ?? []));
         host.nextMessenger = snapshot.nextMessenger ?? 1;
+        host.messengersHeard = new Map(snapshot.messengersHeard ?? []);
 
         for (const one of host.messengers.values()) {
             host.folk.set(one.record.id, one.record);
@@ -17019,7 +17025,8 @@ export class Host {
     }
 
     // A messenger sent to each party or player that may hear one (#mayHearMessenger), every one of
-    // them MESSENGER_EVERY war turns since the last, with no messenger already on the way: about
+    // them half an hour of play since the last came for them (MESSENGER_EVERY, by the world's own
+    // clock: `messengersHeard`), with no messenger already on the way: about
     // the nearest thing of the war within reach of whoever they walk to (core/missions.js
     // missionsNear), at their rank
     #sendMessengers() {
@@ -17036,7 +17043,7 @@ export class Host {
         for (const group of this.#missionGroups()) {
             const lead = group.find((player) => this.#mayHearMessenger(player));
 
-            if (!lead || group.some((player) => out.has(player.id) || (player.standing.messengerAt !== null && war.turn - player.standing.messengerAt < MESSENGER_EVERY))) {
+            if (!lead || group.some((player) => out.has(player.id) || this.battle.time - (this.messengersHeard.get(player.id) ?? -Infinity) < MESSENGER_EVERY)) {
                 continue;
             }
 
@@ -17107,8 +17114,11 @@ export class Host {
 
         this.messengers.set(id, one);
 
+        // (When it came for them, by the world's own clock: the next no sooner than MESSENGER_EVERY
+        // after it, whatever they do meanwhile; and, with their standing, the war's turn)
         if (!briefing) {
             for (const player of players) {
+                this.messengersHeard.set(player.id, this.battle.time);
                 player.standing.messengerAt = this.war.turn;
             }
         }
