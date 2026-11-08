@@ -16897,6 +16897,11 @@ test("magic: the spellbook shows every school and the tomes; an element opened b
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, each frame of the greatest spells' light is slow enough to draw in software that
+    // the summons asked after it is drawn again before it's clicked)
+    await overlook(page);
+
     const book = page.locator(".spellbook");
 
     // Play on without drawing, then carry on
