@@ -23,6 +23,7 @@ import { circleOf, rumoursNear, rumourWord, warningOf } from "./rumours.js";
 import { compass, wayOf } from "./ways.js";
 import { landAt } from "./worldplan/plan.js";
 import { KEEP_MISSIONS, MISSIONS, MOST_MISSIONS } from "./missions.js";
+import { dueAt, onTheRoad, turnsTo } from "./hurry.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
 export const STANDINGS = Object.freeze([
@@ -286,8 +287,10 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         kinds.push("rout");
     }
 
-    // The keep's envoys seen safe on the road, and an enemy's stopped (from a Knight up)
-    const envoys = post === "keep" ? war.forces.filter((force) => force.kind === "envoy") : [];
+    // The keep's envoys seen safe on the road, and an enemy's stopped (from a Knight up): those a
+    // player setting out from here could meet on it before it ends (core/hurry.js onTheRoad)
+    const met = (force) => onTheRoad(town.at, force, war.turn).met;
+    const envoys = post === "keep" ? war.forces.filter((force) => force.kind === "envoy" && met(force)) : [];
     const ours = rank >= OPENS.escort ? envoys.filter((envoy) => war.liege(envoy.realm) === liege && !has("escort", envoy.id)) : [];
     const theirs = rank >= OPENS.waylay ? envoys.filter((envoy) => war.hostile(liege, war.liege(envoy.realm)) && !has("waylay", envoy.id)) : [];
 
@@ -302,11 +305,13 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     // The keep's convoys seen in with their goods, and an enemy's fallen on; the people's works
     // others hold won back, and an enemy's taken (the works and their goods are what the war's
     // towers and garrisons are built of)
-    const convoys = post === "keep" ? war.forces.filter((force) => force.kind === "convoy" && force.cargo && !force.back) : [];
+    const convoys = post === "keep" ? war.forces.filter((force) => force.kind === "convoy" && force.cargo && !force.back && met(force)) : [];
     const ourConvoys = rank >= OPENS.convoy ? convoys.filter((convoy) => war.liege(convoy.realm) === liege && !has("convoy", convoy.id)) : [];
     const theirConvoys = rank >= OPENS.plunder ? convoys.filter((convoy) => war.hostile(liege, war.liege(convoy.realm)) && !has("plunder", convoy.id)) : [];
     const works = post === "keep" ? (war.works ?? []) : [];
-    const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.liege(each.owner) !== liege) && !has("retake", each.id)) : [];
+    // (Won back from brigands, or from a people at war with them: there's no winning works from
+    // one at peace)
+    const lost = rank >= OPENS.retake ? works.filter((each) => war.liege(each.race) === liege && (each.held || war.hostile(liege, war.liege(each.owner))) && !has("retake", each.id)) : [];
     const theirWorks = rank >= OPENS.seize ? works.filter((each) => !each.held && war.hostile(liege, war.liege(each.owner)) && war.liege(each.race) !== liege && !has("seize", each.id)) : [];
 
     // An enemy's town taken, its whole garrison put to the sword, while the age lets towns of its
@@ -331,6 +336,11 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const { title, turns, reward } = REQUESTS[kind];
     const from = { id: giver.id, name: giver.name, title: giver.title, town: town.id, townName: town.name, post };
     const base = { kind, title, from, given: war.turn, state: "open", count: 0 };
+    // (Its time, with the way there besides; and the turn a player hurrying there from here would
+    // have had their chance by: core/hurry.js, docs/WAR.md *A fair chance*)
+    const timeFor = (at) => war.turn + turns + turnsTo(town.at, at);
+    const dueBy = (at) => dueAt(town.at, at, war.turn);
+    const meetBy = (force) => onTheRoad(town.at, force, war.turn).due;
 
     switch (kind) {
         case "message": {
@@ -382,7 +392,9 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
         case "scout": {
             const { key, target, what } = random.pick(scouting);
 
-            return { ...base, key, target, text: `Go and look at ${what}: how many, how armed, how dug in. Then come back and tell me.`, until: war.turn + turns, reward: worth(reward.standing, reward.gold) };
+            const going = war.force(target.force)?.path?.at(-1) ?? target.at;
+
+            return { ...base, key, target, text: `Go and look at ${what}: how many, how armed, how dug in. Then come back and tell me.`, until: Math.max(timeFor(target.at), timeFor(going)), reward: worth(reward.standing, reward.gold) };
         }
         case "defend": {
             const { town: held, camp } = random.pick(threatened);
@@ -393,6 +405,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { town: held.id, name: held.name, at: [...held.at], camp: camp.id, realm: camp.realm },
                 text: `${war.realm(camp.realm).name} have camped within a march of ${held.name}. Get there, and help hold it until they're gone.`,
                 until: null,
+                due: dueBy(held.at),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -404,7 +417,8 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: camp.id,
                 target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: held.id, name: held.name },
                 text: `${war.realm(camp.realm).name} have a camp outside ${held.name}. Take what help you can find, and break it up: bring its soldiers down until it's too few to hold.`,
-                until: war.turn + turns,
+                until: timeFor(camp.at),
+                due: dueBy(camp.at),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -418,6 +432,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: envoy.id, realm: envoy.target, at: [...envoy.at], name: `our envoy to ${to.name}` },
                 text: `Our envoy is on the road to ${to.name}, and not everyone wants them to get there. Find them, and see them safe to ${war.town(to.seat)?.name ?? "their seat"}.`,
                 until: null,
+                due: meetBy(envoy),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -431,6 +446,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: envoy.id, realm: envoy.realm, at: [...envoy.at], name: `the envoy of ${from.name}` },
                 text: `${from.name} have an envoy on the road, and whatever they carry, it's no good to us. See they don't get where they're going.`,
                 until: null,
+                due: meetBy(envoy),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -445,6 +461,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: convoy.id, realm: convoy.realm, at: [...convoy.at], name: `our convoy of ${load}`, works: convoy.home },
                 text: `A convoy of ${Math.round(amount)} ${load} is on the road from ${worksName(war, convoy.home)} to ${to?.name ?? "the seat"}, and there are those who'd have it. Find it, and see it in.`,
                 until: null,
+                due: meetBy(convoy),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -459,6 +476,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 target: { force: convoy.id, realm: convoy.realm, at: [...convoy.at], name: `the convoy of ${from.name}`, works: convoy.home },
                 text: `${from.name} have a convoy of ${load} on the road from ${worksName(war, convoy.home)}: their towers and garrisons are built of it. Fall on it, bring its guard down, and its goods are ours.`,
                 until: null,
+                due: meetBy(convoy),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -473,7 +491,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 text: works.held
                     ? `Brigands hold ${name}, and nothing comes from it. Put them to the sword, and it's ours again.`
                     : `${war.realm(works.owner).name} hold ${name}, and its goods go to them. Bring its guard down, and win it back for us.`,
-                until: war.turn + turns,
+                until: timeFor(works.at),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -486,7 +504,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: works.id,
                 target: { works: works.id, at: [...works.at], name: name.replace(/^the /, ""), realm: works.owner },
                 text: `${name[0].toUpperCase()}${name.slice(1)} keeps ${war.realm(works.owner).name} in ${YIELDED[works.kind] ?? "goods"}. Bring its guard down and it's ours, and its goods with it.`,
-                until: war.turn + turns,
+                until: timeFor(works.at),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -499,7 +517,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: there.id,
                 target: { town: there.id, at: [...there.at], name: there.name, realm: there.owner, quarters },
                 text: `${there.name} is held by ${war.realm(there.owner).name}. Put its whole garrison to the sword: its guards and patrols, and the guardsmen and their captain in its ${quarters}, and it's ours: our soldiers in it, and its taxes ours.`,
-                until: war.turn + turns,
+                until: timeFor(there.at),
                 reward: worth(reward.standing, reward.gold),
             };
         }
@@ -975,14 +993,23 @@ function threatenedTowns(war, realm) {
 }
 
 /**
+ * Where a request's to be told of once it's done (or a tithe paid): to whoever gave it (`from`:
+ * { town, townName, post, name }); or, their town lost to the player's people since, to the
+ * nearest of their people's towns with someone to tell (`back`: core/host.js #sendBack).
+ */
+export const handInAt = (request) => request.back ?? request.from;
+
+/**
  * Where a request's taking the player (for the journal and the maps): [x, y] metres, or null;
  * and its name.
  */
 export function whereTo(request, war) {
-    const { target, from, state } = request;
+    const { target, state } = request;
 
     if (state === "done") {
-        return request.kind === "message" || request.kind === "courier" ? { at: target.at, name: target.name } : { at: war?.town(from.town)?.at ?? null, name: from.townName };
+        const back = handInAt(request);
+
+        return request.kind === "message" || request.kind === "courier" ? { at: target.at, name: target.name } : { at: war?.town(back.town)?.at ?? null, name: back.townName };
     }
 
     if (target.force) {
@@ -1003,9 +1030,10 @@ export function whereTo(request, war) {
  */
 export function progressOf(request) {
     const { kind, target, state, count } = request;
+    const back = handInAt(request);
 
     if (state === "done") {
-        return kind === "message" || kind === "courier" ? deliver(target) : `Done: go back to ${request.from.name} in ${request.from.townName}.`;
+        return kind === "message" || kind === "courier" ? deliver(target) : `Done: go back to ${back.name} in ${back.townName}.`;
     }
 
     switch (kind) {
@@ -1013,7 +1041,7 @@ export function progressOf(request) {
         case "courier":
             return deliver(target);
         case "tithe":
-            return `Bring ${target.gold} gold to ${request.from.name} in ${request.from.townName}.`;
+            return `Bring ${target.gold} gold to ${back.name} in ${back.townName}.`;
         case "bounty":
         case "wild":
         case "beasts":

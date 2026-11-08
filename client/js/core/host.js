@@ -40,7 +40,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, formationsOfBody, holdOf, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
-import { briefingOf, checkMission, gearChoices, MESSENGER_EVERY, MISSION_FAILED, MISSIONS, missionOf, missionsNear, MOST_MISSIONS, rewardOf as missionReward, THERE as MISSION_THERE } from "./missions.js";
+import { briefingOf, chanceOf, checkMission, gearChoices, MESSENGER_EVERY, MISSION_FAILED, MISSIONS, missionOf, missionsNear, MOST_MISSIONS, rewardOf as missionReward, THERE as MISSION_THERE } from "./missions.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
@@ -61,7 +61,8 @@ import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./po
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, handInAt, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
+import { hadChance } from "./hurry.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
@@ -970,7 +971,7 @@ const BODILY = new Set(["blade", "marksman", "endurance"]);
 /** Why a command wasn't carried out (a command's { ok: false, reason }). */
 export const REFUSALS = Object.freeze({
     missions: "You're carrying as many war missions as you can.",
-    overtaken: "Too late: what the messenger came about is over already.",
+    overtaken: "Too late: what the messenger came about is over already, or too far gone to catch.",
     player: "No such player.",
     dead: "The dead can't do that.",
     command: "Nothing that can be done.",
@@ -16212,10 +16213,12 @@ export class Host {
                 return request.target.town === post.town && request.target.post === post.post;
             }
 
-            // (Creatures' parts wanted at the guild: due once they're all in the pack)
+            // (Creatures' parts wanted at the guild: due once they're all in the pack. Told of to
+            // whoever gave it; their town lost, where it's been sent instead: standing.js handInAt)
             const brought = request.kind === "parts" && player.progress.held(request.target.part) >= request.target.need;
+            const back = handInAt(request);
 
-            return request.from.town === post.town && request.from.post === post.post && (request.state === "done" || request.kind === "tithe" || brought);
+            return back.town === post.town && back.post === post.post && (request.state === "done" || request.kind === "tithe" || brought);
         });
     }
 
@@ -16644,9 +16647,10 @@ export class Host {
                 }
             }
 
+            // (A people's soldiers count while they're its own, or under another's banner since)
             const counts =
                 request.kind === "bounty" || request.kind === "hunt"
-                    ? fallen.kind === "soldier" && this.war?.liege(fallen.team) === request.target.realm
+                    ? fallen.kind === "soldier" && (fallen.team === request.target.realm || this.war?.liege(fallen.team) === request.target.realm)
                     : (request.kind === "wild" || request.kind === "beasts") && !fallen.neutral && fallen.kind !== "soldier" && fallen.kind !== "player" && !this.war?.realm(fallen.team) && (fallen.wild?.tier ?? 1) >= (request.target.level ?? 1);
 
             if (counts) {
@@ -16658,7 +16662,10 @@ export class Host {
 
     // How the players' requests stand, as the war goes on and they go about the world: run out
     // of time; seen what they were to scout; there when their town needed holding (and it held);
-    // come to nothing (their target gone, or gone over to their own)
+    // come to nothing (their target gone, or gone over to their own, or no longer at war with
+    // them); and where to tell of one, the town that gave it lost (#sendBack). Nothing's failed by
+    // what happened before they could have got there (core/hurry.js hadChance: docs/WAR.md *A
+    // fair chance*)
     #watchRequests() {
         const war = this.war;
 
@@ -16674,8 +16681,35 @@ export class Host {
 
                 if (change) {
                     this.#settle(player, request, change);
+                } else {
+                    this.#sendBack(player, request);
                 }
             }
+        }
+    }
+
+    // A people's request whose town (where it's to be told of: standing.js handInAt) is no longer
+    // theirs: to be told of at the nearest of theirs with someone to tell instead (a town's reeve,
+    // or the steward at a capital's keep), as a letter's taken (standing.js HALLED); none left
+    // them, where it was
+    #sendBack(player, request) {
+        const war = this.war;
+        const liege = war.liege(player.realm);
+        const was = war.town(handInAt(request).town);
+
+        if (request.from.post === "guild" || request.kind === "message" || request.kind === "courier" || !was || war.liege(was.owner) === liege) {
+            return;
+        }
+
+        const to = war.towns
+            .filter((town) => war.liege(town.owner) === liege && ["town", "city", "capital"].includes(town.kind))
+            .sort((a, b) => hypot(a.at[0] - was.at[0], a.at[1] - was.at[1]) - hypot(b.at[0] - was.at[0], b.at[1] - was.at[1]))[0];
+
+        if (to) {
+            const keep = to.kind === "capital";
+
+            request.back = { town: to.id, townName: to.name, post: keep ? "keep" : "hall", name: keep ? "the steward" : "the reeve" };
+            this.#event("request", { id: player.id, change: "sent", request: structuredClone(request) });
         }
     }
 
@@ -16683,13 +16717,18 @@ export class Host {
         const war = this.war;
         const liege = war.liege(player.realm);
 
+        // (Done, it's only to be told of: its time was for the doing, not the way back)
+        if (request.state === "done") {
+            return null;
+        }
+
         if (request.until !== null && war.turn > request.until) {
             return "failed";
         }
 
-        if (request.state === "done") {
-            return null;
-        }
+        // (Lost or got away before they could have got there: come to nothing; once they could have, failed)
+        const lost = () => (hadChance(request, war.turn) ? "failed" : "void");
+        const atWar = (realm) => Boolean(war.realm(realm)?.alive) && war.hostile(liege, realm);
 
         // (How near a place a player is: from a town's middle, less its reach)
         const near = (point, reach) => Boolean(at && point) && hypot(at[0] - point[0], at[1] - point[1]) <= reach;
@@ -16705,6 +16744,9 @@ export class Host {
 
                 return to && war.liege(to.owner) === liege ? null : "void";
             }
+            // (Their soldiers to bring down: no longer at war with them, or gone, it's come to nothing)
+            case "bounty":
+                return atWar(request.target.realm) ? null : "void";
             // (A guild's look round: seen once the player's been near enough, or seen it from high
             // ground, by the maps' rule; or within REQUEST_REACH.survey of it)
             case "survey": {
@@ -16733,7 +16775,7 @@ export class Host {
                 const town = war.town(request.target.town);
 
                 if (!town || war.liege(town.owner) !== liege) {
-                    return "failed";
+                    return lost();
                 }
 
                 const { middle, radius } = townAt(town);
@@ -16743,7 +16785,8 @@ export class Host {
                     this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                 }
 
-                return war.camp(request.target.camp) ? null : request.there ? "ready" : "void";
+                // (Its camp gone, or its people no longer at war with them: held)
+                return war.camp(request.target.camp) && atWar(request.target.realm) ? null : request.there ? "ready" : "void";
             }
             case "rout":
             case "camp": {
@@ -16754,12 +16797,13 @@ export class Host {
                     this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                 }
 
+                // (A people's: its people no longer at war with them, it's come to nothing)
                 if (camp) {
-                    return null;
+                    return request.kind === "rout" && !atWar(request.target.realm) ? "void" : null;
                 }
 
                 // (Gone: broken, or gone home; or it took the town, and the request's failed)
-                return war.town(request.target.town)?.owner === request.target.realm ? "failed" : request.there ? "ready" : "void";
+                return war.town(request.target.town)?.owner === request.target.realm ? lost() : request.there ? "ready" : "void";
             }
             case "clear": {
                 // (Cleared since it was given, and not with the player there: come to nothing)
@@ -16777,17 +16821,19 @@ export class Host {
                         this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                     }
 
-                    return null;
+                    // (Theirs, from a people no longer at war with them: come to nothing)
+                    return request.kind === "waylay" && !atWar(request.target.realm) ? "void" : null;
                 }
 
-                // (Gone: heard at the end of the road, or waylaid on it, and by whom)
-                const end = war.log.findLast(({ force }) => force === request.target.force);
+                // (Gone: heard at the end of the road, or waylaid on it, and by whom; or with its
+                // people, fallen)
+                const end = war.log.findLast(({ force, type }) => force === request.target.force && (type === "treaty" || type === "waylaid"));
 
                 if (request.kind === "escort") {
-                    return end?.type === "treaty" ? (request.there ? "ready" : "void") : "failed";
+                    return end?.type === "treaty" ? (request.there ? "ready" : "void") : end ? lost() : "void";
                 }
 
-                return end?.type === "waylaid" && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "waylaid" ? "void" : "failed";
+                return end?.type === "waylaid" && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "treaty" ? lost() : "void";
             }
             case "convoy":
             case "plunder": {
@@ -16799,18 +16845,20 @@ export class Host {
                         this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                     }
 
-                    return null;
+                    // (Theirs, from a people no longer at war with them: come to nothing)
+                    return request.kind === "plunder" && !atWar(request.target.realm) ? "void" : null;
                 }
 
-                // (Its goods in, or carried off, and by whom: fallen on in the world by the
-                // player's people, it's theirs)
+                // (Its goods in, or fallen on, and by whom: fallen on in the world by the player's
+                // people, it's theirs. Come to a seat its people had lost, its goods were taken
+                // there, as no one on the road could have stopped: come to nothing)
                 const end = war.log.findLast(({ force, type, beaten }) => force === request.target.force && (type === "delivered" || type === "plundered" || (type === "ambushed" && !beaten)));
 
                 if (request.kind === "convoy") {
-                    return end?.type === "delivered" ? (request.there ? "ready" : "void") : end ? "failed" : "void";
+                    return end?.type === "delivered" ? (request.there ? "ready" : "void") : end?.type === "ambushed" ? lost() : "void";
                 }
 
-                return end?.type === "ambushed" && end.played && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "delivered" ? "failed" : "void";
+                return end?.type === "ambushed" && end.played && end.by && war.liege(end.by) === liege ? "ready" : end?.type === "delivered" ? lost() : "void";
             }
             case "retake":
             case "seize": {
@@ -16837,6 +16885,11 @@ export class Host {
                     return "void";
                 }
 
+                // (Held by a people no longer at war with them: there's no taking it, and it's come to nothing)
+                if (!works.held && !atWar(works.owner)) {
+                    return "void";
+                }
+
                 return request.kind === "seize" && (works.held || works.owner !== request.target.realm) ? "void" : null;
             }
             case "take": {
@@ -16859,7 +16912,7 @@ export class Host {
                     return "ready";
                 }
 
-                return taken || town.owner !== request.target.realm ? "void" : null;
+                return taken || town.owner !== request.target.realm || !atWar(town.owner) ? "void" : null;
             }
             default:
                 return null;
@@ -17213,10 +17266,13 @@ export class Host {
 
         let mine = null;
 
+        // (Each with its time from now, and the way there besides, and the turn they'd have had
+        // their chance by, from where each is: core/missions.js chanceOf)
         for (const id of one.players) {
             const each = this.players.get(id);
             const rank = each?.standing.rank() ?? 0;
-            const taken = each?.standing.takeMission({ ...one.mission, rank, reward: missionReward(one.mission.kind, rank) });
+            const { until, due } = each ? chanceOf(this.war, one.mission, this.#whereIs(each) ?? one.mission.target.at) : {};
+            const taken = each?.standing.takeMission({ ...one.mission, rank, reward: missionReward(one.mission.kind, rank), until, ...(due === undefined ? {} : { due }) });
 
             if (taken) {
                 mine = each === player ? taken : mine;
@@ -17231,7 +17287,9 @@ export class Host {
 
     // Whether a mission offered (`offer`, as core/missions.js missionOf made it when the messenger
     // set out) has come to an end since, as it would be found the moment it was taken on
-    // (checkMission, on a copy, `player` nowhere near): done, failed or come to nothing
+    // (checkMission, on a copy, `player` nowhere near): done, failed or come to nothing; or
+    // what it's about on the road has got too far on for them to meet it before its end now
+    // (chanceOf: `met`)
     #overtaken(offer, player) {
         const war = this.war;
 
@@ -17239,7 +17297,11 @@ export class Host {
             return false;
         }
 
-        return checkMission({ ...structuredClone(offer), there: false }, { war, realm: player.realm, near: () => false }) !== null;
+        if (checkMission({ ...structuredClone(offer), there: false }, { war, realm: player.realm, near: () => false }) !== null) {
+            return true;
+        }
+
+        return !chanceOf(war, offer, this.#whereIs(player) ?? offer.target.at).met;
     }
 
     // A mission's pick of the armoury made (`which`: 0 to 2), or a mission given up

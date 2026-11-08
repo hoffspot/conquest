@@ -9,7 +9,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, OFFICIALS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { layoutTown } from "../client/js/core/setpieces/town.js";
-import { FAILED, OPENS, STANDINGS, TITHE_RATE } from "../client/js/core/standing.js";
+import { FAILED, OPENS, progressOf, STANDINGS, TITHE_RATE } from "../client/js/core/standing.js";
 import { COUNSEL_TURNS } from "../client/js/core/war/war.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -238,6 +238,82 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: scouting.id }).ok, true);
         assert.equal(player.standing.points, 100 - 2 * FAILED);
         assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: "nonsense" }).reason, "request");
+    });
+
+    it("gives a player a fair chance (docs/WAR.md *A fair chance*): nothing failed that's done, against a people no longer at war, or lost before they could have got there", () => {
+        const { host, player } = hosted({ points: 100 });
+        const war = host.war;
+        const enemy = war.realms.find(({ id }) => id !== "human").id;
+        const home = war.town(host.world.start.id);
+        const far = war.towns.find(({ owner, id }) => owner === "human" && id !== home.id);
+        const events = [];
+        const changes = () => events.filter(({ type }) => type === "request").map(({ change, request: asked }) => [asked.key, change]);
+
+        war.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        war.camps.push({ id: "camp-901", realm: enemy, at: [far.at[0] + 400, far.at[1]], guard: 6, built: 0, done: 0, toward: far.id, used: 0, skirmished: 0 });
+
+        // (Done, its time gone on the way back: still to be told of, not failed)
+        player.standing.take(request("wild", { key: "done", target: { wild: true, need: 1 }, count: 1, state: "done", until: war.turn - 1 }));
+
+        // (A town to hold, taken before they could have got there, and one after)
+        player.standing.take(request("defend", { key: "early", target: { town: far.id, name: far.name, at: [...far.at], camp: "camp-901", realm: enemy }, until: null, due: war.turn + 30 }));
+        events.push(...run(host, 600));
+        far.owner = enemy;
+        events.push(...run(host, 600));
+        assert.deepEqual(changes(), [["early", "void"]]);
+        assert.equal(player.standing.requests.find(({ key }) => key === "done").state, "done");
+        assert.equal(player.standing.points, 100);
+
+        far.owner = "human";
+        player.standing.take(request("defend", { key: "late", target: { town: far.id, name: far.name, at: [...far.at], camp: "camp-901", realm: enemy }, until: null, due: war.turn - 1 }));
+        far.owner = enemy;
+        events.push(...run(host, 600));
+        assert.deepEqual(changes().at(-1), ["late", "failed"]);
+        assert.equal(player.standing.points, 100 - FAILED);
+
+        // (Their soldiers to bring down, then peace made: come to nothing)
+        player.standing.take(request("bounty", { key: "peace", target: { realm: enemy, need: 3 } }));
+        events.push(...run(host, 600));
+        assert.equal(player.standing.requests.find(({ key }) => key === "peace").state, "open");
+        war.relations[["human", enemy].sort().join("|")] = { state: "neutral", since: war.turn };
+        events.push(...run(host, 600));
+        assert.deepEqual(changes().at(-1), ["peace", "void"]);
+        assert.equal(player.standing.points, 100 - FAILED);
+    });
+
+    it("has what's done told of at the nearest of their people's towns instead, the town that asked it lost to them; and counts a people's soldiers gone under another's banner", () => {
+        const { host, player, actor } = hosted();
+        const war = host.war;
+        const [enemy, overlord] = war.realms.filter(({ id }) => id !== "human").map(({ id }) => id);
+        const home = war.town(host.world.start.id);
+
+        player.standing.take(request("wild", { key: "told", from: { ...request().from, town: home.id, townName: home.name }, target: { wild: true, need: 1 }, count: 1, state: "done" }));
+        home.owner = enemy;
+
+        const sent = run(host, 600).find(({ type, change }) => type === "request" && change === "sent");
+        const told = player.standing.requests.find(({ key }) => key === "told");
+        const to = war.town(told.back.town);
+
+        assert.ok(sent);
+        assert.equal(war.liege(to.owner), "human");
+        assert.ok(["town", "city", "capital"].includes(to.kind));
+        assert.equal(told.back.post, to.kind === "capital" ? "keep" : "hall");
+        assert.equal(progressOf(told), `Done: go back to ${told.back.name} in ${to.name}.`);
+        assert.equal(host.dueTo(HOST_PLAYER, "home:hall-1/reeve").length, 0);
+        home.owner = "human";
+
+        // (Their enemy gone under another's banner, still at war with the player's people: their
+        // soldiers still count)
+        war.realm(enemy).overlord = overlord;
+        war.relations[["human", overlord].sort().join("|")] = { state: "hostile", since: 0 };
+        player.standing.take(request("bounty", { key: "banner", target: { realm: enemy, need: 1 } }));
+        put(actor, "town", host.world.spawns.player);
+        Object.assign(actor, { hp: 5000, maxHp: 5000 });
+        host.battle.add({ id: "foe", kind: "soldier", name: "Foe", weapon: "sword", team: enemy, square: [actor.square[0], actor.square[1] + 1] });
+        host.battle.actor("foe").hp = 1;
+        host.command(HOST_PLAYER, { type: "engage", target: "foe" });
+        run(host, 20000);
+        assert.equal(player.standing.requests.find(({ key }) => key === "banner").state, "done");
     });
 
     it("seats the people's ruler in the keep, and opens its work, armoury and counsel only to those of rank", () => {

@@ -131,8 +131,12 @@ describe("envoys on the roads, grudges and favours (host.js, war.js)", () => {
         const capital = war.realm("human").seat;
         const giver = { id: "steward", name: "Wat Steward", title: "the steward" };
         const [mx, my] = host.world.stamp.middle;
-        const ours = { id: "force-960", realm: "human", kind: "envoy", size: 0, at: [mx + 90, my], path: [[mx + 90, my], [mx + 130, my]], leg: 0, target: "elf", home: capital, mission: "alliance", about: null, since: 0 };
-        const theirs = { id: "force-961", realm: "orc", kind: "envoy", size: 0, at: [mx + 2000, my], path: [[mx + 2000, my], [mx + 4000, my]], leg: 0, target: "elf", home: war.realm("orc").capital, mission: "alliance", about: null, since: 0 };
+        // (Ours just setting out from the keep, its road on past the player's town; theirs going
+        // by the keep, on its way: each as a player setting out from the keep could meet it on its
+        // road, core/hurry.js meetAt)
+        const [kx, ky] = war.town(capital).at;
+        const ours = { id: "force-960", realm: "human", kind: "envoy", size: 0, at: [kx, ky], path: [[kx, ky], [mx + 90, my], [mx + 130, my]], leg: 0, target: "elf", home: capital, mission: "alliance", about: null, since: 0 };
+        const theirs = { id: "force-961", realm: "orc", kind: "envoy", size: 0, at: [kx + 120, ky], path: [[kx + 120, ky], [kx + 4000, ky]], leg: 0, target: "elf", home: war.realm("orc").capital, mission: "alliance", about: null, since: 0 };
 
         war.forces.push(ours, theirs);
         war.relations["human|orc"] = { state: "hostile", since: 0 };
@@ -165,7 +169,8 @@ describe("envoys on the roads, grudges and favours (host.js, war.js)", () => {
         assert.deepEqual(whereTo(escort, war).at, ours.at);
         assert.equal(progressOf(escort), "Find them on the road.");
 
-        // With them on the road, to its end: done
+        // With them on the road (by the player's town by now), to its end: done
+        Object.assign(ours, { at: [mx + 90, my], leg: 1 });
         put(host.battle.actor(HOST_PLAYER), [Math.floor(mx + 80), Math.floor(my + 6)]);
         run(host, 1000);
         assert.ok(player.standing.find(escort.id).there);
