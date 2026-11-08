@@ -16,6 +16,7 @@ const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.j
 const { BEHEMOTH } = await import("../client/js/core/invasions.js");
 const { RARE_CARDS } = await import("../client/js/core/rare.js");
 const { SCENERY } = await import("../client/js/core/scenery.js");
+const { HORSE_MODEL } = await import("../client/js/core/mounts.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -61,8 +62,11 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // (Or it rides a scene's patrols, its model wanted near the scene as a lair's is:
             // Bellhaven's riders, game.js #modelLairs)
             const patrolling = Object.values(SCENERY).some(({ patrols }) => patrols?.riders.flat().includes(id));
+            // (Or it's no creature but the horse a player rides, called with its whistle
+            // (core/mounts.js; world/mounts3d.js), its model wanted as it's called)
+            const ridden = id === HORSE_MODEL && !CREATURES[id];
 
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied || patrolling, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls, or rides a scene's patrols`);
+            assert.ok(ridden || Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature || carded || rallied || patrolling, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, comes against a town, is a rare card's world boss or one it calls, rides a scene's patrols, or is a player's horse`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);

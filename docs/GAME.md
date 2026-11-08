@@ -1374,6 +1374,68 @@ weapons, each weapon should have a separate slot for an "effect" ... visual and 
     each piece's as they're worn. Each counts in their might (`warded`: what it keeps off, its stone
     skin's share of a fight at one blow every 1.5 seconds).
 
+### Riding (core/mounts.js)
+
+A player buys a horse at a stable and rides it (the owner: "Players should be able to purchase a
+horse from a stable and that provides an item called a "mount whistle" that can be used to call and
+dismiss a specific purchased mount").
+
+- **Stables.** Every town, city and capital of every people has one, by a road in: the house
+  nearest where a main street comes into it, out towards its edge, made over (setpieces/town.js
+  `STABLE_OUT`). It's built by the human kit in every people's own wood, paint and roof (art/kits/
+  landmarks.js `stable`, `STABLE_LOOKS`: a human one's roof the street's, clay, slate or shingles):
+  a long, low, boarded range of stalls open to its yard, half doors in a colour, a hay loft's hood
+  and hoist over them, a vent on its ridge; a trough and a hitching rail either side of the middle
+  of its yard, kept clear (`STABLE_CLEAR`), hay bales, its horseshoe sign and a lantern; a fenced
+  paddock and a haystack behind it where its lot is deep; on a plank deck on piles over a lizard
+  town's lagoon. Far off it's a low barn of its people's colours (far/shapes.js `stableShapes`,
+  `FAR_STABLE`). Its stablemaster stands
+  before it (townsfolk.js `stablemasterOf`, role "stablemaster"; dialogue.js `stablemaster`) and
+  sells a horse for 400 gold (mounts.js `STABLE`), and brings back a fallen one for 100, whichever
+  stable it was bought at. What's paid is the host's (host.js `#stableService`), never the game's.
+- **A horse and its whistle.** Each horse bought comes with a mount whistle of its own (progress.js
+  ITEMS `mountWhistle`, its `horse`): its coat (bay, grey, dapple grey, palomino or white), its mane
+  (the light hair or the long dark mane, tinted one of its colours), its name, all drawn for it as
+  it's bought (`horseFrom`, the same on every copy of the world), and whether it's fallen. A whistle
+  never stacks with another's, and it's bound to its owner (progress.js `bound`): never sold,
+  dropped, given or traded. A player may have several; only one is out at a time.
+- **Calling it.** Blowing a whistle (host.js `#whistle`) calls its horse up out of the ground in a
+  ring of light at its owner's side (battle.js `mount`: at the horse's left, where they stand,
+  `MOUNT.beside`; its right where that's blocked), only out under the open sky (the town's map:
+  not indoors, nor in a dungeon or a cave), never in a fight (`#beset`), nor once it's fallen. They
+  wait while it rises (`MOUNT.rise`), then get up into the saddle (`mount`, the rider's clip) and
+  ride. Its health is its rider's times `MOUNT.health`, rising as theirs does.
+- **Riding.** It carries its rider at a trot as they walk, `MOUNT.walk` times as fast as they'd
+  walk on foot (3.7 m/s to 1.7), and at a gallop as they run, `MOUNT.run` times as fast as they'd
+  run (13.4 m/s to 7.9), and in between as they speed up (mounts.js `carried`; battle.js `#move`).
+  A run on horseback takes none of their stamina: it comes back as at a walk, and they gallop on
+  with none left. Blowing the whistle again (or its Action Bar slot: the whistle whose horse is
+  out, else the first standing) gets them down at its side and it sinks back into a ring
+  (`dismount`, `sinking`).
+- **Fighting.** Any blow, spell, throw or ability gets them down first, quickly (`MOUNT.hop`), and
+  what they were doing is done once they're down (battle.js `#horseback`: a spell cast then); the
+  horse sinks away. Going through a door, or carried off by magic, it sinks where it stood
+  (`#unhorse`). They can't camp or emote on horseback (REFUSALS `riding`).
+- **Struck on horseback.** Blows aimed at the rider land on the horse (`carries`, `#horseStruck`;
+  its health a brown bar under theirs, hud.js `setMount`): nothing of them touches the rider, nor
+  are they staggered or knocked down. At none left it falls dead (`fallen`), throwing them off
+  (TOSS's throw times `MOUNT.thrown`, away from whoever struck it) and down a while, lies dead
+  `MOUNT.fall` ms and sinks away; its whistle says it's fallen (host.js `#horseFell`) till a stable
+  brings it back.
+- **Drawn** (world/mounts3d.js): Malbers Animations' realistic horse (beasts/model.js MODELS
+  `horse`, the catalog's beast-horse and its skins), trotting at a walk and flat out at a run,
+  rising and sinking through the ground, dying as it falls. Its rider's posed on it from the rider's
+  clips (characters/riding.js, the catalog's beast-horse-rider: retargeted onto their own body,
+  their pelvis where the clips have it over the horse, its seat under the horse's CG bone as it
+  bobs), getting up and down from the side they do it from. Their feet are in the stirrups at
+  every gait, whatever their legs' length: each leg's bent to put the ball of the foot on its
+  stirrup's tread, as the saddle hangs from the horse as it goes (mounts3d.js `STIRRUPS`; from the
+  shortest human's legs, 0.78 m, nearly straight, to the tallest elf's, 1.22 m). The camera
+  looks a little higher at them (`HORSEBACK.camera`). Without the licensed models a bay built in
+  code stands in (looks.js `horse`) and the rider's sat on it as on a bench.
+- **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
+  its hooves a stride at a time, its whinny as it comes, and its fall.
+
 ## Drawing the world
 
 ### The view (world/view.js)

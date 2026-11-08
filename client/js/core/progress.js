@@ -27,6 +27,7 @@ import { clockOf } from "./invasions.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
+import { horseOf } from "./mounts.js";
 
 /** A rank's title, and the experience it takes to reach it. */
 export const RANKS = Object.freeze([
@@ -128,6 +129,17 @@ export const ITEMS = Object.freeze({
         scroll: true,
         use: { safety: true },
         price: 25,
+    },
+    // A mount whistle, a horse's, bought at a stable with it (core/mounts.js; its `horse`, kept on
+    // it: which horse, its name, coat and mane, whether it's fallen): blown under the sky, it calls
+    // the horse up out of a magic circle and its owner mounts; blown again, they get down and it
+    // sinks away (host.js #whistle). Never used up; bound to its owner
+    mountWhistle: {
+        label: "Mount whistle",
+        about: "Blow it under the open sky to call your horse up out of the ground and ride; blow it again to get down and send it back. Not indoors, nor with foes on you. Should your horse fall, any stable brings it back, for a fee.",
+        whistle: true,
+        use: { whistle: true },
+        price: 400,
     },
     // A treasure map (core/treasure.js): read out in the world, where it leads is marked as a circle
     // to search on the reader's world map and their party's (host.js #readMap). It comes in every
@@ -472,7 +484,10 @@ export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?
  * Whether two things are alike (the same kind, as well made, as strong a boost; gear, of the same
  * people's make, with the same bonuses): they go on one stack.
  */
-export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && sameGear(a, b);
+/** Whether a thing's bound to whoever has it (a unique, core/rare.js; a horse's whistle): never sold, dropped, given or traded. */
+export const bound = (thing) => Boolean(thing?.unique || thing?.horse);
+
+export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && (a.horse?.id ?? null) === (b.horse?.id ?? null) && sameGear(a, b);
 
 /**
  * A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
@@ -531,6 +546,13 @@ export function thingOf(item) {
     // unique's, which looks as its own)
     if (def?.looks?.includes(item.look) && !thing.unique) {
         thing.look = item.look;
+    }
+
+    // (A mount whistle's horse: which it is, and how it looks, core/mounts.js horseOf)
+    const horse = def?.whistle ? horseOf(item.horse) : null;
+
+    if (horse) {
+        thing.horse = horse;
     }
 
     return thing;
@@ -593,7 +615,13 @@ function packOf(kept) {
  */
 export function itemLabel(item) {
     const { id, quality = "common", boost = null } = item;
-    const { label, magic, robust, slot } = ITEMS[id] ?? { label: id };
+    const { label, magic, robust, slot, whistle } = ITEMS[id] ?? { label: id };
+
+    // (A mount whistle by its horse's name: "Mount whistle (Bramble)")
+    if (whistle && item.horse?.name) {
+        return `${label} (${item.horse.name})`;
+    }
+
     const made = QUALITIES[quality]?.label;
     const plain = !item.affixes?.length && !item.name;
     const named = slot ? gearName(item) : label;

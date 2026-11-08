@@ -30,10 +30,12 @@ const { paintLayer } = await import("../client/js/world/art/engine/painters.js")
 const { ARCHES, inset, openingOutline, Solid } = await import("../client/js/world/art/engine/solid.js");
 const { buildHouse, house, planHouse, STYLES } = await import("../client/js/world/art/kits/house.js");
 const { EMBLEM_NAMES, paintEmblem } = await import("../client/js/world/art/kits/emblems.js");
-const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
+const { landmark, LANDMARK_BUILDERS, STABLE } = await import("../client/js/world/art/kits/landmarks.js");
+const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const { prop, PROP_NAMES } = await import("../client/js/world/art/kits/props.js");
 const { pitchedRoof } = await import("../client/js/world/art/kits/roofs.js");
 const { merge, partsOf } = await import("../client/js/world/town3d.js");
+const { FAR_STABLE, settlementShapes, Shapes } = await import("../client/js/world/far/shapes.js");
 
 const M = 5;
 
@@ -283,6 +285,80 @@ describe("landmarks (kits/landmarks.js)", () => {
             assert.ok(triangles > 100 && triangles < 9000, `${piece.name}: ${triangles} triangles`);
             assert.ok(box.min.x > -M * 1.5 && box.min.z > -M * 1.5 && box.max.x < piece.w * 20 + M * 1.5 && box.max.z < piece.h * 20 + M * 1.5, `${piece.name} spills out of its lot`);
             assert.ok(piece.name === "hall" ? names.includes("board hall") && names.includes("sign hall") : names.includes("sign keep"), piece.name);
+        }
+    });
+
+    it("builds every people's stable alike, of their own timber: within its lot, low, its yard's middle clear, its horseshoe sign; on piles over a lagoon; low from afar too", async () => {
+        // (A town's and a capital's of each people, the lizard folk's town's out over its lagoon)
+        const stables = [null, "elf", "darkElf", "cat", "lizard", "orc"].flatMap((people) => ["town", "capital"].map((kind) => layoutTown({ seed: 1, kind, ...(people ? { people } : {}) }).pieces.find(({ name }) => name === "stable")));
+
+        assert.ok(stables.every(Boolean), "a stable in each");
+        assert.ok(stables.some((piece) => piece.water), "one over a lagoon");
+
+        for (const [key, value] of Object.entries(FAR_STABLE)) {
+            assert.equal(value, STABLE[key], `seen from afar as it's built: ${key}`);
+        }
+
+        for (const piece of stables) {
+            const where = `${piece.people ?? "human"}'s ${piece.w} x ${piece.h}${piece.water ? " over the water" : ""}`;
+            const object = await landmark(piece);
+            const box = new THREE.Box3().setFromObject(object);
+            const [width, depth, floor] = [piece.w * 20, piece.h * 20, piece.water ? M * STABLE.deck : 0];
+            const triangles = trianglesOf(object);
+
+            // (The human kit's for every people: no people's kit builds its own)
+            assert.equal(builderFor(piece), null, where);
+            assert.ok(triangles > 300 && triangles < 2500, `${where}: ${triangles} triangles`);
+            assert.ok(finite(object), where);
+            assert.ok(box.min.x > -M * 0.25 && box.min.z > -M * 0.25 && box.max.x < width + M * 0.25 && box.max.z < depth + M * 0.25, `${where} spills out of its lot`);
+            assert.ok(box.max.y - floor < M * 7, `${where}: ${((box.max.y - floor) / M).toFixed(1)} m high`);
+            assert.ok(piece.water ? box.min.y < 0 : Math.abs(box.min.y) < 1e-6, `${where}: on piles down into the lagoon's bed, or on the ground`);
+            assert.ok(materialsOf(object).includes("sign stable"), `${where}: its sign`);
+
+            // Nothing stands in the middle of its yard (its front 1.6 metres, 0.8 either side of its
+            // middle) between its floor and two metres over it: its stablemaster's way up to the
+            // street (core/townsfolk.js STABLE_FRONT)
+            const [u0, u1, v0] = [width / 2 - M * 0.8, width / 2 + M * 0.8, depth - M * 1.6];
+            const standing = [];
+
+            object.updateMatrixWorld(true);
+            object.traverse((node) => {
+                if (!node.isMesh) {
+                    return;
+                }
+
+                const { index, attributes } = node.geometry;
+                const corner = (k) => new THREE.Vector3().fromBufferAttribute(attributes.position, index ? index.getX(k) : k).applyMatrix4(node.matrixWorld);
+
+                for (let k = 0; k < (index ? index.count : attributes.position.count); k += 3) {
+                    const points = [corner(k), corner(k + 1), corner(k + 2)];
+                    const [low, high] = ["x", "y", "z"].map((axis) => [Math.min(...points.map((p) => p[axis])), Math.max(...points.map((p) => p[axis]))]).reduce(([lows, highs], [a, b]) => [[...lows, a], [...highs, b]], [[], []]);
+
+                    if (high[0] > u0 && low[0] < u1 && high[2] > v0 && low[1] < floor + M * 2 && high[1] > floor + M * 0.05) {
+                        standing.push(`${node.material.name} at ${low.map((v) => (v / M).toFixed(2))}`);
+                    }
+                }
+            });
+
+            assert.deepEqual(standing, [], `${where}: its yard's middle`);
+
+            // From afar: a low box under a gabled roof, within its lot, as high as its roof's ridge
+            const shapes = new Shapes();
+            const [front, inward] = [piece.h * 2 - STABLE.yard, -piece.h * 2 + STABLE.back];
+            const ridge = floor / M + STABLE.eaves + ((front - Math.max(inward, front - STABLE.deep)) / 2) * STABLE.pitch;
+
+            settlementShapes(shapes, { pieces: [piece], people: piece.people ?? "human", origin: [0, 0], heightOf: () => 0 });
+
+            const corners = Array.from({ length: shapes.triangles * 3 }, (_, k) => shapes.positions.slice(k * 3, k * 3 + 3));
+            const [s, c] = [Math.sin(piece.facing), Math.cos(piece.facing)];
+            const high = Math.max(...corners.map(([, y]) => y));
+
+            assert.ok(shapes.triangles > 0 && shapes.triangles <= 16, `${where}: ${shapes.triangles} triangles afar`);
+            assert.ok(high < ridge + 0.1 && high > ridge - 1, `${where}: ${high.toFixed(1)} m high afar, its ridge ${ridge.toFixed(1)} m`);
+            assert.ok(
+                corners.every(([x, , z]) => Math.abs((x - piece.x) * c - (z - piece.y) * s) < piece.w * 2 + 0.1 && Math.abs((x - piece.x) * s + (z - piece.y) * c) < piece.h * 2 + 0.2),
+                `${where}: afar within its lot`,
+            );
         }
     });
 

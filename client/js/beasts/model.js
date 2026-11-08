@@ -733,6 +733,32 @@ export const MODELS = Object.freeze({
     // Choir in the great helm and black)
     bellRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmBar", "SwordSheath", "Sword", "KiteShield", "Horse"]),
     choirRider: riderOf(["Body", "Head", "Surcoat", "Cloak", "Plate", "Cuirass", "Gauntlets", "HelmCross", "SwordSheath", "Sword", "KiteShield", "Horse"], ["choir"]),
+    // (A player's horse (core/mounts.js): Malbers Animations' realistic horse (the catalog's
+    // beast-horse), in the coat its whistle has (`skins`: "" its own bay, or one of
+    // beast-horse-skins'), saddled, with the mane its whistle has (`choose`: the light hair or the
+    // long dark mane, tinted: world/mounts3d.js). It trots as its rider walks and gallops flat out
+    // as they run (its feet sliding back at 3.06 m/s trotting as it's made, 9.99 at its sprint,
+    // played at a pace of 3.2 so a walk's ridden at a trot, not a canter), and goes down dead as
+    // it's struck down under its rider)
+    horse: Object.freeze({
+        asset: "beast-horse",
+        skins: Object.freeze(["", "gray", "dapple", "palomino", "white"]),
+        parts: Object.freeze(["Body", "Saddle"]),
+        choose: Object.freeze([Object.freeze(["ManeLight", "ManeDark"])]),
+        length: 2.46,
+        made: Object.freeze({ long: 2.46, tall: 2.03 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Trot", run: "Sprint", react: "Hit Left", dead: "Death" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({}),
+        rests: Object.freeze({ shake: "Idle Shake", look: "Idle Look", neigh: "Neigh" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Spine2", body: "CG", head: "Head", mouth: "Head", left: "Head" }),
+        close: Object.freeze(["ManeLight"]),
+        mouth: null,
+        pace: 3.2,
+        runPace: 9.99,
+        flinch: 0.5,
+    }),
     // (Prior Osric Vane, the Voice of the Bell, master of Bellhaven's keep (creatures.js priorVane):
     // Alexander Lenski's Cathedral Guardian (the catalog's beast-prior), in plate gilded and black,
     // a halo of thorns over his helm, a war mace and a shield on the bones that hold them; made 2.08
@@ -1172,6 +1198,22 @@ export function wantModel(id, priority = "soon") {
     );
 
     return asked.get(id);
+}
+
+/**
+ * Ask for a catalog entry of clips alone to be read, once (`asset`: one with no body of its own,
+ * a horse's rider's: beast-horse-rider), as wanted as `priority`: a promise of it ({ scene, its
+ * skeleton; animations, its clips }), or of null if it couldn't be read; or null if the catalog
+ * has none of it, or there's no page to read it from (a test).
+ */
+export function wantClips(asset, priority = "soon") {
+    const page = globalThis.document?.baseURI ?? globalThis.location?.href;
+
+    if (!ASSETS.models[asset]?.files?.length || !page) {
+        return null;
+    }
+
+    return readFile(asset, priority, page).catch(() => null);
 }
 
 // A kind's files: its model's, and the skins it wears (MODELS' `skins`)
@@ -1993,10 +2035,14 @@ export function levelOf(node) {
 /**
  * The part of a model a mesh is (the name its parts were joined under, the pipeline's `join`): its
  * own name or its nearest named parent's, without a lower detail's "lod1" (".lod1" as made: three.js
- * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials.
+ * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials. A part
+ * of several materials is read as a group named for it, of a mesh a material, each named for the
+ * mesh it's of, not the part (the horse's body, its coat and its eyes: SK_Horse_Alone and
+ * SK_Horse_Alone_1): the group's name.
  */
 export function partOf(node) {
-    let named = node;
+    const parent = node?.parent;
+    let named = node?.isMesh && parent?.isGroup && parent.name && parent.children.every((child) => child.isMesh) ? parent : node;
 
     while (named && !named.name) {
         named = named.parent;
@@ -2256,6 +2302,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
     const [body, ...others] = materials.values();
     let died = 0;
     let stepped = 0;
+    // (Its clips as they were last posed: a horse's rider's posed with them, world/mounts3d.js)
+    let lastPosed = [];
     // (How far into its walk and its run it is, carried on as it goes: strideOn)
     let strides = null;
 
@@ -2343,6 +2391,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         beam,
         lengths,
 
+        /** Its clips as they were last posed ([{ clip, weight, time }]: poseOf's). */
+        get posed() {
+            return lastPosed;
+        },
+
         pose(inputs) {
             died = inputs.dead ? died + inputs.dt : 0;
 
@@ -2354,6 +2407,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
             const posed = poseOf(model, { ...inputs, speed, strides }, { lengths, died });
             const on = new Set(posed.map(({ clip }) => clip));
+
+            lastPosed = posed;
 
             for (const [name, action] of actions) {
                 if (!on.has(name)) {

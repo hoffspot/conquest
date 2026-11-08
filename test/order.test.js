@@ -174,6 +174,22 @@ describe("the Order of the Bell (creatures.js, weapons.js, beasts/model.js)", ()
 
         assert.deepEqual([partOf(part), partOf(primitive), partOf(lower), partOf(unnamed)], ["Plate", "Plate", "Plate", "Plate"]);
         assert.equal(partOf(Object.assign(new Mesh(), { name: "HelmCrosslod2_3" })), "HelmCross");
+
+        // (A part of several materials whose meshes are named for the mesh they're of, not the
+        // part: the horse's body, its coat and its eyes, at its own detail and a lower one)
+        for (const [group, meshes] of [["Body", ["SK_Horse_Alone", "SK_Horse_Alone_1"]], ["Bodylod1", ["SK_Horse_Alonelod1", "SK_Horse_Alonelod1_1"]]]) {
+            const body = Object.assign(new Group(), { name: group });
+
+            body.add(...meshes.map((name) => Object.assign(new Mesh(), { name })));
+            assert.deepEqual(body.children.map(partOf), ["Body", "Body"]);
+        }
+
+        // (But a mesh at the model's top, beside its bones, its own)
+        const scene = Object.assign(new Group(), { name: "Scene" });
+        const mane = Object.assign(new Mesh(), { name: "ManeLight" });
+
+        scene.add(new Group(), mane);
+        assert.equal(partOf(mane), "ManeLight");
     });
 
     it("strikes each blow when its clip lands it, inside its clip's span; a spear reaching further, a bow loosing as it's drawn, the Choir crushing", () => {

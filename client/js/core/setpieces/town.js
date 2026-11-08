@@ -75,6 +75,13 @@ export const keepsShops = (spec) => Boolean(spec?.seat) && ["church", "guild", "
 // How far out a settlement's barracks stands (shares of its radius: from, to), where it can
 const BARRACKS_OUT = Object.freeze([0.35, 0.8]);
 
+/**
+ * Where a town's, a city's or a capital's stable stands (core/mounts.js: every people's): the
+ * house nearest where a road comes in (its main streets' ends), at least `out` of its radius from
+ * its middle, made over as its seat is.
+ */
+export const STABLE_OUT = 0.45;
+
 // How far the streets step as they're laid (metres), and how far a main street bends either way
 // from its heading (radians)
 const STEP = 6;
@@ -1057,6 +1064,33 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
         }
 
         Object.assign(shop, { key: landmarkKey(name), kind: "landmark", name, ...identity(name), style, storeys: Math.max(1, storeys ?? 1) });
+    }
+
+    // Its stable (a town's, a city's, a capital's: core/mounts.js), where its horses are sold and
+    // its riders' fallen horses brought back: the house nearest where a road comes in whose door
+    // opens onto a street, on dry land and out towards its edge (STABLE_OUT) if one can be (failing
+    // that, over a lagoon with its doorstep on a walk), made over as its seat is, and nothing else
+    // moved
+    if (spec.seat) {
+        const ends = mains.map(({ points }) => points.at(-1));
+        const opening = pieces.filter(({ kind, back, x, y, w, h, facing }) => kind === "house" && !back && opens(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const dry = opening.filter(({ water: wet }) => !wet);
+        const outer = dry.filter((house) => length(house.x - centre[0], house.y - centre[1]) >= radius * STABLE_OUT);
+        const stepping = pieces.filter(({ kind, back, x, y, w, h, facing }) => kind === "house" && !back && steps(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const road = (house) => Math.min(...ends.map(([x, y]) => length(house.x - x, house.y - y)));
+        const stable = ends.length ? [outer, dry, opening, stepping].find((each) => each.length)?.reduce((best, house) => (road(house) < road(best) - 1e-9 ? house : best)) : null;
+
+        if (stable) {
+            const { style } = stable;
+
+            for (const key of Object.keys(stable)) {
+                if (!["x", "y", "w", "h", "facing", "people", "water"].includes(key)) {
+                    delete stable[key];
+                }
+            }
+
+            Object.assign(stable, { key: landmarkKey("stable"), kind: "landmark", name: "stable", ...identity("stable"), style, storeys: 1 });
+        }
     }
 
     // The yards as they're drawn; their fences stand on the squares along their sides
