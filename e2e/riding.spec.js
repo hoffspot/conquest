@@ -13,10 +13,11 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-// Open the game and wait for it to be playing
+// Open the game and wait for it to be playing, then stop it: it's played on a frame at a time
 async function playing(page, address) {
     await page.goto(address);
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    await page.evaluate(() => window.pellagos.game.stop());
 }
 
 // Play on (the game stopped) for `seconds` of its time, a frame at a time, the page's events let
@@ -64,7 +65,19 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     await playing(page, "/?play&seed=2");
 
     // (The home town's stablemaster, out before its stable)
-    await page.waitForFunction(() => window.pellagos.game.battle.actors.some(({ id }) => id.startsWith("stablemaster:")), null, { timeout: 30000 });
+    const out = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const here = () => game.battle.actors.some(({ id }) => id.startsWith("stablemaster:"));
+
+        for (let k = 0; k < 900 && !here(); k++) {
+            game.advance(1 / 30, { render: false, wait: true });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return here();
+    });
+
+    expect(out).toBe(true);
 
     const bought = await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -108,9 +121,22 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     expect(rising.under).toBeGreaterThan(0.3);
     expect(rising.bar).toBe(true);
 
-    // Up in the saddle: sat on it, not standing through it
-    await page.waitForFunction(() => window.pellagos.game.battle.actor(window.pellagos.game.me).mount?.phase === "riding", null, { timeout: 60000, polling: 100 }).catch(() => null);
+    // Up in the saddle: sat on it, not standing through it (with the licensed models, once its
+    // model and the rider's clips are read)
     await play(page, 4);
+
+    if (licensedModelsHere()) {
+        await page.evaluate(async () => {
+            const { game } = window.pellagos;
+            const start = performance.now();
+
+            while (!(game.mounts.horses.get(game.me)?.model && game.mounts.clips) && performance.now() - start < 120000) {
+                game.advance(1 / 30, { render: false, wait: true });
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+        });
+        await play(page, 0.5);
+    }
 
     const sat = await ridden(page);
 

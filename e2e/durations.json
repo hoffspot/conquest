@@ -292,6 +292,7 @@
     "pellagos.spec.js › worlds on this device, apart from the characters: one made, and a character taken into it, new to its folk with what they carry; back in their own as they left it; deleted, asked first, the characters staying; one in no world asked where they go": 43.6,
     "reach.spec.js › Test from outside: the game tries the server's internet address and tells it, from Known Servers and from the page's code; the management page says so": 16.3,
     "reach.spec.js › a page opened over https that can't reach a server at home over plain http hands the player to the server's own page": 21.2,
+    "riding.spec.js › buys a horse from the stablemaster, calls it up with its whistle, rides it at a trot, gets down, and has it brought back once it's fallen": 138,
     "secure.spec.js › from the internet, over TLS alone: a page asked for plainly sent on to https; the game there follows an invite into a world and plays over wss; no management page": 36.6,
     "secure.spec.js › on the server's computer, the management page opens to the internet, lets it in through Tailscale Funnel, shows a game's test from outside, and closes it again": 5.4,
     "secure.spec.js › on the server's computer, the management page says how it stands with the internet, takes a certificate of the owner's own, and turns the internet on": 0.8,
