@@ -41,7 +41,7 @@ const slot = (page, action, which) => page.locator(`.bind[data-action="${action}
 const saved = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings") ?? "{}"));
 
 test("keys set on the Bindings page: an action chosen and a key pressed, taken from what had it (and said), a mouse button, Escape; played with as set, and every key as it came", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
     await bindings(page);
 
@@ -111,7 +111,7 @@ test("keys set on the Bindings page: an action chosen and a key pressed, taken f
 });
 
 test("a controller's actions on keys: G held opens your own wheel, the keys that move aim it; O held, the ring of panels, W its world map; F does what's in front, C stops, = and - zoom", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1&weapon=sword");
 
     // G held: your own wheel, open round you; the player not walked by D while it aims; let go, put away
@@ -170,7 +170,7 @@ test("a controller's actions on keys: G held opens your own wheel, the keys that
 });
 
 test("a handheld's preset: offered once on what looks like a Steam Deck, chosen: its back buttons' keys and how to set them in Steam, its dead zone and larger text", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     // A Steam Deck's controller as Chrome names it on SteamOS with Steam closed: seen once a button's pressed
     await page.addInitScript((names) => {

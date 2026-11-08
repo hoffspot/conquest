@@ -1392,15 +1392,21 @@ far back as the screen's held (view.js `startDistance`):
   of the door. And from 5.5 metres 15 degrees down at their middle, their own head and shoulders
   hid what was straight ahead of them 5 to 25 metres off.) It looks that far up from the start's
   distance or further; nearer them, zoomed in or drawn in by a wall behind them, the point comes
-  down to their middle with the camera, so they're kept in the picture.
+  down to their middle with the camera, so they're kept in the picture. And it looks that far up
+  looking out across the land, 12 degrees down or less (`LOOK_UP.level`); tilted down onto them,
+  the point comes down to their middle, there from 35 degrees down (`LOOK_UP.down`, the higher
+  view the camera once started in).
 - **On a phone held upright,** 5.5 metres back (`DISTANCE.upright`), looking down 15 degrees
   (`PITCH.upright`, `startPitch`) at their middle (0.8 metres up: `LOOK_UP.middle`), which the
   upright framing (below) makes about 21 degrees from 7 metres, low over their shoulder.
 - **Indoors,** at their middle, under the ceilings.
 
 It zooms between 5 and 32 metres, from any side (`yaw`: from the south, looking north, to start
-with). Looking out to the horizon draws more than looking down: about twice as much a frame at
-15 degrees as at 25 in CI's software renderer. On a phone held upright it looks down more steeply from further back
+with). Looking out to the horizon draws more than looking down: in the browser tests' software
+renderer the start view draws about half the frames a second that 25 degrees down from 5.5
+metres did, nearly all of it the near world between 30 and 160 metres off (the ground, trees,
+undergrowth and water there), so the tests have more time (contribution.md). On a device that
+can't keep up, Adaptive draws fewer pixels. On a phone held upright it looks down more steeply from further back
 (below), measured against 35 degrees (view.js `PITCH`). **The opening fly-in** (view.js `fly`,
 `FLIGHT`; game.js `#flyIn`): as a player comes into a world (a new game, Continue or joining
 one; not after a death, a door or a dungeon, and only out of doors), the camera starts 110 metres

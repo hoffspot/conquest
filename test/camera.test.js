@@ -578,6 +578,24 @@ describe("the start view, on a screen held sideways (camera.js startPitch, world
         assert.ok(Math.abs(upThePicture([0, 0.9], 2) - 0.5) < 0.25, `their middle ${upThePicture([0, 0.9], 2).toFixed(2)} up the picture from 2 m`);
         assert.ok(upThePicture([0, 0.9], 2, 2.4) < 0, "(looking over their head from there, out of it)");
     });
+
+    it("looks over the player's head looking out across the land, and at their middle tilted down onto them (35 degrees or more, the higher view it once started in), between the two between", () => {
+        const back = startDistance(false);
+
+        assert.equal(LOOK_UP.level, startPitch(false));
+        assert.equal(lookUpFor(back, 0, false, startPitch(false)), LOOK_UP.sideways);
+        assert.equal(lookUpFor(back, 0, false, -20), LOOK_UP.sideways);
+        assert.equal(lookUpFor(back, 0, false, LOOK_UP.down), LOOK_UP.middle);
+        assert.equal(lookUpFor(back, 0, false, 60), LOOK_UP.middle);
+
+        const between = [15, 20, 25, 30].map((pitch) => lookUpFor(back, 0, false, pitch));
+
+        assert.ok(between.every((up, k) => up < LOOK_UP.sideways && up > LOOK_UP.middle && (k === 0 || up < between[k - 1])), `${between}`);
+
+        // (Halfway down, half as far over their head; from half as far back, half that)
+        assert.ok(Math.abs(lookUpFor(back, 0, false, (LOOK_UP.level + LOOK_UP.down) / 2) - 1.6) < 1e-9);
+        assert.ok(Math.abs(lookUpFor(back / 2, 0, false, (LOOK_UP.level + LOOK_UP.down) / 2) - 1.2) < 1e-9);
+    });
 });
 
 describe("a phone held upright (world/view.js framed)", () => {

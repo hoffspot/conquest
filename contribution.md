@@ -242,6 +242,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   time; whatever else reads it in that frame or between frames (a page of Game options asking
   whether it can rumble) is given the same, as a real controller's would be. Do the same in a new
   test of the controller.
+- Each test has three minutes (`playwright.config.js` `timeout`). One that needs more sets its
+  own (`test.setTimeout`), at least half as long again as it takes on CI: CI's machines can be
+  1.7 times as slow from one run to the next, and the start view looks out across the land,
+  which is slow to draw in software. One that times out on CI only for being slow is given
+  longer, said why in the pull request; one that hangs (waiting on what never comes) is fixed.
 - Time the tests by how long they took on CI, so its split stays even: once a run's done, its
   ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
   Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit
