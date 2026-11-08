@@ -223,12 +223,12 @@ function awayFromWall(map, x, y) {
 function kitCounter(counter, piece, top) {
     const count = Math.max(1, Math.round(counter.w / piece.size[0]));
 
-    return Array.from({ length: count }, (_, k) => ({ model: piece.model, x: counter.x + ((k + 0.5) * counter.w) / count, z: counter.y + 0.5, fit: [counter.w / count, top, 0.8], turn: 0, double: piece.double }));
+    return Array.from({ length: count }, (_, k) => ({ model: piece.model, x: counter.x + ((k + 0.5) * counter.w) / count, z: counter.y + 0.5, fit: [counter.w / count, top, 0.8], turn: 0, double: piece.double, lot: KIT_LOT }));
 }
 
 // A kit's piece standing in a square of the plan (x, y), its back to the wall beside it, as big as
 // the piece is set (or `fit`)
-const kitStanding = (map, piece, x, y, fit = piece.size) => ({ model: piece.model, x: x + 0.5, z: y + 0.5, fit, turn: awayFromWall(map, x, y), double: piece.double, ...toned(piece) });
+const kitStanding = (map, piece, x, y, fit = piece.size) => ({ model: piece.model, x: x + 0.5, z: y + 0.5, fit, turn: awayFromWall(map, x, y), double: piece.double, lot: KIT_LOT, ...toned(piece) });
 
 // A kit's piece's tone, its people's (world/propkits.js TONES), for its placement
 const toned = (piece) => (piece.tone ? { tone: piece.tone } : {});
@@ -236,7 +236,11 @@ const toned = (piece) => (piece.tone ? { tone: piece.tone } : {});
 // A kit's piece set out with its middle over (x, z) (metres), as big as `fit` (its own length,
 // height and depth), turned `turn` (radians: 0 its front south), and anything else of a
 // placement's (`y`, `on`: dungeons3d.js furnish)
-const kitAt = (piece, x, z, fit = piece.size, turn = 0, more = {}) => ({ model: piece.model, x, z, fit, turn, double: piece.double, ...toned(piece), ...more });
+const kitAt = (piece, x, z, fit = piece.size, turn = 0, more = {}) => ({ model: piece.model, x, z, fit, turn, double: piece.double, lot: KIT_LOT, ...toned(piece), ...more });
+
+// How wide a square a kit's pieces' copies are drawn at once in (furnish's `lot`, metres): wider
+// than any building's inside, so each piece is drawn once however many stand there
+const KIT_LOT = 64;
 
 // A kit's piece hung on a wall (a picture, a trophy, a sconce): its back on the wall's face at
 // (x, z) (metres), its front turned `turn` (0 south, π/2 east, π north, -π/2 west), its foot `y`
@@ -1492,9 +1496,11 @@ function taproom(map) {
     const kit = [];
     const antlers = kitted("antlers");
 
+    // (The game's own kept where they were, set into the chimney breast, not among the stand-ins:
+    // a wall's piece there would be a mesh more to draw)
     for (const side of [-1, 1]) {
-        artOf(solid, antlers).box(m(0.1), m(2.2), m(hz) + side * 1.5, m(0.3), m(2.9), m(hz) + side * 2.2, material("candle", WALL));
-        artOf(solid, antlers).box(m(0.1), m(2.6), m(hz) + side * 2.2, m(0.3), m(2.75), m(hz) + side * 4.5, material("candle", WALL));
+        solid.box(m(0.1), m(2.2), m(hz) + side * 1.5, m(0.3), m(2.9), m(hz) + side * 2.2, material("candle", WALL));
+        solid.box(m(0.1), m(2.6), m(hz) + side * 2.2, m(0.3), m(2.75), m(hz) + side * 4.5, material("candle", WALL));
     }
 
     if (antlers) {
