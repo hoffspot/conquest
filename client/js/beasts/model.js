@@ -2035,10 +2035,14 @@ export function levelOf(node) {
 /**
  * The part of a model a mesh is (the name its parts were joined under, the pipeline's `join`): its
  * own name or its nearest named parent's, without a lower detail's "lod1" (".lod1" as made: three.js
- * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials.
+ * drops the dot) or the "_1" three.js puts after the meshes of a part of several materials. A part
+ * of several materials is read as a group named for it, of a mesh a material, each named for the
+ * mesh it's of, not the part (the horse's body, its coat and its eyes: SK_Horse_Alone and
+ * SK_Horse_Alone_1): the group's name.
  */
 export function partOf(node) {
-    let named = node;
+    const parent = node?.parent;
+    let named = node?.isMesh && parent?.isGroup && parent.name && parent.children.every((child) => child.isMesh) ? parent : node;
 
     while (named && !named.name) {
         named = named.parent;
