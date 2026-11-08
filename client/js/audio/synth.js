@@ -19,6 +19,8 @@
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
 //    in the tavern, the hearth's fire crackling.
 //  - War: great horns blown, an invasion's raiders' (low and long) and a town's (a bright call).
+//  - Riding: a mount whistle blown; a horse rising up out of its magic circle, and sinking back
+//    into it; its hooves' stride; the saddle's creak; a horse struck down.
 //
 // Each sound belongs to a bus, which has its own volume: "effects" (the default) or
 // "environment" (the music is music.js's). Built from dsp.js; no Web Audio (sound.js plays
@@ -329,6 +331,56 @@ function notes(list, { decay = 0.35, harmonics = [[1, 1], [2, 0.25], [3, 0.08]],
     }
 
     return out;
+}
+
+// A hoof coming down on earth: a dull thud with its overtones (for a phone's speaker), the soil's
+// soft scuff under it and a little grit
+const hoof = (random) => add(add(thud(125, 70, 0.12, 0.028), burst(random, 0.08, "lowpass", 900, 0.8, 0.002, 0.018), 0.5), burst(random, 0.03, "bandpass", 2600, 1, 0.0005, 0.006), 0.12);
+
+// A horse's magic circle (core/mounts.js), `length` seconds: opening and the horse rising up out
+// of the ground in it (`rising`), or the horse sinking back down into it and it closing. A low hum
+// on D with its overtones (for a phone's speaker), climbing a fifth as it rises (falling one as it
+// sinks); four glass tones shimmering over it (a glass bell's two lowest partials), each trembling
+// at its own rate, and as the circle opens a glass chord rolled up (down, as it sinks); air drawn
+// up through the circle (let down through it); and the earth rumbling softly and crumbling round
+// the horse as it goes, loudest halfway. Risen, its hooves set down on the ground
+function circle(random, length, rising) {
+    const way = (t) => (rising ? t / length : 1 - t / length);
+    const whole = swell(length, rising ? 0.72 : 0.28);
+    let out = shape(tone(length, (t) => 73.4 * 1.5 ** way(t), { harmonics: [[1, 1], [2, 0.6], [3, 0.4], [4, 0.25], [5, 0.12]] }), whole);
+
+    [587, 880, 1175, 1568].forEach((from, k) => {
+        const tremble = 5 + 2.3 * k + random.next();
+
+        out = add(out, shape(tone(length, (t) => from * (1 + 0.06 * way(t)), { harmonics: GLASS.slice(0, 2) }), (t) => whole(t) * (0.6 + 0.4 * Math.sin(TAU * tremble * t + k))), 0.24);
+    });
+
+    const air = shape(filter(noise(random, length), "bandpass", (t) => 300 * 8 ** way(t), 1.1), whole);
+    const earth = shape(add(filter(noise(random, length), "lowpass", 220, 0.8), filter(grains(random, length - 0.1, 28, 150, 800, { decay: 0.018, bunch: 1, q: 1 }), "lowpass", 1400, 0.7), 2), swell(length, 0.5));
+
+    const opening = notes((rising ? [587, 880, 1175] : [1175, 880, 587]).map((frequency, k) => [frequency, k * 0.05]), { decay: 0.2, harmonics: GLASS, length: 0.8 });
+
+    out = add(add(add(out, air, 1.6), earth, 1.2), opening, 0.3);
+
+    return rising ? add(add(out, hoof(random), 0.5, length - 0.2), hoof(random), 0.4, length - 0.13) : out;
+}
+
+// Leather creaking (a saddle's, under a rider's weight), `length` seconds: the leather sticking
+// and slipping, about `rate` times a second and never quite evenly, its rate rising and falling
+// as the weight comes on and off, each slip rung through the leather's two bands
+function creak(random, length, rate) {
+    const slips = new Float32Array(count(length));
+
+    for (let n = 0, next = 0; n < slips.length; n++) {
+        if (n >= next) {
+            const t = n / SAMPLE_RATE;
+
+            slips[n] = 0.6 + 0.4 * random.next();
+            next = n + SAMPLE_RATE / (rate * (1 + 0.5 * Math.sin((Math.PI * t) / length)) * (0.8 + 0.4 * random.next()));
+        }
+    }
+
+    return softened(add(filter(slips, "bandpass", 820, 3), filter(slips, "bandpass", 2100, 4), 0.6), 2);
 }
 
 /**
@@ -783,6 +835,81 @@ export const SOUNDS = {
     baitLand: { variants: 2, volume: 0.4, make: () => thump(190, 70, 0.2, 0.06) },
     beastEat: { variants: 3, volume: 0.42, make: (random) => softened(add(grains(random, 1.6, 14, 450, 1300, { decay: 0.025, bunch: 1, q: 1.4 }), grains(random, 1.6, 10, 180, 420, { decay: 0.04, bunch: 1, q: 1 }), 0.7), 1.8) },
     tamedChime: { variants: 1, volume: 0.45, make: () => notes([[392, 0], [494, 0.12], [587, 0.24], [784, 0.4]], { decay: 0.6, harmonics: GLASS, length: 1.6 }) },
+
+    // Riding (core/mounts.js). A mount whistle blown (host.js #whistle): a carved shepherd's
+    // whistle, a short note and then one up a fourth, held and falling away a little, each bending
+    // up into its note and wavering as the breath does, the breath hissing through it
+    mountWhistle: {
+        variants: 2,
+        volume: 0.45,
+        make: (random) => {
+            const pitch = 2000 * (0.96 + random.next() * 0.08);
+            let out = new Float32Array(1);
+
+            for (const [from, start, length, fall] of [[pitch, 0, 0.22, 0], [pitch * 4 / 3, 0.27, 0.5, 0.04]]) {
+                const level = (t) => Math.min(1, t / 0.025) * Math.min(1, Math.max(0, (length - t) / 0.12));
+                const note = (t) => from * (1 - 0.05 * Math.exp(-t / 0.03)) * (1 + 0.004 * Math.sin(TAU * 5.5 * t)) * (1 - fall * Math.max(0, (t - (length - 0.16)) / 0.16));
+                const blown = add(tone(length, note, { harmonics: [[1, 1], [2, 0.06], [3, 0.02]] }), filter(noise(random, length), "bandpass", note, 6), 2.5);
+
+                out = add(out, shape(add(blown, filter(noise(random, length), "highpass", 4500), 0.12), level), 1, start);
+            }
+
+            return out;
+        },
+    },
+    // A horse called up out of its magic circle, over the 1.3 seconds it rises (MOUNT rise), and
+    // sinking back into it, over its 1.2 (MOUNT sink): circle
+    horseRise: { variants: 2, volume: 0.5, make: (random) => circle(random, 1.3, true) },
+    horseSink: { variants: 2, volume: 0.5, make: (random) => circle(random, 1.2, false) },
+    // A ridden horse's stride on earth, played once a stride (quicker and higher at a quicker gait:
+    // sound.js play's `rate`): its four hooves one after another, nearly evenly, the leading
+    // foreleg's last and hardest; soft, about as loud as a big man's running footsteps
+    hoofbeats: {
+        variants: 4,
+        volume: 0.2,
+        make: (random) => {
+            let out = new Float32Array(count(0.5));
+
+            for (const [at, loud] of [[0, 0.7], [0.11, 0.8], [0.22, 0.75], [0.34, 1]]) {
+                out = add(out, hoof(random), loud * (0.85 + random.next() * 0.15), at + random.next() * 0.015);
+            }
+
+            return softened(out, 1.5);
+        },
+    },
+    // A horse struck down under its rider (battle.js #horseStruck): its legs going and its
+    // hindquarters hitting the ground, then the great weight of it after, soil scattering and its
+    // tack's buckles knocking; and a pained snort, breath forced out through its nostrils,
+    // fluttering, a groan in its throat under it
+    horseFall: {
+        variants: 2,
+        volume: 0.8,
+        make: (random) => {
+            const first = add(thud(110, 60, 0.3, 0.07), burst(random, 0.2, "lowpass", 700, 0.8, 0.002, 0.04), 0.7);
+            const body = add(thud(85, 34, 0.6, 0.17), burst(random, 0.45, "lowpass", 480, 0.8, 0.003, 0.1), 0.9);
+            const soil = filter(grains(random, 0.6, 24, 300, 2400, { decay: 0.01, bunch: 1.6, q: 1 }), "lowpass", 3000);
+            const tack = ring([[1900 + random.next() * 300, 0.4, 0.05], [3100, 0.25, 0.035]], 0.2);
+            const snort = shape(filter(noise(random, 0.42), "bandpass", (t) => 1150 - 500 * (t / 0.42), 1.1), (t) => hit(0.02, 0.12)(t) * (0.6 + 0.4 * Math.sin(TAU * 32 * t)));
+            const groan = shape(tone(0.5, (t) => 150 - 40 * (t / 0.5), { harmonics: [[1, 1], [2, 0.6], [3, 0.4], [4, 0.25]] }), swell(0.5, 0.2));
+            let out = add(add(first, body, 1, 0.14), soil, 0.25, 0.16);
+
+            out = add(add(out, tack, 0.2, 0.17), snort, 3, 0.48);
+
+            return softened(add(out, groan, 0.25, 0.46), 1.6);
+        },
+    },
+    // Getting up into the saddle or down from it: the saddle's leather creaking under the weight
+    // coming onto it (creak), and the rider landing light in it, or on their feet
+    saddle: {
+        variants: 3,
+        volume: 0.4,
+        make: (random) => {
+            const leather = shape(creak(random, 0.42, 45 + random.next() * 25), swell(0.42, 0.45));
+            const landing = add(thud(140, 85, 0.14, 0.035), burst(random, 0.1, "lowpass", 800, 0.8, 0.002, 0.025), 0.6);
+
+            return softened(add(leather, landing, 0.55, 0.4), 1.5);
+        },
+    },
 
     // A rare encounter (core/rare.js; app/game.js #rareTold): seen, a low drone on D swelling under
     // four glass bells (D, up a tritone, down a semitone, up to the D over it) and a breath of wind

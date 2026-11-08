@@ -1229,6 +1229,23 @@ export const ITEM_ICONS = Object.freeze({
         <rect x="2" y="-12" width="7" height="5" rx="1.2" fill="#4a3a2e" stroke="#1a120c" stroke-width="1" transform="rotate(30 5 -9)"/>
         <path d="M8,-12 C11,-16 10,-19 14,-20" fill="none" stroke="#c8a070" stroke-width="1.6" stroke-linecap="round"/>
         <path d="${star(15, -20, 5.2, 1.6)}" fill="#fff0a0" stroke="#e86a10" stroke-width="0.8" filter="url(#icon-glow)"/>`,
+    // A mount whistle (core/mounts.js): a carved wooden whistle, banded, its mouthpiece of bone, on
+    // a leather cord, a small iron horseshoe hung from it for luck
+    mountWhistle: `
+        <path d="M-6.3,2.1 C-14,1 -21.5,-8 -18,-15.5 C-14.5,-22.5 -4.5,-20 -6.3,2.1" fill="none" stroke="#6a4a2a" stroke-width="1.6"/>
+        <path d="M-6.3,2.1 C-7.2,4.6 -8,7 -8.4,9.6" fill="none" stroke="#6a4a2a" stroke-width="1.6"/>
+        <path d="M-19.5,10.5 C-20,21.5 -7.5,21.5 -8,10.5" fill="none" stroke="#3a4048" stroke-width="5" stroke-linecap="round"/>
+        <path d="M-19.5,10.5 C-20,21.5 -7.5,21.5 -8,10.5" fill="none" stroke="#aeb8c2" stroke-width="2.6" stroke-linecap="round"/>
+        <g fill="#2a2e34"><circle cx="-18.9" cy="13.5" r="0.7"/><circle cx="-17.1" cy="17.9" r="0.7"/><circle cx="-10.4" cy="17.9" r="0.7"/><circle cx="-8.6" cy="13.5" r="0.7"/></g>
+        <g transform="translate(3.8 -5) rotate(-35) scale(1.07)">
+            <rect x="-15" y="-5" width="27" height="10" rx="4.5" fill="url(#icon-wood)" stroke="#3f2410" stroke-width="1.2"/>
+            <path d="M-9,-4.7 L-9,4.7 M-6.5,-4.9 L-6.5,4.9" stroke="#5e3a1c" stroke-width="0.9"/>
+            <path d="M-12.5,-2.4 L9,-2.4" stroke="#f0c890" stroke-width="0.8" opacity="0.6" stroke-linecap="round"/>
+            <path d="M3,-5 L7.5,-5 L6.5,-1.4 L3,-1.4 Z" fill="#2a1608"/>
+            <path d="M11.5,-4 L19,-2.6 C20.6,-2.2 20.6,2.2 19,2.6 L11.5,4 Z" fill="#efe6d0" stroke="#6a5a40" stroke-width="1"/>
+            <path d="M17.2,-0.6 L20,-0.6" stroke="#3a2a1a" stroke-width="0.8"/>
+            <circle cx="-11.5" cy="0" r="1.5" fill="#2a1608"/>
+        </g>`,
 
     potion: `
         <circle cy="6" r="13.5" fill="url(#icon-glass)" stroke="#3a2f45" stroke-width="1.3"/>

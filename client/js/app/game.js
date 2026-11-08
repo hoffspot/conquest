@@ -136,6 +136,7 @@ import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
+import { HORSEBACK, Mounts } from "../world/mounts3d.js";
 import { Squares } from "../world/squares.js";
 import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
 import { cutRock, DUNGEON_CUT, loadProp } from "../world/dungeons3d.js";
@@ -1116,7 +1117,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2335,6 +2336,8 @@ export class Game {
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
         this.spellFx = new SpellFx(this.effects, view.scene, { lights: [] });
+        // (Those riding's horses: world/mounts3d.js)
+        this.mounts = new Mounts(view.scene, { fx: this.spellFx, sound: { play: (...heard) => this.sound?.play(...heard) } });
         this.spellFx.camera = view.camera;
         this.spellFx.onShake = (amount) => {
             // (A game controller rumbles with it, Camera shake on or off: app/padplay.js)
@@ -2799,6 +2802,8 @@ export class Game {
         this.hud.untrack(id);
         this.ailments?.clear(id);
         this.radiant.delete(id);
+        // (Their horse with them)
+        this.mounts?.drop(id);
 
         for (const each of [this.avatars, this.previous, this.flash, this.lastAttack, this.variety, this.landing, this.wounds, this.pools]) {
             each.delete(id);
@@ -4015,6 +4020,22 @@ export class Game {
             }
             // (Where they're drawn, which trails where they are a little)
             this.#updateBody(actor, avatar, dt, this.#standsAt(actor.map, avatar.object.position.x - ox, avatar.object.position.z - oz));
+
+            // (The player's horse's health, while it's out: its bar under theirs)
+            if (actor.id === this.me) {
+                const mount = actor.mount && actor.mount.phase !== "sinking" ? actor.mount : null;
+
+                hud.setMount(mount ? mount.hp : null, mount?.maxHp ?? 0, mount ? this.#horseName(mount.horse) : null);
+            }
+
+            // (Their horse, if they've one out: drawn under them, them up on it: world/mounts3d.js)
+            if (actor.mount || this.mounts.horses.has(actor.id)) {
+                const map = actor.mount?.map ?? actor.map;
+
+                this.mounts.update(actor, avatar, dt, { time: battle.time, origin: this.originOf(map), groundAt: (bx, by) => this.#standsAt(map, bx, by) });
+                this.mounts.show(actor.id, map === this.mapId);
+            }
+
             hud.setStamina(actor.id, actor.stamina, actor.maxStamina);
 
             // (Not shown till its shaders are ready and its pictures sent: #register, #sending)
@@ -5887,6 +5908,11 @@ export class Game {
         const away = Math.hypot(eye.x - this.view.focus.x, eye.z - this.view.focus.z);
 
         _focus.copy(position);
+
+        // (Up on a horse: looked at a little higher)
+        if (this.mounts.up(this.me)) {
+            _focus.y += HORSEBACK.camera;
+        }
 
         if (foe) {
             const [ox, oz] = this.originOf(foe.map);
@@ -15316,12 +15342,36 @@ export class Game {
         }
     }
 
+    // A horse's name, by its id (its whistle's, core/mounts.js horseOf), or "Your horse"
+    #horseName(id) {
+        return this.progress.pack.find((stack) => stack?.horse?.id === id)?.horse.name ?? "Your horse";
+    }
+
     #hit(event) {
         const { battle, hud, effects } = this;
 
         if (event.by && (event.by === this.me || event.id === this.me)) {
             this.fought.set(event.by === this.me ? event.id : event.by, this.clock);
         }
+
+        // (On horseback: the horse struck, not its rider: world/mounts3d.js)
+        if (event.mount) {
+            const at = this.mounts.struck(event.id);
+
+            if (at) {
+                this.sound?.hit(event.reaction, at, null);
+                effects.impact(REACTIONS[event.reaction]?.effect ?? "sparks", at, null, event.projectile ? effects.lookOf(event.projectile) : null);
+            }
+
+            if (event.projectile) {
+                this.flights.delete(event.projectile);
+            }
+
+            hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === this.me });
+
+            return;
+        }
+
         const victim = this.avatars.get(event.id);
         const attacker = event.by ? this.avatars.get(event.by) : null;
         const reaction = REACTIONS[event.reaction];

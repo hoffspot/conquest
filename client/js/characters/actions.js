@@ -2633,6 +2633,9 @@ export class Actions {
         /** Sitting (on a bench), or standing. */
         this.seated = false;
 
+        /** Riding: what poses it as its horse's rider (setRiding), or null. */
+        this.riding = null;
+
         /** Which way each action was done last, to do it another way next time. */
         this.variety = new Variety();
 
@@ -2667,6 +2670,14 @@ export class Actions {
     /** Sit down (on a bench) or stand. */
     setSeated(on) {
         this.seated = on;
+    }
+
+    /**
+     * Ride (world/mounts3d.js), or not (null): `pose(rig, dt)` poses the body as its rider each
+     * time it's posed, whatever the walk would have it do (true if it did), its feet off the ground.
+     */
+    setRiding(pose) {
+        this.riding = pose;
     }
 
     /** Which weapon's guard to stand in while fighting (a GUARDS key; null for none). */
@@ -3182,6 +3193,14 @@ export class Actions {
             if (!this.tossed.rising) {
                 return false;
             }
+        }
+
+        // (On horseback: posed as its rider (world/mounts3d.js), its feet in the stirrups, not on
+        // the ground; its head still turned where it's looking)
+        if (this.riding?.(this.rig, dt)) {
+            this.reactions = [];
+
+            return false;
         }
 
         if (this.seated) {

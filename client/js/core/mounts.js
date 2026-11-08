@@ -8,7 +8,7 @@ export const STABLE = Object.freeze({ price: 400, revive: 100 });
 
 /**
  * A horse's coats: its model's own, bay brown, and its other four (the catalog's
- * beast-horse-coats: "" is the model's own).
+ * beast-horse-skins: "" is the model's own).
  */
 export const COATS = Object.freeze(["bay", "gray", "dapple", "palomino", "white"]);
 
