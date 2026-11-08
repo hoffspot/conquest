@@ -121,7 +121,7 @@ async function playing(page, address) {
 
 test("a game controller plays: walks, looks, talks to who's in front, the Action Bar on R2, a wheel, the Pack and the menu", async ({ page }) => {
     // (Walking up to the crier takes a while, a frame or two a second without a GPU)
-    test.setTimeout(300000);
+    test.setTimeout(480000);
 
     const pad = await standIn(page);
 
@@ -273,7 +273,7 @@ test("a game controller works the windows: Multiplayer, a world's code picked a 
 });
 
 test("a game controller's buttons are set on the Bindings page: chosen, the button pressed, taken from what had it (and said), and set back", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     const pad = await standIn(page);
 

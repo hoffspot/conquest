@@ -162,7 +162,7 @@ for (const licensed of [true, false]) {
             : "Bellhaven without the licensed models: its stand-in seen from its road's end, gone into all the same, its walk drawn in their place, walked and left",
         async ({ page }) => {
             test.skip(licensed && !licensedModelsHere(), LEFT_OUT);
-            test.setTimeout(300000);
+            test.setTimeout(480000);
 
             if (!licensed) {
                 await page.route("**/models/scenery/**", (route) => (route.request().url().includes(".bin") ? route.abort() : route.continue()));

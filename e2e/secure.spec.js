@@ -23,7 +23,7 @@ import { expect, test } from "./fixtures.js";
 // the tests' own), shows what a game found testing it from outside, and closes it again.
 
 // (A world drawn without a GPU: more than the usual time)
-test.setTimeout(300000);
+test.setTimeout(480000);
 test.describe.configure({ mode: "default" });
 
 // Short codes hashed cheaply (the server's own cost is for a Mac, not a test)

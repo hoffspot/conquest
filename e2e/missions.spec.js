@@ -40,7 +40,7 @@ async function playUntil(page, done, seconds = 30) {
 
 test("a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked", async ({ page }) => {
     // (The messenger's walk up played out, and the camp's end: past the usual time)
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The switch in Game options, Chat and players: on to start with)

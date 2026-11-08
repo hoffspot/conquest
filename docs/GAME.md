@@ -1402,8 +1402,11 @@ far back as the screen's held (view.js `startDistance`):
 - **Indoors,** at their middle, under the ceilings.
 
 It zooms between 5 and 32 metres, from any side (`yaw`: from the south, looking north, to start
-with). Looking out to the horizon draws more than looking down: about twice as much a frame at
-15 degrees as at 25 in CI's software renderer. On a phone held upright it looks down more steeply from further back
+with). Looking out to the horizon draws more than looking down: in the browser tests' software
+renderer the start view draws about half the frames a second that 25 degrees down from 5.5
+metres did, nearly all of it the near world between 30 and 160 metres off (the ground, trees,
+undergrowth and water there), so the tests have more time (contribution.md). On a device that
+can't keep up, Adaptive draws fewer pixels. On a phone held upright it looks down more steeply from further back
 (below), measured against 35 degrees (view.js `PITCH`). **The opening fly-in** (view.js `fly`,
 `FLIGHT`; game.js `#flyIn`): as a player comes into a world (a new game, Continue or joining
 one; not after a death, a door or a dungeon, and only out of doors), the camera starts 110 metres
