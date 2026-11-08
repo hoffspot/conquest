@@ -15269,6 +15269,11 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
     expect(await full()).toBe(true);
 
+    // (The camera looking down on the player, as overlook, so a tap on the world is on the ground
+    // by them: from the start view, looking out across the land, it can be on someone walking
+    // about the market, whose talk it opens instead)
+    await overlook(page);
+
     // Left by the player (Escape, the browser's own button, Android's back): paused
     await page.evaluate(() => document.exitFullscreen());
     await expect(page.locator("#menu")).toBeVisible();
@@ -16861,7 +16866,12 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await page.locator("#resumebutton").click();
     await expect(menu).toBeHidden();
 
-    // Held on the player: wheel one; flicked down, wheel two, opened again under the finger
+    // Held on the player (the camera looking down on them, as overlook: from the start view,
+    // looking out across the land, a frame drawn in software takes long enough that the wheel
+    // shown a moment after the hold may not be looked at in time): wheel one; flicked down, wheel
+    // two, opened again under the finger
+    await overlook(page);
+
     const me = await page.evaluate(() => {
         const { game, session } = window.pellagos;
 
@@ -16891,6 +16901,11 @@ test("magic: the spellbook shows every school and the tomes; an element opened b
     // (Two tomes read, a fight and a summons: more than the usual time)
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
+
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, each frame of the greatest spells' light is slow enough to draw in software that
+    // the summons asked after it is drawn again before it's clicked)
+    await overlook(page);
 
     const book = page.locator(".spellbook");
 

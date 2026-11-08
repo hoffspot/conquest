@@ -33,7 +33,8 @@ import { falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packP
 import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.js";
 import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
 import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
-import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
+import { horseFrom, horseHealth, out as horseOut, STABLE } from "./mounts.js";
+import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
@@ -68,7 +69,7 @@ import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
-import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
+import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
@@ -1106,6 +1107,15 @@ export const REFUSALS = Object.freeze({
     fighting: "Not in the middle of a fight.",
     portal: "Stand at a guild's portal to step through it.",
     here: "You're there already.",
+    // (A mount whistle: core/mounts.js, #whistle)
+    noSky: "Only under the open sky: no horse comes in here.",
+    otherHorse: "Another of your horses is out: send it back first.",
+    horseGoing: "Your horse is still going back into the ground.",
+    horseFallen: "That horse has fallen: any stable can bring it back, for a fee.",
+    riding: "Not on horseback: get down first.",
+    // (At a stable: #stableService)
+    stable: "They keep no horses here.",
+    unfallen: "That horse is well: there's nothing to bring back.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -2215,7 +2225,7 @@ export class Host {
             case "unequip":
                 return this.#gear(player, player.progress.unequip(command.slot, Number.isInteger(command.to) ? command.to : null));
             case "use":
-                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item), typeof command.target === "string" ? command.target : null, { toss: command.toss === true });
+                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : this.#slotFor(player, actor, command.item), typeof command.target === "string" ? command.target : null, { toss: command.toss === true });
             case "arrange":
                 return this.#packed(player.progress.move(command.from, command.to));
             case "sort":
@@ -3427,6 +3437,10 @@ export class Host {
     #learn(event) {
         this.#wounded(event);
 
+        if (event.type === "thrown") {
+            this.#horseFell(event);
+        }
+
         // (What a player's followers do, their leader's: their Command grows by it, and what they
         // bring down counts for them; and they learn from it, and remember it: #train, #noted)
         const leads = this.followers.get(event.by);
@@ -4355,8 +4369,8 @@ export class Host {
             return refuse("item");
         }
 
-        // (A unique, bound to who has it: core/rare.js)
-        if (stack.unique) {
+        // (A unique, bound to who has it: core/rare.js; a horse's whistle)
+        if (bound(stack)) {
             return refuse("bound");
         }
 
@@ -4433,7 +4447,7 @@ export class Host {
             return refuse("item");
         }
 
-        if (stack.unique) {
+        if (bound(stack)) {
             return refuse("bound");
         }
 
@@ -4629,7 +4643,7 @@ export class Host {
                 return refuse("item");
             }
 
-            if (each.unique) {
+            if (bound(each)) {
                 return refuse("bound");
             }
 
@@ -4826,6 +4840,11 @@ export class Host {
             return refuse("dead");
         }
 
+        // (A mount whistle: its horse called, or sent back)
+        if (use.whistle) {
+            return this.#whistle(player, actor, stack);
+        }
+
         // (A draught, a meal or a cure given to one of their own: a follower, or a creature at
         // their side)
         const own = target === null ? null : this.#ownUnit(player, target);
@@ -4953,6 +4972,90 @@ export class Host {
         return OK;
     }
 
+    // Which of a player's things to use by its kind (an Action Bar's): the first; but of their
+    // mount whistles, the one whose horse is out (to send it back), or else the first whose horse
+    // is standing
+    #slotFor(player, actor, id) {
+        const { pack } = player.progress;
+
+        if (id === "mountWhistle") {
+            const ridden = horseOut(actor?.mount) ? actor.mount.horse.id : null;
+            const whistles = pack.flatMap((stack, index) => (stack?.id === id && stack.horse ? [[index, stack.horse]] : []));
+            const [index = -1] = whistles.find(([, horse]) => horse.id === ridden) ?? whistles.find(([, horse]) => !horse.fallen) ?? whistles[0] ?? [];
+
+            return index;
+        }
+
+        return player.progress.slotOf(id);
+    }
+
+    // A mount whistle blown (core/mounts.js): its horse called up out of the ground at their side
+    // to be ridden (under the open sky only, not in a fight, nor once it's fallen: battle.js
+    // mount, its health theirs times MOUNT `health`); or, out, sent back (dismount). Told to them
+    // ("whistle": the horse's id, and whether it's called)
+    #whistle(player, actor, stack) {
+        const horse = stack.horse;
+
+        if (!horse) {
+            return refuse("item");
+        }
+
+        const mount = actor.mount;
+
+        if (horseOut(mount)) {
+            if (mount.horse.id !== horse.id) {
+                return refuse("otherHorse");
+            }
+
+            if (!this.battle.dismount(actor.id)) {
+                return refuse("midst");
+            }
+
+            this.#event("whistle", { id: player.id, horse: horse.id, call: false });
+
+            return OK;
+        }
+
+        if (mount) {
+            return refuse("horseGoing");
+        }
+
+        if (horse.fallen) {
+            return refuse("horseFallen");
+        }
+
+        if (actor.map !== "town") {
+            return refuse("noSky");
+        }
+
+        if (this.#beset(actor)) {
+            return refuse("fighting");
+        }
+
+        const maxHp = horseHealth(actor.maxHp);
+
+        if (!this.battle.mount(actor.id, horse, { hp: maxHp, maxHp })) {
+            return refuse("midst");
+        }
+
+        this.#event("whistle", { id: player.id, horse: horse.id, call: true });
+
+        return OK;
+    }
+
+    // A player's horse struck down under them (battle.js "thrown"): fallen, its whistle says so,
+    // till a stable brings it back (#stableService)
+    #horseFell(event) {
+        const player = this.players.get(event.id);
+        const pack = player?.progress.pack ?? [];
+        const index = pack.findIndex((stack) => stack?.horse?.id === event.horse);
+
+        if (index >= 0) {
+            pack[index] = { ...pack[index], horse: { ...pack[index].horse, fallen: true } };
+            this.#event("horseFell", { id: player.id, horse: event.horse, name: pack[index].horse.name });
+        }
+    }
+
     // One of a player's own (a follower, or a creature at their side: by id), or null
     #ownUnit(player, id) {
         const one = this.followers.get(id) ?? this.companions.get(id);
@@ -5067,6 +5170,8 @@ export class Host {
         // (A shield bash: harder and longer, by as much, for a shield made for it)
         const bash = ability.stun ? (actor.power?.bash ?? 1) : 1;
 
+        // (On horseback: down first, quickly, the blow struck once they are: battle.js #horseback)
+        this.battle.dismount(actor.id, { quick: true });
         this.battle.empower(actor.id, ability.blow, ability.factor * bash, { stun: Math.round((ability.stun ?? 0) * bash) });
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
@@ -5115,6 +5220,8 @@ export class Host {
             this.battle.slipAway(actor.id);
         }
 
+        // (On horseback: down at once, quickly, to fight)
+        this.battle.dismount(actor.id, { quick: true });
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
 
@@ -5320,10 +5427,12 @@ export class Host {
         const unseen = (square) => !players.some((actor) => this.battle.canSee(actor, { map: "town", square }));
         const folk = townsfolkOf({ place: id, kind, people, name, errands, count: countOut(kind, torchesLit(elapsedOf(this.war))), seed: this.world.seed ?? 1, start: unseen });
         const crier = crierOf({ place: id, kind, people, name, errands, seed: this.world.seed ?? 1 });
+        // (And its stablemaster before its stable, by the road in: a town's, a city's, a capital's)
+        const stablemaster = stablemasterOf({ place: id, people, name, errands, seed: this.world.seed ?? 1 });
         const spot = this.#spots();
         const ids = [];
 
-        for (const one of [...folk, ...(crier ? [crier] : [])]) {
+        for (const one of [...folk, ...(crier ? [crier] : []), ...(stablemaster ? [stablemaster] : [])]) {
             try {
                 one.square = spot([one.square[0] + 0.5, one.square[1] + 0.5]);
             } catch {
@@ -14292,6 +14401,74 @@ export class Host {
         return one ? { id, name: this.#calledBy(one), price: recallPrice(hirePrice((HIRES[one.calling] ?? HIRES.warrior).price, one.level, Boolean(one.renowned))) } : null;
     }
 
+    /**
+     * What a stable asks of a player (core/mounts.js STABLE): { price (a horse), revive (bringing
+     * one back), fallen ([{ id, name }]: their horses fallen, their whistles in their pack) }.
+     * Asked by the game for what a stablemaster says, and by #stableService for what's paid.
+     */
+    stableOffer(playerId) {
+        const pack = this.players.get(playerId)?.progress.pack ?? [];
+
+        return { price: STABLE.price, revive: STABLE.revive, fallen: pack.flatMap((stack) => (stack?.horse?.fallen ? [{ id: stack.horse.id, name: stack.horse.name }] : [])) };
+    }
+
+    // At a stablemaster (any stable's: core/townsfolk.js stablemasterOf): a horse bought (`buy`:
+    // STABLE price; its mount whistle in their pack, the horse's coat, mane and name drawn for it,
+    // the same on every copy of the world, core/mounts.js horseFrom), or the first of theirs fallen
+    // brought back (`revive`: STABLE revive). Told to them ("horse": bought or revived)
+    #stableService(player, actor, service) {
+        if (this.folk.get(actor.talkingTo)?.role !== "stablemaster") {
+            return refuse("stable");
+        }
+
+        const offer = this.stableOffer(player.id);
+
+        if (service === "buy") {
+            if (player.progress.gold < offer.price) {
+                return refuse("gold");
+            }
+
+            // (Its own id among theirs, from when it's bought: the same on every copy)
+            const bought = player.progress.pack.filter((stack) => stack?.horse).length;
+            const id = `horse-${this.battle.time.toString(36)}-${bought + 1}`;
+            const random = createRandom([...`${player.id}:${id}:horse`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
+            const horse = horseFrom(random, id);
+
+            if (!player.progress.stow({ id: "mountWhistle", horse })) {
+                return refuse("full");
+            }
+
+            player.progress.gold -= offer.price;
+            this.#gain(player, "trade", offer.price * XP.trade);
+            this.#event("horse", { id: player.id, change: "bought", horse, price: offer.price });
+
+            return { ok: true, horse, price: offer.price };
+        }
+
+        if (service === "revive") {
+            const [fallen] = offer.fallen;
+
+            if (!fallen) {
+                return refuse("unfallen");
+            }
+
+            if (player.progress.gold < offer.revive) {
+                return refuse("gold");
+            }
+
+            const { pack } = player.progress;
+            const index = pack.findIndex((stack) => stack?.horse?.id === fallen.id);
+
+            pack[index] = { ...pack[index], horse: { ...pack[index].horse, fallen: false } };
+            player.progress.gold -= offer.revive;
+            this.#event("horse", { id: player.id, change: "revived", horse: pack[index].horse, price: offer.revive });
+
+            return { ok: true, horse: pack[index].horse, price: offer.revive };
+        }
+
+        return refuse("command");
+    }
+
     // One of a player's hired adventurers mending at the guild sent for (at any guild's
     // receptionist, recallOffer's price): back at their side, their wounds mended
     #sendFor(player, actor) {
@@ -14401,7 +14578,7 @@ export class Host {
 
         const { one } = near;
 
-        if (stack?.unique) {
+        if (bound(stack)) {
             return refuse("bound");
         }
 
@@ -15742,6 +15919,10 @@ export class Host {
             return refuse("midst");
         }
 
+        if (horseOut(actor.mount)) {
+            return refuse("riding");
+        }
+
         this.#order(actor, { type: "stop" });
         this.#event("emote", { id: actor.id, emote });
 
@@ -15837,6 +16018,11 @@ export class Host {
 
         if (effect.recall) {
             return this.#sendFor(player, actor);
+        }
+
+        // (A horse bought, or a fallen one brought back: a stablemaster's)
+        if (effect.stable) {
+            return this.#stableService(player, actor, effect.stable);
         }
 
         if (effect.release) {
@@ -15939,6 +16125,10 @@ export class Host {
 
         if (actor.map !== "town") {
             return "outdoors";
+        }
+
+        if (horseOut(actor.mount)) {
+            return "riding";
         }
 
         const plan = this.world.plan;

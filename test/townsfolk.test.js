@@ -12,7 +12,8 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { ROLES } from "../client/js/core/roles.js";
-import { CALLINGS, countOut, CRIERS, crierOf, doorsOf, errandsOf, LINGER, SHELTER, shelterOf, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
+import { layoutTown } from "../client/js/core/setpieces/town.js";
+import { CALLINGS, countOut, CRIERS, crierOf, doorsOf, errandsOf, LINGER, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
 import { BEHEMOTH } from "../client/js/core/invasions.js";
 import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
 import { LOOKS } from "../client/js/characters/peoples.js";
@@ -124,8 +125,9 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
 
         assert.deepEqual(out.map(({ place, change }) => [place, change]), [[host.world.start.id, "out"]]);
         assert.equal(folk.length, countOut(host.world.start.kind, false));
-        // (And its crier with them: crierOf)
-        assert.deepEqual(out[0].ids, [...folk.map(({ id }) => id), `crier:${host.world.start.id}`]);
+        // (And its crier with them: crierOf; and, a town, its stablemaster before its stable:
+        // stablemasterOf)
+        assert.deepEqual(out[0].ids, [...folk.map(({ id }) => id), `crier:${host.world.start.id}`, `stablemaster:${host.world.start.id}`]);
 
         for (const one of folk) {
             const kept = host.folk.get(one.id);
@@ -433,5 +435,29 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
                 }
             }
         }
+    });
+});
+
+describe("a town's stablemaster (townsfolk.js stablemasterOf)", () => {
+    it("stands before its stable, in a town and bigger, by the road in; none in a village", () => {
+        const free = ([x, y]) => [Math.floor(x), Math.floor(y)];
+
+        for (const kind of ["town", "city", "capital"]) {
+            const layout = layoutTown({ kind, seed: 3 });
+            const stable = layout.pieces.find(({ kind: piece, name }) => piece === "landmark" && name === "stable");
+            const errands = errandsOf(layout, [0, 0], free);
+            const one = stablemasterOf({ place: `${kind}-3`, people: "human", errands, seed: 1 });
+
+            assert.ok(stable, `a ${kind}'s stable`);
+            assert.equal(errands.stable.length, 1);
+            assert.equal(one.role, "stablemaster");
+            assert.equal(one.id, `stablemaster:${kind}-3`);
+            assert.ok(Math.hypot(one.square[0] + 0.5 - stable.x, one.square[1] + 0.5 - stable.y) < 8, "before it");
+        }
+
+        const village = layoutTown({ kind: "village", seed: 3 });
+
+        assert.equal(village.pieces.some(({ name }) => name === "stable"), false);
+        assert.equal(stablemasterOf({ place: "v", errands: errandsOf(village, [0, 0], ([x, y]) => [Math.floor(x), Math.floor(y)]), seed: 1 }), null);
     });
 });

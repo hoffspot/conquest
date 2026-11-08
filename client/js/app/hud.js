@@ -629,6 +629,30 @@ export class Hud {
         more.setAttribute("aria-label", more.title);
     }
 
+    /**
+     * The player's horse's health (core/mounts.js: blows aimed at them land on it, ridden), its
+     * name with it: a brown bar under theirs, shown while it's out; hidden (`hp` null) once it's
+     * gone.
+     */
+    setMount(hp, maxHp, name = null) {
+        const bar = this.plate?.querySelector(".bar.mount");
+        const shown = hp === null ? "none" : `${hp} / ${maxHp} ${name ?? ""}`;
+
+        if (!bar || bar.dataset.shown === shown) {
+            return;
+        }
+
+        bar.dataset.shown = shown;
+        bar.hidden = hp === null;
+
+        if (!bar.hidden) {
+            bar.querySelector(".fill").style.transform = `scaleX(${Math.max(0, hp / maxHp).toFixed(3)})`;
+            bar.querySelector(".value").textContent = `${Math.ceil(hp)} / ${maxHp}`;
+            bar.querySelector(".horse").textContent = name ?? "";
+            bar.setAttribute("aria-label", `${name ?? "Your horse"}: ${Math.ceil(hp)} of ${maxHp} health`);
+        }
+    }
+
     /** Change a character's stamina: its orange bar, shown while it isn't full. */
     setStamina(id, stamina, maxStamina) {
         const plate = this.#plateOf(id);

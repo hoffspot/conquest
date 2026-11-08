@@ -2064,7 +2064,7 @@ came for each player (`messengersHeard`: `SNAPSHOT_VERSION` 50, none in a world 
 each one's clocks (`found`, `arrived`: `SNAPSHOT_VERSION` 51, from when they last set out or came
 up in a world kept before). What two games share changed (`NET_VERSION` 212: the `mission`
 command, `pick` and `giveUp`; the `messenger` and `mission` events; with the half hour between
-them, 216; and with their following, then staying, and the `messenger` event's "staying", 217).
+them, 216; and with their following, then staying, and the `messenger` event's "staying", 218).
 
 ### The war table (M21)
 

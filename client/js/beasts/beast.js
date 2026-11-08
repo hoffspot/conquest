@@ -178,8 +178,10 @@ export class BeastAvatar {
      * @param {number} [options.seed] - Which one of its kind it is (its size, its markings).
      * @param {object} [options.champion] - A dungeon's boss's or mini-boss's look, if it's one
      *   (champions.js championLook): bigger, its body tinted, what glows on it brighter.
+     * @param {string} [options.skin] - Which of its model's skins it wears (its seed's, skinOf, if not given).
+     * @param {string[]} [options.parts] - The parts it wears of a model of parts kept apart (its seed's, partsOf, if not given).
      */
-    constructor(id, { seed = 1, champion = null } = {}) {
+    constructor(id, { seed = 1, champion = null, skin: wornSkin = null, parts: wornParts = null } = {}) {
         // (One of three of its kind, which it's built as, and shares its body with: the rest of
         // what makes it itself is its size and a little difference in its colour)
         const variant = seed % 3;
@@ -191,7 +193,8 @@ export class BeastAvatar {
 
         this.id = id;
         this.scale = sizeOf(id, seed);
-        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y, skin: skinOf(id, seed), parts: partsOf(id, seed) }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
+        // (In its own skin and parts, if it's given them: a player's horse its whistle's coat and mane)
+        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y, skin: wornSkin ?? skinOf(id, seed), parts: wornParts ?? partsOf(id, seed) }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
         this.scale *= champion ? championScale(champion, this.plan.height * this.scale) : 1;
 
         /** Is it drawn from its model (beasts/model.js), not its stand-in? */

@@ -28,7 +28,8 @@
   the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, with its
   two other skins; and the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, with its two other skins;
   and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, in three liveries, with its riders,
-  and its Prior, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins
+  and its Prior, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the
+  horses players ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with its riders' clips
   (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, its
   stand-in seen from afar and a kit of its parts drawing its keep's insides; the human peoples' timber forts, set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, a kit of Wind Ways' medieval shop pack from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). Don't copy one out of the game or use it in anything else.
 - **The book's code and assets, in the git history.** The repository began as Last Colony, the

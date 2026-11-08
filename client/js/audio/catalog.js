@@ -32,6 +32,7 @@ export const GROUPS = Object.freeze([
     "The world",
     "Birds",
     "Town and farm",
+    "Riding",
     "War",
     "Indoors",
     "Coins and trade",
@@ -211,8 +212,8 @@ export const CATALOG = Object.freeze({
     spellCircle: { group: "Tome spells", label: "Scroll of Safety", about: "A cymbal rolled up to a crescendo under a bowed cymbal, a climbing shimmer of chimes and a triangle's roll.", plays: "Reading a Scroll of Safety: swelling as its circle grows, loudest as you're carried off." },
 
     // Bodies and doors
-    fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down, as they hit the ground." },
-    fallArmoured: { group: "Bodies and doors", label: "An armoured body falling", about: "A body falling, with mail rattling down after it.", plays: "Anyone in mail or plate falling, as they hit the ground." },
+    fall: { group: "Bodies and doors", label: "A body falling", about: "A body hitting the ground (a person falling on a wooden floor), from its first heavy contact.", plays: "Anyone falling, dead or knocked down (thrown by a blast, or by a horse struck down under them), as they hit the ground." },
+    fallArmoured: { group: "Bodies and doors", label: "An armoured body falling", about: "A body falling, with mail rattling down after it.", plays: "Anyone in mail or plate falling, dead or knocked down (thrown by a blast, or by a horse struck down under them), as they hit the ground." },
     dropWeapon: { group: "Bodies and doors", label: "A weapon dropped", about: "Iron clattering onto a hard floor.", plays: "Anyone armed falling dead: what they fought with, just after they hit the ground." },
     door: { group: "Bodies and doors", label: "A door", about: "An old wooden door: a creak or the latch, then it shutting. kyles's rattly old door, on Freesound.", plays: "Anyone going through a house's, a tavern's, a smithy's, a guild's or a shop's door on the player's side of it; and the townsfolk going in at their doors as the Behemoth of the Rift comes, and out of them again once it's slain or gone." },
     deathThudSmall: { group: "Bodies and doors", label: "A small body falling", about: "A small body dropping onto leaves.", plays: "A small creature (a rat, a porcupine, a badger, a jackal, an adder, a Gila monster, a spider, a scorpion, a frog, a salamander, a cave olm, a mandrake, a giant centipede, a spitting cobra, a basilisk, an ahuizotl, a giant ant, a dungeon spider, a giant cockroach, a dungeon wasp) falling dead, as it hits the ground." },
@@ -362,10 +363,18 @@ export const CATALOG = Object.freeze({
     dogBark: { group: "Town and farm", label: "A dog", about: "A big dog barking (ScouseMouseJB's malamute), heard from a way off.", plays: "In a town, every 18 to 55 seconds (less often at night)." },
     chickens: { group: "Town and farm", label: "Hens", about: "Hens clucking: evsecrets's.", plays: "By day in a town, every 25 to 70 seconds." },
     rooster: { group: "Town and farm", label: "A cock crowing", about: "A cock crowing: lonemonk's.", plays: "At dawn, in a town or on farmland, every 12 to 35 seconds." },
-    horseWhinny: { group: "Town and farm", label: "A horse", about: "A horse whinnying: 3bagbrew's and dontwanttobehere's.", plays: "By day in a town, every 45 to 120 seconds." },
+    horseWhinny: { group: "Town and farm", label: "A horse", about: "A horse whinnying: 3bagbrew's and dontwanttobehere's.", plays: "By day in a town, every 45 to 120 seconds; and a player's own horse, now and then as it's called up and while it's ridden." },
     cowMoo: { group: "Town and farm", label: "Cattle", about: "A cow mooing: felix.blume's in the Limousin, and Mystikuum's.", plays: "By day on farmland and meadow, every 25 to 70 seconds, from far off; seldom in a town." },
     sheepBleat: { group: "Town and farm", label: "Sheep", about: "A sheep bleating out of doors: Yuval's.", plays: "By day on farmland and meadow, every 20 to 60 seconds; seldom in a town." },
     churchBell: { group: "Town and farm", label: "A church bell", about: "A church bell struck, ringing on: Nox_Sound's.", plays: "In a town at the hours of prayer (6, 9, 12, 15 and 18 o'clock), three strokes, from the church somewhere off. And the Great Bell of Bellhaven, played deeper: one low note as the Prior of the Bell falls, heard by those who felled him (at 0.55 the speed); and three strokes, softer, heard by everyone, as his keep's made again and he walks again (at 0.7)." },
+
+    // Riding (core/mounts.js): a horse bought at a stable, called up with its whistle and ridden
+    mountWhistle: { group: "Riding", label: "A mount whistle", about: "A carved shepherd's whistle, made in code: a short note, then one up a fourth, held and falling away a little, the breath hissing through it.", plays: "Blowing a mount whistle (core/host.js #whistle): to call a horse up, or to get down and send it back; heard where it's blown." },
+    horseRise: { group: "Riding", label: "A horse called up", about: "Made in code: a magic circle opening with a glass chord rolled up, a low hum climbing a fifth under glass tones shimmering, air drawn up through it and the earth rumbling softly and crumbling, swelling as the horse rises out of the ground, its hooves set down at the last.", plays: "A horse called up out of its magic circle (battle.js mount, phase rising), over the 1.3 seconds it rises." },
+    horseSink: { group: "Riding", label: "A horse sent back", about: "Made in code, the call turned about: a glass chord rolled down, the hum falling a fifth, air let down through the circle and the earth rumbling, dying away as the circle closes over the horse.", plays: "A horse sinking back into its circle (phase sinking, over its 1.2 seconds), sent back by its whistle, and after a fallen horse has lain." },
+    hoofbeats: { group: "Riding", label: "Hooves", about: "Made in code: a horse's stride on earth, its four hooves coming down one after another, nearly evenly, the last the hardest; each a dull thud, the soil's soft scuff and a little grit.", plays: "A ridden horse's strides, in time with its walk, trot, canter and gallop: one a stride, quicker and higher the faster it goes." },
+    horseFall: { group: "Riding", label: "A horse falling", about: "Made in code: a horse's legs going and the great weight of it hitting the ground after, soil scattering and its tack knocking, then a pained snort, fluttering through its nostrils, a groan under it.", plays: "A horse struck down under its rider (battle.js #horseStruck), its rider thrown (they're heard landing as anyone thrown is: a body falling)." },
+    saddle: { group: "Riding", label: "The saddle", about: "Made in code: a saddle's leather creaking as the weight comes onto it, and a light thump as the rider settles, or lands on their feet.", plays: "Getting up into the saddle, and down from it." },
 
     // War (app/game.js #invasion): an invasion's horns
     taunt: { group: "War", label: "A taunt", about: "Made in code: a weapon banged twice on a shield, and a short brassy bark up a fourth.", plays: "A foe made to go for someone by a taunt: the player's (Endurance's Taunt), or a hired warrior's taking one off its leader or the cleric or mage with them; heard where the taunter is. (Not for each foe a war cry takes: that's heard as the cry.)" },
