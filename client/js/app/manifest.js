@@ -48,7 +48,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/charge.js", 5087, "193e705eb1"],
             ["js/app/choices.js", 7166, "4b77ccf428"],
             ["js/app/creator.js", 47878, "20636e4251"],
-            ["js/app/doors.js", 14160, "5676ea34bc"],
+            ["js/app/doors.js", 14243, "c7f51434d8"],
             ["js/app/fate.js", 4610, "862fcbe9db"],
             ["js/app/fight.js", 1610, "7a1237aa07"],
             ["js/app/forecast.js", 20474, "224b049a4f"],
