@@ -46,6 +46,7 @@ import { Character } from "../characters/character.js";
 import { EQUIPMENT } from "../characters/equipment.js";
 import { folkLook } from "../characters/folk.js";
 import { buildItem } from "../characters/items.js";
+import { RIDER_CLIPS } from "../characters/riding.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { motions } from "../characters/motioncheck.js";
 import { ARMS, soldierLook } from "../characters/soldiers.js";
@@ -443,9 +444,11 @@ const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-p
 
 // The catalog's creatures' models, by their catalog ids: each to be shown as it was made, every
 // clip in its file by name, in any of its skins (?model=beast-werewolf); those who aren't in the
-// game yet (no kind is drawn from it: beasts/model.js MODELS) listed in the picker
+// game yet (no kind is drawn from it: beasts/model.js MODELS) listed in the picker; but not one
+// that's only clips played on others' bodies (the riders' on their horses: characters/riding.js)
 const BEAST_MODELS = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins"));
-const COMING = BEAST_MODELS.filter((id) => !Object.values(MODELS).some(({ asset }) => asset === id));
+const CLIPS_ONLY = new Set([RIDER_CLIPS]);
+const COMING = BEAST_MODELS.filter((id) => !CLIPS_ONLY.has(id) && !Object.values(MODELS).some(({ asset }) => asset === id));
 
 // The catalog's scenes' models (scenery-: Bellhaven, the White Castle, its cells, and as it's
 // seen from afar), each shown whole as it was made (?model=scenery-bellhaven); the page each is

@@ -166,6 +166,16 @@ export const LOOKS = Object.freeze({
     bellArcher: { body: "humanoid", scale: [0.98, 1.03] },
     choirKnight: { body: "humanoid", scale: [1.05, 1.1] },
     priorVane: { body: "humanoid", scale: [1.35, 1.35] },
+    // (A player's horse (core/mounts.js), till its model's read: a bay, saddled)
+    horse: {
+        body: "quadruped",
+        scale: [1, 1],
+        length: 2.3, height: 1.6, girth: 0.33, width: 0.26, chest: 1.15, haunch: 1.1, neck: 0.64, neckUp: 0.85,
+        head: [0.1, 0.12, 0.19], snout: { length: 0.36, radius: 0.08, taper: 0.85 }, ears: "pointed", legs: 0.072, hooves: true, mane: "horse",
+        tail: { length: 1.1, radius: 0.08, bushy: true, lift: -1.45, curl: 0.04 }, roughness: 0.55,
+        colours: { fur: 0x7a4a2a, belly: 0x6a3e22, dark: 0x1c1410, mane: 0x1c1410, tail: 0x1c1410, mask: 0x7a4a2a, saddle: 0x4a2e1a, eyes: 0x140c08 },
+        attacks: [], rests: ["sniff", "shake", "root"],
+    },
     // (Its riders: a grey warhorse in steel barding, its rider left to the bought model)
     bellRider: {
         body: "quadruped",

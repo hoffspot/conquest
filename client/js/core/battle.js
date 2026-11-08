@@ -85,6 +85,7 @@ import { armsOf, blowEvery, chooseAttack, distanceBetween, KNIFE, longestReach, 
 import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
 import { BAIT, eats, MOODS, MORALE, moodFor, NERVE, twoDice, WARY } from "./wary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
+import { carried, carries, holds, MOUNT, nextPhase, out, phaseLength } from "./mounts.js";
 
 /**
  * How near (squares) two people have to be to talk, seeing each other: next to each other, or
@@ -1004,6 +1005,12 @@ export class Battle {
             // when it may go up again: #hover)
             aloft: null,
             hoverAt: 0,
+            // (A player's horse, called with its whistle, or null: { horse (core/mounts.js horseFrom),
+            // phase (PHASES), at (when it began, ms), quick (getting down to fight), hp, maxHp, side
+            // (which side of it they get up and down: "left" or "right"), spot (where it stands,
+            // [x, y], while it isn't carrying them), map (that spot's), facing (its way there), then
+            // (what they do once they're down: { call, args }, a spell cast or a throw) }: mount)
+            mount: null,
             // (One that lurks, a black widow (its wild's `lurk`): hanging unseen under the roof, no
             // one's enemy nor anyone its, till it drops on whoever comes beneath it, when it
             // dropped (ms): #lurk)
@@ -1310,6 +1317,8 @@ export class Battle {
 
         const from = actor.map;
 
+        // (Carried off on horseback: the horse gone, back into the ground where it stood)
+        this.#unhorse(actor);
         Object.assign(actor, { map, square: there, x: there[0] + 0.5, y: there[1] + 0.5, path: [], offPath: false, pathGoal: null, facing: facing ?? actor.facing, pace: actor.walkPace, attack: null, casting: null, order: null, target: null, crossed: null });
         this.#version++;
 
@@ -1327,6 +1336,208 @@ export class Battle {
         this.#emit("cross", { id, link: null, kind: "magic", from, to: map, square: there, facing: actor.facing });
 
         return there;
+    }
+
+    // --- Horses (core/mounts.js) ---
+
+    /**
+     * A player's horse called with its whistle (`horse`: core/mounts.js horseFrom; `hp`, `maxHp`
+     * its health): rising out of the ground at their side (MOUNT `beside`: the horse's left, or its
+     * right where that's blocked), then they get up into the saddle (`mounting`) and ride. Held
+     * where they are till they're up. Told as "mount". The mount, or null (none for the dead, or
+     * one with a horse out or going already).
+     */
+    mount(id, horse, { hp, maxHp }) {
+        const actor = this.actor(id);
+
+        if (!actor || actor.dead || actor.mount) {
+            return null;
+        }
+
+        // (At their side as they face: the horse's left's to their right, standing at its left)
+        const [lx, ly] = [cos(actor.facing), -sin(actor.facing)];
+        const sides = [
+            ["left", [actor.x - lx * MOUNT.beside, actor.y - ly * MOUNT.beside]],
+            ["right", [actor.x + lx * MOUNT.beside, actor.y + ly * MOUNT.beside]],
+        ];
+        const [side, spot] = sides.find(([, at]) => this.#clear(actor.map, at, actor)) ?? ["left", [actor.x, actor.y]];
+
+        actor.mount = { horse: { ...horse }, phase: "rising", at: this.time, quick: false, hp: Math.max(1, Math.min(hp, maxHp)), maxHp, side, spot, map: actor.map, facing: actor.facing, then: null };
+        Object.assign(actor, { path: [], offPath: false, progress: null, pace: actor.walkPace });
+
+        if (actor.attack && !actor.attack.struck) {
+            actor.attack = null;
+        }
+
+        this.#version++;
+        this.#emitMount(actor);
+
+        return actor.mount;
+    }
+
+    /**
+     * Off a player's horse (`quick`: to fight, twice as fast), the horse then sinking back into the
+     * ground; or, not up on it yet, the horse called back as it rises. Told as "mount". Whether it
+     * was (not with no horse out, or one going already).
+     */
+    dismount(id, { quick = false } = {}) {
+        const actor = this.actor(id);
+        const mount = actor?.mount;
+
+        if (!mount || !out(mount) || mount.phase === "dismounting") {
+            return false;
+        }
+
+        if (mount.phase === "riding") {
+            // (Down at the side they got up on, if there's room)
+            const [lx, ly] = [cos(actor.facing), -sin(actor.facing)];
+            const way = mount.side === "right" ? -1 : 1;
+            const down = [actor.x + way * lx * MOUNT.beside, actor.y + way * ly * MOUNT.beside];
+
+            Object.assign(mount, { phase: "dismounting", at: this.time, quick, spot: [actor.x, actor.y], map: actor.map, facing: actor.facing });
+            Object.assign(actor, { path: [], offPath: false, progress: null, pace: actor.walkPace });
+
+            if (this.#clear(actor.map, down, actor)) {
+                [actor.x, actor.y] = down;
+                actor.square = [Math.floor(down[0]), Math.floor(down[1])];
+                this.#moved(actor);
+            }
+        } else {
+            Object.assign(mount, { phase: "sinking", at: this.time, then: null });
+        }
+
+        this.#version++;
+        this.#emitMount(actor);
+
+        return true;
+    }
+
+    // What's told of a mount as it changes ("mount": its phase, null once it's gone)
+    #emitMount(actor) {
+        const mount = actor.mount;
+
+        this.#emit("mount", mount ? { id: actor.id, phase: mount.phase, horse: mount.horse.id, hp: mount.hp, maxHp: mount.maxHp, side: mount.side, spot: [...mount.spot], map: mount.map, facing: mount.facing, quick: mount.quick } : { id: actor.id, phase: null });
+    }
+
+    // Its horse gone at once (carried off, through a door): ridden or coming, it sinks where it
+    // stood; going already, it goes on
+    #unhorse(actor) {
+        const mount = actor.mount;
+
+        if (!mount || !out(mount)) {
+            return;
+        }
+
+        Object.assign(mount, { phase: "sinking", at: this.time, then: null, ...(mount.phase === "riding" ? { spot: [actor.x, actor.y], map: actor.map, facing: actor.facing } : {}) });
+        this.#emitMount(actor);
+    }
+
+    // A horse's phase over: on to its next (up in the saddle, its rider where it stands; down,
+    // what they were to do done), or gone
+    #ride(actor) {
+        const mount = actor.mount;
+
+        if (!mount || this.time < mount.at + phaseLength(mount)) {
+            return;
+        }
+
+        const next = mount.phase === "fallen" ? null : nextPhase(mount.phase);
+
+        this.#version++;
+
+        if (next === null) {
+            actor.mount = null;
+            this.#emitMount(actor);
+
+            return;
+        }
+
+        const then = next === "sinking" ? mount.then : null;
+
+        Object.assign(mount, { phase: next, at: this.time, then: null });
+
+        // (Up: where the horse stands, as it faces)
+        if (next === "riding" && !actor.dead && actor.map === mount.map) {
+            [actor.x, actor.y] = mount.spot;
+            actor.square = [Math.floor(actor.x), Math.floor(actor.y)];
+            actor.facing = mount.facing;
+            this.#moved(actor);
+        }
+
+        this.#emitMount(actor);
+
+        if (then && !actor.dead) {
+            this[then.call](actor.id, ...then.args);
+        }
+    }
+
+    // Struck on horseback: the horse takes it (core/mounts.js carries). Fallen, it throws its rider
+    // (TOSS's throw times MOUNT `thrown`, away from whoever struck), and lies a while before it
+    // sinks away; the rider down till they're up again
+    #horseStruck(attacker, target, attack, damage, { projectile, spell, ground }) {
+        const mount = target.mount;
+
+        mount.hp = Math.max(0, mount.hp - damage);
+        this.#emit("hit", { id: target.id, by: attacker?.id ?? null, weapon: attacker?.weapon ?? null, attack: attack.id, reaction: attack.reaction, damage, hp: target.hp, maxHp: target.maxHp, projectile, spell, mount: { hp: mount.hp, maxHp: mount.maxHp }, ...(ground ? { ground: true } : {}) });
+
+        if (attacker) {
+            this.#provoke(attacker, target, { enmity: Math.max(ENMITY.seed, damage) });
+        }
+
+        if (mount.hp > 0) {
+            return;
+        }
+
+        const from = attacker && attacker !== target ? [attacker.x, attacker.y] : null;
+
+        Object.assign(mount, { phase: "fallen", at: this.time, then: null, spot: [target.x, target.y], map: target.map, facing: target.facing });
+        this.#version++;
+        this.#emitMount(target);
+
+        const thrown = this.#toss(target, from ?? [target.x, target.y], 0, MOUNT.thrown, from);
+
+        if (thrown) {
+            this.#emit("blast", { kind: "shove", map: target.map, x: target.x, y: target.y, radius: 0, by: attacker?.id ?? null, spell: null, bomb: null, throws: [thrown] });
+        } else {
+            // (Not thrown, thrown lately: down where they are, as thrown)
+            target.stunnedUntil = Math.max(target.stunnedUntil, this.time + TOSS.down);
+            target.downUntil = Math.max(target.downUntil ?? 0, this.time + TOSS.down);
+            target.casting = null;
+            target.path = [];
+
+            if (target.attack && !target.attack.struck) {
+                target.attack = null;
+            }
+
+            this.#emit("knockdown", { id: target.id, by: attacker?.id ?? null, until: target.downUntil });
+        }
+
+        this.#emit("thrown", { id: target.id, by: attacker?.id ?? null, horse: mount.horse.id });
+    }
+
+    // On horseback, about to fight (a blow, a spell, a throw): down first, quickly, and nothing
+    // done till they are (core/mounts.js). Whether they're to wait (`then`: what to do once down)
+    #horseback(actor, then = null) {
+        const mount = actor.mount;
+
+        if (!mount || !out(mount)) {
+            return false;
+        }
+
+        if (mount.phase === "riding") {
+            this.dismount(actor.id, { quick: true });
+        } else if (mount.phase !== "dismounting") {
+            // (Their horse rising, or them getting up: it called back, and they're free at once)
+            this.dismount(actor.id);
+
+            return false;
+        }
+
+        if (then) {
+            mount.then = then;
+        }
+
+        return true;
     }
 
     /**
@@ -1813,6 +2024,11 @@ export class Battle {
             return { ok: false, reason: "uncursed" };
         }
 
+        // (On horseback: down first, quickly, and cast then)
+        if (this.#horseback(actor, { call: "cast", args: [spellId, targetId, { level, at }] })) {
+            return { ok: true, mounted: true };
+        }
+
         // Casting calls off an attack
         actor.attack = null;
         actor.casting = { spell: spellId, target: target.id, start: this.time, landsAt: this.time + spell.castTime, level, at: at ? [...at] : null };
@@ -1854,6 +2070,11 @@ export class Battle {
 
         if (unseen) {
             return { ok: false, reason: unseen };
+        }
+
+        // (On horseback: down first, quickly, and thrown then)
+        if (this.#horseback(actor, { call: "lob", args: [targetId, { kind, damage, reach }] })) {
+            return { ok: true, mounted: true };
         }
 
         actor.path = [];
@@ -2273,6 +2494,7 @@ export class Battle {
         this.#mustered();
 
         for (const actor of this.actors) {
+            this.#ride(actor);
             this.#arm(actor);
             this.#hover(actor);
             this.#offGuard(actor);
@@ -3721,6 +3943,11 @@ export class Battle {
 
         if (target && hypot(target.x - actor.x, target.y - actor.y) > reach) {
             return { ok: false, reason: "range" };
+        }
+
+        // (On horseback: down first, quickly, and thrown then)
+        if (this.#horseback(actor, { call: "toss", args: [targetId, { kind, reach }] })) {
+            return { ok: true, mounted: true };
         }
 
         const at = target ? [target.x, target.y] : [actor.x + sin(actor.facing) * BAIT.ahead, actor.y + cos(actor.facing) * BAIT.ahead];
@@ -5277,6 +5504,8 @@ export class Battle {
         const square = nearestFree(this.#squares(there.map), there.arrive, { taken: this.#others(there.map, actor) });
         const from = actor.map;
 
+        // (Through a door on horseback: the horse gone, back into the ground where it stood)
+        this.#unhorse(actor);
         Object.assign(actor, {
             map: there.map,
             square,
@@ -5312,9 +5541,10 @@ export class Battle {
         }
 
         const seconds = STEP_MS / 1000;
+        const riding = actor.mount?.phase === "riding";
 
-        // A runner with no stamina left walks
-        if (actor.order?.run && actor.stamina <= 0) {
+        // A runner with no stamina left walks (not one on horseback: the horse runs)
+        if (actor.order?.run && actor.stamina <= 0 && !riding) {
             actor.order.run = false;
             this.#emit("exhausted", { id: actor.id });
         }
@@ -5328,8 +5558,10 @@ export class Battle {
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
         // (Nor while caught in a snare: an ambush's, core/ambush.js)
-        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking || actor.hidden || actor.lying || this.time < (actor.snaredUntil ?? 0);
-        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
+        // (Nor getting up on a horse or down from it, or waiting on it to rise; ridden, it carries
+        // them the faster, at a trot walking and a gallop running: core/mounts.js carried)
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking || actor.hidden || actor.lying || this.time < (actor.snaredUntil ?? 0) || holds(actor.mount);
+        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed") * (riding ? carried(actor.pace, walk, actor.speed * SPRINT) : 1));
 
         // Getting nowhere, jostling: squeezing past (#bumps)
         if (!actor.path.length || held) {
@@ -5351,11 +5583,12 @@ export class Battle {
         }
 
         // Running uses stamina, anything else gets it back (in thousandths, so it adds up exactly),
-        // the faster for what does them good (`recovery`) and the slower for what ails them
+        // the faster for what does them good (`recovery`) and the slower for what ails them; on
+        // horseback the horse does the running, and they get it back at a gallop as at a walk
         actor.running = run && travelled > 0;
 
         const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1) * (1 - Math.min(0.5, actor.endurance ?? 0));
-        const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
+        const stamina = actor.stamina + (actor.running && !riding ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 1000) / 1000));
     }
@@ -5649,6 +5882,11 @@ export class Battle {
     // --- Fighting ---
 
     #attack(actor, target) {
+        // (On horseback: down first, quickly, then on at them)
+        if (this.#horseback(actor)) {
+            return;
+        }
+
         actor.facing = atan2(target.x - actor.x, target.y - actor.y);
 
         // (Its weapon drawn first)
@@ -6654,7 +6892,8 @@ export class Battle {
     // more than its square, a wagon or a siege engine; nor one whose skin's stone (#steel), nor one
     // thrown lately
     #throwable(actor) {
-        return !actor.footprint && !this.#stone(actor) && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        // (Nor one on horseback: the horse is struck, and throws them only as it falls, #horseStruck)
+        return !carries(actor.mount) && !actor.footprint && !this.#stone(actor) && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
@@ -6889,6 +7128,13 @@ export class Battle {
 
                 return 0;
             }
+        }
+
+        // (On horseback: the horse takes it, and nothing else of it touches the rider)
+        if (carries(target.mount)) {
+            this.#horseStruck(attacker, target, attack, damage, { projectile, spell, ground });
+
+            return damage;
         }
 
         target.hp = Math.max(0, target.hp - damage);
@@ -7330,6 +7576,8 @@ export class Battle {
 
     #die(actor, killer) {
         actor.dead = true;
+        // (On horseback, or with one coming: it goes back into the ground)
+        this.#unhorse(actor);
         // (Only knocked down, up again where it fell a while after: #rise)
         actor.downed = Boolean(actor.rises);
         actor.respawnAt = this.time + (actor.downed ? Math.round(DOWNED.ms * actor.rises) : actor.respawnMs);

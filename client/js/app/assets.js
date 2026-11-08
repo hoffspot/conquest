@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "d6193d3008",
+    release: "efff791224",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2471,6 +2471,57 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/cerberus.ash.bin",
                     "hash": "36a1ac8c7c",
                     "bytes": 1467348
+                }
+            ]
+        },
+        "beast-horse": {
+            "tier": "demand",
+            "label": "The horse players ride, its saddle and its two manes (Malbers Animations' \"Horse Animset Pro\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/horse.bin",
+                    "hash": "e23de4dd3f",
+                    "bytes": 3480896
+                }
+            ]
+        },
+        "beast-horse-skins": {
+            "tier": "demand",
+            "label": "The horse's other coats: grey, dapple grey, palomino and white (Malbers Animations' \"Horse Animset Pro\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/horse.gray.bin",
+                    "hash": "828468a6c4",
+                    "bytes": 154976
+                },
+                {
+                    "path": "models/beasts/horse.dapple.bin",
+                    "hash": "d9a4215a82",
+                    "bytes": 156008
+                },
+                {
+                    "path": "models/beasts/horse.palomino.bin",
+                    "hash": "3c37f6a08e",
+                    "bytes": 119064
+                },
+                {
+                    "path": "models/beasts/horse.white.bin",
+                    "hash": "68070e00f1",
+                    "bytes": 163680
+                }
+            ]
+        },
+        "beast-horse-rider": {
+            "tier": "demand",
+            "label": "A rider's clips on a horse: mounting, riding each gait, flinching, thrown and getting down (Malbers Animations' \"Horse Animset Pro\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/horse-rider.bin",
+                    "hash": "8b5d9e4104",
+                    "bytes": 2136720
                 }
             ]
         },

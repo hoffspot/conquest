@@ -1413,6 +1413,9 @@ const KEYED_RESTS = {
     // (A crier's: his bell rung high, the news cried, looking over the square, and the
     // townsfolk's, his bell kept in his right)
     crier: [RINGING, CRYING_OUT, LOOKING_OVER_THE_SQUARE, ADVENTURER_RESTS[4], GLANCING_BACK],
+    // (A stablemaster before their stable: arms folded, the back stretched after the work,
+    // looking down the road in)
+    stablemaster: [renamed(BARKEEP_RESTS[3], "arms folded"), renamed(BARMAID_RESTS[4], "stretching the back"), renamed(LOOKING_OVER_THE_SQUARE, "looking down the road"), renamed(BARKEEP_RESTS[4], "rubbing the neck"), GLANCING_BACK],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars
@@ -2631,6 +2634,9 @@ export class Actions {
         /** Sitting (on a bench), or standing. */
         this.seated = false;
 
+        /** Riding: what poses it as its horse's rider (setRiding), or null. */
+        this.riding = null;
+
         /** Which way each action was done last, to do it another way next time. */
         this.variety = new Variety();
 
@@ -2665,6 +2671,14 @@ export class Actions {
     /** Sit down (on a bench) or stand. */
     setSeated(on) {
         this.seated = on;
+    }
+
+    /**
+     * Ride (world/mounts3d.js), or not (null): `pose(rig, dt)` poses the body as its rider each
+     * time it's posed, whatever the walk would have it do (true if it did), its feet off the ground.
+     */
+    setRiding(pose) {
+        this.riding = pose;
     }
 
     /** Which weapon's guard to stand in while fighting (a GUARDS key; null for none). */
@@ -3180,6 +3194,14 @@ export class Actions {
             if (!this.tossed.rising) {
                 return false;
             }
+        }
+
+        // (On horseback: posed as its rider (world/mounts3d.js), its feet in the stirrups, not on
+        // the ground; its head still turned where it's looking)
+        if (this.riding?.(this.rig, dt)) {
+            this.reactions = [];
+
+            return false;
         }
 
         if (this.seated) {
