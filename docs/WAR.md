@@ -1983,8 +1983,12 @@ games share changed with it and the war's `banded`: `NET_VERSION` 213; with the 
 not in a fight (`#beset`: set on someone, or someone within 40 m set on them), carrying fewer than
 two missions (`MOST_MISSIONS`), their people still standing, and **War messengers** on in Game
 options (Chat and players; `messengers` in their own settings, sent to a server-kept world's
-host). One comes at most once every ten war turns (`MESSENGER_EVERY`, ten minutes of play) since
-the last (`standing.messengerAt`), with none already on the way.
+host). One comes at most once every half an hour of play since the last came for them, taken on or
+turned down (`MESSENGER_EVERY`, by the world's own clock as it's played: not its war turns, which a
+night's sleep runs on by hours), with none already on the way. The world keeps when one last came
+for each player (the host's `messengersHeard`, kept in its snapshot), so it holds however they come
+and go: joined again, or with a character kept from before or elsewhere (their standing's
+`messengerAt` is only the war's turn it came on).
 
 **The messenger** (`#putMessenger`): one of the player's people's folk, in a tunic and jerkin, a cap
 or hood, with a ledger in hand (characters/folk.js `messenger`), put 40 m off (`MESSENGER.from`) the way
@@ -1995,7 +1999,7 @@ what they bring." (The talk isn't opened over whatever the player's doing.) Tapp
 "messenger" tree, core/dialogue.js): who sends them, what's asked, and what it pays at the
 player's rank and what the next rank would have, with "The higher your rank with us, the more we
 give." The player takes it ("Tell them it will be done.") or
-turns it down ("Not this time.", free; none comes again for ten turns). A messenger left
+turns it down ("Not this time.", free; none comes again for half an hour of play). A messenger left
 unanswered waits a minute (`wait`; while the player's in a fight, till it's over and a minute
 after: `#beset`), following a player who walks off and giving up past 120 m
 (`far`); five minutes if the player's gone indoors or underground (`outside`), where they went in;
@@ -2041,14 +2045,15 @@ they were given. The objective done is told ("There's more in it for you"), and 
 rest (`#missionBonus`).
 
 **In a party.** One messenger comes for the party (none while any of them heard one in the last
-ten turns), to its first member who may hear one, and whatever any of them answers is answered
+half hour of play), to its first member who may hear one, and whatever any of them answers is answered
 for them all: taken, the mission's each of theirs of the
 same people, at each one's own rank, each paid and choosing their own piece (`#messengerAnswer`).
 
 **Kept.** The messengers out are in the host's snapshot (`messengers`, `nextMessenger`;
-`SNAPSHOT_VERSION` 49, none in a world kept before), the folk record with them. What two games
-share changed (`NET_VERSION` 212: the `mission` command, `pick` and `giveUp`; the `messenger` and
-`mission` events).
+`SNAPSHOT_VERSION` 49, none in a world kept before), the folk record with them; and when one last
+came for each player (`messengersHeard`: `SNAPSHOT_VERSION` 50, none in a world kept before). What
+two games share changed (`NET_VERSION` 212: the `mission` command, `pick` and `giveUp`; the
+`messenger` and `mission` events; and with the half hour between them, 216).
 
 ### The war table (M21)
 

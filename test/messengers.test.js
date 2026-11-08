@@ -12,6 +12,7 @@ import { dueAt, untilOf } from "../client/js/core/hurry.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { STAGES } from "../client/js/core/war/war.js";
+import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -229,7 +230,8 @@ describe("the war's messengers (host.js, missions.js)", () => {
 
     it("turned down, none comes again for a while; a mission given up costs a little standing", () => {
         const host = hosted();
-        const { war } = camped(host);
+        camped(host);
+
         const player = host.players.get(HOST_PLAYER);
         const arrived = hailed(host);
 
@@ -238,14 +240,12 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(player.standing.missions.length, 0);
         host.command(HOST_PLAYER, { type: "talk", with: null });
 
-        const since = war.turn;
         const events = run(host, 20000);
 
-        assert.ok(war.turn - since < MESSENGER_EVERY);
         assert.ok(!events.some(({ type, change }) => type === "messenger" && change === "coming"));
 
-        // (Another, a while after: taken, then given up)
-        player.standing.messengerAt = war.turn - MESSENGER_EVERY;
+        // (Another, half an hour of play after: taken, then given up)
+        host.messengersHeard.set(HOST_PLAYER, host.battle.time - MESSENGER_EVERY);
 
         const again = hailed(host);
 
@@ -260,6 +260,41 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "mission", act: "giveUp", id: mission.id }).ok, true);
         assert.equal(points - player.standing.points, MISSION_FAILED);
         assert.equal(player.standing.missionsDone[0].state, "failed");
+    });
+
+    it("sends one at most every half an hour of play, by the world's own clock: none sooner for the war's turns run on by a night's sleep, a character brought in kept from before, or the world kept and brought back", () => {
+        const host = hosted();
+        const { war } = camped(host);
+        const player = host.players.get(HOST_PLAYER);
+        const coming = (events) => events.some(({ type, change, kind }) => type === "messenger" && change === "coming" && kind === "messenger");
+        const arrived = hailed(host);
+
+        assert.equal(MESSENGER_EVERY, 30 * 60 * 1000);
+        assert.ok(host.battle.time - host.messengersHeard.get(HOST_PLAYER) < 60000);
+
+        // (Turned down, and gone)
+        host.command(HOST_PLAYER, { type: "talk", with: arrived.folk });
+        host.command(HOST_PLAYER, { type: "effect", effect: { mission: "decline" } });
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        assert.ok(!coming(run(host, 40000)));
+        assert.equal(host.messengers.size, 0);
+
+        // (A night's sleep's worth of the war's turns, and their character's standing as it was
+        // kept before the messenger came: still none)
+        war.turn += 600;
+        player.standing.messengerAt = null;
+        assert.ok(!coming(run(host, 10000)));
+
+        // (The world kept and brought back: still none, its clock and theirs kept with it)
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.messengersHeard], [...host.messengersHeard]);
+        assert.ok(!coming(run(again, 10000)));
+
+        // (Half an hour of play since it came, less a few seconds: none yet; then the next)
+        again.messengersHeard.set(HOST_PLAYER, again.battle.time - MESSENGER_EVERY + 5000);
+        assert.ok(!coming(run(again, 3000)));
+        assert.ok(coming(run(again, 6000 + MESSENGER.every)));
     });
 
     it("sends none to a player who's turned messengers away (Game options)", () => {
