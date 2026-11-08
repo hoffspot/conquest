@@ -23,7 +23,7 @@ import { circleOf, rumoursNear, rumourWord, warningOf } from "./rumours.js";
 import { compass, wayOf } from "./ways.js";
 import { landAt } from "./worldplan/plan.js";
 import { KEEP_MISSIONS, MISSIONS, MOST_MISSIONS } from "./missions.js";
-import { dueAt, onTheRoad, turnsTo } from "./hurry.js";
+import { dueAt, onTheRoad, untilOf } from "./hurry.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
 export const STANDINGS = Object.freeze([
@@ -55,14 +55,15 @@ const KEEP_DONE = 12;
 
 /**
  * What's asked, and what it's worth: each kind's title, the rank it's first offered at, how long
- * there is to do it (war turns: a minute's play each; with `perKm`, more the further it is), and
- * its reward (standing and gold; `each` for each foe, `perKm` for each km to go). A people's gold
+ * there is to do it (war turns: a minute's play each; and, as it's offered, time to finish what
+ * the player was at and the way there besides: core/hurry.js untilOf), and its reward (standing
+ * and gold; `each` for each foe, `perKm` for each km to go). A people's gold
  * is about what the same time fighting would bring in, a letter's mostly for the way there (a
  * reeve's go 0.3 to 2 km, most of them nearly 1: 16 to 37 gold, most of them about 23); the
  * guilds' a little more for the same work, as they pay in gold and merit, not standing.
  */
 export const REQUESTS = Object.freeze({
-    message: { title: "A letter to carry", rank: 0, turns: 12, perKm: 10, reward: { standing: 10, gold: 12, perKm: { standing: 5, gold: 12 } } },
+    message: { title: "A letter to carry", rank: 0, turns: 12, reward: { standing: 10, gold: 12, perKm: { standing: 5, gold: 12 } } },
     tithe: { title: "A tithe for the treasury", rank: 0, turns: 30, reward: { standing: 0, gold: 0 } },
     bounty: { title: "Thin their numbers", rank: 0, turns: 60, reward: { standing: 4, gold: 8, each: { standing: 6, gold: 6 } } },
     wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, gold: 8, each: { standing: 8, gold: 5 } } },
@@ -89,7 +90,7 @@ export const REQUESTS = Object.freeze({
     // core/rumours.js; nothing lost for letting it run out)
     survey: { title: "A look round", rank: 0, turns: 45, reward: { standing: 0, gold: 12, merit: 2 } },
     // (A sealed package to another town's guild, on the way to strangers: offerCourier)
-    courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 14, perKm: { standing: 0, gold: 14 }, merit: 3 } },
+    courier: { title: "A sealed package", rank: 0, turns: 12, reward: { standing: 0, gold: 14, perKm: { standing: 0, gold: 14 }, merit: 3 } },
     // (A place held by outlaws or the dead put to the sword: more for a bigger place, and more for
     // each tier of its land's danger; its merit by its size)
     clear: { title: "Put them to the sword", rank: 0, turns: 90, reward: { standing: 0, gold: 30, size: { small: 0, medium: 25, large: 60 }, tier: 9, merit: { small: 4, medium: 7, large: 12 } } },
@@ -336,9 +337,9 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
     const { title, turns, reward } = REQUESTS[kind];
     const from = { id: giver.id, name: giver.name, title: giver.title, town: town.id, townName: town.name, post };
     const base = { kind, title, from, given: war.turn, state: "open", count: 0 };
-    // (Its time, with the way there besides; and the turn a player hurrying there from here would
-    // have had their chance by: core/hurry.js, docs/WAR.md *A fair chance*)
-    const timeFor = (at) => war.turn + turns + turnsTo(town.at, at);
+    // (Its time, with time to finish what they were at and the way there besides; and the turn
+    // they'd have had their chance by: core/hurry.js, docs/WAR.md *A fair chance*)
+    const timeFor = (at) => untilOf(war.turn, turns, town.at, at);
     const dueBy = (at) => dueAt(town.at, at, war.turn);
     const meetBy = (force) => onTheRoad(town.at, force, war.turn).due;
 
@@ -353,7 +354,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: to.id,
                 target: { town: to.id, name: to.name, at: [...to.at], post: to.kind === "capital" ? "keep" : "hall" },
                 text: `Carry this letter to ${whom}. It's sealed: see it stays that way.`,
-                until: war.turn + Math.ceil(turns + km * REQUESTS.message.perKm),
+                until: untilOf(war.turn, turns, town.at, to.at),
                 reward: worth(reward.standing + reward.perKm.standing * km, reward.gold + reward.perKm.gold * km),
             };
         }
@@ -362,7 +363,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
 
             const text = rising ? `Quietly, now. We're putting by arms against ${war.realm(rising).name}, for when the day comes. Bring ${amount} gold for them.` : `The treasury's thin. Bring ${amount} gold for it, and it won't be forgotten.`;
 
-            return { ...base, key: "tithe", target: { gold: amount }, text, until: war.turn + turns, reward: worth(amount / 2, 0) };
+            return { ...base, key: "tithe", target: { gold: amount }, text, until: untilOf(war.turn, turns), reward: worth(amount / 2, 0) };
         }
         case "bounty": {
             const foe = random.pick(enemies);
@@ -373,7 +374,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: foe,
                 target: { realm: foe, need },
                 text: `We're at war with ${war.realm(foe).name}. Bring down ${need} of the ${soldiersOf(foe)}, wherever you find them.`,
-                until: war.turn + turns,
+                until: untilOf(war.turn, turns),
                 reward: worth(reward.standing + reward.each.standing * need, reward.gold + reward.each.gold * need),
             };
         }
@@ -385,7 +386,7 @@ export function offerRequest({ war, realm, town: townId, post, giver, rank, held
                 key: "wild",
                 target: { wild: true, need },
                 text: `Beasts and worse have been at travellers on the roads round ${town.name}. Put an end to ${need === 1 ? "one of them" : `${need} of them`}.`,
-                until: war.turn + turns,
+                until: untilOf(war.turn, turns),
                 reward: worth(reward.standing + reward.each.standing * need, reward.gold + reward.each.gold * need),
             };
         }
@@ -559,10 +560,14 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
  * who hold it, who have a town or a camp near; creatures' parts, of those found near (as strong as
  * they are there for whoever's asking: as far from their `home`); the camp outside it broken up; a place near held by outlaws or the dead put to the sword, its leader with
  * them (core/places.js). Null if there's nothing on the board they haven't got already.
+ * Nothing's offered that's against the asker's own people or their friends, whose soldiers they
+ * can't fight (`realm`: a bounty, a camp); and each has time to finish what they were at and the
+ * way there in its time (core/hurry.js untilOf).
  * @param {object} options
  * @param {object} options.war - The war (war.js).
  * @param {string} options.town - The town the guild's in (an id).
  * @param {object} options.giver - Who's at the counter: { id, name, title }.
+ * @param {string} [options.realm] - Whoever's asking's people (a realm's id): none, any.
  * @param {number[]} [options.home] - Where whoever's asking starts ([x, y] metres: their people's
  *   start town's middle, the wild tamest near it: creatures.js tierAt); the town's own if not given.
  * @param {object[]} [options.held] - The requests they carry.
@@ -573,7 +578,7 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
  *   places round the town still to find (core/rumours.js rumoursNear). None without it.
  * @param {object} options.random - Random numbers (random.js).
  */
-export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], guildRank = 0, explored = null, random }) {
+export function offerContract({ war, town: townId, giver, realm = null, home = null, held = [], also = [], guildRank = 0, explored = null, random }) {
     const town = war.town(townId);
 
     if (!town || held.length >= MOST_REQUESTS) {
@@ -585,8 +590,10 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
     const has = (kind, key) => [...held, ...also].some((request) => request.kind === kind && request.key === key);
     const holders = war.liege(town.owner);
     const soldiers = opened("hunt") ? soldiersNear(war, town) : new Map();
-    const foes = war.enemiesOf(holders).filter((foe) => soldiers.has(foe) && !has("hunt", foe));
-    const camps = opened("camp") ? war.camps.filter((camp) => war.hostile(camp.realm, town.owner) && apart(camp.at, town.at) <= THREAT && apart(camp.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", camp.id)) : [];
+    // (None of the asker's own people, nor their friends': there's no fighting them, core/host.js canFight)
+    const fightable = (other) => !realm || !war.friendly(realm, other);
+    const foes = war.enemiesOf(holders).filter((foe) => soldiers.has(foe) && fightable(foe) && !has("hunt", foe));
+    const camps = opened("camp") ? war.camps.filter((camp) => war.hostile(camp.realm, town.owner) && fightable(camp.realm) && apart(camp.at, town.at) <= THREAT && apart(camp.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", camp.id)) : [];
     const wanted = dearest(wantedNear(war, town, home ?? town.at), grade.rank >= GUILD_DEARER).filter((part) => !has("parts", part));
     const occupied = biggest(heldNear(war, town).filter(({ place }) => GUILD_SIZES[place.size] <= grade.rank)).filter(({ place }) => !has("clear", place.id));
     // (The places round the town they're still to find, none too far past what their rank sends
@@ -616,8 +623,9 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
             // ground most of the way there, the clerk warning of what's past it)
             const towards = unfound.find((place) => place.far >= HUNTING.least);
             const ground = towards ? groundTowards(town.at, towards.at) : null;
-            // (Of the level the rank asks for, as near as the land within reach has it)
-            const level = grade.level > 1 ? Math.min(grade.level, levelNear(war.plan, ground ?? town.at, home ?? town.at)) : 1;
+            // (Of the level the rank asks for, as near as the land where they count has it: round
+            // the town, or on the hunting ground)
+            const level = grade.level > 1 ? Math.min(grade.level, levelNear(war.plan, ground ?? town.at, home ?? town.at, ground ? HUNTING.reach : GUILD_REACH)) : 1;
             const need = asked(2);
             const strong = level > 1 ? `, level ${level} or more` : "";
             const paid = pay(reward.gold + reward.each.gold * need);
@@ -630,12 +638,12 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
                     key: town.id,
                     target: { wild: true, need, level, near: hunting, at: [...ground], name: hunting.name, towards: towards.id },
                     text: `Wanted: someone to see off the beasts troubling the farms out ${wayOf(town, ground)}. ${need} of them${strong}, within ${HUNTING.reach} m of there, and the farmers will breathe again. Don't go much further out, mind. ${warningOf(towards)}`,
-                    until: war.turn + turns,
+                    until: untilOf(war.turn, turns, town.at, ground),
                     reward: paid,
                 };
             }
 
-            return { ...base, key: town.id, target: { wild: true, need, level, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them${strong}, ${within}, and the carters will breathe again.`, until: war.turn + turns, reward: paid };
+            return { ...base, key: town.id, target: { wild: true, need, level, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them${strong}, ${within}, and the carters will breathe again.`, until: untilOf(war.turn, turns), reward: paid };
         }
         case "survey": {
             // (The nearest place they're still to find, round about where it's said to be: its
@@ -648,7 +656,7 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
                 key: place.id,
                 target: { place: place.id, at, radius, name: `somewhere ${compass(town.at, at)} of ${town.name}` },
                 text: `Folk in ${town.name} are saying: "${rumourWord(war.plan, place, town)}" The guild wants to know what's out there. Go near enough to see it, then come back and tell us. No need to fight it.`,
-                until: war.turn + turns,
+                until: untilOf(war.turn, turns, town.at, at),
                 reward: pay(reward.gold),
             };
         }
@@ -664,7 +672,7 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
                 key: foe,
                 target: { realm: foe, need, near },
                 text: `Bounty, posted for ${war.realm(holders).name}: ${need} of the ${soldiersOf(foe)}, brought down ${within}. ${where}${tome ? ` ${fromTheLibrary(tome)}` : ""}`,
-                until: war.turn + turns,
+                until: untilOf(war.turn, turns),
                 reward: { ...pay(reward.gold + reward.each.gold * need), ...(tome ? { tome } : {}) },
             };
         }
@@ -676,13 +684,13 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
             const need = asked(worth <= 4 ? 3 : 2);
             const paid = pay(reward.gold + worth * need * reward.share);
 
-            return { ...base, key: part, target: { part, name: label, need }, text: `Wanted at the guild in ${town.name}: ${need} ${many(label)}, for the makers who use them. What they come off lives round here. ${paid.gold} gold for the lot, brought in.`, until: war.turn + turns, reward: paid };
+            return { ...base, key: part, target: { part, name: label, need }, text: `Wanted at the guild in ${town.name}: ${need} ${many(label)}, for the makers who use them. What they come off lives round here. ${paid.gold} gold for the lot, brought in.`, until: untilOf(war.turn, turns), reward: paid };
         }
         case "camp": {
             const camp = random.pick(camps);
             const tome = random.chance(GUILD_TOMES.camp) ? rollTome(random) : null;
 
-            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, ${wayOf(town, camp.at)}, and the merchants want it gone. Break it up.${tome ? ` ${fromTheLibrary(tome)}` : ""}`, until: war.turn + turns, reward: { ...pay(reward.gold), ...(tome ? { tome } : {}) } };
+            return { ...base, key: camp.id, target: { force: camp.id, realm: camp.realm, at: [...camp.at], town: town.id, name: town.name }, text: `${war.realm(camp.realm).name} have a camp outside ${town.name}, ${wayOf(town, camp.at)}, and the merchants want it gone. Break it up.${tome ? ` ${fromTheLibrary(tome)}` : ""}`, until: untilOf(war.turn, turns, town.at, camp.at), due: dueAt(town.at, camp.at, war.turn), reward: { ...pay(reward.gold), ...(tome ? { tome } : {}) } };
         }
         case "clear": {
             const { place, holder, tier } = random.pick(occupied);
@@ -699,7 +707,7 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
                 key: place.id,
                 target: { place: place.id, holder, at: [...place.at], name, kind: place.kind },
                 text: `${text}${tome ? ` ${fromTheLibrary(tome)}` : ""}`,
-                until: war.turn + turns,
+                until: untilOf(war.turn, turns, town.at, place.at),
                 reward: { ...pay(reward.gold + reward.size[place.size] + reward.tier * tier, reward.merit[place.size]), ...(tome ? { tome } : {}) },
             };
         }
@@ -732,7 +740,7 @@ export function offerCourier({ war, realm, town: townId, giver, held = [], guild
         return null;
     }
 
-    const { title, turns, perKm, reward } = REQUESTS.courier;
+    const { title, turns, reward } = REQUESTS.courier;
     const km = apart(to.town.at, town.at) / 1000;
 
     return {
@@ -745,7 +753,7 @@ export function offerCourier({ war, realm, town: townId, giver, held = [], guild
         key: to.town.id,
         target: { town: to.town.id, name: to.town.name, at: [...to.town.at], post: "guild", towards: to.towards.id },
         text: `The guild in ${to.town.name} wants this package, sealed, by someone who'll get it there: ${wayOf(town, to.town.at)}, on the way to ${war.realm(to.towards.owner).name} at ${to.towards.name}.`,
-        until: war.turn + Math.ceil(turns + km * perKm),
+        until: untilOf(war.turn, turns, town.at, to.town.at),
         reward: { standing: 0, gold: Math.round((reward.gold + reward.perKm.gold * km) * gradeOf(guildRank).pay), merit: reward.merit },
     };
 }
@@ -764,7 +772,7 @@ export function offerBoard({ war, realm, town, giver, home = null, held = [], gu
     const board = [];
 
     while (board.length < BOARD_SIZE - (courier ? 1 : 0)) {
-        const contract = offerContract({ war, town, giver, home, held, also: board, guildRank, explored, random });
+        const contract = offerContract({ war, town, giver, realm, home, held, also: board, guildRank, explored, random });
 
         if (!contract) {
             break;
@@ -854,15 +862,16 @@ function biggest(occupied) {
 }
 
 // The level of beasts a guild can ask for near its town (GUILD_RANKS' `level`), for whoever's
-// asking: the highest that a quarter of the land within its reach has, or more (creatures.js
-// tierAt: as far as it is from their `home`), so there are beasts of it about to be found
-function levelNear(plan, [x, y], home) {
+// asking: the highest that a quarter of the land within `reach` of where they count has, or more
+// (creatures.js tierAt: as far as it is from their `home`), so there are beasts of it about to be
+// found there
+function levelNear(plan, [x, y], home, reach = GUILD_REACH) {
     if (!plan) {
         return 1;
     }
 
     const tiers = [];
-    const steps = Math.floor(GUILD_REACH / LAND_STEP);
+    const steps = Math.max(1, Math.floor(reach / LAND_STEP));
 
     for (let j = -steps; j <= steps; j++) {
         for (let i = -steps; i <= steps; i++) {
@@ -910,6 +919,16 @@ function soldiersNear(war, town) {
     }
 
     return found;
+}
+
+/**
+ * Whether a people's soldiers (`realm`, or any under its banner) are still about a town for a
+ * guild's bounty on them (docs/WAR.md M8): a town or a camp of theirs within its reach.
+ */
+export function soldiersAbout(war, townId, realm) {
+    const town = war.town(townId);
+
+    return Boolean(town) && soldiersNear(war, town).has(war.liege(realm));
 }
 
 // The parts a guild wants (WANTED_PARTS) of the creatures found within its reach of its town, as

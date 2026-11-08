@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, MESSENGER } from "../client/js/core/host.js";
 import { MESSENGER_EVERY, MISSION_FAILED, MISSIONS, rewardOf } from "../client/js/core/missions.js";
-import { dueAt, turnsTo } from "../client/js/core/hurry.js";
+import { dueAt, untilOf } from "../client/js/core/hurry.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { STAGES } from "../client/js/core/war/war.js";
@@ -114,9 +114,9 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(answer.ok, true);
         assert.equal(answer.mission.state, "open");
 
-        // (Its time from now, the way to the camp besides; held to it from when they'd have got
-        // there: core/missions.js chanceOf)
-        assert.equal(answer.mission.until, war.turn + MISSIONS.rout.turns + turnsTo([me.x, me.y], answer.mission.target.at));
+        // (Its time from now, with time to finish what they were at and the way to the camp
+        // besides; held to it from when they'd have got there: core/missions.js chanceOf)
+        assert.equal(answer.mission.until, untilOf(war.turn, MISSIONS.rout.turns, [me.x, me.y], answer.mission.target.at));
         assert.equal(answer.mission.due, dueAt([me.x, me.y], answer.mission.target.at, war.turn));
         assert.equal(player.standing.missions.length, 1);
         assert.equal(player.standing.messengerAt, war.turn);
@@ -191,6 +191,40 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { mission: "accept" } }), { ok: false, reason: "overtaken" });
         assert.equal(player.standing.missions.length, 0);
         assert.equal(player.standing.points, points);
+    });
+
+    it("waits while the player's in a fight, till it's over and their minute after it, then goes", () => {
+        const host = hosted();
+
+        camped(host);
+
+        const arrived = hailed(host);
+        const me = host.battle.actor(HOST_PLAYER);
+        const left = (events) => events.some(({ type, change }) => type === "messenger" && change === "left");
+
+        // (Set on by something 15 m off, too tough to bring down, that can't hurt them; they stand
+        // their ground where the messenger found them)
+        const spot = [...me.square];
+        const fighting = [];
+
+        Object.assign(me, { hp: 1e9, maxHp: 1e9 });
+        host.battle.add({ id: "brute", kind: "beast", name: "Brute", weapon: "claws", team: "beasts", square: [spot[0] + 15, spot[1]], ai: null });
+        Object.assign(host.battle.actor("brute"), { hp: 1e9, maxHp: 1e9, target: HOST_PLAYER });
+
+        for (let t = 0; t < MESSENGER.wait + 20000; t += 1000) {
+            put(me, spot);
+            fighting.push(...run(host, 1000));
+        }
+
+        // (Still there, waiting by them)
+        assert.ok(!left(fighting), "still waiting");
+        assert.equal([...host.messengers.values()][0]?.state, "waiting");
+        assert.equal(arrived.folk, [...host.messengers.values()][0]?.folk);
+
+        // (Over: come up to them again, their minute after it, then away)
+        Object.assign(host.battle.actor("brute"), { dead: true, target: null, respawnAt: Infinity });
+        Object.assign(me, { target: null });
+        assert.ok(left(run(host, MESSENGER.wait + 30000)), "away after");
     });
 
     it("turned down, none comes again for a while; a mission given up costs a little standing", () => {

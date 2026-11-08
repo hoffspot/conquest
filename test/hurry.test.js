@@ -1,18 +1,19 @@
 // How soon a player could be somewhere (client/js/core/hurry.js; docs/WAR.md *A fair chance*): the
-// way there in turns and the turn they'd have had their chance by; something on the road met
+// way there in turns, with time first to finish what they were at, and the turn they'd have had
+// their chance by; something on the road met
 // before its end or not (coming their way, going by, going away faster than they go, at its end
 // already), and when it's at its end; whether they could catch it hurrying, and from when they're
 // held to it; and whether they've had their chance.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { KINDS } from "../client/js/core/battle.js";
-import { dueAt, endAt, GRACE, hadChance, HURRY, MEET, meetAt, ON_THE_ROAD, onTheRoad, PACE, turnsTo } from "../client/js/core/hurry.js";
+import { dueAt, endAt, GRACE, hadChance, HURRY, LEAVE, MEET, meetAt, ON_THE_ROAD, onTheRoad, PACE, turnsTo, untilOf } from "../client/js/core/hurry.js";
 import { CONVOY, SPEEDS } from "../client/js/core/war/war.js";
 
 const convoy = (at, to, more = {}) => ({ kind: "convoy", at, path: [at, to], leg: 0, ...more });
 
 describe("how soon a player could be somewhere (hurry.js)", () => {
-    it("takes them a turn for each PACE metres of the way, less than they walk, and holds them to it GRACE turns after", () => {
+    it("takes them a turn for each PACE metres of the way, less than they walk, with LEAVE turns first to finish what they were at, and holds them to it GRACE turns after", () => {
         assert.ok(PACE < KINDS.player.speed * 60, "less than a walk");
         assert.ok(HURRY > PACE && HURRY > CONVOY.speed, "hurrying, a convoy's caught up with");
         assert.ok(ON_THE_ROAD.envoy === SPEEDS.envoy && ON_THE_ROAD.envoy > HURRY, "not an envoy");
@@ -20,7 +21,10 @@ describe("how soon a player could be somewhere (hurry.js)", () => {
         assert.equal(turnsTo([0, 0], [PACE * 10, 0]), 10);
         assert.equal(turnsTo([0, 0], [PACE * 10 + 1, 0]), 11);
         assert.equal(turnsTo([0, 0], [PACE * 10, 0], PACE * 4), 6);
-        assert.equal(dueAt([0, 0], [PACE * 10, 0], 7), 7 + 10 + GRACE);
+        assert.equal(dueAt([0, 0], [PACE * 10, 0], 7), 7 + LEAVE + 10 + GRACE);
+        assert.ok(LEAVE >= 10, "time to finish a fight, or get out of a dungeon");
+        assert.equal(untilOf(7, 40), 7 + 40 + LEAVE);
+        assert.equal(untilOf(7, 40, [0, 0], [PACE * 10, 0]), 7 + 40 + LEAVE + 10);
     });
 
     it("meets what's on the road by them at once, coming their way where they'd get to before it, and never what's going away faster than they go", () => {
@@ -63,21 +67,21 @@ describe("how soon a player could be somewhere (hurry.js)", () => {
         assert.equal(meetAt([0, 0], { ...going, at: [1000, 600], leg: 2 }, 4), null);
     });
 
-    it("counts them met with what's on the road if they'd catch it hurrying, and holds them to it from when they'd get there at a steady pace, or it's at its end", () => {
+    it("counts them met with what's on the road if they'd catch it hurrying, and holds them to it from when they'd get there at a steady pace, or it's at its end, with time to finish what they were at", () => {
         // (A convoy going away from them, 250 m off: caught hurrying, not at a walk. They're held
-        // to it only once it's at its end, GRACE turns after)
+        // to it only once it's at its end, LEAVE and GRACE turns after)
         const away = convoy([250, 0], [2250, 0]);
         const chance = onTheRoad([0, 0], away, 10);
 
         assert.equal(meetAt([0, 0], away, 10), null);
         assert.notEqual(meetAt([0, 0], away, 10, { pace: HURRY }), null);
         assert.equal(chance.met, true);
-        assert.equal(chance.due, endAt(away, 10) + GRACE);
+        assert.equal(chance.due, endAt(away, 10) + LEAVE + GRACE);
 
-        // (Coming their way: held to it from when they'd meet it, GRACE turns after)
+        // (Coming their way: held to it from when they'd meet it, LEAVE and GRACE turns after)
         const coming = convoy([1500, 0], [-1500, 0]);
 
-        assert.deepEqual(onTheRoad([0, 0], coming, 10), { met: true, due: meetAt([0, 0], coming, 10) + GRACE });
+        assert.deepEqual(onTheRoad([0, 0], coming, 10), { met: true, due: meetAt([0, 0], coming, 10) + LEAVE + GRACE });
 
         // (Out of reach, going away: not met at all)
         assert.equal(onTheRoad([0, 0], convoy([1000, 0], [3000, 0]), 10).met, false);

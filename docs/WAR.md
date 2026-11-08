@@ -963,13 +963,17 @@ couldn't have stopped:
   at 400 m a turn, a convoy at 200, supply wagons and reinforcements at 250: `ON_THE_ROAD`), only
   what a player setting out at once, hurrying, could meet on its road before its end (within
   150 m of it, where the world plays it out round them: `MEET`) is asked for (`onTheRoad`,
-  `meetAt`). One with a time to do it in has the way there in it besides (`turnsTo`): scouting a
-  town 6 km off is 40 turns and 75 more.
+  `meetAt`).
+- **Time to finish what they were at.** A messenger finds a player wherever they are, at whatever
+  they're doing (a fight, a dungeon, the market), so every time to do something in has 15 turns
+  more first (`LEAVE`), and the way there besides (`untilOf`, `turnsTo`): scouting a town 6 km
+  off is 40 turns, 15 and 75 more. A messenger who's found them waits while they're in a fight,
+  and their minute after it.
 - **Nothing's failed before they could have got there.** Each that something else can end (a
   town to hold, a camp before a town, an envoy, a convoy; and the missions' wagons and
-  reinforcements, works to guard) has the turn they'd have had their chance by (`due`: the way
-  there at `PACE`, or the turn they'd meet it on its road, or, as they wouldn't, the turn it's at
-  its end; and 3 turns more, `GRACE`). Lost or got through before then, with them not there yet,
+  reinforcements, works to guard) has the turn they'd have had their chance by (`due`: the time to
+  finish what they were at, and the way there at `PACE`, or the turn they'd meet it on its road,
+  or, as they wouldn't, the turn it's at its end; and 3 turns more, `GRACE`). Lost or got through before then, with them not there yet,
   it comes to nothing, at no cost (`hadChance`); after, or with them there, it's failed. One kept
   from before there were any (`due` unset) is held to it as it was.
 - **No longer at war, it's over.** Their enemy's soldiers to bring down, a camp to break or a town
@@ -979,6 +983,7 @@ couldn't have stopped:
 - **What no one on the road could stop.** A convoy come to its seat with the seat lost meanwhile
   has its goods taken there: come to nothing, not failed. An envoy gone with its people fallen,
   the same.
+- **The guild's work** the same, as it fits (M8, *A fair chance at the guild's work*).
 
 **The armoury** gives a gift for each rank from a Retainer up, once: a fine mail shirt; a
 masterwork of the player's own weapon; a masterwork kite shield (or mail, with a weapon that takes
@@ -1991,7 +1996,8 @@ what they bring." (The talk isn't opened over whatever the player's doing.) Tapp
 player's rank and what the next rank would have, with "The higher your rank with us, the more we
 give." The player takes it ("Tell them it will be done.") or
 turns it down ("Not this time.", free; none comes again for ten turns). A messenger left
-unanswered waits a minute (`wait`), following a player who walks off and giving up past 120 m
+unanswered waits a minute (`wait`; while the player's in a fight, till it's over and a minute
+after: `#beset`), following a player who walks off and giving up past 120 m
 (`far`); five minutes if the player's gone indoors or underground (`outside`), where they went in;
 then goes back the way they came, let go of once 60 m from every player (`gone`) or after 30 s.
 
@@ -2007,7 +2013,8 @@ people's make and suited to their level (`gearChoices`, gear.js `rollGear`).
 the time left, Give up), and marked on the world map and the minimap (a red ring with a star,
 app/mapicons.js `drawMissionMark`; the map's key). Each has its time (`turns`: 30 or 40 war
 turns) from when it's taken on, and the way there from where each who takes it is besides
-(`chanceOf`); and the turn they'd have had their chance by (`due`). To stand with their own
+(`chanceOf`), and time to finish what they were at when the messenger found them (`LEAVE`); and
+the turn they'd have had their chance by (`due`). To stand with their own
 (guard our works, stand with the reserve, march with the army: `stay`), the time's only to get
 there in: once there, it lasts as long as what it's about. The host looks at it each step
 (`#watchMissions`, `checkMission`): there (told), done (`ready`), failed (out of time, or the war's
@@ -3873,8 +3880,8 @@ Copper is asked and paid (a higher rank's: *The guilds' ranks*, below):
 | Contract | On the board | Done when | Pays | Merit |
 | --- | --- | --- | --- | --- |
 | Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town; or, with a place out there the player's still to find, within 500 m of a hunting ground out towards it (below) | 10, and 7 for each | 3 |
-| A bounty | from Iron; the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each | 4 |
-| The camp outside the walls | from Bronze; an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 | 6 |
+| A bounty | from Iron; the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`), not the player's own people nor their friends (whom they can't fight: the host's `canFight`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each | 4 |
+| The camp outside the walls | from Bronze; an enemy camp before the town (M6), within 1.5 km, not the player's own people's nor their friends' | the player was at it, and it's gone | 70 | 6 |
 | Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for | 2 |
 | Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*): a small one for a Copper | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome | 4, 7 for a middling place, 12 for a great one |
 | A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 14, and 14 for each km | 3 |
@@ -3901,7 +3908,8 @@ So the higher the rank, the harder the work on the board, everywhere:
   soldiers; 3 + more to 5 + more of a cheap part, one fewer of a dearer one).
 - **Stronger beasts.** From Bronze, the beasts must be of a level (their card shows it) as the rank
   asks, as near as the land within reach has them: the highest that a quarter of it has or more,
-  for whoever's asking, as far as it is from their home (`levelNear`). Near home, where there's
+  for whoever's asking, as far as it is from their home (`levelNear`: within 1.5 km of the town,
+  or within 500 m of a hunting ground, where they count). Near home, where there's
   only the first level, any will do; the notice says the level when there is one ("4 of them,
   level 3 or more"), and only those count.
 - **The dearer parts.** From Bronze (`GUILD_DEARER`), the guild wants only the dearer half of the
@@ -3964,13 +3972,31 @@ their allies), never into the strangers' town itself:
 
 The notice says where it goes and why it's the way to go: "The guild in Langdenwick wants this
 package, sealed, by someone who'll get it there: 0.6 km north of Ashby, on the way to the Orcs at
-Gorgash." It's due like a letter (12 turns, and 10 more for each km), and told of at the guild it's
-for, which pays.
+Gorgash." It's due like a letter (12 turns, with time to finish what the player was at and the
+way there besides: *A fair chance*), and told of at the guild it's for, which pays.
 
 They're carried like the rulers' requests (the journal shows them), and told of at the counter.
 A place to put to the sword is told with where it lies ("Outlaws hold Peninggate, 0.8 km south-west
 of Redemoor, and rob all who pass. Put them to the sword, their chief with them."), and marked on
 the world map; if it's cleared without the player there, the contract comes to nothing.
+
+**A fair chance at the guild's work** (M4, *A fair chance*: the halls' rules, as they fit):
+- **Its time** is its own, and time to finish what the player was at, and the way there from the
+  town besides: to a hunting ground, a camp, a place to clear, a place to look round, a package's
+  guild (`untilOf`); what's round the town, its own time and the time to finish.
+- **Parts all in the pack**, the contract's not failed by its time running out on the way back;
+  done, nothing is.
+- **A bounty** comes to nothing once the town it's posted in is no longer at war with that people,
+  or the player's people are their friends now, or none of theirs are about the town any more (a
+  town or a camp within reach: `soldiersAbout`). **A camp** the same, no longer at war with the
+  town's people, or friends of the player's; taking the town before the player could have got
+  there, it comes to nothing (`due`).
+- **A package** comes to nothing once the town it's for is held by a people at war with the
+  player's, who can't go in.
+- **Told of elsewhere.** The guild's town held by a people at war with the player's, what's done
+  (and parts brought, and a look round) is told of at the nearest of the guild's branches (in
+  every town and village) in a town that isn't (`back`: the host's `#sendBack`; "Redemoor is lost
+  to us. A bounty: tell the guild in Ashby instead.").
 
 ### Envoys on the roads, grudges and favours (M7)
 
