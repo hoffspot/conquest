@@ -15,7 +15,7 @@
 
 import { hypot } from "./exact.js";
 import { rollGear } from "./gear.js";
-import { dueAt, hadChance, ON_THE_ROAD, onTheRoad, turnsTo } from "./hurry.js";
+import { dueAt, hadChance, ON_THE_ROAD, onTheRoad, untilOf } from "./hurry.js";
 import { namePeople } from "./names.js";
 import { ITEMS } from "./progress.js";
 import { createRandom } from "./random.js";
@@ -341,7 +341,8 @@ export function missionOf({ war, realm, kind, key, target, rank = 0 }) {
 // What's asked, in the sender's words
 /**
  * A mission (as missionOf made it) as it's taken on by a player at `at` ([x, y] metres) now (docs/
- * WAR.md *A fair chance*): its time from now, with the way there besides (`until`; null: as long
+ * WAR.md *A fair chance*): its time from now, with time to finish what they were at when the
+ * messenger found them and the way there besides (`until`: core/hurry.js untilOf; null: as long
  * as what it's about lasts); and the turn they'd have had their chance by (`due`: the way there,
  * to a town to hold, a camp to break or works to guard; to something on the road, the turn they'd
  * meet it, or, as they'd never meet it, it's at its end; none, of what's theirs to do once they're
@@ -351,7 +352,7 @@ export function chanceOf(war, mission, at) {
     const def = MISSIONS[mission.kind];
     const { target } = mission;
     const force = target.force ? war.force(target.force) : null;
-    const until = !def || def.turns === null ? null : war.turn + def.turns + turnsTo(at, target.at);
+    const until = !def || def.turns === null ? null : untilOf(war.turn, def.turns, at, target.at);
 
     if (force && ON_THE_ROAD[force.kind]) {
         return { until, ...onTheRoad(at, force, war.turn, { short: SHORT[force.kind] ?? 0 }) };

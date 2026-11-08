@@ -61,8 +61,8 @@ import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./po
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, handInAt, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
-import { hadChance } from "./hurry.js";
+import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, handInAt, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, soldiersAbout, Standing, TITHE_RATE } from "./standing.js";
+import { hadChance, untilOf } from "./hurry.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
@@ -12146,7 +12146,7 @@ export class Host {
                     count: 0,
                     target: { wild: true, need, level: 1, near: { town: null, name: "where the trail leads", at: [...thread.at], reach: HUNTING.reach } },
                     text: `${threadWords(def.word, { town: town.name, way })} ${need} of them, within ${HUNTING.reach} m of there.`,
-                    until: this.war.turn + turns,
+                    until: untilOf(this.war.turn, turns, town.at, thread.at),
                     reward: { standing: 0, gold: reward.gold + reward.each.gold * need, merit: reward.merit },
                     thread: { id: thread.id, step: thread.step },
                 },
@@ -16688,27 +16688,29 @@ export class Host {
         }
     }
 
-    // A people's request whose town (where it's to be told of: standing.js handInAt) is no longer
-    // theirs: to be told of at the nearest of theirs with someone to tell instead (a town's reeve,
-    // or the steward at a capital's keep), as a letter's taken (standing.js HALLED); none left
-    // them, where it was
+    // A request whose town (where it's to be told of: standing.js handInAt) the player can't go
+    // back to now: a people's, no longer theirs, told of at the nearest of theirs with someone to
+    // tell instead (a town's reeve, or the steward at a capital's keep), as a letter's taken
+    // (standing.js HALLED); a guild's, held by a people at war with theirs, at the nearest of the
+    // guild's branches (one in every town and village) in a town that isn't. None, where it was
     #sendBack(player, request) {
         const war = this.war;
         const liege = war.liege(player.realm);
         const was = war.town(handInAt(request).town);
+        const guild = request.from.post === "guild";
 
-        if (request.from.post === "guild" || request.kind === "message" || request.kind === "courier" || !was || war.liege(was.owner) === liege) {
+        if (request.kind === "message" || request.kind === "courier" || !was || (guild ? !war.hostile(liege, war.liege(was.owner)) : war.liege(was.owner) === liege)) {
             return;
         }
 
         const to = war.towns
-            .filter((town) => war.liege(town.owner) === liege && ["town", "city", "capital"].includes(town.kind))
+            .filter((town) => (guild ? !war.hostile(liege, war.liege(town.owner)) : war.liege(town.owner) === liege && ["town", "city", "capital"].includes(town.kind)))
             .sort((a, b) => hypot(a.at[0] - was.at[0], a.at[1] - was.at[1]) - hypot(b.at[0] - was.at[0], b.at[1] - was.at[1]))[0];
 
         if (to) {
-            const keep = to.kind === "capital";
+            const keep = !guild && to.kind === "capital";
 
-            request.back = { town: to.id, townName: to.name, post: keep ? "keep" : "hall", name: keep ? "the steward" : "the reeve" };
+            request.back = { town: to.id, townName: to.name, post: guild ? "guild" : keep ? "keep" : "hall", name: guild ? "the guild" : keep ? "the steward" : "the reeve" };
             this.#event("request", { id: player.id, change: "sent", request: structuredClone(request) });
         }
     }
@@ -16717,8 +16719,9 @@ export class Host {
         const war = this.war;
         const liege = war.liege(player.realm);
 
-        // (Done, it's only to be told of: its time was for the doing, not the way back)
-        if (request.state === "done") {
+        // (Done, it's only to be told of: its time was for the doing, not the way back. Parts
+        // wanted at the guild, the same while they're all in the pack)
+        if (request.state === "done" || (request.kind === "parts" && player.progress.held(request.target.part) >= request.target.need)) {
             return null;
         }
 
@@ -16747,6 +16750,22 @@ export class Host {
             // (Their soldiers to bring down: no longer at war with them, or gone, it's come to nothing)
             case "bounty":
                 return atWar(request.target.realm) ? null : "void";
+            // (A guild's bounty: the town it's posted in no longer at war with them, or they're
+            // friends of the player's people now, whom they can't fight, or none of theirs are about
+            // the town any more (standing.js soldiersAbout): come to nothing)
+            case "hunt": {
+                const town = war.town(request.from.town);
+                const foe = request.target.realm;
+
+                return town && war.realm(foe)?.alive && war.hostile(town.owner, foe) && !war.friendly(player.realm, foe) && soldiersAbout(war, town.id, foe) ? null : "void";
+            }
+            // (A guild's package: the town it's for now held by a people at war with theirs, that
+            // they can't go into, it's come to nothing)
+            case "courier": {
+                const to = war.town(request.target.town);
+
+                return to && !war.hostile(liege, war.liege(to.owner)) ? null : "void";
+            }
             // (A guild's look round: seen once the player's been near enough, or seen it from high
             // ground, by the maps' rule; or within REQUEST_REACH.survey of it)
             case "survey": {
@@ -16797,9 +16816,14 @@ export class Host {
                     this.#event("request", { id: player.id, change: "there", request: structuredClone(request) });
                 }
 
-                // (A people's: its people no longer at war with them, it's come to nothing)
+                // (A people's: its people no longer at war with them, it's come to nothing. A guild's:
+                // no longer at war with the town's, or friends of the player's people now, whom they
+                // can't fight, the same)
                 if (camp) {
-                    return request.kind === "rout" && !atWar(request.target.realm) ? "void" : null;
+                    const town = war.town(request.target.town);
+                    const over = request.kind === "rout" ? !atWar(request.target.realm) : !town || !war.hostile(town.owner, camp.realm) || war.friendly(player.realm, camp.realm);
+
+                    return over ? "void" : null;
                 }
 
                 // (Gone: broken, or gone home; or it took the town, and the request's failed)
@@ -17161,6 +17185,11 @@ export class Host {
                     this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(me.x + (them.x - me.x) * step), Math.floor(me.y + (them.y - me.y) * step)], facing: atan2(them.x - me.x, them.y - me.y) }] });
                 }
             } else if (one.state === "waiting") {
+                // (While they're in a fight, they wait till it's over, and their while after it)
+                if (this.#beset(them)) {
+                    one.since = this.battle.time;
+                }
+
                 if (far > MESSENGER.far || this.battle.time - one.since > MESSENGER.wait) {
                     this.#messengerLeaves(one, "gone");
                 } else if (far > MESSENGER.hail * 3 && this.battle.actor(lead.id).talkingTo !== one.folk) {

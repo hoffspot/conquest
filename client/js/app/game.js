@@ -11744,8 +11744,9 @@ export class Game {
                     text: request.text,
                     progress: progressOf(request),
                     where: where.at && at ? bearing(at, where.at) : "",
-                    // (Done, it's only to be told of: no time left to run out)
-                    left: request.until === null || request.state === "done" || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
+                    // (Done, it's only to be told of: no time left to run out; parts wanted at the
+                    // guild, the same while they're all in the pack)
+                    left: request.until === null || request.state === "done" || (request.kind === "parts" && this.progress.held(request.target.part) >= request.target.need) || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
                     shared: request.shared ?? null,
                 };
             }),

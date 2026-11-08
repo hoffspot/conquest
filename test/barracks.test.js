@@ -34,7 +34,7 @@ const { tell } = await import("../client/js/core/war/news.js");
 const { HOLDINGS, SACK, STAGES, TAKEN, TURN_MS, TURNS_PER_STAGE, War } = await import("../client/js/core/war/war.js");
 const { planWorld } = await import("../client/js/core/worldplan/plan.js");
 const { offerRequest, OPENS, progressOf, REQUESTS, STANDINGS } = await import("../client/js/core/standing.js");
-const { turnsTo } = await import("../client/js/core/hurry.js");
+const { untilOf } = await import("../client/js/core/hurry.js");
 const { createRandom } = await import("../client/js/core/random.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
@@ -483,8 +483,9 @@ describe("the keep's request to take a town by its barracks (standing.js take)",
         const request = ask();
 
         assert.equal(request.target.town, target.id);
-        // (Its time, and the way there from the keep besides: core/hurry.js)
-        assert.equal(request.until, war.turn + REQUESTS.take.turns + turnsTo(war.town(capital).at, target.at));
+        // (Its time, with time to finish what they were at and the way there from the keep
+        // besides: core/hurry.js)
+        assert.equal(request.until, untilOf(war.turn, REQUESTS.take.turns, war.town(capital).at, target.at));
         assert.match(request.text, new RegExp(`^${target.name} is held by .+\\. Put its whole garrison to the sword: its guards and patrols, and the guardsmen and their captain in its (barracks|guardhouse)`));
         assert.equal(progressOf(request), `Get to ${target.name}.`);
         assert.match(progressOf({ ...request, there: true }), /^Put down its guards and patrols, and the guardsmen and their captain in its (barracks|guardhouse)\.$/);

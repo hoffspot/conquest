@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Standing } from "../client/js/core/standing.js";
 import { BONUS, briefingOf, chanceOf, checkMission, gearChoices, INTERCEPT_TURNS, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
-import { dueAt, GRACE, onTheRoad, turnsTo } from "../client/js/core/hurry.js";
+import { GRACE, LEAVE, onTheRoad, turnsTo } from "../client/js/core/hurry.js";
 import { REINFORCE } from "../client/js/core/war/armies.js";
 
 // Just enough of a war (core/war/war.js): humans at war with orcs, at peace with elves
@@ -334,7 +334,7 @@ describe("a fair chance (docs/WAR.md *A fair chance*)", () => {
         assert.equal(onTheRoad(at, war.force("column-1"), war.turn, { short: REINFORCE.join }).met, false);
     });
 
-    it("starts a mission's time when it's taken on, the way there besides, and holds them to it from when they'd have got there", () => {
+    it("starts a mission's time when it's taken on, with time to finish what they were at and the way there besides, and holds them to it from when they'd have got there", () => {
         const war = warOf({
             camps: [{ id: "camp-1", realm: "orc", at: [1300, 200], toward: "calbury" }],
             forces: [{ id: "convoy-1", realm: "orc", kind: "convoy", size: 6, at: [2500, 0], path: [[2500, 0], [-3000, 0]], leg: 0, cargo: { stone: 30 }, home: "works-2" }],
@@ -343,9 +343,9 @@ describe("a fair chance (docs/WAR.md *A fair chance*)", () => {
         const plunder = missionOf({ war, realm: "human", kind: "plunder", key: "convoy-1", target: { force: "convoy-1", realm: "orc", at: [2500, 0], name: "the orcish convoy of stone" } });
 
         war.turn = 14;
-        assert.deepEqual(chanceOf(war, rout, at), { until: 14 + MISSIONS.rout.turns + turnsTo(at, [1300, 200]), due: dueAt(at, [1300, 200], 14), met: true });
+        assert.deepEqual(chanceOf(war, rout, at), { until: 14 + MISSIONS.rout.turns + LEAVE + turnsTo(at, [1300, 200]), due: 14 + LEAVE + turnsTo(at, [1300, 200]) + GRACE, met: true });
         assert.deepEqual(chanceOf(war, plunder, at), { until: null, ...onTheRoad(at, war.force("convoy-1"), 14) });
-        assert.equal(chanceOf(war, plunder, at).due > 14 + GRACE, true);
+        assert.equal(chanceOf(war, plunder, at).due > 14 + LEAVE + GRACE, true);
 
         // (Gone too far on for them to meet it now: not met)
         Object.assign(war.force("convoy-1"), { at: [-2000, 0] });

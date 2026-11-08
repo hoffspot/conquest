@@ -2,11 +2,13 @@
 // that won't wait: the requests their people's officials give (core/standing.js) and the war
 // missions messengers bring (core/missions.js). Nothing's offered that a player setting out at
 // once, hurrying, couldn't get to in time: an envoy, a convoy, wagons or reinforcements they'd
-// never meet on its road before it ends (onTheRoad: `met`, at HURRY). A request with a time to do
-// it in has the way there in it too (turnsTo). And nothing's failed by what happened before they
-// could have got there, going at a steady PACE, only by what happened once they could have: each
-// has the turn they'd have had their chance by (`due`: dueAt, or onTheRoad's), and until then, or
-// till they're there, what goes wrong comes to nothing (hadChance).
+// never meet on its road before it ends (onTheRoad: `met`, at HURRY). One with a time to do it in
+// has the way there in it too, and time first to finish what they were at when it was asked
+// (untilOf: LEAVE; a messenger finds a player wherever they are, at whatever they're doing). And
+// nothing's failed by what happened before they could have got there, setting out after that and
+// going at a steady PACE, only by what happened once they could have: each has the turn they'd
+// have had their chance by (`due`: dueAt, or onTheRoad's), and until then, or till they're there,
+// what goes wrong comes to nothing (hadChance).
 //
 // Pure: no world, no host, so it's tested on its own (test/hurry.test.js).
 
@@ -33,6 +35,13 @@ export const HURRY = 250;
 export const GRACE = 3;
 
 /**
+ * War turns a player's given before they set out, to finish what they were at when they were
+ * asked (a fight, a dungeon, the market...): in every time to do something in, and before they're
+ * held to anything.
+ */
+export const LEAVE = 15;
+
+/**
  * How near (metres) something on the road must come to a player to be met: the world plays it
  * out round them from there (core/host.js ENVOY, CONVOY_NEAR and WAGON_NEAR: `near`).
  */
@@ -48,21 +57,30 @@ export function turnsTo(from, to, reach = 0) {
     return from && to ? Math.ceil(Math.max(0, apart(from, to) - reach) / PACE) : 0;
 }
 
-/** The war turn by which a player setting out from `from` on `turn` has had their chance at `to` (within `reach`). */
+/** The war turn by which a player at `from`, asked on `turn`, has had their chance at `to` (within `reach`). */
 export function dueAt(from, to, turn, reach = 0) {
-    return turn + turnsTo(from, to, reach) + GRACE;
+    return turn + LEAVE + turnsTo(from, to, reach) + GRACE;
 }
 
 /**
- * What a player at `from`, setting out on `turn`, has of something on the road (`force`, as for
- * meetAt): whether they could meet it before its end, hurrying (`met`), and the turn they'd have
- * had their chance at it by (`due`: the turn they'd meet it going at PACE, or, as they wouldn't,
- * the turn it's at its end; and GRACE besides).
+ * The war turn something asked on `turn` must be done by, given `turns` to do it in: and time
+ * first to finish what they were at (LEAVE), and the way there from `from` to `to`, if it's
+ * somewhere.
+ */
+export function untilOf(turn, turns, from = null, to = null) {
+    return turn + turns + LEAVE + turnsTo(from, to);
+}
+
+/**
+ * What a player at `from`, asked on `turn`, has of something on the road (`force`, as for meetAt):
+ * whether they could meet it before its end, setting out at once and hurrying (`met`), and the
+ * turn they'd have had their chance at it by (`due`: the turn they'd meet it going at PACE, or, as
+ * they wouldn't, the turn it's at its end; and LEAVE and GRACE besides).
  */
 export function onTheRoad(from, force, turn, { short = 0 } = {}) {
     const meet = meetAt(from, force, turn, { short });
 
-    return { met: meetAt(from, force, turn, { short, pace: HURRY }) !== null, due: (meet ?? endAt(force, turn, { short }) ?? turn) + GRACE };
+    return { met: meetAt(from, force, turn, { short, pace: HURRY }) !== null, due: (meet ?? endAt(force, turn, { short }) ?? turn) + LEAVE + GRACE };
 }
 
 /**

@@ -10,6 +10,7 @@ import { CREATURES, LAIRS, tierAt, tierPower } from "../client/js/core/creatures
 import { hypot } from "../client/js/core/exact.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { untilOf } from "../client/js/core/hurry.js";
 import { WAY_IN_CLEAR } from "../client/js/core/insides.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { bandFolk, heldAtStart, HOLDERS, holderOf, PLACE_BANDS, PLACE_KINDS, PLACE_TIMES, placeOf, placesOf } from "../client/js/core/places.js";
@@ -792,7 +793,8 @@ describe("the guilds' contracts to clear the places held (standing.js \"clear\")
         assert.deepEqual(contract.target.at, place.at);
         assert.match(contract.text, new RegExp(`${contract.target.name}, [0-9.]+ km (north|south|east|west|north-east|north-west|south-east|south-west) of ${town.name}`));
         assert.match(progressOf(contract), contract.target.holder === "dead" ? /Lay the dead of .+ to rest/ : /Put the outlaws at .+ to the sword/);
-        assert.equal(contract.until, war.turn + REQUESTS.clear.turns);
+        // (Its time, with time to finish what they were at and the way there: core/hurry.js)
+        assert.equal(contract.until, untilOf(war.turn, REQUESTS.clear.turns, town.at, place.at));
 
         const { gold, size, tier } = REQUESTS.clear.reward;
 

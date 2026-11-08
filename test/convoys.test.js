@@ -27,7 +27,7 @@ const { STEP_MS } = await import("../client/js/core/battle.js");
 const { CONVOY_NEAR, HOST_PLAYER, Host } = await import("../client/js/core/host.js");
 const { buildWorld } = await import("../client/js/core/overworld.js");
 const { createRandom } = await import("../client/js/core/random.js");
-const { turnsTo } = await import("../client/js/core/hurry.js");
+const { untilOf } = await import("../client/js/core/hurry.js");
 const { OPENS, offerRequest, progressOf, STANDINGS, whereTo } = await import("../client/js/core/standing.js");
 const { CONVOY } = await import("../client/js/core/war/war.js");
 const { decode, encode } = await import("../client/js/core/wire.js");
@@ -283,8 +283,8 @@ describe("the keep's requests about the convoys and the works (standing.js, host
         assert.match(plunder.text, /convoy of stone/);
         assert.equal(retake.target.works, lost.id);
         assert.match(retake.text, /^Brigands hold the /);
-        // (Its time, and the way there from the keep besides)
-        assert.equal(retake.until, war.turn + 40 + turnsTo(war.town(capital).at, lost.at));
+        // (Its time, with time to finish what they were at and the way there from the keep besides)
+        assert.equal(retake.until, untilOf(war.turn, 40, war.town(capital).at, lost.at));
         assert.equal(seize.target.works, taken.id);
         assert.equal(progressOf(seize), `Get to the ${taken.name} ${taken.kind}.`);
         assert.deepEqual(whereTo(seize, war).at, taken.at);

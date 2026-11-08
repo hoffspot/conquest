@@ -12,6 +12,7 @@ import { candidatesAt, CREATURES, TIER_LAND, tierAt } from "../client/js/core/cr
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { Explored } from "../client/js/core/explored.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { untilOf } from "../client/js/core/hurry.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { PARTS, SPOILS } from "../client/js/core/spoils.js";
@@ -44,11 +45,11 @@ function run(host, ms) {
 const put = (actor, map, [x, y]) => Object.assign(actor, { map, square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
 // What a guild's board offers, asked many times (by someone whose people start at `home`, of a
-// rank in the guilds)
-const offers = (war, town, count = 200, seed = 3, home = undefined, guildRank = 0) => {
+// rank in the guilds; of a people, `realm`, or any)
+const offers = (war, town, count = 200, seed = 3, home = undefined, guildRank = 0, realm = null) => {
     const random = createRandom(seed);
 
-    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, home, guildRank, random })).filter(Boolean);
+    return Array.from({ length: count }, () => offerContract({ war, town: town.id, giver, realm, home, guildRank, random })).filter(Boolean);
 };
 
 describe("the guilds' contracts, all within reach of their towns (standing.js offerContract)", () => {
@@ -268,6 +269,61 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
         assert.ok(camps.length > 10);
         assert.ok(camps.every(({ target, text }) => target.force === "camp-900" && text.includes(`0.4 km south of ${town.name}`)));
     });
+
+    it("puts no bounty and no camp to an adventurer against their own people or their friends, whom they can't fight", () => {
+        const war = new War(plan);
+        const town = war.towns.find(({ kind, owner }) => kind === "town" && owner === "human");
+        const kinds = (realm) => new Set(offers(war, town, 200, 3, undefined, BRONZE, realm).map(({ kind }) => kind));
+
+        // (An orcish camp before a human town, the humans and orcs at war)
+        war.relations["human|orc"] = { state: "hostile", since: 0 };
+        war.camps.push({ id: "camp-900", realm: "orc", at: [town.at[0], town.at[1] + 400], guard: 6, built: 0, done: 0, toward: town.id, used: 0, skirmished: 0 });
+        assert.ok(kinds("human").has("hunt") && kinds("human").has("camp"), "to a human");
+        assert.ok(!kinds("orc").has("hunt") && !kinds("orc").has("camp"), "not to an orc");
+
+        // (The elves allied with the orcs: not to an elf either; at peace with them, to an elf)
+        war.relations["elf|orc"] = { state: "allied", since: 0 };
+        assert.ok(!kinds("elf").has("hunt") && !kinds("elf").has("camp"), "not to an ally");
+        war.relations["elf|orc"] = { state: "neutral", since: 0 };
+        assert.ok(kinds("elf").has("camp"), "to a neutral");
+    });
+
+    it("asks for beasts on a hunting ground of a level the ground itself has, where they count, with time to get there", () => {
+        const home = startFor(plan, "human").at;
+        const war = new War(plan);
+        const found = new Explored();
+        const towns = war.towns.filter(({ owner }) => owner === "human");
+        let checked = 0;
+
+        for (const town of towns) {
+            for (const contract of offerBoard({ war, realm: "human", town: town.id, giver, home, guildRank: GUILD_RANKS.length - 1, explored: found, random: createRandom(5) })) {
+                if (contract.kind !== "beasts" || !contract.target.towards) {
+                    continue;
+                }
+
+                // (Somewhere within its reach of the ground, beasts of the level it asks for)
+                const { at, reach } = contract.target.near;
+                const steps = reach / 100;
+                const tiers = [];
+
+                for (let j = -steps; j <= steps; j++) {
+                    for (let i = -steps; i <= steps; i++) {
+                        if (i * i + j * j <= steps * steps) {
+                            const spot = [at[0] + i * 100, at[1] + j * 100];
+
+                            tiers.push(tierAt(spot, [home], landAt(plan, ...spot).biome));
+                        }
+                    }
+                }
+
+                assert.ok(Math.max(...tiers) >= contract.target.level, `level ${contract.target.level} asked, ${Math.max(...tiers)} there`);
+                assert.equal(contract.until, untilOf(war.turn, REQUESTS.beasts.turns, town.at, at));
+                checked++;
+            }
+        }
+
+        assert.ok(checked > 0, "(a hunting ground offered)");
+    });
 });
 
 describe("the guilds' courier work, on the way to strangers (standing.js offerCourier)", () => {
@@ -316,7 +372,8 @@ describe("the guilds' courier work, on the way to strangers (standing.js offerCo
                 const km = apart(destination.at, town.at) / 1000;
 
                 assert.equal(courier.reward.gold, Math.round(REQUESTS.courier.reward.gold + REQUESTS.courier.reward.perKm.gold * km));
-                assert.equal(courier.until, war.turn + Math.ceil(REQUESTS.courier.turns + km * REQUESTS.courier.perKm));
+                // (Its time, with time to finish what they were at and the way there: core/hurry.js)
+                assert.equal(courier.until, untilOf(war.turn, REQUESTS.courier.turns, town.at, destination.at));
                 assert.match(courier.text, new RegExp(`^The guild in ${destination.name} wants this package, sealed, .+ on the way to ${war.realm(towards.owner).name} at ${towards.name}\\.$`));
                 assert.equal(progressOf(courier), `Take it to the guild in ${destination.name}.`);
                 checked++;
@@ -472,11 +529,15 @@ describe("the guild's board at its counter (host.js, dialogue.js)", () => {
         const { host, player } = atTheCounter();
         const actor = host.battle.actor(HOST_PLAYER);
         const home = host.war.town(host.world.start.id);
-        const far = host.war.towns.find((town) => apart(town.at, home.at) > GUILD_REACH * 2);
         const enemy = host.war.realms.find(({ id }) => id !== "human").id;
+        // (Far off, a town of a people at war with them, a camp of theirs before it: as a bounty
+        // there is posted for)
+        const far = host.war.towns.find((town) => apart(town.at, home.at) > GUILD_REACH * 2 && town.owner !== enemy);
         const contract = (kind, town, target) => ({ kind, title: kind, from: { id: "guild/receptionist", name: "Mira", title: "", town: town.id, townName: town.name, post: "guild" }, given: 0, state: "open", count: 0, until: 999, reward: { standing: 0, gold: 10 }, text: "", key: `${kind}-${town.id}`, target: { ...target, near: { town: town.id, name: town.name, at: [...town.at], reach: GUILD_REACH } } });
 
         host.war.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        host.war.relations[[far.owner, enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        host.war.camps.push({ id: "camp-905", realm: enemy, at: [far.at[0] + 400, far.at[1]], guard: 6, built: 0, done: 0, toward: far.id, used: 0, skirmished: 0 });
         host.command(HOST_PLAYER, { type: "talk", with: null });
         player.standing.take(contract("beasts", home, { wild: true, need: 1 }));
         player.standing.take(contract("beasts", far, { wild: true, need: 1 }));
@@ -511,6 +572,57 @@ describe("the guild's board at its counter (host.js, dialogue.js)", () => {
                 ["hunt", `hunt-${far.id}`, "open", 0],
             ],
         );
+    });
+
+    it("gives a guild's work a fair chance (docs/WAR.md M8): parts in the pack, a bounty or a package come to nothing, and what's done told of at another branch", () => {
+        const { host, player } = atTheCounter();
+        const war = host.war;
+        const home = war.town(host.world.start.id);
+        const enemy = war.realms.find(({ id }) => id !== "human").id;
+        const contract = (kind, town, target, more = {}) => ({ kind, title: kind, from: { id: "guild/receptionist", name: "Mira", title: "", town: town.id, townName: town.name, post: "guild" }, given: 0, state: "open", count: 0, until: 999, reward: { standing: 0, gold: 10 }, text: "", key: `${kind}-${town.id}`, target, ...more });
+        const changes = [];
+        const watch = (ms) => changes.push(...run(host, ms).filter(({ type }) => type === "request").map(({ change, request: asked }) => [asked.kind, change]));
+        const [part] = WANTED_PARTS;
+
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        war.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: 0 };
+        war.camps.push({ id: "camp-906", realm: enemy, at: [home.at[0] + 400, home.at[1]], guard: 6, built: 0, done: 0, toward: home.id, used: 0, skirmished: 0 });
+
+        // (Parts all in the pack, its time gone on the way back: not failed)
+        player.progress.stow({ id: part }, 3);
+        player.standing.take(contract("parts", home, { part, name: part, need: 3 }, { until: war.turn - 1 }));
+
+        // (A bounty on them, then peace between the town's people and theirs: come to nothing)
+        player.standing.take(contract("hunt", home, { realm: enemy, need: 2, near: { town: home.id, name: home.name, at: [...home.at], reach: GUILD_REACH } }));
+        watch(600);
+        assert.deepEqual(changes, []);
+        war.relations[["human", enemy].sort().join("|")] = { state: "neutral", since: war.turn };
+        watch(600);
+        assert.deepEqual(changes, [["hunt", "void"]]);
+        assert.equal(player.standing.requests.find(({ kind }) => kind === "parts").state, "open");
+
+        // (A package for a town now held by a people at war with theirs: come to nothing)
+        const other = war.towns.find(({ owner, id }) => owner === "human" && id !== home.id);
+
+        war.relations[["human", enemy].sort().join("|")] = { state: "hostile", since: war.turn };
+        player.standing.take(contract("courier", home, { town: other.id, name: other.name, at: [...other.at], post: "guild" }));
+        other.owner = enemy;
+        watch(600);
+        assert.deepEqual(changes.at(-1), ["courier", "void"]);
+
+        // (Done, the guild's town held by a people at war with theirs now: told of at the
+        // nearest branch in a town that isn't)
+        player.standing.take(contract("beasts", home, { wild: true, need: 1 }, { key: "told", state: "done", count: 1 }));
+        home.owner = enemy;
+        watch(600);
+
+        const told = player.standing.requests.find(({ key }) => key === "told");
+        const to = war.town(told.back.town);
+
+        assert.deepEqual(changes.at(-1), ["beasts", "sent"]);
+        assert.equal(told.back.post, "guild");
+        assert.ok(!war.hostile("human", to.owner));
+        assert.equal(progressOf(told), `Done: go back to the guild in ${to.name}.`);
     });
 
     it("reads out the notices on the board, each in full, and takes the one chosen", () => {
