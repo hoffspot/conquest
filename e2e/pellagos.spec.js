@@ -186,8 +186,9 @@ async function toldOf(page, pattern) {
     return page.evaluate(([source, flags]) => window.pellagos.game.messages.map(({ text }) => text).find((text) => new RegExp(source, flags).test(text)) ?? null, [pattern.source, pattern.flags]);
 }
 
-// The camera looking down on the player from higher and further back (35 degrees from 10.5 m, as
-// it started before it started close behind them: camera.js startPitch, view.js DISTANCE.start),
+// The camera looking down on the player from higher (35 degrees from 10.5 m, as it started before
+// it started close behind them, then 12 degrees down from as far, over their head: camera.js
+// startPitch, view.js startDistance),
 // for a test of tapping or holding on what's about them: seen from close behind them, what's a
 // few metres straight ahead of them, the way the camera looks, is behind them on the screen, and
 // a tap on it is on them. (Played on a frame, so the camera's there)
@@ -2068,9 +2069,9 @@ test("swiping up from the player turns them the way the camera looks and sends t
         return { order, pitch, facing, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    // (A swipe, not a drag: the camera's not tilted from where it starts, close behind them,
-    // sideways 25 degrees down: camera.js startPitch)
-    expect(moved.pitch).toBe(25);
+    // (A swipe, not a drag: the camera's not tilted from where it starts behind them, sideways 12
+    // degrees down: camera.js startPitch)
+    expect(moved.pitch).toBe(12);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -2253,8 +2254,8 @@ test("the thumb stick's knob tapped (let go of at once, not slid): the camera pu
     });
 
     expect(after.off).toBeLessThan(0.05);
-    expect(after.pitch).toBeCloseTo(25, 0);
-    expect(after.distance).toBeCloseTo(5.5, 1);
+    expect(after.pitch).toBeCloseTo(12, 0);
+    expect(after.distance).toBeCloseTo(10.5, 1);
     expect(after.square).toEqual(start.square);
 });
 
@@ -2539,13 +2540,17 @@ test("with following turned on (Game options), the camera follows from the first
     });
 
     expect(camera.start.yaw).toBe(0);
-    expect(camera.start.pitch).toBe(25);
+    expect(camera.start.pitch).toBe(12);
     expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
     expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
     expect(camera.off).toBeLessThan(0.3);
     expect(Math.abs(camera.onScreen.x)).toBeLessThan(0.2);
-    expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.3);
+
+    // (In the lower middle of the picture, the camera looking a little over their head: view.js
+    // LOOK_UP)
+    expect(camera.onScreen.y).toBeLessThan(-0.15);
+    expect(camera.onScreen.y).toBeGreaterThan(-0.55);
 });
 
 test("in a fight, the battle cam turned off, the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view", async ({ page }) => {
@@ -3867,7 +3872,7 @@ test("on a PC, Q and E turn the camera round the player while held, and R puts i
     expect(await press("e", 0.5)).toBeLessThan(-0.8);
 
     // R, the camera tilted steeply and zoomed out first: swung round behind the player, the way
-    // they face, tilted down 25 degrees (sideways: camera.js startPitch) and zoomed in to 5.5 m
+    // they face, tilted down 12 degrees (sideways: camera.js startPitch) and put back at 10.5 m
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -3884,8 +3889,8 @@ test("on a PC, Q and E turn the camera round the player while held, and R puts i
     });
 
     expect(behind.off).toBeLessThan(0.05);
-    expect(behind.pitch).toBeCloseTo(25, 0);
-    expect(behind.distance).toBeCloseTo(5.5, 1);
+    expect(behind.pitch).toBeCloseTo(12, 0);
+    expect(behind.distance).toBeCloseTo(10.5, 1);
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
@@ -15425,7 +15430,7 @@ test("coming into a world, the camera flies down from high overhead, north up, t
     expect(high.above).toBeGreaterThan(high.away * 2);
     expect(high.lower).toBeLessThan(high.above);
 
-    // A key pressed: down at once, close behind the player, as it starts (sideways, 25 degrees down)
+    // A key pressed: down at once, behind the player, as it starts (sideways, 12 degrees down from 10.5 m)
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("Shift");
 
@@ -15441,7 +15446,7 @@ test("coming into a world, the camera flies down from high overhead, north up, t
         return { flying: game.view.flying, above: camera.y - player.y, distance: game.view.distance, pitch: game.cameraFollow.pitch };
     });
 
-    expect(landed).toMatchObject({ flying: false, distance: 5.5, pitch: 25 });
+    expect(landed).toMatchObject({ flying: false, distance: 10.5, pitch: 12 });
     expect(landed.above).toBeLessThan(5);
 
     // Left alone, it comes down by itself in about 4 seconds

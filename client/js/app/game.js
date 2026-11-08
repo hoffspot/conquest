@@ -137,7 +137,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW, startDistance } from "../world/view.js";
 import { cutRock, DUNGEON_CUT, loadProp } from "../world/dungeons3d.js";
 import { KEEP_KIT } from "../world/keepkit.js";
 import { showSilhouette, SILHOUETTE } from "../world/silhouette.js";
@@ -2348,10 +2348,11 @@ export class Game {
             this.#place(actor);
         }
 
-        // The camera starts on the player, looking north, tilted as it starts for how the screen's
-        // held (startPitch)
+        // The camera starts on the player, looking north, tilted and as far back as it starts for
+        // how the screen's held (startPitch, startDistance)
         const start = this.avatars.get(this.me).object.position;
 
+        this.view.distance = startDistance(this.view.heldUpright);
         this.cameraFollow = new CameraFollow({ x: start.x, z: start.z, pitch: startPitch(this.view.heldUpright) });
         this.#follow(0);
 
@@ -8097,7 +8098,7 @@ export class Game {
     /**
      * Put the camera back behind the player, the way they face (R, a tap on the thumb stick, or
      * the player's own mark on the minimap tapped): swung round, close behind them, as it starts
-     * for how the screen's held (camera.js startPitch, view.js DISTANCE.start), as if turned by
+     * for how the screen's held (camera.js startPitch, view.js startDistance), as if turned by
      * hand: a fight
      * the battle cam framed is let be, as after a drag (#battleFoe).
      */
@@ -8118,7 +8119,7 @@ export class Game {
         if (this.dungeonCamera) {
             Object.assign(this.dungeonCamera, { nudge: 0, zoom: 1 });
         } else {
-            this.view.zoomToDistance(DISTANCE.start);
+            this.view.zoomToDistance(startDistance(this.view.heldUpright));
         }
 
         // (The way they face, or are turning to face)
