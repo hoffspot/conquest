@@ -45,11 +45,24 @@ export const HORSE_NAMES = Object.freeze([
  * - `beside`: how far (m) from its rider it rises (at their side, the horse's left: the mounting
  *   clip's rider stands so far from its middle), and they get down;
  * - `thrown`: how far its rider's thrown off (TOSS's throw times this);
- * - `speed`: how many times faster than on foot it carries them (walking and running alike);
- *   `stamina`: how much of a run's stamina it spares them;
+ * - `walk`, `run`: how many times faster than on foot it carries them, walking (at a trot: 3.7 m/s
+ *   at a walking pace of 1.7) and running flat out (at a gallop: 13.4 m/s to a run's 7.9), and in
+ *   between as far as they've got from one to the other (carried); ridden, a run takes none of
+ *   their stamina, which comes back as it does at a walk (battle.js #move);
  * - `health`: its hit points, its rider's times this (rising as theirs do).
  */
-export const MOUNT = Object.freeze({ rise: 1300, mount: 1800, dismount: 1800, hop: 900, sink: 1200, fall: 4000, beside: 0.55, thrown: 0.7, speed: 2.2, stamina: 0.5, health: 1.5 });
+export const MOUNT = Object.freeze({ rise: 1300, mount: 1800, dismount: 1800, hop: 900, sink: 1200, fall: 4000, beside: 0.55, thrown: 0.7, walk: 2.2, run: 1.7, health: 1.5 });
+
+/**
+ * How many times as fast as on foot a horse carries its rider going at `pace` (m/s, as they'd go
+ * on foot): MOUNT.walk at their walking pace (`walk`) or slower, MOUNT.run at their run's
+ * (`sprint`) and faster, and in between as far as they've got from the one to the other.
+ */
+export function carried(pace, walk, sprint) {
+    const run = sprint > walk ? Math.min(1, Math.max(0, (pace - walk) / (sprint - walk))) : 0;
+
+    return MOUNT.walk + (MOUNT.run - MOUNT.walk) * run;
+}
 
 /** A mount's phases: what it's doing, in order (`fallen` after riding, when it's struck down). */
 export const PHASES = Object.freeze(["rising", "mounting", "riding", "dismounting", "sinking", "fallen"]);

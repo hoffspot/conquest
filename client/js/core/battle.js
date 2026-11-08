@@ -85,7 +85,7 @@ import { armsOf, blowEvery, chooseAttack, distanceBetween, KNIFE, longestReach, 
 import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
 import { BAIT, eats, MOODS, MORALE, moodFor, NERVE, twoDice, WARY } from "./wary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
-import { carries, holds, MOUNT, nextPhase, out, phaseLength } from "./mounts.js";
+import { carried, carries, holds, MOUNT, nextPhase, out, phaseLength } from "./mounts.js";
 
 /**
  * How near (squares) two people have to be to talk, seeing each other: next to each other, or
@@ -5541,9 +5541,10 @@ export class Battle {
         }
 
         const seconds = STEP_MS / 1000;
+        const riding = actor.mount?.phase === "riding";
 
-        // A runner with no stamina left walks
-        if (actor.order?.run && actor.stamina <= 0) {
+        // A runner with no stamina left walks (not one on horseback: the horse runs)
+        if (actor.order?.run && actor.stamina <= 0 && !riding) {
             actor.order.run = false;
             this.#emit("exhausted", { id: actor.id });
         }
@@ -5558,10 +5559,9 @@ export class Battle {
 
         // (Nor while caught in a snare: an ambush's, core/ambush.js)
         // (Nor getting up on a horse or down from it, or waiting on it to rise; ridden, it carries
-        // them the faster: core/mounts.js)
+        // them the faster, at a trot walking and a gallop running: core/mounts.js carried)
         const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking || actor.hidden || actor.lying || this.time < (actor.snaredUntil ?? 0) || holds(actor.mount);
-        const riding = actor.mount?.phase === "riding";
-        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed") * (riding ? MOUNT.speed : 1));
+        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed") * (riding ? carried(actor.pace, walk, actor.speed * SPRINT) : 1));
 
         // Getting nowhere, jostling: squeezing past (#bumps)
         if (!actor.path.length || held) {
@@ -5583,11 +5583,12 @@ export class Battle {
         }
 
         // Running uses stamina, anything else gets it back (in thousandths, so it adds up exactly),
-        // the faster for what does them good (`recovery`) and the slower for what ails them
+        // the faster for what does them good (`recovery`) and the slower for what ails them; on
+        // horseback the horse does the running, and they get it back at a gallop as at a walk
         actor.running = run && travelled > 0;
 
-        const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1) * (1 - Math.min(0.5, actor.endurance ?? 0)) * (riding ? MOUNT.stamina : 1);
-        const stamina = actor.stamina + (actor.running ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
+        const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1) * (1 - Math.min(0.5, actor.endurance ?? 0));
+        const stamina = actor.stamina + (actor.running && !riding ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 1000) / 1000));
     }

@@ -4,8 +4,8 @@
 // them, lying dead a while before it sinks away. Its coat and mane its whistle's (the catalog's
 // beast-horse, beasts/model.js MODELS horse; till that's read, or without the licensed models, a
 // bay built in code stands in, beasts/looks.js). Its rider's posed on it from the rider's clips
-// (characters/riding.js: the catalog's beast-horse-rider), in time with its own; till those are
-// read (or without them), sat up on it as on a bench.
+// (characters/riding.js: the catalog's beast-horse-rider), in time with its own, their feet in its
+// stirrups (STIRRUPS); till those are read (or without them), sat up on it as on a bench.
 //
 // Nothing here is the world's: where a horse is and what it's doing is the battle's (actor.mount),
 // the same on every copy. This only draws it.
@@ -30,6 +30,15 @@ const SKINS = Object.freeze({ bay: "", gray: "gray", dapple: "dapple", palomino:
 // Its manes' materials (the model's two: the light hair's, the long dark mane's)
 const MANE_MATERIALS = Object.freeze({ light: "MI_Hair_White", dark: "MI_Mane02_Black" });
 
+/**
+ * A rider's feet in the stirrups (on horseback, whatever their legs' length, at every gait): the
+ * ball of each foot (`ball` of the way from the ball, the toes' joint, back to the ankle) set `up`
+ * metres over the lowest of its stirrup's tread (the saddle's lowest vertices on that side, as it
+ * hangs from the horse as it goes), each leg bent to reach it; put there over the last `into`
+ * seconds of getting up, and let go over the first `outOf` of getting down.
+ */
+export const STIRRUPS = Object.freeze({ ball: 0.35, up: 0.04, treads: 12, into: 0.25, outOf: 0.3 });
+
 const ease = (u) => {
     const t = Math.min(1, Math.max(0, u));
 
@@ -38,6 +47,38 @@ const ease = (u) => {
 
 const _cg = new THREE.Vector3();
 const _feet = new THREE.Vector3();
+const _tread = new THREE.Vector3();
+const _vertex = new THREE.Vector3();
+const _ankle = new THREE.Vector3();
+const _toes = new THREE.Vector3();
+const _ball = new THREE.Vector3();
+
+// A saddle's stirrups' treads: the lowest of its vertices on each side as it's made (the horse's
+// left its +x), by its geometry ({ Left, Right }: vertex indices)
+const TREADS = new WeakMap();
+
+function treadsOf(saddle) {
+    const geometry = saddle.geometry;
+
+    if (!TREADS.has(geometry)) {
+        const position = geometry.attributes.position;
+        const side = (sign) => {
+            const ids = [];
+
+            for (let i = 0; i < position.count; i++) {
+                if (Math.sign(position.getX(i)) === sign) {
+                    ids.push(i);
+                }
+            }
+
+            return ids.sort((a, b) => position.getY(a) - position.getY(b)).slice(0, STIRRUPS.treads);
+        };
+
+        TREADS.set(geometry, { Left: side(1), Right: side(-1) });
+    }
+
+    return TREADS.get(geometry);
+}
 
 /** The horses of those riding (by their actor's id), drawn under them. */
 export class Mounts {
@@ -150,8 +191,46 @@ export class Mounts {
 
         one.dead = fallen;
 
-        // Its rider: up on it, getting up or down, or riding; else as they are
+        // Its rider: up on it, getting up or down, or riding; else as they are; their feet in its
+        // stirrups, the horse posed as it is now
         this.#rider(one, mount, avatar, { since, x, z, facing, ground });
+        this.#stirrups(one, mount, avatar, since);
+    }
+
+    // A rider's feet put in the stirrups (STIRRUPS), up on a horse drawn from its model, posed from
+    // their clips: as far as they're in them (getting up, all the way in at its end; riding; getting
+    // down, out of them at its start)
+    #stirrups(one, mount, avatar, since) {
+        const clips = this.clips;
+        const saddle = one.saddle;
+        const getting = mount.quick ? MOUNT.hop : MOUNT.dismount;
+        const amount =
+            mount.phase === "riding" ? 1
+            : mount.phase === "mounting" ? ease((since - (MOUNT.mount / 1000 - STIRRUPS.into)) / STIRRUPS.into)
+            : mount.phase === "dismounting" ? 1 - ease(since / Math.min(STIRRUPS.outOf, getting / 1000))
+            : 0;
+
+        if (amount <= 0 || !saddle || !clips || one.seated) {
+            return;
+        }
+
+        const rig = avatar.character.rig;
+        const space = rig.root.parent;
+
+        avatar.object.updateMatrixWorld(true);
+        one.beast.object.updateMatrixWorld(true);
+        saddle.skeleton.update();
+
+        for (const side of ["Left", "Right"]) {
+            this.#tread(one, side, _tread);
+
+            // (The ankle moved as far as the ball of the foot's to go, the foot turned as it was)
+            rig.bone(`${side}Foot`).getWorldPosition(_ankle);
+            rig.bone(`${side}ToeBase`).getWorldPosition(_toes);
+            _ball.copy(_toes).lerp(_ankle, STIRRUPS.ball);
+            _ankle.addScaledVector(_tread.sub(_ball), amount);
+            rig.reach(`${side}UpLeg`, `${side}Leg`, `${side}Foot`, space ? space.worldToLocal(_ankle) : _ankle);
+        }
     }
 
     // A horse begun on its next phase: the ring it comes up in or sinks into, and what's heard
@@ -242,6 +321,41 @@ export class Mounts {
         object.position.y = ground + HORSEBACK.saddle;
     }
 
+    // Where the ball of a rider's foot goes in a stirrup (`side`: "Left" or "Right", the horse's
+    // and theirs), as the horse is posed now (in the world): STIRRUPS.up over its tread
+    #tread(one, side, target) {
+        const ids = treadsOf(one.saddle)[side];
+
+        target.set(0, 0, 0);
+
+        for (const i of ids) {
+            one.saddle.getVertexPosition(i, _vertex);
+            target.add(one.saddle.localToWorld(_vertex));
+        }
+
+        target.multiplyScalar(1 / ids.length);
+        target.y += STIRRUPS.up;
+
+        return target;
+    }
+
+    /**
+     * Where the balls of a rider's feet go in their horse's stirrups as it's posed now (world:
+     * { Left, Right }), or null (none out, or drawn without its model).
+     */
+    stirrupsOf(id) {
+        const one = this.horses.get(id);
+
+        if (!one?.saddle) {
+            return null;
+        }
+
+        one.beast.object.updateMatrixWorld(true);
+        one.saddle.skeleton.update();
+
+        return { Left: this.#tread(one, "Left", new THREE.Vector3()), Right: this.#tread(one, "Right", new THREE.Vector3()) };
+    }
+
     // How high a rider's seat is over the horse's feet as it goes (metres): under its CG bone, as
     // the rider's clips have it (SEAT)
     #seat(one) {
@@ -290,7 +404,18 @@ export class Mounts {
         };
         this.scene.add(beast.object);
 
-        return { horse: horse.id, model, beast, phase: null, dead: false, sank: false, seated: false };
+        // (Its saddle as most finely drawn: its stirrups, for its rider's feet)
+        let saddle = null;
+
+        if (model) {
+            beast.object.traverse((node) => {
+                if (node.isSkinnedMesh && node.name === "Saddle") {
+                    saddle = node;
+                }
+            });
+        }
+
+        return { horse: horse.id, model, beast, saddle, phase: null, dead: false, sank: false, seated: false };
     }
 
     #remove(one) {

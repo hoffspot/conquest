@@ -149,7 +149,7 @@ describe("riding (battle.js mount)", () => {
         assert.ok(me.x > mount.spot[0] - 0.01);
     });
 
-    it("carries them MOUNT.speed times as fast, walking and running, sparing them some of a run's stamina", () => {
+    it("carries them at a trot walking (MOUNT.walk times as fast) and a gallop running (MOUNT.run times their run, far faster than any run on foot), a run on it taking none of their stamina", () => {
         const onFoot = new Battle(field(400), { seed: 3 });
         const walker = onFoot.add({ id: "me", kind: "player", weapon: "sword", team: "hero", square: [20, 30] });
         const { battle, me } = riding({ size: 400 });
@@ -160,23 +160,49 @@ describe("riding (battle.js mount)", () => {
         run(onFoot, 4000);
         run(battle, 4000);
 
-        const ratio = (me.x - x1) / (walker.x - x0);
+        const walked = (me.x - x1) / 4;
 
-        assert.ok(Math.abs(ratio - MOUNT.speed) < 0.05, `rode ${(me.x - x1).toFixed(2)} m to ${(walker.x - x0).toFixed(2)} on foot`);
+        assert.ok(Math.abs(walked / ((walker.x - x0) / 4) - MOUNT.walk) < 0.05, `rode ${(me.x - x1).toFixed(2)} m to ${(walker.x - x0).toFixed(2)} on foot`);
 
-        // (Running: as much faster, its stamina going half as fast)
-        const runner = new Battle(field(400), { seed: 3 });
+        // (Running, once each's up to speed: the horse as much faster again, and their stamina
+        // spent on foot and none of it on horseback)
+        const runner = new Battle(field(600), { seed: 3 });
         const foot = runner.add({ id: "me", kind: "player", weapon: "sword", team: "hero", square: [20, 30] });
-        const ridden = riding({ size: 400 });
+        const ridden = riding({ size: 600 });
+        const speeds = [];
 
-        runner.command("me", { type: "move", to: [390, 30], run: true });
-        ridden.battle.command("me", { type: "move", to: [390, 30], run: true });
-        run(runner, 3000);
-        run(ridden.battle, 3000);
+        runner.command("me", { type: "move", to: [590, 30], run: true });
+        ridden.battle.command("me", { type: "move", to: [590, 30], run: true });
 
-        const used = [foot.maxStamina - foot.stamina, ridden.me.maxStamina - ridden.me.stamina];
+        for (const [battle, actor] of [[runner, foot], [ridden.battle, ridden.me]]) {
+            run(battle, 2000);
 
-        assert.ok(Math.abs(used[1] / used[0] - MOUNT.stamina) < 0.05, `stamina used ${used}`);
+            const from = actor.x;
+
+            run(battle, 2000);
+            speeds.push((actor.x - from) / 2);
+        }
+
+        const [running, galloping] = speeds;
+
+        assert.ok(Math.abs(galloping / running - MOUNT.run) < 0.05, `galloped ${galloping.toFixed(2)} m/s to a run's ${running.toFixed(2)}`);
+        assert.ok(galloping > 1.5 * running && galloping > 3 * walked, `galloped ${galloping.toFixed(2)} m/s, trotted ${walked.toFixed(2)}`);
+        assert.ok(foot.stamina < foot.maxStamina - 5, `ran on foot, stamina ${foot.stamina}`);
+        assert.equal(ridden.me.stamina, ridden.me.maxStamina);
+        assert.equal(ridden.me.running, true);
+    });
+
+    it("gallops on with no stamina left, getting it back as it goes", () => {
+        const { battle, me } = riding({ size: 400 });
+
+        me.stamina = 0;
+        battle.command("me", { type: "move", to: [390, 30], run: true });
+
+        const events = run(battle, 2000);
+
+        assert.equal(events.some(({ type }) => type === "exhausted"), false);
+        assert.equal(me.order?.run, true);
+        assert.ok(me.stamina > 1.5, `stamina ${me.stamina}`);
     });
 
     it("gets them down at its side and sinks back into the ground, then is gone; quickly, getting down to fight", () => {

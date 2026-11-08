@@ -1405,10 +1405,13 @@ dismiss a specific purchased mount").
   not indoors, nor in a dungeon or a cave), never in a fight (`#beset`), nor once it's fallen. They
   wait while it rises (`MOUNT.rise`), then get up into the saddle (`mount`, the rider's clip) and
   ride. Its health is its rider's times `MOUNT.health`, rising as theirs does.
-- **Riding.** It carries its rider `MOUNT.speed` times as fast as they go on foot, walking and
-  running (battle.js `#move`), and spares them half a run's stamina (`MOUNT.stamina`). Blowing the
-  whistle again (or its Action Bar slot: the whistle whose horse is out, else the first standing)
-  gets them down at its side and it sinks back into a ring (`dismount`, `sinking`).
+- **Riding.** It carries its rider at a trot as they walk, `MOUNT.walk` times as fast as they'd
+  walk on foot (3.7 m/s to 1.7), and at a gallop as they run, `MOUNT.run` times as fast as they'd
+  run (13.4 m/s to 7.9), and in between as they speed up (mounts.js `carried`; battle.js `#move`).
+  A run on horseback takes none of their stamina: it comes back as at a walk, and they gallop on
+  with none left. Blowing the whistle again (or its Action Bar slot: the whistle whose horse is
+  out, else the first standing) gets them down at its side and it sinks back into a ring
+  (`dismount`, `sinking`).
 - **Fighting.** Any blow, spell, throw or ability gets them down first, quickly (`MOUNT.hop`), and
   what they were doing is done once they're down (battle.js `#horseback`: a spell cast then); the
   horse sinks away. Going through a door, or carried off by magic, it sinks where it stood
@@ -1424,9 +1427,12 @@ dismiss a specific purchased mount").
   rising and sinking through the ground, dying as it falls. Its rider's posed on it from the rider's
   clips (characters/riding.js, the catalog's beast-horse-rider: retargeted onto their own body,
   their pelvis where the clips have it over the horse, its seat under the horse's CG bone as it
-  bobs), getting up and down from the side they do it from; the camera looks a little higher at
-  them (`HORSEBACK.camera`). Without the licensed models a bay built in code stands in (looks.js
-  `horse`) and the rider's sat on it as on a bench.
+  bobs), getting up and down from the side they do it from. Their feet are in the stirrups at
+  every gait, whatever their legs' length: each leg's bent to put the ball of the foot on its
+  stirrup's tread, as the saddle hangs from the horse as it goes (mounts3d.js `STIRRUPS`; from the
+  shortest human's legs, 0.78 m, nearly straight, to the tallest elf's, 1.22 m). The camera
+  looks a little higher at them (`HORSEBACK.camera`). Without the licensed models a bay built in
+  code stands in (looks.js `horse`) and the rider's sat on it as on a bench.
 - **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
   its hooves a stride at a time, its whinny as it comes, and its fall.
 

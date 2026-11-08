@@ -33,8 +33,9 @@ const play = (page, seconds) =>
     }, seconds);
 
 // How the player's horse and its rider are drawn now: its phase (the battle's), whether it's drawn
-// from its model and the rider from their clips, how far under the ground it is, and how high the
-// rider's hips and feet are over the ground they're over (metres)
+// from its model and the rider from their clips, how far under the ground it is, how high the
+// rider's hips and feet are over the ground they're over, and how far the balls of their feet are
+// from where they go in the stirrups (metres; null, drawn without its model)
 const ridden = (page) =>
     page.evaluate(async () => {
         const THREE = await import("three");
@@ -44,6 +45,9 @@ const ridden = (page) =>
         const one = game.mounts.horses.get(game.me);
         const height = (name) => avatar.character.rig.bone(name).getWorldPosition(new THREE.Vector3()).y;
         const ground = avatar.standing ?? avatar.object.position.y;
+        const stirrups = game.mounts.stirrupsOf(game.me);
+        const { STIRRUPS } = await import("/js/world/mounts3d.js");
+        const ball = (side) => avatar.character.rig.bone(`${side}ToeBase`).getWorldPosition(new THREE.Vector3()).lerp(avatar.character.rig.bone(`${side}Foot`).getWorldPosition(new THREE.Vector3()), STIRRUPS.ball);
 
         return {
             phase: me.mount?.phase ?? null,
@@ -57,6 +61,8 @@ const ridden = (page) =>
             feet: +(Math.min(height("LeftFoot"), height("RightFoot")) - ground).toFixed(2),
             posed: one?.beast.plan.posed?.map(({ clip, weight }) => [clip, +weight.toFixed(2)]) ?? [],
             bar: !document.querySelector("#playerplate .bar.mount").hidden,
+            stirrups: stirrups ? Math.max(...["Left", "Right"].map((side) => +ball(side).distanceTo(stirrups[side]).toFixed(3))) : null,
+            stamina: [+me.stamina.toFixed(1), me.maxStamina],
         };
     });
 
@@ -148,23 +154,65 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     if (licensedModelsHere()) {
         expect(sat.model).toBe(true);
         expect(sat.clips).toBe(true);
+        // (Their feet in the stirrups, standing)
+        expect(sat.stirrups).toBeLessThan(0.02);
     }
 
-    // Off at a walk: carried at a trot
-    await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const me = game.battle.actor(game.me);
+    // Off at a walk: carried at a trot, twice as fast and more as walking on foot, their feet in
+    // the stirrups
+    const going = (run, seconds) =>
+        page.evaluate(
+            async ([run, seconds]) => {
+                const { game } = window.pellagos;
+                const me = game.battle.actor(game.me);
 
-        game.host.command(game.me, { type: "move", to: [me.square[0] + 20, me.square[1]] });
-    });
-    await play(page, 1.5);
+                game.host.command(game.me, { type: "move", to: [me.square[0] + 60, me.square[1]], run });
 
+                for (let k = 0; k < Math.round(seconds * 30); k++) {
+                    game.advance(1 / 30, { render: false, wait: true });
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+
+                // (How fast, over its last second)
+                const [x, y, time] = [me.x, me.y, game.battle.time];
+
+                for (let k = 0; k < 30; k++) {
+                    game.advance(1 / 30, { render: false, wait: true });
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+
+                // (And as fast as they'd walk, and run flat out, on foot)
+                const { SPRINT } = await import("/js/core/battle.js");
+
+                return { speed: Math.hypot(me.x - x, me.y - y) / ((game.battle.time - time) / 1000), walk: me.walkPace, run: me.speed * SPRINT, running: me.running };
+            },
+            [run, seconds],
+        );
+    const trot = await going(false, 1);
     const trotting = await ridden(page);
 
     expect(trotting.hips).toBeGreaterThan(1.2);
+    expect(trot.speed).toBeGreaterThan(2 * trot.walk);
 
     if (trotting.model) {
         expect(trotting.posed.some(([clip, weight]) => clip === "Trot" && weight > 0.5)).toBe(true);
+        expect(trotting.stirrups).toBeLessThan(0.02);
+    }
+
+    // Off at a run: carried at a gallop, far faster than they'd run on foot (core/battle.js
+    // SPRINT), their stamina spent none of it, their feet in the stirrups still
+    const before = (await ridden(page)).stamina;
+    const gallop = await going(true, 2);
+    const galloping = await ridden(page);
+
+    expect(gallop.running).toBe(true);
+    expect(gallop.speed).toBeGreaterThan(1.5 * gallop.run);
+    expect(galloping.stamina[0]).toBeGreaterThanOrEqual(before[0]);
+    expect(galloping.hips).toBeGreaterThan(1.2);
+
+    if (galloping.model) {
+        expect(galloping.posed.some(([clip, weight]) => clip === "Sprint" && weight > 0.5)).toBe(true);
+        expect(galloping.stirrups).toBeLessThan(0.02);
     }
 
     // Down again with the whistle: it sinks away, and it's gone
