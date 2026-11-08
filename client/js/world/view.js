@@ -1295,7 +1295,7 @@ export class View {
         const [px, pz] = [this.focus.x, this.focus.z];
         const toward = (from, way, least, most) => (way > 1e-6 ? (most - ROOM.margin - from) / way : way < -1e-6 ? (least + ROOM.margin - from) / way : Infinity);
         const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1), this.room.rock ? rockAlong(this.room.rock, px, pz, dx, dz, distance) : Infinity));
-        const up = pitch > 0 && !open ? (this.room.roof ? this.#underRoof(dx, dz, tilt, Math.min(distance, out / Math.max(0.05, Math.cos(tilt)))) : Math.max(0, ceiling - ROOM.under - this.focus.y - this.lookUpAt(distance)) / Math.sin(tilt)) : Infinity;
+        const up = pitch > 0 && !open ? (this.room.roof ? this.#underRoof(dx, dz, tilt, Math.min(distance, out / Math.max(0.05, Math.cos(tilt)))) : Math.max(0, ceiling - ROOM.under - this.focus.y - LOOK_UP.middle) / Math.sin(tilt)) : Infinity;
 
         return Math.max(ROOM.least, Math.min(distance, up, out / Math.max(0.05, Math.cos(tilt))));
     }
@@ -1306,7 +1306,7 @@ export class View {
     #underRoof(dx, dz, tilt, most) {
         const { roof, ceiling } = this.room;
         const [cos, sin] = [Math.cos(tilt), Math.sin(tilt)];
-        const from = this.focus.y + this.lookUpAt();
+        const from = this.focus.y + LOOK_UP.middle;
 
         for (let along = 0.25; along <= most; along += 0.25) {
             const over = roof(this.focus.x + dx * cos * along, this.focus.z + dz * cos * along) ?? ceiling;
