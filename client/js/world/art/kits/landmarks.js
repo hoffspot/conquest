@@ -2,20 +2,23 @@
 // pixels to a metre): taverns (each its own, from its name down: house.js builds them as it does
 // the houses, with their names and signs), the adventurers' guild's hall, a stone church as big as
 // its place (church.js), a blacksmith's smithy with an open forge, a market hall on columns with stalls
-// beneath, a windmill, a town hall, a capital's keep, a barracks, and the specialists' and masters'
-// shops (shopfront.js). Each is built facing south;
+// beneath, a windmill, a town hall, a capital's keep, a barracks, a stable, and the specialists' and
+// masters' shops (shopfront.js). Each is built facing south;
 // the town turns it to face its street.
 
 import { entranceSpecOf } from "../../../core/insides.js";
+import { LAGOON } from "../../../core/lagoons.js";
 import { GODS } from "../../../core/lore/gods.js";
 import { createRandom } from "../../../core/random.js";
 import { flagpole } from "../../cloth.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
+import { weathering } from "../peoples/kit.js";
 import { churchBody } from "./church.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
 import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, paintBothFaces, signMaterial, TAVERN_NAME } from "./signs.js";
 import { shopLookOf } from "./kitshop.js";
+import { pitchedRoof } from "./roofs.js";
 import { dressShop, SHOP_NAMES, SHOPFRONTS } from "./shopfront.js";
 import { fireLight, lanternLight, torch } from "./torches.js";
 
@@ -775,6 +778,304 @@ export async function barracks(piece) {
 }
 
 /**
+ * How a stable's built (metres): how far in from its lot's sides its range stands, how far in from
+ * its lot's front its stalls' fronts stand (its trough and hitching rail before them), how near
+ * its lot's back it comes and how deep it's built at most (a paddock behind it where its lot runs
+ * on further, at least `paddock` deep); its stalls' floor, how high its half doors and the tops of
+ * their openings are, its eaves and its roof's pitch (rise over half its span), how wide a stall is
+ * near enough, and how wide the hood over its hay loft's door is at most. Over a lagoon it stands on
+ * a deck of planks (`deck` high: as deep as the lagoon's bed is dug at its deepest below the town's
+ * ground, core/lagoons.js, so it's never stood in the water). world/far/shapes.js FAR_STABLE is
+ * the same from afar.
+ */
+export const STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, paddock: 1.6, floor: 0.2, half: 1.3, opening: 2.2, eaves: 2.7, pitch: 0.7, stall: 2.3, hood: 2.2, deck: LAGOON.below + LAGOON.deep });
+
+/**
+ * Where the yard before a stable is kept clear (metres either side of its lot's middle): its
+ * stablemaster stands out before it (core/townsfolk.js STABLE_FRONT), and nothing's set down on
+ * the way up to him.
+ */
+export const STABLE_CLEAR = 1;
+
+// What each people's stable is built of (every people's is the same stable, of their own timber,
+// roofed as they'd roof it: peoples/index.js builderFor): its posts and beams, its boarded walls,
+// its roof (the humans' as their street's is: clay on a street of brick, slate on one of stone,
+// else shingles), its footing, and its half doors (one of them, by its seed)
+const STABLE_LOOKS = Object.freeze({
+    human: { frame: "timber", boards: "planks", roof: "shingles", streets: { brick: "clay", stone: "slate" }, footing: "stone-dark", doors: ["paint-green", "paint-red", "paint-blue", "planks-dark"] },
+    elf: { frame: "heartwood", boards: "planks-pale", roof: "leafscale-sage", footing: "stone-moon", doors: ["paint-green", "planks-pale"] },
+    darkElf: { frame: "timber-char", boards: "planks-char", roof: "slate-violet", footing: "stone-black", doors: ["planks-char"] },
+    cat: { frame: "timber", boards: "mud-pale", roof: "clay-orange", footing: "mud-dark", doors: ["planks-dark", "paint-ochre"] },
+    lizard: { frame: "bamboo", boards: "planks-pale", roof: "thatch-grey", footing: "stone-lime", doors: ["planks-dark"] },
+    orc: { frame: "timber", boards: "planks-dark", roof: "hide-dark", footing: "basalt", doors: ["planks-dark"] },
+});
+
+/**
+ * A stable (a town's, a city's or a capital's, where its horses are sold: core/mounts.js), made
+ * over from a house near where a road comes in (setpieces/town.js), the same for every people,
+ * of their own timber: a long low range of stalls across its lot, open-fronted, each stall's half
+ * door shut and the dark of the stall over it, under a roof that reaches out over them; a hood on
+ * the roof over the hay loft's door, hay in it and a hoist over it, and on a long one a louvred
+ * vent or two on the ridge. Before it a trough on one side of the way up to it and a hitching rail
+ * on the other, the yard's middle left clear (STABLE_CLEAR), its sign (a horseshoe) hanging from
+ * its corner post and a lantern on the other; bales of hay where there's room, and a paddock
+ * behind it with a rick of hay where its lot runs on.
+ */
+export async function stable(piece) {
+    await loadSignFont();
+
+    const look = STABLE_LOOKS[piece.people] ?? STABLE_LOOKS.human;
+    const random = createRandom(seedOf(piece));
+    const solid = new Solid();
+    const [width, depth] = [piece.w * 20, piece.h * 20];
+    const base = piece.water ? m(STABLE.deck) : 0;
+    const y = (metres) => base + m(metres);
+    const [frame, boards, dark] = [material(look.frame), material(look.boards), material("shadow")];
+    const roofing = look.streets?.[piece.style] ?? look.roof;
+    const thatched = /thatch/.test(roofing);
+    const hay = material("thatch");
+    // (Its trough on one side of the middle and its rail on the other, as its seed has it)
+    const side = random.chance(0.5) ? -1 : 1;
+    const leaves = material(random.pick(look.doors));
+
+    // Its range: its stalls' fronts along z1, as deep as there's room for back from them
+    const [x0, x1, z1] = [m(STABLE.side), width - m(STABLE.side), depth - m(STABLE.yard)];
+    const z0 = Math.max(m(STABLE.back), z1 - m(STABLE.deep));
+    const [mid, floor, eaves, thick] = [width / 2, y(STABLE.floor), y(STABLE.eaves), m(0.16)];
+
+    solid.tone = weathering({ seed: random.int(0, 1e6), eaves: [eaves], facing: piece.facing ?? 0, dirt: 0.3, mottle: [roofing] });
+
+    // Over a lagoon, its deck on piles round its edge
+    if (piece.water) {
+        const [dx0, dx1, dz0, dz1] = [m(0.15), width - m(0.15), z0 - m(0.3), depth - m(0.05)];
+        const along = Math.max(2, Math.ceil((dx1 - dx0) / m(2.4)));
+        const across = Math.max(2, Math.ceil((dz1 - dz0) / m(2.4)));
+        const piles = [];
+
+        for (let k = 0; k <= along; k++) {
+            const x = dx0 + m(0.15) + ((dx1 - dx0 - m(0.3)) * k) / along;
+
+            piles.push([x, dz0 + m(0.15)], [x, dz1 - m(0.15)]);
+        }
+
+        for (let k = 1; k < across; k++) {
+            const z = dz0 + m(0.15) + ((dz1 - dz0 - m(0.3)) * k) / across;
+
+            piles.push([dx0 + m(0.15), z], [dx1 - m(0.15), z]);
+        }
+
+        for (const [x, z] of piles) {
+            solid.box(x - m(0.1), -m(0.5), z - m(0.1), x + m(0.1), base - m(0.18), z + m(0.1), frame);
+        }
+
+        solid.box(dx0, base - m(0.18), dz0, dx1, base, dz1, material("planks"));
+    }
+
+    // Its footing (the stalls' floor dark on it), its back wall and its gable ends, boarded, and
+    // the dark of its stalls within: the back wall's face and the loft's floor over them
+    solid.box(x0 - m(0.05), base, z0 - m(0.05), x1 + m(0.05), floor, z1 + m(0.05), material(look.footing), { top: dark });
+    solid.box(x0, floor, z0, x1, eaves, z0 + thick, boards);
+
+    for (const [a, b] of [[x0, x0 + thick], [x1 - thick, x1]]) {
+        solid.box(a, floor, z0 + thick, b, eaves, z1, boards);
+    }
+
+    solid.face([[x0 + thick, floor, z0 + thick + 0.1], [x1 - thick, floor, z0 + thick + 0.1], [x1 - thick, eaves, z0 + thick + 0.1], [x0 + thick, eaves, z0 + thick + 0.1]], dark);
+    solid.facing([[x0 + thick, eaves - m(0.1), z0 + thick], [x1 - thick, eaves - m(0.1), z0 + thick], [x1 - thick, eaves - m(0.1), z1], [x0 + thick, eaves - m(0.1), z1]], [0, -1, 0], material("planks-dark"));
+
+    // Its stalls along the front: a post between each and the next, the beam over them, boards
+    // over their openings, and each one's half door
+    const stalls = Math.max(2, Math.min(9, Math.round((x1 - x0) / m(STABLE.stall))));
+    const posts = Array.from({ length: stalls + 1 }, (_, k) => x0 + m(0.1) + ((x1 - x0 - m(0.2)) * k) / stalls);
+
+    for (const x of posts) {
+        solid.box(x - m(0.11), floor, z1 - m(0.11), x + m(0.11), eaves, z1 + m(0.11), frame);
+    }
+
+    solid.box(x0, eaves - m(0.22), z1 - m(0.12), x1, eaves, z1 + m(0.12), frame);
+    solid.box(x0, y(STABLE.opening), z1 - m(0.1), x1, eaves - m(0.22), z1 + m(0.02), boards);
+
+    for (let k = 0; k < stalls; k++) {
+        solid.box(posts[k] + m(0.13), floor, z1 - m(0.06), posts[k + 1] - m(0.13), y(STABLE.half), z1 + m(0.02), leaves);
+    }
+
+    // The roof: gabled across the lot, out over the stalls' doors (each gable boarded up under it)
+    const roof = pitchedRoof(solid, {
+        x0,
+        x1,
+        z0,
+        z1,
+        eaves,
+        pitch: STABLE.pitch,
+        overhang: m(0.55),
+        verge: m(0.3),
+        thickness: m(thatched ? 0.3 : 0.12),
+        cover: roofing,
+        under: "planks-dark",
+        cap: thatched ? null : /clay/.test(roofing) ? roofing : "ridge",
+        barge: look.frame,
+        thatch: thatched,
+    });
+    const ridge = (z0 + z1) / 2;
+
+    for (const [x, out] of [[x0, -1], [x1, 1]]) {
+        solid.facing([[x, eaves, z0], [x, eaves, z1], [x, roof.top, ridge]], [out, 0, 0], boards);
+    }
+
+    // The hood over the hay loft's door, in the middle of the front slope: its own gable, the door
+    // in it with the hay showing, its cheeks and its roof down onto the roof's, and a hoist out
+    // over the door, its rope hanging from it
+    const hood = Math.min(m(STABLE.hood), (x1 - x0) * 0.4);
+    const [apex, low] = [roof.top - m(0.4), roof.top - m(0.4) - hood / 2];
+    // (How far back from the front wall the roof's as high as `at`)
+    const back = (at) => z1 - (at - eaves) / STABLE.pitch;
+
+    if (low - eaves > m(0.35)) {
+        const [h0, h1] = [mid - hood / 2, mid + hood / 2];
+        const loft = Math.min(m(1), hood - m(0.9));
+        const sill = m(0.3) * STABLE.pitch + m(0.06);
+        const head = Math.min(sill + m(1.1), low - eaves + (hood - loft) / 2 - m(0.08));
+        const [reach, over] = [m(0.25), m(0.15)];
+        const cover = material(roofing);
+
+        solid.wall({ origin: [h0, eaves, z1], across: [1, 0, 0], out: [0, 0, 1] }, hood, low - eaves, [{ u0: (hood - loft) / 2, u1: (hood + loft) / 2, v0: sill, v1: head, depth: m(0.3), back: hay }], boards, {
+            line: [[0, low - eaves], [hood / 2, apex - eaves], [hood, low - eaves]],
+        });
+
+        for (const [x, out] of [[h0, -1], [h1, 1]]) {
+            solid.facing([[x, eaves, z1], [x, low, z1], [x, low, back(low)]], [out, 0, 0], boards);
+
+            const eave = [x + out * over, low - over];
+            const slope = [[eave[0], eave[1], z1 + reach], [mid, apex, z1 + reach], [mid, apex, back(apex)], [eave[0], eave[1], back(eave[1])]];
+
+            solid.facing(slope, [out, 1, 0], cover);
+            solid.facing([[eave[0], eave[1] - m(0.08), z1 + reach], [mid, apex - m(0.08), z1 + reach], [mid, apex - m(0.08), z1], [eave[0], eave[1] - m(0.08), z1]], [0, -1, 0], material("planks-dark"));
+            solid.beam([eave[0], eave[1] - m(0.04), z1 + reach + m(0.04)], [mid, apex - m(0.04), z1 + reach + m(0.04)], m(0.18), m(0.06), frame, { up: [0, 0, 1] });
+        }
+
+        if (!thatched) {
+            solid.prism([mid, apex - m(0.02), z1 + reach + m(0.06)], [mid, apex - m(0.02), back(apex)], m(0.14), m(0.08), material(/clay/.test(roofing) ? roofing : "ridge"));
+        }
+
+        const hoist = apex - m(0.32);
+
+        solid.beam([mid, hoist, z1 - m(0.4)], [mid, hoist, z1 + m(0.85)], m(0.14), m(0.16), frame);
+        solid.near(() => {
+            solid.beam([mid, hoist - m(0.08), z1 + m(0.78)], [mid, hoist - m(1), z1 + m(0.78)], m(0.04), m(0.04), material("rope"));
+            solid.box(mid - m(0.05), hoist - m(1.12), z1 + m(0.74), mid + m(0.05), hoist - m(1), z1 + m(0.82), material("iron"));
+        });
+    }
+
+    // On a long one, a louvred vent on the ridge either side of the hood (or one, off to a side)
+    const length = x1 - x0;
+    const vents = length >= m(13) ? [-1, 1] : length >= m(8) ? [side] : [];
+
+    for (const way of vents) {
+        const cx = mid + (way * length) / 4;
+        const [half, rise] = [m(0.45), m(0.75)];
+
+        solid.box(cx - half, roof.top - m(0.5), ridge - half, cx + half, roof.top + rise, ridge + half, boards);
+
+        // (Its louvres, dark, on each of its four sides: `t` along a side, at `height`)
+        const [bottom, top, along] = [roof.top + m(0.12), roof.top + rise - m(0.12), half - m(0.08)];
+
+        for (const [ox, oz] of [[0, 1], [0, -1], [-1, 0], [1, 0]]) {
+            const at = (t, height) => [cx + ox * (half + 0.1) + oz * t, height, ridge + oz * (half + 0.1) + ox * t];
+
+            solid.facing([at(-along, bottom), at(along, bottom), at(along, top), at(-along, top)], [ox, 0, oz], dark);
+        }
+
+        solid.pyramid(cx - half - m(0.15), ridge - half - m(0.15), cx + half + m(0.15), ridge + half + m(0.15), roof.top + rise, m(0.55), material(roofing));
+    }
+
+    // The yard before it: its trough on one side of the way up to it, its hitching rail on the
+    // other, each from the clear middle out towards the lot's side as far as there's room
+    const reachOut = (way, most) => {
+        const [near, far] = [mid + way * m(STABLE_CLEAR), way < 0 ? x0 + m(0.1) : x1 - m(0.1)];
+        const room = Math.abs(far - near);
+
+        return room < m(1) ? null : [near, near + way * Math.min(most, room)];
+    };
+    const trough = reachOut(side, m(2));
+    const rail = reachOut(-side, m(3));
+
+    if (trough) {
+        const [a, b] = [Math.min(...trough), Math.max(...trough)];
+        const [tz0, tz1] = [depth - m(1), depth - m(0.42)];
+
+        solid.box(a, base, tz0, b, y(0.6), tz1, material("planks"));
+        solid.box(a + m(0.08), y(0.6), tz0 + m(0.08), b - m(0.08), y(0.62), tz1 - m(0.08), material("water"));
+    }
+
+    if (rail) {
+        const rz = depth - m(0.45);
+
+        for (const x of rail) {
+            solid.box(x - m(0.08), base, rz - m(0.08), x + m(0.08), y(1.15), rz + m(0.08), frame);
+        }
+
+        solid.beam([rail[0], y(1), rz], [rail[1], y(1), rz], m(0.1), m(0.1), frame);
+    }
+
+    // Its sign hanging from the corner post on the trough's side, out over the yard (its stay up
+    // from below, under the eaves), and a lantern on the rail's
+    const front = { origin: [x0, base, z1 + m(0.11)], across: [1, 0, 0], out: [0, 0, 1], length };
+    const corner = (way) => (way < 0 ? posts[0] : posts.at(-1));
+
+    hangingSign(solid, front, corner(side) - x0, m(2), emblemSignTexture({ name: "Stables", emblem: "horseshoe", tint: seedOf(piece) % 6 }), "sign stable", { reach: 1.2, above: 0 });
+
+    const lantern = [corner(-side), y(1.92), z1 + m(0.45)];
+
+    solid.beam([lantern[0], lantern[1] + m(0.24), z1 + m(0.11)], [lantern[0], lantern[1] + m(0.24), lantern[2]], m(0.04), m(0.04), material("iron"));
+    solid.box(lantern[0] - m(0.11), lantern[1] - m(0.16), lantern[2] - m(0.11), lantern[0] + m(0.11), lantern[1] + m(0.16), lantern[2] + m(0.11), material("glass-lit"));
+    solid.box(lantern[0] - m(0.14), lantern[1] + m(0.16), lantern[2] - m(0.14), lantern[0] + m(0.14), lantern[1] + m(0.24), lantern[2] + m(0.14), material("iron"));
+    lanternLight(solid, lantern);
+
+    // Bales of hay past the trough's far end, two down and one on them, where there's room
+    const bales = trough ? [trough[1] + side * m(0.15), side < 0 ? x0 + m(0.1) : x1 - m(0.1)] : null;
+
+    if (bales && side * (bales[1] - bales[0]) >= m(1.1)) {
+        const [a, b] = [Math.min(...bales), Math.max(...bales)];
+        const cx = (a + b) / 2;
+        const bz = depth - m(0.95);
+
+        for (const [dx, dz, lift] of [[-0.02, 0, 0], [0.04, 0.55, 0], [0.01, 0.28, 0.45]]) {
+            solid.box(cx - m(0.5) + m(dx), y(lift), bz + m(dz) - m(0.24), cx + m(0.5) + m(dx), y(lift + 0.45), bz + m(dz) + m(0.24), hay);
+        }
+    }
+
+    // Behind it, where its lot runs on, a paddock fenced with rails, and a rick of hay in a corner
+    // of it where there's room
+    if (!piece.water && z0 - m(STABLE.back) >= m(STABLE.paddock)) {
+        const [px0, px1, pz0] = [m(0.3), width - m(0.3), m(0.3)];
+        const runs = [[[px0, z0], [px0, pz0]], [[px0, pz0], [px1, pz0]], [[px1, pz0], [px1, z0]]];
+
+        for (const [[ax, az], [bx, bz]] of runs) {
+            const count = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / m(2.4)));
+
+            for (let k = 0; k <= count; k++) {
+                const [x, z] = [ax + ((bx - ax) * k) / count, az + ((bz - az) * k) / count];
+
+                solid.box(x - m(0.07), 0, z - m(0.07), x + m(0.07), m(1.2), z + m(0.07), frame);
+            }
+
+            for (const height of [0.55, 1.05]) {
+                solid.beam([ax, m(height), az], [bx, m(height), bz], m(0.08), m(0.1), frame);
+            }
+        }
+
+        if (z0 - pz0 >= m(2.8) && px1 - px0 >= m(3)) {
+            const [cx, cz] = [side < 0 ? px0 + m(1.5) : px1 - m(1.5), pz0 + m(1.5)];
+
+            solid.cylinder(cx, cz, 0, m(1.4), m(1.1), m(1.15), hay, { segments: 8, capped: false });
+            solid.cone(cx, cz, m(1.4), m(1), m(1.25), hay, 8);
+        }
+    }
+
+    return solid.toObject();
+}
+
+/**
  * A specialist's or a master's shop (shopfront.js SHOPFRONTS: a swordsmith's, an armorer's, an
  * occult scriptorium, an alchemist's; the Master Swordsmith's, the Master Armorer's, the Mystic
  * Emporium): the house it was, made over (timber if it was a cottage), its name on a board over
@@ -864,7 +1165,7 @@ const KEEP_ENTRY = 1.4;
 const KEEP_DOOR = Object.freeze({ width: 2.4, height: 3.2, floor: 0.8 });
 
 /** Every special building, by name (setpieces/pieces.js LANDMARKS). */
-export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep, barracks, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
+export const LANDMARK_BUILDERS = Object.freeze({ tavern, church, blacksmith, guild, market, windmill, hall, keep, barracks, stable, ...Object.fromEntries(SHOP_NAMES.map((name) => [name, shop])) });
 
 /** A town's special building (its layout piece), filling its footprint. */
 export function landmark(piece) {

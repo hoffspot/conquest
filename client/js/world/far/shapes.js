@@ -7,6 +7,7 @@
 
 import { AQUEDUCTS } from "../../core/aqueducts.js";
 import { CITADEL, citadelLevel, citadelParts, layoutCitadel, moatReach } from "../../core/setpieces/citadel.js";
+import { LAGOON } from "../../core/lagoons.js";
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
@@ -429,6 +430,31 @@ function churchTowers(shapes, { x, z, depth, facing, heightOf, look }) {
 }
 
 /**
+ * A stable seen from afar, as its range of stalls is built (world/art/kits/landmarks.js STABLE's
+ * measures, metres): how far in from its lot's sides it stands, how far in from its lot's front
+ * its stalls' fronts are, how near its lot's back it comes and how deep it's built at most, its
+ * eaves, its roof's pitch (rise over half its span), and how high its deck is over a lagoon.
+ */
+export const FAR_STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, eaves: 2.7, pitch: 0.7, deck: LAGOON.below + LAGOON.deep });
+
+// A stable's range seen from afar (its lot `width` by `depth` metres, its middle at x, z, facing
+// `facing`): a low box of its people's timber under a gabled roof of their roofs' colour, as every
+// people's stable is (one storey, its yard before it and any paddock behind it too low to see)
+function stableShapes(shapes, { x, z, ground, width, depth, facing, people, water }) {
+    const builders = buildersOf(people);
+    const front = depth / 2 - FAR_STABLE.yard;
+    const back = Math.max(-depth / 2 + FAR_STABLE.back, front - FAR_STABLE.deep);
+    const [long, deep] = [width - 2 * FAR_STABLE.side, front - back];
+    const [s, c] = [Math.sin(facing), Math.cos(facing)];
+    const [bx, bz] = [x + s * ((front + back) / 2), z + c * ((front + back) / 2)];
+    const y = ground - SUNK + (water ? FAR_STABLE.deck : 0);
+
+    shapes.box(bx, bz, y, long, deep, SUNK + FAR_STABLE.eaves, facing, builders.wood, false);
+    // (Its ridge along the longer side, as a far roof's is: across its front, but for a narrow lot's)
+    shapes.roof(bx, bz, y + SUNK + FAR_STABLE.eaves, long + 0.6, deep + 1.1, (Math.min(long, deep) / 2) * FAR_STABLE.pitch, facing, builders.roof);
+}
+
+/**
  * The pieces of a settlement laid out (setpieces/town.js layoutTown's), at `origin` in the world
  * ([x, z] metres), as seen from afar: houses, landmarks, towers, walls and gatehouses (not props
  * or trees); and with `big` only, just the larger buildings (two storeys or more, or wider than
@@ -439,6 +465,15 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
         const [x, z] = [piece.x + origin[0], piece.y + origin[1]];
         const [width, depth] = [piece.w * PLOT, piece.h * PLOT];
         const builders = buildersOf(piece.people ?? people);
+
+        // (A stable: one low storey, its people's timber, gabled whoever's it is: FAR_STABLE)
+        if (piece.kind === "landmark" && piece.name === "stable") {
+            if (!big || Math.max(width, depth) >= 8) {
+                stableShapes(shapes, { x, z, ground: heightOf(x, z), width, depth, facing: piece.facing ?? 0, people: piece.people ?? people, water: piece.water });
+            }
+
+            continue;
+        }
 
         if (piece.kind === "house" || piece.kind === "landmark") {
             // (A barracks or a shop as many storeys as the house it was)

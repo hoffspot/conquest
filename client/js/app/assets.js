@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "9467d98655",
+    release: "b1b0d66313",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2486,7 +2486,7 @@ export const ASSETS = Object.freeze({
                 }
             ]
         },
-        "beast-horse-coats": {
+        "beast-horse-skins": {
             "tier": "demand",
             "label": "The horse's other coats: grey, dapple grey, palomino and white (Malbers Animations' \"Horse Animset Pro\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
             "licensed": true,

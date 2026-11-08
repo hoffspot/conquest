@@ -147,8 +147,9 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     });
 
     // (Four taverns, the guild, a church of each grade and build, the smithy, the market hall,
-    // the windmill, a town hall, a keep, two barracks and a guardhouse, and the seven shops)
-    expect(built.stats.pieces).toBe(24);
+    // the windmill, a town hall, a keep, two barracks and a guardhouse, two stables, and the seven
+    // shops)
+    expect(built.stats.pieces).toBe(26);
     expect(built.stats.calls).toBeLessThan(80);
 
     // Each tavern's name on its board and its sign by the door, the guild's, the churches'
@@ -160,6 +161,8 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     expect(built.names).toEqual(expect.arrayContaining(["board Barracks", "sign Barracks", "board Guardhouse", "sign Guardhouse"]));
     expect(built.names).toContain("sign guild");
     expect(built.names).toContain("sign blacksmith");
+    // (The stables' horseshoe)
+    expect(built.names).toContain("sign stable");
     expect(built.names).toEqual(expect.arrayContaining(["board hall", "sign hall", "sign keep"]));
     // (The keep's banners and flags, stirring in the breeze: world/cloth.js)
     expect(built.names).toContain("cloth");

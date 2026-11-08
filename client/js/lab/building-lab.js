@@ -191,8 +191,9 @@ function shopsOf(people = "human") {
 // A row of every special building: taverns of every sort (their names and signs from the seed),
 // the guild, churches to the Six (one of each grade), the smithy, the market hall, the windmill, a town hall and a keep;
 // a barracks (of one storey and of two, among the humans) and a village's guardhouse, each of a
-// house's size as its people builds them (setpieces/town.js makes one over: BARRACKS_SIZES); and
-// the specialists' and the masters' shops (art/kits/shopfront.js), made over the same way
+// house's size as its people builds them (setpieces/town.js makes one over: BARRACKS_SIZES); a
+// stable (two among the humans: STABLE_SIZES), made over the same way; and the specialists' and
+// the masters' shops (art/kits/shopfront.js), made over the same way too
 function landmarksOf(seed, people = "human") {
     const random = createRandom(seed);
     const pieces = [];
@@ -209,6 +210,8 @@ function landmarksOf(seed, people = "human") {
         { name: "keep", ...(own ? { size: [3.5, 4] } : {}) },
         ...(own ? [{ storeys: 1 }, { storeys: 2 }] : [{ storeys: 1, style: "stone" }, { storeys: 2, style: "timber" }]).map((more) => ({ name: "barracks", grade: "barracks", ...more, size: BARRACKS_SIZES[people] })),
         { name: "barracks", grade: "guardhouse", storeys: 1, style: "cottage", size: BARRACKS_SIZES[people].map((plots) => plots - 0.25) },
+        // (A stable of a house's size, in a street's look: the humans' roofed as their street is)
+        ...STABLE_SIZES[people].map((size, k) => ({ name: "stable", style: ["timber", "stone", "brick"][(seed + k) % 3], storeys: 1, size })),
         // (The specialists' and the masters' shops, a house's size too: two storeys and one)
         ...SHOP_NAMES.map((name, k) => ({ name, storeys: k % 3 === 2 ? 1 : 2, style: ["timber", "stone", "brick"][(seed + k) % 3], ...(own ? { size: BARRACKS_SIZES[people] } : {}) })),
     ].map((piece) => (own ? { ...piece, people } : piece));
@@ -227,6 +230,11 @@ function landmarksOf(seed, people = "human") {
 // How big a barracks is in the building lab, by people (plots: a big house of theirs, as their
 // lots run: setpieces/town.js PEOPLE_TOWNS)
 const BARRACKS_SIZES = Object.freeze({ human: [2.5, 2.5], cat: [3, 3], orc: [4.5, 2.25], lizard: [2.5, 2.5], elf: [3.25, 3.25], darkElf: [2.5, 2.75] });
+
+// How big a stable is in the building lab, by people (plots: a house of theirs near where a road
+// comes in, as their lots run: setpieces/town.js makes one over); the humans' on a deep lot, a
+// paddock behind it, and on a narrow one
+const STABLE_SIZES = Object.freeze({ human: [[2.75, 3.25], [1.75, 2.5]], cat: [[4.25, 4.25]], orc: [[4, 2.25]], lizard: [[2.5, 2.25]], elf: [[3, 3.25]], darkElf: [[2.5, 2.5]] });
 
 // A spot in the middle of a stretch of a land (metres), as far from the plan's places and roads as
 // can be found: the land itself, as the game draws it. `land` a land's id, or a people's
