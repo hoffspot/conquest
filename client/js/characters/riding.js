@@ -7,6 +7,9 @@
 import * as THREE from "three";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, retarget } from "./bvh.js";
 
+/** The catalog's model the rider's clips are in (bones and clips only: no body of its own). */
+export const RIDER_CLIPS = "beast-horse-rider";
+
 /** The rider's clips played once and held at their end (the rest loop, as the horse's do). */
 const ONCE = new Set(["Mount Left", "Mount Right", "Dismount Left", "Dismount Right", "Fall", "Death", "Death 2", "Death Gallop", "Hit Left", "Hit Right", "Hit Front Left", "Hit Front Right", "Rear", "Jump"]);
 

@@ -13,7 +13,7 @@
 import * as THREE from "three";
 import { BeastAvatar } from "../beasts/beast.js";
 import { modelOf, wantClips, wantModel } from "../beasts/model.js";
-import { MOUNTING, RiderClips, SEAT } from "../characters/riding.js";
+import { MOUNTING, RIDER_CLIPS, RiderClips, SEAT } from "../characters/riding.js";
 import { HORSE_MODEL, MANES, MOUNT } from "../core/mounts.js";
 
 /**
@@ -64,7 +64,7 @@ export class Mounts {
 
         this.asked = true;
         wantModel(HORSE_MODEL, "now");
-        wantClips("beast-horse-rider", "now")?.then((gltf) => {
+        wantClips(RIDER_CLIPS, "now")?.then((gltf) => {
             if (gltf) {
                 this.clips = new RiderClips(gltf);
             }
