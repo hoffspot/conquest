@@ -435,7 +435,7 @@ function churchTowers(shapes, { x, z, depth, facing, heightOf, look }) {
  * its stalls' fronts are, how near its lot's back it comes and how deep it's built at most, its
  * eaves, its roof's pitch (rise over half its span), and how high its deck is over a lagoon.
  */
-export const FAR_STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, eaves: 2.7, pitch: 0.7, deck: LAGOON.below + LAGOON.deep });
+export const FAR_STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, eaves: 2.9, pitch: 0.7, deck: LAGOON.below + LAGOON.deep });
 
 // A stable's range seen from afar (its lot `width` by `depth` metres, its middle at x, z, facing
 // `facing`): a low box of its people's timber under a gabled roof of their roofs' colour, as every

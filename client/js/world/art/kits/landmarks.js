@@ -788,7 +788,7 @@ export async function barracks(piece) {
  * ground, core/lagoons.js, so it's never stood in the water). world/far/shapes.js FAR_STABLE is
  * the same from afar.
  */
-export const STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, paddock: 1.6, floor: 0.2, half: 1.3, opening: 2.2, eaves: 2.7, pitch: 0.7, stall: 2.3, hood: 2.2, deck: LAGOON.below + LAGOON.deep });
+export const STABLE = Object.freeze({ side: 0.35, yard: 1.9, back: 0.4, deep: 7, paddock: 1.6, floor: 0.2, half: 1.2, opening: 2.45, eaves: 2.9, pitch: 0.7, stall: 2.3, hood: 2.2, deck: LAGOON.below + LAGOON.deep });
 
 /**
  * Where the yard before a stable is kept clear (metres either side of its lot's middle): its
@@ -883,17 +883,24 @@ export async function stable(piece) {
     solid.face([[x0 + thick, floor, z0 + thick + 0.1], [x1 - thick, floor, z0 + thick + 0.1], [x1 - thick, eaves, z0 + thick + 0.1], [x0 + thick, eaves, z0 + thick + 0.1]], dark);
     solid.facing([[x0 + thick, eaves - m(0.1), z0 + thick], [x1 - thick, eaves - m(0.1), z0 + thick], [x1 - thick, eaves - m(0.1), z1], [x0 + thick, eaves - m(0.1), z1]], [0, -1, 0], material("planks-dark"));
 
-    // Its stalls along the front: a post between each and the next, the beam over them, boards
-    // over their openings, and each one's half door
+    // Its stalls along the front: a post between each and the next, the beam over them (all of it
+    // under the roof's thickness, none of it up through its slope), boards over their openings, and
+    // each one's half door
+    const thickness = m(thatched ? 0.3 : 0.12);
+    const under = eaves - thickness;
+    const plate = Math.max(y(STABLE.opening), under - m(0.22));
     const stalls = Math.max(2, Math.min(9, Math.round((x1 - x0) / m(STABLE.stall))));
     const posts = Array.from({ length: stalls + 1 }, (_, k) => x0 + m(0.1) + ((x1 - x0 - m(0.2)) * k) / stalls);
 
     for (const x of posts) {
-        solid.box(x - m(0.11), floor, z1 - m(0.11), x + m(0.11), eaves, z1 + m(0.11), frame);
+        solid.box(x - m(0.11), floor, z1 - m(0.11), x + m(0.11), under, z1 + m(0.11), frame);
     }
 
-    solid.box(x0, eaves - m(0.22), z1 - m(0.12), x1, eaves, z1 + m(0.12), frame);
-    solid.box(x0, y(STABLE.opening), z1 - m(0.1), x1, eaves - m(0.22), z1 + m(0.02), boards);
+    solid.box(x0, plate, z1 - m(0.12), x1, under, z1 + m(0.12), frame);
+
+    if (plate > y(STABLE.opening)) {
+        solid.box(x0, y(STABLE.opening), z1 - m(0.1), x1, plate, z1 + m(0.02), boards);
+    }
 
     for (let k = 0; k < stalls; k++) {
         solid.box(posts[k] + m(0.13), floor, z1 - m(0.06), posts[k + 1] - m(0.13), y(STABLE.half), z1 + m(0.02), leaves);
@@ -907,9 +914,9 @@ export async function stable(piece) {
         z1,
         eaves,
         pitch: STABLE.pitch,
-        overhang: m(0.55),
+        overhang: m(0.4),
         verge: m(0.3),
-        thickness: m(thatched ? 0.3 : 0.12),
+        thickness,
         cover: roofing,
         under: "planks-dark",
         cap: thatched ? null : /clay/.test(roofing) ? roofing : "ridge",
@@ -961,7 +968,7 @@ export async function stable(piece) {
 
         solid.beam([mid, hoist, z1 - m(0.4)], [mid, hoist, z1 + m(0.85)], m(0.14), m(0.16), frame);
         solid.near(() => {
-            solid.beam([mid, hoist - m(0.08), z1 + m(0.78)], [mid, hoist - m(1), z1 + m(0.78)], m(0.04), m(0.04), material("rope"));
+            solid.beam([mid, hoist - m(0.08), z1 + m(0.78)], [mid, hoist - m(1), z1 + m(0.78)], m(0.05), m(0.05), material("rope"), { up: [0, 0, 1] });
             solid.box(mid - m(0.05), hoist - m(1.12), z1 + m(0.74), mid + m(0.05), hoist - m(1), z1 + m(0.82), material("iron"));
         });
     }
@@ -1022,9 +1029,9 @@ export async function stable(piece) {
     const front = { origin: [x0, base, z1 + m(0.11)], across: [1, 0, 0], out: [0, 0, 1], length };
     const corner = (way) => (way < 0 ? posts[0] : posts.at(-1));
 
-    hangingSign(solid, front, corner(side) - x0, m(2), emblemSignTexture({ name: "Stables", emblem: "horseshoe", tint: seedOf(piece) % 6 }), "sign stable", { reach: 1.2, above: 0 });
+    hangingSign(solid, front, corner(side) - x0, m(2.2), emblemSignTexture({ name: "Stables", emblem: "horseshoe", tint: seedOf(piece) % 6 }), "sign stable", { reach: 1.2, above: 0 });
 
-    const lantern = [corner(-side), y(1.92), z1 + m(0.45)];
+    const lantern = [corner(-side), y(2.05), z1 + m(0.45)];
 
     solid.beam([lantern[0], lantern[1] + m(0.24), z1 + m(0.11)], [lantern[0], lantern[1] + m(0.24), lantern[2]], m(0.04), m(0.04), material("iron"));
     solid.box(lantern[0] - m(0.11), lantern[1] - m(0.16), lantern[2] - m(0.11), lantern[0] + m(0.11), lantern[1] + m(0.16), lantern[2] + m(0.11), material("glass-lit"));

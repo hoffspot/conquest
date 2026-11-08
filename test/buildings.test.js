@@ -311,7 +311,7 @@ describe("landmarks (kits/landmarks.js)", () => {
             assert.ok(triangles > 300 && triangles < 2500, `${where}: ${triangles} triangles`);
             assert.ok(finite(object), where);
             assert.ok(box.min.x > -M * 0.25 && box.min.z > -M * 0.25 && box.max.x < width + M * 0.25 && box.max.z < depth + M * 0.25, `${where} spills out of its lot`);
-            assert.ok(box.max.y - floor < M * 6.6, `${where}: ${((box.max.y - floor) / M).toFixed(1)} m high`);
+            assert.ok(box.max.y - floor < M * 7, `${where}: ${((box.max.y - floor) / M).toFixed(1)} m high`);
             assert.ok(piece.water ? box.min.y < 0 : Math.abs(box.min.y) < 1e-6, `${where}: on piles down into the lagoon's bed, or on the ground`);
             assert.ok(materialsOf(object).includes("sign stable"), `${where}: its sign`);
 

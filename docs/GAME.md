@@ -1382,7 +1382,14 @@ dismiss a specific purchased mount").
 
 - **Stables.** Every town, city and capital of every people has one, by a road in: the house
   nearest where a main street comes into it, out towards its edge, made over (setpieces/town.js
-  `STABLE_OUT`; art/kits/landmarks.js `stable`, every people's the same). Its stablemaster stands
+  `STABLE_OUT`). It's built by the human kit in every people's own wood, paint and roof (art/kits/
+  landmarks.js `stable`, `STABLE_LOOKS`: a human one's roof the street's, clay, slate or shingles):
+  a long, low, boarded range of stalls open to its yard, half doors in a colour, a hay loft's hood
+  and hoist over them, a vent on its ridge; a trough and a hitching rail either side of the middle
+  of its yard, kept clear (`STABLE_CLEAR`), hay bales, its horseshoe sign and a lantern; a fenced
+  paddock and a haystack behind it where its lot is deep; on a plank deck on piles over a lizard
+  town's lagoon. Far off it's a low barn of its people's colours (far/shapes.js `stableShapes`,
+  `FAR_STABLE`). Its stablemaster stands
   before it (townsfolk.js `stablemasterOf`, role "stablemaster"; dialogue.js `stablemaster`) and
   sells a horse for 400 gold (mounts.js `STABLE`), and brings back a fallen one for 100, whichever
   stable it was bought at. What's paid is the host's (host.js `#stableService`), never the game's.
