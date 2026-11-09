@@ -630,7 +630,7 @@ in this repository, but in the private one the game's builds fetch it from
 
 Don't copy it out of this game or use it in anything else.
 
-## horse.bin, horse.gray.bin, horse.dapple.bin, horse.palomino.bin, horse.white.bin, horse-rider.bin
+## horse-2.bin, horse.gray.bin, horse.dapple.bin, horse.palomino.bin, horse.white.bin, horse-rider.bin
 
 **Horse Animset Pro**, by **Malbers Animations** (its Unreal Engine files: its realistic horse,
 its manes, tails and saddle, their textures, and its horse's and riders' animations, exported from
@@ -641,15 +641,18 @@ It is not CC0 and not free to reuse. That licence lets it be used in a game its 
 distributed as part of it, never on its own, so it's in the game only in this converted form,
 served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
 (`private/horse.json`, which stays out of the repository with the bought files), its `phone`
-build. That's the realistic horse (its body and eyes), its saddle, and both its manes and tails,
-the light one and the long dark one (simulated as cloth in Unreal, whose FBX export leaves them
-out: taken from the glTFs Unreal wrote of them, bound to the same skeleton), each a part the game
-shows or hides: 33,381 triangles with both, two lower details packed in (15,017 and 6,672); its
-five materials' textures (colour, normals, roughness; the hair's cut-out strands) as KTX2; and 22
-of its clips, all in place: idling four ways, neighing, walking, walking back, trotting,
-cantering, galloping, sprinting, turning either way, rearing, a jump, four flinches and three
-deaths. Its other four coats, grey, dapple grey, palomino and white, are its body's colour alone
-(`horse.gray.bin`, `.dapple`, `.palomino`, `.white`); the default is bay brown.
+build. That's the realistic horse (its body and eyes), its saddle with its bridle and reins
+joined to it (the reins simulated as cloth in Unreal: exported again from a copy with its cloth
+taken off, every vertex on the head's, jaw's, ears' and reins' bones, the reins' ends for the
+rider's hands), and both its manes and tails, the light one and the long dark one (simulated as
+cloth in Unreal, whose FBX export leaves them out: taken from the glTFs Unreal wrote of them,
+bound to the same skeleton), each a part the game shows or hides: 35,555 triangles with both, two
+lower details packed in (15,995 and 7,106); its five materials' textures (colour, normals,
+roughness; the hair's cut-out strands) as KTX2; and 22 of its clips, all in place: idling four
+ways, neighing, walking, walking back, trotting, cantering, galloping, sprinting, turning either
+way, rearing, a jump, four flinches and three deaths. Its other four coats, grey, dapple grey, palomino and white, are its body's colour alone
+(`horse.gray.bin`, `.dapple`, `.palomino`, `.white`); the default is bay brown. `horse-2.bin`
+replaces `horse.bin`, the same horse without its bridle and reins; the four coats are as they were.
 
 `horse-rider.bin` is 27 of the pack's riders' clips, on the Unreal mannequin's skeleton the pack
 retargeted them to, with no mesh: mounting and getting down either side, sitting each of the
