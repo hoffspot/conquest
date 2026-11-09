@@ -36,7 +36,7 @@ import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.j
 import { horseFrom, horseHealth, out as horseOut, STABLE } from "./mounts.js";
 import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
-import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
+import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareAt, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, formationsOfBody, holdOf, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
@@ -4347,9 +4347,10 @@ export class Host {
             return refuse("soldOut");
         }
 
-        // (Made at their might's level, and as dear: the special, made already, brought to it)
+        // (Gear and charms made at their might's level, and as dear, the special, made already,
+        // brought to it; anything else as it is: what the shop shows, stock.js wareAt)
         const level = levelOf(this.mightFor(player.id));
-        const price = shopPrice(special ? atLevel(ware, level) : { id: ware.id, quality: ware.quality, level }, trading.shop, { haggle: player.progress.bonuses().haggle, special, times: this.shopTimes(trading.keeper.id) });
+        const price = shopPrice(special ? atLevel(ware, level) : wareAt(ware, level), trading.shop, { haggle: player.progress.bonuses().haggle, special, times: this.shopTimes(trading.keeper.id) });
 
         if (price > player.progress.gold) {
             return refuse("gold");
