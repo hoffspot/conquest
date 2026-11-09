@@ -9521,9 +9521,10 @@ test("item levels and a legendary weapon: a piece's level and a legendary weapon
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
     // (A long walk through, and then a dozen clicks in the taproom, each waiting on a few frames
-    // drawn in software, over half a second each with the room lit by its flames: more than the
-    // usual time, with others running beside it)
-    test.setTimeout(240000);
+    // drawn in software, a second or two each with the room lit by its flames and furnished from
+    // the tavern kit: more than the usual time, with others running beside it. On CI it took 175 s
+    // before the kits, 197 s and 211 s after, and over 240 s on main twice, its clicks unchanged)
+    test.setTimeout(360000);
 
     // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
     await page.addInitScript((save) => {
