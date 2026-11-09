@@ -14,7 +14,7 @@ import { expect, test } from "./fixtures.js";
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; and these tests one after
 // the other, never side by side: four worlds drawn at once slow each to a crawl)
-test.setTimeout(480000);
+test.setTimeout(660000);
 test.describe.configure({ mode: "default" });
 
 const ELF = {
