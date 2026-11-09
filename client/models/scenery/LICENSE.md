@@ -102,7 +102,7 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## medieval-hall.bin
+## medieval-hall-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (31 of its pieces: a throne, a long table bare and clothed,
 a bench, a carved cabinet, an iron-bound strongbox and a chest, a chandelier (its chain cut at its
@@ -121,6 +121,10 @@ the repository with the bought files: joined, their materials baked onto one atl
 normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a node of its own
 (`kit@<i>,<j>`), its `phone` build: 15,584 triangles in all, one material for every piece, 1.5 MB.
 
+It replaces `medieval-hall.bin`, the same pieces built with the pack's "RMA" textures read as their
+name says (roughness, metal, occlusion), when they hold occlusion in red, roughness in green and
+metal in blue: every piece was unlit in shade and half metal.
+
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
 scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
@@ -128,7 +132,7 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## medieval-tavern-2.bin
+## medieval-tavern-3.bin
 
 **Dragon Motion's "Medieval Props Kit"** (29 of its pieces: a trestle table and a small table, a
 long bench and a settle, a cask on its blocks, a canopied bed and a plain one, two chests, a
@@ -149,10 +153,13 @@ atlas (2,048 pixels; normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`
 node of its own (`kit@<i>,<j>`), its `phone` build: 16,039 triangles in all, one material for
 every piece, 1.4 MB.
 
-It replaces `medieval-tavern.bin`, its first build, never in a game that's been released: the pack
-makes a chest's lid at its hinge on the floor, and its chests' lids lay before them; its wide
-picture and its shield faced the wall; and its small chest's lid stood open, under the candlestick
-set on it (now the pack's iron-bound chest, its lid shut).
+It replaces `medieval-tavern-2.bin`, the same pieces built with the pack's "RMA" textures read as
+their name says (roughness, metal, occlusion), when they hold occlusion in red, roughness in green
+and metal in blue: every piece was unlit in shade and half metal. That one replaced
+`medieval-tavern.bin`, its first build, never in a game that's been released: the pack makes a
+chest's lid at its hinge on the floor, and its chests' lids lay before them; its wide picture and
+its shield faced the wall; and its small chest's lid stood open, under the candlestick set on it
+(now the pack's iron-bound chest, its lid shut).
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
@@ -161,7 +168,7 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## medieval-town.bin
+## medieval-town-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (20 of its pieces: a standing candelabrum, a candelabrum
 for an altar, a candlestick and a candle in its dish, a chandelier (its chain cut at its hub), a
@@ -182,6 +189,10 @@ atlas (2,048 pixels; normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`
 node of its own (`kit@<i>,<j>`), its `phone` build: 13,099 triangles in all, one material for
 every piece, 1.4 MB.
 
+It replaces `medieval-town.bin`, the same pieces built with the pack's "RMA" textures read as their
+name says (roughness, metal, occlusion), when they hold occlusion in red, roughness in green and
+metal in blue: every piece was unlit in shade and half metal.
+
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
 scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
@@ -189,7 +200,7 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## medieval-dungeon.bin
+## medieval-dungeon-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (23 of its pieces: a wall torch, a standing barrel and one
 with a tap, a table and a trestle table, a stool, a high-backed throne, a cauldron on its legs, a
@@ -208,7 +219,11 @@ measured, the torch's flame by hand, the chest's lid set on it) and put through
 repository with the bought files: joined, their materials baked onto one atlas (2,048 pixels;
 normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a node of its own
 (`kit@<i>,<j>`), its `phone` build: 17,620 triangles in all, one material for every piece,
-1.6 MB.
+1.5 MB.
+
+It replaces `medieval-dungeon.bin`, the same pieces built with the pack's "RMA" textures read as
+their name says (roughness, metal, occlusion), when they hold occlusion in red, roughness in green
+and metal in blue: every piece was unlit in shade and half metal.
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,
