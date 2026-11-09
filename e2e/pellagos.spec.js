@@ -5899,6 +5899,7 @@ test("buildings' floors built only once the player comes to their doors, though 
         const { game } = window.pellagos;
         const doors = [...game.visits.values()].filter((visit) => visit.maps.length && visit.door);
         const count = doors.length;
+        const before = game.memoryNow().interiorsMB;
 
         game.floorsMost = 1;
         game.advance(0.1);
@@ -5914,7 +5915,7 @@ test("buildings' floors built only once the player comes to their doors, though 
         // (Stood there a while: nothing built again, nothing more let go of)
         game.advance(3);
 
-        return { count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), MB: game.memoryNow().interiorsMB };
+        return { count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), before, MB: game.memoryNow().interiorsMB };
     }, spot);
 
     expect(stood.count, JSON.stringify(stood)).toBeGreaterThanOrEqual(2);
@@ -5922,7 +5923,9 @@ test("buildings' floors built only once the player comes to their doors, though 
     expect(stood.held === stood.floors && (stood.held <= 1 || stood.kept.length === 1), JSON.stringify(stood)).toBe(true);
     expect(Math.max(...stood.kept, 0)).toBeLessThanOrEqual(Math.min(...stood.gone));
     expect(stood.steady).toBe(true);
-    expect(stood.MB).toBeLessThan(counted.MB);
+    // (What the game holds the less for those let go: a floor furnished from a kit weighs more than
+    // one of the game's own, but is let go of as any)
+    expect(stood.MB, JSON.stringify(stood)).toBeLessThan(stood.before);
 });
 
 // (One start for the two, each its own step: the fingerpost's only looked at, as the game begins)

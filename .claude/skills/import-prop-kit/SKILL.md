@@ -7,8 +7,8 @@ description: Make a bought pack's loose furniture and things (a shop's counters 
 
 How Wind Ways' shop furniture (bought on Fab, November 2026) became the game's first prop kit, in
 the humans' shops, then Dragon Motion's Medieval Props Kit the second, in every people's taverns
-(toned to each, its lights burning where its candles are), and how the next kit goes in the same
-way.
+(toned to each, its lights burning where its candles are), and its third in every people's guild
+halls, town halls, keeps, barracks and undercrofts, and how the next kit goes in the same way.
 Read `contribution.md` first, then `docs/LICENSED_MODELS.md` (*Prop kits*) and
 `utilities/blenderpipeline/README.md` (*A kit of pieces*). `import-licensed-model` covers the
 download from Drive, an Unreal export and the private repository; its rules hold here too. Times
@@ -108,6 +108,24 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
   away) from the same place.
 - Then `LICENSED_MODELS=required npm run check`, the browser tests the insides touch
   (`e2e/building-lab.spec.js` and the game's), and the pipeline's checks if it changed.
+
+## What the halls kit taught
+
+- **One pack, a kit for each kind of place.** The halls kit (`medieval-hall`, 31 pieces, 15,584
+  triangles, 1.5 MB) shares the tavern kit's pack and its pipeline, but not its file: each kit
+  holds only what its places draw, and `kitsFor({ people, place })` chooses by the inside's style.
+- **Measure a light by hand where kit.py can't.** A wall torch has no candle for `candles` to find;
+  its flame sits in its cage (`[0, 0.72, 0.05]`, measured in the pipeline viewer). `torchOn` hangs
+  the torch so its flame is where the game's was (2.05 m) and moves the game's flame and light
+  onto it.
+- **Hang trophies on what can hold them.** Antlers and a skull on a chimney breast read; on a run
+  of bare wall they floated. `onBreast` puts them on the hearth's wall, inside its width.
+- **Keep wall dressing under the friezes.** Other peoples' halls run their accents from 2.4 m up;
+  a map hung with its top at 2.49 m cut through one. Every wall spot's top stays at 2.35 m or
+  under, and the test checks it.
+- **Share the placing.** Tables end to end with benches along them (`kitTables`, `kitBenches`), a
+  desk (`kitDesk`), a chest (`kitBox`) and a barrel (`barrelAt`) are set out alike in every hall,
+  and the tavern's helpers (`kitWare`, `candleOn`, `dressWalls`) carry over unchanged.
 
 ## What the tavern kit taught
 
