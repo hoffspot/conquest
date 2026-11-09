@@ -186,11 +186,12 @@ async function toldOf(page, pattern) {
     return page.evaluate(([source, flags]) => window.pellagos.game.messages.map(({ text }) => text).find((text) => new RegExp(source, flags).test(text)) ?? null, [pattern.source, pattern.flags]);
 }
 
-// The camera looking down on the player from higher and further back (35 degrees from 10.5 m, as
-// it started before it started close behind them: camera.js startPitch, view.js DISTANCE.start),
-// for a test of tapping or holding on what's about them: seen from close behind them, what's a
-// few metres straight ahead of them, the way the camera looks, is behind them on the screen, and
-// a tap on it is on them. (Played on a frame, so the camera's there)
+// The camera looking down on the player from higher (35 degrees from 10.5 m, at their middle: as it
+// started before it started close behind them, and then 12 degrees down from as far, over their
+// head: camera.js startPitch, view.js startDistance, lookUpFor), for a test of tapping or holding
+// on what's about them: seen from close behind them, what's a few metres straight ahead of them,
+// the way the camera looks, is behind them on the screen, and a tap on it is on them. (Played on a
+// frame, so the camera's there)
 async function overlook(page) {
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
@@ -333,7 +334,7 @@ test("behind the loading screen and the title, the town at dusk, then each scene
 
 test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {
     // (Played twice over, and a third time: more than the usual time)
-    test.setTimeout(300000);
+    test.setTimeout(480000);
 
     // (The page's own: each test's page is in a browser of its own, e2e/fixtures.js)
     const context = page.context();
@@ -391,7 +392,7 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
 });
 
 test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     // What the service worker fetches (in the page's own context: each test's page is in a
     // browser of its own, e2e/fixtures.js)
@@ -907,7 +908,7 @@ test.describe("drawn at the screen's own pixels", () => {
 });
 
 test("the debug log (Game options): a crash found from the last game's notes, a frame held up kept with where its time went and what was held, an error with its stack; shown, copied and cleared", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     // (The last game fell over while playing: its notes left behind, never closed, and a boggart's
     // dressing begun after them)
@@ -1028,7 +1029,7 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
 });
 
 test("making a character, the mouse dragged across the view walks round them, and its wheel comes nearer, never so near the camera cuts into them", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await title(page);
     await page.getByRole("button", { name: "New character" }).click();
     await expect(page.locator("#create")).toBeVisible();
@@ -1091,7 +1092,7 @@ test("making a character, the mouse dragged across the view walks round them, an
 
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {
     // Every step draws the character, which takes a while without a GPU
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await title(page);
     await page.getByRole("button", { name: "New character" }).click();
     await expect(page.locator("#create")).toBeVisible();
@@ -1183,7 +1184,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
 });
 
 test("makes a character of another people: a cat folk's ears, tail and fur, their colours, random as one of them; played, they wake in a town of their people's, as one of them", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await title(page);
     await page.getByRole("button", { name: "New character" }).click();
     await page.waitForFunction(() => window.pellagos.creator?.avatar);
@@ -1367,7 +1368,7 @@ test("no word to add the game to the Home Screen on a computer", async ({ page }
 });
 
 test("New character opens at once once the title's been up a while: the new character got ready meanwhile, a step at a time, and shown as they were made; tapped before then, a screen saying they're being made, its bar filling, and Back from it to the title; a game begun from the title lets go of the one got ready", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     // (One character kept, to Continue as)
     await page.addInitScript((save) => {
@@ -1419,7 +1420,7 @@ test("New character opens at once once the title's been up a while: the new char
 });
 
 test("up to six characters kept: Characters on this device lists them, the one played last first, each in a world of their own; played, one's the one Continue as carries on with; deleted, asked first, it's gone for good, their world staying", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await keepSix(page);
     await title(page);
     await expect(page.locator("#continuebutton")).toHaveText("Continue as Fen");
@@ -1474,7 +1475,7 @@ test("up to six characters kept: Characters on this device lists them, the one p
 
 test("with six characters kept, New character asks which is to make way, and to be sure; backed out of making them, the one chosen's kept; made, the new one takes their place", async ({ page }) => {
     // Every step draws the character, which takes a while without a GPU
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await keepSix(page);
     await title(page);
 
@@ -1516,7 +1517,7 @@ test("with six characters kept, New character asks which is to make way, and to 
 
 test("worlds on this device, apart from the characters: one made, and a character taken into it, new to its folk with what they carry; back in their own as they left it; deleted, asked first, the characters staying; one in no world asked where they go", async ({ page }) => {
     // (Played twice: more than the usual time)
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await keepSix(page);
     await title(page);
     await expect(page.locator("#localworldsbutton")).toHaveText("Worlds on this device (6)");
@@ -1678,7 +1679,7 @@ test("a saved character exported as a file and brought in again (not while they'
 
 test("how the player is, kept with where they are: hurt and tired, poisoned, a spell on them, blessed, a power strike waiting; the next time, each as it was, with what was left of it", async ({ page }) => {
     // (Played twice: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -1806,6 +1807,8 @@ test("the player and the orc draw their weapons and fight when in reach, until o
 });
 
 test("a new character with a sword carries a round shield, with a wand a spellward; the orc's blows from in front caught on it show \"Blocked\", the shield arm braced into them", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1&weapon=sword");
 
     // (What a new swordsman carries, drawn on them and given to the battle)
@@ -2068,9 +2071,9 @@ test("swiping up from the player turns them the way the camera looks and sends t
         return { order, pitch, facing, running: player.running, pace: player.pace, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    // (A swipe, not a drag: the camera's not tilted from where it starts, close behind them,
-    // sideways 25 degrees down: camera.js startPitch)
-    expect(moved.pitch).toBe(25);
+    // (A swipe, not a drag: the camera's not tilted from where it starts behind them, sideways 12
+    // degrees down: camera.js startPitch)
+    expect(moved.pitch).toBe(12);
     expect(moved.order?.type).toBe("move");
     expect(moved.order.run).toBe(true);
     expect(moved.running).toBe(true);
@@ -2253,8 +2256,8 @@ test("the thumb stick's knob tapped (let go of at once, not slid): the camera pu
     });
 
     expect(after.off).toBeLessThan(0.05);
-    expect(after.pitch).toBeCloseTo(25, 0);
-    expect(after.distance).toBeCloseTo(5.5, 1);
+    expect(after.pitch).toBeCloseTo(12, 0);
+    expect(after.distance).toBeCloseTo(10.5, 1);
     expect(after.square).toEqual(start.square);
 });
 
@@ -2314,9 +2317,9 @@ test("the thumb stick, asked to float, springs up under the thumb where it lands
 });
 
 test("the thumb stick, there from the start, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off in Game options", async ({ page }) => {
-    // (Turned on and off again, pushed twice and played on between: more than the usual time, on a
-    // machine drawing in software)
-    test.setTimeout(180000);
+    // (Turned on and off again, pushed twice and played on between, the camera looking out the
+    // clearest way across the land: more than the usual time, on a machine drawing in software)
+    test.setTimeout(420000);
     await playing(page, "/?play&seed=1");
 
     await clearestWayAhead(page);
@@ -2416,6 +2419,11 @@ test("the thumb stick, there from the start, walks the player the way it's pushe
 
 test("the mouse pointer a sword over the page, over the view showing what a click would do (an enemy, someone to talk to, the ground), lit and bigger shaken, large or the system's own as Game options say", async ({ page }) => {
     await playing(page, "/?play&seed=1");
+
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, the foe a few steps ahead is just over their head on the screen, and each frame,
+    // which the pointer's shown on, is slow to draw in software)
+    await overlook(page);
 
     const cursor = (selector = "#view") => page.evaluate((selector) => getComputedStyle(document.querySelector(selector)).cursor, selector);
     const set = (id, on) =>
@@ -2539,13 +2547,17 @@ test("with following turned on (Game options), the camera follows from the first
     });
 
     expect(camera.start.yaw).toBe(0);
-    expect(camera.start.pitch).toBe(25);
+    expect(camera.start.pitch).toBe(12);
     expect(camera.firstSteps.x).toBeGreaterThan(camera.start.x + 0.3);
     expect(camera.firstSteps.yaw).toBeLessThan(-0.15);
     expect(camera.walked).toBeGreaterThan(1.5);
     expect(camera.off).toBeLessThan(0.3);
     expect(Math.abs(camera.onScreen.x)).toBeLessThan(0.2);
-    expect(Math.abs(camera.onScreen.y)).toBeLessThan(0.3);
+
+    // (In the lower middle of the picture, the camera looking a little over their head: view.js
+    // LOOK_UP)
+    expect(camera.onScreen.y).toBeLessThan(-0.15);
+    expect(camera.onScreen.y).toBeGreaterThan(-0.55);
 });
 
 test("in a fight, the battle cam turned off, the camera keeps the foe in view, turning as little as it must; one attacking out of view has an arrow at the screen's edge pointing to them till it's in view", async ({ page }) => {
@@ -2869,7 +2881,7 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
 
 test("the first time a fight leaves a character something, they're told in a line what to do with it; never again, not even after a restart, their loot floating where it fell over its rarity's glow, and what they pick up rising over them, not said across the screen", async ({ page }) => {
     // (A character kept, carried on from the title: played twice, more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -3243,6 +3255,8 @@ test("those attacking the player have an icon each down the right side, a likene
 });
 
 test("the enemies list holds every foe in range the player can see: whoever they're set on first, then those after them, then the rest, the nearest first, each marked in range; X and Z step the lock through it; Tab sets them on the nearest, each press the next one out, round again, Shift+Tab back, the game keeping the key; none in sight, said", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // Three foes about the player in the open, each where they can see it, stunned where it
@@ -3523,7 +3537,8 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && window.pellagos.game.avatars.has([...window.pellagos.game.host.companions.keys()][0]), { seconds: 60 })).toBe(true);
 
     // Its icon, its likeness once it's drawn (a tenth of a second at a time: each look draws a
-    // frame, slow on a slow runner, and the likeness waits half a second of play)
+    // frame, slow on a slow runner, slower looking out across the land from the start view, and
+    // the likeness waits half a second of play)
     await page.waitForFunction(
         () => {
             window.pellagos.game.advance(0.1);
@@ -3531,7 +3546,7 @@ test("the player's party: a creature called to their side has an icon down the l
             return document.querySelector("#party .member.summon.painted");
         },
         null,
-        { timeout: 20000 },
+        { timeout: 60000 },
     );
 
     const icon = await page.evaluate(() => {
@@ -3867,7 +3882,7 @@ test("on a PC, Q and E turn the camera round the player while held, and R puts i
     expect(await press("e", 0.5)).toBeLessThan(-0.8);
 
     // R, the camera tilted steeply and zoomed out first: swung round behind the player, the way
-    // they face, tilted down 25 degrees (sideways: camera.js startPitch) and zoomed in to 5.5 m
+    // they face, tilted down 12 degrees (sideways: camera.js startPitch) and put back at 10.5 m
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -3884,12 +3899,14 @@ test("on a PC, Q and E turn the camera round the player while held, and R puts i
     });
 
     expect(behind.off).toBeLessThan(0.05);
-    expect(behind.pitch).toBeCloseTo(25, 0);
-    expect(behind.distance).toBeCloseTo(5.5, 1);
+    expect(behind.pitch).toBeCloseTo(12, 0);
+    expect(behind.distance).toBeCloseTo(10.5, 1);
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const before = await page.evaluate(() => {
@@ -3901,14 +3918,16 @@ test("dragging turns the camera round the player and tilts it; it holds while th
         return { yaw: session.view.yaw, pitch: session.view.pitch, square: [...player.square], width: session.view.canvas.clientWidth, height: session.view.canvas.clientHeight };
     });
 
-    // A drag from off to the side of the player: right and up
-    const [x, y] = [before.width * 0.2, before.height * 0.75];
+    // A drag from off to the side of the player: right and down (down, not up: from the start's 12
+    // degrees, dragged up it'd look within 10 of the horizon, which walking eases it back down
+    // from: camera.js PITCH.walking, the next test)
+    const [x, y] = [before.width * 0.2, before.height * 0.65];
 
     await page.mouse.move(x, y);
     await page.mouse.down();
 
     for (let k = 1; k <= 10; k++) {
-        await page.mouse.move(x + k * 18, y - k * 6);
+        await page.mouse.move(x + k * 18, y + k * 6);
     }
 
     await page.mouse.up();
@@ -3929,10 +3948,10 @@ test("dragging turns the camera round the player and tilts it; it holds while th
 
     const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
-    // Dragged right, it looks further right (turning clockwise from above); dragged up, it looks
-    // further up (tilting lower), by as much as the drag
+    // Dragged right, it looks further right (turning clockwise from above); dragged down, it looks
+    // further down (tilting higher), by as much as the drag
     expect(wrap(dragged.yaw - before.yaw)).toBeCloseTo((-180 / before.width) * Math.PI, 1);
-    expect(dragged.pitch).toBeLessThan(before.pitch - 3);
+    expect(dragged.pitch).toBeGreaterThan(before.pitch + 3);
     expect(dragged.order).toBe(null);
     expect(dragged.held.yaw).toBeCloseTo(dragged.yaw, 5);
     expect(dragged.held.pitch).toBeCloseTo(dragged.pitch, 5);
@@ -4118,7 +4137,7 @@ function texturesRead(page) {
 
 test("walks out of the town into the world, drawn round the player as they go, with no loading; the wild's creatures about them there", async ({ page }) => {
     // (Three minutes' walk out of the town, played through, and a night's camp: longer than most)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const trip = await page.evaluate(() => {
@@ -4255,7 +4274,7 @@ test("walks out of the town into the world, drawn round the player as they go, w
 // (One start for the five, each its own step: none of them leaves anything another goes by, each
 // taking the player where it looks and loading the land there)
 test("the land round the first start town (seed 1), drawn and walked: cliffs up in the mountains and an arch of rock, the road's stone bridge over the river, a broken aqueduct, the humans' hill citadel and a ford in the woods", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
     await page.evaluate(() => window.pellagos.game.stop());
 
@@ -4703,7 +4722,7 @@ test("once a tap lets it make sound, the music plays on recordings of real instr
 test("tapping the ground walks the player there; double-clicking it runs there, using stamina, shown by an orange bar until it's back", async ({ page }) => {
     // (Clicked and tapped while the game plays on, every frame drawn between: about two minutes
     // on a slow machine without a GPU, as CI's can be)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
     // (The camera looking down on them, so the ground ahead isn't behind them on the screen)
     await overlook(page);
@@ -5242,7 +5261,7 @@ test("the bars over others: each stays on the head it's over as the camera turns
 
 test("tapping the tavern's door lights its edge green, and the player walks in: well inside, facing into the room, the camera behind them under the ceiling; up the stairs (where a courtesan beckons), down, and out, facing out; each time a tap round them is a step, not back through", async ({ page }) => {
     // (In and up and down and out, each map drawn as it's come to: a minute or more without a GPU)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     // Tap the door or stairs (a link's end on the map shown), and play on until through
@@ -5789,6 +5808,8 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
 });
 
 test("buildings' floors built only once the player comes to their doors, though they're got ready further off, and held at most twelve further off than they're built (the furthest let go of first, none built again only to be let go), and counted in what the game holds: each on the page alone, put away till the player goes in", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // Got ready as the player comes near, but none of their floors built till they're at the door
@@ -6025,6 +6046,8 @@ test("seed 2's start town: a fingerpost by its main road out, its boards lettere
 });
 
 test("the folk out in the streets held in full only as the bodies' budget has room, the furthest let go first; and indoors, those out in the world let go of a few seconds in, the soldiers to their crowds, and dressed again coming out", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     // (Seed 2's town on Low: its townsfolk, its crier and its guards about the start, its smithy a
     // few steps off)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
@@ -6131,6 +6154,8 @@ test("the folk out in the streets held in full only as the bodies' budget has ro
 });
 
 test("the townsfolk past the bodies' room, or far from the camera, drawn in their people's and sex's crowd once its figure's made, each in their own colours and build; dressed in full again near with room, their crowd's figure fading as they're shown; the crier never in one", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     // (Seed 2's town on Low: its townsfolk and its crier about the start)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
     await playing(page, "/?play&seed=2");
@@ -6342,7 +6367,7 @@ test("the temple: the priest in white blesses the pews and lights the shrines' c
 });
 
 test("the guild's portal: a character kept from before there were portals has the branches in country they'd found open; the receptionist tells of it, and what their rank takes off; tapped, it walks them up to it and the travel map shows those branches with their fares; one tapped is asked about first, and agreed to, they pay and step out of its portal", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     // Seed 2's world: the home town, the branch nearest it, and the next. Kept from before the
     // portals: the way walked from home to the nearest branch, and round both, uncovered; the
@@ -6769,7 +6794,7 @@ test("the adventurers' guild: the receptionist stamps notices behind her counter
 
 test("the townsfolk go about their business in the start town: dressed for their callings, carrying what they carry, walking from errand to errand; tapped, they talk of their town", async ({ page }) => {
     // (Everyone in the town drawn, a step at a time: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
     // Out as soon as the game's played, and drawn a few at a time, after the town's soldiers
@@ -6881,7 +6906,7 @@ test("the townsfolk go about their business in the start town: dressed for their
 });
 
 test("a crier stands in the start town's square in his people's livery, his handbell in his hand, marked with a bell on the minimap; his bell heard from afar while there's news to hear, and how much on the compass; come near, he calls out the latest; talked to, he cries the war's news since the player last listened, three at a time, and remembers where they'd heard to", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
     await page.evaluate(() => {
@@ -7044,7 +7069,7 @@ test("a crier stands in the start town's square in his people's livery, his hand
 });
 
 test("asked, a crier tells of the places round the town still to be found, two the first time and then one a talk, which way each is from the town; each written in the journal and drawn on the world map as a circle round about it, till it's found", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
     await page.evaluate(() => {
@@ -7767,7 +7792,7 @@ test("an army's supply wagon near the player: its ox and wagon drawn laden with 
 });
 
 test("an orc camp near the player sends its scout out on its round and its skirmishers after the player's people's army met there; reinforcements on their way to that army join its line", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // An orc camp out east of the player's town, at war with the humans; the humans' army standing
@@ -7876,7 +7901,7 @@ test("an orc camp near the player sends its scout out on its round and its skirm
 });
 
 test("the orcs' seat, its garrison put down by the player at war with them: its ruler and the captain of its guard make their last stand at its keep, drawn and told of; put down too, it falls, the orcs the humans' vassals", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // The player out in the orcs' seat, at war with them in the age of conquest, made too strong
@@ -7979,6 +8004,8 @@ test("the orcs' seat, its garrison put down by the player at war with them: its 
 });
 
 test("an envoy on the road near the player goes by with their escort; struck down, they're waylaid, and the journal tells of the grudge", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
     // An orcish envoy on the road just outside the town, at war with the humans; the player by them
@@ -8052,8 +8079,9 @@ test("an envoy on the road near the player goes by with their escort; struck dow
 });
 
 test("the journal keeps the last ten messages told across the screen, behind a button, the newest first, refusals left out; and the next time", async ({ page }) => {
-    // (Played twice: more than the usual time)
-    test.setTimeout(180000);
+    // (Played twice, the journal and the menu opened over the start view, which looks out across
+    // the land, slow to draw in software: more than the usual time)
+    test.setTimeout(420000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -8169,7 +8197,7 @@ test("the wild's creatures leave their prints on the ground as they go out in th
 
 test("a trail out of a camp: its prints and signs seen near it, a sign tapped walked up to and read, which way it runs told; three read, its camp tracked, on the world map and in the journal; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -8500,7 +8528,7 @@ test("the rings of standing stones as Lunara's moon roads: stepped into by night
 
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -8592,7 +8620,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
 
 test("where the player is is kept whenever the game stops (paused, the page closed or hidden), and the next time they carry on there", async ({ page }) => {
     // (Played three times: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
 
     const continued = async () => {
@@ -8654,7 +8682,7 @@ test("where the player is is kept whenever the game stops (paused, the page clos
 
 test("an adventurer at the guild, hired for gold, follows the player out and keeps up, sprinting as they sprint, and brought to them when left far behind; the journal shows their company, and they're with them the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     // A saved game in seed 2's world
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), { ...SAVE, seed: 2 });
@@ -8969,7 +8997,7 @@ const tamWears = (page) =>
 
 test("a hired adventurer grown with the player: the party menu's More tells their level, trust and what they wear; a way to grow chosen; armour given from the pack worn and drawn on them, and taken back; renamed; the journal shows their level and the roll", async ({ page }) => {
     // (A good deal looked at: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await leadingTam(page);
 
     // The party menu: their level, and trust to choose how they grow
@@ -9057,7 +9085,7 @@ test("a hired adventurer grown with the player: the party menu's More tells thei
 
 test("a hired adventurer knocked down, up again with the player by them, wounded; home to mend after the third fall, listed so in the party menu, and sent for at the guild's desk; Game options' Mercenaries' chatter and Mercenaries can die", async ({ page }) => {
     // (Played a while: more than the usual time)
-    test.setTimeout(150000);
+    test.setTimeout(240000);
     await leadingTam(page, { ...TAM, wounds: 1 });
 
     const panel = page.locator(".party-panel");
@@ -9147,8 +9175,9 @@ test("a hired adventurer knocked down, up again with the player by them, wounded
 });
 
 test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {
-    // (The war played on two minutes in all: more than the usual time)
-    test.setTimeout(180000);
+    // (The war played on two minutes in all, over the start view, which looks out across the land,
+    // slow to draw in software: more than the usual time)
+    test.setTimeout(420000);
     await playing(page, "/?play&seed=1");
 
     const fate = page.locator(".fate");
@@ -9429,7 +9458,7 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
 });
 
 test("item levels and a legendary weapon: a piece's level and a legendary weapon's effect said; might in the totals; the charge over the card filling blow by blow on a wolf, let loose; Evaluate's power on its plate, coloured", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     // A saved game whose hero carries a legendary sword of level 60 (Cinderburst), one made before
     // effects (of the first level), and a rare ring of level 40
@@ -9520,11 +9549,12 @@ test("item levels and a legendary weapon: a piece's level and a legendary weapon
 });
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
-    // (A long walk through, and then a dozen clicks in the taproom, each waiting on a few frames
-    // drawn in software, a second or two each with the room lit by its flames and furnished from
-    // the tavern kit: more than the usual time, with others running beside it. On CI it took 175 s
-    // before the kits, 197 s and 211 s after, and over 240 s on main twice, its clicks unchanged)
-    test.setTimeout(360000);
+    // (A long walk through, the camera looking out across the land, and then a dozen clicks in the
+    // taproom, each waiting on a few frames drawn in software, a second or two each with the room
+    // lit by its flames and furnished from the tavern kit: more than the usual time, with others
+    // running beside it. On CI it took 175 s before the kits, 197 s and 211 s after, and over 240 s
+    // on main twice, its clicks unchanged)
+    test.setTimeout(540000);
 
     // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
     await page.addInitScript((save) => {
@@ -9795,7 +9825,7 @@ test("what lingers after a creature's blow shows on the player's plate, and its 
 
 test("the swordsmith's in the start town: its keeper behind the counter tells of today's special and sells it, once; what's on the racks today, so many of each, one fewer once bought", async ({ page }) => {
     // (Into the shop and a few clicks in it, each waiting on frames drawn in software)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     // A saved game in seed 1's world, whose start town keeps a swordsmith's, with gold enough
     await page.addInitScript((save) => {
@@ -9893,7 +9923,7 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
 });
 
 test("the Explosion spell bursts on an orc and throws it limp through the air, to land and get up again; a Goblin Bomb thrown from the pack lands lit and fizzing, then bursts and throws a wolf, tumbling", async ({ page }) => {
-    test.setTimeout(150000);
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // An orc and a wolf by the player, standing still; the Tome of Explosion read
@@ -9960,7 +9990,7 @@ test("the Explosion spell bursts on an orc and throws it limp through the air, t
 });
 
 test("each people's bomb throwers' bombs drawn as their own as they're lobbed: a grenado, a starfire seed pod, a shadowfire orb in silk, a sun jar and a swamp-gas bladder, each lying lit or glowing where it lands, then bursting", async ({ page }) => {
-    test.setTimeout(150000);
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // (An orc a way off, standing still, thrown at in turn: each people's bomb lobbed by the
@@ -10111,7 +10141,7 @@ test("a Scroll of Safety read from the pack: a circle of runes grows under the p
 
 test("the pack stacks things alike: dragged together, split by how many, held for a thing's wheel; thrown away and taken back; dropped on the ground, and picked up", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const pack = page.locator(".pack");
@@ -10225,7 +10255,7 @@ test("the pack stacks things alike: dragged together, split by how many, held fo
 
 test("the town hall: the reeve gives work, and pays for what's done; the journal shows where the player stands, what they carry and where it takes them; given up, it's set down", async ({ page }) => {
     // (A long walk through: more than the usual time, with others running beside it)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
 
     await playing(page, "/?play&seed=1");
 
@@ -10477,7 +10507,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
 });
 
 test("a people's castle's undercroft, down the stairs from its great hall: the castle's smith at its forge, its quartermaster and arcanist behind their counters, the quartermaster's racks for sale, a legendary make among them", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // Into the elves' castle's keep, and down the stairs from its great hall
@@ -10681,6 +10711,8 @@ test("an old graveyard outside the start town: walled, its graves, tombs and yew
 });
 
 test("each people's works out in their lands: a lumber mill in its ring of trees, its guards out at their posts and on their round, of its people, drawn; on the minimap; the journal tells of the works held and what's in the stores", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     const works = await page.evaluate(async () => {
@@ -10748,7 +10780,7 @@ test("each people's works out in their lands: a lumber mill in its ring of trees
 });
 
 test("a convoy on the road near the player: its wagons drawn, an ox in each one's shafts and its goods aboard, its captain and guards of its people; said; emptied at the road's end", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     const met = await page.evaluate(async () => {
@@ -10865,7 +10897,7 @@ test("a convoy on the road near the player: its wagons drawn, an ox in each one'
 });
 
 test("a guard tower of the player's people near them: drawn over its squares with its banner, its bar broad; it shoots their enemy within 20 m; razed, said, its stone taken down", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     const built = await page.evaluate(async () => {
@@ -10977,7 +11009,7 @@ test("a guard tower of the player's people near them: drawn over its squares wit
 });
 
 test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next; their army's supplies not getting through cried by a crier, not told in a box", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     // A Knight, at war with the orcs, the stores holding a tower but not a garrison: into the
@@ -11101,7 +11133,7 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
 });
 
 test("the war table in the keep: a Retainer's told it isn't theirs to read; a Knight taps it, walks up to it, and its map shows the war as their council sees it, their army at their camp and the enemy's army its scout sees, not the one beyond, drawn again as the war goes on; what's tapped told of", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     // A Retainer at war with the orcs, a camp of theirs up before the orcs' seat, their army at it,
@@ -11260,7 +11292,7 @@ test("the war table in the keep: a Retainer's told it isn't theirs to read; a Kn
 });
 
 test("orders at the war table: a Lord raises their army at their seat, sends it to make camp, then to march on the orcs' seat, is told why it can't be sent supplies while mustering, and disbands it", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     // A Lord at war with the orcs, the orcs' seat uncovered on their map, at the war table in the keep
@@ -11386,7 +11418,7 @@ test("orders at the war table: a Lord raises their army at their seat, sends it 
 });
 
 test("a forward garrison of the player's people near them: its two patrols of four out on their rounds and its assault team of six at its gate, drawn as near as they're drawn, of its people", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     const built = await page.evaluate(async () => {
@@ -11478,7 +11510,7 @@ test("a forward garrison of the player's people near them: its two patrols of fo
 });
 
 test("the barracks of the town the player starts in, held by the orcs at war with their people: gone into, its captain and guardsmen are there, of the orcs, drawn; put down, the last of its garrison, the town's the humans', and said; the humans' garrison in it once the player's left", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     const inside = await page.evaluate(() => {
@@ -12084,7 +12116,7 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
 
 test("the wilds director puts strangers on the way: a pedlar selling odds and ends, a wounded hunter healed with a draught telling of a place round about, hungry bandits hailing the player and paid to let them by", async ({ page }) => {
     // (Three strangers met, each drawn, walked up to and talked to)
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=1");
 
     const pack = page.locator(".pack");
@@ -12102,12 +12134,23 @@ test("the wilds director puts strangers on the way: a pedlar selling odds and en
             Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
             Object.assign(player, { hp: 1e6, maxHp: 1e6 });
 
-            // (Every word on the banner kept)
+            // (Every word on the banner kept; and who's said words over their head, as they say
+            // them: a bubble's gone after a few seconds, not a few frames, hud.js say)
             window.told ??= [];
+            window.saidBy ??= new Set();
 
             if (!window.watching) {
+                const say = game.hud.say.bind(game.hud);
+
                 window.watching = true;
                 new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+                game.hud.say = (id, text, seconds) => {
+                    if (text) {
+                        window.saidBy.add(id);
+                    }
+
+                    return say(id, text, seconds);
+                };
             }
 
             const settle = async (steps, render = false) => {
@@ -12139,7 +12182,7 @@ test("the wilds director puts strangers on the way: a pedlar selling odds and en
             goTo(one.x + 6, one.y);
             await settle(4, true);
 
-            const hailed = [...(game.hud.said?.keys() ?? [])].includes(one.id) && Boolean(stranger.hailed?.includes("player"));
+            const hailed = window.saidBy.has(one.id) && Boolean(stranger.hailed?.includes("player"));
 
             for (let k = 0; k < 40 && !game.avatars.has(one.id); k++) {
                 await settle(1, true);
@@ -12312,7 +12355,7 @@ test("a wary wolf out in the wilds is minded by a reaction roll: warning the pla
 });
 
 test("meat bait the player carries goes on an enemy's wheel of itself the first time; thrown from it to a curious wolf, it arcs to its feet and is eaten; fed enough, the wolf follows them, tamed, down the party's side", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const wheel = page.locator(".action-wheel");
@@ -12403,7 +12446,7 @@ test("meat bait the player carries goes on an enemy's wheel of itself the first 
 });
 
 test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a wary wolf warning the player off, it's made to come at them, heard and told (Taunted over it); its slice greyed as it cools down, and chosen again too soon, refused", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const wheel = page.locator(".action-wheel");
@@ -12506,7 +12549,7 @@ test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a w
 });
 
 test("Show whom foes are on (Game options, on): a ring round a foe's icon on the right, grey off them, yellow about to turn on them, orange on them with another close, red held; a dot for one of theirs it's on, and a count on that one's icon; a taunt's mark over it; none of it with the switch off", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     // A wolf 6 m off, kept from minding anyone of itself (whom it's on and its enmity set here) and
@@ -12664,7 +12707,7 @@ test("the wilds director lays an ambush ahead of a player crossing the wilds: it
 });
 
 test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack, only to be thrown away, the player asked first; its thread begun, in the journal's Legends with what was met; given up from there, hers alone, and taken back up of a guild's receptionist where it stood", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=2");
 
     const met = await page.evaluate(async () => {
@@ -12860,7 +12903,7 @@ test("a rare encounter dealt in the wilds (debug mode's sample) in a party of tw
 });
 
 test("a rare encounter inside (debug mode's inside sample) on a dungeon's floor: felled, a ward broken and a door shown in the rock, an arch over its way in; gone through to a sealed room of its own, drawn, its keepers woken, its chest each one's reward once they've fallen", async ({ page }) => {
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=2");
 
     const below = await page.evaluate(async () => {
@@ -12959,7 +13002,7 @@ test("a rare encounter inside (debug mode's inside sample) on a dungeon's floor:
 });
 
 test("the wilds director lays a fallen tree across the way: drawn over its squares, said, the way round it; held on, the player walks up to it and clears it, swinging at it, and it's gone for everyone", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // Out in the wilds 600 m north of the start town, going north, the next card a fallen tree
@@ -13493,7 +13536,7 @@ test("from high ground the places in sight are found without going near: said ho
 });
 
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const elite = await page.evaluate(async () => {
@@ -13694,7 +13737,7 @@ test("a cave held by outlaws is gone into by its mouth: within, the rock all rou
 });
 
 test("the Tower of Sar Mordal: the rift swirling green beside it, its riftlings round it; in by its door to Sinclair's hall, lit green up through the crack across its floor, two riftlings keeping it; up to his study, open to the sky, his journal on his lectern, the rift stalker by his hoard breathing the rift's green fire", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     const tower = await page.evaluate(async () => {
@@ -13797,7 +13840,7 @@ test("the Tower of Sar Mordal: the rift swirling green beside it, its riftlings 
 });
 
 test("Sinclair's journal on his lectern, at the top of the Tower of Sar Mordal: tapped from across his study, walked up to and read, kept in the player's journal; its pages turned on and back, by its buttons and the arrow keys; shut, and read again from the journal's Writings", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // Up in his study, those keeping the tower slain, across the room from his lectern
@@ -13935,7 +13978,7 @@ test("Sinclair's journal on his lectern, at the top of the Tower of Sar Mordal: 
 });
 
 test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its pictures kept compressed, nothing drawn past its fog, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const delved = await page.evaluate(async () => {
@@ -14034,7 +14077,7 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
 });
 
 test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const seen = await page.evaluate(async () => {
@@ -14246,7 +14289,9 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
 
 test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(300000);
+    // (Walked out to its way in, the camera looking out across the land, slow to draw in
+    // software, and waited at its door: more than the usual time)
+    test.setTimeout(660000);
     await playing(page, "/?play&seed=1");
 
     // (Two dungeons not far from the start made dens of creatures drawn from models, by a theme of
@@ -14437,7 +14482,9 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
 
 test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling; heard in its own still earth, its colony murmuring round about, something chittering far off, the soil heard where it falls; its midden heaped with the gear of those the ants killed, dug earth heaped where other dungeons have fallen rock, roots through its roof, a web about each widow", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(300000);
+    // (Walked out to its way in, the camera looking out across the land, slow to draw in
+    // software, and waited at its door: more than the usual time)
+    test.setTimeout(600000);
     await playing(page, "/?play&seed=1");
 
     // (The nearest ants' nest not made yet: none within 200 metres of the start; the ground about
@@ -14683,7 +14730,7 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
 });
 
 test("a hell: its way in a cult's camp out in the wilds, shut by day, and by night till the cult keeping its rite there is slain; each of its four levels its realm's, drawn in its realm's own air and heard as it; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
-    test.setTimeout(480000);
+    test.setTimeout(720000);
     await playing(page, "/?play&seed=1");
 
     const hell = await page.evaluate(async () => {
@@ -14849,6 +14896,8 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
 });
 
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // (The ground round the player found, a few chunks each way; the map opened on them)
@@ -15064,7 +15113,7 @@ test("on the world map a pin's dropped where it's held: a column of light where 
 
 test("the minimap walks the player where it's tapped, and Game options turn it and the sound off, remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const minimap = page.locator("#minimap");
@@ -15167,7 +15216,7 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 test("the minimap off, a compass in its corner turns as the camera does, and tapped, opens it again; its corner's button, its needle turned so too, folds it away into the compass", async ({ page }) => {
     // (Frames drawn in software are slow, and the compass is turned a frame after the camera, each
     // turn waited for: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     // (Turned off in Game options, as the test before this does, and the game started with it off)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ minimap: false, sound: false })));
     await playing(page, "/?play&seed=1");
@@ -15248,6 +15297,11 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
     expect(await full()).toBe(true);
+
+    // (The camera looking down on the player, as overlook, so a tap on the world is on the ground
+    // by them: from the start view, looking out across the land, it can be on someone walking
+    // about the market, whose talk it opens instead)
+    await overlook(page);
 
     // Left by the player (Escape, the browser's own button, Android's back): paused
     await page.evaluate(() => document.exitFullscreen());
@@ -15429,7 +15483,7 @@ test("coming into a world, the camera flies down from high overhead, north up, t
     expect(high.above).toBeGreaterThan(high.away * 2);
     expect(high.lower).toBeLessThan(high.above);
 
-    // A key pressed: down at once, close behind the player, as it starts (sideways, 25 degrees down)
+    // A key pressed: down at once, behind the player, as it starts (sideways, 12 degrees down from 10.5 m)
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("Shift");
 
@@ -15445,7 +15499,7 @@ test("coming into a world, the camera flies down from high overhead, north up, t
         return { flying: game.view.flying, above: camera.y - player.y, distance: game.view.distance, pitch: game.cameraFollow.pitch };
     });
 
-    expect(landed).toMatchObject({ flying: false, distance: 5.5, pitch: 25 });
+    expect(landed).toMatchObject({ flying: false, distance: 10.5, pitch: 12 });
     expect(landed.above).toBeLessThan(5);
 
     // Left alone, it comes down by itself in about 4 seconds
@@ -15473,8 +15527,9 @@ test("coming into a world, the camera flies down from high overhead, north up, t
 });
 
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam and finding the way through on at first; a drag turns and tilts it as far as chosen, each its own, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
-    // (The game started twice: more than the usual time)
-    test.setTimeout(180000);
+    // (The game started twice, and the camera dragged round looking out across the land, which is
+    // slow to draw in software: more than the usual time)
+    test.setTimeout(420000);
     await playing(page, "/?play&seed=1");
 
     // At first (Game options, Camera): not following, the battle cam on, a drag turning it as far
@@ -15575,7 +15630,7 @@ test("Game options set the camera: following off at first, it keeps the way it's
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {
     // (Held three times, with the world played on between: more than the usual time, with others
     // running beside it)
-    test.setTimeout(180000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
     await overlook(page);
 
@@ -15686,7 +15741,7 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
 
 test("in a fight the Action Bar's four actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in the Action Bar options; the minimap in the top left corner, the buttons top right, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
     // (Played on between taps, and held once: more than the usual time, with others running beside it)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 
@@ -15901,7 +15956,7 @@ test("in a fight the Action Bar's four actions rise from the bottom, lifting the
 test("what can go in an Action Bar slot is listed by kind (All, On an enemy, Heals, Buffs, Cures...), each saying whom it's for; a school's spells as one, its other tiers opened under it; what can't be used as things are greyed, last; fewer shown bigger; found by name on a PC; Cure and Buff all among them; and the spellbook puts a spell on the Action Bar", async ({ page }) => {
     // (Through the menus to the Action Bar's options and back, and the spellbook: more than the
     // usual time, on a machine drawing in software)
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const setup = page.locator("#quicksetup");
@@ -15989,7 +16044,9 @@ test("what can go in an Action Bar slot is listed by kind (All, On an enemy, Hea
 });
 
 test("Cure on the Action Bar casts the cure for what's on the player, shown in its slot and ringed on their plate: what slows them first, then what will do the most harm; with nothing to cure, its own icon, greyed, and said so. Buff all casts each buff that's off them in turn; again, all up, said so", async ({ page }) => {
-    test.setTimeout(180000);
+    // (Cast after cast in the start view, which looks out across the land, slow to draw in
+    // software: more than the usual time)
+    test.setTimeout(420000);
     await playing(page, "/?play&seed=1");
 
     const bar = page.locator(".quickbar");
@@ -16077,7 +16134,7 @@ test("Cure on the Action Bar casts the cure for what's on the player, shown in i
 });
 
 test("a Prismatic chain: an element's spell cast from the Action Bar rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(240000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 
@@ -16256,7 +16313,7 @@ test("a Prismatic chain: an element's spell cast from the Action Bar rolls its s
 });
 
 test("Action Bar 2: the Swap Bar button at the bar's right end, tapped, flips it to Action Bar 2 (empty to start with), saying which; an empty slot's key opens its choices on Action Bar 2's tab, what's put in it kept on that bar alone; the number keys use the bar shown; ` swaps back; the bar shown kept for the next fight; held on, the options opened on its tab; from Game options, on Action Bar 1's", async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(180000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 
@@ -16457,7 +16514,7 @@ test("Always show (Game options, Action Bar): the Action Bar kept up along the b
 });
 
 test("six actions across the Action Bar (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     // (Not full screen, as a tap on the game asks to be, or the phone can't be turned on its side)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ fullscreen: false })));
     await page.setViewportSize({ width: 402, height: 874 });
@@ -16630,6 +16687,8 @@ test("a spell tapped on a foe out of reach says so, flashes its slot red and sta
 });
 
 test("their followers' wheel, held on one of the player's own (a creature called, by its icon): a draught put on its other side in Game options; its ability by its own name (Savage blow), used on the foe the player's locked on; turned over, Hold fire, and held fire, At will in its place; the draught given to them, healing them", async ({ page }) => {
+    // (Slow to draw in software, in the start view out across the land: more than the usual time)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     // Summon learnt and cast; two draughts in the pack; a wolf after no one, 10 m west
@@ -16771,6 +16830,9 @@ test("their followers' wheel, held on one of the player's own (a creature called
 });
 
 test("the action wheels: flicked down, the other side; what's on each chosen in Game options (the player's own, a foe's and their followers'), from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
+    // (Game options gone through and the wheels held open over the start view, which looks out
+    // across the land, slow to draw in software: more than the usual time)
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const wheel = page.locator(".action-wheel");
@@ -16835,7 +16897,12 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await page.locator("#resumebutton").click();
     await expect(menu).toBeHidden();
 
-    // Held on the player: wheel one; flicked down, wheel two, opened again under the finger
+    // Held on the player (the camera looking down on them, as overlook: from the start view,
+    // looking out across the land, a frame drawn in software takes long enough that the wheel
+    // shown a moment after the hold may not be looked at in time): wheel one; flicked down, wheel
+    // two, opened again under the finger
+    await overlook(page);
+
     const me = await page.evaluate(() => {
         const { game, session } = window.pellagos;
 
@@ -16863,8 +16930,13 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
 
 test("magic: the spellbook shows every school and the tomes; an element opened by its tome; a tome read teaches its spell, put on a wheel from the book; the seventh tier floods the screen; summoned by another player, asked whether to go", async ({ page }) => {
     // (Two tomes read, a fight and a summons: more than the usual time)
-    test.setTimeout(180000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
+
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, each frame of the greatest spells' light is slow enough to draw in software that
+    // the summons asked after it is drawn again before it's clicked)
+    await overlook(page);
 
     const book = page.locator(".spellbook");
 
@@ -17134,7 +17206,7 @@ test.describe("on a phone", () => {
     });
 
     test("an Action Bar press whose lift is lost, as a phone's Safari loses it, never leaves its slot deaf: let go of as the slot's let go of, or once no finger's on the screen, or taken over by the next touch (kept in the debug log); let go of as the bar's put away or the page loses the player; a hold and Back leave the next tap heard", async ({ page }) => {
-        test.setTimeout(180000);
+        test.setTimeout(300000);
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
 
@@ -17304,7 +17376,7 @@ test.describe("on a phone", () => {
     });
 
     test("an Action Bar action held, or an empty slot tapped, opens the Action Bar options, and the finger's lift isn't taken for a tap on what's under it there (Back to the game, over the slot at the foot of the screen): it stays open till Back's tapped", async ({ page }) => {
-        test.setTimeout(180000);
+        test.setTimeout(300000);
         await playing(page, "/?play&seed=1");
 
         // (In a fight with the orc, stunned; the fourth slot emptied; played on, for there to be a
@@ -17368,7 +17440,7 @@ test.describe("on a phone", () => {
     });
 
     test("a thumb on the thumb stick whose lift is lost, as a phone's Safari loses it, never runs the player on: let go of, stopped, once no finger's on the screen; with that lost too, the next thumb on it takes over (kept in the debug log)", async ({ page }) => {
-        test.setTimeout(180000);
+        test.setTimeout(300000);
         await playing(page, "/?play&seed=1");
         await clearestWayAhead(page);
 
@@ -17517,7 +17589,7 @@ test.describe("on a phone", () => {
     });
 
     test("making a character, one finger dragged across the view walks round them, two spread apart come nearer and brought together stand further off; never so near the camera cuts into them, all the way round, even close up on their face", async ({ page }) => {
-        test.setTimeout(240000);
+        test.setTimeout(360000);
         await title(page);
         await page.getByRole("button", { name: "New character" }).tap();
         await expect(page.locator("#create")).toBeVisible();
@@ -17722,7 +17794,7 @@ test.describe("on a phone", () => {
 });
 
 test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=2");
 
     // (Out of town, on open ground, the camera drawn back to see it all)
@@ -17884,7 +17956,7 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
 });
 
 test("soldiers about the player past the bodies the quality's memory can hold in full (fewer than a battle's), the nearest drawn in full and the rest in their crowds, their full bodies let go; the debug log says how many had room", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (Out of town on open ground, as the field battle's; a budget with room for five soldiers in
@@ -17989,7 +18061,7 @@ test("soldiers about the player past the bodies the quality's memory can hold in
 });
 
 test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The town's guards in their crowds: room in full for everyone else but them)
@@ -18120,7 +18192,7 @@ test("a guard in its crowd stands at ease as one in full does, its sword at its 
 });
 
 test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits, wolves and spiders stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "low" })));
     await playing(page, "/?play&seed=2");
 
@@ -18267,7 +18339,7 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
 });
 
 test("past 45 metres from the camera, a bandit's drawn in its kind's crowd however quick the frames, its body kept unseen; come near, in full again", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // (Adaptive off: all drawn in full but for the reach. Out in the open west of the start town,
@@ -18332,7 +18404,7 @@ test("past 45 metres from the camera, a bandit's drawn in its kind's crowd howev
 });
 
 test("a beast's look is let go of three minutes after the last of it's drawn: its body off the graphics card, and sculpted again when another comes", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // A wolf out in the open west of the start town, 8 metres ahead of the player facing north,
@@ -18461,7 +18533,7 @@ test("a beast's look is let go of three minutes after the last of it's drawn: it
 
 test("a Dreadthorn drawn with its stand-in is drawn again from its model once that's read, out of view", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // A Dreadthorn 25 metres behind the player, out of view, not set on a fight; its model kept
@@ -18496,7 +18568,7 @@ test("a Dreadthorn drawn with its stand-in is drawn again from its model once th
 
 test("a werewolf met out in the wild by night: drawn from its model in a skin of its own, clawing and springing at the player, flushed red when struck, falling dead as its model falls, its spoils left", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // Midnight, and a werewolf 6 metres from the player out in the open west of the start town,
@@ -18600,7 +18672,7 @@ test("a werewolf met out in the wild by night: drawn from its model in a skin of
 
 test("a werewolves' den neared: the Moonfang's model and its werewolves' (one file, read once, each in their skins) read before they're met", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // The player put a kilometre from a den, out of reach of it (its master and guards out only
@@ -18646,7 +18718,7 @@ test("a werewolves' den neared: the Moonfang's model and its werewolves' (one fi
 
 test("out in the woods far from home by night, where werewolves are met: the werewolf's model read before one is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // Midnight, and the player put in the woods out in the wild, five tiers or more from home,
@@ -18696,7 +18768,7 @@ test("out in the woods far from home by night, where werewolves are met: the wer
 });
 
 test("a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of reach of the player's blade, the player told; down again after", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
 
     // A Dreadthorn out in the open west of the start town, 6 metres from the player where they
@@ -18778,7 +18850,7 @@ test("a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of r
 });
 
 test("the wild's people-shaped creatures past the bodies' budget are drawn in their kind's crowd, their bodies let go; one that sets on the player is built in full", async ({ page }) => {
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=1");
 
     // Forty-eight goblins in rings 6 to 39 metres round the player west of the start town, leaving
@@ -18864,7 +18936,7 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
 
 test("the Stone Golem dealt before the player: drawn from its model at once, its bar across the top; a boulder torn up and heaved at them, its shadow on the ground where it'll land, and them thrown off their feet", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=5");
 
     // (Out in an open field, the lone orc out of the way: the debug overlay's card dealt, its thread
@@ -18929,7 +19001,7 @@ test("the Stone Golem dealt before the player: drawn from its model at once, its
 
 test("the Orc King dealt before the player at his war camp: drawn from his model at once, his bar across the top, his camp's tents round its fire; his leap carries him to them as they keep off, and he stands on guard", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=5");
 
     // (Out in an open field, the lone orc out of the way: the debug overlay's Card and its thread,
@@ -19021,7 +19093,7 @@ test("the Orc King dealt before the player at his war camp: drawn from his model
 
 test("Vharzul the Greenflame dealt before the player by night: drawn from the Lord of the Pit's model in its green skin at once, his bar across the top; his ring of green fire sets them burning, and worn down he tears the thin place open, fiends coming through, told in his words", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=5");
 
     // (Out in an open field by night, the lone orc out of the way: the debug overlay's Card and its
@@ -19119,7 +19191,7 @@ test("Vharzul the Greenflame dealt before the player by night: drawn from the Lo
 
 test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=5");
 
     // (Out in an open field, the lone orc out of the way: the debug overlay's call-up, 70 m off
@@ -19181,7 +19253,7 @@ test("the Behemoth of the Rift called up out in the open: drawn from its model a
 });
 
 test("the Behemoth of the Rift against the town: its roar heard twice where it comes out, the call told, the town's whole strength out to meet it, the townsfolk running indoors, their doors heard, the crier staying out; its bar across the top as it nears; wounded by the player and slain, the town thanks them for their share of it, and the townsfolk come out again", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The lone orc out of the way; every voice raised heard; as small an invasion as comes)
@@ -19287,7 +19359,7 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
 });
 
 test("the houses the Behemoth of the Rift burns as a town falls: drawn burning, the fire told and its crackle heard; then as the days go by a burnt shell, framed in new timbers, roofed again, and whole, the town told", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The lone orc out of the way; what's heard kept; three of the houses nearest the player
@@ -19360,7 +19432,7 @@ test("the houses the Behemoth of the Rift burns as a town falls: drawn burning, 
 });
 
 test("a town's siege engines drawn from their models: rolled on their wheels; the catapult's arm flung up and over, its pot of burning pitch flying from its bucket, bursting where it lands; the ballista's bolt loosed, gone from it till another's laid in; set alight and burnt through, each lies wrecked", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=5");
 
     // (Out in an open field, the lone orc out of the way: a catapult and a ballista as the town
@@ -19506,7 +19578,7 @@ test("a town's siege engines drawn from their models: rolled on their wheels; th
 });
 
 test("an invasion's raiders felled by the player: thanked for them by the town as it holds, by the name of their band, and played on", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
     // (The lone orc out of the way; as small an invasion as comes)
@@ -19558,7 +19630,7 @@ test("an invasion's raiders felled by the player: thanked for them by the town a
 });
 
 test("an invasion: the raiders' war horn blown twice where they come out, the town's answering from its line, and the call told; a fight's music round the player though none's after them; a share of them felled by the player, the town's lord thanks them in a panel of its own, the town's horn blown for it, as the bandits are cut down to the last, no one left to sound the retreat", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The lone orc out of the way; every horn blown heard, how long after, and whether from
@@ -19658,7 +19730,7 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
 });
 
 test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those of their lines who fight up close in one press, holding the line: none standing in their ranks with a foe near, none after one far from their place", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=2");
 
     // (The lone orc out of the way; every horn blown heard, how long after, and whether from

@@ -1442,15 +1442,33 @@ dismiss a specific purchased mount").
 
 A WebGL renderer with ACES tone mapping, a sky and fog, light from all round (below) and a sun
 whose shadow map follows the player (a little ahead of them, where more of the ground is in view,
-the further out the more: up to 12 of its 24 metres). The camera starts close behind the player,
-5.5 metres away (view.js `DISTANCE.start`): on a PC or a screen held sideways looking down 25
-degrees from the horizon, over their head, the way ahead in view above them (camera.js
-`PITCH.start`); on a phone held upright, 15 (`PITCH.upright`, `startPitch`), which the upright
-framing (below) makes about 21 degrees from 7 metres, low over their shoulder. (Lower still,
-sideways, the player's own head and shoulders hid what was straight ahead of them 5 to 25 metres
-off, and looking out to the horizon it drew twice as much a frame.) It zooms between 5 and 32
-metres, from any side (`yaw`: from the south, looking north, to start with), at the player's
-middle (0.8 metres up). On a phone held upright it looks down more steeply from further back
+the further out the more: up to 12 of its 24 metres). The camera starts behind the player, as
+far back as the screen's held (view.js `startDistance`):
+- **On a PC or a screen held sideways,** 10.5 metres back (`DISTANCE.start`), looking down 12
+  degrees from the horizon (camera.js `PITCH.start`) at a point 2.4 metres up, a little over their
+  head (view.js `LOOK_UP.sideways`, `lookUpFor`). So they stand in the lower middle of the
+  picture, the camera looks over their head at the ground from 7 metres ahead of them on, and a
+  name board over a door they've walked up to is in it: one 5.3 metres up (a barracks', on its
+  floor above) with them standing 5 metres from it, its top a tenth of the way down. (Before,
+  from 5.5 metres 25 degrees down at their middle, it was out of the picture, and so was the top
+  of the door. And from 5.5 metres 15 degrees down at their middle, their own head and shoulders
+  hid what was straight ahead of them 5 to 25 metres off.) It looks that far up from the start's
+  distance or further; nearer them, zoomed in or drawn in by a wall behind them, the point comes
+  down to their middle with the camera, so they're kept in the picture. And it looks that far up
+  looking out across the land, 12 degrees down or less (`LOOK_UP.level`); tilted down onto them,
+  the point comes down to their middle, there from 35 degrees down (`LOOK_UP.down`, the higher
+  view the camera once started in).
+- **On a phone held upright,** 5.5 metres back (`DISTANCE.upright`), looking down 15 degrees
+  (`PITCH.upright`, `startPitch`) at their middle (0.8 metres up: `LOOK_UP.middle`), which the
+  upright framing (below) makes about 21 degrees from 7 metres, low over their shoulder.
+- **Indoors,** at their middle, under the ceilings.
+
+It zooms between 5 and 32 metres, from any side (`yaw`: from the south, looking north, to start
+with). Looking out to the horizon draws more than looking down: in the browser tests' software
+renderer the start view draws about half the frames a second that 25 degrees down from 5.5
+metres did, nearly all of it the near world between 30 and 160 metres off (the ground, trees,
+undergrowth and water there), so the tests have more time (contribution.md). On a device that
+can't keep up, Adaptive draws fewer pixels. On a phone held upright it looks down more steeply from further back
 (below), measured against 35 degrees (view.js `PITCH`). **The opening fly-in** (view.js `fly`,
 `FLIGHT`; game.js `#flyIn`): as a player comes into a world (a new game, Continue or joining
 one; not after a death, a door or a dungeon, and only out of doors), the camera starts 110 metres
@@ -1915,11 +1933,11 @@ twice as far), and the browser's own menu never opens over the world or the worl
 image as" and the like: a player on a PC found it opening as they turned the camera with the
 right button: view.js, worldmap.js). On a PC, **Q** and **E** turn it while held (2 radians a
 second, times Camera turning: game.js `KEY_TURN`, `#keyTurn`), as a drag does, and **R** puts it
-back behind the player, the way they face, close behind them as it starts: swung round on its
-spring and tilted down as it starts for how the screen's held (25 degrees sideways, 15 upright:
-camera.js `recentre`, `startPitch`; it's done only once it's tilted too, not as soon as it's round),
-zoomed in to 5.5 m (view.js `DISTANCE.start`, `zoomToDistance`; in a dungeon's level, its own
-framing again). On a phone, so does a tap on the thumb stick (its knob,
+back behind the player, the way they face, as it starts: swung round on its spring and tilted
+down as it starts for how the screen's held (12 degrees sideways, 15 upright: camera.js
+`recentre`, `startPitch`; it's done only once it's tilted too, not as soon as it's round), and
+zoomed to where it starts (10.5 m sideways, 5.5 upright: view.js `startDistance`,
+`zoomToDistance`; in a dungeon's level, its own framing again). On a phone, so does a tap on the thumb stick (its knob,
 let go of within 0.3 s without sliding more than 12 px; anywhere it lands, with Stick under your
 thumb: steering.js `STICK_TAP`, `tapped`). A thumb come down on the knob holds it where it
 landed, pushed only as it slides, so the tap walks nowhere; down on the rim, it's pushed that way
@@ -7219,8 +7237,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   through a path's corners, staying where it's turned when they stand; dragged, turning and
   tilting, no lower than the view allows nor higher than 75 degrees, holding while they stand,
   not turning itself while held even as they walk, and swinging back behind them once let go and
-  walking; starting 25 degrees down (15 on a phone held upright: `startPitch`, framed to about 21
-  from 7 m) and looking up to 45 degrees over the horizon at most, easing
+  walking; starting 12 degrees down from 10.5 m, over the player's head (15 on a phone held
+  upright from 5.5 m: `startPitch`, `startDistance`, framed to about 21 from 7 m) and looking up
+  to 45 degrees over the horizon at most, easing
   back down to 10 once they walk if it was looking up; catching up without turning when the player
   comes back to life elsewhere, and leaning towards a foe. With the battle cam, in a fight
   (following turned off or on), swinging round to see them both 60 degrees from behind the

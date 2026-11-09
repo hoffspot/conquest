@@ -21,15 +21,16 @@
 
 /**
  * How far the camera looks down from the horizon (degrees; up, less than 0): where it starts,
- * close behind the player (from view.js DISTANCE.start; and put back there by R or a tap on the
- * thumb stick: recentre), on a screen held sideways or a computer's (`start`: over their head,
- * the way ahead in view above them) or a phone held upright (`upright`, which view.js PORTRAIT
- * frames more steeply from further back: about 21 degrees from 7 m, low over their shoulder:
- * startPitch); how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep
+ * behind the player (from view.js startDistance; and put back there by R or a tap on the thumb
+ * stick: recentre), on a screen held sideways or a computer's (`start`: from 10.5 m, over their
+ * head at what's a little over it, view.js LOOK_UP, the way ahead in view above them and the name
+ * board over a door they've walked up to in the picture) or a phone held upright (`upright`, which
+ * view.js PORTRAIT frames more steeply from further back: about 21 degrees from 7 m, low over their
+ * shoulder: startPitch); how far a drag can tilt it (up to 45 degrees above the horizon; the view may keep
  * it lower still: view.js lowestPitch, indoors); and walking, the least it eases back down to if
  * it was looking higher (to see where they're going), at `settle` a second.
  */
-export const PITCH = Object.freeze({ least: -45, start: 25, upright: 15, most: 75, walking: 10, settle: 2.5 });
+export const PITCH = Object.freeze({ least: -45, start: 12, upright: 15, most: 75, walking: 10, settle: 2.5 });
 
 /** Where the camera starts looking down from (degrees: PITCH), on a screen held upright or not. */
 export const startPitch = (upright) => (upright ? PITCH.upright : PITCH.start);

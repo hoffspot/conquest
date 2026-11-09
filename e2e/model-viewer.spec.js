@@ -914,7 +914,7 @@ test("every creature's and scene's own model in the picker, as it was made: thos
 
 test("every part of a model: the White Castle's keep's kit, its nine parts listed and laid out side by side, none on another, one shown alone, and as it was made, all in one place; the Order's, every helm and arm on the one body, each shown and hidden; the castle whole, too many parts to list", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await openViewer(page, "/model-viewer.html?prop=dungeon-prop-bellhaven-keep");
     await page.waitForFunction(() => window.lab.current().thing.read, null, { timeout: 60000 });
 
@@ -1582,7 +1582,7 @@ test("and a hell's six gorgers: each from one of Monster2's builds, its five cli
 
 test("and the Pit henchman and a hell's walkers: Monster3's five clips and Monster4's six, their one mesh each, each of their skins put on, and whose they are", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     // ([its catalog entry, its name, its clips, its triangles and bones, whose, its skins in the chooser])
     const TWO = [
@@ -1632,7 +1632,7 @@ async function drawnAsTheGame(page, kinds) {
 
 test("a hell's flayed as the game draws them: each its model, as tall as it's drawn, its claws or its staff, its lunge or what its free hand casts, curses, wails or drains, its other idle as it rests", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await drawnAsTheGame(page, [
         ["flayling", ["rake"], "lunge", "look", 1.85],
         ["cinderHusk", ["grasp", "lunge"], null, "look", 2],
@@ -1645,7 +1645,7 @@ test("a hell's flayed as the game draws them: each its model, as tall as it's dr
 
 test("a hell's gorgers as the game draws them: each its model, as tall as it's drawn, its club or its claws, its maw's bite or spew, its roar as it rests", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await drawnAsTheGame(page, [
         ["slagGorger", ["claw"], "spew", "roar", 2.06],
         ["forgeBrute", ["smash"], "bite", "roar", 2.24],
@@ -1658,7 +1658,7 @@ test("a hell's gorgers as the game draws them: each its model, as tall as it's d
 
 test("a hell's walkers and the Pit henchmen as the game draws them: each its model, as tall as it's drawn, its claws, no rest of its own; each kind of walker in its level's skins, the henchmen in any of their four", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await drawnAsTheGame(page, [
         ["henchman", ["rend"], null, null, 1.9],
         ["brimstoneWalker", ["rake"], null, null, 1.99],

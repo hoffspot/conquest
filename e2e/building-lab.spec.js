@@ -66,7 +66,7 @@ test("builds a street of every style of house in a few draw calls, of the house 
 });
 
 test("shows a street's houses as the Behemoth of the Rift leaves them, burning, then burnt out, then framed and roofed again, each in a few draw calls; and a village's, drawn in its chunks", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     // (What's drawn: the counts, and every part's name: its smoke, its fires, its materials)
     const seen = () =>
@@ -169,7 +169,7 @@ test("builds the taverns with their names and signs, the guild, the churches of 
 });
 
 test("builds every shop in its own look on lots of every size, of the house kit where it's read: its name over its door, its sign hung from its corner post, its awnings", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(300000);
     await page.goto("/building-lab.html?seed=7&show=shops");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 150000 });
 

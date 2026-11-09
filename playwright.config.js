@@ -9,8 +9,11 @@ export default defineConfig({
     // Without a GPU, drawing is done in software, which is slow: give each test time, and on CI
     // run one at a time so they don't slow each other down (CI splits them between jobs run side
     // by side instead: --shard). Every test has a page of its own, in a browser of its own
-    // (e2e/fixtures.js), so any of them can run alongside any other, even those in the same file
-    timeout: 120000,
+    // (e2e/fixtures.js), so any of them can run alongside any other, even those in the same file.
+    // (Three minutes, and those that set their own twice as long as they take on CI or more,
+    // e2e/durations.json: CI's machines can be 1.7 times as slow from one run to the next, and the
+    // start view looks out across the land, which is slow to draw in software)
+    timeout: 180000,
     workers: process.env.CI ? 1 : undefined,
     fullyParallel: true,
     reporter: process.env.CI ? "github" : "list",

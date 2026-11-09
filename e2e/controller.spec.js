@@ -121,7 +121,7 @@ async function playing(page, address) {
 
 test("a game controller plays: walks, looks, talks to who's in front, the Action Bar on R2, a wheel, the Pack and the menu", async ({ page }) => {
     // (Walking up to the crier takes a while, a frame or two a second without a GPU)
-    test.setTimeout(300000);
+    test.setTimeout(480000);
 
     const pad = await standIn(page);
 
@@ -160,12 +160,14 @@ test("a game controller plays: walks, looks, talks to who's in front, the Action
 
         game.host.command(game.me, { type: "move", to: [Math.floor(them.x) + 1, Math.floor(them.y) + 1] });
     }, crier);
+    // (Walked there a frame at a time, no more than a tenth of a second each, every frame drawn in
+    // software looking out across the land: a while)
     await page.waitForFunction((id) => {
         const game = window.pellagos.game;
         const [me, them] = [game.battle.actor(game.me), game.battle.actor(id)];
 
         return Math.hypot(them.x - me.x, them.y - me.y) < 4 && !me.path.length;
-    }, crier, { timeout: 60000 });
+    }, crier, { timeout: 180000 });
     await page.evaluate((id) => {
         const game = window.pellagos.game;
         const [me, them] = [game.battle.actor(game.me), game.battle.actor(id)];
@@ -273,7 +275,7 @@ test("a game controller works the windows: Multiplayer, a world's code picked a 
 });
 
 test("a game controller's buttons are set on the Bindings page: chosen, the button pressed, taken from what had it (and said), and set back", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     const pad = await standIn(page);
 

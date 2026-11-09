@@ -67,7 +67,7 @@ const ridden = (page) =>
     });
 
 test("buys a horse from the stablemaster, calls it up with its whistle, rides it at a trot, gets down, and has it brought back once it's fallen", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
 
     // (The home town's stablemaster, out before its stable)
