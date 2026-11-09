@@ -17865,7 +17865,7 @@ test("walking into the ring of light round the pin's foot takes the pin away, to
     expect(seen.kept).toEqual(["pin", null, "pin", null]);
 });
 
-test("the way to the pin is kept as the player runs along it: never gone, nor cut short of where it went, fading in from where they've come to, its pulses running on from them, wisps rising off it", async ({ page }) => {
+test("the way to the pin is kept as the player runs along it: never gone, nor cut short of where it went, nor back the way they came, fading in from where they've come to, its pulses running on from them, wisps rising off it", async ({ page }) => {
     // (A long run, a tenth of a second at a time: more than the usual time)
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -17894,6 +17894,8 @@ test("the way to the pin is kept as the player runs along it: never gone, nor cu
 
         const steps = [];
         const marks = game.pinMarks;
+        // (How much further from the pin than they are the way goes at most, metres)
+        const back = () => Math.max(0, ...marks.middles.map(([x, , z]) => Math.hypot(x - pin[0], z - pin[1]) - Math.hypot(me.x - pin[0], me.y - pin[1])));
 
         game.journeyTo(pin);
 
@@ -17907,10 +17909,21 @@ test("the way to the pin is kept as the player runs along it: never gone, nor cu
 
             const end = marks.middles.at(-1);
 
-            steps.push({ shown: marks.line.visible, short: end ? Math.hypot(end[0] - pin[0], end[2] - pin[1]) : null, from: marks.from.value, moved: Math.hypot(me.x - before[0], me.y - before[1]), pulsed: marks.pulse.value - pulse, wisps, off: Math.hypot(me.x - pin[0], me.y - pin[1]) });
+            steps.push({ shown: marks.line.visible, short: end ? Math.hypot(end[0] - pin[0], end[2] - pin[1]) : null, from: marks.from.value, moved: Math.hypot(me.x - before[0], me.y - before[1]), pulsed: marks.pulse.value - pulse, wisps, off: Math.hypot(me.x - pin[0], me.y - pin[1]), back: back() });
         }
 
-        return { steps, speed: WAY_LINE.pulse.speed };
+        // (Stopped there, a second of frames drawn as they come)
+        game.journey = null;
+        me.order = null;
+
+        const stopped = [];
+
+        for (let k = 0; k < 30; k++) {
+            await game.advance(1 / 30, { render: k % 10 === 9, wait: true });
+            stopped.push({ shown: marks.line.visible, back: back() });
+        }
+
+        return { steps, stopped, speed: WAY_LINE.pulse.speed };
     });
 
     const steps = run.steps;
@@ -17932,6 +17945,12 @@ test("the way to the pin is kept as the player runs along it: never gone, nor cu
     expect(steps.every(({ pulsed }) => Math.abs(pulsed - 0.1 * run.speed) < 1e-6 || pulsed < 0)).toBe(true);
     // And wisps rising off it
     expect(Math.min(...far.map(({ wisps }) => wisps))).toBeGreaterThan(5);
+
+    // Never back the way they came, running or stopped: not round by the navigation mesh's tiles
+    // in so far, while those round them aren't
+    expect(Math.max(...far.map(({ back }) => back)), "(running)").toBeLessThan(15);
+    expect(run.stopped.every(({ shown }) => shown)).toBe(true);
+    expect(Math.max(...run.stopped.map(({ back }) => back)), "(stopped)").toBeLessThan(15);
 });
 
 test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {

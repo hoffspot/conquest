@@ -439,8 +439,10 @@ const ARRIVE_WITHIN = 140;
 // point on the mesh within `snap` metres of there; found across the world again once they're
 // this far off it (metres), at most this often (seconds); the way drawn over the mesh kept while
 // they're within `kept` metres of it (looked for no further along it than they could have come
-// since it was laid: `since` metres), unless one found anew goes `longer` metres further
-const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, since: 20, longer: 2 });
+// since it was laid: `since` metres), unless one found anew goes `longer` metres further; and
+// none over the mesh that's longer than `detour` times as far along the way across the world as
+// it goes and `slack` metres (one that goes round by the tiles in so far, back and on again)
+const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, since: 20, longer: 2, detour: 1.5, slack: 20 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
@@ -7535,7 +7537,9 @@ export class Game {
             const join = navigation.nearestIn(pointAlong(rest, reach), PIN_WAY.snap);
             const found = join ? navigation.wayIn(at, join) : [];
 
-            if (found.length > 1 && Math.hypot(found.at(-1)[0] - join[0], found.at(-1)[1] - join[1]) < 1) {
+            // (Not one that goes round far further than the way across the world does: over the
+            // tiles in so far, back the way they came and on again, while those round them aren't)
+            if (found.length > 1 && Math.hypot(found.at(-1)[0] - join[0], found.at(-1)[1] - join[1]) < 1 && lengthOf([[...at], ...found.slice(1)]) <= reach * PIN_WAY.detour + PIN_WAY.slack) {
                 near = { way: [[...at], ...found.slice(1).map(([x, y]) => [x, y])], reach };
                 break;
             }
