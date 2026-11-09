@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; every people's taverns', halls', temples', smithies' and shops' furniture, lights, tableware and wall dressing from Dragon Motion's Medieval Props Kit from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; every people's taverns', halls', temples', smithies' and shops' furniture, lights, tableware and wall dressing, and the heroes' kite shields, tower shields and swords in each faction's designs, from Dragon Motion's Medieval Props Kit from Fab (`client/models/gear/LICENSE.md` for the shields and swords); and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -328,6 +328,32 @@ cage in a kennel and shackles on the walls where the captive are kept.
   taprooms and rooms upstairs set out, the flames where the candles are, the tones, a quantized
   piece read whole, the licensed file's nodes and its one material), and
   `test/furnishings.test.js` (only the registered kits' pieces among the licensed props).
+
+## Gear in faction designs
+
+A bought pack's shields and weapons can be the designs the heroes' own come in. Dragon Motion's
+Medieval Props Kit's 25 shields and 2 swords are the kite shields', tower shields' and swords'
+designs, each a faction's: a people's, the sellswords' or the Order of the Bell's
+(`client/js/core/gear.js` `DESIGNS`, set by their colours and arms against each people's livery).
+
+- **A file each, read when it's held.** Each design is put in a `.blend` of its own and through
+  the pipeline (KTX2 at 512 pixels, normals 256), scrambled into `client/models/gear/`; its
+  catalog entry (`gear-medieval-shields`, `gear-medieval-swords`) lists every file, and
+  `characters/items.js` `HELD_MODELS` names its file (`file`), where it's held (`grip`, measured on
+  its back or its hilt), and how much smaller it's drawn (`scale`: the long kites). The game's own
+  shield or sword is drawn in its place till it's read, and without the licensed models.
+- **Rolled by its maker.** `rollGear`'s `maker` (whose make it is: the fallen soldier's people or
+  band, the shopkeeper's people, the land's people where a chest, cache, lair or dungeon is, the
+  Order in their keep) chooses among that maker's designs, rolled last; a maker with none gives the
+  game's own look (`own`, every kind's first, so pieces made before keep it). The look is kept with
+  the piece, sent with what's worn and held (`Progress.worn`, `wielded`), and said on its card.
+- **Each design an item of its own** (`characters/equipment.js`, from `characters/liveries.js`
+  `KIT_DESIGNS`): held, slung and put away as its kind is; a slung shield is fitted to its shape
+  again once it's read (`Character` `slung`'s `box`).
+- **The pack's "RMA" textures are packed occlusion, roughness, metal** (red, green, blue), whatever
+  their name says: read the other way round, everything is unlit in shade and half metal.
+- **Tests:** `test/gear-designs.test.js` (the designs and their makers, the rolls, every place
+  that makes them, kept and sent, drawn and slung, the files and the cards).
 
 ## The house kit
 

@@ -20,7 +20,7 @@ import { makeUnique } from "../client/js/core/rare.js";
 const LOOKS = GEAR.mace.looks;
 
 describe("a mace's looks", () => {
-    it("rolls one of its five looks on each mace, each about as often as the others; none on a sword, nor on the Prior's Vespers, which looks as its own", () => {
+    it("rolls one of its five looks on each mace, each about as often as the others; none on a sword no one in particular made (core/gear.js DESIGNS: test/gear-designs.test.js), nor on the Prior's Vespers, which looks as its own", () => {
         const counts = Object.fromEntries(LOOKS.map((look) => [look, 0]));
 
         assert.equal(LOOKS.length, 5);
@@ -67,7 +67,8 @@ describe("a mace's looks", () => {
         progress.gear.mainHand = progress.pack.find(Boolean);
         assert.deepEqual(progress.wielded(), { id: "mace", look: "studded" });
         assert.equal(gearLook({ id: "mace" }), LOOKS[0]);
-        assert.equal(gearLook({ id: "sword" }), null);
+        assert.equal(gearLook({ id: "sword" }), "own");
+        assert.equal(gearLook({ id: "potion" }), null);
     });
 
     it("holds each look as its CC0 mace's model, the mace made here for one without; the Prior's Vespers as his own", () => {

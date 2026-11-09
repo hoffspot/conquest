@@ -8,7 +8,7 @@
 // it's bound to its finder (core/rare.js UNIQUES). Pure: from the player's progress
 // (core/progress.js), no DOM.
 
-import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearLook, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
+import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearLook, handsOf, levelFactor, levelOf, makersOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
 import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, gradeWords, WARD_CHARGE } from "../core/legendary.js";
@@ -20,15 +20,51 @@ import { WEAPONS } from "../core/weapons.js";
 /** Each make's name as shown (a common one, none), rarest last; and a unique's (core/rare.js). */
 export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", rare: "Rare", veryRare: "Very rare", legendary: "Legendary", unique: "Unique" });
 
-// What each of a mace's looks is like, as its card says (core/gear.js GEAR mace `looks`: the CC0
-// maces' models, characters/items.js HELD_MODELS)
+// What each of a piece's looks is like, as its card says (core/gear.js GEAR `looks`: a mace's, the
+// CC0 maces' models; a sword's or shield's design, DESIGNS, one of Dragon Motion's: characters/items.js
+// HELD_MODELS), by its kind
 const LOOK_WORDS = Object.freeze({
-    ornate: "an ornate mace: a flanged steel head on a twisted haft",
-    studded: "a studded mace: a great square head, its grip bound in red",
-    star: "a star-headed mace, its haft banded in violet",
-    bronze: "a bronze-headed mace, spiked, on a dark haft",
-    morningStar: "a morning star: a spiked steel ball on a long haft",
+    mace: Object.freeze({
+        ornate: "an ornate mace: a flanged steel head on a twisted haft",
+        studded: "a studded mace: a great square head, its grip bound in red",
+        star: "a star-headed mace, its haft banded in violet",
+        bronze: "a bronze-headed mace, spiked, on a dark haft",
+        morningStar: "a morning star: a spiked steel ball on a long haft",
+    }),
+    sword: Object.freeze({ knightly: "a knight's sword, long in the grip, a green stone in its pommel", blackened: "a sword of blackened iron, its grip bound in brown leather" }),
+    kiteShield: Object.freeze({
+        azureCross: "a gold cross on blue",
+        dragonCrown: "a green dragon over a gold crown, on red",
+        lilyCross: "a black cross between gold lilies on blue",
+        paleCross: "a pale cross on bleached linen",
+        ringCross: "a cross in a ring, on silver",
+        lilies: "black lilies strewn on saffron",
+        whiteCross: "a white cross, black and blue",
+        roundels: "red roundels and a gold cross, quartered black and red",
+        silverScroll: "silver scrollwork on white",
+        seaScroll: "dark scrollwork on sea-green",
+        ironBands: "iron bands about a boss, on black",
+        bendy: "teal and gold bends about a boss",
+        swordLily: "a gold lily and a sword, red and gold",
+        redDragon: "a gold dragon on red, bordered green",
+        etched: "etched steel about a boss",
+        crowned: "a gold crown, quartered blue and white",
+        blackBeast: "a black beast in a blue quarter, on red",
+        battle: "knights in battle, painted",
+        darkDamask: "dark damask",
+        verdigris: "a verdigris damask",
+    }),
+    towerShield: Object.freeze({
+        paintedFigures: "faded painted figures",
+        dragons: "red dragons and a crown on green and gold",
+        heraldry: "small coats of arms on a black lattice",
+        blackScroll: "silver scrollwork on black",
+        lionAxes: "a red lion and red axes, quartered red and blue",
+    }),
 });
+
+// Whose make a design is, as its card says (core/gear.js DESIGNS)
+const MAKER_WORDS = Object.freeze({ human: "the humans'", elf: "the elves'", darkElf: "the dark elves'", cat: "the cat-folk's", lizard: "the lizard-folk's", orc: "the orcs'", bell: "the Order of the Bell's", sellswords: "the sellswords'" });
 
 /**
  * How rare a thing's shown as, its colour's name (styles.css `.rarity-…`): a unique's own
@@ -205,9 +241,14 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     }
 
     // (Which of its kind's looks it has, one that comes in several: a mace's, core/gear.js GEAR
-    // `looks`; a unique looks as its own)
-    if (def.looks && !unique) {
-        lines.push({ text: `Looks like ${LOOK_WORDS[gearLook(item)] ?? "its kind"}`, tone: "note" });
+    // `looks`; a sword's or shield's design, and whose make it is, DESIGNS; none for one in the
+    // game's own make; a unique looks as its own)
+    const look = def.looks && !unique ? gearLook(item) : null;
+
+    if (look && look !== "own") {
+        const makers = makersOf(item.id, look).map((maker) => MAKER_WORDS[maker] ?? maker);
+
+        lines.push({ text: `Looks like ${LOOK_WORDS[item.id]?.[look] ?? "its kind"}${makers.length ? `, of ${makers.join(" or ")} make` : ""}`, tone: "note" });
     }
 
     // What it does

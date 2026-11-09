@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "4849be616d",
+    release: "ff023b50ba",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3715,6 +3715,155 @@ export const ASSETS = Object.freeze({
                     "kit@0,4"
                 ]
             }
+        },
+        "gear-medieval-shields": {
+            "tier": "demand",
+            "label": "The heroes' kite and tower shields in each people's, the sellswords' and the Order of the Bell's designs, a file each, read only when one's held (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/gear/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/gear/medieval-shield-01.bin",
+                    "hash": "3ecdc65d1d",
+                    "bytes": 146244
+                },
+                {
+                    "path": "models/gear/medieval-shield-02.bin",
+                    "hash": "4bf1c7d779",
+                    "bytes": 149468
+                },
+                {
+                    "path": "models/gear/medieval-shield-03.bin",
+                    "hash": "01a3ca2646",
+                    "bytes": 149340
+                },
+                {
+                    "path": "models/gear/medieval-shield-04.bin",
+                    "hash": "4abbcc1499",
+                    "bytes": 162676
+                },
+                {
+                    "path": "models/gear/medieval-shield-05.bin",
+                    "hash": "b01f9abf06",
+                    "bytes": 152828
+                },
+                {
+                    "path": "models/gear/medieval-shield-06.bin",
+                    "hash": "337abe51f9",
+                    "bytes": 149540
+                },
+                {
+                    "path": "models/gear/medieval-shield-07.bin",
+                    "hash": "2b43276ea9",
+                    "bytes": 156604
+                },
+                {
+                    "path": "models/gear/medieval-shield-08.bin",
+                    "hash": "a5de058eac",
+                    "bytes": 155820
+                },
+                {
+                    "path": "models/gear/medieval-shield-09.bin",
+                    "hash": "a1bec4dd43",
+                    "bytes": 144436
+                },
+                {
+                    "path": "models/gear/medieval-shield-10.bin",
+                    "hash": "1f45d0ceb4",
+                    "bytes": 150596
+                },
+                {
+                    "path": "models/gear/medieval-shield-11.bin",
+                    "hash": "132767d852",
+                    "bytes": 144596
+                },
+                {
+                    "path": "models/gear/medieval-shield-12.bin",
+                    "hash": "10aecf0e17",
+                    "bytes": 153468
+                },
+                {
+                    "path": "models/gear/medieval-shield-13.bin",
+                    "hash": "c3467eebdf",
+                    "bytes": 159504
+                },
+                {
+                    "path": "models/gear/medieval-shield-14.bin",
+                    "hash": "4b98993758",
+                    "bytes": 136732
+                },
+                {
+                    "path": "models/gear/medieval-shield-15.bin",
+                    "hash": "3faf95b38f",
+                    "bytes": 124988
+                },
+                {
+                    "path": "models/gear/medieval-shield-16.bin",
+                    "hash": "eca6e23907",
+                    "bytes": 139404
+                },
+                {
+                    "path": "models/gear/medieval-shield-17.bin",
+                    "hash": "8b97de905a",
+                    "bytes": 123276
+                },
+                {
+                    "path": "models/gear/medieval-shield-18.bin",
+                    "hash": "2a587ae4bc",
+                    "bytes": 122092
+                },
+                {
+                    "path": "models/gear/medieval-shield-19.bin",
+                    "hash": "fb5570cf5f",
+                    "bytes": 137412
+                },
+                {
+                    "path": "models/gear/medieval-shield-20.bin",
+                    "hash": "a3240de39f",
+                    "bytes": 136812
+                },
+                {
+                    "path": "models/gear/medieval-shield-21.bin",
+                    "hash": "289e770bcb",
+                    "bytes": 135252
+                },
+                {
+                    "path": "models/gear/medieval-shield-22.bin",
+                    "hash": "dad1e70ab2",
+                    "bytes": 136628
+                },
+                {
+                    "path": "models/gear/medieval-shield-23.bin",
+                    "hash": "97325e3700",
+                    "bytes": 146452
+                },
+                {
+                    "path": "models/gear/medieval-shield-24.bin",
+                    "hash": "aea3c01a9d",
+                    "bytes": 143332
+                },
+                {
+                    "path": "models/gear/medieval-shield-25.bin",
+                    "hash": "29b2f7f005",
+                    "bytes": 155252
+                }
+            ]
+        },
+        "gear-medieval-swords": {
+            "tier": "demand",
+            "label": "The heroes' swords in the humans', the orcs', the sellswords' and the Order of the Bell's designs, a file each, read only when one's held (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/gear/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/gear/medieval-sword-01.bin",
+                    "hash": "ff54080a1e",
+                    "bytes": 101008
+                },
+                {
+                    "path": "models/gear/medieval-sword-02.bin",
+                    "hash": "7e76babed1",
+                    "bytes": 110976
+                }
+            ]
         },
         "dungeon-prop-mace-studded": {
             "tier": "demand",
