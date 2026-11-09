@@ -13,7 +13,8 @@
 import * as THREE from "three";
 import { BeastAvatar } from "../beasts/beast.js";
 import { modelOf, wantClips, wantModel } from "../beasts/model.js";
-import { MOUNTING, RIDER_CLIPS, RiderClips, SEAT } from "../characters/riding.js";
+import { closeHand } from "../characters/grip.js";
+import { MOUNTING, pinchOf, reinGrips, RIDER_CLIPS, RiderClips, SEAT } from "../characters/riding.js";
 import { HORSE_MODEL, MANES, MOUNT } from "../core/mounts.js";
 
 /**
@@ -40,13 +41,13 @@ const MANE_MATERIALS = Object.freeze({ light: "MI_Hair_White", dark: "MI_Mane02_
 export const STIRRUPS = Object.freeze({ ball: 0.35, up: 0.04, treads: 12, into: 0.25, outOf: 0.3 });
 
 /**
- * The reins' ends in their rider's hands: the bones the horse's reins hang from at their ends
- * (`bones`, by the side: the horse's left its rider's left), each put in its hand's palm (`palm` of
- * the way from the wrist to the middle finger's knuckle) as far as the rider's feet are in the
- * stirrups (getting up, riding, getting down: STIRRUPS); else hanging as the horse's clips have
- * them, on its neck before the saddle.
+ * The reins in their rider's hands: the bones the horse's reins hang from at their ends (`bones`,
+ * by the side: the horse's left its rider's left), each put where its hand holds it, under the
+ * thumb of a hand closed on it (characters/riding.js REIN_HOLD, pinchOf), as far as the rider's
+ * feet are in the stirrups (getting up, riding, getting down: STIRRUPS), the hands closed as far;
+ * else the reins hang as the horse's clips have them, on its neck before the saddle.
  */
-export const REINS = Object.freeze({ bones: Object.freeze({ Left: "Reins_Bn_Hand_L", Right: "Reins_Bn_Hand_R" }), palm: 0.5 });
+export const REINS = Object.freeze({ bones: Object.freeze({ Left: "Reins_Bn_Hand_L", Right: "Reins_Bn_Hand_R" }) });
 
 const ease = (u) => {
     const t = Math.min(1, Math.max(0, u));
@@ -61,8 +62,7 @@ const _vertex = new THREE.Vector3();
 const _ankle = new THREE.Vector3();
 const _toes = new THREE.Vector3();
 const _ball = new THREE.Vector3();
-const _wrist = new THREE.Vector3();
-const _knuckle = new THREE.Vector3();
+const _pinch = new THREE.Vector3();
 
 // A saddle's stirrups' treads: the lowest of its vertices on each side as it's made (the horse's
 // left its +x), by its geometry ({ Left, Right }: vertex indices)
@@ -104,6 +104,8 @@ export class Mounts {
         this.fx = fx;
         this.sound = sound;
         this.horses = new Map();
+        /** Each rider's hands' grips on the reins, fitted to their hands (by their body's rig). */
+        this.grips = new WeakMap();
         this.clips = null;
         this.asked = false;
     }
@@ -231,7 +233,8 @@ export class Mounts {
             : 0;
     }
 
-    // The reins' ends put in their rider's hands (REINS), as far as they're in the saddle
+    // The reins' ends put in their rider's hands, under the thumb (REINS: pinchOf), as far as
+    // they're in the saddle
     #reins(one, mount, avatar, since) {
         const amount = this.#inSaddle(one, mount, since);
 
@@ -241,14 +244,27 @@ export class Mounts {
 
         const rig = avatar.character.rig;
 
+        avatar.object.updateMatrixWorld(true);
+
         for (const [side, end] of Object.entries(one.reins)) {
-            rig.bone(`${side}Hand`).getWorldPosition(_wrist);
-            rig.bone(`${side}HandMiddle1`).getWorldPosition(_knuckle);
-            _wrist.lerp(_knuckle, REINS.palm);
-            end.bone.parent.worldToLocal(_wrist);
-            end.bone.position.lerp(_wrist, amount);
+            pinchOf(rig, side, _pinch);
+            end.bone.parent.worldToLocal(_pinch);
+            end.bone.position.lerp(_pinch, amount);
             end.bone.updateMatrixWorld(true);
         }
+    }
+
+    // A body's hands closed round its reins (REIN_HOLD), fitted to its hands once: what it holds
+    // in a hand (a torch at night) closed round as that's held instead
+    #hands(character) {
+        let grips = this.grips.get(character.rig);
+
+        if (!grips) {
+            grips = reinGrips(character);
+            this.grips.set(character.rig, grips);
+        }
+
+        return { Left: character.holds?.Left?.grip ?? grips.Left, Right: character.holds?.Right?.grip ?? grips.Right };
     }
 
     // A rider's feet put in the stirrups (STIRRUPS), up on a horse drawn from its model, posed from
@@ -353,7 +369,20 @@ export class Mounts {
             // (Riding: their seat under the horse's CG bone as it rises and falls with its gait)
             const lift = mount.phase === "riding" ? this.#seat(one) : 0;
 
-            actions.setRiding?.((rig) => clips.pose(rig, posed?.length ? posed : [{ clip: "Idle", weight: 1, time: since }], lift));
+            // (Their hands closed on the reins as far as they're in the saddle: REINS)
+            const holding = this.#inSaddle(one, mount, since);
+            const hands = holding > 0 ? this.#hands(avatar.character) : null;
+
+            actions.setRiding?.((rig) => {
+                const done = clips.pose(rig, posed?.length ? posed : [{ clip: "Idle", weight: 1, time: since }], lift);
+
+                if (done && hands) {
+                    closeHand(rig, "Left", hands.Left, holding);
+                    closeHand(rig, "Right", hands.Right, holding);
+                }
+
+                return done;
+            });
 
             return;
         }

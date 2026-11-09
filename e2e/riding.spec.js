@@ -36,8 +36,10 @@ const play = (page, seconds) =>
 // from its model and the rider from their clips, how far under the ground it is, how high the
 // rider's hips and feet are over the ground they're over (and how high their hips are standing,
 // as their body's made: `stands`), how far the balls of their feet are from where they go in the
-// stirrups, and how far the reins' ends are from their palms (metres; null, drawn without its
-// model)
+// stirrups, how far the reins' ends are from where they're held, under the thumbs (riding.js
+// pinchOf), and how far each hand's closed (its index finger's tip as far from the wrist as a
+// share of how far it is with the hand open: `closed`, the more open of the two; metres; null,
+// drawn without its model)
 const ridden = (page) =>
     page.evaluate(async () => {
         const THREE = await import("three");
@@ -49,8 +51,13 @@ const ridden = (page) =>
         const ground = avatar.standing ?? avatar.object.position.y;
         const stirrups = game.mounts.stirrupsOf(game.me);
         const reins = game.mounts.reinsOf(game.me);
-        const { REINS, STIRRUPS } = await import("/js/world/mounts3d.js");
-        const palm = (side) => avatar.character.rig.bone(`${side}Hand`).getWorldPosition(new THREE.Vector3()).lerp(avatar.character.rig.bone(`${side}HandMiddle1`).getWorldPosition(new THREE.Vector3()), REINS.palm);
+        const { STIRRUPS } = await import("/js/world/mounts3d.js");
+        const { pinchOf } = await import("/js/characters/riding.js");
+        const rig = avatar.character.rig;
+        const tip = (name) => rig.bones[rig.index.get(name)].localToWorld(rig.tails[rig.index.get(name)].clone().sub(rig.heads[rig.index.get(name)]));
+        const closed = (side) => tip(`${side}HandIndex3`).distanceTo(rig.bone(`${side}Hand`).getWorldPosition(new THREE.Vector3())) / rig.tails[rig.index.get(`${side}HandIndex3`)].distanceTo(rig.heads[rig.index.get(`${side}Hand`)]);
+
+        avatar.object.updateMatrixWorld(true);
         const ball = (side) => avatar.character.rig.bone(`${side}ToeBase`).getWorldPosition(new THREE.Vector3()).lerp(avatar.character.rig.bone(`${side}Foot`).getWorldPosition(new THREE.Vector3()), STIRRUPS.ball);
 
         return {
@@ -67,7 +74,8 @@ const ridden = (page) =>
             posed: one?.beast.plan.posed?.map(({ clip, weight }) => [clip, +weight.toFixed(2)]) ?? [],
             bar: !document.querySelector("#playerplate .bar.mount").hidden,
             stirrups: stirrups ? Math.max(...["Left", "Right"].map((side) => +ball(side).distanceTo(stirrups[side]).toFixed(3))) : null,
-            reins: reins ? Math.max(...["Left", "Right"].map((side) => +reins[side].distanceTo(palm(side)).toFixed(3))) : null,
+            reins: reins ? Math.max(...["Left", "Right"].map((side) => +reins[side].distanceTo(pinchOf(rig, side)).toFixed(3))) : null,
+            closed: Math.max(...["Left", "Right"].map((side) => +closed(side).toFixed(2))),
             stamina: [+me.stamina.toFixed(1), me.maxStamina],
             // (What the rider and the horse were doing, told when a check fails: how long into its
             // phase, whether the rider's posed from their clips or sat as on a bench, and where
@@ -174,9 +182,11 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     if (licensedModelsHere()) {
         expect(sat.model).toBe(true);
         expect(sat.clips).toBe(true);
-        // (Their feet in the stirrups, standing, and the reins in their hands)
+        // (Their feet in the stirrups, standing, and the reins in their hands, closed on them:
+        // a loose fist, the index finger's tip brought back to about half its reach)
         expect(sat.stirrups, JSON.stringify(sat)).toBeLessThan(0.02);
         expect(sat.reins, JSON.stringify(sat)).toBeLessThan(0.02);
+        expect(sat.closed, JSON.stringify(sat)).toBeLessThan(0.7);
     }
 
     // Off at a walk: carried at a trot, twice as fast and more as walking on foot, their feet in
@@ -219,6 +229,7 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
         expect(trotting.posed.some(([clip, weight]) => clip === "Trot" && weight > 0.5)).toBe(true);
         expect(trotting.stirrups, JSON.stringify(trotting)).toBeLessThan(0.02);
         expect(trotting.reins, JSON.stringify(trotting)).toBeLessThan(0.02);
+        expect(trotting.closed, JSON.stringify(trotting)).toBeLessThan(0.7);
     }
 
     // Off at a run: carried at a gallop, far faster than they'd run on foot (core/battle.js
@@ -236,6 +247,7 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
         expect(galloping.posed.some(([clip, weight]) => clip === "Sprint" && weight > 0.5)).toBe(true);
         expect(galloping.stirrups, JSON.stringify(galloping)).toBeLessThan(0.02);
         expect(galloping.reins, JSON.stringify(galloping)).toBeLessThan(0.02);
+        expect(galloping.closed, JSON.stringify(galloping)).toBeLessThan(0.7);
     }
 
     // Down again with the whistle: it sinks away, and it's gone
