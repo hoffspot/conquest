@@ -63,6 +63,20 @@ const ridden = (page) =>
             bar: !document.querySelector("#playerplate .bar.mount").hidden,
             stirrups: stirrups ? Math.max(...["Left", "Right"].map((side) => +ball(side).distanceTo(stirrups[side]).toFixed(3))) : null,
             stamina: [+me.stamina.toFixed(1), me.maxStamina],
+            // (What the rider and the horse were doing, told when a check fails: how long into its
+            // phase, whether the rider's posed from their clips or sat as on a bench, and where
+            // the rider, the ground they're over and the horse are drawn)
+            state: {
+                since: me.mount ? game.battle.time - me.mount.at : null,
+                quick: me.mount?.quick ?? null,
+                riding: Boolean(avatar.actions.riding),
+                seated: [avatar.actions.seated, one?.seated ?? null],
+                every: avatar.every,
+                heights: [avatar.object.position.y, avatar.standing ?? null, one?.beast.object.position.y ?? null].map((y) => (y === null ? null : +y.toFixed(3))),
+                level: one?.beast.level ?? null,
+                saddle: one?.saddle?.parent?.name ?? null,
+                time: game.battle.time,
+            },
         };
     });
 
@@ -146,16 +160,16 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
 
     const sat = await ridden(page);
 
-    expect(sat.phase).toBe("riding");
+    expect(sat.phase, JSON.stringify(sat)).toBe("riding");
     expect(sat.under).toBeLessThan(0.05);
-    expect(sat.hips).toBeGreaterThan(1.2);
+    expect(sat.hips, JSON.stringify(sat)).toBeGreaterThan(1.2);
     expect(sat.feet).toBeGreaterThan(0.4);
 
     if (licensedModelsHere()) {
         expect(sat.model).toBe(true);
         expect(sat.clips).toBe(true);
         // (Their feet in the stirrups, standing)
-        expect(sat.stirrups).toBeLessThan(0.02);
+        expect(sat.stirrups, JSON.stringify(sat)).toBeLessThan(0.02);
     }
 
     // Off at a walk: carried at a trot, twice as fast and more as walking on foot, their feet in
@@ -191,12 +205,12 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     const trot = await going(false, 1);
     const trotting = await ridden(page);
 
-    expect(trotting.hips).toBeGreaterThan(1.2);
+    expect(trotting.hips, JSON.stringify(trotting)).toBeGreaterThan(1.2);
     expect(trot.speed).toBeGreaterThan(2 * trot.walk);
 
     if (trotting.model) {
         expect(trotting.posed.some(([clip, weight]) => clip === "Trot" && weight > 0.5)).toBe(true);
-        expect(trotting.stirrups).toBeLessThan(0.02);
+        expect(trotting.stirrups, JSON.stringify(trotting)).toBeLessThan(0.02);
     }
 
     // Off at a run: carried at a gallop, far faster than they'd run on foot (core/battle.js
@@ -208,11 +222,11 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     expect(gallop.running).toBe(true);
     expect(gallop.speed).toBeGreaterThan(1.5 * gallop.run);
     expect(galloping.stamina[0]).toBeGreaterThanOrEqual(before[0]);
-    expect(galloping.hips).toBeGreaterThan(1.2);
+    expect(galloping.hips, JSON.stringify(galloping)).toBeGreaterThan(1.2);
 
     if (galloping.model) {
         expect(galloping.posed.some(([clip, weight]) => clip === "Sprint" && weight > 0.5)).toBe(true);
-        expect(galloping.stirrups).toBeLessThan(0.02);
+        expect(galloping.stirrups, JSON.stringify(galloping)).toBeLessThan(0.02);
     }
 
     // Down again with the whistle: it sinks away, and it's gone
@@ -226,9 +240,9 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
 
     const gone = await ridden(page);
 
-    expect(gone.phase).toBe(null);
+    expect(gone.phase, JSON.stringify(gone)).toBe(null);
     expect(gone.drawn).toBe(false);
-    expect(gone.hips).toBeLessThan(1.2);
+    expect(gone.hips, JSON.stringify(gone)).toBeLessThan(1.2);
     expect(gone.bar).toBe(false);
 
     // Called again and struck down under its rider: thrown, the horse fallen on its whistle, and
