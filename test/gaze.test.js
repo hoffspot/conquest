@@ -126,6 +126,23 @@ describe("a character's gaze", () => {
         assert.ok(Math.abs(turned.up - head.up) < 3, `head drawn up ${turned.up.toFixed(1)}° for ${head.up.toFixed(1)}°`);
     });
 
+    it("looks up or down at someone standing close as if they were a metre off: one a little taller beside it isn't craned up at", () => {
+        const character = someone();
+        const eyes = character.height * 0.935;
+
+        // (Eyes 15 cm higher, 20 cm off in front: as a metre off, not 37 degrees up)
+        look(character, new THREE.Vector3(0, eyes + 0.15, 0.2));
+
+        const up = character.gaze.head.up + character.gaze.eyes.up;
+
+        assert.equal(GAZE.near, 1);
+        assert.ok(Math.abs(up - Math.atan2(0.15, GAZE.near) / DEG) < 1, `up ${up.toFixed(1)}°`);
+
+        // (Further off, as it is)
+        look(character, around(character, 0, 10, 3));
+        assert.ok(Math.abs(character.gaze.head.up + character.gaze.eyes.up - 10) < 1);
+    });
+
     it("turns no further than its neck, head and eyes can, and the eyes get there first", () => {
         const character = someone();
         const gaze = character.gaze;

@@ -194,17 +194,58 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(player.standing.points, points);
     });
 
-    it("waits while the player's in a fight, till it's over and their minute after it, then goes", () => {
+    it("follows the player about a while for an answer, then stays where it's got to till its time's up, and goes", () => {
         const host = hosted();
 
         camped(host);
 
         const arrived = hailed(host);
         const me = host.battle.actor(HOST_PLAYER);
+        const one = () => [...host.messengers.values()][0];
+        const them = () => host.battle.actor(arrived.folk);
+        const changes = (events) => events.filter(({ type }) => type === "messenger").map(({ change }) => change);
+
+        // (Walked off 30 m: after them, and up to them again)
+        put(me, [me.square[0] + 30, me.square[1]]);
+        run(host, 3000);
+        assert.equal(one().state, "coming");
+        assert.ok(until(host, () => one().state === "waiting", 40000).length);
+        assert.ok(Math.hypot(them().x - me.x, them().y - me.y) <= MESSENGER.hail + 1);
+
+        // (Its minute's following over: walked off again, it stays where it is, and says so)
+        one().found = host.battle.time - MESSENGER.follow - 1;
+
+        const spot = [them().x, them().y];
+
+        put(me, [me.square[0] + 30, me.square[1]]);
+
+        const staying = run(host, 10000);
+
+        assert.ok(changes(staying).includes("staying"), changes(staying).join());
+        assert.equal(one().state, "staying");
+        assert.ok(Math.hypot(them().x - spot[0], them().y - spot[1]) < 2, "where it was");
+
+        // (Its three minutes there over: away)
+        one().since = host.battle.time - MESSENGER.stay + 3000;
+        assert.ok(!changes(run(host, 1000)).includes("left"));
+        assert.ok(changes(run(host, 6000)).includes("left"));
+    });
+
+    it("stops its clock while the player's in a fight: what they were doing finished first", () => {
+        const host = hosted();
+
+        camped(host);
+        hailed(host);
+
+        const me = host.battle.actor(HOST_PLAYER);
+        const one = () => [...host.messengers.values()][0];
         const left = (events) => events.some(({ type, change }) => type === "messenger" && change === "left");
 
-        // (Set on by something 15 m off, too tough to bring down, that can't hurt them; they stand
-        // their ground where the messenger found them)
+        // (Staying, its last few seconds left; set on by something 15 m off, too tough to bring
+        // down, that can't hurt them, and standing their ground)
+        one().state = "staying";
+        one().since = host.battle.time - MESSENGER.stay + 5000;
+
         const spot = [...me.square];
         const fighting = [];
 
@@ -212,20 +253,19 @@ describe("the war's messengers (host.js, missions.js)", () => {
         host.battle.add({ id: "brute", kind: "beast", name: "Brute", weapon: "claws", team: "beasts", square: [spot[0] + 15, spot[1]], ai: null });
         Object.assign(host.battle.actor("brute"), { hp: 1e9, maxHp: 1e9, target: HOST_PLAYER });
 
-        for (let t = 0; t < MESSENGER.wait + 20000; t += 1000) {
+        for (let t = 0; t < 30000; t += 1000) {
             put(me, spot);
             fighting.push(...run(host, 1000));
         }
 
-        // (Still there, waiting by them)
-        assert.ok(!left(fighting), "still waiting");
-        assert.equal([...host.messengers.values()][0]?.state, "waiting");
-        assert.equal(arrived.folk, [...host.messengers.values()][0]?.folk);
+        assert.ok(!left(fighting), "still there");
+        assert.equal(one().state, "staying");
 
-        // (Over: come up to them again, their minute after it, then away)
+        // (Over: its last few seconds, then away)
         Object.assign(host.battle.actor("brute"), { dead: true, target: null, respawnAt: Infinity });
         Object.assign(me, { target: null });
-        assert.ok(left(run(host, MESSENGER.wait + 30000)), "away after");
+        assert.ok(!left(run(host, 2000)));
+        assert.ok(left(run(host, 10000)), "away after");
     });
 
     it("turned down, none comes again for a while; a mission given up costs a little standing", () => {
