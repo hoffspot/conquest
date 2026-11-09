@@ -8,7 +8,8 @@ description: Make a bought pack's loose furniture and things (a shop's counters 
 How Wind Ways' shop furniture (bought on Fab, November 2026) became the game's first prop kit, in
 the humans' shops, then Dragon Motion's Medieval Props Kit the second, in every people's taverns
 (toned to each, its lights burning where its candles are), and its third in every people's guild
-halls, town halls, keeps, barracks and undercrofts, and how the next kit goes in the same way.
+halls, town halls, keeps, barracks and undercrofts, its fourth in their temples, smithies and
+shops, and how the next kit goes in the same way.
 Read `contribution.md` first, then `docs/LICENSED_MODELS.md` (*Prop kits*) and
 `utilities/blenderpipeline/README.md` (*A kit of pieces*). `import-licensed-model` covers the
 download from Drive, an Unreal export and the private repository; its rules hold here too. Times
@@ -108,6 +109,24 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
   away) from the same place.
 - Then `LICENSED_MODELS=required npm run check`, the browser tests the insides touch
   (`e2e/building-lab.spec.js` and the game's), and the pipeline's checks if it changed.
+
+## What the temples', smithies' and shops' kit taught
+
+- **Two kits in one place.** The humans' shops have Wind Ways' counters and chests and the town
+  kit's torches, lecterns and rugs: `kitPiece` takes the first kit (in `PROP_KITS`' order) with a
+  piece of the role asked for, so the kit that came second fills only what the first hasn't. Where
+  no kit has a role (a `cabinet` for any but the humans), ask for one that's near it instead
+  (`kitted("cabinet") ?? kitted("chest", k)`).
+- **One builder, two places.** The smithy's forge is the undercroft's too (`forgeworks`): it asks
+  the inside's own kit, so the halls kit, with no anvil block, sack or workbench, leaves the
+  undercroft's as it was, and its tests' counts with it.
+- **A light that stands alone needs a stand-in of its own.** A standing candelabrum where nothing
+  of the game's stood (by a temple's statue) draws an iron pole under its candles till it's read;
+  its candles alone would float.
+- **Trim the kit to what's set out.** The first build took 33 pieces (22,932 triangles, 1.7 MB);
+  the 13 nothing asked for came out, two of them (a bucket, a rack) with faces the pipeline
+  warned would bake black. Every piece is under 4 m (a test says so): the long runner gave way to
+  the halls' one.
 
 ## What the halls kit taught
 
