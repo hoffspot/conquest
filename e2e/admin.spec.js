@@ -343,6 +343,94 @@ test("its Updates: a newer version found, with its notes, and how this copy of t
     await expect(updates.getByRole("button", { name: /Update to/ })).toHaveCount(0);
 });
 
+test("an update followed as the server starts again: what it's doing, then, the server back as the new version (and refusing the page loaded before), the page loaded again saying the update's complete, on Updates as usual", async ({ page }) => {
+    // (How updating stands as a server that updates itself says, as it goes: the newer version
+    // offered; downloaded, then starting again; not answering; back, but not to this page, whose
+    // cookie went with the server before (admin.js); then, to the page loaded again, the new version)
+    const offered = {
+        version: SERVER_VERSION,
+        install: { kind: "release", commands: null },
+        checks: true,
+        overnight: { on: true, from: 3, hours: 2 },
+        checked: { at: new Date().toISOString() },
+        newer: { version: "99.0.0", notes: "Worlds bring their weather with them.", page: "https://example.invalid/99.0.0" },
+        key: false,
+        checkedBy: "sha256",
+        playersIn: 0,
+        busy: null,
+        failed: null,
+        last: null,
+        current: null,
+    };
+    const updated = { ...offered, version: "99.0.0", newer: null, last: { outcome: "updated", from: SERVER_VERSION, to: "99.0.0", when: new Date().toISOString() } };
+    const asked = [];
+    let stage = "offered";
+    // (Each time the page's loaded: the server back refuses every call from a page loaded before it
+    // started again, as many times as it's asked, and answers one loaded since)
+    let loads = 0;
+    let backAt = null;
+
+    page.on("framenavigated", (frame) => {
+        if (frame === page.mainFrame()) {
+            loads++;
+        }
+    });
+
+    await page.route("**/api/v1/server/update", async (route) => {
+        if (route.request().method() === "POST") {
+            stage = "restarting";
+
+            return route.fulfill({ json: { updating: "99.0.0" } });
+        }
+
+        asked.push(stage === "back" && loads > backAt ? "updated" : stage);
+
+        if (stage === "restarting") {
+            stage = "down";
+
+            return route.fulfill({ json: { ...offered, busy: { version: "99.0.0", stage: "restarting", by: "the admin" } } });
+        }
+
+        if (stage === "down") {
+            stage = "back";
+            backAt = loads;
+
+            return route.abort("connectionrefused");
+        }
+
+        if (stage === "back") {
+            return loads === backAt ? route.fulfill({ status: 403, json: { error: "csrf", message: "Management calls come from the management page itself: open it again." } }) : route.fulfill({ json: updated });
+        }
+
+        return route.fulfill({ json: offered });
+    });
+
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="settings"]').click();
+
+    const updates = page.locator("#settings .panel", { hasText: "Updates" });
+
+    await updates.getByRole("button", { name: "Update to 99.0.0" }).click();
+    await expect(page.locator("#confirmtitle")).toHaveText("Update to 99.0.0");
+    await page.locator("#confirmgo").click();
+
+    // What it's doing as it goes
+    await expect(updates.locator('[role="status"]')).toHaveText("Saving every world, then starting again as the new version…");
+    await expect(updates.locator('[role="status"]')).toHaveText("Starting again as the new version…");
+
+    // Back as the new version: the page loaded again, saying so, on Updates as usual; and the update
+    // no longer followed
+    await expect(page.locator("#status")).toHaveText(`Update complete: this server is now version 99.0.0 (it was ${SERVER_VERSION}).`, { timeout: 20000 });
+    await expect(page.locator("#settings")).toBeVisible();
+    await expect(updates).toContainText("This is version 99.0.0.");
+    await expect(updates).toContainText(`Updated from ${SERVER_VERSION} to 99.0.0`);
+    await expect(updates).toContainText("It's the newest version.");
+    await expect(updates).not.toContainText("Starting again");
+    expect(await page.evaluate(() => sessionStorage.getItem("pellagos.admin.update"))).toBe(null);
+    expect(asked).toEqual(expect.arrayContaining(["restarting", "down", "back", "updated"]));
+    expect(loads).toBe(2);
+});
+
 test("its name, given in Settings, is the server's at once: the page's own, its Overview's, and the game's opened from it; left empty, the computer's own again", async ({ page }) => {
     await page.goto(`http://localhost:${server.adminPort}/`);
     await page.locator('[data-tab="settings"]').click();
