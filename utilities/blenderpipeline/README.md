@@ -737,7 +737,8 @@ texture of each kind for the whole kit, not one for each piece.
 1. Bring the pieces into one `.blend`, each centred in a square of its own:
    `.claude/skills/import-scene-model/scripts/kit.py ... --cells 8` (each piece's foot at 0, one
    set against a wall facing −y, its back at 0), which writes which square each is in beside it
-   (`<blend>.cells.json`). A piece can be several of the pack's meshes (a chest's body and lid),
+   (`<blend>.cells.json`). A piece can be several of the pack's meshes (a chest's body and lid:
+   `seat` sets the others on the first, where a pack makes a lid at its hinge on the floor),
    turned once it's set (`turn`), cut to a band of heights (`trim`: a chandelier's chain), and its
    candles' tips measured for the game to light (`candles`: `<blend>.candles.json`); a face mapped
    to a point of its texture, as a palette's are, is spread over a few texels so it bakes.

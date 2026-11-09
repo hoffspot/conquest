@@ -59,7 +59,7 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
    the build's warnings: faces mapped to a point of their textures (a palette's way) bake black;
    kit.py spreads them over a few texels.
    Wind Ways' shop: 21 pieces, 24,954 triangles, 1.86 MB, 3 textures, 21 draw calls at most.
-   The tavern kit: 29 pieces, 16,124 triangles, 1.5 MB, 3 textures.
+   The tavern kit: 29 pieces, 16,039 triangles, 1.4 MB, 3 textures.
 
 ## 3. Scrambled, private, in the catalog
 
@@ -120,6 +120,13 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
   flames on the candles; the chandelier's chain cut at its hub hangs it from any ceiling.
 - **Test what the eye would miss.** A candlestick set `on` its chest before the chest was in
   `props` was never drawn; the test of the flames found it.
+- **Look at every piece from its front before it ships.** A contact sheet of the built kit, each
+  node from where the game's camera sees it (the pipeline viewer, a picture a node), caught what
+  the lab's overview hid: the pack makes a chest's lid at its hinge on the floor, so the lids lay
+  before their chests (`seat` sets them on); a shield's straps and a picture's back read as
+  "detail" to kit.py, so they faced the wall (`turn: 180`); a throne and a wall torch stood
+  side-on (`turn: 90`); and one chest's lid was made standing open (another chest, its lid shut,
+  where a candlestick stands on it). The tavern kit went in as `medieval-tavern-2.bin` for it.
 
 ## What Wind Ways' shop taught
 

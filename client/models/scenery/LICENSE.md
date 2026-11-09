@@ -102,7 +102,7 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
-## medieval-tavern.bin
+## medieval-tavern-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (29 of its pieces: a trestle table and a small table, a
 long bench and a settle, a cask on its blocks, a canopied bed and a plain one, two chests, a
@@ -116,12 +116,17 @@ people's own.
 
 Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
 --cells 8`, its list `private/medieval-tavern/pieces.json`; the chandelier's chain cut at its hub,
-its lights' candles' tips measured, faces mapped to a point of their textures spread over a few
-texels) and put through `utilities/blenderpipeline` (`private/medieval-tavern.json`), both of
+its lights' candles' tips measured, the chests' lids set on them, faces mapped to a point of their
+textures spread over a few texels) and put through `utilities/blenderpipeline` (`private/medieval-tavern.json`), both of
 which stay out of the repository with the bought files: joined, their materials baked onto one
 atlas (2,048 pixels; normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a
-node of its own (`kit@<i>,<j>`), its `phone` build: 16,124 triangles in all, one material for
-every piece, 1.5 MB.
+node of its own (`kit@<i>,<j>`), its `phone` build: 16,039 triangles in all, one material for
+every piece, 1.4 MB.
+
+It replaces `medieval-tavern.bin`, its first build, never in a game that's been released: the pack
+makes a chest's lid at its hinge on the floor, and its chests' lids lay before them; its wide
+picture and its shield faced the wall; and its small chest's lid stood open, under the candlestick
+set on it (now the pack's iron-bound chest, its lid shut).
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,

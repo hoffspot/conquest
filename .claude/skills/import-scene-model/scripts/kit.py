@@ -11,7 +11,10 @@
 # is bellhaven-kit.json, beside this. A part made of several of the pack's meshes (a chest's body
 # and its lid, each where it sits on the other) names them all, a list; a fourth, `{ "turn": 180 }`,
 # turns a part about the upright once it's set (degrees, counterclockwise from above: a bed's head
-# to the back, a wall piece the pack's heuristic turned the wrong way round); `"trim": [low, high]`
+# to the back, a wall piece the heuristic below turned the wrong way round: look at each wall piece
+# from its front once it's built, a shield's straps or a picture's back are its detail too);
+# `"seat": true` sets its other meshes centred on its first and resting on its top (a chest's lid,
+# which the pack makes at its hinge on the floor); `"trim": [low, high]`
 # keeps only its faces between those heights (metres, as the pack has it: a chandelier's chain
 # cut short, the game drawing its own up to the ceiling); and `"candles": true` finds its
 # candles (loose parts thinner than 6 cm and taller than 8 cm) and writes the tip of each, where
@@ -104,15 +107,34 @@ def candleTips(me):
             kept.append(tip)
     return sorted(kept)
 
+def box(objects):
+    # (Their box, as they stand: [min x, max x, min y, max y, min z, max z])
+    points = [o.matrix_world @ v.co for o in objects for v in o.data.vertices]
+    return [f(getattr(p, axis) for p in points) for axis in "xyz" for f in (min, max)]
+
+
 for part, name, wall, how in PIECES:
     before = set(scene.objects)
+    each_meshes = []
     for each in [name] if isinstance(name, str) else name:
+        had = set(scene.objects)
         bpy.ops.import_scene.fbx(filepath=os.path.join(src, each + ".fbx"))
+        each_meshes.append([o for o in set(scene.objects) - had if o.type == "MESH"])
     name = name if isinstance(name, str) else "+".join(name)
     meshes = [o for o in set(scene.objects) - before if o.type == "MESH"]
     for o in set(scene.objects) - before:
         if o.type != "MESH":
             bpy.data.objects.remove(o, do_unlink=True)
+    if how.get("seat"):
+        # (Its other meshes set on its first, as the pack keeps them apart: a chest's lid, made at
+        # its hinge on the floor, centred over the chest and resting on its top)
+        bpy.context.view_layer.update()
+        under = box(each_meshes[0])
+        for others in each_meshes[1:]:
+            over = box(others)
+            move = Vector(((under[0] + under[1] - over[0] - over[1]) / 2, (under[2] + under[3] - over[2] - over[3]) / 2, under[5] - over[4] - 0.005))
+            for o in others:
+                o.location += move
     bpy.ops.object.select_all(action="DESELECT")
     for o in meshes:
         o.select_set(True)
