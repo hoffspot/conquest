@@ -23,6 +23,11 @@ const MANAGE = Object.freeze({ "x-pellagos": "manage" });
 /** Where the session the admin key was traded for is kept (this tab alone). */
 const SESSION = "pellagos.admin.session";
 
+// An update the page's following, kept over its loading again (followUpdate), and for how long it's
+// followed (minutes) before it's said it isn't back
+const FOLLOWED = "pellagos.admin.update";
+const FOLLOW_MINUTES = 15;
+
 /** How often what's shown is asked for again (ms), while it's on screen. */
 const REFRESH = 5000;
 
@@ -59,6 +64,28 @@ const sessions = {
             }
         } catch {
             // (Kept in memory alone, then)
+        }
+    },
+};
+
+const followed = {
+    /** The update this page's following: { version, from, tab, until }, or null. */
+    get() {
+        try {
+            return JSON.parse(sessionStorage.getItem(FOLLOWED) ?? "null");
+        } catch {
+            return null;
+        }
+    },
+    set(update) {
+        try {
+            if (update) {
+                sessionStorage.setItem(FOLLOWED, JSON.stringify(update));
+            } else {
+                sessionStorage.removeItem(FOLLOWED);
+            }
+        } catch {
+            // (Followed till the page's loaded again, then)
         }
     },
 };
@@ -155,6 +182,11 @@ function say(text = "", { bad = false } = {}) {
 }
 
 // ---- The API
+
+// A refusal from a server started again since this page loaded (an update, a restore): it answers,
+// but not to this page, whose cookie (on the server's computer: admin.js) or session (from the
+// Wi-Fi) went with the server before. Loaded again, the page's the new server's
+const startedAgain = (error) => error.status === 401 || error.error === "csrf";
 
 /** A call to the server's API: its answer (JSON), or the response itself for a download. Throws, saying why, if it's refused. A `raw` body (a file) is sent as it is. */
 async function call(method, route, body, { key = null, raw = false } = {}) {
@@ -1847,10 +1879,18 @@ async function afterRestart() {
             location.reload();
 
             return;
-        } catch {
+        } catch (error) {
+            if (startedAgain(error)) {
+                location.reload();
+
+                return;
+            }
+
             await new Promise((resolve) => setTimeout(resolve, 2000));
         }
     }
+
+    say("The server hasn't come back in 5 minutes. Open this page again to see how it stands; if it doesn't open, start the server again.", { bad: true });
 }
 
 // ---- Updates (server/update/updater.js)
@@ -1887,7 +1927,7 @@ async function updatesPanel() {
 
         if (await confirmIt({ title: `Update to ${newer.version}`, note, go: "Update" })) {
             if (await doing(() => call("POST", "/server/update", { version: newer.version }), { status })) {
-                await followUpdate(newer.version, status);
+                await followUpdate(newer.version, updates.version, status);
             }
         }
     };
@@ -1933,11 +1973,31 @@ async function updatesPanel() {
     );
 }
 
-/** An update followed till it's done: the server restarting as `version`, or why it didn't (said in `status`). */
-async function followUpdate(version, status) {
-    const end = Date.now() + 15 * 60000;
+// How a followed update ended, by how updating stands (GET /server/update): what's said at the top
+// of the page ({ text, bad }), or null while it's still going
+function updateEnd(updates, { version, from }) {
+    if (updates.version === version) {
+        return { text: `Update complete: this server is now version ${version}${from && from !== version ? ` (it was ${from})` : ""}.`, bad: false };
+    }
 
-    while (Date.now() < end) {
+    if (updates.failed?.version === version || (updates.last?.outcome === "rolled-back" && updates.last.to === version && !updates.busy)) {
+        return { text: `The update to ${version} didn't go: this is still version ${updates.version}, with every world and the settings as they were. Updates says why.`, bad: true };
+    }
+
+    return null;
+}
+
+/**
+ * An update followed till it's done: the server started again as `version` (from version `from`),
+ * or why it didn't, said in `status` as it goes and at the top of the page once it's over, the page
+ * as it was otherwise. The server started again doesn't answer this page (startedAgain): it's
+ * loaded again, carrying the update over (`followed`), and says how it went there (followOn). Not
+ * back by `until`, it says so.
+ */
+async function followUpdate(version, from, status, until = Date.now() + FOLLOW_MINUTES * 60000) {
+    followed.set({ version, from, tab: state.tab, until });
+
+    while (Date.now() < until) {
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
         let updates;
@@ -1945,8 +2005,7 @@ async function followUpdate(version, status) {
         try {
             updates = await call("GET", "/server/update");
         } catch (error) {
-            // (Its session gone with the server it was made by: signed in again)
-            if (error.status === 401) {
+            if (startedAgain(error)) {
                 location.reload();
 
                 return;
@@ -1956,22 +2015,63 @@ async function followUpdate(version, status) {
             continue;
         }
 
-        if (updates.version === version) {
-            await renderSettings();
-            say(`Updated to ${version}.`);
+        const end = updateEnd(updates, { version, from });
 
-            return;
-        }
+        if (end) {
+            followed.set(null);
 
-        if (updates.failed?.version === version || (updates.last?.outcome === "rolled-back" && updates.last.to === version && !updates.busy)) {
-            await renderSettings();
-            say(`The update to ${version} didn't go: see Updates.`, { bad: true });
+            if (state.tab === "settings") {
+                await renderSettings();
+            }
+
+            say(end.text, { bad: end.bad });
 
             return;
         }
 
         status.textContent = UPDATING[updates.busy?.stage] ?? "Updating…";
     }
+
+    followed.set(null);
+    status.textContent = `It isn't back as version ${version} after ${FOLLOW_MINUTES} minutes. Open this page again to see how it stands; if it doesn't open, start the server again.`;
+    status.classList.add("bad");
+}
+
+// The page loaded again while following an update (followUpdate): how it went said at the top, on
+// the page it was on; or, still going, followed on
+async function followOn() {
+    const update = followed.get();
+
+    if (!update) {
+        return;
+    }
+
+    if (!(Date.now() < update.until)) {
+        followed.set(null);
+
+        return;
+    }
+
+    let updates;
+
+    try {
+        updates = await call("GET", "/server/update");
+    } catch (error) {
+        say(error.message, { bad: true });
+
+        return;
+    }
+
+    const end = updateEnd(updates, update);
+
+    if (end) {
+        followed.set(null);
+        say(end.text, { bad: end.bad });
+
+        return;
+    }
+
+    await followUpdate(update.version, update.from, $("#status"), update.until);
 }
 
 // ---- What's happened
@@ -2122,8 +2222,13 @@ async function open() {
     showWho(overview);
     say("");
     setUpNewWorld();
-    await show(state.tab);
+
+    // (Following an update when it loaded again: on the page it was on)
+    const update = followed.get();
+
+    await show(update && Date.now() < update.until ? update.tab : state.tab);
     refresh();
+    await followOn();
 }
 
 // Who's being managed, at the top: the server's name (as it is now), its version, and from where
