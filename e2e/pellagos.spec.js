@@ -2420,6 +2420,11 @@ test("the thumb stick, there from the start, walks the player the way it's pushe
 test("the mouse pointer a sword over the page, over the view showing what a click would do (an enemy, someone to talk to, the ground), lit and bigger shaken, large or the system's own as Game options say", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, the foe a few steps ahead is just over their head on the screen, and each frame,
+    // which the pointer's shown on, is slow to draw in software)
+    await overlook(page);
+
     const cursor = (selector = "#view") => page.evaluate((selector) => getComputedStyle(document.querySelector(selector)).cursor, selector);
     const set = (id, on) =>
         page.evaluate(
