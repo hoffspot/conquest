@@ -1443,7 +1443,22 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     // as it goes), nor of everyone than the quality's budget; the rest come into their crowds as
     // their figures are made; and once some have fallen, none of those dressed
     await guest.waitForFunction(() => window.pellagos.game.crowds?.members.size > 0, null, { timeout: 180000, polling: 1000 });
-    await guest.waitForFunction(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length >= 3, null, { timeout: 180000, polling: 1000 });
+
+    // (Three of them fallen within a minute by the game's own clock: here it takes 18 s of it, 102 s
+    // by the wall, a frame moving it a tenth of a second at most; on a runner drawing a frame a
+    // second, as many seconds by the wall as tenths by the game's. Waited for by the game's clock,
+    // the wall's only for the game stopping)
+    const dying = await guest.evaluate(() => window.pellagos.game.clock);
+
+    await guest.waitForFunction(
+        (from) => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length >= 3 || window.pellagos.game.clock >= from + 60,
+        dying,
+        { timeout: 480000, polling: 1000 },
+    );
+
+    const dead = await guest.evaluate((from) => ({ fallen: window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length, seconds: +(window.pellagos.game.clock - from).toFixed(1) }), dying);
+
+    expect(dead.fallen, JSON.stringify(dead)).toBeGreaterThanOrEqual(3);
 
     // (Those fallen by now; and a second and a half on by the game's own clock, the line looked at
     // again since: the marshal looks by it, twice a second, MARSHAL.every, and a second and a half
