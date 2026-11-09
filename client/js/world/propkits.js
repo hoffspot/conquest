@@ -180,6 +180,45 @@ export const PROP_KITS = Object.freeze({
             shield: Object.freeze({ role: "shield", size: [0.58, 0.69, 0.09] }),
         }),
     }),
+    // The same pack's for the humans' dungeons' floors (`dungeon-<look>`: interiors3d.js, a
+    // floor's theme's look): the outlaws' hideouts, Bellhaven's keep and the Halls of Bone. Most
+    // of a dungeon's furniture is scanned (dungeons3d.js DUNGEON_PROPS), so a piece stands where a
+    // scanned model did, that model drawn till it's read (furnish's `instead`): barrels, tables
+    // and stools, a cauldron, firewood, a handcart, chests, buckets and baskets, a ladder, a
+    // settle, a shield and a sword, a chopping block. And where the game's own stood: wall torches,
+    // a sack by the crates, standing candelabra, an outlaw chief's throne; and new, on the plan's
+    // squares or its walls, a hound's cage in a kennel, shackles where the captive are kept.
+    "medieval-dungeon": Object.freeze({
+        asset: "dungeon-prop-medieval-dungeon",
+        by: "Dragon Motion",
+        peoples: Object.freeze(["human"]),
+        places: Object.freeze(["dungeon-hideout", "dungeon-keep", "dungeon-hell-bone"]),
+        pieces: Object.freeze({
+            torch: Object.freeze({ role: "torch", size: [0.28, 0.84, 0.36], candles: Object.freeze([Object.freeze([0, 0.72, 0.05])]) }),
+            barrel: Object.freeze({ role: "barrel", size: [0.56, 1.01, 0.51] }),
+            "barrel-tap": Object.freeze({ role: "barrel", size: [0.65, 0.79, 0.57] }),
+            table: Object.freeze({ role: "table", size: [1.35, 0.83, 0.81] }),
+            workbench: Object.freeze({ role: "workbench", size: [3, 0.9, 1] }),
+            stool: Object.freeze({ role: "stool", size: [0.45, 0.44, 0.44] }),
+            throne: Object.freeze({ role: "throne", size: [1.02, 2.78, 1.19] }),
+            cauldron: Object.freeze({ role: "cauldron", size: [0.59, 0.51, 0.55] }),
+            firewood: Object.freeze({ role: "firewood", size: [0.43, 0.23, 0.49] }),
+            cart: Object.freeze({ role: "cart", size: [2.3, 0.96, 0.94] }),
+            chest: Object.freeze({ role: "chest", size: [1, 0.78, 0.67] }),
+            bucket: Object.freeze({ role: "bucket", size: [0.47, 0.44, 0.49] }),
+            tub: Object.freeze({ role: "bucket", size: [0.38, 0.28, 0.38] }),
+            basket: Object.freeze({ role: "basket", size: [0.55, 0.33, 0.35] }),
+            ladder: Object.freeze({ role: "ladder", size: [0.61, 2, 0.08] }),
+            settle: Object.freeze({ role: "settle", size: [1.55, 0.52, 0.5] }),
+            sack: Object.freeze({ role: "sack", size: [0.53, 0.67, 0.37] }),
+            "candle-stand": Object.freeze({ role: "candle-stand", size: [0.56, 1.92, 0.55], candles: STAND }),
+            cage: Object.freeze({ role: "cage", size: [1.42, 2.14, 1.41] }),
+            shackles: Object.freeze({ role: "shackles", size: [0.17, 1.45, 0.14] }),
+            shield: Object.freeze({ role: "shield", size: [0.54, 1.3, 0.16] }),
+            sword: Object.freeze({ role: "sword", size: [0.24, 0.96, 0.03] }),
+            block: Object.freeze({ role: "block", size: [0.48, 0.45, 0.48] }),
+        }),
+    }),
 });
 
 /**

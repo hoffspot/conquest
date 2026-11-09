@@ -924,6 +924,19 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   not. They're in the catalog, downloaded only once a dungeon's wanted (each dungeon only its
   theme's: about 4 to 9 MB), fetched as soon as a level's begun; one that can't be had is left out,
   and what's on it.
+- **A bought kit's furniture in the humans' dungeons** (`world/propkits.js` `medieval-dungeon`,
+  Dragon Motion's Medieval Props Kit, licensed): the outlaws' hideouts, Bellhaven's keep and the
+  Halls of Bone (a floor's place is `dungeon-<look>`). Its pieces stand where the scanned ones did
+  (`interiors3d.js` `swapped`, by the scanned model's name): barrels, tables and stools, a cauldron
+  and firewood by the fire, a handcart, chests, buckets, baskets, a settle, a ladder leant flat on
+  the rock, a kite shield and a sword on the racks and stands, a chopping block; an outlaw chief's
+  seat a lord's throne carried off. Each keeps the scanned model it stands for (`instead`), drawn
+  in its place till the kit's read and without the licensed models. Where the game's own was drawn
+  (put away once the kit's read): wall torches, their flames in their cages; a sack by the crates;
+  standing candelabra for the stands of candles, lit as brightly as the game's own stand and its
+  four candles. New on the plan's squares and walls: a hound's cage over each bedroll in a
+  hideout's kennel, and shackles hung on the rock by open ground in a kennel and in the Halls of
+  Bone's flaying dens and pens. Pure: placed from the plan alone, the same for everyone.
 - **Dressed by its theme's rooms** (`dungeondressing.js`): each piece of the plan is dressed as
   its room's look has it, the same way every time (by the numbers of its own square):
   - what's left against a wall (`d`): a cave's mossy rocks, boulders, logs, roots, branches,

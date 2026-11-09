@@ -283,7 +283,12 @@ standing either side of the statue, candles in their dishes before the shrines, 
 a chandelier for the ring of candles, runners up the aisle and high-backed settles for pews; the
 smithy's block under the anvil, its coal sack, a trestle workbench and a shield on its rack; the
 shops' carved cabinets under the counter, chests, wall torches, standing candelabra, lecterns,
-tables, casks on their blocks and rugs.
+tables, casks on their blocks and rugs. The fifth is its furniture for the humans' dungeons'
+floors (`medieval-dungeon`): the outlaws' hideouts, Bellhaven's keep and the Halls of Bone, with
+wall torches, barrels, tables and stools, a stolen throne for an outlaw chief, a cauldron,
+firewood, a handcart, chests, buckets, baskets, a ladder leant on the rock, a settle, sacks by the
+crates, standing candelabra, a kite shield and a sword on the racks, a chopping block, a hound's
+cage in a kennel and shackles on the walls where the captive are kept.
 
 - **One file, a node a piece, one atlas.** Its pieces are set a square each in a `.blend`
   (`.claude/skills/import-scene-model/scripts/kit.py ... --cells 8`), then joined, baked onto one
@@ -299,6 +304,12 @@ tables, casks on their blocks and rugs.
   is set out fitted to the furnishing's squares, and the game's own furnishing there is drawn
   apart (its stand-in), put away once the kit's read. Without the licensed models, or for a
   people or kind of inside no kit's for, the game's own is all there is.
+- **A dungeon's floor, by its look.** A dungeon's floor is the place `dungeon-<look>` (several
+  themes share a style: a hideout's, the keep's, a hell's realm's). Most of a dungeon's furniture
+  is the game's scanned models (CC0), not drawn, so a kit's piece there keeps the model it stands
+  for (`instead`, `interiors3d.js` `swapped`): `dungeons3d.js` furnish draws that model in its
+  place when the piece can't be read, and reads it only then, and sets what's on either on
+  whichever's drawn.
 - **Every people's, toned to theirs.** A kit made for every people (the tavern kit) is drawn
   towards each people's own colours (`propkits.js` `TONES`, `dungeons3d.js` furnish's `tone`):
   the humans' as the pack made it, the cat folk's sun-bleached, the orcs' charred dark, the lizard

@@ -19,7 +19,7 @@ const { PROP_KITS, TONES, flamesOf, kitPiece, kitsFor, pieceName } = await impor
 const { DUNGEON_PROPS, partsOf } = await import("../client/js/world/dungeons3d.js");
 const { buildInterior, STOREY } = await import("../client/js/world/interiors3d.js");
 const { readPlan, UPSTAIRS_PLAN } = await import("../client/js/core/interiors.js");
-const { LAYOUTS, SHOP_INSIDES, barracksRooms, guildRooms, hallRooms, keepRooms, smithyRooms, taproomPlan, templeRooms } = await import("../client/js/core/insides.js");
+const { LAYOUTS, SHOP_INSIDES, barracksRooms, dungeonRooms, guildRooms, hallRooms, keepRooms, smithyRooms, taproomPlan, templeRooms } = await import("../client/js/core/insides.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
 
@@ -74,6 +74,22 @@ function townOf(people) {
 
 // The town kit's placements of a role's pieces in a built inside
 const town = (built, role) => kitProps(built).filter(({ model }) => model.startsWith("medieval-town-") && PROP_KITS["medieval-town"].pieces[model.slice("medieval-town-".length)].role === role);
+
+// A dungeon's levels of a theme (core/insides.js dungeonRooms), as the game reads them
+function levelsOf(theme, seed) {
+    return dungeonRooms({ seed, theme, tier: 3 }).map((floor, k) =>
+        Object.assign(readPlan(`dungeon-${theme}-${seed}-${k}`, floor.name, floor.rows, { ground: floor.ground }), {
+            origin: [0, 0],
+            style: floor.style,
+            look: floor.look,
+            people: "human",
+            dungeon: { theme: floor.look, level: k, levels: 1, lights: floor.level.lights, rooms: floor.level.rooms },
+        }),
+    );
+}
+
+// The dungeon kit's placements of a role's pieces in a built level
+const dungeon = (built, role) => kitProps(built).filter(({ model }) => model.startsWith("medieval-dungeon-") && PROP_KITS["medieval-dungeon"].pieces[model.slice("medieval-dungeon-".length)].role === role);
 
 // A kit's piece placed, by its model's name
 function pieceOf(model) {
@@ -139,6 +155,14 @@ describe("licensed prop kits (world/propkits.js)", () => {
         assert.equal(kitPiece("counter", { people: "human", place: "guild" }).model, "medieval-hall-cabinet");
         assert.equal(kitPiece("throne", { people: "human", place: "shop" }), null);
         assert.equal(kitPiece("counter", { people: "human", place: "crypt" }), null);
+
+        // (The dungeon kit's in the humans' dungeons' floors of three looks, untoned; none in a cave)
+        for (const look of ["hideout", "keep", "hell-bone"]) {
+            assert.deepEqual(kitsFor({ people: "human", place: `dungeon-${look}` }).map(([name]) => name), ["medieval-dungeon"], look);
+        }
+
+        assert.equal(kitPiece("torch", { people: "human", place: "dungeon-hideout" }).tone, null);
+        assert.equal(kitPiece("barrel", { people: "human", place: "dungeon-caves" }), null);
 
         // (The tavern kit's in every people's taverns, toned to theirs; the humans' as it's made)
         for (const people of PEOPLES) {
@@ -432,6 +456,83 @@ describe("licensed prop kits (world/propkits.js)", () => {
                 assert.ok(Math.abs(y - 2.05) < 1e-9, `${map.style}: a torch's flame ${y} up`);
                 assert.ok(built.lights.some((light) => Math.hypot(light.x - x, light.z - z) < 1e-6), `${map.style}: a torch's light at its flame`);
             }
+        }
+    });
+
+    it("sets the outlaws' hideouts, Bellhaven's keep and the Halls of Bone out from the dungeon kit: each piece where a scanned model stood, that model drawn in its place till it's read; a torch for each torch, a candelabrum for each stand of candles, a hound's cage in a kennel, shackles where the captive are kept", () => {
+        const seen = { hideout: new Map(), keep: new Map(), "hell-bone": new Map() };
+
+        for (const theme of ["hideout", "keep", "hell"]) {
+            for (const seed of [3, 8]) {
+                for (const map of levelsOf(theme, seed)) {
+                    const built = buildInterior(map);
+                    const set = kitProps(built);
+                    const name = `${map.look} ${map.id}`;
+
+                    if (!seen[map.look]) {
+                        assert.equal(set.length, 0, `${name}: none of a kit's`);
+                        built.dispose();
+                        continue;
+                    }
+
+                    assert.ok(set.every(({ model, tone }) => model.startsWith("medieval-dungeon-") && !tone), `${name}: the dungeon kit's, untoned`);
+                    assert.equal(dungeon(built, "torch").length, map.dungeon.lights.filter(({ kind }) => kind === "torch").length, `${name}: a torch for each`);
+                    assert.equal(dungeon(built, "candle-stand").length, map.pieces.filter(({ kind }) => kind === "candles").length, `${name}: a candelabrum for each stand`);
+                    assert.ok(dungeon(built, "cage").length <= map.pieces.filter(({ kind }) => kind === "bedroll").length, `${name}: cages over bedrolls`);
+
+                    for (const each of set) {
+                        const role = pieceOf(each.model).role;
+
+                        seen[map.look].set(role, (seen[map.look].get(role) ?? 0) + 1);
+
+                        // (What a scanned model stood for, that model kept to be drawn in its place:
+                        // one of the game's own, CC0, sized as it was, where it stood)
+                        if (each.instead) {
+                            const own = DUNGEON_PROPS[each.instead.model];
+
+                            assert.ok(own && !CATALOG[own.asset].licensed, `${name}: ${each.model} stands for one of the game's own (${each.instead.model})`);
+                            assert.equal([each.instead.size, each.instead.scale, each.instead.fit].filter(Boolean).length, 1, `${name}: ${each.instead.model} sized`);
+                            assert.ok(Math.hypot(each.x - each.instead.x, each.z - each.instead.z) < 0.2, `${name}: ${each.model} where ${each.instead.model} stood`);
+                        }
+
+                        // (Nothing in the rock; what hangs on a wall hangs by open ground)
+                        assert.notEqual(map.plan[Math.floor(each.z)]?.[Math.floor(each.x)] ?? "#", "#", `${name}: ${each.model} at ${each.x}, ${each.z} in the rock`);
+                    }
+
+                    assert.ok(built.object.getObjectByName("kit-stand-ins")?.visible, `${name}: its own drawn till the kit's read`);
+                    built.dispose();
+                }
+            }
+        }
+
+        // (Across them: the hideouts' barrels, tables and stools, chests, buckets, sacks, a throne,
+        // cages and shackles, torches; the keep's tables, stools, shields and candelabra; the Halls
+        // of Bone's shackles and candelabra)
+        for (const [look, roles] of Object.entries({ hideout: ["torch", "barrel", "table", "stool", "chest", "bucket", "sack", "throne", "cage", "shackles", "shield"], keep: ["torch", "table", "stool", "shield", "candle-stand", "chest", "barrel"], "hell-bone": ["shackles", "candle-stand"] })) {
+            for (const role of roles) {
+                assert.ok(seen[look].get(role) > 0, `${look}: no ${role} (${[...seen[look].keys()].join(", ")})`);
+            }
+        }
+    });
+
+    it("lights the dungeon kit's torches and candelabra where their cages and candles are, as bright as the game's own", () => {
+        for (const map of levelsOf("keep", 3).slice(0, 2)) {
+            const built = buildInterior(map);
+            const flames = flamesIn(built);
+            const torches = dungeon(built, "torch");
+
+            for (const torch of torches) {
+                const [[x, y, z]] = flamesOf(pieceOf(torch.model), torch, torch.y);
+
+                assert.ok(Math.abs(y - 2.05) < 1e-9, `${map.id}: a torch's flame ${y} up`);
+                assert.ok(built.lights.some((light) => Math.hypot(light.x - x, light.z - z) < 1e-6), `${map.id}: a torch's light at its flame`);
+            }
+
+            for (const [x, y, z] of flames.filter((flame) => !torches.some((torch) => Math.hypot(torch.x - flame[0], torch.z - flame[2]) < 0.5))) {
+                assert.ok(built.candles.some((candle) => Math.hypot(candle[0] - x, candle[1] - y, candle[2] - z) < 1e-6), `${map.id}: a flame at ${[x, y, z].map((v) => v.toFixed(2))}`);
+            }
+
+            built.dispose();
         }
     });
 
