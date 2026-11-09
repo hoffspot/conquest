@@ -102,6 +102,32 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
+## medieval-hall.bin
+
+**Dragon Motion's "Medieval Props Kit"** (31 of its pieces: a throne, a long table bare and clothed,
+a bench, a carved cabinet, an iron-bound strongbox and a chest, a chandelier (its chain cut at its
+hub), a wall torch, a candlestick, two mugs, a plate, a jug and a goblet, a scroll, three maps, a
+picture and a tapestry, two shields, a sword, antlers, a skull, a carpet and a runner, firewood, a
+barrel and a cask on its blocks; its Unreal Engine files exported by this repository's owner), by
+**Dragon Motion**, bought on **Fab** by this repository's owner under **Fab's Standard License**:
+the game's third prop kit (`client/js/world/propkits.js` `medieval-hall`), furnishing every
+people's guild halls, town halls, keeps, barracks and undercrofts, toned to each people's own.
+
+Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/medieval-hall/pieces.json`; the chandelier's chain cut at its hub,
+its lights' candles' tips measured, the torch's flame by hand, the chests' lids set on them) and
+put through `utilities/blenderpipeline` (`private/medieval-hall.json`), both of which stay out of
+the repository with the bought files: joined, their materials baked onto one atlas (2,048 pixels;
+normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a node of its own
+(`kit@<i>,<j>`), its `phone` build: 15,584 triangles in all, one material for every piece, 1.5 MB.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.
+
 ## medieval-tavern-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (29 of its pieces: a trestle table and a small table, a

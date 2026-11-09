@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "593915cfb5",
+    release: "0f082cb053",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3271,6 +3271,113 @@ export const ASSETS = Object.freeze({
                 ],
                 "bellhaven-keep-floor": [
                     "floor"
+                ]
+            }
+        },
+        "dungeon-prop-medieval-hall": {
+            "tier": "demand",
+            "label": "Every people's halls' furniture, lights and wall dressing: a carved throne, dining tables bare and clothed, benches, a carved cabinet, an iron-bound strongbox and a chest, a chandelier, wall torches and candlesticks, mugs, plates, a jug and a gilt goblet, a scroll, maps, pictures and a tapestry, shields, a sword, antlers and a skull, carpets, firewood, a barrel and a cask (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/medieval-hall.bin",
+                    "hash": "52d1e5d224",
+                    "bytes": 1545364
+                }
+            ],
+            "pieces": {
+                "medieval-hall-throne": [
+                    "kit@0,0"
+                ],
+                "medieval-hall-table": [
+                    "kit@1,0"
+                ],
+                "medieval-hall-table-clothed": [
+                    "kit@2,0"
+                ],
+                "medieval-hall-bench": [
+                    "kit@3,0"
+                ],
+                "medieval-hall-cabinet": [
+                    "kit@4,0"
+                ],
+                "medieval-hall-strongbox": [
+                    "kit@0,1"
+                ],
+                "medieval-hall-chest": [
+                    "kit@1,1"
+                ],
+                "medieval-hall-chandelier": [
+                    "kit@2,1"
+                ],
+                "medieval-hall-torch": [
+                    "kit@3,1"
+                ],
+                "medieval-hall-candlestick": [
+                    "kit@4,1"
+                ],
+                "medieval-hall-mug": [
+                    "kit@0,2"
+                ],
+                "medieval-hall-tankard": [
+                    "kit@1,2"
+                ],
+                "medieval-hall-plate": [
+                    "kit@2,2"
+                ],
+                "medieval-hall-jug": [
+                    "kit@3,2"
+                ],
+                "medieval-hall-goblet": [
+                    "kit@4,2"
+                ],
+                "medieval-hall-scroll": [
+                    "kit@0,3"
+                ],
+                "medieval-hall-map": [
+                    "kit@1,3"
+                ],
+                "medieval-hall-map-wide": [
+                    "kit@2,3"
+                ],
+                "medieval-hall-map-small": [
+                    "kit@3,3"
+                ],
+                "medieval-hall-picture": [
+                    "kit@4,3"
+                ],
+                "medieval-hall-tapestry": [
+                    "kit@0,4"
+                ],
+                "medieval-hall-shield": [
+                    "kit@1,4"
+                ],
+                "medieval-hall-shield-kite": [
+                    "kit@2,4"
+                ],
+                "medieval-hall-sword": [
+                    "kit@3,4"
+                ],
+                "medieval-hall-antlers": [
+                    "kit@4,4"
+                ],
+                "medieval-hall-skull": [
+                    "kit@0,5"
+                ],
+                "medieval-hall-runner": [
+                    "kit@1,5"
+                ],
+                "medieval-hall-carpet": [
+                    "kit@2,5"
+                ],
+                "medieval-hall-firewood": [
+                    "kit@3,5"
+                ],
+                "medieval-hall-barrel": [
+                    "kit@4,5"
+                ],
+                "medieval-hall-cask": [
+                    "kit@0,6"
                 ]
             }
         },
