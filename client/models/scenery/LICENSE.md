@@ -102,6 +102,32 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
+## medieval-hall.bin
+
+**Dragon Motion's "Medieval Props Kit"** (31 of its pieces: a throne, a long table bare and clothed,
+a bench, a carved cabinet, an iron-bound strongbox and a chest, a chandelier (its chain cut at its
+hub), a wall torch, a candlestick, two mugs, a plate, a jug and a goblet, a scroll, three maps, a
+picture and a tapestry, two shields, a sword, antlers, a skull, a carpet and a runner, firewood, a
+barrel and a cask on its blocks; its Unreal Engine files exported by this repository's owner), by
+**Dragon Motion**, bought on **Fab** by this repository's owner under **Fab's Standard License**:
+the game's third prop kit (`client/js/world/propkits.js` `medieval-hall`), furnishing every
+people's guild halls, town halls, keeps, barracks and undercrofts, toned to each people's own.
+
+Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/medieval-hall/pieces.json`; the chandelier's chain cut at its hub,
+its lights' candles' tips measured, the torch's flame by hand, the chests' lids set on them) and
+put through `utilities/blenderpipeline` (`private/medieval-hall.json`), both of which stay out of
+the repository with the bought files: joined, their materials baked onto one atlas (2,048 pixels;
+normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a node of its own
+(`kit@<i>,<j>`), its `phone` build: 15,584 triangles in all, one material for every piece, 1.5 MB.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.
+
 ## medieval-tavern-2.bin
 
 **Dragon Motion's "Medieval Props Kit"** (29 of its pieces: a trestle table and a small table, a
@@ -127,6 +153,34 @@ It replaces `medieval-tavern.bin`, its first build, never in a game that's been 
 makes a chest's lid at its hinge on the floor, and its chests' lids lay before them; its wide
 picture and its shield faced the wall; and its small chest's lid stood open, under the candlestick
 set on it (now the pack's iron-bound chest, its lid shut).
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.
+
+## medieval-town.bin
+
+**Dragon Motion's "Medieval Props Kit"** (20 of its pieces: a standing candelabrum, a candelabrum
+for an altar, a candlestick and a candle in its dish, a chandelier (its chain cut at its hub), a
+wall torch, a chained book, a runner and a rug, a high-backed settle, a carved cabinet, a chest
+and an iron-bound strongbox, a lectern, a table and a trestle table, a cask on its blocks, a block
+of wood, a sack and a shield; its Unreal Engine files exported by this repository's owner), by **Dragon Motion**,
+bought on **Fab** by this repository's owner under **Fab's Standard License**: the game's fourth
+prop kit (`client/js/world/propkits.js` `medieval-town`), furnishing every people's temples,
+smithies and shops (the humans' shops' counters and chests are still Wind Ways'), toned to each
+people's own.
+
+Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/medieval-town/pieces.json`; the chandelier's chain cut at its hub,
+its lights' candles' tips measured, the torch's flame and the small candle's by hand, the chests'
+lids set on them) and put through `utilities/blenderpipeline` (`private/medieval-town.json`), both
+of which stay out of the repository with the bought files: joined, their materials baked onto one
+atlas (2,048 pixels; normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a
+node of its own (`kit@<i>,<j>`), its `phone` build: 13,099 triangles in all, one material for
+every piece, 1.4 MB.
 
 It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
 distributed as part of it, never on its own, so it's in the game only in this converted form,

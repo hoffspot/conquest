@@ -19,7 +19,7 @@ const { PROP_KITS, TONES, flamesOf, kitPiece, kitsFor, pieceName } = await impor
 const { DUNGEON_PROPS, partsOf } = await import("../client/js/world/dungeons3d.js");
 const { buildInterior, STOREY } = await import("../client/js/world/interiors3d.js");
 const { readPlan, UPSTAIRS_PLAN } = await import("../client/js/core/interiors.js");
-const { LAYOUTS, SHOP_INSIDES, taproomPlan } = await import("../client/js/core/insides.js");
+const { LAYOUTS, SHOP_INSIDES, barracksRooms, guildRooms, hallRooms, keepRooms, smithyRooms, taproomPlan, templeRooms } = await import("../client/js/core/insides.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
 
@@ -41,6 +41,47 @@ const PEOPLES = Object.keys(TONES);
 // A tavern kit's placements of a role's pieces in a built inside
 const tavern = (built, role) => kitProps(built).filter(({ model }) => model.startsWith("medieval-tavern-") && PROP_KITS["medieval-tavern"].pieces[model.slice("medieval-tavern-".length)].role === role);
 
+// Every people's halls' floors (core/insides.js): a guild's, a town hall's, a town's keep's, a
+// castle's keep's great hall and its undercroft, and a barracks', as the game reads them
+function hallsOf(people) {
+    const floors = [];
+
+    for (const [rooms, siteKind] of [[guildRooms], [hallRooms], [keepRooms, "town"], [keepRooms, "castle"], [barracksRooms]]) {
+        for (const floor of rooms({ seed: 3, name: "Inside", people, siteKind })) {
+            floors.push(Object.assign(readPlan(`halls-${floor.style}-${siteKind ?? ""}`, floor.name, floor.rows, { ground: floor.ground }), { origin: [0, 0], style: floor.style, castle: siteKind === "castle", people }));
+        }
+    }
+
+    return floors;
+}
+
+// The halls kit's placements of a role's pieces in a built inside
+const halls = (built, role) => kitProps(built).filter(({ model }) => model.startsWith("medieval-hall-") && PROP_KITS["medieval-hall"].pieces[model.slice("medieval-hall-".length)].role === role);
+
+// A people's temple (a town's, or an abbey's: a site's), smithy and shops of every kind, as the
+// game reads them
+function townOf(people) {
+    const floors = [];
+
+    for (const [rooms, building] of [[templeRooms, { place: "town", patron: "aurelia" }], [templeRooms, { place: "site", patron: "aurelia" }], [smithyRooms, {}]]) {
+        for (const floor of rooms({ name: "Inside", ...building })) {
+            floors.push(Object.assign(readPlan(`town-${floor.style}-${building.place ?? ""}`, floor.name, floor.rows, { ground: floor.ground }), { origin: [0, 0], style: floor.style, patron: floor.patron, abbey: building.place === "site", people }));
+        }
+    }
+
+    return [...floors, ...Object.keys(SHOP_INSIDES).map((kind) => shopOf(kind, people))];
+}
+
+// The town kit's placements of a role's pieces in a built inside
+const town = (built, role) => kitProps(built).filter(({ model }) => model.startsWith("medieval-town-") && PROP_KITS["medieval-town"].pieces[model.slice("medieval-town-".length)].role === role);
+
+// A kit's piece placed, by its model's name
+function pieceOf(model) {
+    const kit = Object.keys(PROP_KITS).find((name) => model.startsWith(`${name}-`));
+
+    return PROP_KITS[kit].pieces[model.slice(kit.length + 1)];
+}
+
 // Each placed light's flames (world/propkits.js flamesOf), where it stands: its foot on what it's on
 // or at its height
 function flamesIn(built) {
@@ -48,7 +89,7 @@ function flamesIn(built) {
     const out = [];
 
     for (const each of kitProps(built)) {
-        const piece = PROP_KITS["medieval-tavern"].pieces[each.model.slice("medieval-tavern-".length)];
+        const piece = pieceOf(each.model);
 
         if (!piece) {
             continue;
@@ -89,12 +130,15 @@ describe("licensed prop kits (world/propkits.js)", () => {
     });
 
     it("gives the piece for a role in a people's place, the same for the same seed, and none where no kit's for it", () => {
-        assert.deepEqual(kitsFor({ people: "human", place: "shop" }).map(([name]) => name), ["wind-ways-shop"]);
+        assert.deepEqual(kitsFor({ people: "human", place: "shop" }).map(([name]) => name), ["wind-ways-shop", "medieval-town"]);
         assert.equal(kitPiece("counter", { people: "human", place: "shop" }).model, "wind-ways-shop-counter");
+        assert.equal(kitPiece("torch", { people: "human", place: "shop" }).model, "medieval-town-torch");
         assert.deepEqual(kitPiece("chest", { people: "human", place: "upstairs", seed: 5 }), kitPiece("chest", { people: "human", place: "upstairs", seed: 5 }));
-        assert.equal(kitPiece("counter", { people: "orc", place: "shop" }), null);
-        assert.equal(kitPiece("counter", { people: "human", place: "guild" }), null);
+        assert.equal(kitPiece("counter", { people: "orc", place: "shop" }).model, "medieval-town-cabinet");
+        assert.equal(kitPiece("counter", { people: "human", place: "temple" }).model, "medieval-town-cabinet");
+        assert.equal(kitPiece("counter", { people: "human", place: "guild" }).model, "medieval-hall-cabinet");
         assert.equal(kitPiece("throne", { people: "human", place: "shop" }), null);
+        assert.equal(kitPiece("counter", { people: "human", place: "crypt" }), null);
 
         // (The tavern kit's in every people's taverns, toned to theirs; the humans' as it's made)
         for (const people of PEOPLES) {
@@ -237,10 +281,157 @@ describe("licensed prop kits (world/propkits.js)", () => {
             }
         }
 
-        // (Another people's shops have no kit)
+        // (Another people's shops have no Wind Ways' there either: the town kit's alone)
         for (const people of ["orc", "elf"]) {
-            assert.equal(kitProps(buildInterior(shopOf("swordsmith", people))).length, 0, people);
-            assert.equal(buildInterior(shopOf("swordsmith", people)).object.getObjectByName("kit-stand-ins"), undefined, people);
+            const set = kitProps(buildInterior(shopOf("swordsmith", people)));
+
+            assert.ok(set.length > 0 && set.every(({ model }) => model.startsWith("medieval-town-")), people);
+        }
+    });
+
+    it("sets every people's halls out from the halls kit, toned to theirs: a guild's, a town hall's, a keep's great hall and a castle's undercroft, and a barracks'", () => {
+        // (Of each kind of hall, how many of a role's pieces stand in it)
+        const COUNTS = {
+            guild: { counter: 4, table: 4, bench: 8, candlestick: 4, mug: 8, scroll: 4, skull: 1, barrel: 2, chandelier: 1, map: 5, shield: 4, sword: 1 },
+            hall: { counter: 5, "council-table": 3, bench: 10, candlestick: 4, strongbox: 2, antlers: 1, chandelier: 1, map: 3, picture: 3, shield: 4 },
+            keep: { throne: 2, runner: 4, "council-table": 4, bench: 8, candlestick: 2, goblet: 4, counter: 2, strongbox: 2, antlers: 2, chandelier: 2, shield: 6, sword: 2, picture: 3, map: 2 },
+            undercroft: { counter: 5, table: 2, bench: 4, mug: 2, candlestick: 1, cask: 3, strongbox: 2, torch: 4 },
+            barracks: { table: 3, bench: 6, candlestick: 1, mug: 2, barrel: 2, counter: 3, chest: 2, torch: 3, map: 2, shield: 3 },
+        };
+
+        for (const people of PEOPLES) {
+            for (const map of hallsOf(people)) {
+                const built = buildInterior(map);
+                const set = kitProps(built);
+                const name = `${people} ${map.style}${map.castle ? " (a castle's)" : ""}`;
+                const counts = { ...COUNTS[map.style], ...(map.style === "keep" && !map.castle ? { map: 3 } : {}) };
+
+                assert.ok(set.length > 15, `${name}: ${set.length}`);
+                assert.ok(set.every(({ model, tone }) => model.startsWith("medieval-hall-") && (tone ?? null) === TONES[people]), `${name}: the halls kit's, toned to theirs`);
+
+                for (const [role, count] of Object.entries(counts)) {
+                    assert.equal(halls(built, role).length, count, `${name}: ${role}`);
+                }
+
+                // (What's on a table stands on one of the kit's tables; standing pieces in their
+                // furnishing's squares, carpets aside; what hangs on a wall off the floor, under
+                // the frieze, in the room)
+                const boards = [...halls(built, "table"), ...halls(built, "council-table"), ...halls(built, "counter")];
+                const lying = ({ model }) => ["runner", "carpet"].includes(pieceOf(model).role);
+                const standing = set.filter((placement) => !placement.on && placement.y === undefined && !lying(placement));
+
+                for (const each of set.filter(({ on }) => on)) {
+                    assert.ok(boards.includes(each.on), `${name}: ${each.model} on a table`);
+                }
+
+                for (const each of standing) {
+                    assert.ok(map.blocked[Math.floor(each.z)][Math.floor(each.x)], `${name}: ${each.model} on an open square at ${each.x}, ${each.z}`);
+                }
+
+                for (const each of set.filter(({ model }) => ["map", "picture", "shield", "sword"].includes(pieceOf(model).role))) {
+                    assert.ok(each.y >= 0.85 && each.y + each.fit[1] <= 2.4, `${name}: ${each.model} from ${each.y} to ${each.y + each.fit[1]}`);
+                    assert.ok(each.x >= 0 && each.x <= map.width && each.z >= 0 && each.z <= map.height, `${name}: ${each.model} in the room`);
+                }
+
+                assert.ok(built.object.getObjectByName("kit-stand-ins")?.visible, `${name}: its own drawn till the kit's read`);
+            }
+        }
+    });
+
+    it("lights the halls kit's chandeliers, candlesticks and torches where their candles and cages are", () => {
+        for (const map of hallsOf("orc")) {
+            const built = buildInterior(map);
+            const flames = flamesIn(built);
+            const torches = halls(built, "torch");
+
+            assert.ok(flames.length >= 4, `${map.style}: ${flames.length} flames`);
+
+            for (const [x, y, z] of flames.slice(0, flames.length - torches.length)) {
+                assert.ok(built.candles.some((candle) => Math.hypot(candle[0] - x, candle[1] - y, candle[2] - z) < 1e-6), `${map.style}: a flame at ${[x, y, z].map((v) => v.toFixed(2))}`);
+            }
+
+            // (A torch's flame where its light is, in its cage)
+            for (const torch of torches) {
+                const [[x, y, z]] = flamesOf(pieceOf(torch.model), torch, torch.y);
+
+                assert.ok(Math.abs(y - 2.05) < 1e-9, `${map.style}: a torch's flame ${y} up`);
+                assert.ok(built.lights.some((light) => Math.hypot(light.x - x, light.z - z) < 1e-6), `${map.style}: a torch's light at its flame`);
+            }
+        }
+    });
+
+    it("sets every people's temples, smithies and shops out from the town kit, toned to theirs (the humans' shops their own kit's counters and chests first)", () => {
+        for (const people of PEOPLES) {
+            for (const map of townOf(people)) {
+                const built = buildInterior(map);
+                const set = kitProps(built);
+                const own = set.filter(({ model }) => model.startsWith("medieval-town-"));
+                const name = `${people} ${map.style}${map.look ? ` (${map.look})` : ""}${map.abbey ? " (an abbey)" : ""}`;
+                const count = (kind) => map.pieces.filter((piece) => piece.kind === kind).length;
+                const counts = {
+                    temple: { candelabrum: 2, "altar-book": 1, "candle-stand": 2, candle: 15, chandelier: 1, runner: 4, pew: 20, counter: map.abbey ? 2 : 0 },
+                    smithy: { "anvil-block": 1, sack: 1, workbench: 1, candlestick: 1, shield: 1 },
+                    shop: {
+                        torch: 4,
+                        counter: people === "human" ? 0 : 3,
+                        chest: people === "human" ? 0 : count("chest"),
+                        "candle-stand": count("votive"),
+                        lectern: count("side-table"),
+                        workbench: count("workbench"),
+                        table: map.look === "alchemist" ? count("table") : 0,
+                        cask: map.pieces.filter((piece) => piece.kind === "barrels").reduce((sum, { h }) => sum + h, 0),
+                        rug: map.look === "alchemist" ? 0 : 2 * count("carpet"),
+                    },
+                }[map.style];
+
+                assert.ok(own.length >= 4, `${name}: ${own.length}`);
+                assert.ok(own.every(({ tone }) => (tone ?? null) === TONES[people]), `${name}: the town kit's, toned to theirs`);
+                assert.ok(set.every(({ model }) => model.startsWith("medieval-town-") || (people === "human" && model.startsWith("wind-ways-shop-"))), `${name}: no other kit's`);
+
+                for (const [role, many] of Object.entries(counts)) {
+                    assert.equal(town(built, role).length, many, `${name}: ${role}`);
+                }
+
+                // (What stands on something stands on one of the kits' pieces; standing pieces
+                // in their furnishing's squares, rugs and runners aside; what hangs on a wall or
+                // stands raised off the floor, in the room)
+                const lying = ({ model }) => ["runner", "rug"].includes(pieceOf(model).role);
+
+                for (const each of set.filter(({ on }) => on)) {
+                    assert.ok(set.includes(each.on), `${name}: ${each.model} on one of the kit's`);
+                }
+
+                for (const each of set.filter((placement) => !placement.on && placement.y === undefined && !lying(placement))) {
+                    assert.ok(map.blocked[Math.floor(each.z)][Math.floor(each.x)], `${name}: ${each.model} on an open square at ${each.x}, ${each.z}`);
+                }
+
+                for (const each of set) {
+                    assert.ok(each.x >= 0 && each.x <= map.width && each.z >= 0 && each.z <= map.height, `${name}: ${each.model} in the room`);
+                }
+
+                assert.ok(built.object.getObjectByName("kit-stand-ins")?.visible, `${name}: its own drawn till the kit's read`);
+            }
+        }
+    });
+
+    it("lights the town kit's candelabra, candles, chandelier and torches where their candles and cages are", () => {
+        for (const map of townOf("lizard")) {
+            const built = buildInterior(map);
+            const flames = flamesIn(built);
+            const torches = town(built, "torch");
+
+            assert.ok(flames.length >= 1, `${map.style}: ${flames.length} flames`);
+
+            for (const [x, y, z] of flames.slice(0, flames.length - torches.length)) {
+                assert.ok(built.candles.some((candle) => Math.hypot(candle[0] - x, candle[1] - y, candle[2] - z) < 1e-6), `${map.style}: a flame at ${[x, y, z].map((v) => v.toFixed(2))}`);
+            }
+
+            for (const torch of torches) {
+                const [[x, y, z]] = flamesOf(pieceOf(torch.model), torch, torch.y);
+
+                assert.ok(Math.abs(y - 2.05) < 1e-9, `${map.style}: a torch's flame ${y} up`);
+                assert.ok(built.lights.some((light) => Math.hypot(light.x - x, light.z - z) < 1e-6), `${map.style}: a torch's light at its flame`);
+            }
         }
     });
 

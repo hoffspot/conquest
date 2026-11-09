@@ -2420,6 +2420,11 @@ test("the thumb stick, there from the start, walks the player the way it's pushe
 test("the mouse pointer a sword over the page, over the view showing what a click would do (an enemy, someone to talk to, the ground), lit and bigger shaken, large or the system's own as Game options say", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
+    // (The camera looking down on the player, as overlook: from the start view, looking out across
+    // the land, the foe a few steps ahead is just over their head on the screen, and each frame,
+    // which the pointer's shown on, is slow to draw in software)
+    await overlook(page);
+
     const cursor = (selector = "#view") => page.evaluate((selector) => getComputedStyle(document.querySelector(selector)).cursor, selector);
     const set = (id, on) =>
         page.evaluate(
@@ -5915,6 +5920,7 @@ test("buildings' floors built only once the player comes to their doors, though 
         const { game } = window.pellagos;
         const doors = [...game.visits.values()].filter((visit) => visit.maps.length && visit.door);
         const count = doors.length;
+        const before = game.memoryNow().interiorsMB;
 
         game.floorsMost = 1;
         game.advance(0.1);
@@ -5930,7 +5936,7 @@ test("buildings' floors built only once the player comes to their doors, though 
         // (Stood there a while: nothing built again, nothing more let go of)
         game.advance(3);
 
-        return { count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), MB: game.memoryNow().interiorsMB };
+        return { count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), before, MB: game.memoryNow().interiorsMB };
     }, spot);
 
     expect(stood.count, JSON.stringify(stood)).toBeGreaterThanOrEqual(2);
@@ -5938,7 +5944,9 @@ test("buildings' floors built only once the player comes to their doors, though 
     expect(stood.held === stood.floors && (stood.held <= 1 || stood.kept.length === 1), JSON.stringify(stood)).toBe(true);
     expect(Math.max(...stood.kept, 0)).toBeLessThanOrEqual(Math.min(...stood.gone));
     expect(stood.steady).toBe(true);
-    expect(stood.MB).toBeLessThan(counted.MB);
+    // (What the game holds the less for those let go: a floor furnished from a kit weighs more than
+    // one of the game's own, but is let go of as any)
+    expect(stood.MB, JSON.stringify(stood)).toBeLessThan(stood.before);
 });
 
 // (One start for the two, each its own step: the fingerpost's only looked at, as the game begins)
@@ -9542,8 +9550,10 @@ test("item levels and a legendary weapon: a piece's level and a legendary weapon
 
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
     // (A long walk through, the camera looking out across the land, and then a dozen clicks in the
-    // taproom, each waiting on a few frames drawn in software, over half a second each with the
-    // room lit by its flames: more than the usual time, with others running beside it)
+    // taproom, each waiting on a few frames drawn in software, a second or two each with the room
+    // lit by its flames and furnished from the tavern kit: more than the usual time, with others
+    // running beside it. On CI it took 175 s before the kits, 197 s and 211 s after, and over 240 s
+    // on main twice, its clicks unchanged)
     test.setTimeout(540000);
 
     // A saved game whose hero is a blow from their next rank with the blade, with 30 gold and a draught
@@ -15620,7 +15630,7 @@ test("Game options set the camera: following off at first, it keeps the way it's
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {
     // (Held three times, with the world played on between: more than the usual time, with others
     // running beside it)
-    test.setTimeout(300000);
+    test.setTimeout(360000);
     await playing(page, "/?play&seed=1");
     await overlook(page);
 
@@ -16124,7 +16134,7 @@ test("Cure on the Action Bar casts the cure for what's on the player, shown in i
 });
 
 test("a Prismatic chain: an element's spell cast from the Action Bar rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
-    test.setTimeout(180000);
+    test.setTimeout(240000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
 

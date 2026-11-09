@@ -17,7 +17,7 @@ skins; the Orc Warlord and the Orc Reaver, the caves' and the outlaws' hideouts'
 dressings of Snake|3D's modular orc from Fab; the Stone Golem of Harrowstone, a rare card's world
 boss, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss from Fab, with its three other
 skins (kept for something rarer); the Orc King, the orc's finest dressing, another rare card's
-world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; every people's taverns' furniture, lights and tableware from Dragon Motion's Medieval Props Kit from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
+world boss, with his two other skins, his champions Ironjaw and Bloodtusk; the Kaiju, HuyKhoi2407's Kaiju from Fab; the cerberus, Panchenko Lyudmila's Cerberus from Fab, the Halls of Bone's master in a hell and a rare card's world boss, with its two other skins; the Demon Boss, Panchenko Lyudmila's DemonBoss from Fab, the Breach's master in a hell (red) and a rare card's world boss (blue), with its other skin, green; and the Order of the Bell, Naked Singularity Studio's Templar Army from Fab, Bellhaven's zealots in its courts and its keep, in three liveries, and its riders on barded warhorses on the roads round it; its Prior, the keep's master, Alexander Lenski's Cathedral Guardian from Fab, with its three other skins; and the horses players buy at a stable and ride, Malbers Animations' Horse Animset Pro from Fab, in five coats, with the clips a rider's played on them (all 527 of the pack's animations kept besides, in the private repository, for later) (`client/models/beasts/LICENSE.md`); and Bellhaven, DmitriyDryzhak's White Castle from Fab, a place of its own, with its stand-in seen from the world round it and a kit of its parts its keep's insides are drawn with; the human peoples' timber forts, a guard tower and a forward garrison set together from Wind Ways' medieval village pack from Fab; the humans' shops' furniture, the game's first prop kit, from Wind Ways' medieval shop pack from Fab; every people's taverns', halls', temples', smithies' and shops' furniture, lights, tableware and wall dressing from Dragon Motion's Medieval Props Kit from Fab; and the humans' town houses and shops, built of Meshsmith Foundry's half-timbered building kit from Fab (`client/models/scenery/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
@@ -271,7 +271,19 @@ Ways' shop furniture, in the humans' shops. The second is Dragon Motion's Mediev
 tavern furniture, lights and tableware, in every people's taprooms and the rooms upstairs: their
 tables, benches, casks, beds, chests, counters and settles, chandeliers, wall sconces,
 candlesticks and a candelabrum, mugs, plates, jugs, bottles and cups, carpets, pictures, antlers
-and trophies on the walls, logs by the hearth.
+and trophies on the walls, logs by the hearth. The third is the same pack's furniture for every
+people's halls (`medieval-hall`): their adventurers' guilds, town halls, keeps' great halls,
+barracks and castles' undercrofts, with a carved throne, dining tables bare and clothed, benches,
+strongboxes and chests, carved cabinets under their desks and counters, chandeliers, wall torches
+whose flames burn in their cages, gilt goblets, open scrolls, maps, pictures, a tapestry, shields,
+a sword, antlers and a skull over the hearths, runners down a keep's carpet, barrels and casks.
+The fourth is its furniture for every people's temples, smithies and shops (`medieval-town`;
+the humans' shops keep Wind Ways' counters and chests): the temples' candelabra on the altar and
+standing either side of the statue, candles in their dishes before the shrines, a chained book,
+a chandelier for the ring of candles, runners up the aisle and high-backed settles for pews; the
+smithy's block under the anvil, its coal sack, a trestle workbench and a shield on its rack; the
+shops' carved cabinets under the counter, chests, wall torches, standing candelabra, lecterns,
+tables, casks on their blocks and rugs.
 
 - **One file, a node a piece, one atlas.** Its pieces are set a square each in a `.blend`
   (`.claude/skills/import-scene-model/scripts/kit.py ... --cells 8`), then joined, baked onto one
