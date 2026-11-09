@@ -65,6 +65,13 @@ export const WAY_LINE = Object.freeze({
 export const WAY_WISPS = Object.freeze({ count: 36, life: 2.8, rise: 0.9, from: 3, to: 40, size: 0.16 });
 
 /**
+ * Where the player's come to along the way there, followed each frame: looked for from `back`
+ * metres behind where they were last to `on` metres on from it, or anywhere along it once they're
+ * more than `off` metres from it there.
+ */
+export const WAY_FOLLOW = Object.freeze({ back: 3, on: 12, off: 6 });
+
+/**
  * The glow on the ground round a column's foot: how far across it's drawn (metres), and how far
  * out its bright ring is (a share of its half width; it swells and shrinks a little with time).
  */
@@ -332,6 +339,7 @@ export class PinMarks {
         // (Its middle's points as laid, [x, y, z], and how far along each is: where the player's
         // come to along it, and where the wisps rise)
         this.middles = [];
+        this.flat = [];
         this.alongs = [];
 
         // The wisps drifting up off it near the player: each where it rose from, how old it is, and
@@ -370,6 +378,7 @@ export class PinMarks {
             this.line.visible = false;
             this.wisps.points.visible = false;
             this.middles = [];
+            this.flat = [];
             this.alongs = [];
 
             return;
@@ -412,6 +421,7 @@ export class PinMarks {
         this.lineLength.value = walked;
         this.from.value = 0;
         this.middles = middles;
+        this.flat = middles.map(([x, , z]) => [x, z]);
         this.alongs = alongs;
         this.line.visible = true;
         this.wisps.points.visible = true;
@@ -431,11 +441,13 @@ export class PinMarks {
         this.reach.value = farReach * 0.9;
         this.pulse.value = (this.pulse.value + dt * WAY_LINE.pulse.speed) % (WAY_LINE.pulse.every * WAY_LINE.pulse.speed * 1000);
 
-        if (this.line.visible && at && this.middles.length > 1) {
-            this.from.value = nearestAlong(
-                this.middles.map(([x, , z]) => [x, z]),
-                at,
-            ).along;
+        // (Looked for near where they were along it last: a way that comes back close to itself,
+        // round a bend or up a slope's zigzags, isn't taken for further along than they are;
+        // anywhere along it once they're well off it there)
+        if (this.line.visible && at && this.flat.length > 1) {
+            const near = nearestAlong(this.flat, at, { from: this.from.value - WAY_FOLLOW.back, to: this.from.value + WAY_FOLLOW.on });
+
+            this.from.value = near.off <= WAY_FOLLOW.off ? near.along : nearestAlong(this.flat, at).along;
         }
 
         this.wisps.update(dt, this.line.visible ? this : null);

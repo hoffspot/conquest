@@ -111,6 +111,17 @@ describe("ways across the world (core/journey.js)", () => {
         assert.deepEqual(wayFrom(way, 20), [[20, 0], [30, 0], [30, 40]]);
         assert.deepEqual(wayFrom(way, 999), [[30, 40]]);
     });
+
+    it("finds where along a way that comes back close to itself someone is, near where they were last, not further on where it passes them again", () => {
+        // (Up a slope's zigzag: out 30 m east, 2 m north, back 30 m west)
+        const way = [[0, 0], [30, 0], [30, 2], [0, 2]];
+
+        assert.equal(nearestAlong(way, [10, 1.2]).along, 52, "anywhere: the way back, nearer");
+        assert.deepEqual(nearestAlong(way, [10, 1.2], { from: 5, to: 20 }), { along: 10, off: 1.2, segment: 0 });
+        // (Only within it, its ends where it's cut)
+        assert.deepEqual(nearestAlong(way, [40, 0], { to: 25 }), { along: 25, off: 15, segment: 0 });
+        assert.deepEqual(nearestAlong(way, [0, 0], { from: 40, to: 45 }), { along: 45, off: Math.hypot(17, 2), segment: 2 });
+    });
 });
 
 describe("running somewhere far (app/journey.js)", () => {

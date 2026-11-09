@@ -17865,7 +17865,7 @@ test("walking into the ring of light round the pin's foot takes the pin away, to
     expect(seen.kept).toEqual(["pin", null, "pin", null]);
 });
 
-test("the way to the pin is kept as the player runs along it: never gone nor cut short of where it went, fading in from where they've come to, its pulses running on from them, wisps rising off it", async ({ page }) => {
+test("the way to the pin is kept as the player runs along it: never gone, nor cut short of where it went, fading in from where they've come to, its pulses running on from them, wisps rising off it", async ({ page }) => {
     // (A long run, a tenth of a second at a time: more than the usual time)
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -17905,7 +17905,9 @@ test("the way to the pin is kept as the player runs along it: never gone nor cut
 
             const wisps = marks.wisps.points.geometry.attributes.color.array.filter((_, i) => i % 3 === 2 && _ > 0.01).length;
 
-            steps.push({ shown: marks.line.visible, ahead: marks.lineLength.value - marks.from.value, from: marks.from.value, moved: Math.hypot(me.x - before[0], me.y - before[1]), pulsed: marks.pulse.value - pulse, wisps, off: Math.hypot(me.x - pin[0], me.y - pin[1]) });
+            const end = marks.middles.at(-1);
+
+            steps.push({ shown: marks.line.visible, short: end ? Math.hypot(end[0] - pin[0], end[2] - pin[1]) : null, from: marks.from.value, moved: Math.hypot(me.x - before[0], me.y - before[1]), pulsed: marks.pulse.value - pulse, wisps, off: Math.hypot(me.x - pin[0], me.y - pin[1]) });
         }
 
         return { steps, speed: WAY_LINE.pulse.speed };
@@ -17918,9 +17920,10 @@ test("the way to the pin is kept as the player runs along it: never gone nor cut
     // Never gone while they run there
     expect(far.filter(({ shown }) => !shown).length).toBe(0);
 
-    // Never cut short of where it went: what's ahead of them along it no shorter than it was but by
-    // as far as they've come (and a little: a way found anew, that goes further)
-    const cut = far.slice(1).map((step, k) => ({ k, was: far[k].ahead, now: step.ahead, moved: step.moved })).filter(({ was, now, moved }) => now < was - moved - 2.5);
+    // Never cut short of where it went: its far end never further from the pin than it was (but a
+    // little: a way found anew that goes as far, by another way; where they cut across a bend it
+    // went round, it's shorter ahead of them, and goes as far)
+    const cut = far.slice(1).map((step, k) => ({ k, was: far[k].short, now: step.short })).filter(({ was, now }) => now > was + 3);
 
     expect(cut, JSON.stringify(cut.slice(0, 5))).toEqual([]);
     // (Where they've come to along it followed between its layings, so it fades in from their feet)

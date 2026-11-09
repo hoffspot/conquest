@@ -438,8 +438,9 @@ const ARRIVE_WITHIN = 140;
 // be (metres, the furthest first: the rest across the world's cells, core/journey.js), to the
 // point on the mesh within `snap` metres of there; found across the world again once they're
 // this far off it (metres), at most this often (seconds); the way drawn over the mesh kept while
-// they're within `kept` metres of it, unless one found anew goes `longer` metres further
-const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, longer: 2 });
+// they're within `kept` metres of it (looked for no further along it than they could have come
+// since it was laid: `since` metres), unless one found anew goes `longer` metres further
+const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, since: 20, longer: 2 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
@@ -7549,7 +7550,9 @@ export class Game {
         const laid = this.pinNear;
 
         if (laid?.length > 1) {
-            const on = nearestAlong(laid, at);
+            // (Near its start, where they were when it was laid: not a later part of it that
+            // comes back close by)
+            const on = nearestAlong(laid, at, { to: PIN_WAY.since });
             const left = lengthOf(laid) - on.along;
 
             if (on.off <= PIN_WAY.kept && left > 1 && (!near || lengthOf(near.way) < left - PIN_WAY.longer)) {

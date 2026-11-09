@@ -239,21 +239,30 @@ export function lengthOf(points) {
     return length;
 }
 
-/** Where along a way (its points, [x, y]) a point is nearest: { along (metres from its start), off (metres from it), segment }. */
-export function nearestAlong(points, [x, y]) {
-    let best = { along: 0, off: Infinity, segment: 0 };
+/**
+ * Where along a way (its points, [x, y]) a point is nearest: { along (metres from its start), off
+ * (metres from it), segment }. Only along the part of it from `from` to `to` metres along, if
+ * they're given: near where someone was along it last, so a way that comes back close to itself
+ * (round a bend, up a slope's zigzags) isn't taken for further along than they are.
+ */
+export function nearestAlong(points, [x, y], { from = 0, to = Infinity } = {}) {
+    let best = { along: Math.max(0, from), off: Infinity, segment: 0 };
     let walked = 0;
 
     for (let k = 1; k < points.length; k++) {
         const [ax, ay] = points[k - 1];
         const [dx, dy] = [points[k][0] - ax, points[k][1] - ay];
         const long = Math.sqrt(dx * dx + dy * dy);
-        const t = long > 0 ? Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / (long * long))) : 0;
-        const [px, py] = [ax + dx * t, ay + dy * t];
-        const off = Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
 
-        if (off < best.off) {
-            best = { along: walked + long * t, off, segment: k - 1 };
+        if (walked + long >= from && walked <= to) {
+            const [lo, hi] = long > 0 ? [Math.max(0, (from - walked) / long), Math.min(1, (to - walked) / long)] : [0, 0];
+            const t = long > 0 ? Math.min(hi, Math.max(lo, ((x - ax) * dx + (y - ay) * dy) / (long * long))) : 0;
+            const [px, py] = [ax + dx * t, ay + dy * t];
+            const off = Math.sqrt((x - px) * (x - px) + (y - py) * (y - py));
+
+            if (off < best.off) {
+                best = { along: walked + long * t, off, segment: k - 1 };
+            }
         }
 
         walked += long;
