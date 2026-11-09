@@ -127,12 +127,34 @@ const LOOKS = Object.freeze({
 export const UNIQUE_LOOKS = Object.freeze({ vespers: Object.freeze(["vespers"]), bulwark: Object.freeze(["bulwark"]) });
 
 /**
- * What a weapon that comes in several looks is held as, by its look (core/gear.js GEAR `looks`,
- * rolled on each: a mace's): its equipment id, the CC0 maces' models (characters/equipment.js).
+ * The designs of Dragon Motion's shields and swords (core/gear.js DESIGNS), by their number in the
+ * pack (characters/items.js HELD_MODELS: each its own file, read only when it's held).
  */
-export const HELD_LOOKS = Object.freeze({ mace: Object.freeze({ ornate: "maceOrnate", studded: "maceStudded", star: "maceStar", bronze: "maceBronze", morningStar: "maceMorningStar" }) });
+export const KIT_DESIGNS = Object.freeze({
+    sword: Object.freeze({ knightly: 1, blackened: 2 }),
+    kiteShield: Object.freeze({ azureCross: 1, dragonCrown: 2, lilyCross: 3, paleCross: 4, ringCross: 5, lilies: 6, whiteCross: 7, roundels: 8, silverScroll: 9, seaScroll: 10, ironBands: 11, bendy: 12, swordLily: 13, redDragon: 14, etched: 15, crowned: 21, blackBeast: 22, battle: 23, darkDamask: 24, verdigris: 25 }),
+    towerShield: Object.freeze({ paintedFigures: 16, dragons: 17, heraldry: 18, blackScroll: 19, lionAxes: 20 }),
+});
 
-export const lookOf = ({ id, people = null, unique = null }) => UNIQUE_LOOKS[unique] ?? LOOKS[id] ?? uniformLook(id, people);
+/** The name in characters/items.js HELD_MODELS of a design of one of Dragon Motion's shields or swords (KIT_DESIGNS), or null. */
+export const kitModel = (kind, look) => (KIT_DESIGNS[kind]?.[look] ? `medieval-${kind === "sword" ? "sword" : "shield"}-${String(KIT_DESIGNS[kind][look]).padStart(2, "0")}` : null);
+
+/** The equipment id of a design of a kind (characters/equipment.js: its kind's, held as one of the pack's: "kiteShieldAzureCross"). */
+export const designItem = (kind, look) => `${kind}${look[0].toUpperCase()}${look.slice(1)}`;
+
+/**
+ * What a piece that comes in several looks is held or worn as, by its look (core/gear.js GEAR
+ * `looks`, rolled on each: a mace's; a sword's or shield's design, DESIGNS): its equipment id, the
+ * CC0 maces' models, Dragon Motion's shields and swords (characters/equipment.js); none for one in
+ * the game's own make (`own`).
+ */
+export const HELD_LOOKS = Object.freeze({
+    mace: Object.freeze({ ornate: "maceOrnate", studded: "maceStudded", star: "maceStar", bronze: "maceBronze", morningStar: "maceMorningStar" }),
+    ...Object.fromEntries(Object.entries(KIT_DESIGNS).map(([kind, looks]) => [kind, Object.freeze(Object.fromEntries(Object.keys(looks).map((look) => [look, designItem(kind, look)])))])),
+});
+
+// (A shield in a design: core/progress.js Progress worn, its `look`)
+export const lookOf = ({ id, people = null, unique = null, look = null }) => UNIQUE_LOOKS[unique] ?? (HELD_LOOKS[id]?.[look] ? [HELD_LOOKS[id][look]] : null) ?? LOOKS[id] ?? uniformLook(id, people);
 
 /** What a character wearing some gear ([{ id, people }]) has on: equipment ids, each once. */
 export const dress = (pieces) => [...new Set(pieces.flatMap((piece) => lookOf(piece)))];

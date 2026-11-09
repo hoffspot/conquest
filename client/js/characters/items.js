@@ -421,14 +421,43 @@ function mace() {
     ], "mace");
 }
 
+// How each of Dragon Motion's shields and swords is held (characters/liveries.js KIT_DESIGNS: each
+// a file of its own, `medieval-shield-NN.bin`, `medieval-sword-NN.bin`, in the catalog's
+// `gear-medieval-shields` and `gear-medieval-swords`, read only when it's held).
+// How each of the pack's shapes is held (measured in their files: each faces +x, its foot at y 0,
+// across along z): where on its back the forearm is, two fifths of the way down from its top in
+// its middle, as the game's own kite and tower shields are (`grip`, metres in its file), and how
+// much it's drawn smaller (`scale`: the long kites, 1.3 m in the pack, a hero's 0.95 m, clear of
+// the backs of the knees when slung). The swords' grips, a hand's breadth below the guard: the
+// first's long, a hand and a half (`round`, `hilt`: characters/equipment.js).
+const KIT_SHAPES = Object.freeze([
+    { numbers: [1, 2, 3, 4, 5], grip: [-0.031, 0.445, 0], stand: "kiteShield" },
+    { numbers: [6, 7, 8, 9, 10], grip: [-0.017, 0.758, 0], scale: 0.74, stand: "kiteShield" },
+    { numbers: [11, 12, 13, 14, 15], grip: [0.055, 0.769, 0], scale: 0.73, stand: "kiteShield" },
+    { numbers: [16, 17, 18, 19, 20], grip: [-0.085, 0.607, 0], stand: "towerShield" },
+    { numbers: [21, 22, 23, 24, 25], grip: [-0.043, 0.407, 0], stand: "kiteShield" },
+]);
+const KIT_SWORDS = Object.freeze({ 1: [-0.004, 0.17, 0], 2: [0, 0.115, 0] });
+
+const twoDigits = (n) => String(n).padStart(2, "0");
+
+// HELD_MODELS' entries for the pack's shields and swords
+function kitHeld() {
+    const shields = KIT_SHAPES.flatMap(({ numbers, grip, scale = 1, stand }) => numbers.map((n) => [`medieval-shield-${twoDigits(n)}`, Object.freeze({ asset: "gear-medieval-shields", file: `medieval-shield-${twoDigits(n)}.bin`, grip, scale, stand })]));
+    const swords = Object.entries(KIT_SWORDS).map(([n, grip]) => [`medieval-sword-${twoDigits(n)}`, Object.freeze({ asset: "gear-medieval-swords", file: `medieval-sword-${twoDigits(n)}.bin`, grip, stand: "sword" })]);
+
+    return Object.fromEntries([...shields, ...swords]);
+}
+
 /**
  * What's held as one of the catalog's models ("held:<name>": characters/equipment.js, a mace's
  * looks), each its prop's (client/models/dungeons, scripts/build-props.js): `asset`, its catalog
  * entry; turned so its haft runs up (+y) to its head (`turn`, radians about x, y and z: the bronze
  * mace is made lying down, its head at -z), with where it's held (`grip`, in its file, metres:
- * about 9 cm up from the end of its haft) at the origin; and `stand`, the item made here drawn till
- * its model's read, and in its place where it can't be (no page to read it from: the motion check,
- * the tests).
+ * about 9 cm up from the end of its haft) at the origin, drawn as big as it's made or `scale`d; and
+ * `stand`, the item made here drawn till its model's read, and in its place where it can't be (no
+ * page to read it from: the motion check, the tests; without the licensed models, the pack's). Of
+ * an entry of several files, its own (`file`).
  */
 export const HELD_MODELS = Object.freeze({
     mace: Object.freeze({ asset: "dungeon-prop-mace", grip: [0, -0.013, 0], stand: "mace" }),
@@ -436,6 +465,7 @@ export const HELD_MODELS = Object.freeze({
     "mace-star": Object.freeze({ asset: "dungeon-prop-mace-star", grip: [0, -0.128, 0], stand: "mace" }),
     "mace-bronze": Object.freeze({ asset: "dungeon-prop-mace-bronze", turn: [Math.PI / 2, 0, 0], grip: [0, 0, 0.306], stand: "mace" }),
     "morning-star": Object.freeze({ asset: "dungeon-prop-morning-star", grip: [0, -0.022, 0], stand: "mace" }),
+    ...kitHeld(),
 });
 
 // One of HELD_MODELS (`name`), as it's held: its stand-in at first, its model in its place once
@@ -443,11 +473,12 @@ export const HELD_MODELS = Object.freeze({
 // then (`userData.resized`, given the box it fills: what hangs from the belt swings as long as it
 // is, character.js hanging)
 function heldModel(name, fit) {
-    const { asset, turn = [0, 0, 0], grip, stand } = HELD_MODELS[name];
+    const { asset, file = null, turn = [0, 0, 0], grip, scale = 1, stand } = HELD_MODELS[name];
     const group = new THREE.Group();
     const standIn = buildItem(stand, fit);
     const page = globalThis.document?.baseURI;
-    const url = page && ASSETS.models[asset] ? Object.values(filesOf(ASSETS, asset, page))[0] : null;
+    const files = page && ASSETS.models[asset] ? filesOf(ASSETS, asset, page) : {};
+    const url = (file ? files[file] : Object.values(files)[0]) ?? null;
 
     group.name = `held:${name}`;
     group.add(standIn);
@@ -463,6 +494,7 @@ function heldModel(name, fit) {
                     node.castShadow = Boolean(node.isMesh);
                 });
                 held.rotation.set(...turn);
+                held.scale.setScalar(scale);
                 held.add(model);
 
                 const box = new THREE.Box3().setFromObject(held);

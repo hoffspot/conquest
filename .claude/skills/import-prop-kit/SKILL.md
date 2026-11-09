@@ -56,6 +56,11 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
    "always"` with `mergeMaterials` (an atlas of 2,048; normals 1,024; KTX2), and `cells: { "size":
    8, "bakeFirst": true }`, so they're cut apart again once baked, every piece the one material.
    `simplify` evenly (`ratio`, `error`, `permissive`): no piece shares an edge with another.
+   A packed texture's channels are what its pixels say, not its name: look at each channel
+   (occlusion is white with dark creases, metal bright only on the metal). Dragon Motion's
+   "RMA" textures are occlusion in red, roughness in green and metal in blue; read as their name
+   says, everything is unlit in shade and half metal (`docs/LICENSED_MODELS.md`, *Gear in
+   faction designs*).
 3. Look at it in the pipeline's viewer: every piece there, none black, none see-through. Read
    the build's warnings: faces mapped to a point of their textures (a palette's way) bake black;
    kit.py spreads them over a few texels.

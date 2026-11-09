@@ -197,11 +197,12 @@ export const SPOILS = Object.freeze({
     orcBloodtusk: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }] },
     orcRaider: { gold: [5, 16], items: [{ id: "potion", chance: 0.12 }] },
     // (The Order of the Bell: what's in their purses, the little bells they wear, and what they
-    // carry; the Black Choir's and their Prior's more of each)
+    // carry, a sword of the Order's own make, core/gear.js DESIGNS; the Black Choir's and their
+    // Prior's more of each)
     bellInitiate: { gold: [3, 10], items: [{ id: "potion", chance: 0.15 }, { id: "bellToken", chance: 0.25 }] },
-    bellBrother: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }, { id: "sword", chance: 0.05 }] },
-    bellRider: { gold: [18, 40], items: [{ id: "potion", chance: 0.4 }, { id: "bellToken", chance: 0.8 }, { id: "sword", chance: 0.08 }] },
-    choirRider: { gold: [26, 60], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }, { id: "sword", chance: 0.1 }] },
+    bellBrother: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }, { id: "sword", chance: 0.05, look: "knightly" }] },
+    bellRider: { gold: [18, 40], items: [{ id: "potion", chance: 0.4 }, { id: "bellToken", chance: 0.8 }, { id: "sword", chance: 0.08, look: "knightly" }] },
+    choirRider: { gold: [26, 60], items: [{ id: "potion", chance: 0.5 }, { id: "bellToken", chance: 0.9, count: [1, 2] }, { id: "sword", chance: 0.1, look: "knightly" }] },
     bellSpearman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }] },
     bellMaceman: { gold: [6, 18], items: [{ id: "potion", chance: 0.25 }, { id: "bellToken", chance: 0.5 }, { id: "mace", chance: 0.06 }] },
     bellArcher: { gold: [5, 16], items: [{ id: "potion", chance: 0.2 }, { id: "bellToken", chance: 0.45 }, { id: "bow", chance: 0.05 }] },
@@ -362,9 +363,9 @@ export function rollSpoils(creature, tier, random, least = tier, { elite = false
     const gold = purse ? Math.round(random.int(...purse) * tierPower(tier) * (elite ? ELITE_SPOILS.gold : 1)) : 0;
     const items = [];
 
-    for (const { id, chance, count = [1, 1] } of table.items) {
+    for (const { id, chance, count = [1, 1], look = null } of table.items) {
         if (random.chance(Math.min(MOST_CHANCE, chance + above * CHANCE_PER_TIER))) {
-            items.push({ id, quality: "common", count: random.int(...count) });
+            items.push({ id, quality: "common", count: random.int(...count), ...(look ? { look } : {}) });
         }
     }
 

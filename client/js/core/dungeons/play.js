@@ -47,10 +47,11 @@ export const FALLEN = Object.freeze({ gold: [3, 10], gear: 0.2, potion: 0.2, ant
 export const HOARD = Object.freeze({ gold: [80, 150], gear: [3, 5], up: 2, potions: [1, 2] });
 
 // A piece of gear for a chest: any but a people's uniform, made as a cache's at a tier, a wand's or
-// grimoire's boost rolled
-function gearPiece(tier, random, people, { level = 1, falloff = 1 } = {}) {
+// grimoire's boost rolled; a sword or shield in one of its `maker`'s designs (core/gear.js
+// DESIGNS: the Order of the Bell's in their keep, the people's whose land the dungeon's in)
+function gearPiece(tier, random, people, { level = 1, falloff = 1, maker = people } = {}) {
     const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-    const made = rollGear(id, cacheMake(tier, random, { falloff }), random, { people, level });
+    const made = rollGear(id, cacheMake(tier, random, { falloff }), random, { people, maker, level });
 
     return ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made;
 }
@@ -58,11 +59,11 @@ function gearPiece(tier, random, people, { level = 1, falloff = 1 } = {}) {
 const goldAt = ([least, most], tier, random) => Math.round(random.int(least, most) * (1 + CHEST_GOLD * (Math.max(1, tier) - 1)));
 
 /** A share of a small chest's (COFFER) at a level's tier: { gold, items }. */
-export function rollCoffer(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+export function rollCoffer(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
     const items = [];
 
     if (random.chance(COFFER.gear)) {
-        items.push(gearPiece(tier, random, people, { level, falloff }));
+        items.push(gearPiece(tier, random, people, { level, falloff, maker }));
     }
 
     if (random.chance(COFFER.potion)) {
@@ -73,11 +74,11 @@ export function rollCoffer(tier, random, { people = "human", level = 1, falloff 
 }
 
 /** A share of what's left on one of the fallen (FALLEN) at a level's tier: { gold, items }. */
-export function rollFallen(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+export function rollFallen(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
     const items = [];
 
     if (random.chance(FALLEN.gear)) {
-        items.push(gearPiece(tier, random, people, { level, falloff }));
+        items.push(gearPiece(tier, random, people, { level, falloff, maker }));
     }
 
     if (random.chance(FALLEN.potion)) {
@@ -92,12 +93,12 @@ export function rollFallen(tier, random, { people = "human", level = 1, falloff 
 }
 
 /** A share of the boss's hoard (HOARD) at a tier (hoardTier's): { gold, items }. */
-export function rollHoard(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+export function rollHoard(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
     const items = [];
     const made = Math.min(TIERS, tier + HOARD.up);
 
     for (let k = random.int(...HOARD.gear); k > 0; k--) {
-        items.push(gearPiece(made, random, people, { level, falloff }));
+        items.push(gearPiece(made, random, people, { level, falloff, maker }));
     }
 
     for (let k = random.int(...HOARD.potions); k > 0; k--) {

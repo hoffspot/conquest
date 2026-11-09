@@ -2555,7 +2555,7 @@ export class Host {
                         const { hoard = "hoard", relic = false, master } = LAIRS[this.#siteOf(beast.lair).kind];
 
                         // (Its gold as its own; a treasure map in it as well made as its master's tier)
-                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, mapTier: master[1], relic });
+                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", maker: this.#landMakerAt(heart), tier: 1, mapTier: master[1], relic });
                     }
                 }
 
@@ -3812,7 +3812,7 @@ export class Host {
             return;
         }
 
-        this.#opened(id, "hoard", { at: this.#ringHeart(ring), maps: [], map: "town", square: held.chest, people: "human", tier: 1, relic: "moonsilver" });
+        this.#opened(id, "hoard", { at: this.#ringHeart(ring), maps: [], map: "town", square: held.chest, people: "human", maker: this.#landMakerAt(this.#ringHeart(ring)), tier: 1, relic: "moonsilver" });
         this.trials.delete(id);
         this.#event("trial", { change: "fallen", trial: id, ring: held.ring });
     }
@@ -4006,7 +4006,10 @@ export class Host {
     #loot(player, fallen) {
         // (An invasion's raiders: as their band's are, no uniforms of a people's)
         const band = this.soldiers.get(fallen.id)?.side === "invader" ? BANDS[fallen.team] : null;
-        const { gold, items } = rollLoot(band?.loot ?? fallen.kind, this.random, { ...(fallen.kind === "soldier" && !band ? { people: fallen.team } : {}), ...this.#making(player, powerOf(fallen)) });
+        // (A sword or shield on them in a design of whose make it is, core/gear.js DESIGNS: their
+        // band's, their people's, an orc's own; else the people's whose land they fell in)
+        const maker = band || fallen.kind === "soldier" ? fallen.team : fallen.kind === "orc" ? "orc" : this.#landMaker(fallen);
+        const { gold, items } = rollLoot(band?.loot ?? fallen.kind, this.random, { ...(fallen.kind === "soldier" && !band ? { people: fallen.team } : {}), maker, ...this.#making(player, powerOf(fallen)) });
         const kept = items.filter((item) => player.progress.stow(item));
 
         if (!gold && !kept.length) {
@@ -4264,9 +4267,23 @@ export class Host {
     }
 
     // A piece of gear as it's made for a player (bought, given): of their might's level (mightFor),
-    // with what's rolled on it (core/gear.js), and a wand's or grimoire's boost
-    #made(ware, player) {
-        return madeOf(ware, this.random, { level: this.mightFor(player.id) });
+    // with what's rolled on it (core/gear.js), and a wand's or grimoire's boost; a sword or shield
+    // in one of its `maker`'s designs (core/gear.js DESIGNS: the shopkeeper's people's, the realm's
+    // that gives it)
+    #made(ware, player, maker = null) {
+        return madeOf(ware, this.random, { level: this.mightFor(player.id), maker: maker ?? ware.people ?? null });
+    }
+
+    // Whose make what's found where an actor is is (core/gear.js DESIGNS): the people's whose land
+    // it is, out in the world (none in the wild lands, nor indoors)
+    #landMaker({ map, x, y }) {
+        return map === "town" ? this.#landMakerAt([x, y]) : null;
+    }
+
+    // Whose make what's found at a point of the world is (core/gear.js DESIGNS): the people's whose
+    // land it's in, none in the wild lands
+    #landMakerAt(at) {
+        return Array.isArray(at) && Number.isFinite(at[0]) && Number.isFinite(at[1]) ? (landAt(this.world.plan, at[0], at[1]).race ?? null) : null;
     }
 
     /**
@@ -4340,7 +4357,7 @@ export class Host {
 
         // (The special as it is, its rolls on it already; anything else's rolled as it's bought: a
         // wand's or grimoire's boost, rarely high; better made gear's bonuses)
-        const bought = special ? atLevel(structuredClone(ware), level) : this.#made(ware, player);
+        const bought = special ? atLevel(structuredClone(ware), level) : this.#made(ware, player, trading.people);
 
         if (!player.progress.stow(bought)) {
             return refuse("full");
@@ -4792,13 +4809,13 @@ export class Host {
             }
 
             if (elite) {
-                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
+                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", maker: this.#landMaker(fallen), ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
             // (The leader of an ambush caught out: its stash, core/ambush.js AMBUSH `stash`)
             if (beast.ambush && beast.master && this.ambushes.get(beast.ambush)?.caught) {
                 bundle.gold += this.random.int(...AMBUSH.stash);
-                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
+                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", maker: this.#landMaker(fallen), ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
             if (!bundle.gold && !bundle.items.length) {
@@ -10660,7 +10677,7 @@ export class Host {
     // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
     // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
     // alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, tier, mapTier = tier, relic = false, fought = [] }) {
+    #opened(id, kind, { at, maps, map, square, people, maker = people, tier, mapTier = tier, relic = false, fought = [] }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
@@ -10673,7 +10690,7 @@ export class Host {
 
             // (Made for the land's power where it is, or a lair's master's: core/might.js)
             const made = this.#making(player, tierPowerOf(mapTier));
-            const bundle = kind === "cache" ? rollCache(tier, this.random, { people, ...made }) : rollLoot(kind, this.random, { people, relic, ...made });
+            const bundle = kind === "cache" ? rollCache(tier, this.random, { people, maker, ...made }) : rollLoot(kind, this.random, { people, maker, relic, ...made });
 
             if (kind !== "cache") {
                 bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
@@ -13354,7 +13371,7 @@ export class Host {
             return;
         }
 
-        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier, fought: cache.fought ?? [] });
+        this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", maker: this.#landMakerAt(cache.at), tier: cache.tier, fought: cache.fought ?? [] });
         this.#event("cache", { cache: id, change: "opened" });
     }
 
@@ -13787,6 +13804,10 @@ export class Host {
         this.ground.delete(dropped.id);
         delve.opened.push(dropped.coffer);
 
+        // (A sword or shield in it in a design of whose make it is, core/gear.js DESIGNS: the Order
+        // of the Bell's in their keep, else the people's whose land the dungeon's in)
+        const maker = (building.dungeon?.theme ?? building.theme) === "keep" ? "bell" : this.#landMakerAt(this.#siteOf(dropped.dungeon)?.at);
+
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
             const there = actor && !actor.dead && (dropped.hoard ? building.maps.includes(actor.map) : actor.map === dropped.map && hypot(actor.x - dropped.square[0] - 0.5, actor.y - dropped.square[1] - 0.5) <= SPOILS_REACH);
@@ -13796,7 +13817,7 @@ export class Host {
             }
 
             const hoard = dropped.hoard ? hoardTier(level.tier, mightTier(this.mightFor(player.id))) : null;
-            const made = this.#making(player, tierPowerOf(hoard ?? level.tier));
+            const made = { ...this.#making(player, tierPowerOf(hoard ?? level.tier)), maker };
             const bundle = dropped.hoard ? rollHoard(hoard, this.random, made) : dropped.remains ? rollFallen(level.tier, this.random, made) : rollCoffer(level.tier, this.random, made);
 
             // (A treasure map in a chest or the hoard now and then: core/treasure.js MAP_FINDS)
@@ -16563,7 +16584,7 @@ export class Host {
             const weapon = weaponOf(player.progress);
             const held = ITEMS[weapon]?.slot === "mainHand" ? weapon : "sword";
             const given = armouryGift(due, held, offHandFits(held, "shield") === null, player.realm);
-            const gift = this.#made(given, player);
+            const gift = this.#made(given, player, player.realm);
 
             if (!player.progress.stow(gift)) {
                 return refuse("full");

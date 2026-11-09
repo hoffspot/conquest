@@ -675,9 +675,10 @@ export function rollMake(random, { falloff = 1 } = {}) {
  * rolled, of a `level` (gear.js rollGear), a uniform's piece's make as likely as MAKES has it, less
  * likely exceptional for an easy kill (`falloff`: rollMake); and, the dead's (`relic`), one of their
  * relics (rollRelic); or, Lunara's guardian's (`relic` "moonsilver"), a relic of moonsilver
- * (rollMoonsilver).
+ * (rollMoonsilver). A sword or shield in one of its `maker`'s designs (gear.js DESIGNS: theirs, or
+ * a band's, or the people's whose land they fell in), as `people` make them unless said.
  */
-export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false, level = 1, falloff = 1 } = {}) {
+export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", maker = people, relic = false, level = 1, falloff = 1 } = {}) {
     const table = LOOT[kind];
 
     if (!table) {
@@ -689,7 +690,7 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
         items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality, uniform }) => {
             const kindOf = uniform ? UNIFORM[Math.floor(random.next() * UNIFORM.length) % UNIFORM.length] : id;
 
-            return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random, { falloff }) : "common"), random, { people, level }) : { id: kindOf, quality: quality ?? "common" };
+            return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random, { falloff }) : "common"), random, { people, maker, level }) : { id: kindOf, quality: quality ?? "common" };
         }),
     };
 
@@ -1055,14 +1056,15 @@ export class Progress {
     }
 
     /**
-     * What they wear that shows: each piece but the weapon in their hand ([{ id, people }]:
-     * characters/liveries.js dresses a character in them).
+     * What they wear that shows: each piece but the weapon in their hand ([{ id, people, unique,
+     * look }]: characters/liveries.js dresses a character in them; a shield in its design,
+     * core/gear.js DESIGNS).
      */
     worn() {
         return SLOT_IDS.filter((slot) => slot !== "mainHand" && this.gear[slot]).map((slot) => {
-            const { id, people, unique } = this.gear[slot];
+            const { id, people, unique, look } = this.gear[slot];
 
-            return { id, ...(people ? { people } : {}), ...(unique ? { unique } : {}) };
+            return { id, ...(people ? { people } : {}), ...(unique ? { unique } : {}), ...(look ? { look } : {}) };
         });
     }
 

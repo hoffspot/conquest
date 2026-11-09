@@ -43,10 +43,12 @@ function mix(seed, key, day) {
 /**
  * A thing made (random.js random): gear with what's rolled on it (core/gear.js), its people's for
  * a uniform's piece; a wand or a grimoire with its boost; a charm with what's rolled on it
- * (core/goods.js rollCharm); anything else as it is.
+ * (core/goods.js rollCharm); anything else as it is. A sword or shield in one of its `maker`'s
+ * designs (core/gear.js DESIGNS: the shopkeeper's people's, the realm's that gives it), none if
+ * there's no one's in particular.
  */
-export function madeOf({ id, quality = "common", people = null }, random, { level = 1 } = {}) {
-    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people, level }) : ITEMS[id]?.charm ? rollCharm(id, quality, random, { level }) : { id, quality };
+export function madeOf({ id, quality = "common", people = null }, random, { level = 1, maker = people } = {}) {
+    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people, maker, level }) : ITEMS[id]?.charm ? rollCharm(id, quality, random, { level }) : { id, quality };
 
     return ITEMS[id]?.magic ? { ...made, boost: rollBoost(random, level) } : made;
 }
@@ -129,7 +131,7 @@ export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human"
     const specials = [...choicesOf(SHOPS[shop].items, daily.special), ...(daily.specials ?? []).map((id) => ({ id, quality: "common", weight: rarest }))];
     const today = daily.sometimes === undefined || random.next() < daily.sometimes;
     const pick = specials.length && today ? random.pickWeighted(specials, ({ id, weight }) => weight * (ITEMS[id]?.price ?? 1)) : null;
-    const special = pick && madeOf({ id: pick.id, quality: pick.quality, people: ITEMS[pick.id]?.uniform ? maker : null }, random);
+    const special = pick && madeOf({ id: pick.id, quality: pick.quality, people: ITEMS[pick.id]?.uniform ? maker : null }, random, { maker });
 
     return { wares, special };
 }

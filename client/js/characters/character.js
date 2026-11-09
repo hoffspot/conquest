@@ -230,9 +230,10 @@ export function placed(socket, { at = [0, 0, 0], point = [0, 1, 0], edge = [0, 0
  * Where a shield's slung on the back (equipment.js SLING), its `look` built, on the back's
  * `socket`: its back to the upper back, the middle of its top at the shoulders, leaning out at
  * the bottom; `over` further off the back (over a quiver or a pack). { bone, position, quaternion }.
+ * As big as it is (`box`, in its own frame: one of the catalog's models once it's read), or as its
+ * look is built.
  */
-export function slung(socket, look, { over = false } = {}) {
-    const box = new THREE.Box3().setFromObject(look);
+export function slung(socket, look, { over = false, box = new THREE.Box3().setFromObject(look) } = {}) {
     // (Its face, out along its x, turned to face back; its up leaning in at the top)
     const { quaternion } = placed(socket, { point: [0, Math.cos(SLING.lean), Math.sin(SLING.lean)], edge: [1, 0, 0] });
     const top = new THREE.Vector3(box.min.x, box.max.y, (box.min.z + box.max.z) / 2).applyQuaternion(quaternion);
@@ -827,6 +828,22 @@ export class Character {
                 // (A shield that's slung on the back while the weapons are put away: over whatever
                 // else is on the back)
                 model.userData.sling = part === item && item.sling ? slung(socketOn(this, SLING.socket), look, { over: this.equipment.has("back") }) : null;
+
+                // (One held as a model of the catalog's, read after it's made (items.js heldModel,
+                // a design of Dragon Motion's): slung as it's shaped once it's read, and moved there
+                // if it's slung now)
+                if (model.userData.sling) {
+                    const resized = look.userData.resized;
+
+                    look.userData.resized = (box) => {
+                        resized?.(box);
+                        model.userData.sling = slung(socketOn(this, SLING.socket), look, { over: this.equipment.has("back"), box });
+
+                        if (this.slung) {
+                            this.arrange();
+                        }
+                    };
+                }
 
                 this.items.push(model);
             }

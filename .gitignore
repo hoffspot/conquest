@@ -96,6 +96,33 @@ client/models/scenery/medieval-tavern-2.bin
 client/models/scenery/medieval-hall.bin
 client/models/scenery/medieval-town.bin
 client/models/scenery/medieval-dungeon.bin
+client/models/gear/medieval-shield-01.bin
+client/models/gear/medieval-shield-02.bin
+client/models/gear/medieval-shield-03.bin
+client/models/gear/medieval-shield-04.bin
+client/models/gear/medieval-shield-05.bin
+client/models/gear/medieval-shield-06.bin
+client/models/gear/medieval-shield-07.bin
+client/models/gear/medieval-shield-08.bin
+client/models/gear/medieval-shield-09.bin
+client/models/gear/medieval-shield-10.bin
+client/models/gear/medieval-shield-11.bin
+client/models/gear/medieval-shield-12.bin
+client/models/gear/medieval-shield-13.bin
+client/models/gear/medieval-shield-14.bin
+client/models/gear/medieval-shield-15.bin
+client/models/gear/medieval-shield-16.bin
+client/models/gear/medieval-shield-17.bin
+client/models/gear/medieval-shield-18.bin
+client/models/gear/medieval-shield-19.bin
+client/models/gear/medieval-shield-20.bin
+client/models/gear/medieval-shield-21.bin
+client/models/gear/medieval-shield-22.bin
+client/models/gear/medieval-shield-23.bin
+client/models/gear/medieval-shield-24.bin
+client/models/gear/medieval-shield-25.bin
+client/models/gear/medieval-sword-01.bin
+client/models/gear/medieval-sword-02.bin
 client/models/scenery/meshsmith-houses-2.bin
 # Builds superseded and deleted from the private repository: still ignored, as a copy of each
 # may be left behind in a contributor's client/ (docs/LICENSED_MODELS.md, Remaking a licensed model)

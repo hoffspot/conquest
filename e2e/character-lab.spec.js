@@ -1,3 +1,4 @@
+import { licensedModelsHere } from "../scripts/licensed-models.js";
 import { expect, test } from "./fixtures.js";
 
 // The character lab (character-lab.html) exposes itself as window.lab, which these tests use
@@ -300,4 +301,72 @@ test("holds a mace as each of its five looks, the CC0 mace's model in the hand i
     const lengths = await page.evaluate(() => window.lab.character.items.map(({ name, userData }) => [name, userData.hangs?.length ?? null]));
 
     expect(lengths.find(([name]) => name === "maceMorningStar")?.[1]).toBeGreaterThan(0.6);
+});
+
+test("holds a sword and wears kite and tower shields in factions' designs, Dragon Motion's models read in place of the game's own (where the licensed models are), the kite slung on the back as it's shaped", async ({ page }) => {
+    await openLab(page, "/character-lab.html?weapon=sword");
+
+    // (Where the licensed models aren't, the game's own drawn in each one's place)
+    const licensed = licensedModelsHere();
+    const heldOf = (names) =>
+        page.evaluate((names) => {
+            const { character } = window.lab;
+
+            return names.map((name) => {
+                const item = character.items.find((each) => each.name === name);
+                const held = item?.children.find((child) => child.name.startsWith("held:"));
+                const meshes = [];
+
+                held?.traverse((node) => node.isMesh && meshes.push(node));
+
+                return held ? { model: held.name, meshes: meshes.length, read: meshes.some(({ material }) => Boolean(material.map)) } : null;
+            });
+        }, names);
+
+    for (const [sword, shield] of [
+        ["swordKnightly", "kiteShieldAzureCross"],
+        ["swordBlackened", "towerShieldLionAxes"],
+    ]) {
+        await page.evaluate(({ sword, shield }) => {
+            const { state, change } = window.lab;
+
+            state.equipment = state.equipment.filter((id) => !/^(sword|kiteShield|towerShield)/.test(id)).concat([sword, shield]);
+            change("equipment");
+        }, { sword, shield });
+
+        await expect
+            .poll(() => heldOf([sword, shield]), { timeout: 30000, message: `${sword}, ${shield}` })
+            .toEqual([expect.objectContaining({ model: expect.stringMatching(/^held:medieval-sword-0\d$/), read: licensed }), expect.objectContaining({ model: expect.stringMatching(/^held:medieval-shield-\d\d$/), read: licensed })]);
+
+        expect((await heldOf([sword, shield])).every(({ meshes }) => meshes > 0)).toBe(true);
+    }
+
+    // (The kite shield slung on the back with the sword put away: behind the body, its top about
+    // the shoulders, as the model's shaped once it's read)
+    await page.evaluate(() => {
+        const { state, change } = window.lab;
+
+        state.equipment = state.equipment.filter((id) => !/^(sword|kiteShield|towerShield)/.test(id)).concat(["swordKnightly", "kiteShieldAzureCross"]);
+        change("equipment");
+    });
+    await expect.poll(() => heldOf(["kiteShieldAzureCross"]), { timeout: 30000 }).toEqual([expect.objectContaining({ read: licensed })]);
+
+    const slung = await page.evaluate(() => {
+        const { THREE, character } = window.lab;
+
+        character.sheathe(true);
+        character.object.updateMatrixWorld(true);
+
+        const shield = character.items.find(({ name }) => name === "kiteShieldAzureCross");
+        const box = new THREE.Box3().setFromObject(shield);
+        const body = new THREE.Box3().setFromObject(character.object);
+        const local = (point) => character.object.worldToLocal(point.clone());
+
+        return { slung: character.slung, top: local(new THREE.Vector3(0, box.max.y, 0)).y / character.height, behind: local(box.getCenter(new THREE.Vector3())).z, height: Number((box.max.y - box.min.y).toFixed(2)), tall: Number((body.max.y - body.min.y).toFixed(2)) };
+    });
+
+    expect(slung.slung).toBe(true);
+    expect(slung.behind).toBeLessThan(0);
+    expect(slung.top).toBeGreaterThan(0.7);
+    expect(slung.top).toBeLessThan(0.95);
 });
