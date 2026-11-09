@@ -152,7 +152,7 @@ import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
 import { LightGlobes } from "../world/globes.js";
-import { PingBeacons, PinMarks, WAY_LINE } from "../world/pin3d.js";
+import { PIN_REACHED, PingBeacons, PinMarks, WAY_LINE } from "../world/pin3d.js";
 import { TreasureGlints } from "../world/treasure3d.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
@@ -7262,22 +7262,31 @@ export class Game {
         this.pinLine = null;
         this.pinNear = null;
         this.pinFrom = null;
+        this.pinOutside = false;
         this.onPin([...this.pin]);
         this.sound?.play("pinSet");
 
         return this.pinView();
     }
 
-    /** Take the pin away (the column and the ways go with it). */
-    clearPin() {
+    /**
+     * Take the pin away (the column and the ways go with it), with a tap, or as it's been reached
+     * (`reached`: its chime, and told so).
+     */
+    clearPin({ reached = false } = {}) {
         this.pin = null;
         this.pinWay = null;
         this.pinLine = null;
         this.pinNear = null;
         this.pinShown = null;
+        this.pinOutside = false;
         this.pinMarks?.setPin(null);
         this.onPin(null);
-        this.sound?.play("tap");
+        this.sound?.play(reached ? "pinSet" : "tap");
+
+        if (reached) {
+            this.hud.message("You've reached your pin.", 3);
+        }
     }
 
     // --- The world map's markers (core/markers.js) ---
@@ -7457,6 +7466,19 @@ export class Game {
         }
 
         if (!shown) {
+            return;
+        }
+
+        // (Come into the ring of light round its foot from outside it, it's been reached, and it's
+        // taken away: not one dropped where they stand, nor one kept that they start in, till
+        // they've stepped out of it)
+        const off = Math.hypot(player.x - shown[0], player.y - shown[1]);
+
+        if (off > PIN_REACHED) {
+            this.pinOutside = true;
+        } else if (this.pinOutside) {
+            this.clearPin({ reached: true });
+
             return;
         }
 

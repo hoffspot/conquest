@@ -33,6 +33,18 @@ export const PING_COLUMN = Object.freeze({ height: 420, half: 1.1, core: [0.82, 
  */
 export const WAY_LINE = Object.freeze({ half: 0.16, over: 0.14, reach: 180, step: 1, strength: 0.7 });
 
+/**
+ * The glow on the ground round a column's foot: how far across it's drawn (metres), and how far
+ * out its bright ring is (a share of its half width; it swells and shrinks a little with time).
+ */
+export const FOOT_RING = Object.freeze({ size: 7, ring: 0.62 });
+
+/**
+ * How near the pin's foot the player has to come to have reached it (metres): inside its ring of
+ * light (FOOT_RING), where it's taken away (app/game.js).
+ */
+export const PIN_REACHED = (FOOT_RING.size / 2) * FOOT_RING.ring;
+
 const COLUMN_VERTEX = /* glsl */ `
 uniform vec3 foot;
 uniform float reach;
@@ -98,7 +110,7 @@ varying vec2 vUv;
 
 void main() {
     float r = length(vUv - 0.5) * 2.0;
-    float off = (r - 0.62 - 0.05 * sin(time * 2.0)) * 9.0;
+    float off = (r - ${FOOT_RING.ring.toFixed(2)} - 0.05 * sin(time * 2.0)) * 9.0;
     float ring = exp(-off * off) * 0.8;
     float pool = (1.0 - smoothstep(0.0, 1.0, r)) * 0.35;
     float lit = (ring + pool) * (1.0 - smoothstep(0.9, 1.0, r));
@@ -191,7 +203,7 @@ function column(strip, near, look, shared, strength, name) {
 
 // The glow on the ground round a column's foot (`look`: its colours), as bright as `strength` has it ({ value })
 function footRing(look, time, strength, name) {
-    const ring = new THREE.Mesh(new THREE.PlaneGeometry(7, 7).rotateX(-Math.PI / 2), additive({ time, edge: { value: new THREE.Vector3(...look.edge) }, strength }, RING_VERTEX, RING_FRAGMENT));
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(FOOT_RING.size, FOOT_RING.size).rotateX(-Math.PI / 2), additive({ time, edge: { value: new THREE.Vector3(...look.edge) }, strength }, RING_VERTEX, RING_FRAGMENT));
 
     ring.name = name;
     ring.visible = false;
