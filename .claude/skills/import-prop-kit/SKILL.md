@@ -6,7 +6,9 @@ description: Make a bought pack's loose furniture and things (a shop's counters 
 # A prop kit: a pack's pieces in place of the game's own furnishings
 
 How Wind Ways' shop furniture (bought on Fab, November 2026) became the game's first prop kit, in
-the humans' shops and the rooms upstairs at their inns, and how the next kit goes in the same way.
+the humans' shops, then Dragon Motion's Medieval Props Kit the second, in every people's taverns
+(toned to each, its lights burning where its candles are), and how the next kit goes in the same
+way.
 Read `contribution.md` first, then `docs/LICENSED_MODELS.md` (*Prop kits*) and
 `utilities/blenderpipeline/README.md` (*A kit of pieces*). `import-licensed-model` covers the
 download from Drive, an Unreal export and the private repository; its rules hold here too. Times
@@ -39,17 +41,25 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
 
 ## 2. One file, a node a piece, one atlas
 
-1. A list of its pieces, `[[name, the pack's mesh, set against a wall], ...]`
-   (`private/<kit>/kit.json`), and `kit.py ... --cells 8`: each piece in a square of its own, its
-   foot at 0; one against a wall faces −y (the game's +z) with its back at 0. It writes which
-   square each is in beside the `.blend` (`<blend>.cells.json`).
+1. A list of its pieces, `[[name, the pack's mesh, set against a wall, how], ...]`
+   (`private/<kit>/pieces.json`), and `kit.py ... --cells 8`: each piece in a square of its own,
+   its foot at 0; one against a wall faces −y (the game's +z) with its back at 0. It writes which
+   square each is in beside the `.blend` (`<blend>.cells.json`). A piece of several of the pack's
+   meshes (a chest's body and lid) names them all; `how` can `turn` it (degrees: a table's length
+   along x), `trim` it to a band of heights (a chandelier's chain cut at its hub) and find its
+   `candles` (`<blend>.candles.json`: their tips, for the game's flames).
+   Fetch only the textures its pieces use, shrunk as they come to suit each piece's size (a bed's
+   1,024, a mug's 256): the atlas gives each its share at its own texture's size.
 2. Its config (`private/<kit>.json`, as `private/wind-ways-shop.json`): `materials` by the pack's
    names (Unreal's normals `flipGreen`), `join` every piece into one mesh, `textures.bake:
    "always"` with `mergeMaterials` (an atlas of 2,048; normals 1,024; KTX2), and `cells: { "size":
    8, "bakeFirst": true }`, so they're cut apart again once baked, every piece the one material.
    `simplify` evenly (`ratio`, `error`, `permissive`): no piece shares an edge with another.
-3. Look at it in the pipeline's viewer: every piece there, none black, none see-through.
+3. Look at it in the pipeline's viewer: every piece there, none black, none see-through. Read
+   the build's warnings: faces mapped to a point of their textures (a palette's way) bake black;
+   kit.py spreads them over a few texels.
    Wind Ways' shop: 21 pieces, 24,954 triangles, 1.86 MB, 3 textures, 21 draw calls at most.
+   The tavern kit: 29 pieces, 16,039 triangles, 1.4 MB, 3 textures.
 
 ## 3. Scrambled, private, in the catalog
 
@@ -61,7 +71,8 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
 - Its section in `client/models/scenery/LICENSE.md`, copied with the `.bin` into the private
   repository (commit, push). `.gitignore`, `NOTICE.md`, `README.md`'s credits,
   `docs/LICENSED_MODELS.md`'s list, contribution.md's three lists, and `test/scramble.test.js`.
-- `npm run build:manifest`.
+- `npm run build:manifest`, every time the `.bin` changes: the game reads its pieces' nodes from
+  the generated catalog (`client/js/app/assets.js`), and a stale one names another build's nodes.
 
 ## 4. The kit's entry and where it's set out
 
@@ -77,7 +88,13 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
   Keep what stood on the game's own (a ledger, a candle) at the height it had: fit the piece's
   top to it (the counter at `SHOP_TOPS.counter`, the chests at 0.52 m upstairs).
 - Small things go `on` another placement (a basket on a chest), never on an open square: what
-  stands on a square nothing blocks is walked through.
+  stands on a square nothing blocks is walked through. The placement it's on goes first in
+  `props`: furnish stands a thing on another only once that's set.
+- A kit for every people: its `peoples` all six; its pieces are toned to each (`TONES`).
+- Lights: `candleOn`, `kitLit` and `chandelier` (interiors3d.js) light a flame at each of a
+  piece's candles (`flamesOf`) and draw the game's own candles there meanwhile.
+- Things on walls: `onWall` (its back on the wall's face), `dressWalls` with a builder's spots,
+  clear of its windows, door, stairs and hearth.
 - Pure: placements from the plan alone, the same for every player.
 
 ## 5. Tests and pictures
@@ -92,12 +109,32 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
 - Then `LICENSED_MODELS=required npm run check`, the browser tests the insides touch
   (`e2e/building-lab.spec.js` and the game's), and the pipeline's checks if it changed.
 
+## What the tavern kit taught
+
+- **A quantized model's points wrap.** The pipeline stores points as 16-bit whole numbers, its
+  node's scale making them metres; put the node's scale and place into them and anything past a
+  metre from the file's middle folds back. A chandelier hung upside down; Wind Ways' counter, read
+  as "a glass case", had been folded too. `dungeons3d.js` `partsOf` makes them plain numbers
+  first (`unpacked`), and `test/propkits.test.js` keeps it so.
+- **Measure what the game must line up with.** The candles' tips, measured in Blender, put the
+  flames on the candles; the chandelier's chain cut at its hub hangs it from any ceiling.
+- **Test what the eye would miss.** A candlestick set `on` its chest before the chest was in
+  `props` was never drawn; the test of the flames found it.
+- **Look at every piece from its front before it ships.** A contact sheet of the built kit, each
+  node from where the game's camera sees it (the pipeline viewer, a picture a node), caught what
+  the lab's overview hid: the pack makes a chest's lid at its hinge on the floor, so the lids lay
+  before their chests (`seat` sets them on); a shield's straps and a picture's back read as
+  "detail" to kit.py, so they faced the wall (`turn: 180`); a throne and a wall torch stood
+  side-on (`turn: 90`); and one chest's lid was made standing open (another chest, its lid shut,
+  where a candlestick stands on it). The tavern kit went in as `medieval-tavern-2.bin` for it.
+
 ## What Wind Ways' shop taught
 
 - **One atlas for the kit, not one for each piece.** The pipeline baked each mesh on its own;
   cutting after baking (`cells.bakeFirst`) gave 21 pieces three textures between them.
 - **Faces turned inwards.** Drawn front-only, the counter's panels vanished and it read as a glass
   case. Its kit's `double` draws its pieces from both sides; the scanned props stay front-only.
+  (Much of that glass was the wrapped points above, found with the tavern kit.)
 - **Hanging things need something to hang from.** Lanterns set in the air over a counter read
   as floating; one on a cabinet reads as a lantern.
 - **The pack's scale isn't life.** Size each piece to its furnishing (`fit`), never by a factor.
