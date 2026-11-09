@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "ff023b50ba",
+    release: "61bcb94e62",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3280,9 +3280,9 @@ export const ASSETS = Object.freeze({
             "licensed": true,
             "files": [
                 {
-                    "path": "models/scenery/medieval-dungeon.bin",
-                    "hash": "6db03b7658",
-                    "bytes": 1592948
+                    "path": "models/scenery/medieval-dungeon-2.bin",
+                    "hash": "c33e60edab",
+                    "bytes": 1509708
                 }
             ],
             "pieces": {
@@ -3363,9 +3363,9 @@ export const ASSETS = Object.freeze({
             "licensed": true,
             "files": [
                 {
-                    "path": "models/scenery/medieval-hall.bin",
-                    "hash": "52d1e5d224",
-                    "bytes": 1545364
+                    "path": "models/scenery/medieval-hall-2.bin",
+                    "hash": "7c62252f06",
+                    "bytes": 1489428
                 }
             ],
             "pieces": {
@@ -3470,9 +3470,9 @@ export const ASSETS = Object.freeze({
             "licensed": true,
             "files": [
                 {
-                    "path": "models/scenery/medieval-tavern-2.bin",
-                    "hash": "8d30d4b737",
-                    "bytes": 1459948
+                    "path": "models/scenery/medieval-tavern-3.bin",
+                    "hash": "1811534961",
+                    "bytes": 1397844
                 }
             ],
             "pieces": {
@@ -3571,9 +3571,9 @@ export const ASSETS = Object.freeze({
             "licensed": true,
             "files": [
                 {
-                    "path": "models/scenery/medieval-town.bin",
-                    "hash": "421f2cf351",
-                    "bytes": 1437792
+                    "path": "models/scenery/medieval-town-2.bin",
+                    "hash": "e0d056f50f",
+                    "bytes": 1368928
                 }
             ],
             "pieces": {
