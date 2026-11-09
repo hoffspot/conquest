@@ -17463,6 +17463,19 @@ export class Host {
         this.battle.reroute(me.id, { order: "cycle", wait: [60000, 60000], stops: [{ square: [Math.floor(me.x), Math.floor(me.y)], facing: me.facing }] });
     }
 
+    /**
+     * What a messenger or a commander among the folk (`folk`: their id) has to say, for their talk
+     * (app/game.js, the "messenger" and "briefing" trees): { mission } as their hailing the player
+     * has it (the mission offered, or the briefing); or null, for anyone else. As the world has it,
+     * so it's whole whenever they're talked to: after the game's loaded again, or from one who
+     * stopped to wait before they'd found the player.
+     */
+    messengerSaysOf(folk) {
+        const one = [...this.messengers.values()].find((each) => each.folk === folk);
+
+        return one ? this.#messengerSays(one) : null;
+    }
+
     // What a messenger or commander says as they arrive, for the talk: the mission offered (a
     // messenger's), or the briefing (a commander's)
     #messengerSays(one) {

@@ -11734,13 +11734,9 @@ export class Game {
             return;
         }
 
-        this.messengerSaid ??= new Map();
-
         if (event.change === "coming" && event.kind === "messenger" && event.from) {
             this.hud.message(`A messenger from ${senderName(event.from)} is coming to find you.`, 3);
         } else if (event.change === "arrived") {
-            this.messengerSaid.set(event.folk, event.mission);
-
             const npc = this.battle.actor(event.folk);
 
             if (event.lead === this.me && npc) {
@@ -11752,16 +11748,16 @@ export class Game {
             const npc = this.battle.actor(event.folk);
 
             this.hud.message(`${npc?.name ?? "The messenger"} will wait for you there a little while.`, 3);
-        } else if (event.change === "gone") {
-            this.messengerSaid.delete(event.folk);
         }
     }
 
     // What a messenger or a commander says, for their talk (the "messenger" and "briefing" trees):
     // who sends them, what's asked, what it pays at the player's rank and that it pays more the
-    // higher it is; or the briefing, line by line
+    // higher it is; or the briefing, line by line. As the world has them (core/host.js
+    // messengerSaysOf), not as their hailing the player was heard: whole after the game's loaded
+    // again, or from one who stopped to wait before they'd found the player
     #messengerWords(npc) {
-        const mission = this.messengerSaid?.get(npc.id);
+        const mission = this.host.messengerSaysOf(npc.id)?.mission;
 
         if (!mission) {
             return {};
