@@ -6,6 +6,7 @@ import { readHumanData } from "../scripts/lib/human-data.js";
 import { ITEMS } from "../client/js/characters/equipment.js";
 import { closeHand, DIGITS } from "../client/js/characters/grip.js";
 import { BODIES, dress, motions } from "../client/js/characters/motioncheck.js";
+import { pinchOf, reinGrips } from "../client/js/characters/riding.js";
 
 // Each body made from each data's default (MakeHuman's and Vitruvian's), holding each weapon with
 // a round grip, each hand that holds it closed round it as the body rests (and what it holds as
@@ -139,6 +140,64 @@ describe("a hand round a haft or a hilt (grip.js)", () => {
             const reach = Math.max(...DIGITS.flatMap((digit) => [1, 2, 3].flatMap((j) => bone(`${Side}Hand${digit}${j}`).map((point) => point.sub(middle).dot(along)))));
 
             assert.ok(reach < hilt[1], `${label}: the fingers ${((reach - hilt[1]) * 100).toFixed(1)} cm past the guard`);
+        }
+    });
+});
+
+describe("a rider's hands on the reins (riding.js reinGrips, pinchOf: the owner's photos)", () => {
+    // Each body made from each data's default, its hands closed on its reins as it rests: how far
+    // each hand's closed (its index finger's tip from the wrist, as a share of how far it is with
+    // the hand open), how far the thumb's pad is from the curled index finger, and where the rein
+    // is held, each against the hand's palm (the wrist to the middle finger's knuckle)
+    const hands = function* () {
+        const motion = motions().find(({ id }) => id.startsWith("walk")) ?? motions()[0];
+
+        for (const data of ["human", "vitruvian"]) {
+            const human = readHumanData(data);
+
+            for (const body of BODIES) {
+                const { character } = dress(human, motion.look(body));
+                const rig = character.rig;
+                const grips = reinGrips(character);
+
+                rig.reset();
+                closeHand(rig, "Left", grips.Left);
+                closeHand(rig, "Right", grips.Right);
+                rig.apply();
+                character.object.updateMatrixWorld(true);
+
+                for (const Side of ["Left", "Right"]) {
+                    const at = (name, share) => {
+                        const i = rig.index.get(name);
+
+                        return rig.bones[i].localToWorld(rig.tails[i].clone().sub(rig.heads[i]).multiplyScalar(share));
+                    };
+                    const wrist = rig.bone(`${Side}Hand`).getWorldPosition(new THREE.Vector3());
+                    const palm = rig.bone(`${Side}HandMiddle1`).getWorldPosition(new THREE.Vector3()).distanceTo(wrist);
+                    const open = rig.tails[rig.index.get(`${Side}HandIndex3`)].distanceTo(rig.heads[rig.index.get(`${Side}Hand`)]);
+                    const pad = at(`${Side}HandThumb3`, 0.5);
+                    const index = at(`${Side}HandIndex2`, 0.5);
+
+                    yield { label: `${data} ${body.id}, the ${Side.toLowerCase()} hand`, closed: at(`${Side}HandIndex3`, 1).distanceTo(wrist) / open, thumb: pad.distanceTo(index) / palm, pinch: pinchOf(rig, Side), pad, index, wrist, palm };
+                }
+            }
+        }
+    };
+
+    it("closes each hand in a loose fist, the thumb over the curled index finger", () => {
+        for (const { label, closed, thumb } of hands()) {
+            // (The index finger's tip brought back towards the wrist: about half as far as it
+            // reaches with the hand open; a loose fist, not a clenched one)
+            assert.ok(closed > 0.4 && closed < 0.7, `${label}: closed to ${(closed * 100).toFixed(0)}% of its reach`);
+            // (The thumb's pad over the index finger's middle bone, a rein's width off it)
+            assert.ok(thumb < 0.5, `${label}: the thumb's pad ${(thumb * 100).toFixed(0)}% of the palm from the index finger`);
+        }
+    });
+
+    it("holds the rein under the thumb, between its pad and the index finger", () => {
+        for (const { label, pinch, pad, index, wrist, palm } of hands()) {
+            assert.ok(Math.abs(pinch.distanceTo(pad) - pinch.distanceTo(index)) < 1e-6, `${label}: the rein midway between the thumb's pad and the index finger`);
+            assert.ok(pinch.distanceTo(wrist) < 1.2 * palm, `${label}: the rein in the hand, ${((pinch.distanceTo(wrist) / palm) * 100).toFixed(0)}% of the palm from the wrist`);
         }
     });
 });
