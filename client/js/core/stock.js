@@ -75,6 +75,16 @@ export function atLevel(item, level = 1) {
     return { ...rest, ...(to > 1 ? { level: to } : {}), ...(bonuses ? { bonuses } : {}), ...(def.magic && Number.isFinite(item.boost) ? { boost: Math.min(1, Math.round(item.boost * times * 100) / 100) } : {}) };
 }
 
+/**
+ * A shop's ware (`ware`: { id, quality, people? }) as it's sold to a buyer of a `level` (core/gear.js
+ * levelOf), and as dear (shopPrice): a piece of gear or a charm made at their level (madeOf),
+ * anything else (a tome, a draught, a scroll) as it is. What the shop shows (app/game.js) and what
+ * it asks (core/host.js #buy), the one price.
+ */
+export function wareAt({ id, quality = "common", people = null }, level = 1) {
+    return atLevel({ id, quality, ...(people ? { people } : {}) }, level);
+}
+
 // What a shop could have in, by the makes (or how rare they are) it weighs: [{ id, quality, weight }]
 function choicesOf(items, grades) {
     return items.flatMap((id) => {

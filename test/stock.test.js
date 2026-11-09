@@ -8,11 +8,12 @@ import { describe, it } from "node:test";
 import { CURES } from "../client/js/core/afflictions.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { dayOf, elapsedOf } from "../client/js/core/daytime.js";
+import { levelOf } from "../client/js/core/gear.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { mightTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SHARE, SHOPS, SMITH_MAKES, wares } from "../client/js/core/progress.js";
-import { dailyStock, SPECIAL_MARKUP, shopPrice, stockKey } from "../client/js/core/stock.js";
+import { dailyStock, SPECIAL_MARKUP, shopPrice, stockKey, wareAt } from "../client/js/core/stock.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -245,6 +246,75 @@ describe("what each shop buys (progress.js buys)", () => {
         for (const id of ["tomeBurn", "scrollBurn", "scrollVigor", "scrollStun", "glowcapDraught", "scrollOfSafety", "staminaBoost"]) {
             assert.ok(SHOPS.guild.items.includes(id), id);
         }
+    });
+});
+
+// A player as mighty as `might` (core/might.js), whatever they've done
+function mighty(host, might) {
+    const mightFor = host.mightFor.bind(host);
+
+    host.mightFor = (id) => (id === HOST_PLAYER ? might : mightFor(id));
+}
+
+describe("what a shop asks a mighty buyer (stock.js wareAt)", () => {
+    it("sells a mighty buyer a tome of polymorph at an emporium for what it shows, as dear as at any level", () => {
+        // (As the owner found it: a tome of polymorph shown at 540 gold, 584 had, "Not enough
+        // gold": the tome asked at their might's level, as if it were made at it as gear is)
+        const { host, keeper } = atShop("emporium");
+        const { progress } = host.players.get(HOST_PLAYER);
+        const tome = { id: "tomePolymorph", quality: "common" };
+
+        mighty(host, 30);
+
+        // (A day it's in)
+        for (let day = 0; day < 200 && !host.stockOf(keeper.id).wares.some(({ id }) => id === tome.id); day++) {
+            host.war.turn += 60;
+            host.advance(STEP_MS);
+        }
+
+        assert.ok(host.stockOf(keeper.id).wares.some(({ id }) => id === tome.id), "an emporium has a tome of polymorph in, some day");
+
+        const haggle = progress.bonuses().haggle;
+        const shown = shopPrice(wareAt(tome, levelOf(30)), "emporium", { haggle });
+
+        assert.equal(shown, shopPrice(tome, "emporium", { haggle }), "as dear as for anyone");
+        progress.gold = shown + 44;
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: tome, from: keeper.id }), { ok: true });
+        assert.equal(progress.gold, 44);
+        assert.equal(progress.count(tome.id), 1);
+    });
+
+    it("asks what it shows for everything it sells: gear and charms made at the buyer's level and as dear, a tome, a draught or a scroll as it is", () => {
+        let things = 0;
+        let gear = 0;
+
+        for (const shop of ["guild", "scriptorium", "alchemist", "emporium", "arcane", "smith", "masterArmorer", "pedlar"]) {
+            const { host, keeper } = atShop(shop);
+            const { progress } = host.players.get(HOST_PLAYER);
+            const level = levelOf(60);
+
+            mighty(host, 60);
+
+            for (const ware of host.stockOf(keeper.id)?.wares ?? wares(shop, "human", { tier: mightTier(60) })) {
+                // (Nothing carried: a charm's haggling, the last thing bought)
+                progress.pack.fill(null);
+
+                const haggle = progress.bonuses().haggle;
+                const shown = shopPrice(wareAt(ware, level), shop, { haggle });
+                const made = ITEMS[ware.id].slot || ITEMS[ware.id].charm;
+
+                // (Gear and charms dearer for being made at their level, but a wand or a grimoire,
+                // worth what its boost is; anything else not)
+                assert.ok(made && !ITEMS[ware.id].magic ? shown > shopPrice(ware, shop, { haggle }) : shown === shopPrice({ id: ware.id, quality: ware.quality }, shop, { haggle }), `${shop}: ${ware.id}`);
+
+                progress.gold = shown;
+                assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: ware.id, quality: ware.quality }, from: keeper.id }), { ok: true }, `${shop}: ${ware.id} (${ware.quality}) for ${shown} gold, all they have`);
+                assert.equal(progress.gold, 0, `${shop}: ${ware.id} for what it showed`);
+                made ? gear++ : things++;
+            }
+        }
+
+        assert.ok(things > 10 && gear > 10, "tomes, draughts and scrolls, and gear and charms");
     });
 });
 

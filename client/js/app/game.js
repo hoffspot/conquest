@@ -77,7 +77,7 @@ import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
 import { ABILITIES, bound, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
-import { atLevel, shopPrice } from "../core/stock.js";
+import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
@@ -12399,7 +12399,7 @@ export class Game {
             wares: (stock ? stock.wares : [...wares(this.shopping.shop, this.shopping.people, { tier: mightTier(might) }), ...this.host.threadWaresOf(this.shopping.keeper)])
                 .sort(shopOrder)
                 .map((ware) => {
-                    const item = { id: ware.id, quality: ware.quality, ...(ware.people ? { people: ware.people } : {}), ...(level > 1 && (ITEMS[ware.id]?.slot || ITEMS[ware.id]?.charm) ? { level } : {}) };
+                    const item = wareAt(ware, level);
                     const price = ask(item);
 
                     return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)], left: ware.left ?? null };

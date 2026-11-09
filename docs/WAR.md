@@ -666,9 +666,12 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     their people's uniform, as well made as the player buying is mighty (`tiered`,
     `SMITH_MAKES`, by their might's tier, one every ten: core/might.js `mightTier`): common and
     fine to begin with (might 0 to 29), fine and masterwork as they grow (30 to 59), masterwork
-    alone for the mightiest (60 and more). Better than that is the specialists'. Whatever a shop
-    sells is made at the buyer's might's level as it's bought (a day's special, made already,
-    brought to it: core/stock.js `atLevel`), and priced at it;
+    alone for the mightiest (60 and more). Better than that is the specialists'. The gear and
+    charms a shop sells are made at the buyer's might's level as they're bought (a day's
+    special, made already, brought to it: core/stock.js `atLevel`), and priced at it (a wand or
+    a grimoire by its boost); anything else (a tome, a draught, a scroll) is as it is, as dear
+    at any level. What a shop shows is what it asks: its wares priced as they're sold
+    (core/stock.js `wareAt`), in the pack's Buy tab and by the host alike;
   - the priest: healing draughts;
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
     buy?", which she answers: everything, the spoils of the wild that no one else takes too):
