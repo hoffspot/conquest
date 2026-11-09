@@ -371,8 +371,9 @@ In `scripts/`, run from the repository's root:
 - `pieces.py -- <Meshes dir> <out.json> [skip prefix ...]`: every part's size, triangles and
   materials.
 - `render.py -- <prefix> file.fbx [width] [samples]`: clay pictures from three sides.
-- `kit.py -- <Meshes dir> <pieces.json> <out.blend> [picture.png]`: a kit's parts in one `.blend`
-  for the pipeline. `bellhaven-kit.json` is Bellhaven's list.
+- `kit.py -- <Meshes dir> <pieces.json> <out.blend> [picture.png] [--cells 8]`: a kit's parts in
+  one `.blend` for the pipeline (a part of several meshes; `turn`, `trim`, `candles`: its header).
+  `bellhaven-kit.json` is Bellhaven's list.
 - `housekit.py -- <Meshes dir> <pieces.json> <tiles dir> <out.blend> [--cells 3]`: a modular
   building kit's pieces in one `.blend`, each keeping its pivot, a square each, its windows' glass
   apart and its roof tiles' repeats as planes; which square each is in (`<out>.cells.json`) and

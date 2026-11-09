@@ -365,10 +365,33 @@ const props = new Map();
 // pictures lie (a model without pictures given none)
 const KEPT = Object.freeze(["position", "normal", "uv"]);
 
+// (Exported for its tests: test/propkits.test.js)
 // A model's meshes (those under its `nodes`, or all of them), joined into one for each material
 // it's drawn with: its parts ([{ geometry, source }]) and how big it is ({ min, max }, its own
 // metres), or null if it has no meshes
-function partsOf(scene, nodes) {
+// A geometry with its points in plain numbers. A quantized model's (KHR_mesh_quantization: each a
+// whole number standing for its share of -1 to 1, its node's scale and place making them metres)
+// would wrap round once its node's scale and place were put into it: anything past a metre from
+// its middle folded back, a chandelier's hub hung under its candles, a counter's top in its feet
+function unpacked(geometry) {
+    const position = geometry.attributes.position;
+
+    if (position && (position.isInterleavedBufferAttribute || !(position.array instanceof Float32Array))) {
+        const values = new Float32Array(position.count * 3);
+
+        for (let k = 0; k < position.count; k++) {
+            values[k * 3] = position.getX(k);
+            values[k * 3 + 1] = position.getY(k);
+            values[k * 3 + 2] = position.getZ(k);
+        }
+
+        geometry.setAttribute("position", new THREE.BufferAttribute(values, 3));
+    }
+
+    return geometry;
+}
+
+export function partsOf(scene, nodes) {
     const wanted = nodes && new Set(nodes);
     const byMaterial = new Map();
 
@@ -381,7 +404,7 @@ function partsOf(scene, nodes) {
         }
 
         if (node.isMesh && at) {
-            const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld);
+            const geometry = unpacked(node.geometry.clone()).applyMatrix4(node.matrixWorld);
 
             for (const name of Object.keys(geometry.attributes)) {
                 if (!KEPT.includes(name)) {
@@ -457,8 +480,11 @@ const propMaterials = new Map();
 // The colour a solid cut prop's insides are drawn, where it's cut (propMaterial `cut` "solid")
 const CUT_CAP = "vec3(0.11, 0.105, 0.1)";
 
-function propMaterial(name, part, source, tint, cut = false, double = false) {
-    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}${double ? "|double" : ""}`;
+// A tone's key, among the materials (its colour, how far, how light)
+const toneKey = ({ colour, amount, lift }) => `${colour}:${amount}:${lift}`;
+
+function propMaterial(name, part, source, tint, cut = false, double = false, tone = null) {
+    const key = `${name}|${part}|${tint ?? ""}${cut ? `|cut-${cut}` : ""}${double ? "|double" : ""}${tone ? `|tone-${toneKey(tone)}` : ""}`;
 
     if (propMaterials.has(key)) {
         return propMaterials.get(key);
@@ -493,9 +519,21 @@ function propMaterial(name, part, source, tint, cut = false, double = false) {
                 .replace("#include <dithering_fragment>", cut === "solid" ? `#include <dithering_fragment>\nif (!gl_FrontFacing) gl_FragColor = vec4(${CUT_CAP}, gl_FragColor.a);` : "#include <dithering_fragment>");
         }
 
+        // (Toned to its people's own: drawn towards their colour as far as `amount`, its shading
+        // kept, lighter or darker by `lift`: world/propkits.js TONES)
+        if (tone) {
+            const colour = new THREE.Color(tone.colour);
+            const light = colour.r * 0.2126 + colour.g * 0.7152 + colour.b * 0.0722;
+
+            Object.assign(shader.uniforms, { propTone: { value: colour.multiplyScalar(tone.lift / Math.max(light, 1e-3)) }, propToneAmount: { value: tone.amount } });
+            shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", "#include <common>\nuniform vec3 propTone;\nuniform float propToneAmount;")
+                .replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, propTone * dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), propToneAmount);");
+        }
+
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => `dungeon-prop${cut === "solid" ? "-solid" : cut ? "-cut" : ""}`;
+    result.customProgramCacheKey = () => `dungeon-prop${cut === "solid" ? "-solid" : cut ? "-cut" : ""}${tone ? "-tone" : ""}`;
     propMaterials.set(key, result);
 
     return result;
@@ -552,7 +590,8 @@ const _corner = new THREE.Vector3();
  * to), shadow (whether it casts one: if it's as big as SHADOWS_FROM, unless it's said), cut
  * (cut away with the rock while the camera's over the roof; "solid", drawn solid where it is:
  * propMaterial), double (drawn from both sides: a prop kit's pieces, made to be,
- * world/propkits.js), lot (how wide a square of the level its copies are drawn at once in, metres:
+ * world/propkits.js), tone (a prop kit's piece toned to its people's own: { colour, amount, lift },
+ * world/propkits.js TONES), lot (how wide a square of the level its copies are drawn at once in, metres:
  * the rock's tile, CAVERNS, if it isn't said) }]), each model's copies in each such square drawn at
  * once (instanced, one for each of its materials), so what's out of sight or of a light's reach
  * isn't drawn; added to
@@ -582,7 +621,7 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
             continue;
         }
 
-        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null, cut = false, double = false } = placement;
+        const { x, z, turn = 0, roll = 0, pitch = 0, size, fit, tint = null, cut = false, double = false, tone = null } = placement;
         const extent = prop.box.getSize(new THREE.Vector3());
         const each = fit ? [fit[0] / extent.x, fit[1] / extent.y, fit[2] / extent.z] : (placement.scale ?? (size ? size / Math.max(extent.x, extent.y, extent.z) : 1));
         const scale = Array.isArray(each) ? new THREE.Vector3(...each) : new THREE.Vector3(each, each, each);
@@ -602,10 +641,10 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         tops.set(placement, y + box.max.y - box.min.y);
 
         const across = placement.lot ?? CAVERNS.tile;
-        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${double ? "double|" : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
+        const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${double ? "double|" : ""}${tone ? `${toneKey(tone)}|` : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
 
         if (!lots.has(key)) {
-            lots.set(key, { name: placement.model, prop, tint, cut, double, matrices: [], shadow: false });
+            lots.set(key, { name: placement.model, prop, tint, cut, double, tone, matrices: [], shadow: false });
         }
 
         const lot = lots.get(key);
@@ -614,9 +653,9 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         lot.shadow ||= placement.shadow ?? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) >= SHADOWS_FROM;
     }
 
-    for (const { name, prop, tint, cut, double, matrices, shadow } of lots.values()) {
+    for (const { name, prop, tint, cut, double, tone, matrices, shadow } of lots.values()) {
         prop.parts.forEach(({ geometry, source }, part) => {
-            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint, cut, double), matrices.length);
+            const mesh = new THREE.InstancedMesh(geometry, propMaterial(name, part, source, tint, cut, double, tone), matrices.length);
 
             matrices.forEach((matrix, k) => mesh.setMatrixAt(k, matrix));
             mesh.instanceMatrix.needsUpdate = true;

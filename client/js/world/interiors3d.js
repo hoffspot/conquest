@@ -43,7 +43,7 @@ import { CAVERNS, cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js"
 import { Blocks, DUNGEON_CUT, DUNGEON_PROPS, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial, setKitPicture } from "./dungeons3d.js";
 import { ASSETS } from "../app/assets.js";
 import { KEEP_KIT, KIT_PICTURES, kitPlacements } from "./keepkit.js";
-import { kitPiece, kitsFor } from "./propkits.js";
+import { flamesOf, kitPiece, kitsFor } from "./propkits.js";
 import { houseKitRead, kitFloors, readyHouseKit } from "./kithouses3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
@@ -223,12 +223,94 @@ function awayFromWall(map, x, y) {
 function kitCounter(counter, piece, top) {
     const count = Math.max(1, Math.round(counter.w / piece.size[0]));
 
-    return Array.from({ length: count }, (_, k) => ({ model: piece.model, x: counter.x + ((k + 0.5) * counter.w) / count, z: counter.y + 0.5, fit: [counter.w / count, top, 0.8], turn: 0, double: piece.double }));
+    return Array.from({ length: count }, (_, k) => ({ model: piece.model, x: counter.x + ((k + 0.5) * counter.w) / count, z: counter.y + 0.5, fit: [counter.w / count, top, 0.8], turn: 0, double: piece.double, lot: KIT_LOT }));
 }
 
 // A kit's piece standing in a square of the plan (x, y), its back to the wall beside it, as big as
 // the piece is set (or `fit`)
-const kitStanding = (map, piece, x, y, fit = piece.size) => ({ model: piece.model, x: x + 0.5, z: y + 0.5, fit, turn: awayFromWall(map, x, y), double: piece.double });
+const kitStanding = (map, piece, x, y, fit = piece.size) => ({ model: piece.model, x: x + 0.5, z: y + 0.5, fit, turn: awayFromWall(map, x, y), double: piece.double, lot: KIT_LOT, ...toned(piece) });
+
+// A kit's piece's tone, its people's (world/propkits.js TONES), for its placement
+const toned = (piece) => (piece.tone ? { tone: piece.tone } : {});
+
+// A kit's piece set out with its middle over (x, z) (metres), as big as `fit` (its own length,
+// height and depth), turned `turn` (radians: 0 its front south), and anything else of a
+// placement's (`y`, `on`: dungeons3d.js furnish)
+const kitAt = (piece, x, z, fit = piece.size, turn = 0, more = {}) => ({ model: piece.model, x, z, fit, turn, double: piece.double, lot: KIT_LOT, ...toned(piece), ...more });
+
+// How wide a square a kit's pieces' copies are drawn at once in (furnish's `lot`, metres): wider
+// than any building's inside, so each piece is drawn once however many stand there
+const KIT_LOT = 64;
+
+// A kit's piece hung on a wall (a picture, a trophy, a sconce): its back on the wall's face at
+// (x, z) (metres), its front turned `turn` (0 south, π/2 east, π north, -π/2 west), its foot `y`
+// high, as big as `fit`
+const onWall = (piece, x, z, turn, y, fit = piece.size) => kitAt(piece, x + (Math.sin(turn) * fit[2]) / 2, z + (Math.cos(turn) * fit[2]) / 2, fit, turn, { y });
+
+// A kit's piece no bigger than `most` (metres: its length, height), as its own proportions are
+const kitScaled = (piece, most) => {
+    const scale = Math.min(1, ...most.map((metres, k) => metres / piece.size[k]));
+
+    return piece.size.map((metres) => metres * scale);
+};
+
+// A kit's light's flames lit where its candles are (its placement's, its foot `y` high: metres):
+// each candle's flame (fire.js's, drawn with the room's others) and the light of `kind` they give
+// together from their middle (`colour` its own, if not its kind's); the candles themselves drawn
+// among the stand-ins meanwhile, each as tall as `tall` (metres) under its flame
+function kitLit(piece, placement, y, kind, { colour, tall = 0.16, fire = null } = {}) {
+    const tips = flamesOf(piece, placement, y);
+    const middle = [0, 1, 2].map((k) => tips.reduce((sum, tip) => sum + tip[k], 0) / tips.length);
+
+    for (const [x, top, z] of tips) {
+        const seed = candleSeed(m(x), m(top), m(z));
+
+        standIns.cylinder(m(x), m(z), m(top - tall), m(top), m(0.022), m(0.022), material("candle"), { segments: 6 });
+        standIns.cylinder(m(x), m(z), m(top - tall - 0.03), m(top - tall), m(0.05), m(0.04), material("brass"), { segments: 8 });
+        lighting.candles.push([m(x), m(top), m(z), seed]);
+    }
+
+    lit(kind, m(middle[0]), m(middle[1] + 0.02), m(middle[2]), { count: tips.length, glows: tips.map(([x, top, z]) => [m(x), m(top + 0.02), m(z)]), fire, ...(colour ? { colour } : {}) });
+
+    return tips;
+}
+
+// A candle on something `y` high at (x, z) (art pixels): a kit's candlestick where there's one
+// (set `on` that placement if it's given, else at that height), its flame where its candle is and
+// the game's own candle drawn meanwhile as tall; or the game's own
+function candleOn(solid, props, x, z, y, on = null) {
+    const stick = kitted("candlestick", x + z);
+
+    if (!stick) {
+        candle(solid, x, z, y);
+
+        return;
+    }
+
+    const placement = kitAt(stick, x / M, z / M, stick.size, 0, on ? { on } : { y: y / M });
+    const [[tx, top, tz]] = flamesOf(stick, placement, y / M);
+
+    props.push(placement);
+    standIns.cylinder(x, z, y, m(top - 0.16), m(0.05), m(0.04), material("brass"), { segments: 8 });
+    // (Its light rising and falling with its flame, as a candle's)
+    kitLit(stick, placement, y / M, "candle", { fire: { seed: candleSeed(m(tx), m(top), m(tz)), rate: FIRES.candle.rate, steady: FIRES.candle.steady } });
+}
+
+// A kit's mug or tankard, plate, jug, bottle or cup (its role) standing at (x, z) (metres) on
+// something (`on` its placement) or `y` high; the game's own tankard drawn meanwhile
+function kitWare(solid, props, role, x, z, { on = null, y = null, seed = 0 } = {}) {
+    const ware = kitted(role, seed);
+
+    if (role === "mug") {
+        tankard(artOf(solid, ware), m(x), m(z), m(y ?? 0.78), seed % 2 === 0);
+    } else if (role === "plate") {
+        artOf(solid, ware).cylinder(m(x), m(z), m(y ?? 0.78), m((y ?? 0.78) + 0.02), m(0.14), m(0.14), material("pewter"), { segments: 10 });
+    }
+
+    if (ware) {
+        props.push(kitAt(ware, x, z, ware.size, (seed % 8) * 0.7, on ? { on } : { y }));
+    }
+}
 
 // How each of a thing's cuts is known (its material's and its mesh's): a wall's round the edge
 // ("wall"), through the floor ("wall-x", "wall-z"), a ceiling's, or anything else's
@@ -1409,25 +1491,72 @@ function taproom(map) {
     fires[1].position.set(spitX - m(0.1), m(0.1), m(hz - 0.15));
     fires[2].position.set(spitX, m(0.1), m(hz + 0.4));
 
-    // A pair of antlers over the mantel
+    // A pair of antlers over the mantel (a kit's, on the chimney breast: world/propkits.js), and
+    // logs stacked by the hearth either side of its opening
+    const kit = [];
+    const antlers = kitted("antlers");
+
+    // (The game's own kept where they were, set into the chimney breast, not among the stand-ins:
+    // a wall's piece there would be a mesh more to draw)
     for (const side of [-1, 1]) {
         solid.box(m(0.1), m(2.2), m(hz) + side * 1.5, m(0.3), m(2.9), m(hz) + side * 2.2, material("candle", WALL));
         solid.box(m(0.1), m(2.6), m(hz) + side * 2.2, m(0.3), m(2.75), m(hz) + side * 4.5, material("candle", WALL));
     }
 
-    // Tables, and benches along them, with tankards, plates and candles
+    if (antlers) {
+        kit.push(onWall(antlers, 0.9, hz, Math.PI / 2, 1.85, kitScaled(antlers, [1.2, 1.1])));
+    }
+
+    const logsBy = kitted("firewood");
+
+    for (const z of logsBy ? [hearth.y + 0.42, hearth.y + hearth.h - 0.42] : []) {
+        kit.push(kitAt(logsBy, 1.45, z, logsBy.size, Math.PI / 2, { y: 0.016 }));
+    }
+
+    // Tables, and benches along them, with tankards, plates and candles: a kit's tables (as many
+    // end to end as suit the table's length) and benches, its mugs, plates and candlesticks on them
     for (const piece of map.pieces.filter((each) => each.kind === "table")) {
         const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+        const board = kitted("table", piece.x + piece.y);
 
-        table(solid, x0, z0 + m(0.1), x1, z1 - m(0.1));
-        candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
-        tankard(solid, x0 + m(0.4), z0 + m(0.35), m(0.78), piece.x % 2 === 0);
-        tankard(solid, x1 - m(0.5), z1 - m(0.3), m(0.78));
-        solid.cylinder(x1 - m(0.35), z0 + m(0.3), m(0.78), m(0.8), m(0.14), m(0.14), material("pewter"), { segments: 10 });
+        table(artOf(solid, board), x0, z0 + m(0.1), x1, z1 - m(0.1));
+
+        if (!board) {
+            candle(solid, (x0 + x1) / 2, (z0 + z1) / 2, m(0.78));
+            tankard(solid, x0 + m(0.4), z0 + m(0.35), m(0.78), piece.x % 2 === 0);
+            tankard(solid, x1 - m(0.5), z1 - m(0.3), m(0.78));
+            solid.cylinder(x1 - m(0.35), z0 + m(0.3), m(0.78), m(0.8), m(0.14), m(0.14), material("pewter"), { segments: 10 });
+
+            continue;
+        }
+
+        const count = Math.max(1, Math.round(piece.w / 2.4));
+        const boards = Array.from({ length: count }, (_, k) => kitAt(board, piece.x + ((k + 0.5) * piece.w) / count, piece.y + piece.h / 2, [piece.w / count - 0.06, 0.78, piece.h - 0.24]));
+        const under = (x) => boards[Math.min(count - 1, Math.floor(((x - piece.x) / piece.w) * count))];
+        const [mx, mz] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
+
+        kit.push(...boards);
+        candleOn(solid, kit, m(mx), m(mz), m(0.78), under(mx));
+        kitWare(solid, kit, "mug", piece.x + 0.4, piece.y + 0.35, { on: under(piece.x + 0.4), seed: piece.x });
+        kitWare(solid, kit, "mug", piece.x + piece.w - 0.5, piece.y + piece.h - 0.3, { on: under(piece.x + piece.w - 0.5), seed: piece.x + 1 });
+        kitWare(solid, kit, "plate", piece.x + piece.w - 0.35, piece.y + 0.3, { on: under(piece.x + piece.w - 0.35), seed: piece.y });
+
+        // (A longer table's more: a jug, and a plate across from its mug)
+        if (piece.w >= 3) {
+            kitWare(solid, kit, "jug", mx + 0.55, mz + 0.1, { on: under(mx + 0.55), seed: piece.y });
+            kitWare(solid, kit, "plate", piece.x + 0.45, piece.y + piece.h - 0.3, { on: under(piece.x + 0.45), seed: piece.x + 2 });
+        }
     }
 
     for (const run of benchRuns(map)) {
-        bench(solid, m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+        const seat = kitted("bench", run.x + run.y);
+        const count = Math.max(1, Math.round(run.w / 2.4));
+
+        bench(artOf(solid, seat), m(run.x), m(run.y), m(run.x + run.w), m(run.y + 1));
+
+        for (let k = 0; seat && k < count; k++) {
+            kit.push(kitAt(seat, run.x + ((k + 0.5) * run.w) / count, run.y + 0.5, [run.w / count - 0.08, 0.45, 0.42]));
+        }
     }
 
     // The bar: a panelled counter with a thick top, tankards on it; the barrels behind, lying on
@@ -1444,12 +1573,14 @@ function taproom(map) {
         solid.box(barX0 - 0.15, m(0.15), z - m(0.2), barX0, m(0.9), z + m(0.2), material("timber"));
 
         if (k % 3 !== 1) {
-            tankard(solid, barX0 + m(0.25), z, m(1.12), k % 2 === 0);
+            kitWare(solid, kit, "mug", (barX0 + m(0.25)) / M, z / M, { y: 1.12, seed: k });
         }
     }
 
-    candle(solid, barX0 + m(0.4), barZ0 + m(2.5), m(1.12));
+    candleOn(solid, kit, barX0 + m(0.4), barZ0 + m(2.5), m(1.12));
 
+    // (The barrels lying on their stillage: a kit's casks, each as long and as round, its blocks
+    // sunk in the stillage's boards)
     const barrels = map.pieces.find((piece) => piece.kind === "barrels");
     const [kx, kz0, kz1] = [m(barrels.x), m(barrels.y), m(barrels.y + barrels.h)];
 
@@ -1457,22 +1588,36 @@ function taproom(map) {
     solid.box(kx + m(0.1), m(0.8), kz0, kx + m(0.95), m(0.88), kz1, material("timber"));
 
     for (let z = kz0 + m(0.5); z < kz1 - m(0.3); z += m(0.95)) {
-        cask(solid, kx + m(0.08), z, m(0.15), m(0.88), m(0.32));
-        cask(solid, kx + m(0.12), z, m(0.88), m(0.8), m(0.28));
+        for (const [x, y, length, radius] of [[0.08, 0.15, 0.88, 0.32], [0.12, 0.88, 0.8, 0.28]]) {
+            const keg = kitted("cask", z);
+
+            cask(artOf(solid, keg), kx + m(x), z, m(y), m(length), radius * M);
+
+            if (keg) {
+                const tall = (2 * radius * keg.size[1]) / keg.size[2];
+
+                kit.push(kitAt(keg, kx / M + x + length / 2, z / M, [length, tall, 2 * radius], 0, { y: y + 2 * radius - tall }));
+            }
+        }
     }
 
     for (const y of [m(1.9), m(2.4)]) {
         solid.box(kx + m(0.4), y, kz0, m(map.width), y + 0.4, kz1, material("planks"));
 
         for (let z = kz0 + m(0.35); z < kz1; z += m(0.55)) {
-            tankard(solid, kx + m(0.7), z, y + 0.4, Math.round(z) % 2 === 0);
+            kitWare(solid, kit, "mug", (kx + m(0.7)) / M, z / M, { y: (y + 0.4) / M, seed: Math.round(z) });
         }
     }
 
-    // Wheels of candles hanging over the tables, and a lantern over the bar
-    solid.add(objectSolid(candleWheel(m(7.5), m(5.5), m(2.45), m(0.7), 6)));
-    solid.add(objectSolid(candleWheel(m(7.5), m(10.5), m(2.45), m(0.7), 6)));
+    // Wheels of candles hanging over the tables (a kit's chandeliers), and a lantern over the bar
+    for (const z of [5.5, 10.5]) {
+        chandelier(solid, kit, 7.5, z);
+    }
+
     solid.add(objectSolid(lantern(m(bar.x + 1.5), m(bar.y + bar.h / 2), m(2.2))));
+
+    // Pictures and trophies on the walls, clear of the windows, the door, the stairs and the hearth
+    dressWalls(kit, map, TAPROOM_WALLS.filter(({ stairs }) => stairs === undefined || stairs === Boolean(map.pieces.find((piece) => piece.kind === "stairs"))));
 
     return {
         solid,
@@ -1480,8 +1625,70 @@ function taproom(map) {
         flames: fires,
         lights: [{ kind: "fire", x: 1.1, y: 1.0, z: hz, colour: 0xff8a3a, intensity: 9, distance: 14, flicker: 0.25, ...fires[0].userData.fire }],
         hearth: { x: 1.1, y: 0.8, z: hz },
+        props: kit,
     };
 }
+
+// Where a taproom hangs pictures and trophies on its walls (metres: on the wall's face, facing into
+// the room; `stairs`, only with stairs up along the north wall, or only without): each in the
+// clear between its windows (PANE's, with their posts), its door and its hearth
+const TAPROOM_WALLS = Object.freeze([
+    { role: "picture", x: 7.4, z: 0, turn: 0, y: 1.45, most: [1.3, 1], stairs: true },
+    { role: "picture", x: 6.5, z: 0, turn: 0, y: 1.45, most: [1.6, 1.1], stairs: false },
+    { role: "picture", x: 11.75, z: 0, turn: 0, y: 1.45, most: [2, 1.2] },
+    { role: "picture", x: 6.08, z: 15, turn: Math.PI, y: 1.45, most: [2, 1.2] },
+    { role: "picture", x: 11.67, z: 15, turn: Math.PI, y: 1.45, most: [2, 1.2] },
+    { role: "trophy", x: 0, z: 5.1, turn: Math.PI / 2, y: 1.55, most: [0.6, 0.75] },
+    { role: "trophy", x: 0, z: 13.86, turn: Math.PI / 2, y: 1.55, most: [0.6, 0.75] },
+]);
+
+// A kit's pieces hung on walls where they're wanted (`spots`: role, where on the wall's face,
+// which way they face, how high their foot is, how big they may be), each of its role as its
+// place picks
+function dressWalls(props, map, spots) {
+    for (const { role, x, z, turn, y, most } of spots) {
+        const piece = kitted(role, Math.round(x * 7 + z * 3) + map.width);
+
+        if (piece) {
+            props.push(onWall(piece, x, z, turn, y, kitScaled(piece, most)));
+        }
+    }
+}
+
+// A kit's chandelier hung over (x, z) (metres), its hub at the ceiling, its candles lit where
+// they are; or the game's own wheel of candles. Meanwhile, its stand-in: a ring of candles where
+// its candles are, on chains to the ceiling
+function chandelier(solid, props, x, z) {
+    const lamp = kitted("chandelier", x + z);
+
+    if (!lamp) {
+        solid.add(objectSolid(candleWheel(m(x), m(z), m(2.45), m(0.7), 6)));
+
+        return;
+    }
+
+    const fit = lamp.size.map((metres) => metres * CHANDELIER_SCALE);
+    const placement = kitAt(lamp, x, z, fit, 0, { y: STOREY - fit[1] });
+    const tips = kitLit(lamp, placement, STOREY - fit[1], "lamp");
+    const ring = Math.min(...tips.map(([, top]) => top)) - 0.19;
+    const reach = tips.reduce((sum, [tx, , tz]) => sum + Math.hypot(tx - x, tz - z), 0) / tips.length;
+    const wheel = new THREE.Group();
+
+    wheel.add(new THREE.Mesh(new THREE.TorusGeometry(m(reach), 0.3, 5, 18).rotateX(Math.PI / 2).translate(m(x), m(ring), m(z)), material("iron")));
+
+    for (let k = 0; k < 3; k++) {
+        const angle = (k / 3) * Math.PI * 2 + 0.5;
+
+        wheel.add(rod([m(x + Math.cos(angle) * reach), m(ring), m(z + Math.sin(angle) * reach)], [m(x), m(STOREY), m(z)], 0.08, material("iron")));
+    }
+
+    standIns.add(objectSolid(wheel));
+    props.push(placement);
+}
+
+// How big a kit's chandelier's hung (times its own: 0.92 m across, its foot 2.1 m up, the
+// candles' flames about 2.45 m, as the game's own wheels' are)
+const CHANDELIER_SCALE = 0.7;
 
 // A wheel of `count` candles hanging from the ceiling on three chains, its middle at x, z (art
 // pixels), `y` high, `radius` across
@@ -1612,62 +1819,113 @@ function upstairs(map) {
     innerWalls(solid, map, finish, cloth);
     ceiling(solid, map);
 
-    // Rugs: a big one before the counter, a runner along the hallway
-    rug(solid, m(0.6), m(6.2), m(7.4), m(12.8));
-    rug(solid, m(8.3), m(6.4), m(17.6), m(8.6));
+    // Rugs: a big one before the counter, a runner along the hallway (a kit's carpet in the
+    // lounge, a little bigger than it's made, and its runners end to end along the hallway)
+    const kit = [];
+    const carpet = kitted("carpet");
+    const runner = kitted("runner");
 
-    // The counter: dark wood, a runner, a ledger, a bell, a candle, flowers
+    rug(artOf(solid, carpet), m(0.6), m(6.2), m(7.4), m(12.8));
+    rug(artOf(solid, runner), m(8.3), m(6.4), m(17.6), m(8.6));
+
+    if (carpet) {
+        kit.push(kitAt(carpet, 4, 9.5, [4.4, 0.012, 2.9]));
+    }
+
+    for (let k = 0; runner && k < 3; k++) {
+        kit.push(kitAt(runner, 8.3 + (k + 0.5) * 3.1, 7.5, [3.06, 0.012, 1.12]));
+    }
+
+    // The counter: dark wood, a runner, a ledger, a bell, a candle, flowers (a kit's carved
+    // cabinet under its top, its doors to the lounge)
     const counter = map.pieces.find((piece) => piece.kind === "counter");
     const [cx0, cx1, cz0, cz1] = [m(counter.x), m(counter.x + counter.w), m(counter.y + 0.15), m(counter.y + 0.85)];
+    const cabinet = kitted("counter");
 
-    solid.box(cx0, 0, cz0, cx1, m(1.05), cz1, material("planks-dark"));
+    artOf(solid, cabinet).box(cx0, 0, cz0, cx1, m(1.05), cz1, material("planks-dark"));
     solid.box(cx0 - 0.4, m(1.05), cz0 - 0.4, cx1 + 0.4, m(1.12), cz1 + 0.4, material("timber-light"));
+
+    if (cabinet) {
+        kit.push(kitAt(cabinet, counter.x + counter.w / 2, counter.y + 0.5, [counter.w - 0.04, 1.05, 0.68]));
+    }
+
     solid.box(cx0 + m(0.3), m(1.12), cz0 + 0.5, cx1 - m(0.3), m(1.14), cz1 - 0.5, material(inn ? "rug-border" : "velvet"));
     solid.box(cx0 + m(0.6), m(1.14), cz0 + m(0.15), cx0 + m(1.05), m(1.2), cz0 + m(0.5), material("ledger"));
     solid.cylinder(cx0 + m(1.7), cz0 + m(0.35), m(1.14), m(1.22), m(0.06), 0.1, material("brass"), { segments: 10 });
-    candle(solid, cx1 - m(0.35), cz0 + m(0.35), m(1.14));
+    candleOn(solid, kit, cx1 - m(0.35), cz0 + m(0.35), m(1.14));
     solid.cylinder(cx0 + m(2.4), cz0 + m(0.4), m(1.14), m(1.35), m(0.06), m(0.08), material("pewter"), { segments: 8 });
 
     for (let k = 0; k < 5; k++) {
         solid.cylinder(cx0 + m(2.4) + (k - 2) * 0.35, cz0 + m(0.4) + ((k % 2) - 0.5) * 0.4, m(1.35), m(1.5), 0.3, 0.3, material(k % 2 ? "flowers" : "leaves"), { segments: 5 });
     }
 
-    // A chaise longue in red velvet, a side table with a candelabrum and wine
+    // A chaise longue in red velvet (a kit's settle, its back to the south wall), a side table
+    // with a candelabrum and wine
     const chaise = map.pieces.find((piece) => piece.kind === "chaise");
     const [lx0, lx1, lz] = [m(chaise.x), m(chaise.x + chaise.w), m(chaise.y)];
+    const settle = kitted("settle");
+    const lounging = artOf(solid, settle);
 
-    solid.box(lx0 + 0.5, 0, lz + m(0.2), lx1 - 0.5, m(0.4), lz + m(0.85), material("timber"));
-    solid.box(lx0 + 0.8, m(0.4), lz + m(0.25), lx1 - 0.8, m(0.52), lz + m(0.8), material(cloth));
-    solid.box(lx0 + 0.5, m(0.4), lz + m(0.7), lx1 - 0.5, m(0.95), lz + m(0.88), material(cloth));
-    solid.box(lx0 + 0.5, m(0.4), lz + m(0.2), lx0 + m(0.3), m(0.8), lz + m(0.85), material(cloth));
+    lounging.box(lx0 + 0.5, 0, lz + m(0.2), lx1 - 0.5, m(0.4), lz + m(0.85), material("timber"));
+    lounging.box(lx0 + 0.8, m(0.4), lz + m(0.25), lx1 - 0.8, m(0.52), lz + m(0.8), material(cloth));
+    lounging.box(lx0 + 0.5, m(0.4), lz + m(0.7), lx1 - 0.5, m(0.95), lz + m(0.88), material(cloth));
+    lounging.box(lx0 + 0.5, m(0.4), lz + m(0.2), lx0 + m(0.3), m(0.8), lz + m(0.85), material(cloth));
+
+    if (settle) {
+        kit.push(kitAt(settle, chaise.x + chaise.w / 2, chaise.y + 0.55, [chaise.w - 0.1, 1.25, 0.66], Math.PI));
+    }
 
     const side = map.pieces.find((piece) => piece.kind === "side-table");
     const [sx, sz] = [m(side.x + 0.5), m(side.y + 0.5)];
-    // (A kit's table in place of its own where there's a kit for it, and chests by the beds:
-    // world/propkits.js)
-    const kit = [];
+    // (A kit's table in place of its own where there's a kit for it, its candlesticks and wine on
+    // it, and chests by the beds: world/propkits.js)
     const table = kitted("side-table");
 
     artOf(solid, table).cylinder(sx, sz, 0, m(0.65), m(0.08), m(0.08), material("timber"), { segments: 8 });
     artOf(solid, table).cylinder(sx, sz, m(0.62), m(0.68), m(0.35), m(0.35), material("timber-light"), { segments: 14 });
 
-    if (table) {
-        kit.push({ model: table.model, x: side.x + 0.5, z: side.y + 0.5, fit: [0.8, 0.68, 0.8], double: table.double });
+    const board = table && kitAt(table, side.x + 0.5, side.y + 0.5, [0.86, 0.68, 0.8]);
+
+    if (board) {
+        kit.push(board);
     }
-    candle(solid, sx - m(0.1), sz - m(0.1), m(0.68));
-    candle(solid, sx + m(0.12), sz - m(0.05), m(0.68));
-    solid.cylinder(sx + m(0.05), sz + m(0.15), m(0.68), m(0.95), m(0.05), m(0.03), material("wine"), { segments: 8 });
+
+    // (Its candelabrum: a kit's, its nine candles lit; or the game's own two candles)
+    const branches = board && kitted("candelabrum");
+
+    if (branches) {
+        const stand = kitAt(branches, side.x + 0.42, side.y + 0.42, branches.size, 0, { on: board });
+
+        kit.push(stand);
+        candle(standIns, sx - m(0.1), sz - m(0.1), m(0.68));
+        kitLit(branches, stand, 0.68, "lamp", { tall: 0.12 });
+    } else {
+        candleOn(solid, kit, sx - m(0.1), sz - m(0.1), m(0.68), board);
+        candleOn(solid, kit, sx + m(0.12), sz - m(0.05), m(0.68), board);
+    }
+
+    if (board && kitted("bottle")) {
+        standIns.cylinder(sx + m(0.05), sz + m(0.15), m(0.68), m(0.95), m(0.05), m(0.03), material("wine"), { segments: 8 });
+        kitWare(solid, kit, "bottle", side.x + 0.55, side.y + 0.68, { on: board });
+        kitWare(solid, kit, "cup", side.x + 0.32, side.y + 0.7, { on: board, seed: 3 });
+    } else {
+        solid.cylinder(sx + m(0.05), sz + m(0.15), m(0.68), m(0.95), m(0.05), m(0.03), material("wine"), { segments: 8 });
+    }
 
     // The bedrooms: canopied beds, a washstand and a chest in each, candles in sconces on the
     // walls
     const drapes = inn ? ["wool-green", "wool-blue", "wool-ochre", "linen"] : ["velvet", "velvet-purple", "velvet-purple", "velvet"];
 
+    // (A kit's beds: a madam's canopied, an inn's plain; the head, its -x, to the wall)
+    const bedding = kitted(inn ? "bed-plain" : "bed");
+
     map.pieces.filter((piece) => piece.kind === "bed").forEach((piece, k) => {
         const [x0, z0, x1, z1] = [m(piece.x), m(piece.y), m(piece.x + piece.w), m(piece.y + piece.h)];
+        const art = artOf(solid, bedding);
 
         // The head against the wall it touches (north for the north rooms, south for the south)
         if (piece.y === 0) {
-            bed(solid, x0, z0, x1, z1, drapes[k]);
+            bed(art, x0, z0, x1, z1, drapes[k]);
         } else {
             const turned = new Solid();
 
@@ -1677,7 +1935,11 @@ function upstairs(map) {
 
             object.rotation.y = Math.PI;
             object.position.set(x1, 0, z1);
-            solid.add(objectSolid(object));
+            art.add(objectSolid(object));
+        }
+
+        if (bedding) {
+            kit.push(kitAt(bedding, piece.x + piece.w / 2, piece.y + piece.h / 2, [piece.h - 0.08, inn ? 1.1 : 2.3, piece.w - 0.12], piece.y === 0 ? -Math.PI / 2 : Math.PI / 2));
         }
     });
 
@@ -1687,26 +1949,58 @@ function upstairs(map) {
 
     // (A candle on each chest, to go to bed by)
     for (const piece of map.pieces.filter((each) => each.kind === "chest")) {
-        const kept = kitted("chest");
+        const kept = kitted("chest", piece.x + piece.y);
+        const box = kept && kitStanding(map, kept, piece.x, piece.y, [0.8, 0.52, 0.56]);
 
         chest(artOf(solid, kept), m(piece.x + 0.5), m(piece.y + 0.5));
-        candle(solid, m(piece.x + 0.3), m(piece.y + 0.5), m(0.52));
 
-        if (kept) {
-            kit.push(kitStanding(map, kept, piece.x, piece.y, [kept.size[0], 0.52, kept.size[2]]));
+        // (The chest set out before the candlestick on it: furnish stands a thing on another only once that's set)
+        if (box) {
+            kit.push(box);
         }
+
+        candleOn(solid, kit, m(piece.x + 0.5), m(piece.y + 0.5), m(0.52), box);
     }
 
     // Sconces in the hallway and by the counter: red glass in a madam's house, clear at an inn
-    for (const [x, z] of [[9, 5.62], [13.5, 5.62], [9, 9.38], [13.5, 9.38], [0.05, 8]]) {
-        sconce(solid, m(x), m(z), inn);
+    // (a kit's candles on iron brackets, their light red or clear as the glass was)
+    const bracket = kitted("sconce");
+
+    for (const [x, z, turn] of [[9, 5.62, 0], [13.5, 5.62, 0], [9, 9.38, Math.PI], [13.5, 9.38, Math.PI], [0.05, 8, Math.PI / 2]]) {
+        if (!bracket) {
+            sconce(solid, m(x), m(z), inn);
+            continue;
+        }
+
+        const face = [x - Math.sin(turn) * 0.03, z - Math.cos(turn) * 0.03];
+        const placement = onWall(bracket, face[0], face[1], turn, 1.95 - bracket.candles[0][1]);
+
+        kit.push(placement);
+        standIns.box(m(face[0]) - 0.5, m(1.6), m(face[1]) - 0.5, m(face[0]) + 0.5, m(1.8), m(face[1]) + 0.5, material("iron", WALL));
+        kitLit(bracket, placement, placement.y, "sconce", { colour: inn ? 0xffa860 : 0xff6a5a });
     }
 
-    // A wheel of candles over the lounge
-    solid.add(objectSolid(candleWheel(m(4), m(8), m(2.45), m(0.7), 6)));
+    // A wheel of candles over the lounge (a kit's chandelier)
+    chandelier(solid, kit, 4, 8);
+
+    // Pictures on the walls: the lounge's, each bedroom's over its chest's wall, the hallway's end
+    dressWalls(kit, map, UPSTAIRS_WALLS);
 
     return { solid, moving: [], flames: [], lights: [], hearth: null, props: kit };
 }
+
+// Where upstairs hangs its pictures (metres: on the wall's face, facing into the room): the
+// lounge's east wall either side of the hallway, each bedroom's west wall (its chest's), and the
+// hallway's end
+const UPSTAIRS_WALLS = Object.freeze([
+    { role: "picture", x: 8.41, z: 2.6, turn: -Math.PI / 2, y: 1.4, most: [1.8, 1.2] },
+    { role: "picture", x: 8.41, z: 12.3, turn: -Math.PI / 2, y: 1.4, most: [1.8, 1.2] },
+    ...[8.59, 13.59].flatMap((x) => [
+        { role: "picture", x, z: 1.4, turn: Math.PI / 2, y: 1.45, most: [1.2, 0.9] },
+        { role: "picture", x, z: 13.6, turn: Math.PI / 2, y: 1.45, most: [1.2, 0.9] },
+    ]),
+    { role: "picture", x: 18, z: 7.5, turn: -Math.PI / 2, y: 1.35, most: [2, 1.1] },
+]);
 
 // --- The smithy ---
 
@@ -6581,6 +6875,8 @@ export function* buildingInterior(map) {
         /** How high over the ground the rock closes over a point (world metres), a dungeon's level's; null for anywhere else. */
         roof: (x, z) => (roof ? roof(x - ox, z - oz) : null),
         props: built.props ?? [],
+        /** Where its candles' flames burn (world metres: [x, y, z]), as fire.js draws them. */
+        candles: lit.candles.map(([x, y, z]) => [ox + x / M, y / M, oz + z / M]),
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         /** Where a hell's heart beats and its Hellforge stands (world metres), heard from there; null where there's none. */
         heart: built.heart ? { x: ox + built.heart.x, z: oz + built.heart.z } : null,
