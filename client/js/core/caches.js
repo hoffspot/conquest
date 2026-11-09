@@ -186,7 +186,7 @@ export function cacheMake(tier, random, { falloff = 1 } = {}) {
  * might hold, or (`charm` of the time) a charm (what's rolled on it rolled: goods.js rollCharm),
  * made as a cache's `up` tiers further out would be.
  */
-export function elitePrize(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+export function elitePrize(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
     const quality = cacheMake(Math.min(TIERS, tier + ELITE_SPOILS.up), random, { falloff });
 
     if (random.chance(ELITE_SPOILS.charm)) {
@@ -195,16 +195,17 @@ export function elitePrize(tier, random, { people = "human", level = 1, falloff 
         return rollCharm(charms[Math.floor(random.next() * charms.length) % charms.length], quality, random, { level });
     }
 
-    return cachePiece(quality, random, { people, level });
+    return cachePiece(quality, random, { people, maker, level });
 }
 
 /**
  * A piece of gear any cache might hold (CACHE_GEAR) of a make, made (random.js random) of a `level`
- * (gear.js rollGear; `people`: the maker of a people's piece), a wand's or grimoire's boost rolled.
+ * (gear.js rollGear; `people`: the maker of a people's piece; `maker`, whose design a sword's or
+ * shield's is: gear.js DESIGNS), a wand's or grimoire's boost rolled.
  */
-export function cachePiece(quality, random, { people = "human", level = 1 } = {}) {
+export function cachePiece(quality, random, { people = "human", maker = people, level = 1 } = {}) {
     const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-    const made = rollGear(id, quality, random, { people, level });
+    const made = rollGear(id, quality, random, { people, maker, level });
 
     return ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made;
 }
@@ -214,14 +215,14 @@ export function cachePiece(quality, random, { people = "human", level = 1 } = {}
  * any people's piece in it): { gold, items }, CACHE_LOOT's; its gear made as any's is (gear.js
  * rollGear: its bonuses rolled), a wand's or grimoire's boost to spells rolled as a shop's is.
  */
-export function rollCache(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+export function rollCache(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
     const gold = Math.round(random.int(...CACHE_LOOT.gold) * (1 + CHEST_GOLD * (Math.max(1, tier) - 1)));
     const pieces = random.int(...CACHE_LOOT.gear);
     const items = [];
 
     for (let k = 0; k < pieces; k++) {
         const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-        const made = rollGear(id, cacheMake(tier, random, { falloff }), random, { people, level });
+        const made = rollGear(id, cacheMake(tier, random, { falloff }), random, { people, maker, level });
 
         items.push(ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made);
     }

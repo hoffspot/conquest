@@ -18,7 +18,7 @@ import { measureHead } from "./headwear.js";
 import { DRAPES } from "./drapes.js";
 import { GARMENTS } from "./garments.js";
 import { powerGrip } from "./grip.js";
-import { LIVERIES, STANDARDS } from "./liveries.js";
+import { designItem, KIT_DESIGNS, kitModel, LIVERIES, STANDARDS } from "./liveries.js";
 
 /** The slots, in the order to show them. */
 export const SLOTS = Object.freeze([
@@ -174,7 +174,19 @@ const SLUNG_SHIELDS = new Set(["human", "elf", "orc", "lizard"]);
  * names the line its edge follows round it (`rim`: headwear.js's RIMS), which the hair is cut
  * along under it.
  */
-export const ITEMS = Object.freeze({
+// Each design of Dragon Motion's shields and swords (characters/liveries.js KIT_DESIGNS) an item of
+// its own: held, worn, slung and put away as its kind is, drawn as its model (characters/items.js
+// HELD_MODELS: "kiteShieldAzureCross"); a sword's hand round its own grip (KIT_HILTS: the first's a
+// hand and a half long)
+const KIT_HILTS = Object.freeze({ knightly: Object.freeze({ round: 0.013, hilt: [-0.11, 0.045] }), blackened: Object.freeze({ round: 0.013, hilt: [-0.06, 0.055] }) });
+
+function withDesigns(items) {
+    const designs = Object.entries(KIT_DESIGNS).flatMap(([kind, looks]) => Object.keys(looks).map((look) => [designItem(kind, look), { ...items[kind], ...(KIT_HILTS[look] ?? {}), label: `${items[kind].label} (${look})`, model: `held:${kitModel(kind, look)}` }]));
+
+    return { ...items, ...Object.fromEntries(designs) };
+}
+
+export const ITEMS = Object.freeze(withDesigns({
     sword: { label: "Arming sword", slot: "mainHand", model: "sword", socket: "rightHand", turn: [0.9, 0, 0], grips: true, round: 0.014, hilt: [-0.045, 0.053], hold: HOLDS.sword, sheath: SHEATHS.sword },
     staff: { label: "Mage's staff", slot: "mainHand", model: "staff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.019, hold: HOLDS.staff, haft: [-0.7, -0.3], haftRound: 0.017, sheath: SHEATHS.staff },
     wand: { label: "Wand", slot: "mainHand", model: "wand", socket: "rightHand", turn: [1.45, 0, 0], grips: true, hold: HOLDS.wand, sheath: SHEATHS.wand },
@@ -281,7 +293,7 @@ export const ITEMS = Object.freeze({
     circletDark: { label: "Black circlet", slot: "head", model: "circletDark", socket: "head" },
     darkHood: { label: "Black hood", slot: "head", model: "darkHood", socket: "head", hides: ["hair"], rim: "hood" },
     featherBand: { label: "Feathered band", slot: "head", model: "featherBand", socket: "head" },
-});
+}));
 
 /** Every piece of equipment by id: { kind: "garment" | "drape" | "item", slot, label, ... }. */
 export const EQUIPMENT = Object.freeze(Object.fromEntries([

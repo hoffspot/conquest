@@ -51,6 +51,44 @@ export const SLOT_IDS = Object.freeze(GEAR_SLOTS.map(({ id }) => id));
 export const UNIFORM_PEOPLES = Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc"]);
 
 /**
+ * The designs some pieces come in, by whose make they are (rollGear `maker`): a people's
+ * (core/worldplan/races.js), a band's (core/invasions.js BANDS: the sellswords'), the Order of
+ * the Bell's (`bell`). Each piece of such a kind is made in one of its maker's (GEAR `looks`);
+ * one of a maker with none of their own (wild lands' finds, the bandits'), as the game makes its
+ * kind (`own`). Each design one of Dragon Motion's shields or swords (characters/items.js
+ * HELD_MODELS), set by its colours and arms with those whose they are (characters/liveries.js
+ * LIVERIES): the humans' blue and gold and their crowns, the lizard-folk's red and their dragons,
+ * the Order's pale crosses.
+ */
+export const DESIGNS = Object.freeze({
+    sword: Object.freeze({ human: Object.freeze(["knightly"]), orc: Object.freeze(["blackened"]), bell: Object.freeze(["knightly"]), sellswords: Object.freeze(["blackened"]) }),
+    kiteShield: Object.freeze({
+        human: Object.freeze(["azureCross", "lilyCross", "whiteCross", "crowned"]),
+        elf: Object.freeze(["silverScroll", "seaScroll"]),
+        darkElf: Object.freeze(["ironBands", "verdigris"]),
+        cat: Object.freeze(["lilies", "swordLily", "battle"]),
+        lizard: Object.freeze(["dragonCrown", "bendy", "redDragon"]),
+        orc: Object.freeze(["roundels", "darkDamask"]),
+        bell: Object.freeze(["paleCross", "ringCross"]),
+        sellswords: Object.freeze(["etched", "blackBeast"]),
+    }),
+    towerShield: Object.freeze({
+        human: Object.freeze(["heraldry"]),
+        darkElf: Object.freeze(["blackScroll"]),
+        cat: Object.freeze(["paintedFigures"]),
+        lizard: Object.freeze(["dragons"]),
+        sellswords: Object.freeze(["lionAxes"]),
+    }),
+});
+
+// A kind's looks, one that comes in designs (DESIGNS): the game's own make first (what one made
+// before it had them looks like: gearLook), then every maker's
+const designed = (id) => Object.freeze(["own", ...new Set(Object.values(DESIGNS[id]).flat())]);
+
+/** Whose make a design of a kind is (DESIGNS: makers, in order; none for its own look). */
+export const makersOf = (id, look) => Object.keys(DESIGNS[id] ?? {}).filter((maker) => DESIGNS[id][maker].includes(look));
+
+/**
  * Every piece of gear: its name, the slot it goes in, what a common one costs (gold) and does:
  * `armor` (the share of each blow it takes off), and any bonus of its own (`bonus`: as the rolled
  * ones: a belt's stamina); a weapon's hands (1 or 2); what a shield or a quiver goes with; a
@@ -59,7 +97,8 @@ export const UNIFORM_PEOPLES = Object.freeze(["human", "elf", "darkElf", "cat", 
  */
 export const GEAR = Object.freeze({
     // Weapons (core/weapons.js WEAPONS: how they fight)
-    sword: { label: "Sword", slot: "mainHand", hands: 1, price: 30 },
+    // (A sword, and a kite or tower shield, in one of its maker's designs: DESIGNS)
+    sword: { label: "Sword", slot: "mainHand", hands: 1, price: 30, looks: designed("sword") },
     wand: { label: "Wand", slot: "mainHand", hands: 1, price: 40, magic: true, ward: true },
     staff: { label: "Staff", slot: "mainHand", hands: 2, price: 20 },
     hammer: { label: "War hammer", slot: "mainHand", hands: 2, price: 35 },
@@ -75,8 +114,8 @@ export const GEAR = Object.freeze({
     // quiver, with a bow. A shield's `robust`: how much of a blow it can take, as a share of
     // what a tower shield can (BLOCK_MOST); a spellward turns spells too (`spells`)
     roundShield: { label: "Round shield", slot: "offHand", armor: 0.06, price: 20, robust: 0.6 },
-    kiteShield: { label: "Kite shield", slot: "offHand", armor: 0.1, price: 45, robust: 0.8 },
-    towerShield: { label: "Tower shield", slot: "offHand", armor: 0.12, price: 70, robust: 1 },
+    kiteShield: { label: "Kite shield", slot: "offHand", armor: 0.1, price: 45, robust: 0.8, looks: designed("kiteShield") },
+    towerShield: { label: "Tower shield", slot: "offHand", armor: 0.12, price: 70, robust: 1, looks: designed("towerShield") },
     spellward: { label: "Spellward", slot: "offHand", armor: 0.04, price: 50, robust: 0.5, spells: true, ward: true },
     shield: { label: "Shield", slot: "offHand", armor: 0.08, price: 40, uniform: true, robust: 0.7 },
     quiver: { label: "Quiver", slot: "offHand", bonus: { ranged: 0.05 }, price: 15, withBow: true },
@@ -350,9 +389,12 @@ const rounded = (stat, value) => (STATS[stat].share ? Math.round(value * 100) / 
  * one), each different, stronger the better made and the higher its level; two, a word before its
  * name and one after. A graded piece (`grade`, 0 to 1: core/rare.js UNIQUES `graded`), as many and
  * as strong as its grade has it. One that comes in several looks (GEAR `looks`: a mace's), one of
- * them (`look`), unless it's to look as its own (`looked`: false, a unique's: core/rare.js).
+ * them (`look`), unless it's to look as its own (`looked`: false, a unique's: core/rare.js); one
+ * that comes in designs (DESIGNS: a sword's, a kite or tower shield's), one of its `maker`'s (a
+ * people's, a band's, the Order of the Bell's: whose make it is, the `people` it's made by or
+ * found among unless said), none if they've none of their own: it looks as the game makes it.
  */
-export function rollGear(id, quality = "common", random, { people = null, level = 1, grade = null, looked = true } = {}) {
+export function rollGear(id, quality = "common", random, { people = null, maker = people, level = 1, grade = null, looked = true } = {}) {
     const def = GEAR[id];
     const item = { id, quality };
     const at = levelOf(level);
@@ -420,15 +462,21 @@ export function rollGear(id, quality = "common", random, { people = null, level 
         item.effect = pick(random, BLOW_EFFECTS);
     }
 
-    // (Its look, the last thing rolled: what's rolled before it is as it was before maces had them)
-    if (def.looks && looked) {
-        item.look = pick(random, def.looks);
+    // (Its look, the last thing rolled: what's rolled before it is as it was before maces had them;
+    // a design, one of its maker's, none rolled if they've none)
+    const looks = def.looks && looked ? (DESIGNS[id] ? (Object.hasOwn(DESIGNS[id], maker ?? "") ? DESIGNS[id][maker] : null) : def.looks) : null;
+
+    if (looks?.length) {
+        item.look = pick(random, looks);
     }
 
     return item;
 }
 
-/** A piece's look (GEAR `looks`: one of them, its first if it has none, or none it can have), or null if it has no looks. */
+/**
+ * A piece's look (GEAR `looks`: one of them, its first if it has none, or none it can have: a
+ * sword or shield made before they came in designs, the game's own), or null if it has no looks.
+ */
 export const gearLook = ({ id, look = null }) => (GEAR[id]?.looks ? (GEAR[id].looks.includes(look) ? look : GEAR[id].looks[0]) : null);
 
 /**

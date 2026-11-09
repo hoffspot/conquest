@@ -519,7 +519,12 @@ describe("drawing weapons and putting them away (actions.js DRAWS, Character.she
             assert.equal(typeof item.sling, "boolean", `${id}: a new shield says`);
         }
 
-        assert.deepEqual(shields.filter(([, item]) => !item.sling).map(([id]) => id).sort(), ["shield.cat", "shield.darkElf", "towerShield"]);
+        // (A tower shield in each of its designs, characters/liveries.js KIT_DESIGNS, as a tower shield)
+        const towers = shields.filter(([id]) => /^towerShield./.test(id));
+
+        assert.equal(towers.length, 5);
+        assert.ok(towers.every(([, item]) => !item.sling));
+        assert.deepEqual(shields.filter(([id, item]) => !item.sling && !/^towerShield./.test(id)).map(([id]) => id).sort(), ["shield.cat", "shield.darkElf", "towerShield"]);
     });
 
     it("takes a slung shield off the back before drawing the sword, and slings it there again after putting the sword away", () => {
