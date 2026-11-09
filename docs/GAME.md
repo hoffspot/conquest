@@ -1430,9 +1430,11 @@ dismiss a specific purchased mount").
   bobs), getting up and down from the side they do it from. Their feet are in the stirrups at
   every gait, whatever their legs' length: each leg's bent to put the ball of the foot on its
   stirrup's tread, as the saddle hangs from the horse as it goes (mounts3d.js `STIRRUPS`; from the
-  shortest human's legs, 0.78 m, nearly straight, to the tallest elf's, 1.22 m). The camera
-  looks a little higher at them (`HORSEBACK.camera`). Without the licensed models a bay built in
-  code stands in (looks.js `horse`) and the rider's sat on it as on a bench.
+  shortest human's legs, 0.78 m, nearly straight, to the tallest elf's, 1.22 m). The horse wears
+  its bridle and reins, and the reins' ends are in their hands: each held in its palm as far as
+  their feet are in the stirrups, else hanging on its neck as its clips have them (mounts3d.js
+  `REINS`). The camera looks a little higher at them (`HORSEBACK.camera`). Without the licensed
+  models a bay built in code stands in (looks.js `horse`) and the rider's sat on it as on a bench.
 - **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
   its hooves a stride at a time, its whinny as it comes, and its fall.
 

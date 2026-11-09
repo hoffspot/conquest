@@ -39,6 +39,15 @@ const MANE_MATERIALS = Object.freeze({ light: "MI_Hair_White", dark: "MI_Mane02_
  */
 export const STIRRUPS = Object.freeze({ ball: 0.35, up: 0.04, treads: 12, into: 0.25, outOf: 0.3 });
 
+/**
+ * The reins' ends in their rider's hands: the bones the horse's reins hang from at their ends
+ * (`bones`, by the side: the horse's left its rider's left), each put in its hand's palm (`palm` of
+ * the way from the wrist to the middle finger's knuckle) as far as the rider's feet are in the
+ * stirrups (getting up, riding, getting down: STIRRUPS); else hanging as the horse's clips have
+ * them, on its neck before the saddle.
+ */
+export const REINS = Object.freeze({ bones: Object.freeze({ Left: "Reins_Bn_Hand_L", Right: "Reins_Bn_Hand_R" }), palm: 0.5 });
+
 const ease = (u) => {
     const t = Math.min(1, Math.max(0, u));
 
@@ -52,6 +61,8 @@ const _vertex = new THREE.Vector3();
 const _ankle = new THREE.Vector3();
 const _toes = new THREE.Vector3();
 const _ball = new THREE.Vector3();
+const _wrist = new THREE.Vector3();
+const _knuckle = new THREE.Vector3();
 
 // A saddle's stirrups' treads: the lowest of its vertices on each side as it's made (the horse's
 // left its +x), by its geometry ({ Left, Right }: vertex indices)
@@ -178,6 +189,13 @@ export class Mounts {
         horse.object.rotation.y = facing;
         horse.facing = facing;
         horse.object.visible = under < 0.999 && avatar.object.visible !== false;
+
+        // (Its reins' ends back where they hang, for its clips to move or leave: the rider's hands
+        // take them again below)
+        for (const end of Object.values(one.reins)) {
+            end.bone.position.copy(end.rest);
+        }
+
         horse.animate(dt);
 
         if (fallen && fallen !== one.dead) {
@@ -195,22 +213,52 @@ export class Mounts {
         // stirrups, the horse posed as it is now
         this.#rider(one, mount, avatar, { since, x, z, facing, ground });
         this.#stirrups(one, mount, avatar, since);
+        this.#reins(one, mount, avatar, since);
+    }
+
+    // How far a rider's in the saddle, posed from their clips on a horse drawn from its model (0 to
+    // 1): getting up, all the way at its end; riding; getting down, out of it at its start
+    #inSaddle(one, mount, since) {
+        if (!one.saddle || !this.clips || one.seated) {
+            return 0;
+        }
+
+        const getting = mount.quick ? MOUNT.hop : MOUNT.dismount;
+
+        return mount.phase === "riding" ? 1
+            : mount.phase === "mounting" ? ease((since - (MOUNT.mount / 1000 - STIRRUPS.into)) / STIRRUPS.into)
+            : mount.phase === "dismounting" ? 1 - ease(since / Math.min(STIRRUPS.outOf, getting / 1000))
+            : 0;
+    }
+
+    // The reins' ends put in their rider's hands (REINS), as far as they're in the saddle
+    #reins(one, mount, avatar, since) {
+        const amount = this.#inSaddle(one, mount, since);
+
+        if (amount <= 0) {
+            return;
+        }
+
+        const rig = avatar.character.rig;
+
+        for (const [side, end] of Object.entries(one.reins)) {
+            rig.bone(`${side}Hand`).getWorldPosition(_wrist);
+            rig.bone(`${side}HandMiddle1`).getWorldPosition(_knuckle);
+            _wrist.lerp(_knuckle, REINS.palm);
+            end.bone.parent.worldToLocal(_wrist);
+            end.bone.position.lerp(_wrist, amount);
+            end.bone.updateMatrixWorld(true);
+        }
     }
 
     // A rider's feet put in the stirrups (STIRRUPS), up on a horse drawn from its model, posed from
     // their clips: as far as they're in them (getting up, all the way in at its end; riding; getting
     // down, out of them at its start)
     #stirrups(one, mount, avatar, since) {
-        const clips = this.clips;
         const saddle = one.saddle;
-        const getting = mount.quick ? MOUNT.hop : MOUNT.dismount;
-        const amount =
-            mount.phase === "riding" ? 1
-            : mount.phase === "mounting" ? ease((since - (MOUNT.mount / 1000 - STIRRUPS.into)) / STIRRUPS.into)
-            : mount.phase === "dismounting" ? 1 - ease(since / Math.min(STIRRUPS.outOf, getting / 1000))
-            : 0;
+        const amount = this.#inSaddle(one, mount, since);
 
-        if (amount <= 0 || !saddle || !clips || one.seated) {
+        if (amount <= 0) {
             return;
         }
 
@@ -356,6 +404,22 @@ export class Mounts {
         return { Left: this.#tread(one, "Left", new THREE.Vector3()), Right: this.#tread(one, "Right", new THREE.Vector3()) };
     }
 
+    /**
+     * Where the ends of a rider's reins are as their horse is posed now (world: { Left, Right }),
+     * or null (none out, or drawn without its model).
+     */
+    reinsOf(id) {
+        const one = this.horses.get(id);
+
+        if (!one?.reins.Left || !one.reins.Right) {
+            return null;
+        }
+
+        one.beast.object.updateMatrixWorld(true);
+
+        return { Left: one.reins.Left.bone.getWorldPosition(new THREE.Vector3()), Right: one.reins.Right.bone.getWorldPosition(new THREE.Vector3()) };
+    }
+
     // How high a rider's seat is over the horse's feet as it goes (metres): under its CG bone, as
     // the rider's clips have it (SEAT)
     #seat(one) {
@@ -415,7 +479,18 @@ export class Mounts {
             });
         }
 
-        return { horse: horse.id, model, beast, saddle, phase: null, dead: false, sank: false, seated: false };
+        // (Its reins' ends, for its rider's hands: their bones, and where they hang as it's made)
+        const reins = {};
+
+        for (const [side, name] of Object.entries(REINS.bones)) {
+            const bone = saddle?.skeleton.bones.find((one) => one.name === name);
+
+            if (bone) {
+                reins[side] = { bone, rest: bone.position.clone() };
+            }
+        }
+
+        return { horse: horse.id, model, beast, saddle, reins, phase: null, dead: false, sank: false, seated: false };
     }
 
     #remove(one) {
