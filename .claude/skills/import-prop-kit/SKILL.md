@@ -60,7 +60,7 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
    (occlusion is white with dark creases, metal bright only on the metal). Dragon Motion's
    "RMA" textures are occlusion in red, roughness in green and metal in blue; read as their name
    says, everything is unlit in shade and half metal (`docs/LICENSED_MODELS.md`, *Gear in
-   faction designs*).
+   faction designs*). Its first four kits were built so, and built again as new files.
 3. Look at it in the pipeline's viewer: every piece there, none black, none see-through. Read
    the build's warnings: faces mapped to a point of their textures (a palette's way) bake black;
    kit.py spreads them over a few texels.

@@ -324,6 +324,10 @@ cage in a kennel and shackles on the walls where the captive are kept.
   were, anything more than a metre from the file's middle wrapped round: the shop counter's top
   folded into its front, read for a while as a glass case. `dungeons3d.js` `partsOf` makes them
   plain numbers first.
+- **A packed texture's channels by its pixels.** The Medieval Props Kit's "RMA" textures hold
+  occlusion in red, roughness in green and metal in blue. Its first four kits read them as their
+  name says, and every piece was unlit in shade and half metal; they were built again as new files
+  (`medieval-tavern-3`, `medieval-hall-2`, `medieval-town-2`, `medieval-dungeon-2`).
 - **Tests:** `test/propkits.test.js` (the catalog, the choosing, the shops and every people's
   taprooms and rooms upstairs set out, the flames where the candles are, the tones, a quantized
   piece read whole, the licensed file's nodes and its one material), and

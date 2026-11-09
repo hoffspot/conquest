@@ -166,24 +166,25 @@ describe("rocks' shapes (world/art/kits/rocks.js)", () => {
     });
 
     it("are made quickly enough to make a few a frame, near and far", () => {
-        quickEnough(14, () => {
+        // A rock of each family at a detail, each made in full (nothing of a shape is kept), and
+        // how long one took (ms)
+        const each = (detail, seed) => () => {
             const start = performance.now();
 
             for (const family of FAMILIES) {
-                rockLook(randomOf(11), { family, detail: 3 });
+                rockLook(randomOf(seed), { family, detail });
             }
 
             return (performance.now() - start) / FAMILIES.length;
-        });
-        quickEnough(4, () => {
-            const start = performance.now();
+        };
 
-            for (const family of FAMILIES) {
-                rockLook(randomOf(12), { family, detail: 1 });
-            }
-
-            return (performance.now() - start) / FAMILIES.length;
-        });
+        // Timed once made a first time: the first of each detail makes its ball (sphereOf) and
+        // the engine compiles the code that shapes it, once a game, not once a rock. Timed cold,
+        // a busy machine took 5 ms where a warm one takes under 1.
+        each(3, 10)();
+        each(1, 13)();
+        quickEnough(14, each(3, 11));
+        quickEnough(4, each(1, 12));
     });
 });
 
