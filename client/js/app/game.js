@@ -439,9 +439,10 @@ const ARRIVE_WITHIN = 140;
 // point on the mesh within `snap` metres of there; found across the world again once they're
 // this far off it (metres), at most this often (seconds); the way drawn over the mesh kept while
 // they're within `kept` metres of it (looked for no further along it than they could have come
-// since it was laid: `since` metres), unless one found anew goes `longer` metres further; and
-// none over the mesh that's longer than `detour` times as far along the way across the world as
-// it goes and `slack` metres (one that goes round by the tiles in so far, back and on again)
+// since it was laid: `since` metres), unless one found anew goes `longer` metres further along the
+// way across the world; and none over the mesh, found or kept, that's longer than `detour` times
+// as far along the way across the world as it goes and `slack` metres (one that goes round by the
+// tiles in so far, back and on again)
 const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, since: 20, longer: 2, detour: 1.5, slack: 20 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
@@ -7548,21 +7549,24 @@ export class Game {
         // (Short of the furthest wanted, short of the pin: found again soon, as the tiles come in)
         this.pinShort = !near || (near.reach < PIN_WAY.near[0] && lengthOf(rest) > near.reach + 1);
 
-        // (Found no further than the way drawn goes on from where they are, or not at all, while
-        // they're still on it: that kept, from there. It can be walked; laid anew each time it was
-        // asked for, as the mesh's tiles came and went, the line came and went, and grew and shrank)
+        // (Found going no further towards the pin than the way drawn goes on from where they are,
+        // or not at all, while they're still on it: that kept, from there. It can be walked; laid
+        // anew each time it was asked for, as the mesh's tiles came and went, the line came and
+        // went, and grew and shrank. Not one that goes round far further than the way across the
+        // world, as one found anew isn't: kept for being longer, one laid round by the tiles in
+        // so far went back the way they'd come for good)
         const laid = this.pinNear;
 
         if (laid?.length > 1) {
             // (Near its start, where they were when it was laid: not a later part of it that
             // comes back close by)
             const on = nearestAlong(laid, at, { to: PIN_WAY.since });
-            const left = lengthOf(laid) - on.along;
+            const way = [[...at], ...wayFrom(laid, on.along).slice(1)];
+            const reach = nearestAlong(rest, way.at(-1)).along;
+            const long = lengthOf(way);
 
-            if (on.off <= PIN_WAY.kept && left > 1 && (!near || lengthOf(near.way) < left - PIN_WAY.longer)) {
-                const way = [[...at], ...wayFrom(laid, on.along).slice(1)];
-
-                near = { way, reach: nearestAlong(rest, way.at(-1)).along };
+            if (on.off <= PIN_WAY.kept && long > 1 && long <= reach * PIN_WAY.detour + PIN_WAY.slack && (!near || near.reach < reach - PIN_WAY.longer)) {
+                near = { way, reach };
             }
         }
 

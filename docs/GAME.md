@@ -5034,12 +5034,13 @@ same button holds the war's key.
   along it is followed every frame (`from`), so it fades in from their feet as they go, and its
   pulses, counted from them, run on without a jump each time it's laid again. The way over the
   navigation mesh it's laid along is kept while the player's within 3 m of it, unless one found
-  anew goes further (game.js `PIN_WAY.kept`): laid anew each time the way was asked for, as the
-  mesh's tiles came in, it grew and shrank by up to 100 m and now and then went. And one found
-  over the mesh that goes round far further than the way across the world does (more than half as
-  far again, and 20 m) isn't taken (`PIN_WAY.detour`): over the tiles in so far, while those round
-  the player weren't yet, it went back the way they'd come and on again, and the line ran back
-  behind them.
+  anew goes further towards the pin along the way across the world (game.js `PIN_WAY.kept`): laid
+  anew each time the way was asked for, as the mesh's tiles came in, it grew and shrank by up to
+  100 m and now and then went. And none over the mesh, found or kept, that goes round far further
+  than the way across the world does (more than half as far again, and 20 m) is taken
+  (`PIN_WAY.detour`): over the tiles in so far, while those round the player weren't yet, one went
+  back the way they'd come and on again, and kept for being the longer, the line ran back behind
+  them from then on.
 - **The way there** (core/journey.js `wayAcross`): found over the world plan's cells (32 m), not
   the navigation meshes (whose tiles are baked only round the players: kilometres of them would
   stall the game). Each cell's ground is worked out once a world, in about a tenth of a second
