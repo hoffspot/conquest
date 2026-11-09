@@ -15030,7 +15030,7 @@ test("on the world map a pin's dropped where it's held: a column of light where 
             long: marks.lineLength.value,
             points: points.length,
             astray: points.filter(([x, z]) => !navigation.nearestIn([x, z], 0.3)).map((point) => point.map(Math.round)),
-            over: { points: over.length, least: Math.min(...over), most: Math.max(...over) },
+            over: { points: over.length, least: Math.min(...over), most: Math.max(...over), middling: over.toSorted((a, b) => a - b)[Math.floor(over.length / 2)] },
             spacing: [...new Set(grounds.map((mesh) => mesh.userData.step))].sort(),
         };
     });
@@ -15042,11 +15042,12 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(world.long).toBeGreaterThan(80);
     expect(world.points).toBeGreaterThan(40);
     expect(world.astray).toEqual([]);
-    // (On the ground as it's drawn, all along it: 0.14 m over it, never under, wherever its
-    // corners are drawn further apart)
+    // (Floating over the ground as it's drawn, all along it: 0.5 m over it, never lower, wherever
+    // its corners are drawn further apart; higher only where it glides across a dip, and not much)
     expect(world.over.points).toBeGreaterThan(40);
-    expect(world.over.least).toBeGreaterThan(0.139);
-    expect(world.over.most).toBeLessThan(0.141);
+    expect(world.over.least, JSON.stringify(world.over)).toBeGreaterThan(0.499);
+    expect(world.over.middling, JSON.stringify(world.over)).toBeLessThan(0.55);
+    expect(world.over.most, JSON.stringify(world.over)).toBeLessThan(1.5);
     expect(world.spacing.length, `chunks drawn ${world.spacing.join(", ")} m apart`).toBeGreaterThan(1);
 
     // Held on the pin, it's taken away, its column and line with it
@@ -17862,6 +17863,72 @@ test("walking into the ring of light round the pin's foot takes the pin away, to
     expect(seen.into).toEqual({ pin: false, column: false, off: null });
     // (Kept as it was dropped and taken away, each time)
     expect(seen.kept).toEqual(["pin", null, "pin", null]);
+});
+
+test("the way to the pin is kept as the player runs along it: never gone nor cut short of where it went, fading in from where they've come to, its pulses running on from them, wisps rising off it", async ({ page }) => {
+    // (A long run, a tenth of a second at a time: more than the usual time)
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const run = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { WAY_LINE } = await import("/js/world/pin3d.js");
+        const me = game.battle.actor("player");
+        const pin = [me.x + 300, me.y - 200];
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let dx = -64; dx <= 364; dx += 32) {
+            for (let dy = -64; dy <= 264; dy += 32) {
+                game.explored.visit(me.x + dx, me.y - dy);
+            }
+        }
+
+        game.stop();
+        game.setPin(pin);
+
+        // (Laid once the mesh's tiles round them are in)
+        for (let k = 0; k < 100 && !game.pinMarks.line.visible; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const steps = [];
+        const marks = game.pinMarks;
+
+        game.journeyTo(pin);
+
+        for (let k = 0; k < 250 && game.pin && game.journey; k++) {
+            const before = [me.x, me.y];
+            const pulse = marks.pulse.value;
+
+            game.advance(0.1, { render: false });
+
+            const wisps = marks.wisps.points.geometry.attributes.color.array.filter((_, i) => i % 3 === 2 && _ > 0.01).length;
+
+            steps.push({ shown: marks.line.visible, ahead: marks.lineLength.value - marks.from.value, from: marks.from.value, moved: Math.hypot(me.x - before[0], me.y - before[1]), pulsed: marks.pulse.value - pulse, wisps, off: Math.hypot(me.x - pin[0], me.y - pin[1]) });
+        }
+
+        return { steps, speed: WAY_LINE.pulse.speed };
+    });
+
+    const steps = run.steps;
+    const far = steps.filter(({ off }) => off > 40);
+
+    expect(far.length, "(ran a good way)").toBeGreaterThan(100);
+    // Never gone while they run there
+    expect(far.filter(({ shown }) => !shown).length).toBe(0);
+
+    // Never cut short of where it went: what's ahead of them along it no shorter than it was but by
+    // as far as they've come (and a little: a way found anew, that goes further)
+    const cut = far.slice(1).map((step, k) => ({ k, was: far[k].ahead, now: step.ahead, moved: step.moved })).filter(({ was, now, moved }) => now < was - moved - 2.5);
+
+    expect(cut, JSON.stringify(cut.slice(0, 5))).toEqual([]);
+    // (Where they've come to along it followed between its layings, so it fades in from their feet)
+    expect(steps.some(({ from }) => from > 1)).toBe(true);
+    // Its pulses running on from them, as far as they go in the time
+    expect(steps.every(({ pulsed }) => Math.abs(pulsed - 0.1 * run.speed) < 1e-6 || pulsed < 0)).toBe(true);
+    // And wisps rising off it
+    expect(Math.min(...far.map(({ wisps }) => wisps))).toBeGreaterThan(5);
 });
 
 test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {

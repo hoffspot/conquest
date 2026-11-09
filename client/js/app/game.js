@@ -437,8 +437,9 @@ const ARRIVE_WITHIN = 140;
 // wanted: its tiles still to come) this often anyway; over the mesh for as far along it as can
 // be (metres, the furthest first: the rest across the world's cells, core/journey.js), to the
 // point on the mesh within `snap` metres of there; found across the world again once they're
-// this far off it (metres), at most this often (seconds)
-const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2 });
+// this far off it (metres), at most this often (seconds); the way drawn over the mesh kept while
+// they're within `kept` metres of it, unless one found anew goes `longer` metres further
+const PIN_WAY = Object.freeze({ every: 0.3, moved: 1, short: 1.5, near: Object.freeze([160, 120, 88, 64, 40, 20]), snap: 6, astray: 40, again: 2, kept: 3, longer: 2 });
 
 // How far round the player the chunks' lights are looked through for the nearest (metres: past
 // the furthest any reaches, lights.js LIGHTS)
@@ -7453,7 +7454,7 @@ export class Game {
             return;
         }
 
-        this.pinMarks.update(this.clock, this.view.far.camera.far);
+        this.pinMarks.update(this.clock, this.view.far.camera.far, player && this.mapId === "town" ? [player.x, player.y] : null);
 
         const shown = this.pin && player && this.mapId === "town" && this.world.plan ? this.pin : null;
 
@@ -7541,6 +7542,23 @@ export class Game {
 
         // (Short of the furthest wanted, short of the pin: found again soon, as the tiles come in)
         this.pinShort = !near || (near.reach < PIN_WAY.near[0] && lengthOf(rest) > near.reach + 1);
+
+        // (Found no further than the way drawn goes on from where they are, or not at all, while
+        // they're still on it: that kept, from there. It can be walked; laid anew each time it was
+        // asked for, as the mesh's tiles came and went, the line came and went, and grew and shrank)
+        const laid = this.pinNear;
+
+        if (laid?.length > 1) {
+            const on = nearestAlong(laid, at);
+            const left = lengthOf(laid) - on.along;
+
+            if (on.off <= PIN_WAY.kept && left > 1 && (!near || lengthOf(near.way) < left - PIN_WAY.longer)) {
+                const way = [[...at], ...wayFrom(laid, on.along).slice(1)];
+
+                near = { way, reach: nearestAlong(rest, way.at(-1)).along };
+            }
+        }
+
         this.pinLine = near ? [...near.way, ...wayFrom(rest, near.reach).slice(1)] : [[...at], ...rest];
 
         if (drawn) {

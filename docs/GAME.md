@@ -5014,15 +5014,28 @@ same button holds the war's key.
   shadows), drawn in the near pass where it's within the near camera's reach and in the far pass
   above that and out past the far land (brought in to the far camera's reach and shrunk as much,
   a little fainter through the haze), so it's seen from anywhere, day or night; a glow on the
-  ground round its foot; and a thin, half-transparent, glowing blue line along the ground from the
-  player's feet the way they'd walk (a strip 0.3 m wide just over the grass's roots, light running
-  along it towards the pin), only along a way that can be walked (below), for up to 180 m (past
-  that the column shows the way). Four draws. It's laid on the ground as it's drawn, 0.14 m over
-  it: away from the player the chunks' ground is drawn with its corners 2 or 4 m apart (Low and
-  Medium; 2 further off on High), cutting across the land's own heights, so laid on those the line
-  went under the drawn ground wherever the land dipped, and floated over it on a rise (ground.js
-  `drawnHeight`, chunks3d.js `groundDrawnAt`; on a bridge's or a walkway's deck, the deck). It's
-  laid again whenever a chunk's ground is drawn otherwise (`groundVersion`).
+  ground round its foot; and the way there, a ribbon of misty blue light floating over the ground
+  from the player the way they'd walk, only along a way that can be walked (below), for up to
+  180 m (past that the column shows the way). It's turned to face the camera, 0.6 m across (never
+  thinner on the screen than a few pixels), a bright thread down its middle in a mist feathered out
+  to its edges, wavering, a shimmer drifting along it, rising and falling a few centimetres as it
+  floats; every 1.5 s a swell of whiter light leaves the player and runs along it at 12 m/s (a sharp
+  front, a long tail), fading as it goes, till it's out of sight; and wisps drift up off it over
+  its first 40 m (pin3d.js `WAY_LINE`, `WAY_WISPS`). Five draws. Its middle floats 0.5 m over the
+  ground as it's drawn, its heights the mean of those 2 m either way, so it glides over bumps and
+  across dips, never lower than that (`floatingOver`): away from the player the chunks' ground is
+  drawn with its corners 2 or 4 m apart (Low and Medium; 2 further off on High), cutting across the
+  land's own heights, so laid on those it went under the drawn ground wherever the land dipped
+  (ground.js `drawnHeight`, chunks3d.js `groundDrawnAt`; on a bridge's or a walkway's deck, the
+  deck). It's laid again whenever a chunk's ground is drawn otherwise (`groundVersion`). It's drawn
+  1.2 m nearer the camera than it is, where it's seen on the screen the same (`through`): the tall
+  grass's blades (knee to waist high) never hide it, as they hid the old line laid 0.14 m over the
+  ground in stretches; a hill, a wall or a tree in front of it does. Where the player's come to
+  along it is followed every frame (`from`), so it fades in from their feet as they go, and its
+  pulses, counted from them, run on without a jump each time it's laid again. The way over the
+  navigation mesh it's laid along is kept while the player's within 3 m of it, unless one found
+  anew goes further (game.js `PIN_WAY.kept`): laid anew each time the way was asked for, as the
+  mesh's tiles came in, it grew and shrank by up to 100 m and now and then went.
 - **The way there** (core/journey.js `wayAcross`): found over the world plan's cells (32 m), not
   the navigation meshes (whose tiles are baked only round the players: kilometres of them would
   stall the game). Each cell's ground is worked out once a world, in about a tenth of a second
