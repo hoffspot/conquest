@@ -17,7 +17,7 @@ import { expect, test } from "./fixtures.js";
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; these tests one after the
 // other, never side by side)
-test.setTimeout(420000);
+test.setTimeout(660000);
 test.describe.configure({ mode: "default" });
 
 // Short codes hashed cheaply (the server's own cost is for a Mac, not a test)

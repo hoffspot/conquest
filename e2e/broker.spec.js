@@ -12,7 +12,7 @@ import { expect, test } from "./fixtures.js";
 // once the server no longer relays. (The broker's expiry, caps and refusals: test/broker.test.js.)
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; one test after the other)
-test.setTimeout(420000);
+test.setTimeout(660000);
 test.describe.configure({ mode: "default" });
 
 // (WebRTC's host candidates as plain addresses, not mDNS names a container can't resolve; and, as

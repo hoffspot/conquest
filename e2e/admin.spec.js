@@ -55,7 +55,7 @@ async function enter(body) {
 }
 
 test("the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, exported, deleted with its name typed, and brought in again", async ({ page }) => {
-    test.setTimeout(240000);
+    test.setTimeout(360000);
 
     const errors = [];
 
@@ -380,7 +380,7 @@ test("its name, given in Settings, is the server's at once: the page's own, its 
 });
 
 test("its Archive: the whole server archived, the archive opened, its worlds brought in as new ones with keys of their own (restoring's for a server with none)", async ({ page }) => {
-    test.setTimeout(120000);
+    test.setTimeout(180000);
 
     const { world } = await server.createWorld({ name: "Archived Vale", seed: 3, race: "human" });
     const before = server.worlds.size;

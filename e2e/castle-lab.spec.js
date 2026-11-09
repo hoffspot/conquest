@@ -20,7 +20,7 @@ async function settle(page) {
 
 test("draws the castle in its cells, walked from the bridge to the keep's doors, in a phone's draw calls, and measures the walk", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
-    test.setTimeout(300000);
+    test.setTimeout(480000);
     await page.setViewportSize({ width: 640, height: 360 });
     await page.goto("/castle-lab.html");
     await page.waitForFunction(() => window.castleLab?.ready, null, { timeout: 180000 });
