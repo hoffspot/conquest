@@ -34,9 +34,10 @@ const play = (page, seconds) =>
 
 // How the player's horse and its rider are drawn now: its phase (the battle's), whether it's drawn
 // from its model and the rider from their clips, how far under the ground it is, how high the
-// rider's hips and feet are over the ground they're over, how far the balls of their feet are
-// from where they go in the stirrups, and how far the reins' ends are from their palms (metres;
-// null, drawn without its model)
+// rider's hips and feet are over the ground they're over (and how high their hips are standing,
+// as their body's made: `stands`), how far the balls of their feet are from where they go in the
+// stirrups, and how far the reins' ends are from their palms (metres; null, drawn without its
+// model)
 const ridden = (page) =>
     page.evaluate(async () => {
         const THREE = await import("three");
@@ -61,6 +62,7 @@ const ridden = (page) =>
             under: one ? +(ground - one.beast.object.position.y).toFixed(2) : null,
             visible: one?.beast.object.visible ?? null,
             hips: +(height("Hips") - ground).toFixed(2),
+            stands: +avatar.character.rig.heads[avatar.character.rig.index.get("Hips")].y.toFixed(2),
             feet: +(Math.min(height("LeftFoot"), height("RightFoot")) - ground).toFixed(2),
             posed: one?.beast.plan.posed?.map(({ clip, weight }) => [clip, +weight.toFixed(2)]) ?? [],
             bar: !document.querySelector("#playerplate .bar.mount").hidden,
@@ -249,7 +251,9 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
 
     expect(gone.phase, JSON.stringify(gone)).toBe(null);
     expect(gone.drawn).toBe(false);
-    expect(gone.hips, JSON.stringify(gone)).toBeLessThan(1.2);
+    // (On their own feet: their hips no more than a hand's breadth over where they stand as their
+    // body's made, however tall they are; a tall hero's stand at 1.21 m and more, sat at 1.6)
+    expect(gone.hips, JSON.stringify(gone)).toBeLessThan(gone.stands + 0.1);
     expect(gone.bar).toBe(false);
 
     // Called again and struck down under its rider: thrown, the horse fallen on its whistle, and
