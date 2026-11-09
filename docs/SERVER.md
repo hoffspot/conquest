@@ -453,7 +453,16 @@ Energy). The journal (Activity) says when it did.
 
 If the new version fails to start or to bring a world forward (or says nothing for 3 minutes), the
 server goes back to the version before, puts the settings and every world back from the backups
-made in step 3, and the page says why. The version before stays until the next update. The menu-bar
+made in step 3, and the page says why. The version before stays until the next update.
+
+The management page follows it as it goes: what it's doing (downloading, checking, backing up,
+unpacking, saving every world and starting again), then "Starting again as the new version…" while
+the server's down. The server back doesn't answer the page loaded before it started again (its
+cookie, or from the Wi-Fi its session, went with the server before), so the page loads again by
+itself, on Updates as it was, and says how it went: "Update complete: this server is now version
+2.0.2379 (it was 2.0.2371)."; or, gone back, that the update didn't go, and Updates says why. From
+the Wi-Fi it asks for the admin key again first. Not back in 15 minutes, the page says so (open it
+again; if it doesn't open, start the server again). Restoring the whole server (Archive) the same. The menu-bar
 app says **Updating** meanwhile. As it's the same Node, macOS's firewall shouldn't ask again; if
 it does, allow it.
 
