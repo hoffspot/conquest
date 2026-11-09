@@ -419,4 +419,35 @@ describe("the war's messengers (host.js, missions.js)", () => {
         assert.equal(back.folk.get(one.folk).talk, "messenger");
         assert.deepEqual(back.snapshot().messengers, snapshot.messengers);
     });
+
+    it("has everything it brings to say whenever it's talked to: one that stopped to wait before it found the player, and one kept with the world and brought back (host.js messengerSaysOf)", () => {
+        // (As the owner found it: "{reward}. {rankNote}", their game knowing what they'd say only
+        // from their hailing them, which they never had)
+        const host = hosted();
+        const { camp } = camped(host);
+
+        until(host, (now) => now.some(({ type, change }) => type === "messenger" && change === "coming"), 10000);
+
+        const [one] = [...host.messengers.values()];
+
+        // (Its minute over before it found them: staying where it's got to, never having hailed
+        // them)
+        one.found = host.battle.time - MESSENGER.follow - 1;
+
+        const events = run(host, 5000).filter(({ type }) => type === "messenger");
+
+        assert.equal(one.state, "staying");
+        assert.ok(!events.some(({ change }) => change === "arrived"), "never hailed them");
+        assert.equal(host.messengerSaysOf(one.folk).mission.kind, "rout");
+        assert.equal(host.messengerSaysOf(one.folk).mission.key, camp.id);
+        assert.equal(host.messengerSaysOf(one.folk).mission.from.kind, "ruler");
+
+        // (Kept with the world and brought back: the same)
+        const back = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual(back.messengerSaysOf(one.folk), host.messengerSaysOf(one.folk));
+
+        // (Anyone else: nothing)
+        assert.equal(host.messengerSaysOf(HOST_PLAYER), null);
+    });
 });

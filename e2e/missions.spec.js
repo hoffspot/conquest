@@ -38,6 +38,53 @@ async function playUntil(page, done, seconds = 30) {
     return page.evaluate(done);
 }
 
+// An orcish camp 400 m out from the start town, at war with the humans, the player 250 m beyond
+// it (the game stopped): a messenger's sent to them to break it. Where it is: { at }
+function campOut(page) {
+    return page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const { SETTLEMENT_KINDS } = await import("/js/core/setpieces/town.js");
+        const { STAGES } = await import("/js/core/war/war.js");
+        const middle = host.world.stamp.middle;
+        const radius = SETTLEMENT_KINDS[host.world.start.kind].radius;
+        const at = [middle[0] + radius + 400, middle[1] + 5];
+
+        game.stop();
+        host.war.relations["human|orc"] = { state: "hostile", since: 0 };
+        host.war.stage = STAGES.length - 1;
+        host.war.camps.push({ id: "camp-900", realm: "orc", at, guard: 6, built: 0, done: 0, toward: host.world.start.id, used: 1e6, skirmished: 1e6 });
+        host.battle.place(game.me, "town", [Math.floor(at[0] + 250), Math.floor(at[1])]);
+
+        return { at };
+    });
+}
+
+// The messenger (core/host.js `messengers`), drawn, tapped: their talk opened. Their id among the
+// folk
+async function tapMessenger(page) {
+    const folk = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const [one] = [...game.host.messengers.values()];
+
+        for (let k = 0; k < 30 && !game.avatars.has(one.folk); k++) {
+            game.advance(1 / 30);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        game.advance(1 / 30);
+
+        const spot = session.view.toScreen(game.avatars.get(one.folk).point(0.6));
+
+        game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
+
+        return one.folk;
+    });
+
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 10)).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.talking.id)).toBe(folk);
+}
+
 test("a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked", async ({ page }) => {
     // (The messenger's walk up played out, and the camp's end: past the usual time)
     test.setTimeout(480000);
@@ -58,28 +105,12 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
 
     // An orcish camp 400 m out from the start town, at war with the humans, the player 250 m
     // beyond it
-    const camp = await page.evaluate(async () => {
-        const { game } = window.pellagos;
-        const { host } = game;
-        const { SETTLEMENT_KINDS } = await import("/js/core/setpieces/town.js");
-        const { STAGES } = await import("/js/core/war/war.js");
-        const middle = host.world.stamp.middle;
-        const radius = SETTLEMENT_KINDS[host.world.start.kind].radius;
-        const at = [middle[0] + radius + 400, middle[1] + 5];
-
-        game.stop();
-        host.war.relations["human|orc"] = { state: "hostile", since: 0 };
-        host.war.stage = STAGES.length - 1;
-        host.war.camps.push({ id: "camp-900", realm: "orc", at, guard: 6, built: 0, done: 0, toward: host.world.start.id, used: 1e6, skirmished: 1e6 });
-        host.battle.place(game.me, "town", [Math.floor(at[0] + 250), Math.floor(at[1])]);
-
-        return { at };
-    });
+    const camp = await campOut(page);
 
     // The messenger comes, drawn, and hails the player as they get there (the talk not opened
     // over whatever they're doing); tapped, they talk: from the King, what's asked, what it pays
     // at the player's rank and that it pays more the higher it is
-    expect(await playUntil(page, () => Boolean(window.pellagos.game.messengerSaid?.size), 90)).toBe(true);
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ arrived }) => arrived), 90)).toBe(true);
     await expect(page.locator("#banner")).toContainText(/, a messenger from (King|Queen) .+, has found you\. Tap them to hear what they bring\./);
     expect(await page.evaluate(() => Boolean(window.pellagos.game.talking))).toBe(false);
 
@@ -174,4 +205,47 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
     expect(await playUntil(page, () => window.pellagos.game.standing.missionsDone[0]?.state === "done", 5)).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.standing.missions.length)).toBe(0);
     expect(piece.length).toBeGreaterThan(0);
+});
+
+test("a messenger who stopped to wait before they'd found the player tells them all the same, walked back to: who sends them, what's asked and what it pays", async ({ page }) => {
+    // (As the owner found it: "{reward}. {rankNote}", their words known to the player's game only
+    // from their hailing them, which they never had)
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=2");
+    await campOut(page);
+
+    // A messenger sets out; a minute goes by before they've found the player (who'd kept on the
+    // move, say): they stay where they've got to
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "coming"), 90)).toBe(true);
+    await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { MESSENGER } = await import("/js/core/host.js");
+        const [one] = [...game.host.messengers.values()];
+
+        one.found = game.host.battle.time - MESSENGER.follow - 1;
+    });
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "staying"), 10)).toBe(true);
+    await expect(page.locator("#banner")).toContainText("will wait for you there a little while.");
+    expect(await page.evaluate(() => Boolean([...window.pellagos.game.host.messengers.values()][0].arrived))).toBe(false);
+
+    // Walked back up to them and tapped: everything they bring, said
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [one] = [...game.host.messengers.values()];
+        const them = game.host.battle.actor(one.folk);
+
+        game.host.battle.place(game.me, "town", [Math.floor(them.x) + 2, Math.floor(them.y)]);
+    });
+    // (Their figure made as the game plays: app/game.js #marshal)
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has([...window.pellagos.game.host.messengers.values()][0].folk), 30)).toBe(true);
+    await tapMessenger(page);
+
+    const talk = page.locator("#talkline");
+
+    await expect(talk).toContainText(/from (King|Queen) .+ of the Kingdom of/);
+    await page.locator(".talk-choice", { hasText: "Go on." }).click();
+    await expect(talk).toContainText("have a camp near");
+    await page.locator(".talk-choice", { hasText: "And what's in it for me?" }).click();
+    await expect(talk).toContainText("120 gold, 60 standing and your pick of three pieces from the armoury (fine), as you're a commoner of ours. The higher your rank with us, the more we give.");
+    await expect(talk).not.toContainText("{");
 });
