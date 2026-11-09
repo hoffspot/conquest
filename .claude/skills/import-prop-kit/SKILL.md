@@ -110,6 +110,32 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
 - Then `LICENSED_MODELS=required npm run check`, the browser tests the insides touch
   (`e2e/building-lab.spec.js` and the game's), and the pipeline's checks if it changed.
 
+## What the dungeons' kit taught
+
+- **A dungeon's place is its look.** Its theme's `style` (`dungeon-caves`, `dungeon-ancient`) is
+  shared between themes; a dungeon's `map.look` isn't, so its inside's place is `dungeon-<look>`
+  (`dungeon-hideout`, `dungeon-keep`, `dungeon-hell-bone`), and the kit's `places` name those.
+- **Scanned furniture falls back to itself.** A dungeon's own furniture is the scanned props, not
+  art drawn from boxes, so there's nothing to put in `artOf`: the kit's placement carries the
+  scanned one as `instead`, and `furnish` reads the `instead` models only for pieces that failed.
+  Whatever sits `on` it is set on whichever is drawn.
+- **Swap by name, in the rooms only.** `SWAPS` maps a scanned model to a role (`own` keeps the
+  piece's size, `tall` sizes it by its height). The small things strewn by the walls (`strewnAt`)
+  stay the scanned ones: they're walked over, not a room's furnishing.
+- **A ladder for a ladder isn't the same ladder.** The scanned one was a step ladder standing
+  free; the kit's straight ladder needs to lean on the rock: `turn`, `pitch` and `back` set it
+  against the wall it's by.
+- **Leave out what can't be hidden.** The torture rack was chosen and built, then dropped: the
+  flaying altar's candle flames are the game's and would float over it. 23 pieces, 17,620
+  triangles, 1.6 MB.
+- **The wall's face is the square's edge.** Torches and shackles hang at half a square from the
+  square's middle, towards the rock (`rockBeside`), turned away from it (`facingFrom`).
+- **One light for a stand's candles.** A hand-built candle stand lit each of its four candles; the
+  kit's candelabrum gets one light where its candles' tips are, as bright as the four together.
+- **Pictures from the piece's front.** The dungeon's camera looks down and its walls are in the
+  way; `pieces.cjs` renders from a camera of its own aimed at the piece, with the avatar hidden
+  only for that frame.
+
 ## What the temples', smithies' and shops' kit taught
 
 - **Two kits in one place.** The humans' shops have Wind Ways' counters and chests and the town

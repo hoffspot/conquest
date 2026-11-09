@@ -43,7 +43,7 @@ import { CAVERNS, cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js"
 import { Blocks, DUNGEON_CUT, DUNGEON_PROPS, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial, setKitPicture } from "./dungeons3d.js";
 import { ASSETS } from "../app/assets.js";
 import { KEEP_KIT, KIT_PICTURES, kitPlacements } from "./keepkit.js";
-import { flamesOf, kitPiece, kitsFor } from "./propkits.js";
+import { flamesOf, kitPiece, kitsFor, PROP_KITS } from "./propkits.js";
 import { houseKitRead, kitFloors, readyHouseKit } from "./kithouses3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
@@ -3833,8 +3833,12 @@ function candleStand(solid, stand) {
         candle(solid, cx + m(dx), cz + m(dz), m(1.0));
     }
 
-    return { kind: "fire", x: stand.x + 0.5, y: 1.4, z: stand.y + 0.5, colour: 0xffb060, intensity: 5, distance: 10, flicker: 0.2, seed: roughOf(stand.x, stand.y), rate: 1.1, steady: 0.85 };
+    return standLight(stand);
 }
+
+// How a stand of candles in a dungeon lights what's round it, warm (its plan's piece's)
+const STAND_LIGHT = Object.freeze({ kind: "fire", colour: 0xffb060, intensity: 5, distance: 10, flicker: 0.2, rate: 1.1, steady: 0.85 });
+const standLight = (stand) => ({ ...STAND_LIGHT, x: stand.x + 0.5, y: 1.4, z: stand.y + 0.5, seed: roughOf(stand.x, stand.y) });
 
 // How high a crypt's vault is at its crown, and its stair's steps (metres)
 const CRYPT = Object.freeze({ tall: 3.4, step: { rise: 0.2, tread: 0.3 }, steps: 13 });
@@ -4527,9 +4531,12 @@ function floorAround(blocks, map, holes) {
 }
 
 // An inside furnished with a prop kit's pieces (world/propkits.js) once they're read: what they
-// stand in for put away (`standing`), if any of them was (none, without the licensed models)
+// stand in for put away (`standing`), if any of them was (none, without the licensed models; a
+// prop kit's, not Bellhaven's keep's castle's: world/keepkit.js)
+const KIT_ASSETS = new Set(Object.values(PROP_KITS).map(({ asset }) => asset));
+
 function kitShown(object, standing, placements) {
-    const kitModels = new Set(placements.map(({ model }) => model).filter((model) => DUNGEON_PROPS[model] && ASSETS.models[DUNGEON_PROPS[model].asset]?.licensed));
+    const kitModels = new Set(placements.map(({ model }) => model).filter((model) => KIT_ASSETS.has(DUNGEON_PROPS[model]?.asset) && ASSETS.models[DUNGEON_PROPS[model].asset]?.licensed));
 
     if ([...kitModels].some((model) => object.getObjectByName(`prop-${model}`))) {
         standing.visible = false;
@@ -5405,6 +5412,70 @@ const FALLEN = Object.freeze({ "rock-dark": 0x9a9080, rock: 0xb7a58c });
 // How likely a square of open ground by a dungeon's rock is to have something small strewn on it
 const STREWN = 0.22;
 
+// The rooms of a dungeon's floor whose walls a kit's shackles hang on (their looks: a hideout's
+// kennel, the Halls of Bone's flaying den and pens)
+const SHACKLED = new Set(["kennel", "flaying", "pens"]);
+
+// What a prop kit's pieces stand in for on a dungeon's floor (world/propkits.js: its theme's,
+// `dungeon-<look>`), by the scanned model's name: the role a piece's asked for, and how it's
+// sized: as big as the scanned one (its longest side the scanned one's `size`, or its `fit`), or
+// `own`, as the kit sets it, or `tall` metres high; and, where the piece stands otherwise than the
+// model, turned `turn` more (radians), tipped back `pitch` and moved `back` metres towards its back.
+// Only what's set out in a room (its barrels, tables, arms, what's left by its walls), never what's
+// strewn to walk over
+const SWAPS = Object.freeze({
+    barrel: { role: "barrel" },
+    "barrel-old": { role: "barrel" },
+    "barrel-worn": { role: "barrel" },
+    table: { role: "table" },
+    "table-plank": { role: "table" },
+    stool: { role: "stool" },
+    cauldron: { role: "cauldron" },
+    // (The brushwood by a fire or a wall a stack of split logs; the lesser bundle by it kept)
+    "branches-a": { role: "firewood", own: true },
+    cart: { role: "cart" },
+    "chest-old": { role: "chest" },
+    bucket: { role: "bucket" },
+    "bucket-wide": { role: "bucket" },
+    basket: { role: "basket" },
+    // (The game's a step ladder, standing edge on to the wall; the kit's a straight one, leant
+    // flat on it, its top at the rock)
+    ladder: { role: "ladder", turn: -Math.PI / 2, pitch: -0.24, back: 0.18 },
+    bench: { role: "settle" },
+    "shield-kite": { role: "shield" },
+    sword: { role: "sword" },
+    stump: { role: "block" },
+    "stump-2": { role: "block" },
+});
+
+// A dungeon's floor's scanned placements (dungeons3d.js furnish's) with a kit's pieces standing in
+// for those it has (SWAPS, and `more` of a builder's own: a workbench's planks, a chief's chair),
+// each where the scanned one stood, turned and tipped as it was, and drawn as it was (`instead`)
+// till the kit's read and without it; what's set `on` one set on whichever's drawn
+function swapped(placements, more = {}) {
+    return placements.map((placement) => {
+        const swap = more[placement.model] ?? SWAPS[placement.model];
+        const piece = swap && kitted(swap.role, placement.x * 3 + placement.z);
+
+        if (!piece) {
+            return placement;
+        }
+
+        const longest = Math.max(...piece.size);
+        const fit = swap.own ? piece.size : swap.tall ? piece.size.map((metres) => (metres * swap.tall) / piece.size[1]) : (placement.fit ?? piece.size.map((metres) => (metres * (placement.size ?? longest)) / longest));
+        const where = { ...placement };
+
+        for (const key of ["size", "scale", "fit", "tint"]) {
+            delete where[key];
+        }
+
+        const turn = (placement.turn ?? 0) + (swap.turn ?? 0);
+        const [x, z] = [placement.x - Math.sin(turn) * (swap.back ?? 0), placement.z - Math.cos(turn) * (swap.back ?? 0)];
+
+        return { ...where, model: piece.model, x, z, fit, turn, ...(swap.pitch ? { pitch: swap.pitch } : {}), double: piece.double, lot: KIT_LOT, ...toned(piece), instead: placement };
+    });
+}
+
 // A dungeon's level, as its theme has it drawn (DUNGEON_LOOKS: caves of dark rock, an outlaws'
 // hideout dug out and shored up with timber, an ancient temple of dressed stone under its vault):
 // its floor, its rock or walls; daylight at the way in on its first level; its stairs down through
@@ -5524,13 +5595,21 @@ function dungeon(map) {
                 const [bx, bz] = by(1, 1.0);
                 const [fx, fz] = by(2, 1.2);
 
-                props.push(rough > 0.7 ? { model: "cauldron", x: px, z: pz, size: 0.55, turn: rough * 9 } : { model: rough > 0.4 ? "pot-brass" : "pot", x: px, z: pz, size: 0.36, turn: rough * 9, shadow: false });
+                props.push(...swapped([rough > 0.7 ? { model: "cauldron", x: px, z: pz, size: 0.55, turn: rough * 9 } : { model: rough > 0.4 ? "pot-brass" : "pot", x: px, z: pz, size: 0.36, turn: rough * 9, shadow: false }]));
                 props.push({ model: "bowl", x: bx, z: bz, size: 0.28, turn: rough * 4, shadow: false }, { model: "spoon", x: bx + 0.18, z: bz, size: 0.24, turn: rough * 3, shadow: false });
-                props.push({ model: "branches-a", x: fx, z: fz, size: 1, turn: rough * 5 }, { model: "branches-b", x: fx + 0.1, z: fz - 0.08, size: 0.9, turn: rough * 5 + 0.5 });
+                props.push(...swapped([{ model: "branches-a", x: fx, z: fz, size: 1, turn: rough * 5 }, { model: "branches-b", x: fx + 0.1, z: fz - 0.08, size: 0.9, turn: rough * 5 + 0.5 }]));
                 break;
             }
             case "bedroll": {
-                bedroll(solid, x, z, rough);
+                // (In a kennel, a hound's cage of iron bars where its straw was, its door out from
+                // the wall: a kit's)
+                const cage = spot.look === "kennel" ? kitted("cage", piece.x + piece.y) : null;
+
+                bedroll(artOf(solid, cage), x, z, rough);
+
+                if (cage) {
+                    props.push(kitAt(cage, x / M, z / M, kitScaled(cage, [0.96, 1.6]), facingFrom(spot.wall ?? [0, -1])));
+                }
 
                 // (By its head now and then: a light, a bottle, a bowl)
                 if (rough > 0.3) {
@@ -5551,7 +5630,7 @@ function dungeon(map) {
                 const kinds = ["barrel", "barrel", "barrel-old", "barrel-worn"];
 
                 for (const [sx, sy] of piece.squares) {
-                    props.push({ model: kinds[Math.floor(hashOf(sx, sy, 6) * kinds.length)], x: sx + 0.5, z: sy + 0.5, size: 0.95, turn: roughOf(sx, sy) * Math.PI * 2 });
+                    props.push(...swapped([{ model: kinds[Math.floor(hashOf(sx, sy, 6) * kinds.length)], x: sx + 0.5, z: sy + 0.5, size: 0.95, turn: roughOf(sx, sy) * Math.PI * 2 }]));
                 }
 
                 break;
@@ -5559,14 +5638,20 @@ function dungeon(map) {
             case "crates":
                 props.push(...crateStack(x / M, z / M, rough));
 
-                // (A sack by them now and then)
+                // (A sack by them now and then: a kit's, as tall as the game's own)
                 if (rough < 0.35) {
-                    solid.cylinder(x + m(0.55), z + m(0.3), 0, m(0.45), m(0.22), m(0.16), material("canvas-sack"), { segments: 8 });
+                    const sack = kitted("sack", piece.x + piece.y);
+
+                    artOf(solid, sack).cylinder(x + m(0.55), z + m(0.3), 0, m(0.45), m(0.22), m(0.16), material("canvas-sack"), { segments: 8 });
+
+                    if (sack) {
+                        props.push(kitAt(sack, x / M + 0.55, z / M + 0.3, kitScaled(sack, [0.6, 0.55]), rough * 9));
+                    }
                 }
 
                 break;
             case "table":
-                props.push(...tableRun(solid, piece, rough));
+                props.push(...swapped(tableRun(solid, piece, rough)));
                 break;
             case "rack": {
                 weaponRack(solid, piece);
@@ -5574,8 +5659,8 @@ function dungeon(map) {
                 // (Its arms: a shield leant on its end, an estoc laid at its foot)
                 const along = piece.w >= piece.h;
 
-                props.push({ model: "shield-kite", x: along ? piece.x + piece.w - 0.2 : x / M, z: along ? z / M : piece.y + piece.h - 0.2, size: 1, turn: along ? Math.PI / 2 : 0, pitch: -0.15 });
-                props.push({ model: rough < 0.5 ? "sword" : "estoc", x: x / M, z: z / M, size: rough < 0.5 ? 0.95 : 1.3, turn: along ? Math.PI / 2 : 0, ...(rough < 0.5 ? {} : { pitch: -Math.PI / 2 }), shadow: false });
+                props.push(...swapped([{ model: "shield-kite", x: along ? piece.x + piece.w - 0.2 : x / M, z: along ? z / M : piece.y + piece.h - 0.2, size: 1, turn: along ? Math.PI / 2 : 0, pitch: -0.15 }]));
+                props.push(...swapped([{ model: rough < 0.5 ? "sword" : "estoc", x: x / M, z: z / M, size: rough < 0.5 ? 0.95 : 1.3, turn: along ? Math.PI / 2 : 0, ...(rough < 0.5 ? {} : { pitch: -Math.PI / 2 }), shadow: false }]));
                 break;
             }
             case "throne": {
@@ -5587,8 +5672,9 @@ function dungeon(map) {
                     break;
                 }
 
-                // (The chief's: a tall carved chair, its back to the rock)
-                props.push({ model: "chair-gothic", x: x / M, z: z / M, size: 1.9, turn: facingFrom(back) });
+                // (The chief's: a tall carved chair, its back to the rock; an outlaw's a lord's
+                // throne carried off, a kit's)
+                props.push(...swapped([{ model: "chair-gothic", x: x / M, z: z / M, size: 1.9, turn: facingFrom(back) }], theme === "hideout" ? { "chair-gothic": { role: "throne", tall: 2.3 } } : {}));
 
                 // (A sheepskin before it)
                 props.push({ model: "pelt", x: x / M - back[0] * 1.05, z: z / M - back[1] * 1.05, size: 1.2, pitch: -Math.PI / 2, turn: facingFrom(back) + Math.PI / 2, shadow: false });
@@ -5643,11 +5729,11 @@ function dungeon(map) {
                 const long = Math.max(piece.w, piece.h);
                 const model = long >= 3 ? "cart" : "wheelbarrow";
 
-                props.push({ model, x: x / M, z: z / M, size: model === "cart" ? Math.min(2.6, long - 0.2) : 1.45, turn: (along ? 0 : Math.PI / 2) + (rough < 0.5 ? Math.PI : 0) });
+                props.push(...swapped([{ model, x: x / M, z: z / M, size: model === "cart" ? Math.min(2.6, long - 0.2) : 1.45, turn: (along ? 0 : Math.PI / 2) + (rough < 0.5 ? Math.PI : 0) }]));
                 break;
             }
             case "clutter":
-                props.push(...clutterAt(x / M, z / M, spot));
+                props.push(...swapped(clutterAt(x / M, z / M, spot)));
                 break;
             case "remains":
                 props.push(...remainsAt(x / M, z / M, spot));
@@ -5656,23 +5742,28 @@ function dungeon(map) {
                 props.push(...shelvesAt(x / M, z / M, spot));
                 break;
             case "side-table":
-                props.push(...sideTableAt(x / M, z / M, spot));
+                props.push(...swapped(sideTableAt(x / M, z / M, spot)));
                 break;
             case "stand":
-                props.push(...standAt(x / M, z / M, spot));
+                props.push(...swapped(standAt(x / M, z / M, spot)));
                 break;
             case "votive":
                 props.push(...vesselsAt(x / M, z / M, spot));
                 break;
             case "workbench":
-                props.push(...workbenchAt(x / M, z / M, spot));
+                props.push(...swapped(workbenchAt(x / M, z / M, spot), { "table-plank": { role: "workbench" } }));
                 break;
             case "anvil":
-                props.push(...blockAt(x / M, z / M, spot));
+                props.push(...swapped(blockAt(x / M, z / M, spot)));
                 break;
-            case "candles":
-                lights.push(candleStand(solid, piece));
+            case "candles": {
+                // (A kit's standing candelabrum, its candles lit, as bright as the game's own stand
+                // and its four candles together; or the game's own)
+                const tips = standingLight(props, piece.x + 0.5, piece.y + 0.5, 0);
+
+                lights.push(tips ? { ...standLight(piece), y: tips.reduce((sum, [, y]) => sum + y, 0) / tips.length, intensity: STAND_LIGHT.intensity + 3 * FLAMES.candle.intensity } : candleStand(solid, piece));
                 break;
+            }
             case "altar": {
                 altarStone(walls, solid, piece);
 
@@ -5739,7 +5830,7 @@ function dungeon(map) {
                 for (const [k, [name, size]] of [["goblet-a", 0.2], ["goblet-c", 0.18], ["vase-brass", 0.5], ["candleholder-c", 0.75], ["shield-kite", 1], ["mace", 0.65], ["dagger", 0.34], ["vase-tall", 0.6], ["sword", 0.95], ["bronze-vessel", 0.32], ["chest-old", 0.85]].entries()) {
                     const [a, d] = [roughOf(k + 30, piece.x) * Math.PI * 2, 1.1 + roughOf(piece.y, k + 30) * 1.1];
 
-                    props.push({ model: name, x: x / M + Math.cos(a) * d, z: z / M + Math.sin(a) * d, size, turn: a * 3, roll: name === "mace" || name === "dagger" || name === "sword" ? Math.PI / 2 : 0, pitch: name === "shield-kite" ? -1.45 : 0 });
+                    props.push(...swapped([{ model: name, x: x / M + Math.cos(a) * d, z: z / M + Math.sin(a) * d, size, turn: a * 3, roll: name === "mace" || name === "dagger" || name === "sword" ? Math.PI / 2 : 0, pitch: name === "shield-kite" ? -1.45 : 0 }]));
                 }
 
                 break;
@@ -5783,14 +5874,45 @@ function dungeon(map) {
         }
     }
 
+    // Shackles on the rock where hounds are kept and the damned flayed and penned (a kit's: on the
+    // walls by open ground now and then, none where a torch is)
+    if (kitting) {
+        const torches = new Set((map.dungeon?.lights ?? []).map(({ at }) => `${at[0]},${at[1]}`));
+
+        for (let y = 1; y < map.height - 1; y++) {
+            for (let x = 1; x < map.width - 1; x++) {
+                const wall = map.plan[y][x] === "." ? rockBeside(map, x, y) : null;
+                const piece = wall && SHACKLED.has(roomOf(x, y)?.look) && !torches.has(`${x},${y}`) && hashOf(x, y, 13) < 0.3 ? kitted("shackles", x + y) : null;
+
+                if (piece) {
+                    props.push(onWall(piece, x + 0.5 + wall[0] * 0.5, y + 0.5 + wall[1] * 0.5, facingFrom(wall), 0.6));
+                }
+            }
+        }
+    }
+
     // Torches on the walls (place.js's: each by a wall, and which way it is); and the colonies of
     // glowing fungus on them, each its light (grown on the rock as it's drawn: rockShell)
     for (const torch of map.dungeon?.lights ?? []) {
         if (torch.kind === "torch") {
             const [x, y] = torch.at;
             const [dx, dy] = torch.wall ?? [0, 0];
+            // (A kit's, its back to the rock and its flame burning in its cage, the game's own
+            // bracket drawn meanwhile)
+            const kit = kitted("torch", x * 3 + y);
+            const burnt = wallTorch(artOf(solid, kit), m(x + 0.5 + dx * 0.42), m(y + 0.5 + dy * 0.42));
 
-            burning(wallTorch(solid, m(x + 0.5 + dx * 0.42), m(y + 0.5 + dy * 0.42)));
+            if (kit) {
+                const placement = onWall(kit, x + 0.5 + dx * 0.5, y + 0.5 + dy * 0.5, facingFrom([dx, dy]), 2.05 - kit.candles[0][1]);
+                const [[fx, fy, fz]] = flamesOf(kit, placement, placement.y);
+
+                props.push(placement);
+                burnt.fire.position.set(m(fx), m(fy), m(fz));
+                burnt.light.x = fx;
+                burnt.light.z = fz;
+            }
+
+            burning(burnt);
         } else if (torch.kind === "glow") {
             lights.push(glowOf(torch.at, torch.wall));
         }
@@ -7084,8 +7206,9 @@ export function* buildingInterior(map) {
     people = own;
     lighting = { flames: [], glows: [], panes: [], daylight: null, candles: [] };
 
-    // (Furnished with a prop kit's pieces where one's for its people and kind: world/propkits.js)
-    const place = { people: map.people ?? "human", place: map.style ?? map.id };
+    // (Furnished with a prop kit's pieces where one's for its people and kind: world/propkits.js; a
+    // dungeon's floor by its theme's look, `dungeon-<look>`, as its style's shared by several)
+    const place = { people: map.people ?? "human", place: map.dungeon ? `dungeon-${map.look}` : (map.style ?? map.id) };
 
     kitting = kitsFor(place).length ? place : null;
     standIns = kitting ? new Solid() : null;
