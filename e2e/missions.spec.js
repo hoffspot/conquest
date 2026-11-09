@@ -1,8 +1,8 @@
 import { expect, test } from "./fixtures.js";
 
 // The war's messengers and the missions they bring (core/missions.js, core/host.js, app/game.js),
-// in a real browser: one sent to a player near an enemy camp walks up, drawn, and hails them, and
-// tapped, talks; taken, it's in the journal's War missions and on the world map; the camp broken,
+// in a real browser: one sent to a player near an enemy camp walks up, drawn with a scroll
+// floating over their head, and hails them, and tapped, talks; taken, it's in the journal's War missions and on the world map; the camp broken,
 // it's paid on the spot and the pick of the armoury offered, the piece picked in the pack; and the
 // Game options switch that turns messengers away
 
@@ -96,14 +96,25 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
         game.advance(1 / 30);
 
         const drawn = game.avatars.has(one.folk);
-        const spot = session.view.toScreen(game.avatars.get(one.folk).point(0.6));
+        const avatar = game.avatars.get(one.folk);
+        const spot = session.view.toScreen(avatar.point(0.6));
+        // (Their scroll over their head, bobbing: world/scroll3d.js)
+        const height = avatar.character.height;
+        const first = avatar.scroll?.position.y ?? null;
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(1 / 30);
+        }
+
+        const scroll = { over: first !== null && first > height, bobbing: first !== null && avatar.scroll.position.y !== first, shown: Boolean(avatar.scroll?.parent) };
 
         game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
 
-        return { folk: one.folk, drawn };
+        return { folk: one.folk, drawn, scroll };
     });
 
     expect(messenger.drawn).toBe(true);
+    expect(messenger.scroll).toEqual({ over: true, bobbing: true, shown: true });
     expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 10)).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.talking.id)).toBe(messenger.folk);
 

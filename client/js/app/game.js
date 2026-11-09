@@ -112,6 +112,7 @@ import { nextOf, sigilSpell } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
+import { floatScroll, makeScroll } from "../world/scroll3d.js";
 import { Crowd, CROWD, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
 import { megabytes } from "../world/gpumemory.js";
 import { heldOnPage } from "../world/release.js";
@@ -4002,6 +4003,7 @@ export class Game {
 
             avatar.every = thronged ? Infinity : this.#posing(actor, avatar, dt, pixels);
             this.#gazing(actor, avatar, mine);
+            this.#scrollOver(actor, avatar);
 
             // (Up in the air over a fight, badly hurt: battle.js #hover; its wings heard)
             if (actor.aloft && !actor.dead) {
@@ -4523,6 +4525,21 @@ export class Game {
         const seen = other && this.avatars.get(other.id);
 
         gaze.at(seen && !actor.dead ? seen.point(GAZE_EYES, _gazeAt) : null);
+    }
+
+    // A war's messenger's scroll over their head (world/scroll3d.js), floating, bobbing and
+    // turning, so it's plain who they are: theirs made the first time they're drawn
+    #scrollOver(actor, avatar) {
+        if (this.host.folk?.get(actor.id)?.role !== "messenger" || actor.dead) {
+            return;
+        }
+
+        if (!avatar.scroll) {
+            avatar.scroll = makeScroll();
+            avatar.object.add(avatar.scroll);
+        }
+
+        floatScroll(avatar.scroll, (avatar.character?.height ?? 1.75) / (avatar.object.scale.y || 1), this.clock);
     }
 
     // The player, if they're near and in front of someone (not one fighting them), for a few
@@ -11680,6 +11697,10 @@ export class Game {
 
                 this.hud.message(event.kind === "briefing" ? `${title ? `${title} ` : ""}${npc.name} has come to brief you. Tap them to hear it.` : `${npc.name}, a messenger from ${senderName(event.mission.from)}, has found you. Tap them to hear what they bring.`, 5);
             }
+        } else if (event.change === "staying" && event.kind === "messenger") {
+            const npc = this.battle.actor(event.folk);
+
+            this.hud.message(`${npc?.name ?? "The messenger"} will wait for you there a little while.`, 3);
         } else if (event.change === "gone") {
             this.messengerSaid.delete(event.folk);
         }

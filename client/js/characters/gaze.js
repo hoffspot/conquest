@@ -14,14 +14,17 @@ import * as THREE from "three";
  * How far and how quickly a gaze turns (degrees, and of the way a second): the eyes in the head,
  * and the head on the neck (`neck` of its turn in the neck, the rest in the head), which takes
  * `share` of a turn, the eyes the rest. Further round than `behind` it doesn't look: ahead instead.
- * With nothing to look at, it glances about now and then (`glance`: how far, and how long each
- * look lasts, seconds), as often straight ahead as not.
+ * Someone nearer than `near` metres (across the ground) is looked up or down at as if they were
+ * that far: a little taller, beside it, isn't craned up at. With nothing to look at, it glances
+ * about now and then (`glance`: how far, and how long each look lasts, seconds), as often straight
+ * ahead as not.
  */
 export const GAZE = Object.freeze({
     eyes: Object.freeze({ turn: 28, up: 18, down: 22, ease: 22 }),
     head: Object.freeze({ turn: 55, up: 22, down: 35, ease: 5, neck: 0.4 }),
     share: 0.7,
     behind: 110,
+    near: 1,
     glance: Object.freeze({ turn: 20, up: 6, down: 12, every: [1.2, 4.5], ahead: 0.5 }),
 });
 
@@ -127,7 +130,7 @@ export class Gaze {
             const turn = wrap(Math.atan2(dx, dz) - object.rotation.y) / DEG;
 
             if (Math.abs(turn) <= GAZE.behind) {
-                return { turn, up: Math.atan2(this.target.y - _eye.y, Math.hypot(dx, dz)) / DEG };
+                return { turn, up: Math.atan2(this.target.y - _eye.y, Math.max(GAZE.near, Math.hypot(dx, dz))) / DEG };
             }
         }
 
