@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import { gltfPoses, MESH2MOTION_MATCH, MESH2MOTION_NAMES, retarget } from "./bvh.js";
+import { powerGrip } from "./grip.js";
 
 /** The catalog's model the rider's clips are in (bones and clips only: no body of its own). */
 export const RIDER_CLIPS = "beast-horse-rider";
@@ -23,9 +24,38 @@ export const SEAT = Object.freeze({ under: 0.66 });
 /** Getting up into the saddle and down from it, by the side it's done from (battle.js mount's `side`). */
 export const MOUNTING = Object.freeze({ left: Object.freeze({ up: "Mount Left", down: "Dismount Left" }), right: Object.freeze({ up: "Mount Right", down: "Dismount Right" }) });
 
+/**
+ * A rider's hands on the reins (the owner's photos of a hand on a rein): each closed in a loose
+ * fist round its rein, as round a haft `radius` metres thick (grip.js powerGrip), the thumb over
+ * the curled index finger, and the rein coming out of the top of the fist under the thumb, between
+ * its pad and the index finger (pinchOf).
+ */
+export const REIN_HOLD = Object.freeze({ radius: 0.01 });
+
 const _a = new THREE.Quaternion();
 const _pelvis = new THREE.Vector3();
 const _at = new THREE.Vector3();
+const _pad = new THREE.Vector3();
+
+/** A body's hands closed round its reins (REIN_HOLD), fitted to its own hands: { Left, Right }, as powerGrip has them. */
+export function reinGrips(character) {
+    return Object.fromEntries(["Left", "Right"].map((side) => [side, powerGrip(character, side, { radius: REIN_HOLD.radius })]));
+}
+
+/**
+ * Where a rider holds a rein in a hand (`side`: "Left" or "Right"), as their body's posed now
+ * (world, its matrices up to date): under the thumb, between the middle of its end bone (its pad)
+ * and the middle of the curled index finger's middle bone.
+ */
+export function pinchOf(rig, side, out = new THREE.Vector3()) {
+    const middle = (name, at) => {
+        const i = rig.index.get(name);
+
+        return rig.bones[i].localToWorld(at.subVectors(rig.tails[i], rig.heads[i]).multiplyScalar(0.5));
+    };
+
+    return middle(`${side}HandThumb3`, out).lerp(middle(`${side}HandIndex2`, _pad), 0.5);
+}
 
 /** The rider's clips, read (wantClips), fitted to each body that rides as it first does. */
 export class RiderClips {
