@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "dbf5918e1c",
+    release: "198ee3bf9c",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3271,6 +3271,89 @@ export const ASSETS = Object.freeze({
                 ],
                 "bellhaven-keep-floor": [
                     "floor"
+                ]
+            }
+        },
+        "dungeon-prop-medieval-dungeon": {
+            "tier": "demand",
+            "label": "The outlaws' hideouts', Bellhaven's keep's and the Halls of Bone's furniture and lights: wall torches, barrels, tables, a trestle workbench, stools, a throne, a cauldron, firewood, a handcart, a chest, buckets and a tub, a basket, a ladder, a settle, a sack, a standing candelabrum, a cage, shackles, a kite shield, a sword and a block (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/medieval-dungeon.bin",
+                    "hash": "6db03b7658",
+                    "bytes": 1592948
+                }
+            ],
+            "pieces": {
+                "medieval-dungeon-torch": [
+                    "kit@0,0"
+                ],
+                "medieval-dungeon-barrel": [
+                    "kit@1,0"
+                ],
+                "medieval-dungeon-barrel-tap": [
+                    "kit@2,0"
+                ],
+                "medieval-dungeon-table": [
+                    "kit@3,0"
+                ],
+                "medieval-dungeon-workbench": [
+                    "kit@4,0"
+                ],
+                "medieval-dungeon-stool": [
+                    "kit@0,1"
+                ],
+                "medieval-dungeon-throne": [
+                    "kit@1,1"
+                ],
+                "medieval-dungeon-cauldron": [
+                    "kit@2,1"
+                ],
+                "medieval-dungeon-firewood": [
+                    "kit@3,1"
+                ],
+                "medieval-dungeon-cart": [
+                    "kit@4,1"
+                ],
+                "medieval-dungeon-chest": [
+                    "kit@0,2"
+                ],
+                "medieval-dungeon-bucket": [
+                    "kit@1,2"
+                ],
+                "medieval-dungeon-tub": [
+                    "kit@2,2"
+                ],
+                "medieval-dungeon-basket": [
+                    "kit@3,2"
+                ],
+                "medieval-dungeon-ladder": [
+                    "kit@4,2"
+                ],
+                "medieval-dungeon-settle": [
+                    "kit@0,3"
+                ],
+                "medieval-dungeon-sack": [
+                    "kit@1,3"
+                ],
+                "medieval-dungeon-candle-stand": [
+                    "kit@2,3"
+                ],
+                "medieval-dungeon-cage": [
+                    "kit@3,3"
+                ],
+                "medieval-dungeon-shackles": [
+                    "kit@4,3"
+                ],
+                "medieval-dungeon-shield": [
+                    "kit@0,4"
+                ],
+                "medieval-dungeon-sword": [
+                    "kit@1,4"
+                ],
+                "medieval-dungeon-block": [
+                    "kit@2,4"
                 ]
             }
         },

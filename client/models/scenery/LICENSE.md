@@ -189,6 +189,34 @@ private repository the game's builds fetch it from, not in this one (`docs/LICEN
 
 Don't copy it out of this game or use it in anything else.
 
+## medieval-dungeon.bin
+
+**Dragon Motion's "Medieval Props Kit"** (23 of its pieces: a wall torch, a standing barrel and one
+with a tap, a table and a trestle table, a stool, a high-backed throne, a cauldron on its legs, a
+stack of firewood, a handcart, a chest, a bucket and a banded tub, a basket, a ladder, a settle, a
+sack, a standing candelabrum, a cage and shackles on their chain, a kite shield, a sword and a
+block of wood; its Unreal Engine files exported by this repository's owner), by **Dragon Motion**,
+bought on **Fab** by this repository's owner under **Fab's Standard License**: the game's fifth
+prop kit (`client/js/world/propkits.js` `medieval-dungeon`), furnishing the humans' dungeons'
+floors: the outlaws' hideouts, Bellhaven's keep and the Halls of Bone. Each piece stands where one
+of the game's own scanned models did, that model drawn in its place without this file.
+
+Its pieces were set a square each in Blender (`.claude/skills/import-scene-model/scripts/kit.py
+--cells 8`, its list `private/medieval-dungeon/pieces.json`; the candelabrum's candles' tips
+measured, the torch's flame by hand, the chest's lid set on it) and put through
+`utilities/blenderpipeline` (`private/medieval-dungeon.json`), both of which stay out of the
+repository with the bought files: joined, their materials baked onto one atlas (2,048 pixels;
+normals 1,024; KTX2) and cut apart again (`cells.bakeFirst`), each piece a node of its own
+(`kit@<i>,<j>`), its `phone` build: 17,620 triangles in all, one material for every piece,
+1.6 MB.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+scrambled as the game serves it, with whose it is in its glTF asset's `copyright`, and kept in the
+private repository the game's builds fetch it from, not in this one (`docs/LICENSED_MODELS.md`).
+
+Don't copy it out of this game or use it in anything else.
+
 ## meshsmith-houses-2.bin
 
 **Meshsmith Foundry's half-timbered building kit** (its modular pieces: wall frames, braces and

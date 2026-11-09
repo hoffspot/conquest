@@ -111,14 +111,18 @@ describe("a dungeon's levels furnished (world/interiors3d.js dungeon)", () => {
                     const { props } = interior;
 
                     props.forEach((prop, k) => {
-                        const where = `${theme} ${map.id}: ${prop.model} at ${prop.x.toFixed(2)}, ${prop.z.toFixed(2)}`;
+                        // (A licensed kit's piece and the scanned model drawn in its place till it's
+                        // read and without it, its `instead`: each where it can stand)
+                        for (const each of [prop, prop.instead].filter(Boolean)) {
+                            const where = `${theme} ${map.id}: ${each.model} at ${each.x.toFixed(2)}, ${each.z.toFixed(2)}`;
 
-                        assert.ok(DUNGEON_PROPS[prop.model], where);
-                        assert.ok(prop.x > 0 && prop.z > 0 && prop.x < map.width && prop.z < map.height, where);
-                        assert.notEqual(map.plan[Math.floor(prop.z)][Math.floor(prop.x)], "#", `${where} is in the rock`);
-                        assert.ok(!prop.on || props.indexOf(prop.on) < k, `${where} is on what isn't placed before it`);
-                        assert.ok([prop.size, prop.scale, prop.fit].filter(Boolean).length === 1, `${where}: one size`);
-                        seen.add(prop.model);
+                            assert.ok(DUNGEON_PROPS[each.model], where);
+                            assert.ok(each.x > 0 && each.z > 0 && each.x < map.width && each.z < map.height, where);
+                            assert.notEqual(map.plan[Math.floor(each.z)][Math.floor(each.x)], "#", `${where} is in the rock`);
+                            assert.ok(!each.on || props.findIndex((other) => other === each.on || other.instead === each.on) < k, `${where} is on what isn't placed before it`);
+                            assert.ok([each.size, each.scale, each.fit].filter(Boolean).length === 1, `${where}: one size`);
+                            seen.add(each.model);
+                        }
                     });
 
                     interior.dispose();
@@ -200,6 +204,34 @@ describe("the models placed (world/dungeons3d.js furnish)", () => {
         await furnish(wider, [foot, { model: "block", on: foot, x: 3, z: 4, size: 1, lot }, { model: "block", x: 5, z: 6, size: 2, lot }, { model: "block", x: CAVERNS.tile + 4, z: 4, size: 1, lot }], { read });
         assert.equal(wider.children.length, 1);
         assert.equal(wider.children[0].count, 4);
+    });
+
+    it("draws a kit's piece where it's read, and the scanned model it stands in for (its `instead`) where it isn't, read only then, what's on either set on whichever's drawn", async () => {
+        const asked = [];
+        const reading = (name) => (asked.push(name), name === "kit-piece" ? read("block") : read(name === "stand-in" ? "block" : name));
+        const stood = { model: "stand-in", x: 3, z: 4, size: 1 };
+        const piece = { model: "kit-piece", x: 3, z: 4, fit: [2, 2, 2], instead: stood };
+        const on = { model: "block", on: stood, x: 3, z: 4, size: 1 };
+
+        // (The kit's read: its piece drawn, 2 m tall, what's on its stand-in on it; the stand-in
+        // never asked for)
+        const kitted = new THREE.Group();
+
+        await furnish(kitted, [piece, on], { read: reading });
+        assert.deepEqual(asked, ["kit-piece", "block"]);
+        assert.deepEqual(kitted.children.map(({ name }) => name), ["prop-kit-piece", "prop-block"]);
+        near(boxOf(kitted.children[1], 0).min.y, 2, "on the kit's piece");
+
+        // (It isn't: the stand-in read and drawn where it stood, as it was asked for, a metre
+        // long and half a metre tall, and what's on it on it)
+        const unread = new THREE.Group();
+
+        asked.length = 0;
+        await furnish(unread, [{ ...piece, model: "missing" }, on], { read: reading });
+        assert.deepEqual(asked, ["missing", "block", "stand-in"]);
+        assert.deepEqual(unread.children.map(({ name }) => name), ["prop-stand-in", "prop-block"]);
+        near(boxOf(unread.children[0], 0).max.y, 0.5, "as the stand-in was asked for");
+        near(boxOf(unread.children[1], 0).min.y, 0.5, "on the stand-in");
     });
 
     it("never leaves a model that can't be read an error no one's caught, asked for ahead of being wanted as a level's built (the licensed models left out)", async () => {

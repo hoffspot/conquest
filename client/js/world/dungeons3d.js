@@ -592,28 +592,40 @@ const _corner = new THREE.Vector3();
  * propMaterial), double (drawn from both sides: a prop kit's pieces, made to be,
  * world/propkits.js), tone (a prop kit's piece toned to its people's own: { colour, amount, lift },
  * world/propkits.js TONES), lot (how wide a square of the level its copies are drawn at once in, metres:
- * the rock's tile, CAVERNS, if it isn't said) }]), each model's copies in each such square drawn at
+ * the rock's tile, CAVERNS, if it isn't said), instead (a placement drawn in its place if its model
+ * isn't read: the scanned model a licensed kit's piece stands in for, read only then; what's `on`
+ * either set on whichever's drawn) }]), each model's copies in each such square drawn at
  * once (instanced, one for each of its materials), so what's out of sight or of a light's reach
  * isn't drawn; added to
  * `group` once they're all read (`read`: how, loadProp). What isn't read (not in the catalog, not
  * downloaded) is left out, and what's on it. Resolves once they're in.
  */
 export async function furnish(group, placements, { read: reading = loadProp } = {}) {
-    const names = [...new Set(placements.map(({ model }) => model))];
-    const read = await Promise.all(
-        names.map((name) =>
-            Promise.resolve(reading(name)).catch((error) => {
-                console.warn(`Couldn't load ${name}`, error);
+    const models = new Map();
+    const readAll = async (names) => {
+        const read = await Promise.all(
+            names.map((name) =>
+                Promise.resolve(reading(name)).catch((error) => {
+                    console.warn(`Couldn't load ${name}`, error);
 
-                return null;
-            }),
-        ),
-    );
-    const models = new Map(names.map((name, k) => [name, read[k]]));
+                    return null;
+                }),
+            ),
+        );
+
+        names.forEach((name, k) => models.set(name, read[k]));
+    };
+
+    await readAll([...new Set(placements.map(({ model }) => model))]);
+
+    // (What a kit's piece that isn't read stood in for: read now, none of it till then)
+    await readAll([...new Set(placements.filter(({ model, instead }) => instead && !models.get(model)).map(({ instead }) => instead.model))].filter((name) => !models.has(name)));
+
     const tops = new Map();
     const lots = new Map();
 
-    for (const placement of placements) {
+    for (const asked of placements) {
+        const placement = !models.get(asked.model) && asked.instead ? { ...asked.instead, on: asked.instead.on ?? asked.on } : asked;
         const prop = models.get(placement.model);
         const below = placement.on;
 
@@ -638,7 +650,10 @@ export async function furnish(group, placements, { read: reading = loadProp } = 
         const y = below ? tops.get(below) : (placement.y ?? 0);
 
         matrix.premultiply(new THREE.Matrix4().makeTranslation(x - (box.min.x + box.max.x) / 2, y - box.min.y, z - (box.min.z + box.max.z) / 2));
-        tops.set(placement, y + box.max.y - box.min.y);
+
+        for (const one of [asked, asked.instead].filter(Boolean)) {
+            tops.set(one, y + box.max.y - box.min.y);
+        }
 
         const across = placement.lot ?? CAVERNS.tile;
         const key = `${placement.model}|${tint ?? ""}|${cut ? `${cut}|` : ""}${double ? "double|" : ""}${tone ? `${toneKey(tone)}|` : ""}${across}|${Math.floor(x / across)},${Math.floor(z / across)}`;
