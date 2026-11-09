@@ -5003,8 +5003,12 @@ same button holds the war's key.
   way to it from where they are, a glowing blue line, and how far that is beside the pin (along
   the way, or as the crow flies while there's none: "640 m", and past a kilometre in kilometres
   to a tenth, "1.3 km": worldmap.js `distanceLabel`); held on the pin, or its button (a pin with
-  a cross, by the zoom buttons), it's taken away. It's kept with the character (save.js
-  `loadPin`), not the world: each player's is their own. Out in the world (world/pin3d.js
+  a cross, by the zoom buttons), it's taken away. Reached, it's taken away too: walking into the
+  ring of light round its foot (2.17 m from it: pin3d.js `PIN_REACHED`, `FOOT_RING`) from outside
+  it, with the pin's chime and "You've reached your pin." (one dropped where the player stands,
+  or kept from a game they start in its ring, stays till they've stepped out of the ring and back
+  in: game.js `#pinned`). It's kept with the character (save.js `loadPin`), not the world: each
+  player's is their own. Out in the world (world/pin3d.js
   `PinMarks`) it's a round column of blue light rising 900 m from where it stands (a strip turned
   to the camera, never thinner than about ten pixels, light rising slowly up it; additive, no
   shadows), drawn in the near pass where it's within the near camera's reach and in the far pass

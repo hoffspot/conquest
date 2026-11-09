@@ -17793,6 +17793,77 @@ test.describe("on a phone", () => {
     });
 });
 
+test("walking into the ring of light round the pin's foot takes the pin away, told so; one dropped where the player stands stays till they've stepped out of the ring and back in", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const seen = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { PIN_REACHED } = await import("/js/world/pin3d.js");
+        const me = game.battle.actor("player");
+        const home = [Math.floor(me.x), Math.floor(me.y)];
+        const kept = [];
+        // (Put somewhere on the map, a frame played on; whether the pin's there and its column
+        // drawn, and how far they are from it)
+        const at = (square) => {
+            game.battle.place("player", "town", square);
+
+            for (let k = 0; k < 3; k++) {
+                game.advance(1 / 30, { render: false });
+            }
+
+            return { pin: Boolean(game.pin), column: game.pinMarks.ring.visible, off: game.pin ? +Math.hypot(me.x - game.pin[0], me.y - game.pin[1]).toFixed(2) : null };
+        };
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let dx = -64; dx <= 64; dx += 32) {
+            for (let dy = -64; dy <= 64; dy += 32) {
+                game.explored.visit(me.x + dx, me.y + dy);
+            }
+        }
+
+        game.onPin = (pin) => kept.push(pin);
+
+        // (A square 20 m off they can stand on, and just where on it)
+        at([home[0] + 20, home[1]]);
+
+        const spot = [me.x, me.y];
+        const square = [...me.square];
+
+        // Dropped where they stand: there while they're in its ring, and once they've stepped out
+        // of it; back into it, gone, and told so
+        game.setPin(spot);
+
+        const under = at(square);
+        const out = at(home);
+        const back = at(square);
+        const told = game.messages.map(({ text }) => text).includes("You've reached your pin.");
+
+        // Dropped from 20 m off: there as they walk up to it, out of its ring; into it, gone
+        game.setPin(spot);
+
+        const off = at(home);
+        const edge = at([square[0] - 3, square[1]]);
+        const into = at(square);
+
+        return { reach: PIN_REACHED, off, edge, into, told, under, out, back, kept: kept.map((pin) => (pin ? "pin" : null)) };
+    });
+
+    expect(seen.reach).toBeCloseTo(2.17, 2);
+    expect(seen.under).toMatchObject({ pin: true, column: true });
+    expect(seen.under.off).toBeLessThan(seen.reach);
+    expect(seen.out).toMatchObject({ pin: true, column: true });
+    expect(seen.back).toEqual({ pin: false, column: false, off: null });
+    expect(seen.told).toBe(true);
+    expect(seen.off).toMatchObject({ pin: true, column: true });
+    expect(seen.edge.off, JSON.stringify(seen.edge)).toBeGreaterThan(seen.reach);
+    expect(seen.edge).toMatchObject({ pin: true, column: true });
+    expect(seen.into).toEqual({ pin: false, column: false, off: null });
+    // (Kept as it was dropped and taken away, each time)
+    expect(seen.kept).toEqual(["pin", null, "pin", null]);
+});
+
 test("the debug overlay's field battle, out on open ground: two armies of 40 mustered before the player in their lines of battle, every role in each, drawn all at once in their crowds, a kind's figure each, and the few nearest in full; let go, they march to meet and fight, and the fallen lie", async ({ page }) => {
     test.setTimeout(480000);
     await playing(page, "/?play&seed=2");
