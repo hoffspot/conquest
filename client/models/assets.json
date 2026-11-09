@@ -3009,6 +3009,40 @@
                 "medieval-tavern-firewood": ["kit@3,5"]
             }
         },
+        "dungeon-prop-medieval-town": {
+            "tier": "demand",
+            "label": "Every people's temples', smithies' and shops' furniture and lights: standing candelabra, altar candelabra, candlesticks and candles in their dishes, a chandelier, wall torches, a chained book, runners and rugs, high-backed settles, a carved cabinet, a chest and an iron-bound strongbox, a lectern, a table and a trestle workbench, a cask, an anvil's block, a sack and a shield (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/scenery/medieval-town.bin",
+                    "hash": "421f2cf351",
+                    "bytes": 1437792
+                }
+            ],
+            "pieces": {
+                "medieval-town-candle-stand": ["kit@0,0"],
+                "medieval-town-candelabrum": ["kit@1,0"],
+                "medieval-town-candlestick": ["kit@2,0"],
+                "medieval-town-candle": ["kit@3,0"],
+                "medieval-town-chandelier": ["kit@4,0"],
+                "medieval-town-torch": ["kit@0,1"],
+                "medieval-town-chained-book": ["kit@1,1"],
+                "medieval-town-runner": ["kit@2,1"],
+                "medieval-town-rug": ["kit@3,1"],
+                "medieval-town-pew": ["kit@4,1"],
+                "medieval-town-cabinet": ["kit@0,2"],
+                "medieval-town-chest": ["kit@1,2"],
+                "medieval-town-strongbox": ["kit@2,2"],
+                "medieval-town-lectern": ["kit@3,2"],
+                "medieval-town-table": ["kit@4,2"],
+                "medieval-town-workbench": ["kit@0,3"],
+                "medieval-town-cask": ["kit@1,3"],
+                "medieval-town-block": ["kit@2,3"],
+                "medieval-town-sack": ["kit@3,3"],
+                "medieval-town-shield": ["kit@4,3"]
+            }
+        },
         "dungeon-prop-wind-ways-shop": {
             "tier": "demand",
             "label": "The humans' shops' furniture: a counter, cupboards, chests and cabinets, a table and chair, a hanging lantern, baskets and trays of goods, a curtain, windows, a rack, a sign post and a door (Wind Ways' medieval shop pack, bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",

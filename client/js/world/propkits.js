@@ -20,6 +20,9 @@
 const CHANDELIER = Object.freeze([[-0.5976, 0.5967, 0.0005], [-0.4233, 0.4858, -0.4219], [-0.422, 0.6313, 0.4224], [-0.0011, 0.561, -0.5971], [0.0008, 0.5967, 0.5972], [0.422, 0.5978, -0.4234], [0.423, 0.5967, 0.4217], [0.5972, 0.6402, -0.0006]].map(Object.freeze));
 const CANDELABRUM = Object.freeze([[-0.1338, 0.613, -0.0009], [-0.0642, 0.6707, -0.0644], [-0.0642, 0.6708, 0.0629], [-0.0005, 0.6129, -0.1344], [-0.0004, 0.7128, -0.0009], [-0.0003, 0.6135, 0.1323], [0.063, 0.6706, -0.0644], [0.0632, 0.6701, 0.0626], [0.1328, 0.6131, -0.0011]].map(Object.freeze));
 
+// The tips of the temples' and shops' standing candelabrum's nine candles (kit.py's `candles`)
+const STAND = Object.freeze([[-0.2507, 1.7448, -0.0668], [-0.1819, 1.8646, -0.0481], [-0.0672, 1.7448, 0.2501], [-0.0487, 1.85, 0.1817], [-0.0011, 1.9166, -0.0008], [0.0477, 1.8016, -0.1813], [0.0659, 1.7293, -0.25], [0.1783, 1.8492, 0.0481], [0.2495, 1.764, 0.0666]].map(Object.freeze));
+
 /**
  * The kits, by name: each its catalog model (`asset`), whose it is (`by`), the peoples whose
  * buildings it furnishes (`peoples`) and the kinds of inside (`places`: interiors3d.js's builders'
@@ -142,6 +145,39 @@ export const PROP_KITS = Object.freeze({
             newel: Object.freeze({ role: "newel", size: [0.22, 1.2, 0.22] }),
             "sign-post": Object.freeze({ role: "sign-post", size: [1.08, 2.9, 0.11] }),
             door: Object.freeze({ role: "door", size: [1.12, 2.24, 0.21] }),
+        }),
+    }),
+    // The same pack's furniture for every people's temples, smithies and shops (the humans' shops
+    // their own kit's counters and chests first): the temples' candles, candelabra, chained book,
+    // chandelier, runners and pews; the smithy's anvil block, coal sack, workbench and shield; the
+    // shops' cabinets under the counter, chests, wall torches, candle stands, lecterns, tables,
+    // casks and rugs. Its torch's flame and its small candle's are measured, not found.
+    "medieval-town": Object.freeze({
+        asset: "dungeon-prop-medieval-town",
+        by: "Dragon Motion",
+        peoples: Object.freeze(["human", "elf", "darkElf", "cat", "lizard", "orc"]),
+        places: Object.freeze(["temple", "smithy", "shop"]),
+        pieces: Object.freeze({
+            "candle-stand": Object.freeze({ role: "candle-stand", size: [0.56, 1.92, 0.56], candles: STAND }),
+            candelabrum: Object.freeze({ role: "candelabrum", size: [0.08, 0.72, 0.3], candles: Object.freeze([[0.0001, 0.613, -0.1343], [0.0001, 0.7128, -0.0008], [0.0002, 0.6128, 0.1324]].map(Object.freeze)) }),
+            candlestick: Object.freeze({ role: "candlestick", size: [0.1, 0.34, 0.1], candles: Object.freeze([Object.freeze([0, 0.34, 0])]) }),
+            candle: Object.freeze({ role: "candle", size: [0.1, 0.15, 0.12], candles: Object.freeze([Object.freeze([0, 0.145, 0.011])]) }),
+            chandelier: Object.freeze({ role: "chandelier", size: [1.32, 1.29, 1.32], candles: CHANDELIER }),
+            torch: Object.freeze({ role: "torch", size: [0.28, 0.84, 0.36], candles: Object.freeze([Object.freeze([0, 0.72, 0.05])]) }),
+            "chained-book": Object.freeze({ role: "altar-book", size: [0.32, 0.09, 0.48] }),
+            runner: Object.freeze({ role: "runner", size: [3.44, 0.01, 1.12] }),
+            rug: Object.freeze({ role: "rug", size: [3.68, 0.02, 2.42] }),
+            pew: Object.freeze({ role: "pew", size: [1.96, 1.49, 0.7] }),
+            cabinet: Object.freeze({ role: "counter", size: [1.92, 1.29, 0.9] }),
+            chest: Object.freeze({ role: "chest", size: [1, 0.77, 0.67] }),
+            strongbox: Object.freeze({ role: "chest", size: [1.2, 0.5, 0.57] }),
+            lectern: Object.freeze({ role: "lectern", size: [0.86, 1.17, 1.28] }),
+            table: Object.freeze({ role: "table", size: [1.34, 0.83, 0.8] }),
+            workbench: Object.freeze({ role: "workbench", size: [3, 0.9, 1] }),
+            cask: Object.freeze({ role: "cask", size: [3.62, 2.61, 2.32] }),
+            block: Object.freeze({ role: "anvil-block", size: [0.48, 0.45, 0.48] }),
+            sack: Object.freeze({ role: "sack", size: [0.54, 0.67, 0.36] }),
+            shield: Object.freeze({ role: "shield", size: [0.58, 0.69, 0.09] }),
         }),
     }),
 });
