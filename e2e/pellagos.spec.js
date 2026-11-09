@@ -2315,8 +2315,9 @@ test("the thumb stick, asked to float, springs up under the thumb where it lands
 
 test("the thumb stick, there from the start, walks the player the way it's pushed, runs pushed to its rim, stops when let go, and goes when it's turned off in Game options", async ({ page }) => {
     // (Turned on and off again, pushed twice and played on between: more than the usual time, on a
-    // machine drawing in software)
-    test.setTimeout(180000);
+    // machine drawing in software. On CI it takes 150 s to 155 s, and over 180 s on a runner a
+    // tenth slower than most, its steps unchanged)
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 
     await clearestWayAhead(page);
