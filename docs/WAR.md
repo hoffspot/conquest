@@ -2004,7 +2004,9 @@ Holt, a messenger from King Redhelm of the Kingdom of Mardenmoor, has found you.
 what they bring." (The talk isn't opened over whatever the player's doing.) Tapped, they talk (the
 "messenger" tree, core/dialogue.js): who sends them, what's asked, and what it pays at the
 player's rank and what the next rank would have, with "The higher your rank with us, the more we
-give." The player takes it ("Tell them it will be done.") or
+give." What they say is as the world has it (host.js `messengerSaysOf`), not as their hailing was
+heard, so it's whole whenever they're talked to: after the game's loaded again, or from one who
+stopped to wait before they'd found the player. The player takes it ("Tell them it will be done.") or
 turns it down ("Not this time.", free; none comes again for half an hour of play). A messenger left
 unanswered follows the player about for a minute from when they found them (`follow`; or from
 when they set out, if they never did), going after them again whenever they're more than 10.5 m

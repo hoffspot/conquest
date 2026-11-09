@@ -46,6 +46,7 @@
     "downloads.spec.js › downloads a file a part at a time, checks it and keeps it, has it from there the next time, and says so in debug mode": 10.1,
     "dungeon-map.spec.js › cooks up a dungeon for a seed and theme and draws each level, and another theme or seed": 0.8,
     "missions.spec.js › a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked": 235.3,
+    "missions.spec.js › a messenger who stopped to wait before they'd found the player tells them all the same, walked back to: who sends them, what's asked and what it pays": 75.9,
     "model-viewer.spec.js › a creature drawn from a model: every clip in its file played alone, stepped and slid through; its skeleton and wireframe shown and hidden; what there is of it and whose it is": 58.3,
     "model-viewer.spec.js › a creature's model as it was made (?model=): the werewolf, every clip in its file, its full detail only, each of its skins put on, and whose it is": 18.6,
     "model-viewer.spec.js › a hell's cerberus and Ashmaw as the game draws them: a great hound till the Cerberus is read, then the hound, its heads' bite, its lunge, its fire from one head and from all three, its leap and its howl; the Halls' hound in its own skin or the dark, Ashmaw a tenth bigger in the ash": 27.1,
