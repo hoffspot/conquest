@@ -127,6 +127,11 @@ are told to the owner in US Eastern; show before-and-after pictures (`DPR=2`).
   the 13 nothing asked for came out, two of them (a bucket, a rack) with faces the pipeline
   warned would bake black. Every piece is under 4 m (a test says so): the long runner gave way to
   the halls' one.
+- **Measure which way a piece faces, not only look.** The settle's back and seat both read as
+  "a panel" on the contact sheet; measured in Blender (its seat's points against its back's), it
+  was made seat-to-the-back, and the pews faced away from the altar (`turn: 270`). Two chests'
+  lids sat above their boxes, made a little open; the halls kit's chests, checked shut, took their
+  place.
 
 ## What the halls kit taught
 

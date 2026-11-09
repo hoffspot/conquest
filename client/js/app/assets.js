@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "82aa5dea79",
+    release: "3a4272c229",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -3484,13 +3484,13 @@ export const ASSETS = Object.freeze({
         },
         "dungeon-prop-medieval-town": {
             "tier": "demand",
-            "label": "Every people's temples', smithies' and shops' furniture and lights: standing candelabra, altar candelabra, candlesticks and candles in their dishes, a chandelier, wall torches, a chained book, runners and rugs, high-backed settles, a carved cabinet, two chests, a lectern, a table and a trestle workbench, a cask, an anvil's block, a sack and a shield (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
+            "label": "Every people's temples', smithies' and shops' furniture and lights: standing candelabra, altar candelabra, candlesticks and candles in their dishes, a chandelier, wall torches, a chained book, runners and rugs, high-backed settles, a carved cabinet, a chest and an iron-bound strongbox, a lectern, a table and a trestle workbench, a cask, an anvil's block, a sack and a shield (Dragon Motion's \"Medieval Props Kit\", bought on Fab: used with the permission its Standard License gives; client/models/scenery/LICENSE.md)",
             "licensed": true,
             "files": [
                 {
                     "path": "models/scenery/medieval-town.bin",
-                    "hash": "235895050d",
-                    "bytes": 1597312
+                    "hash": "421f2cf351",
+                    "bytes": 1437792
                 }
             ],
             "pieces": {
@@ -3530,7 +3530,7 @@ export const ASSETS = Object.freeze({
                 "medieval-town-chest": [
                     "kit@1,2"
                 ],
-                "medieval-town-chest-plain": [
+                "medieval-town-strongbox": [
                     "kit@2,2"
                 ],
                 "medieval-town-lectern": [
