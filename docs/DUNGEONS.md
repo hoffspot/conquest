@@ -612,6 +612,10 @@ heard in any of them: another world's.
   heard in (`do: [{ heard: "hell" }]`, `#heardOfCult`); heard near, it's drawn on the world map
   too, a violet circle with a crescent moon round about the camp, till the camp's found
   (docs/GAME.md *Rumours of places*). Far off, it's only hearsay, and isn't written.
+- **A cultist's letter** (`core/hellrift.js` `letterOf`): on the altar of each hell rift a hero
+  helps close out in the wilds (docs/WILDS.md *Hell rifts*) lies a letter from the Hollow Choir,
+  kept in their journal under *Writings*: which way the nearest hell they haven't found yet is
+  from the rift, how far a walk, and what stands by its camp.
 
 ## Bellhaven's keep
 

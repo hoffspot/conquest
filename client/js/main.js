@@ -2302,6 +2302,43 @@ async function keyOf() {
         list.append(item);
     }
 
+    // (A hell rift open in the wilds: its land red, a tear in it; or, where it's not been
+    // uncovered, a red dashed ring with a "?")
+    for (const [known, label] of [[true, "A hell rift: close it before it seals itself"], [false, "A hell rift, somewhere in it"]]) {
+        const item = document.createElement("li");
+        const glyph = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+        const context = glyph.getContext("2d");
+
+        context.beginPath();
+        context.arc(22, 22, 17, 0, Math.PI * 2);
+        context.fillStyle = `rgba(232, 52, 28, ${known ? 0.3 : 0.12})`;
+        context.fill();
+        context.setLineDash(known ? [] : [6, 4]);
+        context.lineWidth = 2;
+        context.strokeStyle = "rgba(232, 52, 28, 0.95)";
+        context.stroke();
+
+        if (known) {
+            context.beginPath();
+            context.ellipse(22, 22, 3.6, 11, 0, 0, Math.PI * 2);
+            context.fillStyle = "rgb(232, 52, 28)";
+            context.fill();
+            context.beginPath();
+            context.ellipse(22, 22, 1.3, 7.5, 0, 0, Math.PI * 2);
+            context.fillStyle = "rgb(255, 226, 170)";
+            context.fill();
+        } else {
+            context.font = "bold 14px sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillStyle = "rgb(232, 52, 28)";
+            context.fillText("?", 22, 23);
+        }
+
+        item.append(glyph, label);
+        list.append(item);
+    }
+
     // (A camp or a lair tracked home by its trails' signs: its icon with a pale paw)
     const tracked = document.createElement("li");
     const paw = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });

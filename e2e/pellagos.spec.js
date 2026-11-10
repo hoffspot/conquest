@@ -19378,6 +19378,124 @@ test("Vharzul the Greenflame dealt before the player by night: drawn from the Lo
     expect(await page.evaluate(() => window.said.some((text) => text === "Vharzul the Greenflame tears the thin place open behind him: fiends come through!"))).toBe(true);
 });
 
+test("a hell rift torn open in the wilds: cried, its time left on a chip, on both maps; a tear drawn, struck and sealed; its altar smashed for a chest and a cultist's letter in the journal", async ({ page }) => {
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: the debug overlay's, its heart 120 m off
+    // the way they face)
+    const opened = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(21).keys()].every((j) => [...Array(21).keys()].every((i) => !squares.blocked(cx - 30 + i * 3, cy - 30 + j * 3)));
+        const message = game.hud.message.bind(game.hud);
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+            message(text, seconds);
+        };
+
+        for (let far = 200; far <= 600 && !spot; far += 25) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) && open([at[0], at[1] + 120]) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 1e6;
+
+        return game.host.command(game.me, { type: "hellrift" }).ok;
+    });
+
+    expect(opened).toBe(true);
+    expect(await playUntil(page, () => document.querySelector("#riftchip") && !document.querySelector("#riftchip").hidden, { seconds: 10 })).toBe(true);
+    await expect(page.locator("#riftchip .words")).toHaveText("Hell rift");
+    await expect(page.locator("#riftchip .time")).toHaveText(/^(30:00|29:\d\d)$/);
+    expect(await page.evaluate(() => window.said.some((text) => /^The criers cry it: a hell rift has torn open to the [a-z-]+, 1[0-9]0 m off!/.test(text)))).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.minimap.rift)).toBeTruthy();
+
+    // (On the world map: its land red where it's been uncovered, else a red ring with a "?": its
+    // heart 120 m off, at the edge of what they've seen about them)
+    await page.evaluate(() => {
+        window.pellagos.game.start();
+        window.pellagos.game.onWorldMap();
+    });
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.rift, null, { timeout: 20000, polling: 100 });
+    expect(["known", "unknown"]).toContain(await page.evaluate(() => window.pellagos.worldMap.drawn.rift));
+    await page.locator("#worldmapclose").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    // (By one of its tears: stood out, drawn and struck; sealed, gone, and folding in on itself)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const tear = game.host.hellRifts.open.tears[0];
+
+        game.host.battle.place(game.me, "town", [Math.floor(tear.at[0]) + 6, Math.floor(tear.at[1])]);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.host.hellRifts.open.tears[0].id !== null, { seconds: 10 })).toBe(true);
+
+    const tearId = await page.evaluate(() => window.pellagos.game.host.hellRifts.open.tears[0].id);
+
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has(window.pellagos.game.host.hellRifts.open.tears[0].id), { seconds: 20 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.hellRifts3d.tears.has("tear-0"))).toBe(true);
+    await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const tear = game.battle.actor(id);
+        const me = game.battle.actor(game.me);
+
+        game.host.battle.place(game.me, "town", [tear.square[0] + 1, tear.square[1]]);
+        Object.assign(tear, { hp: 1 });
+        Object.assign(me, { power: { melee: 1e4, ranged: 1e4 } });
+        game.host.command(game.me, { type: "engage", target: id });
+    }, tearId);
+    expect(await playUntil(page, () => window.pellagos.game.host.hellRifts.open.tears[0].sealed, { seconds: 30 })).toBe(true);
+    expect(await page.evaluate((id) => window.pellagos.game.battle.actor(id), tearId)).toBeFalsy();
+    expect(await playUntil(page, () => !window.pellagos.game.hellRifts3d.tears.has("tear-0"), { seconds: 5 })).toBe(true);
+
+    // (At its heart, its guards had fallen: its altar bare, struck down; the rift closed, a chest for
+    // them, and the letter on it in their journal)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const open = game.host.hellRifts.open;
+
+        open.guards = { left: [], ids: [], fell: true };
+        game.host.battle.place(game.me, "town", [Math.floor(open.at[0]) + 6, Math.floor(open.at[1])]);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.some((actor) => actor.kind === "altar"), { seconds: 10 })).toBe(true);
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const altar = game.battle.actors.find((actor) => actor.kind === "altar");
+
+        game.host.battle.place(game.me, "town", [altar.square[0] + 1, altar.square[1]]);
+        Object.assign(altar, { hp: 1 });
+        game.host.command(game.me, { type: "engage", target: altar.id });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.host.hellRifts.open === null, { seconds: 30 })).toBe(true);
+    expect(await page.evaluate(() => window.said.some((text) => text.startsWith("The hell rift is closed! A cultist's letter lay on its altar")))).toBe(true);
+    expect(await playUntil(page, () => document.querySelector("#riftchip").hidden, { seconds: 5 })).toBe(true);
+
+    const letter = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.read("rift-letter-0");
+
+        return { title: document.querySelector(".reader-title")?.textContent ?? null, text: document.querySelector(".reader-page")?.textContent ?? "" };
+    });
+
+    expect(letter.title).toBe("A cultist's letter");
+    expect(letter.text).toMatch(/(north|south|east|west)/);
+});
+
 test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(360000);

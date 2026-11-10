@@ -121,6 +121,8 @@ import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { FortAvatar, Forts } from "../world/forts3d.js";
+import { HellRifts, RiftThingAvatar } from "../world/hellrift3d.js";
+import { HELL_RIFT, hellFor, letterOf } from "../core/hellrift.js";
 import { EngineAvatar } from "../world/siege3d.js";
 import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
@@ -1151,7 +1153,24 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle"]);
+// What stands in the battle without moving or falling as the living do: a fortification, a camp's
+// stakes, a hell rift's tear or its altar (battle.js STANDS)
+const STILL = new Set(["fort", "stakes", "tear", "altar"]);
+
+// What a crier cries of a hell rift open in the wilds (`crier`, where he stands; `rift`, the host's
+// hellRifts.open): which way it is from him and how far, and that it wants closing (no more than
+// 90 characters, as every cry: core/crying.js)
+function riftCry(crier, rift) {
+    const far = Math.hypot(rift.at[0] - crier.x, rift.at[1] - crier.y);
+
+    return `A hell rift's torn open to the ${compass([crier.x, crier.y], rift.at)}, ${(far / 1000).toFixed(1)} km off! Close it, for pity's sake!`;
+}
+
+// How red the sky's made in a hell rift's land (as a great fire spell makes it: view.js setOmen),
+// at its fullest
+const RIFT_SKY = 0.6;
+
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2248,6 +2267,8 @@ export class Game {
         this.camps = new Camps(view.scene);
         // (And the fortifications standing near the player: world/forts3d.js, #syncForts)
         this.forts3d = new Forts(view.scene, view.far.scene);
+        // (And a hell rift open in the wilds, its tears, altar and column of light: world/hellrift3d.js)
+        this.hellRifts3d = new HellRifts(view.scene, view.far.scene);
         this.fortsClock = 0;
         // (And the armies' camps' stockades: world/stockades3d.js, #syncStockades)
         this.stockades = new Stockades(view.scene);
@@ -2647,6 +2668,12 @@ export class Game {
 
         // A fortification (its stone drawn by world/forts3d.js): standing in for it in the battle; and
         // a camp's stakes being hacked at (drawn by world/stockades3d.js) the same way
+        // A hell rift's tear or its altar (drawn by world/hellrift3d.js): standing in for it in
+        // the battle, to be struck
+        if (actor.kind === "tear" || actor.kind === "altar") {
+            return this.#register(actor.id, new RiftThingAvatar(actor.kind), { wounds: false });
+        }
+
         if (actor.kind === "fort" || actor.kind === "stakes") {
             const out = this.host.fortsOut.get(actor.id);
 
@@ -4008,9 +4035,9 @@ export class Game {
                 }
             }
 
-            // (A fortification, or a camp's stakes: only where it stands, on the ground there; and a
-            // siege engine, rolled there)
-            if (actor.kind === "fort" || actor.kind === "stakes" || actor.engine) {
+            // (A fortification, a camp's stakes, a hell rift's tear or altar: only where it stands, on
+            // the ground there; and a siege engine, rolled there)
+            if (STILL.has(actor.kind) || actor.engine) {
                 avatar.update(dt, ox + x, oz + z, actor.facing);
                 avatar.object.position.y = this.#groundOn(actor.map, ox + x, oz + z);
 
@@ -4134,8 +4161,9 @@ export class Game {
         // Spells being cast and landing (light gathering in the casters' hands...), and those
         // lasting on anyone here showing on them now and then
         this.spellFx.update(dt);
-        // (The sky as dark as the greatest spells have made it)
-        this.view.setOmen(this.spellFx.darkness(), this.spellFx.omenTint());
+        // (A hell rift open in the wilds drawn as it stands, out of doors; and in its land the sky
+        // reddened as a great fire spell reddens it, eased in and out: #riftSky)
+        this.#riftSky(dt);
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -6125,6 +6153,7 @@ export class Game {
             icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
+            rift: this.mapId === "town" ? this.riftView() : null,
             // (Where their war missions take them: core/missions.js)
             missions: this.mapId === "town" ? (this.standing.missions ?? []).filter(({ state, target }) => state === "open" && target?.at).map(({ target }) => ({ x: target.at[0], z: target.at[1] })) : [],
             // (The party's pings: pingView; and the player's markers: markerView)
@@ -7003,7 +7032,24 @@ export class Game {
         const revealed = new Set((this.host.legends?.lasting() ?? []).filter(({ kind }) => kind === "reveal").map(({ site }) => site));
         const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id) || revealed.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter(seen), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter(seen), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), rift: this.riftView(), ...this.pinView() };
+    }
+
+    /**
+     * A hell rift open in the wilds, for the maps (core/hellrift.js): { x, z (its heart, metres),
+     * radius (its land's), known (whether the player's uncovered the land there: its land drawn red,
+     * else a red ring with a "?"), left (ms till it seals itself) }; null with none open.
+     */
+    riftView() {
+        const open = this.host?.hellRifts?.open;
+
+        if (!open) {
+            return null;
+        }
+
+        const [x, z] = open.at;
+
+        return { x, z, radius: HELL_RIFT.radius, known: this.explored.sighted(x, z), left: open.until - this.battle.time };
     }
 
     /**
@@ -8784,7 +8830,10 @@ export class Game {
 
             const state = this.crierCalls.get(nearest.one.id) ?? {};
             const invasion = this.host.invasions.find(({ place, broke }) => broke === null && `crier:${place}` === nearest.one.id);
-            const call = invasion ? this.#invasionCall(invasion, state, now * 1000) : callOf({ now: now * 1000, state, headline: unheard.at(-1)?.words ?? null, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
+            // (A hell rift open in the wilds: his news before any other's, which way it is from him)
+            const rift = this.host.hellRifts?.open;
+            const headline = rift ? riftCry(nearest.one, rift) : (unheard.at(-1)?.words ?? null);
+            const call = invasion ? this.#invasionCall(invasion, state, now * 1000) : callOf({ now: now * 1000, state, headline, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
 
             this.crierCalls.set(nearest.one.id, state);
 
@@ -11999,7 +12048,7 @@ export class Game {
             legends: this.#legendNotes(at),
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
-            writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
+            writings: [...(this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })), ...this.#riftLetters().map(({ id, letter }) => ({ id, title: letter.title, found: letter.found }))],
             bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind) },
             messages: this.messages,
         });
@@ -12264,7 +12313,7 @@ export class Game {
                 this.previous.set(actor.id, { x: actor.x, y: actor.y });
             }
 
-            if (actor.kind === "fort" || actor.kind === "stakes") {
+            if (STILL.has(actor.kind)) {
                 continue;
             }
 
@@ -14956,6 +15005,12 @@ export class Game {
             case "rare":
                 this.#rareTold(event);
                 break;
+            case "hellRift":
+                this.#hellRiftTold(event);
+                break;
+            case "brimstone":
+                this.#brimstoneTold(event);
+                break;
             case "thread":
                 this.#threadTold(event);
                 break;
@@ -16135,7 +16190,7 @@ export class Game {
 
     // Does a character bleed red (not a skeleton, a slime, a spider, a wisp...)?
     #bleeds(actor) {
-        return actor?.kind !== "fort" && actor?.kind !== "stakes" && (actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red");
+        return !STILL.has(actor?.kind) && (actor?.kind !== "beast" || CREATURES[actor.wild?.creature]?.blood === "red");
     }
 
     // Wounds glow and fade; burns smoke and throw embers; the badly hurt drip blood (the worse
@@ -17280,6 +17335,132 @@ export class Game {
         return me && boss && !boss.dead && boss.map === me.map && Math.hypot(boss.x - me.x, boss.y - me.y) <= COLOSSAL_FRAMED ? boss : null;
     }
 
+    // --- A hell rift (core/hellrift.js; host.js #hellRifts) ---
+
+    // A hell rift open in the wilds, drawn as it stands (world/hellrift3d.js), out of doors; in its
+    // land the sky reddened as a great fire spell reddens it (eased in over a few seconds, out
+    // again as the player leaves it, or as it's closed), unless a great spell has it darker; and its
+    // time left on the HUD (#riftChip)
+    #riftSky(dt) {
+        const open = this.host?.hellRifts?.open ?? null;
+        const me = this.battle.actor(this.me);
+        const outdoors = me?.map === "town";
+        const origin = this.originOf("town");
+        const within = outdoors ? HellRifts.within(open, [origin[0] + me.x, origin[1] + me.y], origin) : 0;
+        const darkness = this.spellFx.darkness();
+
+        this.hellRifts3d.update(dt, open, { origin, groundAt: this.groundOf("town"), camera: this.view.camera, shown: outdoors });
+        this.riftRed = (this.riftRed ?? 0) + (within * RIFT_SKY - (this.riftRed ?? 0)) * Math.min(1, dt * 0.6);
+        this.view.setOmen(Math.max(darkness, this.riftRed), darkness >= this.riftRed ? this.spellFx.omenTint() : "fire");
+        this.#riftChip(open, within > 0);
+    }
+
+    // A hell rift's time left on the HUD, and, in its land, the brimstone its demons have left the
+    // player (hud.js rift); none with none open
+    #riftChip(open, inside) {
+        const brimstone = open?.brimstone?.[this.me] ?? 0;
+
+        this.hud.rift(open ? { left: open.until - this.battle.time, brimstone: inside || brimstone ? brimstone : null } : null);
+    }
+
+    // The cultists' letters the player's taken off hell rifts' altars (memory.riftLetters: which
+    // hell each points to, where it was found, which way it's written), as they read (hellrift.js
+    // letterOf): [{ id, letter }]
+    #riftLetters() {
+        const plan = this.world.plan;
+
+        return (this.memory.riftLetters ?? [])
+            .map((kept, k) => {
+                const site = plan?.sites.find((one) => one.id === kept.hell);
+
+                return site ? { id: `rift-letter-${k}`, letter: letterOf(plan, kept.from, site, kept.which) } : null;
+            })
+            .filter(Boolean);
+    }
+
+    // A hell rift's news (host.js #hellRifts): torn open (told everyone, wherever they are, as the
+    // criers cry it, with which way it is and how far, and the bell), its guards woken, a tear
+    // sealed and its altar bare (told those near), closed (the letter on its altar kept by those
+    // who closed it), or faded
+    #hellRiftTold(event) {
+        const me = this.battle.actor(this.me);
+        const [ox, oz] = this.originOf("town");
+        const at = event.at ? new THREE.Vector3(ox + event.at[0], this.#groundOn("town", ox + event.at[0], oz + event.at[1]) + 1.5, oz + event.at[1]) : null;
+        const near = (within) => me?.map === "town" && event.at && Math.hypot(me.x - event.at[0], me.y - event.at[1]) <= within;
+
+        switch (event.change) {
+            case "opened": {
+                const out = me?.map === "town";
+                const far = out ? Math.hypot(me.x - event.at[0], me.y - event.at[1]) : null;
+                const where = out ? `to the ${compass([me.x, me.y], event.at)}, ${far < 1000 ? `${Math.round(far / 50) * 50} m` : `${(far / 1000).toFixed(1)} km`} off` : "out in the wilds";
+
+                this.hud.message(`The criers cry it: a hell rift has torn open ${where}! Close it within half an hour.`, 7);
+                this.sound?.play("riftTorn");
+                this.sound?.play("newsHeard");
+                break;
+            }
+            case "guards":
+                if (near(HELL_RIFT.far)) {
+                    this.hud.message("The Rift Warden rises to guard the altar, the cult's high priest with it!", 4);
+                    this.sound?.play("riftTorn", { at });
+                }
+
+                break;
+            case "sealed":
+                if (near(HELL_RIFT.far)) {
+                    this.sound?.play("tearSealed", { at });
+
+                    if (event.by === this.me) {
+                        this.hud.message("The tear folds in on itself and is gone.", 3);
+                    }
+                }
+
+                break;
+            case "bare":
+                if (near(HELL_RIFT.far)) {
+                    this.hud.message("Its guards have fallen: the altar stands bare. Smash it!", 4);
+                }
+
+                break;
+            case "closed": {
+                const mine = (event.heroes ?? []).includes(this.me);
+
+                this.sound?.play("altarSmashed", near(HELL_RIFT.far) ? { at } : {});
+
+                if (mine && this.world.plan) {
+                    const site = hellFor(this.world.plan, event.at, (one) => this.explored.knows(one.id, one.at[0], one.at[1]));
+
+                    if (site) {
+                        this.memory.riftLetters = [...(this.memory.riftLetters ?? []), { hell: site.id, from: [...event.at], which: (this.memory.riftLetters ?? []).length }];
+                    }
+
+                    this.hud.message(site ? "The hell rift is closed! A cultist's letter lay on its altar: it's in your journal, under Writings." : "The hell rift is closed!", 6);
+                    this.sound?.play("quill");
+                } else {
+                    this.hud.message("The hell rift is closed.", 4);
+                }
+
+                break;
+            }
+            case "faded":
+                this.hud.message("The hell rift has sealed itself, its half hour out.", 4);
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Brimstone a hell rift's demon left the player as it fell (host.js #riftFell): risen off them,
+    // and a crackle
+    #brimstoneTold(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        this.hud.damage(this.#screenAbove(this.me), `+${event.gained} brimstone`, { kind: "brimstone" });
+        this.sound?.play("brimstone");
+    }
+
     // The bar across the top for the great foe nearest the player (hud.js boss): the Behemoth of
     // the Rift (battle.js #colossus), or a world's boss (creatures.js `worldBoss`: the Stone
     // Golem), alive within BOSS_NEAR metres of them; looked for a couple of times a second
@@ -17610,9 +17791,15 @@ export class Game {
         return { ok: true, id: writing.id };
     }
 
-    /** Open a writing the player's read (core/writings.js WRITINGS' id) at its first page, everything else closed. */
+    /**
+     * Open a writing the player's read (core/writings.js WRITINGS' id; or one of the cultists'
+     * letters they've taken off hell rifts' altars, #riftLetters') at its first page, everything
+     * else closed.
+     */
     read(id) {
-        if (!WRITINGS[id] || !(this.memory.writings ?? []).includes(id)) {
+        const letter = this.#riftLetters().find((one) => one.id === id)?.letter ?? null;
+
+        if (!letter && (!WRITINGS[id] || !(this.memory.writings ?? []).includes(id))) {
             return;
         }
 
@@ -17620,7 +17807,7 @@ export class Game {
         this.closeJournal();
         this.closeSpellbook();
         this.closeParty();
-        this.reader.show(id);
+        this.reader.show(id, 0, letter ?? WRITINGS[id]);
         this.sound?.play("bookOpen");
     }
 
@@ -18527,7 +18714,7 @@ export class Game {
 
         for (const id of this.hud.tracked.keys()) {
             const foe = this.battle.actor(id);
-            const fight = me && foe && !foe.dead && foe.kind !== "fort" && foe.kind !== "stakes" && this.battle.hostile(foe, me) ? this.host.fightFor(this.me, id) : null;
+            const fight = me && foe && !foe.dead && !STILL.has(foe.kind) && this.battle.hostile(foe, me) ? this.host.fightFor(this.me, id) : null;
 
             this.hud.sizeUp(id, fight ? { look: fightLook(might - fight.power), power: evaluating ? fight.power : null, pack: fight.pack } : {});
         }

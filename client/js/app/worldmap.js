@@ -44,6 +44,8 @@ const OPENED = 900;
 // across the middle to the edge), in these colours (red, green, blue): the criers' a pale gold,
 // a hell's cult's violet
 const HEARD_LEAST = 10;
+// A hell rift's red (its land, its ring, its tear: the rift's own)
+const RIFT_COLOUR = "232, 52, 28";
 const HEARD_COLOURS = Object.freeze({ told: "236, 214, 150", hell: "190, 140, 255" });
 
 // A chunk the player has been in is shown as the minimap paints it from this near (metres to a
@@ -404,7 +406,7 @@ export class WorldMap {
      * branches), the building screen (`build`: { plans, forts }), or the war table's map (`war`:
      * app/battlemap.js battleMapView's).
      */
-    open({ player, icons = [], marks = [], heard = [], searches = [], pin = null, way = null, travel = null, build = null, war = null }) {
+    open({ player, icons = [], marks = [], heard = [], searches = [], rift = null, pin = null, way = null, travel = null, build = null, war = null }) {
         const only = Boolean(travel || build || war);
 
         this.land ??= paintLand(this.world.plan);
@@ -416,6 +418,7 @@ export class WorldMap {
         this.marks = only ? [] : marks;
         this.heard = only ? [] : heard;
         this.searches = only ? [] : searches;
+        this.rift = only ? null : rift;
         this.pin = only ? null : pin;
         this.way = only ? null : way;
         this.lastTap = null;
@@ -845,6 +848,54 @@ export class WorldMap {
             context.restore();
         }
 
+        // A hell rift open in the wilds (app/game.js riftView), fog or no: where its land's been
+        // uncovered, its land red, a red ring round it and a tear in its middle; where it's not, a
+        // red dashed ring round it, a "?" in its middle. Its time left on a tap
+        if (this.rift) {
+            const { x: rx, z: rz, radius, known, left } = this.rift;
+            const [x, y] = at(rx, rz);
+            const r = Math.max(HEARD_LEAST * 1.4, radius / view.scale);
+
+            if (x > -r && y > -r && x < width + r && y < height + r) {
+                context.save();
+                context.beginPath();
+                context.arc(x, y, r, 0, Math.PI * 2);
+                context.fillStyle = `rgba(${RIFT_COLOUR}, ${known ? 0.3 : 0.12})`;
+                context.fill();
+                context.setLineDash(known ? [] : [6, 4]);
+                context.lineWidth = known ? 2.5 : 2;
+                context.strokeStyle = `rgba(${RIFT_COLOUR}, 0.95)`;
+                context.stroke();
+                context.setLineDash([]);
+
+                if (known) {
+                    // (A tear: a narrow lens, white-hot down its middle)
+                    const tall = Math.min(14, Math.max(7, r * 0.45));
+
+                    context.beginPath();
+                    context.ellipse(x, y, tall * 0.32, tall, 0, 0, Math.PI * 2);
+                    context.fillStyle = `rgb(${RIFT_COLOUR})`;
+                    context.fill();
+                    context.beginPath();
+                    context.ellipse(x, y, tall * 0.12, tall * 0.7, 0, 0, Math.PI * 2);
+                    context.fillStyle = "rgb(255, 226, 170)";
+                    context.fill();
+                } else {
+                    context.font = `bold ${Math.round(Math.min(20, Math.max(12, r * 0.6)))}px sans-serif`;
+                    context.textAlign = "center";
+                    context.textBaseline = "middle";
+                    context.lineWidth = 3;
+                    context.strokeStyle = "rgba(20, 6, 4, 0.9)";
+                    context.fillStyle = `rgb(${RIFT_COLOUR})`;
+                    context.strokeText("?", x, y);
+                    context.fillText("?", x, y);
+                }
+
+                context.restore();
+                spots.push({ x, y, r: Math.min(r, 24) + TIP.reach, about: `A hell rift${known ? "" : ", somewhere in it"}: sealed of itself in ${Math.max(1, Math.ceil(left / 60000))} min, unless it's closed first` });
+            }
+        }
+
         // The circles to search for the treasures they're hunting, fog or no: never smaller than a
         // heard-of place's
         for (const { x: sx, z: sz, radius, grade, own } of this.searches ?? []) {
@@ -1011,7 +1062,7 @@ export class WorldMap {
         // (The newest drawn over the rest: found first)
         this.spots = spots.reverse();
         this.#placeTip();
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, party: party.map(({ id }) => id), markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, party: party.map(({ id }) => id), markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war, rift: this.rift ? (this.rift.known ? "known" : "unknown") : null };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)
