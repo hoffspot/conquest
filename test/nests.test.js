@@ -81,7 +81,12 @@ describe("what's to be had in an ants' nest (dungeons/place.js, play.js)", () =>
         assert.equal(THEMES.nest.fallen, true);
 
         for (let seed = 1; seed <= 12; seed++) {
-            for (const level of buildDungeon({ seed, theme: "nest", tier: 5 }).levels) {
+            const levels = buildDungeon({ seed, theme: "nest", tier: 5 }).levels;
+
+            // (The queen's own chamber, her arena, none: build.js; those who fell to her lying in it)
+            assert.ok(levels.at(-1).arena && !levels.at(-1).chests.some(({ kind }) => kind === "small"));
+
+            for (const level of levels.slice(0, -1)) {
                 const small = level.chests.filter(({ kind }) => kind === "small");
                 const remains = level.chests.filter(({ kind }) => kind === "remains");
                 // (Every one of the fallen the plan has, searchable where it lies)
@@ -198,7 +203,11 @@ describe("an ants' nest dug as ants dig (dungeons/layouts.js nest)", () => {
         for (let seed = 1; seed <= 12; seed++) {
             const dungeon = buildDungeon({ seed, theme: "nest", tier: 4, levels: 3 });
 
-            dungeon.levels.forEach((level, depth) => {
+            // (Her own chamber, her arena, below the three: build.js; the room that was it on the
+            // bottom of them, its door to it)
+            assert.ok(dungeon.levels.length === 4 && dungeon.levels[3].arena);
+
+            dungeon.levels.slice(0, -1).forEach((level, depth) => {
                 const kinds = new Map(level.rooms.map(({ id, kind }) => [id, kind]));
                 const linked = (id) => level.links.filter(([a, b]) => a === id || b === id).map(([a, b]) => (a === id ? b : a));
                 const galleries = level.rooms.filter(({ kind }) => kind === "gallery");
@@ -218,16 +227,17 @@ describe("an ants' nest dug as ants dig (dungeons/layouts.js nest)", () => {
                     counts.chambers[band] += ["midden", "brood", "larder", "nook"].includes(kind) ? 1 : 0;
                 }
 
-                // (The queen's chamber on the bottom level only, the way to it its one way in)
-                const queen = level.rooms.filter(({ kind }) => kind === "arena");
-
-                assert.equal(queen.length, depth === 2 ? 1 : 0);
-
-                if (queen.length) {
-                    assert.equal(linked(queen[0].id).length, 1, `${seed}: the queen's chamber has more than one way in`);
-                    assert.equal(level.path.at(-1), queen[0].id);
-                }
+                // (The queen's chamber below them all, a level of its own)
+                assert.equal(level.rooms.filter(({ kind }) => kind === "arena").length, 0);
             });
+
+            // (Her chamber, its way in its one way in)
+            const queen = dungeon.levels[3];
+            const chamber = queen.rooms.find(({ kind }) => kind === "arena");
+
+            assert.ok(chamber, `${seed}: the queen's chamber`);
+            assert.equal(queen.links.filter(([a, b]) => a === chamber.id || b === chamber.id).length, 1, `${seed}: the queen's chamber has more than one way in`);
+            assert.equal(queen.path.at(-1), chamber.id);
         }
 
         // (Middens near the top, none at the bottom; brood at the bottom, none at the top;

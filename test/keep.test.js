@@ -60,7 +60,7 @@ function cross(host, me, link) {
 const at = (rows, char) => rows.flatMap((row, y) => [...row].flatMap((each, x) => (each === char ? [[x, y]] : [])));
 
 describe("Bellhaven's keep, a dungeon (core/dungeons/themes.js keep)", () => {
-    it("is four floors going up, each its own: its way in a stair down from the floor below, its way on a stair up, a warden barring each but the belfry's, and the boss at the top, beyond him a stair down out", () => {
+    it("is four floors going up, each its own, and the Bell Chamber over them: its way in a stair down from the floor below, its way on a stair up, a warden barring each but the belfry's, and the boss at the top in his arena, beyond him a stair down out", () => {
         assert.equal(KEEP.wild, false);
         assert.equal(KEEP.levels, 4);
         assert.equal(KEEP.rises, true);
@@ -68,13 +68,14 @@ describe("Bellhaven's keep, a dungeon (core/dungeons/themes.js keep)", () => {
         for (const seed of SEEDS) {
             const dungeon = buildDungeon({ seed, theme: "keep", tier: 5 });
 
-            assert.equal(dungeon.levels.length, 4);
+            assert.equal(dungeon.levels.length, 5, "its four floors, and the Bell Chamber");
             assert.equal(dungeon.name, "the Keep of Bellhaven");
             dungeon.levels.forEach((level, k) => {
                 const { rows } = level;
-                const last = k === 3;
+                const last = k === 4;
 
-                assert.equal(level.realm, KEEP.realms[k].id);
+                assert.equal(level.realm, KEEP.realms[Math.min(k, 3)].id);
+                assert.equal(Boolean(level.arena), last);
                 // (Come into: the front doors on the first floor; on the rest, the head of a stair
                 // down from the floor below, at the middle of its south edge)
                 if (k === 0) {
@@ -94,13 +95,18 @@ describe("Bellhaven's keep, a dungeon (core/dungeons/themes.js keep)", () => {
 
                 if (!last) {
                     assert.ok(level.down.squares.every(([x, y]) => rows[y][x] === "<"));
-                    assert.ok(level.packs.some(({ role, foes }) => role === "warden" && foes[0].creature === KEEP.realms[k].warden.creature), `${seed}/${k}: its warden`);
+
+                    if (k < 3) {
+                        assert.ok(level.packs.some(({ role, foes }) => role === "warden" && foes[0].creature === KEEP.realms[k].warden.creature), `${seed}/${k}: its warden`);
+                    } else {
+                        assert.ok(!level.packs.some(({ role }) => role === "warden" || role === "boss"), "the belfry's floor: its master's above, in the Bell Chamber");
+                    }
                 } else {
                     assert.equal(level.down, null);
                     assert.ok(level.exit.squares.every(([x, y]) => rows[y][x] === ">"));
                     assert.ok(level.packs.some(({ role }) => role === "boss"));
                     assert.ok(level.chests.some(({ kind }) => kind === "hoard"));
-                    assert.ok(!level.packs.some(({ role }) => role === "warden"), "the belfry has its master, no warden");
+                    assert.ok(!level.packs.some(({ role }) => role === "warden"), "the Bell Chamber has its master, no warden");
                 }
             });
 
@@ -183,27 +189,30 @@ describe("Bellhaven's keep gone into by its doors off its court (core/insides.js
         run(host, 1500, me);
 
         assert.ok(keep.made, "made by its doors");
-        assert.equal(keep.maps.length, 4);
+        assert.equal(keep.maps.length, 5, "its four floors, and the Bell Chamber");
         keep.maps.forEach((id, k) => {
             const map = world.maps[id];
 
             assert.deepEqual(map.origin, [KEEP_ORIGINS.x, k * KEEP_ORIGINS.step]);
             assert.equal(map.look, "keep");
             assert.ok(!map.dungeon.portals);
-            assert.ok(map.name.endsWith(KEEP.realms[k].name), map.name);
+            assert.ok(map.name.endsWith(k < 4 ? KEEP.realms[k].name : KEEP.arena), map.name);
         });
 
         const ups = keep.flights.filter(({ id }) => id.endsWith("/stairs"));
         const [out] = keep.flights.filter(({ id }) => id.endsWith("/exit"));
 
-        assert.equal(ups.length, 3);
-        ups.forEach((flight, k) => assert.deepEqual(flight.seal, { map: keep.maps[k], level: k, pack: `${k}-warden`, refusal: "barred" }));
+        // (Each barred by its floor's warden but the belfry's floor's, up into the Bell Chamber)
+        assert.equal(ups.length, 4);
+        ups.forEach((flight, k) => assert.deepEqual(k < 3 ? flight.seal : null, k < 3 ? { map: keep.maps[k], level: k, pack: `${k}-warden`, refusal: "barred" } : null));
+        assert.equal(ups[3].seal, undefined);
+        assert.equal(ups[3].arena, true);
         assert.ok(REFUSALS.barred);
         assert.equal(out.seal.refusal, "throne");
         assert.equal(out.ends[0].map, castle.maps[0]);
         assert.deepEqual(out.ends[0].squares, []);
         assert.deepEqual(out.ends[0].arrive, outside.arrive);
-        assert.ok(!(routeBetween(world.links, castle.maps[0], keep.maps[3]) ?? []).includes(out));
+        assert.ok(!(routeBetween(world.links, castle.maps[0], keep.maps[4]) ?? []).includes(out));
         // (Its first floor's foes woken by its doors)
         assert.ok([...host.wild.values()].some((one) => one.dungeon === site.id));
     });

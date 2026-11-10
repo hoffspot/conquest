@@ -5,10 +5,17 @@
 // and spreads out flat when it dies. A magma slime is the same under a lumpy crust of cooling
 // rock, cracked all over, molten rock glowing in the cracks (white-hot in the deepest, orange,
 // then dull red at their edges) and slowly pulsing, sparks spitting from it now and then.
+//
+// And what's set out about a dungeon boss's arena to be broken (core/creatures.js `object`), built
+// on the same: a heap of waxy eggs, something dark curled in each (`eggs`, how many: the Ant
+// Monster's clutches), or one egg sac, silk wound round and round it (`eggs` 1, `silk`: the
+// Broodmother's); or a squat urn of dark stone, its lid cracked and a green light welling in it
+// (`jar`: the Tomb Lord's soul jars). None has eyes or moves; each throbs a little, its insides
+// rising and sinking, and slumps when it's broken.
 
 import * as THREE from "three";
 import { Sculpt } from "./sculpt.js";
-import { ellipsoid, glowSpot, joint, part, skin } from "./shapes.js";
+import { box, ellipsoid, glowSpot, joint, limb, part, ring, skin } from "./shapes.js";
 
 const smooth = (u) => u * u * (3 - 2 * u);
 
@@ -73,10 +80,12 @@ function meltable(material, glow) {
     return uniforms;
 }
 
-/** Build a slime from its look ({ size, colours: { body, core, eyes, glow } }): as quadruped does. */
+/** Build a slime from its look ({ size, colours: { body, core, eyes, glow }, eggs, silk, jar }): as quadruped does. */
 export function blob(look, random, key = null) {
     const size = look.size;
     const colours = look.colours;
+    // (Something set out in a boss's arena: no eyes, and it doesn't move)
+    const still = Boolean(look.eggs || look.jar);
     const gel = skin(colours.body, { roughness: look.crust ? 0.8 : 0.15, metalness: 0.05, clear: look.clear ?? 0.3, glow: colours.glow ?? colours.body, glowing: look.crust ? 0.04 : 0.12, flat: Boolean(look.crust) });
     const core = skin(colours.core, { roughness: 0.6, glow: colours.glow ?? null, glowing: 1.4 });
     const eyes = skin(colours.eyes ?? 0x101010, { roughness: 0.2, glow: look.crust ? colours.eyes : null, glowing: 1.6 });
@@ -119,11 +128,59 @@ export function blob(look, random, key = null) {
         }
 
         melt = meltable(skinMaterial, colours.glow);
+    } else if (look.eggs) {
+        // (A heap of eggs, the first in its middle, the rest round it; or one, tall, silk wound
+        // round it)
+        const tall = look.eggs === 1 ? 1.1 : 1;
+
+        const curled = skin(colours.core, { roughness: 0.7 });
+
+        for (let k = 0; k < look.eggs; k++) {
+            const round = (k / Math.max(1, look.eggs - 1)) * Math.PI * 2 + random() * 0.4;
+            const out = k === 0 ? 0 : size * (0.5 + random() * 0.15);
+            const egg = look.eggs === 1 ? size * 0.8 : k === 0 ? size * 0.55 : size * (0.42 + random() * 0.08);
+            const at = [Math.sin(round) * out, egg * 1.15 * tall + (k === 0 && look.eggs > 1 ? size * 0.25 : 0), Math.cos(round) * out];
+
+            part(shape, ellipsoid(egg, egg * 1.3 * tall, egg, 14), gel, { at, turn: [random() * 0.4 - 0.2, round, random() * 0.4 - 0.2] }).userData.alive = true;
+            // (Something dark curled in each, seen through its shell)
+            part(shape, ellipsoid(egg * 0.45, egg * 0.6, egg * 0.4, 8), curled, { at: [at[0], at[1] - egg * 0.1, at[2]], turn: [0.4, round, 0], shadow: false });
+        }
+
+        // (Silk wound round and round an egg sac, close to it, each strand as wide as the sac is there)
+        if (look.silk) {
+            const silk = skin(colours.glow ?? colours.body, { roughness: 0.95 });
+            const [wide, high, middle] = [size * 0.8, size * 0.8 * 1.3 * tall, size * 0.8 * 1.15 * tall];
+
+            for (let k = 0; k < 7; k++) {
+                const up = (k / 6 - 0.5) * 1.6 * high * 0.8;
+                const across = wide * Math.sqrt(Math.max(0.05, 1 - (up / high) ** 2)) * 1.02;
+
+                part(shape, ring(1, 0.018, Math.PI * 2, 24), silk, { at: [0, middle + up, 0], turn: [Math.PI / 2 + random() * 0.8 - 0.4, random() * Math.PI, random() * 0.8 - 0.4], scale: [across, across, across] });
+            }
+        }
+    } else if (look.jar) {
+        // (A squat urn of dark stone, a neck and a cracked lid, the light welling in it)
+        const stone = skin(colours.body, { roughness: 0.9, flat: true });
+
+        const crack = skin(colours.core, { roughness: 0.4, glow: colours.glow, glowing: 2 });
+
+        part(shape, ellipsoid(size, size * 0.85, size, 16), stone, { at: [0, size * 0.85, 0] }).userData.alive = true;
+        part(shape, limb(size * 0.3, size * 0.42, size * 0.5, 12), stone, { at: [0, size * 1.9, 0] });
+        // (Its lid cracked and pushed askew, the light welling up under it)
+        part(shape, ellipsoid(size * 0.36, size * 0.14, size * 0.36, 10), crack, { at: [0, size * 1.92, 0], shadow: false });
+        part(shape, ellipsoid(size * 0.55, size * 0.12, size * 0.55, 12), stone, { at: [size * 0.12, size * 2.08, 0], turn: [0.1, 0, -0.35] });
+
+        // (Cracks down its sides, glowing)
+        for (let k = 0; k < 4; k++) {
+            const round = (k / 4) * Math.PI * 2 + random() * 0.6;
+
+            part(shape, box(size * 0.05, size * 0.7, size * 0.04), crack, { at: [Math.sin(round) * size * 0.99, size * 0.95, Math.cos(round) * size * 0.99], turn: [0, round, random() * 0.6 - 0.3], shadow: false });
+        }
     } else {
         part(shape, ellipsoid(size, size * 0.8, size, 20), gel, { at: [0, size * 0.8, 0] }).userData.alive = true;
     }
 
-    part(inside, ellipsoid(size * 0.35, size * 0.3, size * 0.35, 10), core, { shadow: false });
+    part(inside, ellipsoid(size * 0.35, size * 0.3, size * 0.35, 10), core, { shadow: false, ...(look.jar ? { at: [-size * 0.1, size * 1.05, size * 0.1] } : {}) });
 
     // (Sparks, a magma slime's: spat from its crust now and then, flying up and out, falling
     // and fading; each a point of light that goes out, then waits its turn again)
@@ -149,14 +206,14 @@ export function blob(look, random, key = null) {
     // (Bubbles, rising through it)
     const bubbles = [];
 
-    for (let k = 0; k < (look.crust ? 0 : 5); k++) {
+    for (let k = 0; k < (look.crust || still ? 0 : 5); k++) {
         const bubble = part(shape, ellipsoid(size * 0.06, size * 0.06, size * 0.06, 6), core, { shadow: false });
 
         bubble.userData.alive = true;
         bubbles.push({ bubble, x: (random() - 0.5) * size, z: (random() - 0.5) * size, speed: 0.2 + random() * 0.3, offset: random() });
     }
 
-    for (const side of [-1, 1]) {
+    for (const side of still ? [] : [-1, 1]) {
         part(shape, ellipsoid(size * 0.1, size * 0.14, size * 0.08, 8), eyes, { at: [side * size * 0.3, size * 1.05, size * 0.78] });
     }
 
@@ -169,7 +226,8 @@ export function blob(look, random, key = null) {
         joints: { torso: shape, head: shape, mouth: shape, body },
         materials: { body: skinMaterial },
         attacks: ["slam", "engulf", "spit"],
-        rests: ["puddle", "bounce", "bubble"],
+        // (Something set out in a boss's arena only throbs, its insides rising and sinking)
+        rests: still ? ["bubble"] : ["puddle", "bounce", "bubble"],
 
         pose({ dt, t, speed, attack, react, dead, rest, onStep }) {
             const moving = Math.min(1, speed / 0.4);

@@ -1284,7 +1284,7 @@ export function dungeonRooms(building) {
         suffix: `level-${k + 1}`,
         style: level.style ?? dungeon.style,
         look: level.look ?? dungeon.theme,
-        name: capital(realms ? `${named}: ${realms[k]?.name ?? DEEP[k]}` : k ? `${named}, ${DEEP[k]}` : named),
+        name: capital(level.arena ? `${named}${realms ? ":" : ","} ${THEMES[dungeon.theme]?.arena ?? "its arena"}` : realms ? `${named}: ${realms[k]?.name ?? DEEP[k]}` : k ? `${named}, ${DEEP[k]}` : named),
         rows: level.rows,
         ground: level.ground ?? dungeon.ground,
         sound: level.sound ?? dungeon.sound,
@@ -1295,9 +1295,10 @@ export function dungeonRooms(building) {
 /**
  * Where the dungeons' levels are drawn in the 3D world: beyond the buildings' columns, each
  * dungeon a column of its own by its number (so the same wherever it's made, and made again),
- * `across` to a row, its levels `step` apart, a row `row` deep.
+ * `across` to a row, its levels `step` apart, a row `row` deep: room for three levels and an
+ * arena (build.js), each under 120 metres across.
  */
-export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 400 });
+export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 600 });
 
 /**
  * Where the hells' levels are drawn (a theme never found in a wild dungeon: themes.js `wild`),
@@ -1859,7 +1860,7 @@ export class Interiors {
                 // (What the art and the minimap want of the level: its theme, how deep, its torches
                 // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
                 // is drawn about each)
-                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, balconies: floor.level.balconies ?? [], lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}) },
+                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, balconies: floor.level.balconies ?? [], lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}), ...(floor.level.arena ? { arena: true } : {}) },
             });
 
             return map;
@@ -1881,6 +1882,12 @@ export class Interiors {
             return pack ? { seal: { map: maps[k].id, level: k, pack: pack.id, refusal } } : {};
         };
 
+        // (Each level's way on barred while its own boss stands: a hell's portal, the keep's stair
+        // up, a wild dungeon's stairs down; and the way into the arena (its `arena`) shut while
+        // its boss's fight is on: host.js #arenaShut)
+        const theme = THEMES[building.theme];
+        const refusal = theme?.portals ? "sealed" : theme?.rises ? "barred" : "downBarred";
+
         building.flights = levels.slice(0, -1).map((above, k) => {
             const below = levels[k + 1];
 
@@ -1892,7 +1899,8 @@ export class Interiors {
                     { map: maps[k + 1].id, squares: below.entry.squares.map((square) => [...square]), arrive: [...below.entry.arrive], facing: below.entry.facing },
                     { map: maps[k].id, squares: above.down.squares.map((square) => [...square]), arrive: [...above.down.arrive], facing: above.down.facing },
                 ],
-                ...sealOf(k, "warden", THEMES[building.theme]?.portals ? "sealed" : "barred"),
+                ...sealOf(k, "warden", refusal),
+                ...(below.arena ? { arena: true } : {}),
             };
         });
 

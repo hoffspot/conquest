@@ -19,7 +19,8 @@ const ORCS = Object.freeze({ caves: ["orcWarlord", "the Orc Warlord", ["goblin",
 function ruledBy(theme, creature) {
     for (let seed = 1; seed < 400; seed++) {
         const dungeon = buildDungeon({ seed, theme, tier: 6, levels: 1 });
-        const boss = dungeon.levels[0].packs.find(({ role }) => role === "boss");
+        // (In its arena, a level of its own under its last: build.js)
+        const boss = dungeon.levels.at(-1).packs.find(({ role }) => role === "boss");
 
         if (boss.foes[0].creature === creature) {
             return boss;

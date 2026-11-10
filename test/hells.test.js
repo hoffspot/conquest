@@ -73,16 +73,17 @@ function cross(host, me, link) {
 describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", () => {
     const made = SEEDS.map((seed) => buildDungeon({ seed, theme: "hell", tier: 9 }));
 
-    it("is four levels deep, each its realm's: dug, dressed, drawn and heard as its realm has it", () => {
+    it("is four levels deep, each its realm's, and the Pit's arena after them: dug, dressed, drawn and heard as its realm has it", () => {
         assert.equal(HELL.levels, 4);
         assert.equal(HELL.realms.length, 4);
         assert.ok(LEVEL_SIZES[4] && MINIS[4]);
 
         for (const dungeon of made) {
-            assert.equal(dungeon.levels.length, 4);
+            assert.equal(dungeon.levels.length, 5, "its four realms, and its lord's arena");
+            assert.ok(dungeon.levels[4].arena);
 
             dungeon.levels.forEach((level, k) => {
-                const realm = HELL.realms[k];
+                const realm = HELL.realms[Math.min(k, 3)];
                 const kinds = new Set(level.rooms.map(({ kind }) => kind));
 
                 assert.deepEqual([level.realm, level.look, level.style, level.sound, level.ground], [realm.id, realm.look, realm.style, realm.sound, realm.ground]);
@@ -114,9 +115,11 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
         }
     });
 
-    it("has a boss of its realm on every level guarding its way on: by the portal down, and on the bottom level in the last room before the arena; a boss of their own rank, no pack of the level's besides", () => {
+    it("has a boss of its realm on every level guarding its way on, by the portal down (the Pit's by the way into its lord's arena); a boss of their own rank, no pack of the level's besides", () => {
         for (const dungeon of made) {
-            dungeon.levels.forEach((level, k) => {
+            assert.ok(!dungeon.levels[4].packs.some(({ role }) => role === "warden"), "none in the arena but its lord's");
+
+            dungeon.levels.slice(0, 4).forEach((level, k) => {
                 const realm = HELL.realms[k];
                 const wardens = level.packs.filter(({ role }) => role === "warden");
 
@@ -129,23 +132,17 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
                 assert.ok(escorts.length >= 1 && escorts.every(({ creature, warden }) => realm.warden.guard.includes(creature) && !warden));
                 assert.ok(level.packs.every((other) => other === pack || other.room !== pack.room), "another pack in its room");
 
-                if (k < 3) {
-                    assert.equal(pack.room, level.path.at(-1), "in the room furthest in, by the way down");
-                    assert.ok(level.down);
-                } else {
-                    const arena = level.path.at(-1);
-
-                    assert.equal(level.path[level.path.indexOf(pack.room) + 1], arena, "in the room before the arena");
-                }
+                assert.equal(pack.room, level.path.at(-1), "in the room furthest in, by the way down");
+                assert.ok(level.down);
             });
         }
 
         assert.ok(CHAMPIONS.floor.hp > CHAMPIONS.mini.hp && CHAMPIONS.floor.hp < CHAMPIONS.boss.hp);
     });
 
-    it("draws its levels' packs and mini-bosses from their realms' own, whatever their tiers; the lord of the Pit at the bottom", () => {
+    it("draws its levels' packs and mini-bosses from their realms' own, whatever their tiers; the lord of the Pit in his arena at the bottom", () => {
         for (const dungeon of made) {
-            dungeon.levels.forEach((level, k) => {
+            dungeon.levels.slice(0, 4).forEach((level, k) => {
                 const realm = HELL.realms[k];
                 const kinds = new Set(realm.packs.flatMap(({ creatures }) => creatures));
                 const minis = new Set(realm.minis.map(({ creature }) => creature));
@@ -224,10 +221,10 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
         assert.deepEqual(CREATURES.fiend.tiers, [9, 10]);
     });
 
-    it("has its portal out on its bottom level beyond the throne: further in than its lord, every level still walked through whole", () => {
+    it("has its portal out in its lord's arena beyond the throne: further in than its lord, every level still walked through whole", () => {
         for (const dungeon of made) {
             dungeon.levels.forEach((level, k) => {
-                assert.equal(Boolean(level.exit), k === 3, `level ${k + 1}`);
+                assert.equal(Boolean(level.exit), k === 4, `level ${k + 1}`);
             });
 
             const bottom = dungeon.levels.at(-1);
@@ -330,7 +327,8 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             assert.ok(veils.length >= 1);
             assert.equal(points, portals * each, `${floor.look}: ${points / each} veils`);
             assert.equal(built.lights.filter(({ kind }) => kind === "portal-hell").length, portals);
-            assert.equal(map.look, HELL.realms[k].look);
+            // (The Pit's lord's arena drawn as the Pit is)
+            assert.equal(map.look, HELL.realms[Math.min(k, 3)].look);
 
             // (The Breach's rift over its altar, a hell's swirl in it, two faces back to back, lit
             // by its own light; on no other level)
@@ -349,9 +347,10 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             };
             const pools = map.pieces.filter(({ kind }) => kind === "lava").length;
 
-            assert.equal(pools > 0, k !== 1, `${floor.look}: ${pools} pools`);
-            assert.equal(named("lava").length, k === 0 || k === 3 ? 1 : 0);
-            assert.equal(named("lava-bank").length, k === 0 || k === 3 ? 1 : 0);
+            // (The Pit's rim along its throne hall's walls, in its lord's arena)
+            assert.equal(pools > 0, k !== 1 && k !== 3, `${floor.look}: ${pools} pools`);
+            assert.equal(named("lava").length, k === 0 || k === 4 ? 1 : 0);
+            assert.equal(named("lava-bank").length, k === 0 || k === 4 ? 1 : 0);
 
             if (k !== 2) {
                 assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
@@ -372,8 +371,8 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
 
             // (The Pit's: its sigils inlaid in its floor, every one in one mesh, and the lord's
             // throne, his light over it)
-            assert.equal(named("sigils").length, k === 3 ? 1 : 0);
-            assert.equal(built.lights.filter(({ kind }) => kind === "lord").length, k === 3 ? 1 : 0);
+            assert.equal(named("sigils").length, k >= 3 ? 1 : 0);
+            assert.equal(built.lights.filter(({ kind }) => kind === "lord").length, k === 4 ? 1 : 0);
             assert.equal(named("forge-basin").length, k === 2 ? 1 : 0);
             assert.equal(named("forge-mouth").length, k === 2 ? 1 : 0);
 
@@ -493,29 +492,33 @@ describe("a hell gone down (insides.js, host.js enter, #riteFell, #delveFell)", 
         assert.equal(me.map, building.maps[0]);
     });
 
-    it("draws its four levels in a block of their own, each named for its realm, its ways down portals each sealed by its level's boss, and from beyond its throne a way out to the wilds, sealed by its lord", () => {
+    it("draws its four levels and its lord's arena in a block of their own, each named for its realm, its ways down portals each sealed by its level's boss, and from beyond its throne a way out to the wilds, sealed by its lord", () => {
         assert.ok(building.made);
-        assert.equal(building.maps.length, 4);
+        assert.equal(building.maps.length, 5);
 
         building.maps.forEach((id, k) => {
             const map = world.maps[id];
+            const realm = HELL.realms[Math.min(k, 3)];
 
             assert.ok(map.origin[0] >= HELL_ORIGINS.x);
-            assert.equal(map.look, HELL.realms[k].look);
+            assert.equal(map.look, realm.look);
             assert.equal(map.dungeon.portals, true);
-            assert.ok(map.name.endsWith(HELL.realms[k].name), map.name);
+            assert.ok(map.name.endsWith(k < 4 ? realm.name : HELL.arena), map.name);
+            assert.equal(Boolean(map.dungeon.arena), k === 4);
         });
 
         const downs = building.flights.filter(({ id }) => id.endsWith("/stairs"));
         const [out] = building.flights.filter(({ id }) => id.endsWith("/exit"));
 
-        assert.equal(downs.length, 3);
+        // (The last way down the lord's arena's, sealed by the Pit's Gatekeeper)
+        assert.equal(downs.length, 4);
         downs.forEach((flight, k) => {
             assert.deepEqual(flight.seal, { map: building.maps[k], level: k, pack: `${k}-warden`, refusal: "sealed" });
+            assert.equal(Boolean(flight.arena), k === 3);
         });
 
         // (Out to before its way in, nothing outside to go in by)
-        assert.equal(out.seal.map, building.maps[3]);
+        assert.equal(out.seal.map, building.maps[4]);
         assert.equal(out.seal.refusal, "throne");
         assert.equal(out.ends[0].map, "town");
         assert.deepEqual(out.ends[0].squares, []);
@@ -523,13 +526,13 @@ describe("a hell gone down (insides.js, host.js enter, #riteFell, #delveFell)", 
         assert.ok(REFUSALS.sealed && REFUSALS.throne);
 
         // (Never a way anyone's led in by: routeBetween)
-        assert.ok(!(routeBetween(world.links, "town", building.maps[3]) ?? []).includes(out));
+        assert.ok(!(routeBetween(world.links, "town", building.maps[4]) ?? []).includes(out));
     });
 
-    it("won't let anyone down a portal till its level's boss falls, then does; nor in by the way out", () => {
+    it("won't let anyone down a portal till its level's boss falls, then does (the last into its lord's arena); nor in by the way out", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.flights.find(({ id }) => id.endsWith("/exit")).id }).ok, false);
 
-        for (let k = 0; k < 3; k++) {
+        for (let k = 0; k < 4; k++) {
             const flight = building.flights[k];
             const told = cross(host, me, flight);
 
@@ -548,11 +551,11 @@ describe("a hell gone down (insides.js, host.js enter, #riteFell, #delveFell)", 
             assert.equal(me.map, building.maps[k + 1]);
         }
 
-        // (And back up, whenever)
-        assert.ok(cross(host, me, building.flights[2]).ok);
-        assert.equal(me.map, building.maps[2]);
-        assert.ok(cross(host, me, building.flights[2]).ok);
+        // (And back up, whenever, but for the lord's arena while his fight's on: host.js #arenaWatch)
+        assert.ok(cross(host, me, building.flights[3]).ok);
         assert.equal(me.map, building.maps[3]);
+        assert.ok(cross(host, me, building.flights[3]).ok);
+        assert.equal(me.map, building.maps[4]);
     });
 
     it("won't let anyone out beyond the throne till its lord falls, then brings them out before its way in", () => {

@@ -853,6 +853,74 @@ export function nest({ width, height, rooms, arena, random, depth = 0, levels = 
     return { grid, count: kinds.length, entryRoom: 0, goalRoom, kinds, entrance, loops };
 }
 
+// --- A boss's arena: a level of its own (build.js) ---
+
+/**
+ * A boss's arena (squares): a dug place's round, `radius` across its middle (give or take), or a
+ * built place's hall, `hall` wide and long; and the room come into before it, `mouth` across, and
+ * the level round them, `margin` beyond.
+ */
+export const ARENA = Object.freeze({ radius: Object.freeze([11, 12]), hall: Object.freeze({ w: Object.freeze([20, 22]), h: Object.freeze([24, 26]) }), mouth: 3, margin: 4 });
+
+/**
+ * A boss's arena, a level of its own past the bottom one's stairs (build.js): up the way in, a
+ * small room come into (`entry`: the theme's own kind of it, a cave's mouth, a temple's vestibule),
+ * and through a short passage the arena itself north of it: a round of rock wobbling at its edge
+ * for a dug place (`hall` false), or a hall for a built one. { grid, count, entryRoom, goalRoom,
+ * kinds, entrance, loops }, as the layouts' (the arena the goal).
+ */
+export function arenaLevel({ random, hall = false, entry = "mouth" }) {
+    const [rx, ry] = hall ? [Math.floor(random.int(...ARENA.hall.w) / 2), Math.floor(random.int(...ARENA.hall.h) / 2)] : [random.int(...ARENA.radius), random.int(...ARENA.radius)];
+    const width = 2 * (rx + ARENA.margin) + 2;
+    const mouth = ARENA.mouth;
+    const height = 2 * ry + 2 * mouth + 2 * ARENA.margin + WAY_IN + 4;
+    const grid = new Grid(width, height);
+    const cx = Math.floor(width / 2);
+    const bottom = height - 1 - WAY_IN;
+    const doorway = [cx, bottom - mouth];
+    const middle = [cx, ARENA.margin + ry + 1];
+
+    // (The room come into, at the top of the way in)
+    grid.digRound(doorway[0], doorway[1], mouth, 0);
+
+    // (The arena: a hall, or a round wobbling at its edge)
+    if (hall) {
+        grid.digRect(middle[0] - rx, middle[1] - ry, 2 * rx, 2 * ry, 1);
+    } else {
+        const wobble = random.seed() % 100000;
+
+        for (let dy = -ry - 2; dy <= ry + 2; dy++) {
+            for (let dx = -rx - 2; dx <= rx + 2; dx++) {
+                const d = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+                const edge = 1 + (noise(middle[0] + dx, middle[1] + dy, wobble, 5, 2) - 0.5) * 0.35;
+
+                if (d <= 0.6 || d <= edge) {
+                    grid.dig(middle[0] + dx, middle[1] + dy, 1);
+                }
+            }
+        }
+    }
+
+    // (Joined by a passage three wide, straight up from the room come into)
+    for (let y = doorway[1] - mouth; y >= middle[1] + ry - 2; y--) {
+        for (const x of [cx - 1, cx, cx + 1]) {
+            if (!grid.open(x, y)) {
+                grid.dig(x, y, -1);
+            }
+        }
+    }
+
+    if (!hall) {
+        smooth(grid, 1);
+    }
+
+    const entrance = digWayIn(grid, bottom - 1);
+
+    grid.keepReachable([[cx - 1, height - 2]]);
+
+    return { grid, count: 2, entryRoom: 0, goalRoom: 1, kinds: [entry, "arena"], entrance, loops: 0 };
+}
+
 /** The ways a level can be dug, by name (a theme's `layout`): add more with registerLayout. */
 export const LAYOUTS = { caves, accretion, axial, nest };
 

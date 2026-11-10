@@ -3345,6 +3345,14 @@ folk out of the battle, their characters and any floors thrown away (built again
 back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
 dressed and let go of at its door as any building's.
 
+**A dungeon's levels, only those about the player** (`#dungeonHeld`, `#dungeonFloors`): a
+dungeon's floors aren't all built and kept as a building's are, but only the level the player's on
+and the ones either side of it (outside, at its way in, the first alone); the rest let go of
+(their meshes, their interiors, what the minimap had of them) and built again as the player comes
+near them, a piece at a time as any floor is. Down in a boss's arena, everything above it but the
+level its door's on is let go of. Measured before (headless Chromium, High): a three-level cave's
+levels came to 56 MB of the page's floors as the player went in, most of it the two below.
+
 **Doors and stairs** (app/doors.js). Each end of each link has a box a tap's ray can hit (a
 building's front door, the inside of the door, the side of the stairs, the stairwell upstairs)
 and a glow round its edge (new doors, as settlements are laid out and buildings made, are picked

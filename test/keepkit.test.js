@@ -91,11 +91,12 @@ describe("Bellhaven's keep's castle's pieces (world/keepkit.js)", () => {
 
             assert.equal(columns.length, pillars.length);
             assert.ok(columns.every(({ fit }) => fit[1] === TALL));
-            assert.equal(placements.filter(({ model }) => model === KEEP_KIT.bell).length, k === 3 ? 1 : 0, `floor ${k + 1}'s bell`);
+            // (In the Bell Chamber, the Prior's arena over the belfry's floor)
+            assert.equal(placements.filter(({ model }) => model === KEEP_KIT.bell).length, k === 4 ? 1 : 0, `floor ${k + 1}'s bell`);
         });
 
-        const [bell] = kitPlacements(floors[3], { tall: TALL }).filter(({ model }) => model === KEEP_KIT.bell);
-        const altar = floors[3].pieces.find(({ kind, x, y, w, h }) => kind === "altar" && Math.abs(x + w / 2 - bell.x) < 1e-9 && Math.abs(y + h / 2 - bell.z) < 1e-9);
+        const [bell] = kitPlacements(floors[4], { tall: TALL }).filter(({ model }) => model === KEEP_KIT.bell);
+        const altar = floors[4].pieces.find(({ kind, x, y, w, h }) => kind === "altar" && Math.abs(x + w / 2 - bell.x) < 1e-9 && Math.abs(y + h / 2 - bell.z) < 1e-9);
 
         assert.ok(altar, "over the altar");
         assert.ok(bell.y + KIT.bell <= TALL);

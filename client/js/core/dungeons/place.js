@@ -10,6 +10,7 @@
 // Pure: whole numbers and the level's own random stream (seeds.js), the same on every machine.
 
 import { CREATURES, TIERS } from "../creatures.js";
+import { atan2, hypot, PI, TAU } from "../exact.js";
 import { EIGHT, FOUR } from "./grid.js";
 import { neighbours, roomPath } from "./graph.js";
 import { WAY_IN } from "./layouts.js";
@@ -46,11 +47,6 @@ const FALLEN_CHAR = "i".charCodeAt(0);
 /** How far apart (rings of squares) those in a pack stand, and how far from a room's ways in at least. */
 export const SPREAD = Object.freeze({ apart: 2, doors: 3 });
 
-/**
- * How likely a room is to have a pack in it, by how many levels the dungeon has (fewer each the
- * more there are, so a deep one takes about as long to clear as a shallow one).
- */
-export const PACK_ODDS = Object.freeze({ 1: 1, 2: 0.9, 3: 0.75, 4: 0.7 });
 
 /** Each level's pack's chance of an elite (a tier up), by how deep it is. */
 export const ELITE = Object.freeze([0.1, 0.2, 0.3]);
@@ -166,9 +162,12 @@ function chooseFoe(seed, slot, list, tier, slack) {
 /**
  * Fill a dug level (layouts.js's `dug`): { chars, reserved, entry, down, exit, packs, chests,
  * lights, looks (each room's look's id, by its id), rooms, links, path, goal, arena, hoard } (see
- * buildDungeon). `plan`: { index, levels (how many),
+ * buildDungeon). `plan`: { index, levels (how many, its arena among them),
  * theme (as it is on this level: themes.js realmOf), tier (the level's), boss (on the bottom
- * level: { tier }), minis (how many here), seed, random }.
+ * level: { tier }), floor (a floor's boss of the theme's `floors` guarding its stairs down, a wild
+ * dungeon's), arena (the final boss's arena: its boss, its hoard and nothing else; and `arena`:
+ * { centre, radius, spots } for its fight, AREA_SPOTS of them round its edge), minis (how many
+ * here), seed, random }.
  */
 export function fillLevel(dug, rooms, links, plan) {
     const { grid } = dug;
@@ -422,14 +421,29 @@ export function fillLevel(dug, rooms, links, plan) {
         dressRoom(room.get(goal), 1);
     }
 
-    // --- A hell's level's own boss (its realm's `warden`), guarding its way on: in the room
-    // furthest in, as near its portal down as anyone waits; on the bottom level, in the last room
-    // on the way through before the arena ---
+    // (And what's heaped in the middle of a room (its look's first prop set at its centre, more
+    // than a square of it: an ants' nest's brood, its midden), placed before anyone waits in it, so
+    // it has its middle: as many packs as rooms now, none of them thinned out deeper down)
+    for (const one of rooms) {
+        const kind = one.id === goal && theme.rooms.goal ? "goal" : dug.kinds[one.id];
+        const first = pickStable(seed, slot("room", one.id), theme.rooms[kind] ?? theme.rooms.any ?? [])?.props?.[0];
+
+        if (!placed.has(one.id) && first?.at === "centre" && (first.size?.[0] ?? 1) * (first.size?.[1] ?? 1) > 1) {
+            dressRoom(one, 1);
+        }
+    }
+
+    // --- A level's own boss guarding its way on (a hell's realm's `warden`, the keep's; a wild
+    // dungeon's floor's boss, one of its theme's `floors`): in the room furthest in, as near its
+    // stairs down as anyone waits; on the bottom level, in the last room on the way through
+    // before the arena. A floor's boss's chest beside it, kept shut till it falls ---
 
     const taken = new Set([entryRoom, goal]);
     let held = null;
+    const floorBoss = plan.floor && theme.floors?.length ? chooseFoe(seed, slot("floor"), theme.floors, Math.min(TIERS, plan.tier + 1), slack(2)) : null;
+    const warden = plan.arena ? null : (theme.warden ?? floorBoss);
 
-    if (theme.warden) {
+    if (warden) {
         const bottom = index === plan.levels - 1;
 
         held = bottom ? ([...path].reverse().find((id) => id !== goal && id !== entryRoom) ?? null) : goal;
@@ -438,8 +452,9 @@ export function fillLevel(dug, rooms, links, plan) {
         const [heart] = keep ? spotsIn(level, keep, 1, { near: !bottom && down ? down.arrive : keep.centre, doors: 2, fromDoors, ways: ways() }) : [];
 
         if (heart) {
-            const { warden } = theme;
             const tier = Math.min(TIERS, plan.tier + 1);
+            // (Its guard: its own, as a hell's master's; a floor's boss's, of its theme's packs)
+            const guard = warden.guard ?? chooseFoe(seed, slot("floor-guard"), theme.packs, plan.tier, slack(1)).creatures;
 
             level.reserve(...heart);
             taken.add(held);
@@ -455,8 +470,22 @@ export function fillLevel(dug, rooms, links, plan) {
                 role: "warden",
                 room: held,
                 title: warden.title,
-                foes: [{ creature: warden.creature, tier, at: heart, warden: true, title: warden.title, regalia: warden.id }, ...escorts.map((at, k) => ({ creature: warden.guard[k % warden.guard.length], tier: plan.tier, at }))],
+                foes: [{ creature: warden.creature, tier, at: heart, warden: true, title: warden.title, regalia: warden.regalia ?? warden.id }, ...escorts.map((at, k) => ({ creature: guard[k % guard.length], tier: plan.tier, at }))],
             });
+
+            // (A floor's boss's chest, by a wall near it, shut till it falls: core/host.js)
+            if (floorBoss) {
+                const spot = keep.cells
+                    .map((c) => [c % level.width, Math.floor(c / level.width)])
+                    .filter(([x, y]) => level.free(x, y) && fromDoors(held, [x, y]) >= 2 && FOUR.some(([dx, dy]) => !grid.open(x + dx, y + dy)) && FOUR.some(([dx, dy]) => level.walkable(x + dx, y + dy)) && !nextTo(x, y, (u, v) => BLOCKING.has(level.char(u, v))))
+                    .sort((a, b) => Math.max(Math.abs(a[0] - heart[0]), Math.abs(a[1] - heart[1])) - Math.max(Math.abs(b[0] - heart[0]), Math.abs(b[1] - heart[1])) || a[1] - b[1] || a[0] - b[0])[0];
+
+                if (spot) {
+                    level.put(spot[0], spot[1], "$");
+                    level.reserve(...spot);
+                    chests.push({ id: `${index}-floor`, at: spot, kind: "floor", room: held });
+                }
+            }
         } else {
             held = null;
         }
@@ -507,12 +536,12 @@ export function fillLevel(dug, rooms, links, plan) {
     const elite = ELITE[Math.min(index, ELITE.length - 1)];
 
     for (const one of rooms) {
-        if (one.id === entryRoom || one.id === held || (taken.has(one.id) && one.id !== goal) || (one.id === goal && index === plan.levels - 1)) {
+        if (plan.arena || one.id === entryRoom || one.id === held || (taken.has(one.id) && one.id !== goal) || (one.id === goal && index === plan.levels - 1)) {
             continue;
         }
 
         const kind = dug.kinds[one.id];
-        const odds = (one.id === goal ? 0.7 : kind === "nook" || kind === "cell" || kind === "store" ? 0.5 : 0.8) * PACK_ODDS[plan.levels];
+        const odds = one.id === goal ? 0.7 : kind === "nook" || kind === "cell" || kind === "store" ? 0.5 : 0.8;
 
         if (!random.chance(odds)) {
             continue;
@@ -546,7 +575,7 @@ export function fillLevel(dug, rooms, links, plan) {
 
     // (As many again for a theme that has more of them: its `chests`, the ants' nests' twice)
     const more = theme.chests ?? 1;
-    const wanted = random.int(2 * more, (index === plan.levels - 1 ? 3 : 4) * more);
+    const wanted = plan.arena ? 0 : random.int(2 * more, (index === plan.levels - 2 ? 3 : 4) * more);
     const hasChest = new Set();
 
     for (let k = 0; k < rooms.length && chests.filter(({ kind }) => kind === "small").length < wanted; k++) {
@@ -616,8 +645,40 @@ export function fillLevel(dug, rooms, links, plan) {
         }
     }
 
-    return { level, entry, down, exit, packs, chests, lights, looks, path, goal, hoard };
+    // (The final boss's arena: its middle, how far it reaches, and spots round its edge for what
+    // its fight sets there, each on open ground clear of the rock and of everyone, AREA_SPOTS of
+    // them as far apart round it as they'll go: core/fights.js)
+    let arena = null;
+
+    if (plan.arena) {
+        const one = room.get(goal);
+        const centre = one.centre;
+        const cells = one.cells.map((c) => [c % level.width, Math.floor(c / level.width)]);
+        const radius = Math.max(...cells.map(([x, y]) => hypot(x - centre[0], y - centre[1])));
+        const edge = cells
+            .filter(([x, y]) => level.free(x, y) && openAround(x, y) && EIGHT.some(([dx, dy]) => !level.walkable(x + 2 * dx, y + 2 * dy)))
+            .map(([x, y]) => ({ at: [x, y], turn: atan2(y - centre[1], x - centre[0]) }));
+        const spots = [];
+
+        for (let k = 0; k < AREA_SPOTS && edge.length; k++) {
+            const want = -PI + ((k + 0.5) * TAU) / AREA_SPOTS;
+            const off = (a) => Math.abs(((a - want + 3 * PI) % TAU) - PI);
+            const best = edge.sort((a, b) => off(a.turn) - off(b.turn) || a.at[1] - b.at[1] || a.at[0] - b.at[0])[0];
+
+            if (off(best.turn) < PI / AREA_SPOTS) {
+                spots.push(best.at);
+                edge.splice(edge.indexOf(best), 1);
+            }
+        }
+
+        arena = { centre: [...centre], radius: Math.round(radius * 10) / 10, spots };
+    }
+
+    return { level, entry, down, exit, packs, chests, lights, looks, path, goal, hoard, arena };
 }
+
+/** How many spots round an arena's edge its fight can set things on (core/fights.js). */
+export const AREA_SPOTS = 8;
 
 /**
  * Up to `count` squares in a room for those in it to stand on: free, with ground all round, at
@@ -1023,12 +1084,13 @@ function dress(level, room, prop, { random, putProp, fromDoors, count, axis }) {
 
 // Lights on a room's walls (torches, or colonies of glowing fungus: `kind`): `count`, spread round
 // it (at least `apart` rings from each other and from those `taken` already), each on a square
-// against the rock with ground before it (and, if `deep`, rock two squares deep behind it: not a
-// sliver the rock's drawn worn through, world/caverns.js). [{ at, kind, wall: [dx, dy] (towards
-// the wall) }]
+// against the rock with ground before it (and, if `deep`, rock two squares deep behind it, none of
+// it nor the rock either side of it a stair's, cut out of it: not a sliver the rock's drawn worn
+// through, world/caverns.js). [{ at, kind, wall: [dx, dy] (towards the wall) }]
 function onWalls(level, room, count, random, { kind, apart, taken = [], deep = false }) {
     const { grid } = level;
     const lit = [];
+    const solid = (u, v) => !grid.open(u, v) && !level.char(u, v);
 
     for (const k of random.shuffle(room.cells)) {
         if (lit.length >= count) {
@@ -1036,7 +1098,7 @@ function onWalls(level, room, count, random, { kind, apart, taken = [], deep = f
         }
 
         const [x, y] = [k % level.width, Math.floor(k / level.width)];
-        const wall = FOUR.find(([dx, dy]) => !grid.open(x + dx, y + dy) && (!deep || !grid.open(x + dx * 2, y + dy * 2)));
+        const wall = FOUR.find(([dx, dy]) => !grid.open(x + dx, y + dy) && (!deep || (solid(x + dx, y + dy) && solid(x + dx * 2, y + dy * 2) && !level.char(x + dx + dy, y + dy + dx) && !level.char(x + dx - dy, y + dy - dx))));
 
         if (!wall || !level.walkable(x, y) || level.char(x, y) || !level.walkable(x - wall[0], y - wall[1]) || [...taken, ...lit].some(({ at: [u, v] }) => Math.max(Math.abs(u - x), Math.abs(v - y)) < apart)) {
             continue;

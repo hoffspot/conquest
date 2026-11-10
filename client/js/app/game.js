@@ -983,7 +983,34 @@ const COLOSSAL_BLASTS = Object.freeze({
     trample: { quake: "slam", shake: 0.25, sound: "impactEarthMid" },
     shove: { quake: null, shake: 0, sound: null },
     boulder: { quake: "slam", shake: 0.5, sound: "impactEarthHigh" },
+    // (The dungeons' bosses' fights' (core/fights.js): the Ant Monster's acid sprayed before her,
+    // the green of it bursting, heard splashing as foul water does; her chamber's roof coming down,
+    // the belfry's stones and the stalactites falling, as the golem's boulder does; the Troll King's
+    // slam and an ogre's club smashed down, as the golem's hammer; the Broodmother's webbing, a
+    // little dust, and her poison dripping, green; the Frost Troll's breath and his icicles, frost
+    // bursting, heard as ice cracks, and the Tomb Lord's grave chill, unheard; the dark welling up
+    // and the Dread Wraith's wail, a pale shockwave; hellfire falling, lava bursting up and the
+    // Forge Demon's hammer, fire bursting, heard as it does)
+    acidSpray: { quake: "flare", shake: 0.1, sound: "impactWaterHigh" },
+    caveIn: { quake: "slam", shake: 0.35, sound: "impactEarthHigh" },
+    stalactite: { quake: "slam", shake: 0.25, sound: "impactEarthHigh" },
+    stoneFall: { quake: "slam", shake: 0.3, sound: "impactEarthHigh" },
+    trollSlam: { quake: "slam", shake: 0.45, sound: "impactEarthMid" },
+    ogreSmash: { quake: "slam", shake: 0.35, sound: "impactEarthMid" },
+    webSpit: { quake: "spin", shake: 0, sound: null },
+    venomDrip: { quake: "flare", shake: 0, sound: "impactWaterHigh" },
+    frostBreath: { quake: "frost", shake: 0.1, sound: "impactWaterHigh" },
+    icicle: { quake: "frost", shake: 0.2, sound: "impactWaterHigh" },
+    graveChill: { quake: "frost", shake: 0.05, sound: null },
+    darkPool: { quake: "roar", shake: 0, sound: null },
+    wail: { quake: "roar", shake: 0.2, sound: null },
+    hellfire: { quake: "inferno", shake: 0.25, sound: "impactFireMid" },
+    lavaBurst: { quake: "inferno", shake: 0.2, sound: "impactFireMid" },
+    forgeSlam: { quake: "inferno", shake: 0.35, sound: "impactFireMid" },
 });
+
+// How often the player's told a boss they're striking is shielded, at most (seconds: game.js #hit)
+const SHIELD_TOLD = 12;
 
 // How long (seconds) a rare card's foe's last words (core/rare.js RARE_CARDS `last`: the Orc
 // King's) are shown before the player's told they've overcome it
@@ -1680,6 +1707,9 @@ export class Game {
         /** The map the player is on, the one shown (world.maps), and the game's clock (s). */
         this.mapId = "town";
         this.clock = 0;
+
+        /** When the player may next be told a boss they're striking is shielded (the game's clock, s: #hit). */
+        this.shieldTold = 0;
 
         /** Each floor inside (interiors3d.js's), by map id. */
         this.interiors = new Map();
@@ -5771,7 +5801,10 @@ export class Game {
         }
 
         const [ox, oz] = this.originOf(event.map);
-        const at = new THREE.Vector3(ox + event.x, 0, oz + event.y);
+        // (One in a wedge before whoever struck it, a boss's breath: drawn over the wedge's middle,
+        // as wide as half its length, battle.js #blast `cone`)
+        const cone = event.arc ? event.radius / 2 : 0;
+        const at = new THREE.Vector3(ox + event.x + Math.sin(event.facing ?? 0) * cone, 0, oz + event.y + Math.cos(event.facing ?? 0) * cone);
         const me = this.avatars.get(this.me)?.object.position;
         const off = me ? Math.hypot(me.x - at.x, me.z - at.z) : Infinity;
         const look = BOMBS[event.kind]?.look ?? null;
@@ -5781,7 +5814,7 @@ export class Game {
 
         if (colossal) {
             if (colossal.quake) {
-                this.spellFx.quake(at, { radius: event.radius, kind: colossal.quake, shake: colossal.shake * shaken });
+                this.spellFx.quake(at, { radius: cone || event.radius, kind: colossal.quake, shake: colossal.shake * shaken });
             } else if (shaken > 0) {
                 this.spellFx.shake(colossal.shake * shaken);
             }
@@ -5829,8 +5862,21 @@ export class Game {
     }
 
     // A blow about to land on the ground round a point (battle.js "telegraph": the Orc King's leap,
-    // where he'll come down, and his spin all round him): how far it'll reach shown on the ground
-    // till it lands (spellfx.js telegraph), on the player's own map
+    // where he'll come down, and his spin all round him; what's falling on a boss's arena), or in a
+    // wedge before whoever strikes it (`arc`, `facing`: a boss's breath): how far it'll reach shown
+    // on the ground till it lands (spellfx.js telegraph), on the player's own map
+    // A boss's fight come to a phase of its own (battle.js "phase": core/fights.js), or fought too
+    // long, its enrage: what it says told to whoever's on its map, by its name
+    #phased(event) {
+        const actor = this.battle.actor(event.id);
+
+        if (event.map !== this.mapId || !event.told || !actor) {
+            return;
+        }
+
+        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} ${event.told}`, event.enraged ? 4 : 3);
+    }
+
     #telegraphed(event) {
         if (event.map !== this.mapId) {
             return;
@@ -5838,7 +5884,7 @@ export class Game {
 
         const [ox, oz] = this.originOf(event.map);
 
-        this.spellFx.telegraph(new THREE.Vector3(ox + event.x, 0, oz + event.y), { radius: event.radius, seconds: Math.max(0.1, (event.lands - this.battle.time) / 1000) });
+        this.spellFx.telegraph(new THREE.Vector3(ox + event.x, 0, oz + event.y), { radius: event.radius, seconds: Math.max(0.1, (event.lands - this.battle.time) / 1000), ...(event.arc ? { arc: event.arc, facing: event.facing } : {}) });
     }
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
@@ -6819,7 +6865,8 @@ export class Game {
     // opened (host.js #delveFell, #openDungeonChest): said to whoever's in it; its icon greyed once
     // it's cleared, and made again (#remakeDungeon) back as it was, nothing said. A hell's cult's
     // rite broken at its way in (host.js #riteFell): said to whoever's out there near it
-    #delved({ site, change, name, boss = null }) {
+    #delved(event) {
+        const { site, change, name, boss = null } = event;
         const me = this.battle.actor(this.me);
         const building = this.world.interiors?.buildings.get(`site:${site}`);
         const within = me && building?.maps.includes(me.map);
@@ -6842,15 +6889,25 @@ export class Game {
 
         const hell = Boolean(building?.dungeon?.levels.at(-1)?.exit);
 
+        const Boss = boss ? `${boss[0].toUpperCase()}${boss.slice(1)}` : null;
+
         if (change === "boss") {
-            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "Its master is"} slain, and the hoard it kept lies unlocked.${hell ? " The way out beyond it opens." : ""}`, 4);
+            this.hud.message(`${Boss ? `${Boss} is` : "Its master is"} slain, and the hoard it kept lies unlocked.${hell ? " The way out beyond it opens." : ""}`, 4);
             this.sound?.play("wake");
         } else if (change === "floor") {
-            // (A keep's floor's warden: its stair up, core/dungeons/themes.js `rises`)
-            const way = THEMES[building?.theme]?.rises ? "stair up" : "portal down";
+            // (A keep's floor's warden: its stair up, core/dungeons/themes.js `rises`; a hell's
+            // master, its portal down; a wild dungeon's floor's boss, its stairs down and its chest)
+            const theme = THEMES[building?.theme];
+            const way = theme?.rises ? "the stair up is open" : theme?.portals ? "the portal down is open" : "the way down is open, its chest unlocked";
 
-            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "This level's master is"} slain, and the ${way} is open.`, 4);
+            this.hud.message(`${Boss ? `${Boss} is` : "This level's master is"} slain, and ${way}.`, 4);
             this.sound?.play("wake");
+        } else if (change === "arenaShut") {
+            // (A boss's arena's way in shut behind those in it: host.js #arenaWatch)
+            this.hud.message(me.map === event.map ? `The way out shuts behind you: ${Boss ?? "its master"} must fall, or you.` : `The way into ${Boss ?? "its master"}'s lair shuts while the fight goes on beyond it.`, 4);
+            this.sound?.play("doorHeavy");
+        } else if (change === "arenaLost") {
+            this.hud.message(`${Boss ?? "Its master"} stands. Its lair's way in opens again: all as it was, for another try.`, 4);
         } else if (change === "cleared") {
             this.hud.message(`${called} is cleared. Something new will stir in it once everyone's left.`, 4);
         }
@@ -10098,6 +10155,7 @@ export class Game {
         for (const visit of this.visits.values()) {
             this.#doorstep(visit);
             this.#floorsWanted(visit);
+            this.#dungeonFloors(visit);
             this.#work(visit, until);
             busy ||= Boolean(visit.steps || visit.queue.length);
         }
@@ -13668,10 +13726,17 @@ export class Game {
     }
 
     // The work of building a building's floors, one to a piece of work, and telling the doors of
-    // its insides after
+    // its insides after: a dungeon's only those held (#dungeonHeld)
     #floorsOf(visit, building) {
+        const held = building.kind === "dungeon" ? this.#dungeonHeld(building) : null;
+        const maps = held ? building.maps.filter((id) => held.has(id)) : building.maps;
+
+        if (held) {
+            visit.queued = new Set(maps);
+        }
+
         // (And the sealed rooms the rare encounters inside have added to it: core/rare.js VAULT)
-        return [...[...building.maps, ...(building.vaults ?? [])].map((id) => () => this.#furnishing(visit, id)), () => this.doors?.sync(), () => this.vaultDoors?.sync()];
+        return [...[...maps, ...(building.vaults ?? [])].map((id) => () => this.#furnishing(visit, id)), () => this.doors?.sync(), () => this.vaultDoors?.sync()];
     }
 
     // A building's floors let go of, the player well away from it (FLOORS), though it's still got
@@ -13683,7 +13748,51 @@ export class Game {
             this.minimap?.forget(id);
         }
 
+        visit.queued?.clear();
         visit.bare = true;
+    }
+
+    // Which of a dungeon's levels are held (built, drawn and kept): the one the player's on and the
+    // one either side of it, or its first, coming to its way in. The rest let go of (#dungeonFloors)
+    // and built again as the player comes to the level next to them: a three-level dungeon's levels
+    // held 56 MB of the page's floors all at once as the player went in, most of them the two below
+    // (headless Chromium, Low)
+    #dungeonHeld(building) {
+        const me = this.battle.actor(this.me);
+        const k = me ? building.maps.indexOf(me.map) : -1;
+
+        return new Set(building.maps.filter((id, j) => (k < 0 ? j === 0 : Math.abs(j - k) <= 1)));
+    }
+
+    // A dungeon's levels as the player goes through it: those no longer held (#dungeonHeld) let go
+    // of, and those now held built, a piece at a time, before the player comes to them
+    #dungeonFloors(visit) {
+        const building = this.world.interiors?.buildings.get(visit.key);
+
+        if (building?.kind !== "dungeon" || visit.bare) {
+            return;
+        }
+
+        const held = this.#dungeonHeld(building);
+        const me = this.battle.actor(this.me);
+
+        visit.queued ??= new Set();
+
+        for (const id of [...visit.maps]) {
+            if (building.maps.includes(id) && !held.has(id) && id !== me?.map) {
+                this.interiors.get(id)?.dispose();
+                this.interiors.delete(id);
+                this.minimap?.forget(id);
+                visit.maps.splice(visit.maps.indexOf(id), 1);
+            }
+        }
+
+        for (const id of held) {
+            if (!visit.maps.includes(id) && !visit.queued.has(id)) {
+                visit.queued.add(id);
+                visit.queue.push(() => this.#furnishing(visit, id), () => this.doors?.sync(), () => this.vaultDoors?.sync());
+            }
+        }
     }
 
     // A building's floors let go of (#bare) built again: first, before any of its folk
@@ -13901,6 +14010,21 @@ export class Game {
 
     // One of a building's floors, built a step at a time and put away until the player goes in
     *#furnishing(visit, mapId) {
+        // (A dungeon's level no longer held by the time it's come to: not built after all)
+        if (visit.queued?.has(mapId)) {
+            const building = this.world.interiors?.buildings.get(visit.key);
+
+            visit.queued.delete(mapId);
+
+            if (building?.kind === "dungeon" && !this.#dungeonHeld(building).has(mapId)) {
+                return;
+            }
+        }
+
+        if (this.interiors.has(mapId) || !this.world.maps[mapId]) {
+            return;
+        }
+
         const interior = yield* buildingInterior(this.world.maps[mapId]);
 
         // (A floor of a scene's keep high over the land, open air round it: where it stands, looked
@@ -14223,6 +14347,12 @@ export class Game {
                 continue;
             }
 
+            // (A boss's fight come to a phase of its own, or its enrage: told whether it's drawn or not)
+            if (event.type === "phase") {
+                this.#phased(event);
+                continue;
+            }
+
             // (A projectile gone astray, its target gone or through a door: no one's, out of the air)
             if (event.type === "fizzle") {
                 effects.land(event.projectile);
@@ -14261,11 +14391,14 @@ export class Game {
                     }
 
                     // (One rallying a champion of its own to it as it's worn down, by name: battle.js
-                    // #rallies, the Orc King's; or in words of its own, `told`: Vharzul's fiends)
+                    // #rallies, the Orc King's; or in words of its own, `told`: Vharzul's fiends;
+                    // something set out in a boss's arena hatching, `hatched`: battle.js #hatch)
                     if (event.target === this.me) {
                         const name = `${actor.name[0].toUpperCase()}${actor.name.slice(1)}`;
 
-                        this.hud.message(event.told ? `${name} ${event.told}` : event.title ? `${name} roars a battlecry: ${event.title} is coming!` : `${name} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                        const kind = `${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s`;
+
+                        this.hud.message(event.told ? `${name} ${event.told}` : event.hatched ? `${name} splits open: ${kind} pour out of it!` : event.title ? `${name} roars a battlecry: ${event.title} is coming!` : `${name} calls its flock: more ${kind} are coming!`, 2.5);
                     }
 
                     break;
@@ -15455,6 +15588,13 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
+
+        // (A boss shielded by what's set out about its arena, struck by the player: told so, now
+        // and then, battle.js #shieldOf)
+        if (event.shielded && actor && event.by === this.me && this.clock >= this.shieldTold) {
+            this.shieldTold = this.clock + SHIELD_TOLD;
+            hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} takes only half the harm while what's about it stands: break it!`, 2.5);
+        }
 
         // (One of the player's hired adventurers striking the kind of foe that last knocked them
         // down: a word about it, now and then, #bark)

@@ -227,13 +227,13 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         me = host.battle.actor(HOST_PLAYER);
         Object.assign(me, { hp: 1e6, maxHp: 1e6 });
 
-        // (The nearest of two levels or more to where the player starts)
+        // (The nearest of two levels or more to where the player starts: two levels and its arena)
         const [sx, sy] = world.start.at;
 
         site = world.plan.sites
             .filter(({ kind }) => kind === "dungeon")
             .sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))
-            .find((one) => buildDungeon({ seed: one.seed, theme: one.theme, tier: 1 }).levels.length >= 2);
+            .find((one) => buildDungeon({ seed: one.seed, theme: one.theme, tier: 1 }).levels.length >= 3);
         world.maps.town.sites.heartOf(site);
         outside = world.maps.town.sites.set.get(site.id).entrance.outside;
     });
@@ -268,7 +268,8 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         const chests = [...host.ground.values()].filter(({ dungeon, map }) => dungeon === site.id && map === building.maps[0]);
 
         assert.equal(chests.length, level.chests.length);
-        assert.ok(chests.every(({ chest, locked }) => chest && !locked));
+        assert.ok(chests.every(({ chest, locked, floor }) => chest && locked === Boolean(floor)), "open, but its floor's boss's");
+        assert.equal(chests.filter(({ floor }) => floor).length, 1);
 
         // (Its boss and its mini-bosses stand out from their kind)
         const champions = [...host.wild.values()].filter(({ dungeon, champion }) => dungeon === site.id && champion);
@@ -276,26 +277,67 @@ describe("a dungeon in play (host.js #dungeons)", () => {
         assert.ok(champions.length === 0 || champions.every(({ champion }) => CHAMPIONS[champion]));
     });
 
-    it("is gone into by its way in, and down its stairs, each level woken as a player comes onto it or the one over it, the one above that let go", () => {
+    it("is gone into by its way in, and down its stairs, each level woken as a player comes onto it or the one over it, the one above that let go; a floor's boss barring the stairs down, and keeping its chest shut, till it falls", () => {
         assert.ok(cross(host, me, building.door));
         assert.equal(me.map, building.maps[0]);
 
         building.flights.forEach((flight, k) => {
+            // (A floor's boss by the stairs down, barring them and keeping its chest shut till it
+            // falls: on each level but the last, the arena's way in never barred so)
+            const warden = building.dungeon.levels[k].packs.find(({ role }) => role === "warden");
+
+            assert.equal(Boolean(warden), k < building.flights.length - 1, `level ${k + 1}'s floor's boss`);
+            assert.equal(Boolean(flight.arena), k === building.flights.length - 1, "the last way down the arena's");
+
+            if (warden) {
+                const end = flight.ends.find(({ map }) => map === me.map);
+                const chest = [...host.ground.values()].find(({ dungeon, floor, map }) => dungeon === site.id && floor && map === me.map);
+                const [id, one] = [...host.wild].find(([key, each]) => each.dungeon === site.id && each.champion === "floor" && host.battle.actor(key)?.map === me.map);
+
+                put(me, end.arrive);
+                assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: flight.id }), { ok: false, reason: "downBarred" });
+                assert.equal(chest.locked, true, "its chest shut");
+                put(me, [chest.square[0], chest.square[1] + 1]);
+                assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }), { ok: false, reason: "floorKept" });
+
+                assert.equal(one.champion, "floor");
+                assert.equal(host.battle.actor(id).map, me.map);
+                assert.ok(THEMES[site.theme].floors.some(({ title }) => title === host.battle.actor(id).name), host.battle.actor(id).name);
+                host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+
+                const events = run(host, 2000, me);
+
+                assert.ok(events.some(({ type, change }) => type === "dungeon" && change === "floor"));
+                assert.equal(chest.locked, false, "its chest open once it's fallen");
+                assert.ok(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }).ok);
+                run(host, 250, me);
+            }
+
             assert.ok(cross(host, me, flight), `down to level ${k + 2}`);
             run(host, 1000, me);
             assert.equal(me.map, building.maps[k + 1]);
             assert.ok(delve.awake[k + 1]?.length > 0, `level ${k + 2} woken`);
-            assert.ok(delve.awake[k]?.length > 0, `level ${k + 1} awake over the player`);
 
+            // (The one under them woken too, before they get there: the arena, from the last)
+            if (k + 2 < building.maps.length) {
+                assert.ok(delve.awake[k + 2]?.length > 0, `level ${k + 3} woken under the player`);
+            }
+
+            // (Two levels up, let go: those that were after the player, once they've given up)
             if (k > 0) {
+                for (let t = 0; t < 30000 && delve.awake[k - 1]; t += 1000) {
+                    run(host, 1000, me);
+                }
+
                 assert.equal(delve.awake[k - 1], null, `level ${k} let go`);
             }
         });
 
-        // (Its boss on the bottom level, a mighty one of its kind)
+        // (Its boss in its arena, past the last level's stairs, a mighty one of its kind)
         const [id, boss] = [...host.wild].find(([, one]) => one.dungeon === site.id && one.champion === "boss");
 
         assert.equal(host.battle.actor(id).map, building.maps.at(-1));
+        assert.equal(world.maps[building.maps.at(-1)].dungeon.arena, true);
         assert.equal(host.battle.actor(id).name, boss.title ?? host.battle.actor(id).name);
 
         // (Drawn as its theme's boss: its rank and its id there, beasts/champions.js)
@@ -303,6 +345,98 @@ describe("a dungeon in play (host.js #dungeons)", () => {
 
         assert.equal(wild.champion, "boss");
         assert.ok(THEMES[site.theme].bosses.some((each) => each.id === wild.regalia), wild.regalia);
+    });
+
+    it("shuts its arena's way in once its boss is struck, either way, while its fight goes on; and everyone in it fallen, the fight's lost: its boss whole again where it stood, the way in open, the fallen up again outside it", () => {
+        const arena = building.maps.at(-1);
+        const way = building.flights.at(-1);
+        const [id] = [...host.wild].find(([, one]) => one.dungeon === site.id && one.champion === "boss");
+        const boss = host.battle.actor(id);
+
+        assert.equal(me.map, arena);
+        assert.ok(!delve.arena?.on, "open as the party gathers");
+
+        // (Gone for and struck: its way in shut, either way)
+        put(me, [boss.square[0], boss.square[1] + 2]);
+        assert.ok(host.command(HOST_PLAYER, { type: "engage", target: id }).ok);
+
+        const shut = [];
+
+        for (let t = 0; t < 10000 && !delve.arena?.on; t += 250) {
+            shut.push(...run(host, 250, me));
+        }
+
+        assert.equal(delve.arena?.on, true);
+        assert.ok(shut.some(({ type, change }) => type === "dungeon" && change === "arenaShut"));
+        host.command(HOST_PLAYER, { type: "stop" });
+        put(me, way.ends.find(({ map }) => map === arena).arrive);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: way.id }), { ok: false, reason: "arenaShut" });
+
+        // (Everyone in it fallen: lost, all of it as it was before its fight, and the fallen up
+        // again by its way in on the level above)
+        const outside = way.ends.find(({ map }) => map !== arena);
+
+        host.battle.afflict(HOST_PLAYER, "poison", { by: id, damage: 1e7 });
+
+        const lost = [];
+
+        for (let t = 0; t < 12000 && !(lost.some(({ type, change }) => type === "dungeon" && change === "arenaLost") && !me.dead); t += 250) {
+            lost.push(...host.advance(250));
+        }
+
+        assert.ok(lost.some(({ type, change }) => type === "dungeon" && change === "arenaLost"), "the fight lost");
+        assert.ok(!delve.arena.on, "its way in open again");
+        assert.equal(me.dead, false);
+        assert.equal(me.map, outside.map, "up again outside its way in");
+        assert.ok(hypot(me.x - outside.arrive[0], me.y - outside.arrive[1]) <= 3);
+        assert.ok(!host.battle.actor(id), "the boss that was let go");
+        Object.assign(me, { hp: me.maxHp });
+
+        // (Its boss whole again, as it was before its fight)
+        run(host, 1000, me);
+
+        const [again] = [...host.wild].find(([, one]) => one.dungeon === site.id && one.champion === "boss");
+
+        assert.equal(host.battle.actor(again).hp, host.battle.actor(again).maxHp);
+        assert.equal(host.battle.actor(again).map, arena);
+        assert.ok(boss.maxHp === host.battle.actor(again).maxHp, "as strong as it was");
+        assert.ok(cross(host, me, way), "and gone in again");
+        assert.equal(me.map, arena);
+    });
+
+    it("sets out what its boss's fight has to be broken round its arena's edge as the fight comes to it, out with its level's foes", () => {
+        const k = building.maps.length - 1;
+        const arena = building.maps[k];
+        const [id] = [...host.wild].find(([, one]) => one.dungeon === site.id && one.champion === "boss");
+        const boss = host.battle.actor(id);
+        const { spots } = building.dungeon.levels[k].arena;
+
+        // (Its fight as the Ant Monster's is, at its second phase, whatever boss it is: core/fights.js)
+        boss.wild.fight = { phases: [{}, { below: 0.99, told: "shrieks", objects: { kind: "antClutch", count: 4, hatch: { kind: "ant", count: [1, 1], most: 2, every: 60000, first: 60000 } } }] };
+        boss.hp = Math.floor(boss.maxHp * 0.9);
+
+        const events = run(host, 500, me);
+        const set = [...host.wild].filter(([each, one]) => one.creature === "antClutch" && host.battle.actor(each)?.map === arena).map(([each]) => host.battle.actor(each));
+
+        assert.ok(events.some(({ type, id: who, phase }) => type === "phase" && who === id && phase === 1));
+        assert.equal(set.length, 4);
+
+        for (const clutch of set) {
+            assert.ok(clutch.wild.object && clutch.wild.hatch.kind === "ant", "still, hatching");
+            assert.ok(
+                spots.some(([x, y]) => hypot(clutch.x - x - 0.5, clutch.y - y - 0.5) <= 3),
+                "by one of its spots",
+            );
+            assert.ok(delve.awake[k].includes(clutch.id), "out with its level's foes");
+        }
+
+        assert.equal(new Set(set.map(({ square }) => square.join(","))).size, 4, "each where it's set");
+
+        for (const clutch of set) {
+            host.battle.remove(clutch.id);
+        }
+
+        boss.hp = boss.maxHp;
     });
 
     it("keeps its boss's hoard locked till the boss falls", () => {

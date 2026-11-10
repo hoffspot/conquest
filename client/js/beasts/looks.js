@@ -777,6 +777,13 @@ export const LOOKS = Object.freeze({
     // lean horned brutes half as tall again as a man and more, long in the arm: creatures.js)
     demonBoss: { body: "humanoid", scale: [1.55, 1.6] },
     ashkhar: { body: "humanoid", scale: [1.68, 1.72] },
+    // (What's set out in a boss's arena to be broken (creatures.js `object`): a heap of eggs, the Ant
+    // Monster's, waxy and pale, something dark curled in each; a spider's egg sac, silk wound round
+    // and round, pale grey; a soul jar, a squat urn of black stone glowing green within, its lid
+    // cracked (blob.js `eggs`, `jar`))
+    antClutch: { body: "blob", scale: [0.95, 1.1], size: 0.55, eggs: 7, clear: 0.12, colours: { body: 0xe0cc8a, core: 0x3a2a1a, glow: 0x8a7040 } },
+    eggSac: { body: "blob", scale: [0.95, 1.1], size: 0.5, eggs: 1, silk: true, clear: 0.15, colours: { body: 0xc8c8c0, core: 0x2a2a28, glow: 0xe8e8e0 } },
+    soulJar: { body: "blob", scale: [0.95, 1.05], size: 0.42, jar: true, colours: { body: 0x1a1a1e, core: 0x60ff9a, glow: 0x40e080 } },
 });
 
 // A value between two, from the random numbers

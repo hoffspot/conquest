@@ -14051,6 +14051,20 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
         await until(() => pictures.every(({ userData }) => userData.loaded?.value === 1) && props().length > 0, 300);
         Object.assign(first, { pictures: pictures.length, compressed: pictures.every((texture) => texture.userData.loaded.value === 1 && compressed(texture)), props: props().length, propsCompressed: props().every(compressed) });
 
+        // (Its floor's boss slain first, if it has one: its stairs down barred till it falls)
+        const [warden] = [...game.host.wild].find(([each, one]) => one.dungeon === site.id && one.champion === "floor" && game.battle.actor(each)?.map === player.map) ?? [];
+
+        first.warden = Boolean(warden);
+
+        if (warden) {
+            const end = building.flights[0].ends.find(({ map }) => map === player.map);
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, path: [], order: null, progress: null });
+            first.barred = game.host.command("player", { type: "enter", link: building.flights[0].id }).reason;
+            game.battle.afflict(warden, "poison", { by: "player", damage: 1e7 });
+            await until(() => game.battle.actor(warden)?.dead ?? true, 100);
+        }
+
         await through(building.flights[0]);
 
         const second = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), woken: game.host.dungeons.get(site.id).awake[1]?.length ?? 0 };
@@ -14071,6 +14085,8 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved.first.pictures).toBeGreaterThanOrEqual(2);
     expect(delved.first.props).toBeGreaterThan(0);
     expect(delved.first).toMatchObject({ compressed: true, propsCompressed: true });
+    // (A floor's boss on it, as a dungeon two levels deep or more has: its stairs down barred till it falls)
+    expect(delved.first.barred ?? null).toBe(delved.first.warden ? "downBarred" : null);
     expect(delved.second).toMatchObject({ map: delved.maps[1], drawn: true });
     expect(delved.second.woken).toBeGreaterThan(0);
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
@@ -14851,21 +14867,22 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
         const downs = building.flights.filter(({ id }) => id.endsWith("/stairs"));
         const out = building.flights.find(({ id }) => id.endsWith("/exit"));
 
-        for (let k = 0; k < 4; k++) {
-            const level = { ...seen(), sealed: k < 3 ? await through(downs[k]) : await through(out) };
+        // (Its four realms, then the lord's throne hall under them, his arena: docs/DUNGEONS.md)
+        for (let k = 0; k < 5; k++) {
+            const level = { ...seen(), sealed: k < 4 ? await through(downs[k]) : await through(out) };
 
-            level.slain = await slay(k < 3 ? "floor" : "boss");
+            level.slain = await slay(k < 4 ? "floor" : "boss");
             await until(() => false, 10);
-            level.after = k < 3 ? await through(downs[k]) : await through(out);
+            level.after = k < 4 ? await through(downs[k]) : await through(out);
             levels.push(level);
         }
 
         return { made, camp, maps: building.maps, levels, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
     });
 
-    // (Not made till the player came near, then four levels deep)
+    // (Not made till the player came near, then four levels deep, and the lord's hall under them)
     expect(hell.made).toBe(false);
-    expect(hell.maps).toHaveLength(4);
+    expect(hell.maps).toHaveLength(5);
 
     // (Shut by day, the cult not there; by night its high priest and its faithful at their rite,
     // the way shut till they're slain, then in)
@@ -14874,21 +14891,26 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
     expect(hell.camp.cult.slice(1).every((kind) => kind === "cultist")).toBe(true);
 
     // (Each its realm's, a portal of fire on it, in its own air; sealed till its master's slain,
-    // then through)
+    // then through; the lord's hall drawn and heard as the Pit)
     hell.levels.forEach((level, k) => {
         expect(level.map).toBe(hell.maps[k]);
-        expect(level.look).toBe(["hell-breach", "hell-bone", "hell-fire", "hell-pit"][k]);
+        expect(level.look).toBe(["hell-breach", "hell-bone", "hell-fire", "hell-pit", "hell-pit"][k]);
         expect(level.veils).toBeGreaterThan(0);
-        expect(level.background).toBe([0x140806, 0x120606, 0x1e0804, 0x0a0404][k]);
-        expect(level.sealed).toBe(k < 3 ? "sealed" : "throne");
+        expect(level.background).toBe([0x140806, 0x120606, 0x1e0804, 0x0a0404, 0x0a0404][k]);
+        expect(level.sealed).toBe(k < 4 ? "sealed" : "throne");
         expect(level.slain).toBe(true);
         expect(level.after).toBe(null);
 
         // (Heard as its realm: its drone, lower than the realm's above; the Halls' heart)
-        expect(level.heard.place).toBe(["hellBreach", "hellBone", "hellFire", "hellPit"][k]);
+        expect(level.heard.place).toBe(["hellBreach", "hellBone", "hellFire", "hellPit", "hellPit"][k]);
         expect(level.heard.beds).toContain("hellDrone");
         expect(level.heard.beds.includes("heartbeat")).toBe(k === 1);
-        expect(level.heard.drone).toBeLessThan(k ? hell.levels[k - 1].heard.drone : 1.01);
+
+        if (k < 4) {
+            expect(level.heard.drone).toBeLessThan(k ? hell.levels[k - 1].heard.drone : 1.01);
+        } else {
+            expect(level.heard.drone).toBe(hell.levels[3].heard.drone);
+        }
     });
 
     // (Out beyond the throne to before its way in)

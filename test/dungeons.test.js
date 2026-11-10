@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CREATURES, TIERS } from "../client/js/core/creatures.js";
-import { ATTEMPTS, buildDungeon, checkLevel, DUNGEON_VERSION, dungeonName, LEVEL_SIZES, MINIS } from "../client/js/core/dungeons/build.js";
+import { ATTEMPTS, buildDungeon, checkLevel, DUNGEON_VERSION, dungeonName, FIRST_EASIER, LEVEL_SIZES, MINIS } from "../client/js/core/dungeons/build.js";
 import { gabriel, loopsFor, roomsOf, spanningTree } from "../client/js/core/dungeons/graph.js";
 import { Grid } from "../client/js/core/dungeons/grid.js";
 import { LAYOUTS, registerLayout, WAY_IN } from "../client/js/core/dungeons/layouts.js";
@@ -137,8 +137,8 @@ describe("buildDungeon", () => {
         }
     });
 
-    it("is one to three levels deep, about as likely each, by seed", () => {
-        const depths = Array.from({ length: 60 }, (each, seed) => buildDungeon({ seed, theme: "caves" }).levels.length);
+    it("is one to three levels deep, about as likely each, by seed, its arena after them", () => {
+        const depths = Array.from({ length: 60 }, (each, seed) => buildDungeon({ seed, theme: "caves" }).levels.length - 1);
 
         for (const n of [1, 2, 3]) {
             assert.ok(depths.filter((d) => d === n).length >= 10, `${n} levels deep`);
@@ -159,21 +159,26 @@ describe("buildDungeon", () => {
     });
 
     for (const { theme, levels, seed, dungeon } of MADE) {
-        it(`${theme}, ${levels} level${levels > 1 ? "s" : ""}, seed ${seed}: every level whole, joined, and filled`, () => {
-            assert.equal(dungeon.levels.length, levels);
+        it(`${theme}, ${levels} level${levels > 1 ? "s" : ""}, seed ${seed}: every level whole, joined, and filled, its floors' bosses by their stairs, its arena after`, () => {
+            assert.equal(dungeon.levels.length, levels + 1, "its levels, and its arena");
 
             const size = LEVEL_SIZES[levels];
+            const tier = 1 + (seed % 7);
             let minis = 0;
 
-            for (const level of dungeon.levels) {
-                const bottom = level.index === levels - 1;
+            for (const level of dungeon.levels.slice(0, levels)) {
+                const bottom = false;
                 const map = readPlan(`d${level.index}`, dungeon.name, level.rows);
+
+                // (A tier under the dungeon's on the first level, a tier more each level down)
+                assert.equal(level.tier, Math.max(1, Math.min(TIERS, tier - FIRST_EASIER + level.index)));
 
                 // (Its size, and its rooms)
                 assert.ok(Math.abs(level.width - size.side) <= size.vary && Math.abs(level.height - size.side) <= size.vary);
                 assert.ok(level.rooms.length >= Math.ceil(size.rooms[0] * 0.8), `${level.rooms.length} rooms`);
                 assert.ok(level.attempt < ATTEMPTS);
-                const check = checkLevel(level, { wanted: size.rooms[0], bottom, levels });
+                const floor = levels > 1 && level.index < levels - 1;
+                const check = checkLevel(level, { wanted: size.rooms[0], bottom, levels, warden: floor });
 
                 assert.ok(check.ok, JSON.stringify(check.checks));
 
@@ -234,9 +239,10 @@ describe("buildDungeon", () => {
                             assert.ok(rings(foe.at, way.arrive) >= ARRIVE_CLEAR, `${foe.creature} waits ${rings(foe.at, way.arrive)} from a way in`);
                         }
 
-                        const want = foe.boss ? Math.min(TIERS, level.tier + 2) : foe.mini ? Math.min(TIERS, level.tier + 1) : level.tier;
+                        const want = foe.mini || foe.warden ? Math.min(TIERS, level.tier + 1) : level.tier;
 
-                        assert.ok(foe.tier === want || (!foe.boss && !foe.mini && foe.tier === Math.min(TIERS, want + 1)), `${foe.creature} tier ${foe.tier}, the level's ${level.tier}`);
+                        assert.ok(!foe.boss, "no final boss on the levels: it's in its arena");
+                        assert.ok(foe.tier === want || (!foe.mini && !foe.warden && foe.tier === Math.min(TIERS, want + 1)), `${foe.creature} tier ${foe.tier}, the level's ${level.tier}`);
                     }
 
                     assert.ok(pack.foes.length >= 1 && pack.foes.length <= 6);
@@ -244,24 +250,29 @@ describe("buildDungeon", () => {
 
                 minis += level.packs.filter(({ role }) => role === "mini").length;
 
-                // (The boss and its hoard at the far end of the bottom level)
-                const bosses = level.packs.filter(({ role }) => role === "boss");
-                const hoards = level.chests.filter(({ kind }) => kind === "hoard");
+                // (No boss nor hoard on the levels: they're in the arena)
+                assert.equal(level.packs.filter(({ role }) => role === "boss").length, 0);
+                assert.equal(level.chests.filter(({ kind }) => kind === "hoard").length, 0);
 
-                assert.equal(bosses.length, bottom ? 1 : 0);
-                assert.equal(hoards.length, bottom ? 1 : 0);
+                // (A floor's boss on each level but the last, of the theme's floors, in the room
+                // furthest in by the stairs down, its chest beside it; none on the last)
+                const wardens = level.packs.filter(({ role }) => role === "warden");
+                const floors = level.chests.filter(({ kind }) => kind === "floor");
 
-                if (bottom) {
-                    const [boss] = bosses;
-                    const [hoard] = hoards;
-                    const arena = level.rooms.find(({ role }) => role === "arena");
+                assert.equal(wardens.length, floor ? 1 : 0);
+                assert.equal(floors.length, floor ? 1 : 0);
 
-                    assert.equal(boss.room, arena.id);
-                    assert.equal(hoard.room, arena.id);
-                    assert.ok(boss.foes[0].boss && boss.foes[0].title.startsWith("the "));
-                    assert.equal(level.path.at(-1), arena.id, "the arena's the end of the way through");
-                    assert.deepEqual(map.marks.h, [hoard.at]);
-                    assert.ok(rings(boss.foes[0].at, hoard.at) <= 8, "the boss stands before the hoard");
+                if (floor) {
+                    const [warden] = wardens;
+                    const [chest] = floors;
+                    const stairs = level.rooms.find(({ role }) => role === "stairs");
+
+                    assert.ok(THEMES[theme].floors.some(({ creature, title }) => creature === warden.foes[0].creature && title === warden.title), warden.title);
+                    assert.ok(warden.foes[0].warden && warden.foes.length >= 3 && warden.foes.length <= 4, "its guard about it");
+                    assert.equal(warden.room, stairs.id);
+                    assert.equal(chest.room, warden.room);
+                    assert.ok(rings(chest.at, warden.foes[0].at) <= 12, "its chest beside it");
+                    assert.ok((map.marks.$ ?? []).some(([x, y]) => x === chest.at[0] && y === chest.at[1]));
                 }
 
                 // (Small chests here and there, none in the way in's room, each marked; as many
@@ -269,7 +280,7 @@ describe("buildDungeon", () => {
                 const small = level.chests.filter(({ kind }) => kind === "small");
 
                 assert.ok(small.length >= 1 && small.length <= 4 * (THEMES[theme].chests ?? 1), `${small.length} small chests`);
-                assert.equal((map.marks.$ ?? []).length, small.length);
+                assert.equal((map.marks.$ ?? []).length, small.length + floors.length);
 
                 for (const chest of small) {
                     assert.notEqual(chest.room, level.path[0]);
@@ -307,6 +318,46 @@ describe("buildDungeon", () => {
             }
 
             assert.ok(minis >= MINIS[levels][0] - 1 && minis <= MINIS[levels][1], `${minis} mini-bosses`);
+
+            // Its arena, after the last level's stairs: the room come into, then the arena, the
+            // boss before its hoard (two tiers over the last level), its guard, nothing else; and
+            // spots round its edge for what its fight sets there
+            const arena = dungeon.levels.at(-1);
+            const map = readPlan("arena", dungeon.name, arena.rows);
+            const room = arena.rooms.find(({ role }) => role === "arena");
+            const [boss] = arena.packs;
+            const [hoard] = arena.chests.filter(({ kind }) => kind === "hoard");
+            const far = walk(map, map.marks["<"]);
+
+            assert.equal(arena.index, levels);
+            assert.equal(arena.tier, dungeon.levels[levels - 1].tier);
+            assert.deepEqual(arena.rooms.map(({ role }) => role), ["entry", "arena"]);
+            assert.ok(checkLevel(arena, { wanted: 2, bottom: true, arena: true }).ok);
+            assert.ok(room.area >= 160, `${room.area} m²`);
+            assert.equal(arena.down, null);
+            assert.deepEqual(map.marks["<"], arena.entry.squares);
+            assert.deepEqual(arena.packs.map(({ role }) => role), ["boss"]);
+            assert.ok(THEMES[theme].bosses.some(({ creature, title }) => creature === boss.foes[0].creature && title === boss.title));
+            assert.equal(boss.foes[0].tier, Math.min(TIERS, arena.tier + 2));
+            assert.ok(boss.foes.length >= 3 && boss.foes.length <= 4, "its guard about it");
+            assert.equal(boss.room, room.id);
+            assert.equal(hoard.room, room.id);
+            assert.deepEqual(map.marks.h, [hoard.at]);
+            assert.ok(rings(boss.foes[0].at, hoard.at) <= 8, "the boss stands before the hoard");
+            assert.ok(far[boss.foes[0].at[1]][boss.foes[0].at[0]] < far[hoard.at[1]][hoard.at[0]] + 2, "between the way in and its hoard");
+            assert.deepEqual(arena.chests.filter(({ kind }) => kind === "small" || kind === "floor"), []);
+            assert.ok(arena.arena.spots.length >= 6, `${arena.arena.spots.length} spots`);
+
+            for (const [x, y] of arena.arena.spots) {
+                assert.ok(!map.blocked[y][x] && far[y][x] >= 0, "a spot on open ground");
+                assert.ok(Math.hypot(x - arena.arena.centre[0], y - arena.arena.centre[1]) <= arena.arena.radius);
+            }
+
+            for (let y = 0; y < map.height; y++) {
+                for (let x = 0; x < map.width; x++) {
+                    assert.ok(map.blocked[y][x] || far[y][x] >= 0, `(${x}, ${y}) can't be walked to`);
+                }
+            }
         });
     }
 
@@ -396,8 +447,9 @@ describe("themes", () => {
         const dungeon = buildDungeon({ seed: 3, theme: "burrow", levels: 2 });
 
         assert.equal(dungeon.theme, "burrow");
-        assert.equal(dungeon.levels.length, 2);
-        assert.ok(dungeon.levels.every(({ rooms }) => rooms.length <= 8));
+        assert.equal(dungeon.levels.length, 3, "its two levels and its arena");
+        assert.ok(dungeon.levels.slice(0, 2).every(({ rooms }) => rooms.length <= 8));
+        assert.deepEqual(dungeon.levels[2].rooms.map(({ role }) => role), ["entry", "arena"], "its arena dug as every arena is");
         delete THEMES.burrow;
         delete LAYOUTS.burrow;
     });
