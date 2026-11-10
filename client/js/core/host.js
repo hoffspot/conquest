@@ -15574,7 +15574,10 @@ export class Host {
     }
 
     // Polymorph: one of the wild's creatures made into another of the world's (not one of the
-    // unique), as strong as its tier has it, as hurt as it was
+    // perilous), at any of that one's tiers (its `tiers`, each as likely), whole: as strong, as
+    // well and with the spoils of a fresh one of them at that tier. A true gamble: a tier-1 rat
+    // may come out a tier-9 Flayed Hierarch at full strength, or a wolf near dead a rat. (Never a
+    // champion: battle.js, a dungeon's boss or mini-boss, an elite or Lunara's guardian resist it)
     #polymorph(targetId) {
         const beast = this.wild.get(targetId);
         const actor = this.battle.actor(targetId);
@@ -15586,11 +15589,23 @@ export class Host {
         const from = beast.creature;
         const creature = this.random.pick(Object.keys(CREATURES).filter((id) => id !== from && !CREATURES[id].perilous));
         const spec = CREATURES[creature];
-        const power = tierPower(beast.tier);
+        const tier = this.random.int(...spec.tiers);
+        const power = tierPower(tier);
 
-        beast.creature = creature;
-        this.battle.reshape(targetId, { name: spec.name, weapon: spec.weapon, hp: Math.round(spec.hp * power), speed: spec.speed, chase: spec.chase, armor: spec.armor ?? 0, wild: { creature, temper: spec.temper, guard: spec.guard ?? 0, menace: menaces(creature), ...traitsOf(creature) } });
-        this.#event("polymorphed", { id: targetId, creature, from });
+        Object.assign(beast, { creature, tier });
+        this.battle.reshape(targetId, {
+            name: spec.name,
+            weapon: spec.weapon,
+            hp: Math.round(spec.hp * power),
+            whole: true,
+            power,
+            speed: spec.speed,
+            chase: spec.chase,
+            armor: spec.armor ?? 0,
+            wards: spec.wards ?? null,
+            wild: { creature, tier, temper: spec.temper, guard: spec.guard ?? 0, menace: menaces(creature), darkSight: Boolean(spec.darkSight), ...traitsOf(creature) },
+        });
+        this.#event("polymorphed", { id: targetId, creature, from, tier });
     }
 
     // Teleport: somewhere, anywhere, on the world's land (away from its settlements), those with them left behind

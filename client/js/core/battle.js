@@ -1541,20 +1541,35 @@ export class Battle {
     }
 
     /**
-     * A creature made into another (Polymorph: host.js), as hurt as it was for its size: its name,
-     * weapon, hit points, pace, armour and what it is (`wild`).
+     * A creature made into another (Polymorph: host.js), as hurt as it was for its size, or whole
+     * (`whole`): its name, weapon, hit points, pace, armour, how strong its blows are (`power`, if
+     * given), its wards (`wards`, if given: null for none) and what it is (`wild`).
      */
-    reshape(id, { name, weapon, hp, speed, chase, armor = 0, wild }) {
+    reshape(id, { name, weapon, hp, speed, chase, armor = 0, power = null, wards, whole = false, wild }) {
         const actor = this.actor(id);
 
         if (!actor) {
             return;
         }
 
-        const share = actor.hp / actor.maxHp;
+        const share = whole ? 1 : actor.hp / actor.maxHp;
 
         this.rearm(id, weapon);
         Object.assign(actor, { name, maxHp: hp, hp: Math.max(1, Math.round(hp * share)), maxStamina: hp, stamina: hp, speed, chaseSpeed: chase ?? speed, walkPace: speed, pace: speed, armor, wild: { ...actor.wild, ...wild }, target: null, path: [], pathGoal: null });
+
+        // (Its blows as strong as its new tier has them, and its new kind's wards, or none)
+        if (power !== null) {
+            actor.power = { ...actor.power, melee: power, ranged: power };
+        }
+
+        if (wards !== undefined) {
+            if (wards) {
+                actor.wards = { ...wards };
+            } else {
+                delete actor.wards;
+            }
+        }
+
         this.#emit("reshaped", { id, name, weapon, hp: actor.hp, maxHp: actor.maxHp });
     }
 
@@ -6101,8 +6116,9 @@ export class Battle {
         } else if (id === "pacify") {
             landed += this.#pacify(actor, target, id);
         } else if (id === "polymorph") {
-            // (The host changes it, if it doesn't shrug it off: only one of the wild's creatures)
-            landed += this.#resisted(actor, target, id, { always: !target.wild }) ? 0 : 1;
+            // (The host changes it, if it doesn't shrug it off: only one of the wild's creatures,
+            // and never a champion, a dungeon's boss or mini-boss, an elite or Lunara's guardian)
+            landed += this.#resisted(actor, target, id, { always: !target.wild || Boolean(target.wild.champion || target.wild.elite) }) ? 0 : 1;
         } else if (spell.drain) {
             landed += this.#drain(actor, target, id, spell, level);
         } else if (spell.venom) {

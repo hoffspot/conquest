@@ -5,7 +5,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { AFFLICTIONS } from "../client/js/core/afflictions.js";
-import { CREATURES } from "../client/js/core/creatures.js";
+import { CREATURES, tierPower } from "../client/js/core/creatures.js";
+import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
 import { Battle, FEAR_MEMORY, FOLLOW, SEE_THROUGH, STAMINA_DRAIN, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, SUMMONING_MS } from "../client/js/core/host.js";
 import { calledTier, mightOf } from "../client/js/core/might.js";
@@ -637,6 +638,62 @@ describe("the tomes' wonders (host.js)", () => {
         assert.equal(host.wild.get(boar).creature, changed.creature);
         assert.equal(host.battle.actor(boar).wild.creature, changed.creature);
         assert.equal(host.battle.actor(boar).weapon, CREATURES[changed.creature].weapon);
+    });
+
+    it("turns it whole with Polymorph, at any of the new kind's tiers: as strong, as well and with the spoils of a fresh one of them there, a true gamble", () => {
+        // (A tier-1 rat as likely to come out a tier-9 Flayed Hierarch at full strength as anything
+        // else: the owner's ask, 2026-11-10)
+        const host = hosted(["polymorph"]);
+        const me = host.battle.actor(HOST_PLAYER);
+        const turned = [];
+
+        for (let k = 0; k < 30; k++) {
+            const id = `rat-${k}`;
+
+            host.wild.set(id, { creature: "rat", tier: 1, pack: id, camp: null, lair: null, master: false });
+            host.battle.add({ id, kind: "beast", name: CREATURES.rat.name, weapon: CREATURES.rat.weapon, team: "beasts", square: [me.square[0] + 3, me.square[1]], ai: null, hp: CREATURES.rat.hp, wild: { creature: "rat", tier: 1, temper: "aggressive", guard: 0, roam: 0, leash: 30, pack: id, leader: null, menace: true, unique: false } });
+
+            // (Hurt near to death first: whole again, whatever it comes out)
+            host.battle.actor(id).hp = 1;
+
+            const changed = castHere(host, "polymorph", { target: id }).find(({ type }) => type === "polymorphed");
+            const actor = host.battle.actor(id);
+            const spec = CREATURES[changed.creature];
+            const [least, most] = spec.tiers;
+
+            assert.ok(!spec.perilous, changed.creature);
+            assert.ok(changed.tier >= least && changed.tier <= most, `${changed.creature} at tier ${changed.tier}: its own are ${least} to ${most}`);
+            assert.equal(host.wild.get(id).tier, changed.tier, "its spoils a fresh one's at that tier");
+            assert.equal(actor.wild.tier, changed.tier);
+            assert.equal(actor.maxHp, Math.round(spec.hp * tierPower(changed.tier)));
+            assert.equal(actor.hp, actor.maxHp, "whole");
+            assert.equal(actor.power.melee, tierPower(changed.tier));
+            assert.equal(actor.armor, spec.armor ?? 0);
+            assert.deepEqual(actor.wards ?? null, spec.wards ?? null);
+            turned.push(changed.tier);
+            host.battle.remove(id);
+        }
+
+        // (As likely to come out far mightier as far weaker)
+        assert.ok(Math.max(...turned) >= 9 && Math.min(...turned) <= 2, turned.join());
+    });
+
+    it("can't polymorph a champion: an elite, a dungeon's boss, floor boss or mini-boss, or Lunara's guardian", () => {
+        const host = hosted(["polymorph"]);
+        const me = host.battle.actor(HOST_PLAYER);
+        const [boar] = wildOut(host, "boar", 1, [me.square[0] + 4, me.square[1]]);
+
+        host.battle.actor(boar).ai = null;
+
+        for (const champion of [{ champion: "elite", elite: true }, ...Object.keys(CHAMPIONS).map((name) => ({ champion: name }))]) {
+            Object.assign(host.battle.actor(boar).wild, { champion: null, elite: false }, champion);
+
+            const events = castHere(host, "polymorph", { target: boar });
+
+            assert.ok(!events.some(({ type }) => type === "polymorphed"), champion.champion);
+            assert.ok(events.some(({ type, id, always }) => type === "resisted" && id === boar && always), `${champion.champion}: immune`);
+            assert.equal(host.wild.get(boar).creature, "boar");
+        }
     });
 
     it("carries the player off with Teleport, anywhere; their followers and companions left behind", () => {
