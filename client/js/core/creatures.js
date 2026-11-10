@@ -808,9 +808,43 @@ export function livesOn(id, { biome, race }) {
  * night's creatures more often (NIGHT_WEIGHT).
  */
 export function candidatesAt(land, tier, dark = false) {
-    const found = Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && tier >= creature.tiers[0] && tier <= creature.tiers[1] && (!creature.perilous || id === "frostTroll") && (dark || outByDay(id)));
+    return livingOn(land, dark)
+        .filter(([, creature]) => tier >= creature.tiers[0] && tier <= creature.tiers[1])
+        .map(([id, creature]) => ({ id, weight: weightOf(creature, dark) }));
+}
 
-    return found.map(([id, creature]) => ({ id, weight: (creature.people ? 2 : 1) * (dark ? (NIGHT_WEIGHT[creature.night] ?? 1) : 1) }));
+// The creatures that live on a land (landAt's { biome, race }), whatever its tier: none of the
+// perilous places' masters but the frost trolls, and by day none of the night's own ([id, creature])
+const livingOn = (land, dark) => Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && (!creature.perilous || id === "frostTroll") && (dark || outByDay(id)));
+
+// How often a creature's met among others (candidatesAt): a people's own uniques twice as often,
+// and after dark the night's creatures more often (NIGHT_WEIGHT)
+const weightOf = (creature, dark) => (creature.people ? 2 : 1) * (dark ? (NIGHT_WEIGHT[creature.night] ?? 1) : 1);
+
+/**
+ * What comes to a caster's call (Summon: host.js #call): one of the creatures that live on the
+ * land where they are (landAt's { biome, race }), as strong as the caster (`tier`: their might's,
+ * might.js calledTier), whatever the land's own tier. One of those found at that tier there, if
+ * any are; else of those whose tiers come nearest it (a mighty caster by their home town calls
+ * the strongest of what lives there, as strong as they are). By day none of the night's own, after
+ * dark the night's more often (candidatesAt). { creature, tier }, or null if nothing lives there.
+ */
+export function calledAt(land, tier, random, dark = false) {
+    const living = livingOn(land, dark);
+    const off = ([, creature]) => Math.max(0, creature.tiers[0] - tier, tier - creature.tiers[1]);
+    const nearest = Math.min(...living.map(off));
+    const found = living.filter((one) => off(one) === nearest);
+
+    if (!found.length) {
+        return null;
+    }
+
+    const { id } = random.pickWeighted(
+        found.map(([one, creature]) => ({ id: one, weight: weightOf(creature, dark) })),
+        ({ weight }) => weight,
+    );
+
+    return { creature: id, tier };
 }
 
 /**

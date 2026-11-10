@@ -281,7 +281,7 @@ tomes, above, are the guild's to sell, never found or given.)
 | Invisibility | rare | oneself | 1000 ms | 60 s | unseen, five minutes or till you strike, cast, talk, trade or use anything |
 | Word of Recall | uncommon | oneself | 2000 ms | 60 s | to the door of the nearest temple (a grimoire) |
 | Wizard's Walk | rare | a place | 1200 ms | 5 min | anywhere on the map you've uncovered, in a step (a wand) |
-| Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, an hour, as many at once as its level, 1 to 5; or another player, if they'll come |
+| Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, as strong as you are, an hour, as many at once as its level, 1 to 5; or another player, if they'll come |
 | Levitate | common | oneself | 600 ms | 20 s | float above the ground, five minutes: nothing on it touches you |
 | Fear | uncommon | an enemy | 500 ms | 8 s | it runs blindly away, ten seconds |
 | Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's, at any of its tiers, whole |
@@ -417,7 +417,13 @@ same for everyone playing (docs/GAME.md: hosting and joining):
 - **Zombify** raises an enemy creature fallen in the last half minute (they lie 30 s: long enough)
   as the caster's companion, and **Summon** (on a creature) calls one of the creatures of these
   parts as one: a companion follows its player and fights their enemies, an hour (`COMPANY`; its
-  time up, it's gone). A player keeps as many called at once as Summon's level, and as many risen
+  time up, it's gone). What's called is as strong as the caster, not as the land is where they
+  stand: the tier whose packs are as mighty as they are, one for every ten of their might (a
+  fresh hero's the first, one of 90 or more the tenth: might.js `calledTier`), of a kind that
+  lives where they are and is met at that tier there, or else of the kinds whose tiers come
+  nearest it (a mighty caster in their home's meadows calls the strongest of the meadows' own, as
+  strong as they are: creatures.js `calledAt`). Attraction's hostile creature is still as strong
+  as the land is there. A player keeps as many called at once as Summon's level, and as many risen
   as Zombify's (*Growing*, above: one to five each, so ten at most); one more called or raised
   than that, and the oldest of that kind goes to make room for it ("Your wolf goes, to make room
   for another.", host.js `#companion`). And where there are already as many about as the body

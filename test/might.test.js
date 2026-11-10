@@ -6,11 +6,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
-import { CREATURES, ELITES, tierPower } from "../client/js/core/creatures.js";
+import { CREATURES, ELITES, tierPower, TIERS } from "../client/js/core/creatures.js";
 import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
 import { AFFIXES, affixesFor, bonusCount, bonusCounts, effectOf, GEAR, levelFactor, levelOf, LEVELS, rollGear, ROLLS, statsOf } from "../client/js/core/gear.js";
 import { BLOW_EFFECTS, CHARGE, chargeOf, effectAt, EFFECTS, effectFor, effectStrength, WARD_CHARGE } from "../client/js/core/legendary.js";
-import { falloff, fighterOf, fightLook, heroValue, LOOT_LEVEL, MIGHT, mightOf, mightTier, packPower, partsOf, powerOf, scaleOf, tierPowerOf, levelFor } from "../client/js/core/might.js";
+import { calledTier, falloff, fighterOf, fightLook, heroValue, LOOT_LEVEL, MIGHT, mightOf, mightTier, packPower, partsOf, powerOf, scaleOf, tierPowerOf, levelFor } from "../client/js/core/might.js";
 import { EXCEPTIONAL, fallenOff, MAKES, priceOf, Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { atLevel } from "../client/js/core/stock.js";
@@ -60,6 +60,15 @@ describe("might, a hero's (might.js)", () => {
     it("gives the old tiers one for every ten of it (the war's ages, the smith, caches, treasure, dungeons, hoards)", () => {
         assert.deepEqual([0, 9, 10, 29, 59, 99, 100].map(mightTier), [0, 0, 1, 2, 5, 9, 10]);
         assert.deepEqual([1, 2, 5, 10].map(tierPowerOf), [0, 10, 40, 90]);
+    });
+
+    it("calls a creature to a hero's side as strong as they are: the tier whose packs are as mighty, the first to the last", () => {
+        assert.deepEqual([0, 9, 10, 55, 89, 90, 100].map(calledTier), [1, 1, 2, 6, 9, 10, 10]);
+
+        for (let might = 0; might <= 100; might++) {
+            assert.ok(tierPowerOf(calledTier(might)) <= might, `a hero of ${might}: no mightier than they are`);
+            assert.ok(calledTier(might) === TIERS || tierPowerOf(calledTier(might) + 1) > might, `a hero of ${might}: the mightiest tier that isn't`);
+        }
     });
 });
 

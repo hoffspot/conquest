@@ -21,6 +21,7 @@
 import { AFFLICTIONS } from "./afflictions.js";
 import { KINDS } from "./battle.js";
 import { RESEARCH } from "./bestiary.js";
+import { TIERS } from "./creatures.js";
 import { exp, log, pow, sqrt } from "./exact.js";
 import { effectOf, levelOf, SLOT_IDS } from "./gear.js";
 import { chargeOf, EFFECTS, effectAt, WARD_CHARGE } from "./legendary.js";
@@ -199,6 +200,13 @@ export const mightOf = (progress) => scaleOf(heroValue(progress));
  * the smith's makes, a cache's, a treasure's, a dungeon's and a hoard's tier): one every ten.
  */
 export const mightTier = (might) => Math.max(0, Math.min(10, Math.floor((might ?? 0) / 10)));
+
+/**
+ * How strong a creature a hero calls to their side is (Summon: creatures.js calledAt), from their
+ * might (0 to 100): the tier whose land's packs are as mighty as they are (tierPowerOf's), one
+ * every ten; a fresh hero's the first, one of 90 or more the last (TIERS).
+ */
+export const calledTier = (might) => Math.min(TIERS, 1 + mightTier(might));
 
 /**
  * A foe's power (0 to 100): its own fighting value on the scale (strength.js toughness × harm,

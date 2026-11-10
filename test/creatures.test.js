@@ -13,7 +13,7 @@ import { elitePrize } from "../client/js/core/caches.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { CHARMS } from "../client/js/core/goods.js";
 import { AGGRO, Battle, BOMBS, KINDS, SIGHT, STEP_MS } from "../client/js/core/battle.js";
-import { CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, notable, NOTABLE, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
+import { calledAt, CAMP_FOLK, candidatesAt, clearOfSettlements, CREATURES, eliteName, eliteRound, ELITES, LAIRS, livesOn, notable, NOTABLE, outByDay, packOf, TIER_LAND, tierAt, tierPower, TIERS, WILD } from "../client/js/core/creatures.js";
 import { HOST_PLAYER, Host, snagChoice, snaggable, SNAG_GRADES, SNAG_KINDS, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -203,6 +203,42 @@ describe("the wild's creatures (creatures.js)", () => {
                 }
             }
         }
+    });
+
+    it("calls to a caster's side one of what lives where they are, as strong as they are, whatever the land's tier (Summon)", () => {
+        const random = createRandom(7);
+        const meadow = { biome: "meadow", race: "human" };
+
+        for (let tier = 1; tier <= TIERS; tier++) {
+            for (const land of [meadow, { biome: "woods", race: "elf" }, { biome: "snow", race: null }]) {
+                for (const dark of [false, true]) {
+                    const called = calledAt(land, tier, random, dark);
+                    const creature = CREATURES[called.creature];
+                    const here = candidatesAt(land, tier, dark);
+
+                    assert.equal(called.tier, tier, "as strong as the caster, whatever the land's");
+                    assert.ok(livesOn(called.creature, land), `${called.creature} lives on ${land.biome}`);
+                    assert.ok(!creature.perilous || called.creature === "frostTroll", `${called.creature} out in the open`);
+
+                    if (here.length) {
+                        assert.ok(here.some(({ id }) => id === called.creature), `${called.creature} one of those at tier ${tier}`);
+                    }
+                }
+            }
+        }
+
+        // (Where nothing that lives there is met at the caster's tier, the nearest: a mighty caster
+        // in their home's meadows by day calls the strongest of the meadows' own out by day)
+        const top = Math.max(...Object.entries(CREATURES).filter(([id, one]) => livesOn(id, meadow) && (!one.perilous || id === "frostTroll") && outByDay(id)).map(([, one]) => one.tiers[1]));
+
+        if (top < TIERS) {
+            const strongest = calledAt(meadow, TIERS, random);
+
+            assert.equal(CREATURES[strongest.creature].tiers[1], top, strongest.creature);
+            assert.equal(strongest.tier, TIERS);
+        }
+
+        assert.equal(calledAt({ biome: "lake", race: null }, 3, random), null, "nothing out of the water");
     });
 
     it("grows packs further out, up to their most", () => {
