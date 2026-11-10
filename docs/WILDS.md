@@ -1680,8 +1680,10 @@ the land about it is thick with demons (`core/hellrift.js`, `core/host.js` `#hel
   stands out in the world as a hero comes within 120 m of it, a thing to strike (battle.js `tear`,
   `STANDS`: it only stands), and while one's within 70 m pours out a pack of the Breach's demons
   (`RIFT_DEMONS`: fiends, brimstone walkers, flaylings, cinder husks, slag gorgers, pyre acolytes)
-  every 40 seconds, no more than two of its packs out at once. Struck down, it's sealed: a small
-  cache for whoever sealed it and any hero by it.
+  every 40 seconds, no more than two of its packs out at once. Its packs are held to the body
+  budget as every pack is (*A ceiling*): none poured while it's full about the tear, and what more
+  of a pack there'd have been goes into the hit points of those there are. Struck down, it's
+  sealed: a small cache for whoever sealed it and any hero by it.
 - **Its land.** The packs put out about the players in it (`#putOut`) are its demons, or now and
   then the cult's cultists (a quarter of them), as strong as its demons are.
 - **Its guards.** Once a hero's within 60 m of its heart, its guards wake there: the Rift Warden (a

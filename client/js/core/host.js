@@ -4003,10 +4003,15 @@ export class Host {
 
             tear.packs = tear.packs.filter((pack) => [...this.wild].some(([id, one]) => one.pack === pack && !this.battle.actor(id)?.dead));
 
-            if (tear.id && near <= HELL_RIFT.wakes && this.battle.time >= tear.next && tear.packs.length < HELL_RIFT.most) {
+            // (Held to the body budget as every pack is (BODIES): none poured while it's full about
+            // the tear, and what more of a pack there'd have been in the hit points of those there are)
+            const room = tear.id && near <= HELL_RIFT.wakes && this.battle.time >= tear.next && tear.packs.length < HELL_RIFT.most ? BODIES.most - this.#bodiesNear(tear.at) : 0;
+
+            if (room > 0) {
                 const tier = this.#riftTier(open);
                 const { creature } = riftDemon(this.random);
-                const ids = this.#pack({ creature, tier, count: packOf(creature, tier) }, tear.at, { hellRift: open.id, temper: "aggressive" });
+                const { count, health } = withinBudget(packOf(creature, tier), 1, room);
+                const ids = this.#pack({ creature, tier, count }, tear.at, { hellRift: open.id, temper: "aggressive", health });
 
                 tear.next = this.battle.time + HELL_RIFT.every;
 

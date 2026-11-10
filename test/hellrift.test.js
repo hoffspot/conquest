@@ -13,7 +13,8 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { calledTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
-import { clearOfSettlements } from "../client/js/core/creatures.js";
+import { clearOfSettlements, CREATURES, packOf, tierPower } from "../client/js/core/creatures.js";
+import { BODIES } from "../client/js/core/strength.js";
 import { landAt, planWorld } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -248,6 +249,32 @@ describe("a hell rift in the world (core/host.js #hellRifts)", () => {
         assert.ok(open.tears[0].sealed);
         assert.ok(sealing.some((event) => event.type === "spoils" && event.id === HOST_PLAYER && event.cache), "a cache for sealing it");
         assert.equal(host.battle.actors.filter((each) => each.kind === "tear" && !each.dead).every((each) => each.id !== `${open.id}/tear-0`), true);
+    });
+
+    it("pours out no more about a tear than the body budget there allows (BODIES)", () => {
+        const { host, me, open } = opened();
+        const tear = open.tears[0];
+        const [x, y] = tear.at;
+
+        // (The budget about the tear all but filled with the player's own: room for one more)
+        for (let k = 0; k < BODIES.most - 2; k += 1) {
+            const square = [Math.floor(x) + 10 + (k % 8), Math.floor(y) + 10 + Math.floor(k / 8)];
+
+            host.battle.add({ id: `hireling-${k}`, kind: "follower", name: "Hireling", weapon: "sword", team: me.team, square, map: "town", hp: 100, power: { melee: 1, ranged: 1 }, armor: 0 });
+        }
+
+        const events = [...standBy(host, me, tear.at, 20), ...run(host, 3000)];
+        const [poured] = riftEvents(events, "poured");
+        const tier = riftTier([host.mightFor(HOST_PLAYER)]);
+        const wanted = packOf(poured.creature, tier);
+
+        assert.equal(poured.ids.length, 1, "one, for the one place left");
+        assert.equal(host.battle.actor(poured.ids[0]).maxHp, Math.round(CREATURES[poured.creature].hp * tierPower(tier) * wanted), "the rest of the pack in its hit points");
+
+        // (And none more while the budget's full: its next pack's time come and gone)
+        const later = run(host, HELL_RIFT.every + 2000);
+
+        assert.equal(riftEvents(later, "poured").length, 0);
     });
 
     it("wakes its guards at its heart (the Rift Warden a boss, the high priest, fiends); the altar bare once they've fallen, smashed for a chest each, more for brimstone; the rest gone back", () => {
