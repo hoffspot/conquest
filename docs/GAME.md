@@ -2162,7 +2162,25 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options' Chat and
   players (`refuseInvites`, saved), or asked by someone they've blocked (below), nothing at all. What becomes of the party is said in the banner ("Bryn
   joins the party.", "You lead the party now.", "The party's no more: no one's left in it with
-  you."). Playing together, the menu has three tabs (`PartyPanel showTab`): **Party** (all that),
+  you."). **A ready check** (core/host.js `READY`; game.js `readyCheck`, `#readyEvent`): the
+  party's leader asks whether everyone's ready, by **Ready check** on their own row of Your party,
+  Y (rebindable on the bindings page; on a controller, from the menu), or "/ready" typed in its
+  chat (anyone else told "Only your party's leader can call a ready check."). Everyone hears a
+  small hand bell ("newsHeard"). The rest are asked "Ada asks: are you ready?", **Ready** or **Not
+  ready**, for 30 seconds (`READY.askMs`; `hud.choose`, no answer let go of); the leader's ready
+  already. Each player's icon in the column is marked as they say (hud.js `READY_MARKS`, at its
+  top right: ✓ green, ✗ red, ⧗ not said yet, – no answer), kept 10 seconds after it's over
+  (`READY.markedMs`). It's over once everyone's said, or its time's up (one who leaves the party
+  not waited for): "Everyone's ready!" (with the "wake" cue) or "Not ready: Bryn, Cai (no
+  answer)." in the banner and the party's chat. The leader has its panel meanwhile (hud.js
+  `readyCheck`, up out of the way of a question asked of them): each of the party and what
+  they've said, how long's left, a countdown's length (**3 s**, **5 s** or **10 s**:
+  `READY.countdowns`, 5 to start with) and **Start countdown**, asking first, if anyone isn't
+  ready, "Not everyone is ready. Start anyway?" (Start anyway, or Back), and Close. A countdown
+  (a ready check going, over first) shows on every one of the party's screens, big across the
+  middle (hud.js `countdown`: each number swelling in, then "Go!" in green; still, with reduced
+  motion), a wooden tick each second ("wheel") and a fuller one at "Go!" ("wheelSelect"), and
+  "Ada counts down from 5." in the chat. Playing together, the menu has three tabs (`PartyPanel showTab`): **Party** (all that),
   **Chat** (below) and **Players** (below). **Chat** is the party's own talk (core/netplay.js: sent to those in it alone; docs/WAR.md
   *Parties*): what's been said, the newest at the foot, the player's own lines as "You" in green,
   others' by name in gold, and the party's comings and goings among them in grey; eight quick

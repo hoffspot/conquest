@@ -375,6 +375,13 @@ export const SUMMONING_MS = 30000;
  */
 export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
 
+/**
+ * A party's ready check (#partyCommand "readyCheck"): how long the rest have to answer whether
+ * they're ready (ms), how long what each said stays marked on their icons after it's over (ms:
+ * app/game.js), and how long a countdown its leader starts can be (seconds).
+ */
+export const READY = Object.freeze({ askMs: 30000, markedMs: 10000, countdowns: Object.freeze([3, 5, 10]) });
+
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
 const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
@@ -1105,6 +1112,8 @@ export const REFUSALS = Object.freeze({
     closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     member: "They're not in your party.",
+    readying: "A ready check's going already.",
+    noReadyCheck: "There's no ready check going.",
     invitee: "Not someone to ask.",
     outdoors: "There's nowhere to camp in here.",
     settlement: "No camping in town: find an inn.",
@@ -2431,6 +2440,13 @@ export class Host {
                 this.invites.delete(id);
                 this.#event("party", { id: asked.from, change: "unanswered", who: id, name: this.players.get(id)?.hero.name ?? "" });
                 this.#event("party", { id, change: "lapsed", from: asked.from });
+            }
+        }
+
+        // (A party's ready check, and no answer from some in time: over, whoever hadn't said, not)
+        for (const party of this.parties.values()) {
+            if (party.ready && party.ready.until <= this.battle.time) {
+                this.#readyOver(party);
             }
         }
 
@@ -15425,8 +15441,14 @@ export class Host {
     // leader, put someone out of it or make them its leader; or show the rest of it somewhere on
     // the map (`at`: [x, y] metres, the world's: a ping, gone after a while, nothing kept of it),
     // or share one of their markers with them (`mark`: `at`, its `icon` and `words`, core/
-    // markers.js: each of the rest given it to keep, if they've room, nothing kept of it here)
-    #partyCommand(player, { do: what, who = null, at = null, icon = null, words = "" }) {
+    // markers.js: each of the rest given it to keep, if they've room, nothing kept of it here).
+    // Its leader, ask the rest whether they're ready ("readyCheck": READY.askMs to answer, the
+    // leader ready, told as "readyCheck" { who, name, until }); one of the rest, say whether they
+    // are ("ready", `answer` true or false: told as "readyAnswer" { who, name, ready }, and said
+    // again till it's over); its leader, start a countdown (`seconds`, one of READY.countdowns:
+    // told as "countdown" { who, name, seconds, at }, whoever's ready or not: a ready check going
+    // over first). A ready check over once everyone's said, or its time's up (#readyOver)
+    #partyCommand(player, { do: what, who = null, at = null, icon = null, words = "", answer = null, seconds = null }) {
         const party = this.partyFor(player.id);
         const onMap = Array.isArray(at) && at.length === 2 && at.every((v) => Number.isFinite(v) && v >= 0 && v <= WORLD_SIZE);
 
@@ -15533,6 +15555,61 @@ export class Host {
                 this.#tellParty(party, { change: what, who: player.id, name: player.hero.name, at: [at[0], at[1]], ...(what === "mark" ? { icon, words: markerWords(words) } : {}) });
 
                 return OK;
+            case "readyCheck":
+            case "countdown": {
+                if (!party) {
+                    return refuse("unpartied");
+                }
+
+                if (party.leader !== player.id) {
+                    return refuse("leader");
+                }
+
+                if (what === "countdown") {
+                    if (!READY.countdowns.includes(seconds)) {
+                        return refuse("command");
+                    }
+
+                    if (party.ready) {
+                        this.#readyOver(party);
+                    }
+
+                    this.#tellParty(party, { change: "countdown", who: player.id, name: player.hero.name, seconds, at: this.battle.time + seconds * 1000 });
+
+                    return OK;
+                }
+
+                if (party.ready) {
+                    return refuse("readying");
+                }
+
+                party.ready = { by: player.id, until: this.battle.time + READY.askMs, answers: { [player.id]: true } };
+                this.#tellParty(party, { change: "readyCheck", who: player.id, name: player.hero.name, until: party.ready.until });
+
+                return OK;
+            }
+            case "ready": {
+                if (!party) {
+                    return refuse("unpartied");
+                }
+
+                if (!party.ready) {
+                    return refuse("noReadyCheck");
+                }
+
+                if (typeof answer !== "boolean") {
+                    return refuse("command");
+                }
+
+                party.ready.answers[player.id] = answer;
+                this.#tellParty(party, { change: "readyAnswer", who: player.id, name: player.hero.name, ready: answer });
+
+                if (party.members.every((id) => typeof party.ready.answers[id] === "boolean")) {
+                    this.#readyOver(party);
+                }
+
+                return OK;
+            }
             case "remove":
             case "promote": {
                 if (!party) {
@@ -15589,6 +15666,26 @@ export class Host {
             party.leader = party.members[0];
             this.#tellParty(party, { change: "leader", who: party.leader, name: this.players.get(party.leader)?.hero.name ?? "" });
         }
+
+        // (A ready check going: theirs not waited for; over, if everyone left's said)
+        if (party.ready) {
+            delete party.ready.answers[playerId];
+
+            if (party.members.every((id) => typeof party.ready.answers[id] === "boolean")) {
+                this.#readyOver(party);
+            }
+        }
+    }
+
+    // A party's ready check over (#partyCommand "readyCheck"), everyone having said or its time
+    // up: told to each in it as "readyDone" { answers: { [id]: "ready", "not" or "none" (no
+    // answer) }, all (everyone ready) }
+    #readyOver(party) {
+        const { answers: said } = party.ready;
+        const answers = Object.fromEntries(party.members.map((id) => [id, said[id] === true ? "ready" : said[id] === false ? "not" : "none"]));
+
+        party.ready = null;
+        this.#tellParty(party, { change: "readyDone", answers, all: Object.values(answers).every((one) => one === "ready") });
     }
 
     // Something about a party told to each in it (by their id)

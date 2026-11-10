@@ -70,7 +70,7 @@ import { actionFor, heldBy, keyMap, keyOf, keysOf, mouseOf } from "./keys.js";
 import { PICKED, pickInFront } from "./gamepad.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, READY, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
@@ -1730,6 +1730,17 @@ export class Game {
         /** When the player may next be told a boss they're striking is shielded (the game's clock, s: #hit). */
         this.shieldTold = 0;
 
+        /**
+         * Their party's ready check (core/host.js READY, #readyEvent): what each in it has said
+         * ("ready", "not", "waiting" or "none": no answer), by id, marked on their icons till
+         * `readyMarksUntil` (the game's clock, s); its leader's panel (hud.js readyCheck) and
+         * another's question (hud.js choose), while they're up.
+         */
+        this.readyMarks = new Map();
+        this.readyMarksUntil = 0;
+        this.readyPanel = null;
+        this.readyPrompt = null;
+
         /** Each floor inside (interiors3d.js's), by map id. */
         this.interiors = new Map();
 
@@ -2511,7 +2522,7 @@ export class Game {
         this.partyPanel.onTakeBack = (id, slot) => this.#mercCommand({ type: "unoutfit", follower: id, slot });
         this.partyPanel.onRename = (id, name) => this.#mercCommand({ type: "rename", follower: id, name });
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
-        this.partyPanel.onParty = (what, who) => this.#partyOrder(what, who);
+        this.partyPanel.onParty = (what, who) => (what === "readyCheck" ? this.readyCheck() : this.#partyOrder(what, who));
         this.partyPanel.onSay = (text) => this.#sayToParty(text);
         this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
@@ -10869,7 +10880,123 @@ export class Game {
     // Something the player says from the party menu's Chat (typed, or a quick phrase): to their
     // party, or, `chatTo` a player, to them alone (a direct message); to the host, which sends it
     // on (the host's own game: core/netplay.js Hosting.chat); said why not, if not
+    /**
+     * Ask the player's party whether they're ready (core/host.js READY: its leader alone; the
+     * Party menu's Ready check, Y, or "/ready" in its chat): refused, said why.
+     */
+    readyCheck() {
+        const party = this.host.partyFor(this.me);
+        const refused = !party ? "unpartied" : party.leader !== this.me ? "leader" : null;
+
+        if (refused) {
+            this.hud.message(refused === "leader" ? "Only your party's leader can call a ready check." : REFUSALS.unpartied, 1.8);
+            this.sound?.play("denied");
+
+            return;
+        }
+
+        this.#partyOrder("readyCheck");
+    }
+
+    // The party's ready check (core/host.js READY), and its leader's countdown:
+    //  - called ("readyCheck"): heard as a small hand bell; its leader shown its panel (hud.js
+    //    readyCheck: who's said what, and the countdown to start), the rest asked (Ready, Not
+    //    ready: READY.askMs to answer, then let go of); each marked on their icon, waiting;
+    //  - said ("readyAnswer"): marked so, on their icon and its leader's panel;
+    //  - over ("readyDone"): each marked as they said (or with no answer) for READY.markedMs, said
+    //    across the screen and in its chat ("Everyone's ready!", heard as two chimes rising, or who
+    //    isn't); its leader's panel kept up, for the countdown;
+    //  - counted down ("countdown"): its numbers big on the screen, a wooden tick each second, and
+    //    "Go!", a fuller one (hud.js countdown); its leader's panel let go of
+    #readyEvent(event) {
+        const party = this.host.partyFor(this.me);
+        const nameOf = (id) => this.host.players.get(id)?.hero.name ?? "";
+
+        if (event.change === "readyCheck") {
+            const members = party?.members ?? [];
+            const seconds = Math.max(1, (event.until - this.battle.time) / 1000);
+
+            this.readyMarks = new Map(members.map((id) => [id, id === event.who ? "ready" : "waiting"]));
+            this.readyMarksUntil = Infinity;
+            this.sound?.play("newsHeard");
+            this.readyPrompt?.withdraw();
+            this.readyPanel?.withdraw();
+
+            if (event.who === this.me) {
+                this.readyPanel = this.hud.readyCheck({
+                    members: members.map((id) => ({ id, name: nameOf(id), me: id === this.me })),
+                    seconds,
+                    countdowns: READY.countdowns,
+                    onCountdown: (length) => this.#command({ type: "party", do: "countdown", seconds: length }, (result) => !result.ok && this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6)),
+                    onClose: () => (this.readyPanel = null),
+                });
+                this.readyPanel.update(this.readyMarks);
+            } else {
+                this.readyPrompt = this.hud.choose(
+                    `${event.name} asks: are you ready?`,
+                    [
+                        { label: "Ready", value: true },
+                        { label: "Not ready", value: false },
+                    ],
+                    (answer) => {
+                        this.readyPrompt = null;
+
+                        if (typeof answer === "boolean") {
+                            this.#command({ type: "party", do: "ready", answer }, (result) => !result.ok && this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6));
+                        }
+                    },
+                    { cancel: null, seconds },
+                );
+            }
+        } else if (event.change === "readyAnswer") {
+            this.readyMarks.set(event.who, event.ready ? "ready" : "not");
+            this.readyPanel?.update(this.readyMarks);
+        } else if (event.change === "readyDone") {
+            this.readyMarks = new Map(Object.entries(event.answers));
+            this.readyMarksUntil = this.clock + READY.markedMs / 1000;
+            this.readyPrompt?.withdraw();
+            this.readyPanel?.update(this.readyMarks, { over: true });
+
+            const unready = Object.entries(event.answers)
+                .filter(([, said]) => said !== "ready")
+                .map(([id, said]) => `${nameOf(id)}${said === "none" ? " (no answer)" : ""}`);
+            const said = event.all ? "Everyone's ready!" : `Not ready: ${unready.join(", ")}.`;
+
+            this.hud.message(said, 3);
+            this.#chatLine({ name: "", text: said, system: true });
+            this.#chatShown();
+
+            if (event.all) {
+                this.sound?.play("wake");
+            }
+        } else if (event.change === "countdown") {
+            const seconds = Math.max(0, Math.round((event.at - this.battle.time) / 1000));
+
+            this.readyPanel?.withdraw();
+            this.hud.countdown(seconds);
+            this.#chatLine({ name: "", text: `${event.name} counts down from ${event.seconds}.`, system: true });
+            this.#chatShown();
+
+            for (let k = 0; k < seconds; k++) {
+                this.sound?.play("wheel", { delay: k });
+            }
+
+            this.sound?.play("wheelSelect", { delay: seconds });
+        }
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
     #sayToParty(text) {
+        // ("/ready": a ready check of the party, its leader's: #readyCheck)
+        if (/^\s*\/ready\s*$/i.test(text)) {
+            this.readyCheck();
+
+            return;
+        }
+
         const to = this.chatTo;
         const said = !to && !this.host.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to }) : this.remote ? this.remote.chat(text, { to }) : { ok: false, reason: "unpartied" };
 
@@ -11248,6 +11375,13 @@ export class Game {
             return;
         }
 
+        // (Its ready check, and its leader's countdown: #readyEvent)
+        if (["readyCheck", "readyAnswer", "readyDone", "countdown"].includes(event.change)) {
+            this.#readyEvent(event);
+
+            return;
+        }
+
         const name = event.name || this.host.players.get(event.who)?.hero.name || "They";
         const mine = event.who === this.me;
         const leader = this.host.players.get(this.host.partyFor(this.me)?.leader)?.hero.name ?? "their";
@@ -11392,7 +11526,7 @@ export class Game {
 
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null, foes: foesOn.get(id) ?? 0 }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null, foes: foesOn.get(id) ?? 0, ready: kind === "player" && this.clock < this.readyMarksUntil ? (this.readyMarks.get(id) ?? null) : null }))
                 : [],
         );
 
@@ -16643,6 +16777,8 @@ export class Game {
             this.toggleSpellbook();
         } else if (id === "party") {
             this.toggleParty();
+        } else if (id === "readyCheck") {
+            this.readyCheck();
         } else if (id === "chat" && (event.target === document.body || event.target instanceof HTMLCanvasElement || event.target === document) && !this.partyPanel?.open && (this.hosting || this.remote) && this.host.partyFor(this.me)) {
             // (In a party of players, with nothing else to press: its chat, ready to type)
             event.preventDefault();

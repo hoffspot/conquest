@@ -65,6 +65,7 @@ export const KEY_ACTIONS = Object.freeze([
     action("spellbook", "The Spellbook", "panels", ["KeyB"]),
     action("party", "The Party panel", "panels", ["KeyP"]),
     action("chat", "The party's chat", "panels", ["Enter"]),
+    action("readyCheck", "A ready check of your party (its leader)", "panels", ["KeyY"]),
     action("map", "The world map", "panels", ["KeyM"]),
     action("panels", "The ring of panels (held)", "panels", ["KeyO"]),
     action("menu", "The menu, or back out of what's open", "panels", ["Escape"], { scope: "any" }),

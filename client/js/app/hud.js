@@ -135,6 +135,18 @@ function pressable(root, onPress) {
 // What each kind of the party's called, said with their name
 const PARTY_KINDS = { player: "in your party", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", tamed: "tamed, at your side", unit: "with you" };
 
+/**
+ * What one of the party said to its ready check, as it's marked on their icon and its leader's
+ * panel (party, readyCheck): a tick, ready; a cross, not; an hourglass, not said yet; a dash, no
+ * answer in time.
+ */
+export const READY_MARKS = Object.freeze({
+    ready: Object.freeze({ mark: "✓", said: "Ready" }),
+    not: Object.freeze({ mark: "✗", said: "Not ready" }),
+    waiting: Object.freeze({ mark: "⧗", said: "Not said yet" }),
+    none: Object.freeze({ mark: "–", said: "No answer" }),
+});
+
 // A wary beast's mood as its plate marks it (core/wary.js MOODS: hud.mood): its mark, and what
 // it's said to be (a hunter watching them, stalking)
 // How the player stands in each foe's enmity (battle.js enmityStanding), as its icon on the right
@@ -1109,7 +1121,9 @@ export class Hud {
     /**
      * The icons down the left side of the screen, under the minimap and the Party button (over the
      * thumb stick, if it's shown), for the player's party, in order (none: gone): [{ id, name, hp, maxHp, kind, ally,
-     * waiting, away, left, picture, leader }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
+     * waiting, away, left, picture, leader, ready }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
+     * `ready`: what a player said to the party's ready check, "ready", "not", "waiting" or "none",
+     * marked at its corner (READY_MARKS), or null;
      * `leader`: a player leading the party, crowned; `colour`: a player's own in the party, their
      * frame and initial in it (app/mapicons.js PARTY_COLOURS); `foes`: how many foes are on them,
      * a count at its corner (none, or Show whom foes are on off: none shown);
@@ -1145,7 +1159,7 @@ export class Hud {
             column.style.setProperty("--member-size", `${size}px`);
         }
 
-        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false, colour = null, foes = 0 }, k) => {
+        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false, colour = null, foes = 0, ready = null }, k) => {
             const icon = this.partyIcons.get(id) ?? this.#memberIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
             const look = `${kind}|${ally}|${waiting}|${away}|${name}|${leader}|${colour}`;
@@ -1172,6 +1186,15 @@ export class Hud {
 
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
             icon.time.hidden = left === null;
+
+            // (What they said to the party's ready check: READY_MARKS)
+            if (icon.readyShown !== ready) {
+                icon.readyShown = ready;
+                icon.ready.hidden = !ready;
+                icon.ready.className = `member-ready${ready ? ` ${ready}` : ""}`;
+                icon.ready.textContent = READY_MARKS[ready]?.mark ?? "";
+                icon.ready.title = READY_MARKS[ready]?.said ?? "";
+            }
 
             // (How many foes are on them)
             if (icon.foesShown !== foes) {
@@ -1240,6 +1263,7 @@ export class Hud {
         const time = element("span", "member-time");
         const wait = element("span", "member-wait");
         const foes = element("span", "member-foes");
+        const ready = element("span", "member-ready");
 
         root.type = "button";
         root.dataset.id = id;
@@ -1247,12 +1271,13 @@ export class Hud {
         time.append(element("span", "member-time-fill"));
         time.hidden = true;
         foes.hidden = true;
+        ready.hidden = true;
         initial.setAttribute("aria-hidden", "true");
         wait.setAttribute("aria-hidden", "true");
-        root.append(initial, canvas, line, time, wait, foes);
+        root.append(initial, canvas, line, time, wait, foes, ready);
         pressable(root, (gesture, press) => this.onPartyMember(id, gesture, press));
 
-        const icon = { root, canvas, initial, health, time, foes, painted: false, look: null, foesShown: 0 };
+        const icon = { root, canvas, initial, health, time, foes, ready, painted: false, look: null, foesShown: 0, readyShown: null };
 
         this.partyIcons.set(id, icon);
 
@@ -1366,6 +1391,168 @@ export class Hud {
         }
 
         return asked;
+    }
+
+    /**
+     * The party leader's ready check (app/game.js #readyEvent): a panel as `choose`'s, not in its
+     * way, with each of the party (`members`: [{ id, name, me }]) and what they've said
+     * (READY_MARKS, `update`), how long the rest have to say (`seconds`), and the countdown to
+     * start: how long, one of `countdowns` (5, if it's one), and Start countdown, asking first if
+     * anyone isn't ready ("Not everyone is ready. Start anyway?"), told `onCountdown` (seconds);
+     * and Close (`onClose`). Returns { update(marks: Map of id to what they said, { over }),
+     * withdraw }.
+     */
+    readyCheck({ members, seconds, countdowns, onCountdown, onClose }) {
+        this.readyShown?.withdraw();
+
+        const panel = element("div", "choice ready-check");
+        const heading = element("p", "choice-title", "Ready check");
+        const list = element("ul", "ready-list");
+        const left = element("p", "ready-left");
+        const lengths = element("div", "ready-lengths");
+        const buttons = element("div", "choice-options");
+        const start = element("button", "button choice-option ready-start", "Start countdown");
+        const close = element("button", "button choice-cancel", "Close");
+        const rows = new Map();
+        const until = performance.now() + seconds * 1000;
+        let length = countdowns.includes(5) ? 5 : countdowns[0];
+        let marks = new Map();
+        let over = false;
+        let asking = false;
+        let timer = null;
+
+        panel.setAttribute("role", "dialog");
+        panel.setAttribute("aria-label", "Ready check");
+        lengths.setAttribute("role", "group");
+        lengths.setAttribute("aria-label", "How long the countdown is");
+
+        for (const { id, name, me } of members) {
+            const row = element("li", "ready-row");
+            const mark = element("span", "ready-mark");
+
+            row.dataset.id = id;
+            row.append(mark, element("span", "ready-name", me ? `${name} (you)` : name));
+            list.append(row);
+            rows.set(id, { row, mark });
+        }
+
+        const pick = () => {
+            for (const button of lengths.children) {
+                button.setAttribute("aria-pressed", String(Number(button.dataset.seconds) === length));
+            }
+        };
+
+        for (const each of countdowns) {
+            const button = element("button", "button ready-length", `${each} s`);
+
+            button.type = "button";
+            button.dataset.seconds = String(each);
+            button.addEventListener("click", () => {
+                length = each;
+                pick();
+            });
+            lengths.append(button);
+        }
+
+        const tick = () => {
+            const s = Math.max(0, Math.ceil((until - performance.now()) / 1000));
+
+            left.textContent = over ? "The ready check's over." : `${s} s for everyone to say.`;
+
+            if (!over && s > 0) {
+                timer = setTimeout(tick, 250);
+            }
+        };
+        const withdraw = () => {
+            clearTimeout(timer);
+            panel.remove();
+
+            if (this.readyShown === shown) {
+                this.readyShown = null;
+                onClose();
+            }
+        };
+        const startNow = () => {
+            withdraw();
+            onCountdown(length);
+        };
+        const unready = () => members.some(({ id }) => marks.get(id) !== "ready");
+
+        // (Asked first, anyone not ready: then Start anyway, or Back to the list)
+        const confirm = () => {
+            asking = true;
+            heading.textContent = "Not everyone is ready. Start anyway?";
+            list.hidden = lengths.hidden = left.hidden = true;
+            start.textContent = "Start anyway";
+            close.textContent = "Back";
+        };
+        const back = () => {
+            asking = false;
+            heading.textContent = "Ready check";
+            list.hidden = lengths.hidden = left.hidden = false;
+            start.textContent = "Start countdown";
+            close.textContent = "Close";
+        };
+
+        start.type = "button";
+        close.type = "button";
+        start.addEventListener("click", () => (asking || !unready() ? startNow() : confirm()));
+        close.addEventListener("click", () => (asking ? back() : withdraw()));
+        buttons.append(start, close);
+        panel.append(heading, list, left, lengths, buttons);
+        this.root.append(panel);
+        pick();
+        tick();
+
+        const shown = {
+            panel,
+            update: (now, { over: done = false } = {}) => {
+                marks = new Map(now);
+                over = over || done;
+
+                for (const [id, { row, mark }] of rows) {
+                    const said = marks.get(id) ?? "waiting";
+
+                    row.className = `ready-row ${said}`;
+                    mark.textContent = READY_MARKS[said]?.mark ?? "";
+                    mark.title = READY_MARKS[said]?.said ?? "";
+                }
+
+                tick();
+            },
+            withdraw,
+        };
+
+        this.readyShown = shown;
+
+        return shown;
+    }
+
+    /**
+     * A countdown across the middle of the screen (the party leader's: app/game.js #readyEvent):
+     * `seconds` down to 1, a second each, then "Go!", gone a second after. One at a time.
+     */
+    countdown(seconds) {
+        clearTimeout(this.counting?.timer);
+        this.counting?.shown.remove();
+
+        const shown = element("div", "countdown");
+        const counting = { shown, timer: null };
+        const step = (n) => {
+            shown.textContent = n > 0 ? String(n) : "Go!";
+            shown.classList.toggle("go", n <= 0);
+            // (Each number swelling in afresh)
+            shown.classList.remove("beat");
+            void shown.offsetWidth;
+            shown.classList.add("beat");
+            counting.timer = setTimeout(() => (n > 0 ? step(n - 1) : (shown.remove(), this.counting === counting && (this.counting = null))), 1000);
+        };
+
+        shown.setAttribute("role", "status");
+        shown.setAttribute("aria-live", "assertive");
+        this.root.append(shown);
+        this.counting = counting;
+        step(seconds);
     }
 
     /**

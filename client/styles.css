@@ -2949,6 +2949,34 @@ body[data-minimap="off"] #party {
     display: none;
 }
 
+/* (What they said to the party's ready check: a mark at the top right, app/hud.js READY_MARKS) */
+.member-ready {
+    position: absolute;
+    right: -4px;
+    top: -4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    color: #fff;
+    background: #5a5048;
+    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.75);
+    font: 700 12px/18px var(--font-ui);
+    text-align: center;
+    pointer-events: none;
+}
+
+.member-ready.ready {
+    background: #2f8a3c;
+}
+
+.member-ready.not {
+    background: #b8321f;
+}
+
+.member-ready[hidden] {
+    display: none;
+}
+
 .member.away {
     opacity: 0.55;
 }
@@ -4432,6 +4460,117 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .choice-cancel {
     opacity: 0.8;
+}
+
+/* The party leader's ready check (app/hud.js readyCheck): who's said what, and the countdown to
+   start; up out of the way of a question asked of them (choose) */
+.choice.ready-check {
+    top: 30%;
+}
+
+.ready-list {
+    margin: 0 0 8px;
+    padding: 0;
+    list-style: none;
+    text-align: left;
+}
+
+.ready-list[hidden],
+.ready-left[hidden],
+.ready-lengths[hidden] {
+    display: none;
+}
+
+.ready-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+}
+
+.ready-mark {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    background: #5a5048;
+    color: #fff;
+    font: 700 12px/20px var(--font-ui);
+    text-align: center;
+}
+
+.ready-row.ready .ready-mark {
+    background: #2f8a3c;
+}
+
+.ready-row.not .ready-mark {
+    background: #b8321f;
+}
+
+.ready-left {
+    margin: 0 0 8px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.ready-lengths {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+    margin: 0 0 10px;
+}
+
+.ready-length {
+    min-width: 56px;
+}
+
+.ready-length[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px var(--gold, #ecc882);
+}
+
+/* A countdown across the middle of the screen (app/hud.js countdown), each number swelling in */
+.countdown {
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    transform: translate(-50%, -50%);
+    z-index: 19;
+    color: #f8e7c0;
+    font: 800 96px/1 var(--font-ui);
+    /* (Outlined dark, to read over a white wall as over the night) */
+    -webkit-text-stroke: 5px rgba(20, 14, 8, 0.9);
+    paint-order: stroke fill;
+    text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+}
+
+.countdown.go {
+    color: #9fe08a;
+}
+
+.countdown.beat {
+    animation: countdown-beat 1s ease-out;
+}
+
+@keyframes countdown-beat {
+    from {
+        opacity: 0.2;
+        transform: translate(-50%, -50%) scale(1.6);
+    }
+
+    25% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    to {
+        opacity: 0.85;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .countdown.beat {
+        animation: none;
+    }
 }
 
 /* Making camp: how many hours, − and + either side of them */
