@@ -46,6 +46,8 @@ export const THEMES = {
     caves: {
         id: "caves",
         name: "caves",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the throne cavern",
         layout: "caves",
         lands: { mountain: 4, snow: 3, volcanic: 3, badlands: 3, tundra: 2, heath: 2 },
         style: "dungeon-caves",
@@ -74,6 +76,15 @@ export const THEMES = {
             { id: "ogre", creature: "ogre", title: "Ogre", weight: 1 },
             { id: "tusker", creature: "rockTusker", title: "Old rock tusker", weight: 1 },
             { id: "brood", creature: "caveSpider", title: "Brood guardian", weight: 1 },
+        ],
+        // (Each level's but the last's boss, by its stairs down: one of its mini-bosses' kinds made
+        // its floor's, drawn as that mini-boss is: place.js)
+        floors: [
+            { id: "troll", creature: "troll", title: "the Cave Troll Elder", weight: 2 },
+            { id: "bear", creature: "bear", title: "the Elder Cave Bear", weight: 1 },
+            { id: "ogre", creature: "ogre", title: "the Ogre Chieftain", weight: 1 },
+            { id: "tusker", creature: "rockTusker", title: "the Elder Rock Tusker", weight: 1 },
+            { id: "brood", creature: "caveSpider", title: "the Brood Keeper", weight: 1 },
         ],
         bosses: [
             { id: "trollKing", creature: "troll", title: "the Troll King", weight: 2 },
@@ -104,6 +115,8 @@ export const THEMES = {
     hideout: {
         id: "hideout",
         name: "an outlaws' hideout",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the outlaws' great hall",
         layout: "accretion",
         lands: { woods: 4, farmland: 3, meadow: 3, darkwood: 3, heath: 2, marsh: 2, elfwood: 2 },
         style: "dungeon-hideout",
@@ -126,6 +139,11 @@ export const THEMES = {
             { id: "lieutenant", creature: "banditChief", title: "Outlaw lieutenant", weight: 3 },
             { id: "enforcer", creature: "ogre", title: "Hired ogre", weight: 1 },
             { id: "hedgePriest", creature: "cultist", title: "Hedge priest", weight: 1 },
+        ],
+        floors: [
+            { id: "lieutenant", creature: "banditChief", title: "the Outlaw Captain", weight: 3 },
+            { id: "enforcer", creature: "ogre", title: "the Ogre Enforcer", weight: 1 },
+            { id: "hedgePriest", creature: "cultist", title: "the Hedge Abbot", weight: 1 },
         ],
         bosses: [
             { id: "banditLord", creature: "banditChief", title: "the Outlaw King", weight: 3 },
@@ -151,6 +169,8 @@ export const THEMES = {
     ancient: {
         id: "ancient",
         name: "an ancient temple",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the sanctum",
         layout: "axial",
         lands: { jungle: 4, savannah: 3, badlands: 2, marsh: 2, elfwood: 2, darkwood: 2 },
         hoard: "head",
@@ -176,6 +196,11 @@ export const THEMES = {
             { id: "champion", creature: "skeleton", title: "Tomb champion", weight: 2 },
             { id: "wraith", creature: "wraith", title: "Wraith", weight: 1 },
             { id: "highPriest", creature: "cultist", title: "Cult high priest", weight: 1 },
+        ],
+        floors: [
+            { id: "champion", creature: "skeleton", title: "the Tomb Warden", weight: 2 },
+            { id: "wraith", creature: "wraith", title: "the Grave Wraith", weight: 1 },
+            { id: "highPriest", creature: "cultist", title: "the Cult Hierophant", weight: 1 },
         ],
         bosses: [
             { id: "tombLord", creature: "wightLord", title: "the Tomb Lord", weight: 3 },
@@ -205,6 +230,8 @@ export const THEMES = {
     nest: {
         id: "nest",
         name: "an ants' nest",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the queen's chamber",
         layout: "nest",
         lands: { savannah: 4, badlands: 3, meadow: 2, farmland: 2, heath: 2, jungle: 2 },
         style: "dungeon-caves",
@@ -235,6 +262,11 @@ export const THEMES = {
             { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },
             { id: "crawler", creature: "greatCentipede", title: "Tunnel crawler", weight: 2 },
             { id: "matriarch", creature: "blackWidow", title: "Widow matriarch", weight: 2 },
+        ],
+        floors: [
+            { id: "warden", creature: "ant", title: "the Brood Sentinel", weight: 2 },
+            { id: "crawler", creature: "greatCentipede", title: "the Great Tunnel Crawler", weight: 2 },
+            { id: "matriarch", creature: "blackWidow", title: "the Widow Queen", weight: 2 },
         ],
         bosses: [{ id: "antMonster", creature: "antMonster", title: "the Ant Monster", weight: 1, guard: ["ant"] }],
         // (Twice the small chests other dungeons have, and the adventurers who died in it, many of
@@ -273,6 +305,8 @@ export const THEMES = {
     hell: {
         id: "hell",
         name: "a hell",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the Throne of the Pit",
         // (Each level dug as its realm digs it: `realms`' `layout`; this for whatever asks of the
         // theme as a whole)
         layout: "caves",
@@ -505,6 +539,8 @@ export const THEMES = {
     keep: {
         id: "keep",
         name: "a castle keep",
+        // (Its final boss's arena, a level of its own past the last: build.js)
+        arena: "the Bell Chamber",
         layout: "axial",
         wild: false,
         levels: 4,

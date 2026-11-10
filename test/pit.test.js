@@ -75,7 +75,8 @@ describe("the lord's throne (world/pit.js throneParts)", () => {
 describe("the Pit's lava, only a rim (core/dungeons/place.js lavaRim)", () => {
     it("lines its throne hall's side walls, clear of its ways in and its throne, nowhere else", () => {
         for (const seed of [11, 12, 13, 14]) {
-            const level = buildDungeon({ seed, theme: "hell", tier: 9 }).levels[3];
+            // (The Lord of the Pit's throne hall: his arena, a level of its own under the Pit, build.js)
+            const level = buildDungeon({ seed, theme: "hell", tier: 9 }).levels[4];
             const arena = level.rooms.find(({ role }) => role === "arena");
             const lava = [];
 

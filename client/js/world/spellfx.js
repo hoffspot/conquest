@@ -2427,11 +2427,16 @@ export class SpellFx {
 
     /**
      * A blow's warning on the ground round a point (battle.js "telegraph": the Orc King's leap, where
-     * he'll come down, and his axe spun all round him), `radius` m, the `seconds` till it lands: a
-     * bomb's pulsing ring (#warning), and the ground within it filling red from its heart as the
-     * blow comes. Returns it.
+     * he'll come down, and his axe spun all round him; what's falling on a boss's arena), `radius`
+     * m, the `seconds` till it lands: a bomb's pulsing ring (#warning), and the ground within it
+     * filling red from its heart as the blow comes; or, one in a wedge before whoever strikes it
+     * (`arc` degrees across, the way `facing` has it), the wedge (#wedge). Returns it.
      */
-    telegraph(centre, { radius = 3, seconds = 1 } = {}) {
+    telegraph(centre, { radius = 3, seconds = 1, arc = null, facing = 0 } = {}) {
+        if (arc) {
+            return this.#wedge(centre, radius, seconds, arc, facing);
+        }
+
         const fill = new THREE.Mesh(this.geometries.disc, this.#additive(0xff2a0a, { map: this.#texture("glow"), opacity: 0.35 }));
 
         fill.renderOrder = ORDER.glow;
@@ -2443,6 +2448,43 @@ export class SpellFx {
         });
 
         return this.#warning(centre, radius, seconds);
+    }
+
+    // A blow's warning in a wedge before whoever strikes it (battle.js "telegraph" `arc`: the Ant
+    // Monster's acid, the Frost Troll's breath), from its point at `centre`, `arc` degrees across
+    // and `radius` m long, the way `facing` has it (radians, as the battle's: from south towards
+    // east), `seconds`: pulsing as a bomb's ring does, quicker and quicker, and filling red out from
+    // its point as the blow comes
+    #wedge(centre, radius, seconds, arc, facing) {
+        const key = `wedge${arc}`;
+        const half = (arc * Math.PI) / 360;
+
+        this.geometries[key] ??= new THREE.CircleGeometry(1, 32, -half, half * 2).rotateX(-Math.PI / 2);
+
+        const group = new THREE.Group();
+        const turn = new THREE.Group();
+        const edge = new THREE.Mesh(this.geometries[key], this.#additive(0xff5a1a, { opacity: 0.3 }));
+        const fill = new THREE.Mesh(this.geometries[key], this.#additive(0xff2a0a, { opacity: 0.35 }));
+        let phase = 0;
+
+        // (Its point's +x turned the way it faces)
+        turn.rotation.y = facing - Math.PI / 2;
+        edge.scale.set(radius, 1, radius);
+        edge.renderOrder = ORDER.ring;
+        fill.renderOrder = ORDER.glow;
+        turn.add(edge, fill);
+        group.add(turn);
+        this.#lay(group, centre, radius, 0.065);
+        this.#show(group, seconds, (t, dt) => {
+            phase += dt * (2 + 8 * t);
+
+            const wide = radius * Math.max(0.05, t);
+
+            edge.material.opacity = 0.12 + 0.28 * (0.5 + 0.5 * Math.cos(phase * Math.PI * 2));
+            fill.scale.set(wide, 1, wide);
+        });
+
+        return group;
     }
 
     // A ring on the ground `radius` m round a point, warning of a blast, `seconds`: pulsing,

@@ -456,6 +456,11 @@ export const CREATURE_VOICES = Object.freeze({
     choirKnight: { family: "humanRough" },
     priorVane: { family: "humanRough" },
     ashkhar: { family: "bigCat", rate: 0.71, fall: "deathThudBig" },
+    // (What's set out in a boss's arena to be broken: an egg clutch's and an egg sac's wet
+    // squelch, a soul jar's moan, none heard falling)
+    antClutch: { family: "slime", rate: 0.8, fall: null },
+    eggSac: { family: "slime", rate: 1.1, fall: null },
+    soulJar: { family: "ghost", rate: 0.8, fall: null },
     // (The River of Fire's master, the Greater Demon: a troll's voice, low, the lord's a little lower)
     greaterDemon: { family: "troll", rate: 0.78 },
     fiend: { family: "bigCat", rate: 0.74, fall: "deathThudBig" },

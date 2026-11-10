@@ -695,6 +695,15 @@ export const CREATURES = Object.freeze({
             { below: 1 / 3, animation: "rally", hitAt: 1400, duration: 3600, call: { kind: "ghost", count: [2, 3], most: 4, down: 2, told: "roars again: the drowned and the lost rise out of the bog!" } },
         ],
     },
+    // (What's set out about a dungeon boss's arena to be broken, as its fight goes on (core/fights.js
+    // FIGHTS `objects`): the Ant Monster's egg clutches, split open in her chamber's walls, hatching
+    // broods; the Broodmother's egg sacs, hatching spiderlings; the Tomb Lord's soul jars, raising
+    // the dead. None moves or strikes (`object`: battle.js #think), each hatching what it's set out
+    // to now and then (battle.js #hatch), and while enough of them stand their boss takes only part
+    // of any harm (FIGHTS `shield`). Too heavy to be thrown; drawn as what they are, beasts/looks.js)
+    antClutch: { name: "Egg clutch", hp: 40, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "ichor", armor: 0.1, darkSight: true, steady: true, object: true },
+    eggSac: { name: "Egg sac", hp: 34, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "ichor", armor: 0.05, darkSight: true, steady: true, object: true },
+    soulJar: { name: "Soul jar", hp: 44, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "none", armor: 0.2, darkSight: true, steady: true, object: true },
 });
 
 /**
@@ -912,13 +921,13 @@ export function notable(wild, { master = false } = {}) {
 
 /**
  * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep`,
- * `bomb`, `hover` and, one that has them, `call`, `lurk` and `burst` (CREATURES); as a dungeon's
+ * `bomb`, `hover` and, one that has them, `call`, `lurk`, `burst` and `object` (CREATURES); as a dungeon's
  * boss (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null, worldBoss = false, sight = null, moves = null, stance = null, rally = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null, worldBoss = false, sight = null, moves = null, stance = null, rally = null, object = false } = CREATURES[creature] ?? {};
 
-    return { steady, keep, ...(worldBoss ? { worldBoss } : {}), ...(sight ? { sight } : {}), bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}), ...(moves ? { moves: structuredClone(moves) } : {}), ...(stance ? { stance: { ...stance } } : {}), ...(rally ? { rally: structuredClone(rally) } : {}) };
+    return { steady, keep, ...(object ? { object } : {}), ...(worldBoss ? { worldBoss } : {}), ...(sight ? { sight } : {}), bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}), ...(moves ? { moves: structuredClone(moves) } : {}), ...(stance ? { stance: { ...stance } } : {}), ...(rally ? { rally: structuredClone(rally) } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

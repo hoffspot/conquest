@@ -500,4 +500,16 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "A demon of the Breach that came up through a thin place on the moors a hundred years ago. The Order of the Bell bound it under their shrine in chains of blessed silver, and the cold of the silver smothered its fire to frost. When the Magpies stripped the shrine's silver for coin, it woke. Its hide has gone the blue of ice, and frost follows wherever it walks. It rakes and sweeps with frozen claws, and its fist's blow chills and slows. It leaps on whoever keeps off it, and brings its fists down so that frost bursts out all round it, the ground warning of both first. Worn down, it roars, and the moor's restless dead come to it. Cold harms it little.",
         sign: "prints as long as a man's arm, frost rimed in each though the day is warm, and links of tarnished silver chain",
     }),
+    antClutch: Object.freeze({
+        lore: "A heap of the Ant Monster's eggs, each as big as a man's head, sealed into the walls of her brood chamber. When she is hard pressed they split, and her brood comes boiling out of them. While two or more of them stand, she takes only half the harm of any blow: break them.",
+        sign: "waxy shell, curled and split, sticky with something clear",
+    }),
+    eggSac: Object.freeze({
+        lore: "A Broodmother's egg sac, silk wound round and round a hundred eggs, hung about her cavern. When she is hard pressed they tear open, and spiderlings pour out of them. While two of them stand, she takes only half the harm of any blow: cut them down.",
+        sign: "a torn ball of grey silk, and tiny tracks leading away from it",
+    }),
+    soulJar: Object.freeze({
+        lore: "A squat urn of black stone, glowing green within, set in a sanctum by a Tomb Lord to hold the souls of those buried there. While two of them stand he takes only half the harm of any blow, and the dead rise from them to fight for him: shatter them.",
+        sign: "shards of black stone, cold to the touch, a faint green light fading in them",
+    }),
 });

@@ -263,7 +263,8 @@ for (const licensed of [true, false]) {
                 return { key: building.key, door: building.door.id, map: building.door.ends[1].map, made: building.made, levels: building.maps.length, card: Boolean(game.readyingAt) || player.map === building.door.ends[1].map };
             });
 
-            expect(keep).toMatchObject({ made: true, levels: 4, card: true });
+            // (Its four floors and, over them, the Bell Chamber: its arena, docs/DUNGEONS.md)
+            expect(keep).toMatchObject({ made: true, levels: 5, card: true });
             expect(await inside(page, keep.map)).toMatchObject({ shown: true });
 
             const floor = await page.evaluate(([id, castle]) => {

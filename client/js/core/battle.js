@@ -775,6 +775,12 @@ export class Battle {
         this.bombs = [];
         this.nextBomb = 1;
 
+        // What's falling on a boss's arena, shown on the ground first (a boss's fight's `falls`:
+        // #boss, #falling): { id, map, x, y, radius, lands, damage, power, kind, element, afflict,
+        // toss, pool, by, team, caster }
+        this.falls = [];
+        this.nextFall = 1;
+
         // Food thrown to the wild's beasts (core/wary.js BAIT, toss): { id, kind ("meat" or
         // "feed"), map, x, y, from (where it was thrown from: [x, y]), thrown, lands, until, by,
         // taken (the pack eating it, or null) }
@@ -1668,6 +1674,8 @@ export class Battle {
             nextHazard: this.nextHazard,
             bombs: structuredClone(this.bombs),
             nextBomb: this.nextBomb,
+            falls: structuredClone(this.falls),
+            nextFall: this.nextFall,
             baits: structuredClone(this.baits),
             nextBait: this.nextBait,
             breaths: structuredClone(this.breaths),
@@ -1694,6 +1702,7 @@ export class Battle {
             projectiles: [],
             hazards: [],
             bombs: [],
+            falls: [],
             baits: [],
             breaths: [],
             formations: {},
@@ -1709,7 +1718,7 @@ export class Battle {
     static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null, sworn = null } = {}) {
         const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve, sworn });
 
-        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
+        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, falls: structuredClone(snapshot.falls ?? []), nextFall: snapshot.nextFall ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
             const actor = structuredClone(kept);
@@ -2513,6 +2522,7 @@ export class Battle {
             this.#arm(actor);
             this.#hover(actor);
             this.#offGuard(actor);
+            this.#boss(actor);
             this.#think(actor);
         }
 
@@ -2526,6 +2536,7 @@ export class Battle {
 
         this.#fly();
         this.#burst();
+        this.#falling();
         this.#spoil();
         this.#rake();
         this.#ground();
@@ -2618,8 +2629,9 @@ export class Battle {
     // --- Deciding what to do ---
 
     #think(actor) {
-        // (Only standing there, a mind of its own none: one in a forecast's battle, fork)
-        if (actor.still) {
+        // (Only standing there, a mind of its own none: one in a forecast's battle, fork; something
+        // set out in a boss's arena to be broken, creatures.js `object`)
+        if (actor.still || actor.wild?.object) {
             return;
         }
 
@@ -4512,11 +4524,14 @@ export class Battle {
     // whoever it's after, now and then (every `every` ms), while they keep `beyond` metres off and
     // within its `reach`, in sight (and `volley` at a time, the others about them, `spread` metres
     // off at most: the caves' Goblin King, at whoever's second in its enmity, if they're where it
-    // can lob one: FFXIV's tankbuster on the off-tank): whether it's thrown
+    // can lob one: FFXIV's tankbuster on the off-tank). A boss's fight's (core/fights.js): from
+    // its `phase` on, at whoever of its enemies is furthest off within its reach (`far`: the Troll
+    // King's boulder), and leaving what lies where it bursts (`pool`: the Outlaw King's oil,
+    // burning). Whether it's thrown
     #lobs(actor, target) {
-        const { kind, damage, every, beyond, reach, volley = 1, spread = 0 } = actor.wild.bomb;
+        const { kind, damage, every, beyond, reach, volley = 1, spread = 0, phase = 0, far: furthest = false } = actor.wild.bomb;
 
-        if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed) {
+        if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed || phase > (actor.phase ?? 0)) {
             return false;
         }
 
@@ -4525,7 +4540,7 @@ export class Battle {
 
             return other.map === actor.map && far >= beyond && far <= reach && this.canSee(actor, other, Math.max(SIGHT, reach));
         };
-        const at = (volley > 1 ? this.#second(actor, target, lobbable) : null) ?? target;
+        const at = (furthest ? this.#farthest(actor, beyond, reach) : null) ?? (volley > 1 ? this.#second(actor, target, lobbable) : null) ?? target;
 
         if (!lobbable(at)) {
             return false;
@@ -4533,7 +4548,7 @@ export class Battle {
 
         actor.bombAt = this.time + every;
         actor.path = [];
-        this.#throwAt(actor, at, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread });
+        this.#throwAt(actor, at, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread, ...(actor.wild.bomb.pool ? { pool: actor.wild.bomb.pool } : {}) });
 
         return true;
     }
@@ -4581,8 +4596,10 @@ export class Battle {
     // after someone: the first time `first` ms after it first sets on anyone, then every `every`
     // ms, between blows and on the ground, while they're `least` to `most` metres off (and, for a
     // leap, in sight). Each an attack of its own (#fight): a leap (`leap`: LEAP, #leapFor) to
-    // land on them, a blow all round it (`quake`, `ahead` 0) or before it, several blows
-    // (`blows`)...: whether it starts one
+    // land on them, a blow all round it (`quake`, `ahead` 0) or before it, or in a wedge before it
+    // (`arc`), several blows (`blows`)...: whether it starts one. A boss's fight's moves each from
+    // its `phase` on (#boss), and coming the sooner as it's quicker (`faster`); one at whoever of
+    // its enemies is furthest off within its reach (`far`: a charge), not whoever it's after
     #moves(actor, target) {
         if (this.time < actor.readyAt || !actor.armed || actor.aloft || target.aloft || target.map !== actor.map || actor.attack) {
             return false;
@@ -4590,27 +4607,32 @@ export class Battle {
 
         actor.movesAt ??= {};
 
-        const far = hypot(target.x - actor.x, target.y - actor.y);
-
         for (const move of actor.wild.moves) {
-            actor.movesAt[move.id] ??= this.time + (move.first ?? 0);
-
-            if (this.time < actor.movesAt[move.id] || far < (move.least ?? 0) || far > (move.most ?? MELEE_REACH + 0.5) || (move.leap && !this.canSee(actor, target, Math.max(SIGHT, move.most)))) {
+            if ((move.phase ?? 0) > (actor.phase ?? 0)) {
                 continue;
             }
 
-            const landing = move.leap ? this.#leapFor(actor, target) : null;
+            actor.movesAt[move.id] ??= this.time + (move.first ?? 0);
+
+            const at = move.far ? this.#farthest(actor, move.least ?? 0, move.most) : target;
+            const far = at ? hypot(at.x - actor.x, at.y - actor.y) : Infinity;
+
+            if (this.time < actor.movesAt[move.id] || !at || at.aloft || far < (move.least ?? 0) || far > (move.most ?? MELEE_REACH + 0.5) || (move.leap && !this.canSee(actor, at, Math.max(SIGHT, move.most)))) {
+                continue;
+            }
+
+            const landing = move.leap ? this.#leapFor(actor, at) : null;
 
             if (move.leap && !landing) {
                 continue;
             }
 
-            actor.movesAt[move.id] = this.time + move.every;
+            actor.movesAt[move.id] = this.time + Math.round(move.every / (actor.faster ?? 1));
             actor.path = [];
-            this.#throwAt(actor, target, move, landing ? { leap: landing } : {});
+            this.#throwAt(actor, at, move, landing ? { leap: landing } : {});
 
             if (landing) {
-                this.#emit("leap", { id: actor.id, target: target.id, map: actor.map, from: [actor.x, actor.y], to: [landing.x, landing.y], lift: move.leap.lift, land: move.hitAt, up: move.leap.up });
+                this.#emit("leap", { id: actor.id, target: at.id, map: actor.map, from: [actor.x, actor.y], to: [landing.x, landing.y], lift: move.leap.lift, land: move.hitAt, up: move.leap.up });
             }
 
             return true;
@@ -4710,6 +4732,228 @@ export class Battle {
         }
     }
 
+    // --- A boss's own fight (core/fights.js FIGHTS) ---
+
+    /**
+     * A boss's hand-made fight (its `wild.fight`: core/fights.js), from when it's begun (struck,
+     * or set on anyone: `fightSince`, `phase` 0). Each of its `phases` in turn at its mark
+     * (`below`: its hit points that share or fewer of its most), told as "phase" ({ id, map,
+     * phase, told, objects }: the host sets out what's to be broken, host.js #fightPhase); what
+     * each has holding till a later one says otherwise (#stage): its blows and moves the quicker
+     * (`faster`), what falls across its arena (`falls`: #drop), its hurts regrown so much a second
+     * unless it's burnt lately (`regrow`: { share, stop }), healed by what it deals (`drain`),
+     * shielded (`shield`: #shieldOf). Fought too long (`enrage`: { after, every, radius, damage,
+     * kind, told } ms it's been after anyone), a blast across all of its arena every so often till
+     * it's down or they are. And what's set out in an arena to be broken that hatches (its
+     * `wild.hatch`: { kind, count, most, every, first, down, reach }): calling them out of it
+     * (told as "call", as #calls), at whoever's nearest
+     */
+    #boss(actor) {
+        if (actor.wild?.hatch && !actor.dead) {
+            this.#hatch(actor);
+        }
+
+        const fight = actor.wild?.fight;
+
+        if (!fight || actor.dead) {
+            return;
+        }
+
+        const phases = fight.phases ?? [];
+
+        if (!Number.isFinite(actor.fightSince)) {
+            if (actor.target === null && actor.hp >= actor.maxHp) {
+                return;
+            }
+
+            Object.assign(actor, { fightSince: this.time, phase: 0, fought: 0, faster: phases[0]?.faster ?? 1, fallsAt: null });
+
+            if (phases[0]?.told || phases[0]?.objects) {
+                this.#emit("phase", { id: actor.id, map: actor.map, phase: 0, ...(phases[0].told ? { told: phases[0].told } : {}), ...(phases[0].objects ? { objects: structuredClone(phases[0].objects) } : {}) });
+            }
+        }
+
+        while (actor.phase + 1 < phases.length && actor.hp <= actor.maxHp * phases[actor.phase + 1].below) {
+            actor.phase++;
+
+            const { told = null, objects = null, faster = null } = phases[actor.phase];
+
+            actor.faster = faster ?? actor.faster;
+            actor.fallsAt = null;
+            this.#emit("phase", { id: actor.id, map: actor.map, phase: actor.phase, ...(told ? { told } : {}), ...(objects ? { objects: structuredClone(objects) } : {}) });
+        }
+
+        if (actor.target !== null) {
+            actor.fought += STEP_MS;
+        }
+
+        const falls = this.#stage(actor, "falls");
+
+        if (falls && actor.target !== null) {
+            actor.fallsAt ??= this.time + (falls.first ?? falls.every);
+
+            if (this.time >= actor.fallsAt) {
+                actor.fallsAt = this.time + falls.every;
+                this.#drop(actor, falls);
+            }
+        }
+
+        const regrow = this.#stage(actor, "regrow");
+
+        if (regrow && actor.hp < actor.maxHp && this.time >= (actor.regrowAt ?? 0)) {
+            actor.regrowAt = this.time + 1000;
+
+            if (this.time - (actor.burntAt ?? -Infinity) >= regrow.stop) {
+                const before = actor.hp;
+
+                actor.hp = Math.min(actor.maxHp, actor.hp + Math.max(1, Math.round(actor.maxHp * regrow.share)));
+                this.#emit("healed", { id: actor.id, by: actor.id, spell: null, amount: actor.hp - before, hp: actor.hp, maxHp: actor.maxHp, cured: [], regrown: true });
+            }
+        }
+
+        const enrage = fight.enrage;
+
+        if (enrage && actor.fought >= enrage.after) {
+            if (!actor.enraged) {
+                Object.assign(actor, { enraged: true, enrageAt: this.time + (enrage.first ?? 0) });
+                this.#emit("phase", { id: actor.id, map: actor.map, phase: actor.phase, enraged: true, ...(enrage.told ? { told: enrage.told } : {}) });
+            }
+
+            if (this.time >= actor.enrageAt) {
+                actor.enrageAt = this.time + enrage.every;
+                this.#blast(actor, actor, actor.map, actor.x, actor.y, { radius: enrage.radius, damage: enrage.damage, power: actor.power?.melee ?? 1, toss: enrage.toss ?? 0.4, kind: enrage.kind, heart: [actor.x, actor.y], element: enrage.element ?? null, stagger: 400 });
+            }
+        }
+    }
+
+    // What a boss's fight has (#boss) as it is now: as its latest phase so far that says (`key`),
+    // else null
+    #stage(actor, key) {
+        const phases = actor.wild?.fight?.phases ?? [];
+
+        for (let k = Math.min(actor.phase ?? 0, phases.length - 1); k >= 0; k--) {
+            if (phases[k][key] !== undefined) {
+                return phases[k][key];
+            }
+        }
+
+        return null;
+    }
+
+    // How much of a blow a boss takes, shielded by what's about its arena (its fight's `shield`:
+    // { kind, least, share }, #boss): `share` of it while `least` or more of that kind still
+    // stand on its map (the Ant Monster's egg clutches); all of it otherwise, and anyone else
+    #shieldOf(target) {
+        const shield = target.wild?.fight ? this.#stage(target, "shield") : null;
+
+        if (!shield) {
+            return 1;
+        }
+
+        let standing = 0;
+
+        for (const other of this.actors) {
+            if (!other.dead && other.map === target.map && other.wild?.creature === shield.kind) {
+                standing++;
+            }
+        }
+
+        return standing >= shield.least ? shield.share : 1;
+    }
+
+    // What falls across a boss's arena (its fight's `falls`, #boss): `under` of those it's against
+    // (its enemies on its map within `reach` of it, chosen by chance), a circle under each, and
+    // `count` more on clear ground within `reach` of it; each `radius` metres round, shown on the
+    // ground (told as "telegraph", as a blow's warning is, `fall` its kind) and coming down
+    // `delay` ms later (#falling)
+    #drop(actor, { under = 0, count = 0, reach = 12, radius, delay, damage, kind, element = "earth", afflict = null, toss = 0, pool = null }) {
+        const foes = this.actors.filter((other) => !other.dead && other.map === actor.map && this.hostile(actor, other) && !other.wild?.object && hypot(other.x - actor.x, other.y - actor.y) <= reach);
+        const spots = [];
+
+        for (let k = 0; k < under && foes.length; k++) {
+            const [one] = foes.splice(Math.floor(this.random.next() * foes.length), 1);
+
+            spots.push([one.x, one.y]);
+        }
+
+        for (let k = 0, tries = 0; k < count && tries < count * 4; tries++) {
+            const angle = this.random.next() * Math.PI * 2;
+            const off = reach * Math.sqrt(this.random.next());
+            const at = [actor.x + cos(angle) * off, actor.y + sin(angle) * off];
+
+            if (this.#clear(actor.map, at)) {
+                spots.push(at);
+                k++;
+            }
+        }
+
+        for (const [x, y] of spots) {
+            const fall = { id: this.nextFall++, map: actor.map, x, y, radius, lands: this.time + delay, damage: [...damage], power: actor.power?.melee ?? 1, kind, element, afflict: afflict ? { ...afflict } : null, toss, pool: pool ? structuredClone(pool) : null, by: actor.id, team: actor.team, caster: actor.kind };
+
+            this.falls.push(fall);
+            this.#emit("telegraph", { id: actor.id, map: actor.map, x, y, radius, lands: fall.lands, fall: kind });
+        }
+    }
+
+    // What's falling on a boss's arena come down (#drop): a blast where it lands (#blast: its
+    // boss's enemies in it hurt, thrown as it has it), and what it leaves there (`pool`: #lay)
+    #falling() {
+        for (const fall of [...this.falls]) {
+            if (this.time < fall.lands) {
+                continue;
+            }
+
+            this.falls.splice(this.falls.indexOf(fall), 1);
+
+            const by = this.actor(fall.by);
+            const side = by ?? { id: fall.by, team: fall.team, kind: fall.caster };
+
+            this.#blast(by && !by.dead ? by : null, side, fall.map, fall.x, fall.y, { radius: fall.radius, damage: fall.damage, power: fall.power, toss: fall.toss, kind: fall.kind, element: fall.element, afflict: fall.afflict, stagger: 300 });
+
+            if (fall.pool) {
+                this.#lay(side, fall.map, fall.x, fall.y, fall.pool, rollDamage(fall.pool, this.random) * fall.power);
+            }
+        }
+    }
+
+    // Something in a boss's arena that hatches (`wild.hatch`, #boss): the first time `first` ms
+    // after it's set out, then every `every` ms, while any it's against are within `reach` of it,
+    // calling `count` of `kind` out of it (as many at most about it as `most`: host.js #flock),
+    // after whoever's nearest
+    #hatch(actor) {
+        const { kind, count, most, every, first = every, down = null, reach = 30, title = null } = actor.wild.hatch;
+
+        actor.hatchAt ??= this.time + first;
+
+        if (this.time < actor.hatchAt) {
+            return;
+        }
+
+        actor.hatchAt = this.time + every;
+
+        const near = this.#nearestEnemy(actor, () => true, reach);
+
+        if (near) {
+            this.#emit("call", { id: actor.id, target: near.id, kind, count: [...count], most, ...(down === null ? {} : { down }), ...(title ? { title } : {}), map: actor.map, x: actor.x, y: actor.y, hatched: true });
+        }
+    }
+
+    // Whoever of `actor`'s enemies on its map is furthest off it, `least` to `most` metres, that
+    // it can see (a boss's charge or boulder, `far`); null for none
+    #farthest(actor, least, most) {
+        let [best, far] = [null, -1];
+
+        for (const other of this.actors) {
+            const off = other.map === actor.map && !other.dead && !other.wild?.object ? hypot(other.x - actor.x, other.y - actor.y) : -1;
+
+            if (off >= least && off <= most && off > far && this.hostile(actor, other) && this.canSee(actor, other, Math.max(SIGHT, most))) {
+                [best, far] = [other, off];
+            }
+        }
+
+        return best;
+    }
+
     // Calling others to it as it's worn down (`wild.rally`: creatures.js `rally`): once at each of
     // its marks (`below`: its hit points that share or fewer of its most, in turn), between blows
     // and on the ground, a motion of its own (CALL, as `animation`, `hitAt`, `duration` have it)
@@ -4736,7 +4980,8 @@ export class Battle {
     // them; let go, called or landing as the attack's blow would land (#fight)
     #throwAt(actor, target, attack, more = {}) {
         actor.facing = atan2(target.x - actor.x, target.y - actor.y);
-        actor.attack = { attack, target: target.id, start: this.time, struck: false, ...more };
+        // (A blow in a wedge before it: struck the way it was shown, whichever way it's turned by then)
+        actor.attack = { attack, target: target.id, start: this.time, struck: false, ...(attack.quake?.arc ? { aim: actor.facing } : {}), ...more };
         actor.readyAt = Math.max(actor.readyAt, this.time + attack.interval);
         this.unbuff(actor.id, "invisibility");
         this.#emit("attack", { id: actor.id, target: target.id, weapon: actor.weapon, attack: attack.id, animation: attack.animation, duration: attack.duration, hitAt: attack.hitAt });
@@ -4745,17 +4990,18 @@ export class Battle {
 
     // A blow that shakes the ground (`quake`) and gives warning of it (`telegraph`): told as
     // "telegraph", where it'll land and how far it'll reach, and when (`lands`, the battle's time),
-    // so it can be shown on the ground before it does (a leap's, where it lands)
+    // so it can be shown on the ground before it does (a leap's, where it lands; a wedge's, from
+    // where it stands, which way and how wide: `facing`, `arc` degrees)
     #telegraphs(actor, attack) {
         if (!attack.quake || !attack.telegraph) {
             return;
         }
 
-        const { ahead, radius } = attack.quake;
+        const { ahead, radius, arc = null } = attack.quake;
         const leap = actor.attack?.leap ?? null;
         const [x, y] = leap ? [leap.x, leap.y] : [actor.x + sin(actor.facing ?? 0) * ahead, actor.y + cos(actor.facing ?? 0) * ahead];
 
-        this.#emit("telegraph", { id: actor.id, map: actor.map, x, y, radius, lands: this.time + attack.hitAt });
+        this.#emit("telegraph", { id: actor.id, map: actor.map, x, y, radius, lands: this.time + attack.hitAt, ...(arc ? { arc, facing: actor.facing ?? 0 } : {}) });
     }
 
     /**
@@ -5927,8 +6173,9 @@ export class Battle {
         }
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
-        // (Sooner for a player's Swift gear: core/gear.js)
-        actor.readyAt = this.time + blowEvery(attack, actor.haste);
+        // (Sooner for a player's Swift gear: core/gear.js; and a boss's, the quicker as its fight
+        // has it: #boss `faster`)
+        actor.readyAt = this.time + Math.round(blowEvery(attack, actor.haste) / (actor.faster ?? 1));
 
         // (Striking, they're seen)
         this.unbuff(actor.id, "invisibility");
@@ -5974,9 +6221,9 @@ export class Battle {
             if (attack.kind === "colossal") {
                 this.#colossal(actor, attack, current.ahead);
             } else if (attack.call) {
-                const { kind, count, most, down = null, title = null, told = null } = attack.call;
+                const { kind, count, most, down = null, title = null, told = null, arms = null } = attack.call;
 
-                this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, ...(down === null ? {} : { down }), ...(title ? { title } : {}), ...(told ? { told } : {}), map: actor.map, x: actor.x, y: actor.y });
+                this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, ...(down === null ? {} : { down }), ...(title ? { title } : {}), ...(told ? { told } : {}), ...(arms ? { arms } : {}), map: actor.map, x: actor.x, y: actor.y });
             } else if (attack.bomb) {
                 this.#lob(actor, target, attack);
             } else if (attack.quake) {
@@ -6219,6 +6466,20 @@ export class Battle {
 
         this.hazards.push(hazard);
         this.#emit("hazard", { hazard: hazard.id, kind, map, x, y, radius, until: hazard.until, by: hazard.by, change: "on" });
+    }
+
+    /**
+     * Whatever lies on a map's ground hurting whoever stands in it gone, and whatever's falling
+     * on it or lobbed onto it with it (a boss's arena made afresh: host.js #arenaLost).
+     */
+    clearHazards(map) {
+        for (const hazard of this.hazards.filter((one) => one.map === map)) {
+            this.hazards.splice(this.hazards.indexOf(hazard), 1);
+            this.#emit("hazard", { hazard: hazard.id, kind: hazard.kind, map, change: "over" });
+        }
+
+        this.falls = this.falls.filter((fall) => fall.map !== map);
+        this.bombs = this.bombs.filter((bomb) => bomb.map !== map);
     }
 
     // What lies on the ground hurting whoever of the other side stands in it (never one who's
@@ -6810,7 +7071,7 @@ export class Battle {
         const damage = attack.given ?? attack.damage;
         const power = attack.given ? 1 : (actor.power?.ranged ?? 1);
 
-        this.#throwBomb(actor, [target.x, target.y], attack.bomb, damage, power);
+        this.#throwBomb(actor, [target.x, target.y], attack.bomb, damage, power, attack.pool ?? null);
 
         // (A volley: the others about them, half to all of `spread` metres off, each where there's
         // ground clear enough to stand on)
@@ -6820,7 +7081,7 @@ export class Battle {
             const at = [target.x + cos(angle) * off, target.y + sin(angle) * off];
 
             if (this.#clear(target.map, at)) {
-                this.#throwBomb(actor, at, attack.bomb, damage, power);
+                this.#throwBomb(actor, at, attack.bomb, damage, power, attack.pool ?? null);
             }
         }
     }
@@ -6831,20 +7092,33 @@ export class Battle {
     // it hurt (its damage, times their power for blows up close) and thrown away from them
     // (#blast), its element earth's (but as given, `element`: null, none), leaving on them what it
     // says (`afflict`: Vharzul's ring of green fire, setting them burning)
+    // A boss's in a wedge before it (`arc`, degrees across, `radius` metres long: the Ant Monster's
+    // acid, the Frost Troll's breath), the way it faced as it was shown (`aim`, #throwAt); and what
+    // it leaves where it lands (`pool`: HAZARDS `kind`, `ms`, `radius` and its `damage`, times its
+    // power: #lay), in the wedge's middle
     #quake(actor, attack) {
-        const { ahead, radius, toss, kind, element = "earth", afflict = null } = attack.quake;
-        const [x, y] = [actor.x + sin(actor.facing ?? 0) * ahead, actor.y + cos(actor.facing ?? 0) * ahead];
+        const { ahead, radius, toss, kind, element = "earth", afflict = null, arc = null, pool = null } = attack.quake;
+        const facing = arc ? (actor.attack?.aim ?? actor.facing ?? 0) : (actor.facing ?? 0);
+        const [x, y] = [actor.x + sin(facing) * ahead, actor.y + cos(facing) * ahead];
+        const power = actor.power?.melee ?? 1;
 
-        this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power: actor.power?.melee ?? 1, toss, kind, heart: [actor.x, actor.y], element, reaction: attack.reaction ?? "crush", stagger: attack.stagger ?? 300, afflict });
+        this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power, toss, kind, heart: [actor.x, actor.y], element, reaction: attack.reaction ?? "crush", stagger: attack.stagger ?? 300, afflict, ...(arc ? { cone: { facing, arc } } : {}) });
+
+        if (pool) {
+            const off = arc ? radius * 0.55 : 0;
+
+            this.#lay(actor, actor.map, x + sin(facing) * off, y + cos(facing) * off, pool, rollDamage(pool, this.random) * power);
+        }
     }
 
     // A bomb in the air (BOMBS), from where `by` stands to (x, y): landing a moment later, and
     // bursting once its fuse burns down. Told as "bomb": where it's from and to, when it lands and
     // when it bursts, and how far its blast reaches
-    #throwBomb(by, [x, y], kind, damage, power) {
+    // (What it leaves where it bursts, if anything: `pool`, #lay)
+    #throwBomb(by, [x, y], kind, damage, power, pool = null) {
         const spec = BOMBS[kind];
         const flight = Math.max(spec.soonest, Math.round((hypot(x - by.x, y - by.y) / spec.speed) * 1000));
-        const bomb = { id: this.nextBomb++, kind, map: by.map, x, y, lands: this.time + flight, bursts: this.time + flight + spec.fuse, damage: [...damage], power, by: by.id, team: by.team, caster: by.kind };
+        const bomb = { id: this.nextBomb++, kind, map: by.map, x, y, lands: this.time + flight, bursts: this.time + flight + spec.fuse, damage: [...damage], power, by: by.id, team: by.team, caster: by.kind, ...(pool ? { pool: structuredClone(pool) } : {}) };
 
         this.bombs.push(bomb);
         this.#emit("bomb", { bomb: bomb.id, kind, id: by.id, map: by.map, from: [by.x, by.y], x, y, lands: bomb.lands, bursts: bomb.bursts, radius: spec.radius });
@@ -6865,6 +7139,10 @@ export class Battle {
             const { radius, toss } = BOMBS[bomb.kind];
 
             this.#blast(by && !by.dead ? by : null, side, bomb.map, bomb.x, bomb.y, { radius, damage: bomb.damage, power: bomb.power, toss, kind: bomb.kind, bomb: bomb.id });
+
+            if (bomb.pool) {
+                this.#lay(side, bomb.map, bomb.x, bomb.y, bomb.pool, rollDamage(bomb.pool, this.random) * bomb.power);
+            }
         }
     }
 
@@ -6876,16 +7154,20 @@ export class Battle {
      * or away from `away` wherever they are: the colossal's breath, away from it).
      * Its element a bomb's own (BOMBS), else fire's but as given (`element`: null, none), and how
      * they react to it (`reaction`, `stagger`) and what it leaves on them (`afflict`) a bomb's, but
-     * as given. Told as "blast", before what it does: where, how far it reached, and who's thrown
-     * where ({ id, from, to, flight, up, until }). How many it caught.
+     * as given. Only those in a wedge from (x, y) the way it faces (`cone`: { facing, arc }
+     * degrees across; told with it), not all round. Told as "blast", before what it does: where,
+     * how far it reached, and who's thrown where ({ id, from, to, flight, up, until }). How many
+     * it caught.
      */
-    #blast(by, side, map, x, y, { radius, damage, power = 1, toss, kind, spell = null, heart = null, away = null, bomb = null, spare = null, element: given, reaction = "crush", stagger = 300, afflict: leaves = null }) {
-        const caught = this.actors.filter((actor) => !actor.dead && actor.map === map && !spare?.has(actor.id) && hypot(actor.x - x, actor.y - y) <= radius && this.hostile(side, actor));
+    #blast(by, side, map, x, y, { radius, damage, power = 1, toss, kind, spell = null, heart = null, away = null, bomb = null, spare = null, element: given, reaction = "crush", stagger = 300, afflict: leaves = null, cone = null }) {
+        const half = cone ? (cone.arc * Math.PI) / 360 : null;
+        const inCone = (actor) => !cone || hypot(actor.x - x, actor.y - y) < 0.8 || Math.abs(wrapAngle(atan2(actor.x - x, actor.y - y) - cone.facing)) <= half;
+        const caught = this.actors.filter((actor) => !actor.dead && actor.map === map && !spare?.has(actor.id) && hypot(actor.x - x, actor.y - y) <= radius && inCone(actor) && this.hostile(side, actor));
         // (How near the heart each was, before any's thrown)
         const near = caught.map((actor) => hypot(actor.x - x, actor.y - y));
         const throws = caught.map((actor, k) => this.#toss(actor, [x, y], near[k] / radius, toss, heart, away)).filter(Boolean);
 
-        this.#emit("blast", { kind, map, x, y, radius, by: side.id, spell, bomb, throws });
+        this.#emit("blast", { kind, map, x, y, radius, by: side.id, spell, bomb, throws, ...(cone ? { arc: cone.arc, facing: cone.facing } : {}) });
 
         // (A bomb's own element and what it leaves on whoever it catches, BOMBS; fire's otherwise,
         // but as given)
@@ -7117,7 +7399,9 @@ export class Battle {
         // (A kind of creature Mastered in a player's bestiary, `mastered`: struck the harder, they
         // know where to: core/bestiary.js RESEARCH `edge`)
         const known = target.wild && attacker?.mastered?.includes(target.wild.creature) ? RESEARCH.edge : 1;
-        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element) * known * this.#wardThrough(target);
+        // (A boss shielded by what stands about its arena: #shieldOf)
+        const shielded = this.#shieldOf(target);
+        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element) * known * this.#wardThrough(target) * shielded;
         // (What can't be warded, charmed or shielded against: Prismatic Destruction's, `sure`)
         const whole = sure || factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
@@ -7155,6 +7439,21 @@ export class Battle {
 
         target.hp = Math.max(0, target.hp - damage);
 
+        // (A boss that regrows its hurts, burnt: none regrown a while, #boss `regrow`)
+        if (target.wild?.fight && (school === "fire" || element === "fire")) {
+            target.burntAt = this.time;
+        }
+
+        // (A boss's bloodlust: healed by a share of what it deals, #boss `drain`)
+        const drain = attacker?.wild?.fight && attacker !== target && !attacker.dead && damage > 0 ? this.#stage(attacker, "drain") : null;
+
+        if (drain && attacker.hp < attacker.maxHp) {
+            const before = attacker.hp;
+
+            attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.max(1, Math.round(damage * drain)));
+            this.#emit("healed", { id: attacker.id, by: attacker.id, spell: null, amount: attacker.hp - before, hp: attacker.hp, maxHp: attacker.maxHp, cured: [], from: target.id });
+        }
+
         // (A ward worn, its charge the fuller for a blow that did them harm: #steel)
         if (target.ward && damage > 0 && target.hp > 0 && attacker && attacker !== target) {
             this.#steel(target, attacker);
@@ -7178,6 +7477,7 @@ export class Battle {
             spell,
             ...(ground ? { ground: true } : {}),
             ...(attack.reflected ? { reflected: true } : {}),
+            ...(shielded < 1 ? { shielded: true } : {}),
         });
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up

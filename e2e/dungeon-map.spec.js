@@ -14,7 +14,8 @@ test("cooks up a dungeon for a seed and theme and draws each level, and another 
     await page.waitForFunction(() => window.dungeonMap?.state.dungeon, null, { timeout: 60000 });
     await expect(page.locator("#status")).toBeHidden();
     await expect(page.locator("#counts")).toContainText("stairs down to level 2");
-    await expect(page.locator("#levels button")).toHaveCount(2);
+    // (Its two levels and, under them, its boss's arena)
+    await expect(page.locator("#levels button")).toHaveCount(3);
 
     const read = () =>
         page.evaluate(() => {
@@ -41,14 +42,17 @@ test("cooks up a dungeon for a seed and theme and draws each level, and another 
 
     const caves = await read();
 
-    expect(caves).toMatchObject({ seed: 7, theme: "caves", levels: 2, level: 0 });
+    expect(caves).toMatchObject({ seed: 7, theme: "caves", levels: 3, level: 0 });
     expect(caves.address).toContain("theme=caves");
     expect(caves.colours).toBeGreaterThan(8);
 
-    // The bottom level: the boss and its hoard
+    // The bottom level, its stairs down to the arena; the arena: the boss and its hoard
     await page.locator("#levels button", { hasText: "Level 2" }).click();
-    await expect(page.locator("#counts")).toContainText("the boss:");
+    await expect(page.locator("#counts")).toContainText("stairs down to its arena");
     expect((await read()).level).toBe(1);
+    await page.locator("#levels button", { hasText: "Arena" }).click();
+    await expect(page.locator("#counts")).toContainText("the boss:");
+    expect((await read()).level).toBe(2);
 
     // Another theme: the same seed, another dungeon
     await page.locator("#theme").selectOption("ancient");

@@ -2,9 +2,13 @@
 
 A dungeon is a place under the wilds: a way in above ground (a cave mouth, a hatch, steps down
 into a ruin) that leads to one to three levels underground (a hell's four: [Hells](#hells)), each
-a map of its own, joined by stairs, filled with enemies. Mini-bosses wait along the way. At the far end of the bottom level, a
-final boss guards a chest of gold and gear matched to the players' power. Small chests lie about
-the rest of it.
+a map of its own, joined by stairs, filled with enemies, the first a little easier than the land
+about it and each further down harder. Mini-bosses wait along the way, and on every level but the
+last of a deeper one a floor's boss guards the way down. Past the far end of the bottom level, in
+an arena of its own whose way in shuts once its fight begins, a final boss fights its own way
+(phases, blows shown on the ground first, things falling, things to break) and guards a chest of
+gold and gear matched to the players' power ([Floors, arenas and boss fights](#floors-arenas-and-boss-fights)).
+Small chests lie about the rest of it.
 
 This document describes the **dungeon builder**, `client/js/core/dungeons/`. It cooks a whole
 dungeon up from a seed and a theme. The builder is pure: no DOM, whole numbers and seeded streams
@@ -52,22 +56,30 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   | 3 | 68 m | 8 to 10 |
   | 4 (a hell's) | 66 m | 8 or 9 |
 
-  In a deeper dungeon, a room is less likely to hold a pack (`PACK_ODDS`: every room that might have
-  one, 90% as often in two levels, 75% in three, 70% in a hell's four).
-- **How strong**: its `tier` (1 to 10: the land's, or its finders', whichever's higher, in play)
-  for the first level's packs. Deeper levels' packs are a tier up. A mini-boss is a tier over its
-  level, and the boss two over the bottom level's packs. One in ten of a pack is an elite a tier
-  up on the first level, one in five on the second, three in ten on the third (`ELITE`).
+  Below the last, the boss's arena, a level of its own (*Floors, arenas and boss fights*, below).
+  However deep it is, every room that might hold a pack holds one as often (deeper dungeons used to
+  be thinned out: no longer).
+- **How strong**: its `tier` (1 to 10: the land's, or its finders', whichever's higher, in play).
+  A wild dungeon (caves, a hideout, a temple, an ants' nest) starts a tier under it and grows a
+  tier harder each level down (`build.js` `levelTier`, `FIRST_EASIER`, at least 1, at most 10): in
+  tier-5 land, its first level's packs at 4, its second's at 5, its third's at 6. A hell and
+  Bellhaven's keep stay as they were, their first level at its tier and the rest a tier up. A
+  mini-boss is a tier over its level, a floor's boss too, and the boss two over the bottom level's
+  packs (8, in tier-5 land three levels deep). One in ten of a pack is an elite a tier up on the
+  first level, one in five on the second, three in ten on the third (`ELITE`).
 - **Mini-bosses**: two in a one-level dungeon, two or three in two levels, three or four in three
   (`MINIS`), shared out between the levels. Each waits in a room on the way through, about 40% and
   75% of the way along, with one or two of a pack about it.
-- **The boss** stands a few steps before its hoard in the arena, the great room at the far end of
-  the bottom level (a dead end, 160 m² and more). Two or three of a pack stand about it. In an
-  ancient temple the hoard's at the head of the sanctum, before the altar on the middle way.
-  Elsewhere it's at the furthest walk in.
+- **A floor's boss** on every level but the last of a wild dungeon two or three levels deep
+  (*Floors, arenas and boss fights*, below).
+- **The boss** stands a few steps before its hoard in its arena, a level of its own past the far
+  end of the bottom level. Two or three of a pack stand about it. In an ancient temple the hoard's
+  at the head of the sanctum, before the altar on the middle way. Elsewhere it's at the furthest
+  walk in.
 - **Small chests**: two to four on each level (two or three on the bottom level); twice as many in
-  an ants' nest (four to eight, four to six on the bottom level: its theme's `chests`). They're
-  likeliest in dead ends, then in rooms off the way through, and never in the room you come in by.
+  an ants' nest (four to eight, four to six on the bottom level: its theme's `chests`); none in the
+  boss's arena. They're likeliest in dead ends, then in rooms off the way through, and never in
+  the room you come in by.
 - **The fallen** (an ants' nest's: its theme's `fallen`): the remains of the adventurers who died
   in it, many of them (one or more in most rooms, three to five in the queen's chamber, beside the
   bones of what the ants have eaten), each searched once for what was left on them (*Its chests*).
@@ -81,6 +93,121 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   each of those with fewest till it has that many, so it's never dark through.
 - **Its name** comes from its theme's words: "the Glittering Deeps", "the Rat's Den", "the Halls of
   Ur-Kalath".
+
+## Floors, arenas and boss fights
+
+From players' feedback (2026-11): boss-only rooms with more to them, as Diablo IV's are; floor
+bosses on dungeons of more than one level; floors growing harder, the first easier; and what's
+behind the player let go of.
+
+### A floor's boss (`themes.js` `floors`, `place.js`, `host.js`)
+
+- **On every level but the last** of a wild dungeon two or three levels deep: one of its theme's
+  mini-boss kinds made its floor's boss (its `floors`: the caves' Cave Troll Elder, Elder Cave
+  Bear, Ogre Chieftain, Elder Rock Tusker or Brood Keeper; a hideout's Outlaw Captain, Ogre
+  Enforcer or Hedge Abbot; a temple's Tomb Warden, Grave Wraith or Cult Hierophant; an ants' nest's
+  Brood Sentinel, Great Tunnel Crawler or Widow Queen), a tier over its level, with three times its
+  kind's hit points and blows 1.2 times as hard (`CHAMPIONS.floor`), two or three of the theme's
+  own about it, in the room furthest in, by the stairs down. Mini-bosses still wait along the way.
+- **The stairs down barred till it falls** ("The way down is barred while this floor's guardian
+  still stands.": `REFUSALS.downBarred`), as a hell's portal is till its master falls.
+- **Its own chest** beside it, by a wall, locked till it falls ("Its lock holds while this floor's
+  guardian still stands.": `floorKept`). Opened, each player near it gets a share of their own
+  (`FLOOR_CHEST`, `rollFloorChest`, a tier over its level): 20 to 45 gold, more each tier, a piece
+  of gear, a healing draught 60% of the time.
+- **Told as it falls**: which way's open now, and its chest unlocked.
+
+### The boss's arena (`layouts.js` `arenaLevel`, `build.js`, `host.js` `#arenaWatch`)
+
+- **A level of its own** under the last, every dungeon's (a hell's and the keep's too): a way in
+  (a cave's mouth, a hideout's gate, a temple's vestibule), a passage three squares wide, and the
+  arena: round for caves and an ants' nest (22 to 24 m across, its edge wobbling as a cavern's
+  does: `ARENA.radius`), a hall for a hideout, a temple, a hell and the keep (20 to 22 m by 24 to
+  26). Its theme's own name (`themes.js` `arena`): the throne cavern, the outlaws' great hall, the
+  sanctum, the queen's chamber, the Throne of the Pit, the Bell Chamber. Drawn as its last level's
+  realm is (the Pit's, for a hell). The boss and its guard in it, the hoard behind them; no packs and
+  no small chests. Eight spots round its edge, on open ground with rock behind (`place.js`
+  `AREA_SPOTS`), for what its fight sets out.
+- **Its way in, the bottom level's last stairs down** (a portal, in a hell; the flight's `arena`).
+- **Shut once its fight begins**: open as the party gathers in it; once a player in it strikes the
+  boss or the boss sets on one of them, its way in shuts ("The way out shuts behind you: the Troll
+  King must fall, or you.", heard as a heavy door), and none go in or out while it goes on ("The
+  way in is shut while the fight goes on beyond it.": `arenaShut`). Those outside wait at it.
+- **One who falls in it** comes back outside its way in, on the level above, and is theirs to come
+  back to as ever once they're up (`#arenaFell`, `#arenaBack`).
+- **Everyone in it fallen: the fight's lost** (`#arenaLost`). The boss and its guard whole again
+  where they stood, what it called up and set out gone, what lay on its ground and what was
+  falling gone, its fight from its start; its way in open again. The levels above stay as they
+  were, cleared. ("The Troll King stands. Its lair's way in opens again: all as it was, for
+  another try.")
+- **The boss slain**: its way in opens, its hoard's unlocked.
+
+### Memory: the levels about the player only (`app/game.js` `#dungeonHeld`, `#dungeonFloors`)
+
+Only the level the player's on and those either side of it are built and kept (outside, the first
+alone); the rest are let go of and built again as they're come to. In the arena, everything above
+it but the level its way in's on is let go of (docs/GAME.md *Getting buildings ready*). Measured
+before: a three-level cave's levels came to 56 MB of the page's floors as the player went in, most
+of it the two below. And on the host, a dungeon's first level's foes are woken for players
+outside by its way in, not those already in it (it held them awake while anyone was anywhere
+inside).
+
+### Every boss's fight (`core/fights.js` `FIGHTS`, `battle.js` `#boss`)
+
+Each boss's own fight laid onto its kind's ways as it's roused (`withFight`), by its id in its
+theme (its `regalia`). The building blocks (battle.js):
+
+- **Phases** at health marks (`phases`, each from its `below`), each told as it begins, by name
+  ("The Ant Monster shrieks: the egg clutches in the walls split and stir!"); what each has holds
+  till a later one says otherwise.
+- **Blows shown on the ground first** (`telegraph`): all round it, before it, where it lands, or
+  **in a wedge** before it (`quake.arc`, degrees across: drawn as a wedge, struck the way it was
+  shown, whichever way it's turned by then), and **pools** left where it lands (`quake.pool`:
+  acid, fire, rot, lava, venom, battle.js `HAZARDS`).
+- **Things falling across its arena** (`falls`): every so often, a circle under so many of those
+  it's against and so many more about it, shown on the ground 1.4 to 1.8 seconds before each comes
+  down (rock, ice, hellfire, bombs, poison, the dark), some leaving pools.
+- **Things to break** (`objects`, creatures.js `object`: the Ant Monster's egg clutches, the
+  Broodmother's egg sacs, the Tomb Lord's soul jars), set out at its arena's spots (`host.js`
+  `#fightPhase`), none moving or striking, each hatching what's in it now and then (`hatch`,
+  battle.js `#hatch`: "The Egg clutch splits open: giant ants pour out of it!"), and the boss
+  taking **half the harm** of any blow while two or more of them stand (`shield`: told to whoever
+  strikes it, now and then).
+- **Quicker** (`faster`: its blows and its moves), **its hurts regrowing** a share a second unless
+  it's been burnt lately (`regrow`), **its bloodlust**, healed by a share of what it deals
+  (`drain`); a charge or a boulder **at whoever's furthest off** (`far`).
+- **Its enrage**: fought six minutes (eight, the Lord of the Pit), a blast across all its arena
+  every four seconds till it's down or they are.
+
+The final bosses, in their arenas:
+
+| Boss | Its first phase | Below two thirds | Below a third | Enrage |
+|---|---|---|---|---|
+| the Ant Monster | her flock called; acid sprayed in a wedge, a pool of it left | four egg clutches hatching ants every 20 s; half harm while two stand | the roof caving in across the chamber; quicker | 6 min |
+| the Troll King | his club; a boulder hurled at whoever's furthest | a slam all round him; stalactites falling | his hurts regrowing (fire stops it six seconds); quicker | 6 min |
+| the Broodmother | bites; webbing spat in a wedge, slowing | three egg sacs hatching spiderlings every 18 s; half harm while two stand | up to the roof a while, out of reach, poison dripping in pools below | 6 min |
+| the Goblin King | his bomb volleys at whoever's second in his enmity; his war band | raiders and bombers called | bombs raining across the cave; quicker | 6 min |
+| the Frost Troll | his club; frost breathed in a wedge, slowing | icicles falling | a nova of frost all round him; quicker | 6 min |
+| the Orc Warlord | his great axe; a leap on whoever keeps off | goblin raiders and bombers rallied | his axe whirled all round him; quicker | 6 min |
+| the Outlaw King | his blades; two archers called to the hall's corners | oil jars thrown, burning where they land | his two lieutenants called; quicker | 6 min |
+| the Ogre Captain | his club smashed down before him | a charge at whoever's furthest | the ground pounded all round him; a hired ogre called | 6 min |
+| the Orc Reaver | his great axe; a leap | his cutthroats rallied | his bloodlust: healed by a third of what he deals; quicker | 6 min |
+| the Tomb Lord | his blade; the grave's chill in a wedge, withering | three soul jars raising the dead every 20 s; half harm while two stand | dark pools welling under whoever's near; quicker | 6 min |
+| the Dread Wraith | its touch; a wail all round it, frightening | out of reach a while, wisps called | dark pools under whoever's near; quicker | 6 min |
+| the Lord of the Pit | his blows, a leap, hellfire all round him | the sigils bursting: hellfire falling across the hall, pools of fire; his henchmen called | his hellfire more often; quicker | 8 min |
+| Prior Osric Vane | the Bell's toll; the Black Choir called (two thirds, a third) | stone falling from the belfry | the toll more often; quicker | 6 min |
+
+A hell's masters and the keep's wardens, on their levels (no enrage):
+
+| Boss | Its fight |
+|---|---|
+| the Demon of the Breach | below half, lava bursting up across its room, pools of it left |
+| the Hound of the Halls | below half, its three heads biting at once, and its howl calling the dead up |
+| the Forge Demon | its hammer brought down before it, burning; below half, molten pools under whoever's near, quicker |
+| the Gatekeeper | its club smashed down before it; a charge at whoever's furthest |
+| the Castellan of Bellhaven | on guard now and then; below half, the watch rallied |
+| the Sub-Prior | on guard now and then; initiates called at two thirds and a third |
+| the Lector of the Choir | on guard now and then; below half, a knight of the Black Choir rallied, and quicker |
 
 ## Hells
 
@@ -239,12 +366,12 @@ Greenflame*, whose quest ends going down through one).
 - **How strong**: never below tier 9 (its `tiers`), however low it's asked to be made
   (`buildDungeon`); its packs, mini-bosses and masters its own, whatever the tiers they're met at
   elsewhere (`tiered: false`: `place.js` `chooseFoe`'s slack).
-- **How deep**: four levels, each 66 m across (give or take 4), with 8 or 9 rooms (`LEVEL_SIZES`);
-  a room 70% as likely to hold a pack as on a dungeon of one level (`PACK_ODDS`); two or three
-  mini-bosses besides its masters (`MINIS`).
+- **How deep**: four levels, each 66 m across (give or take 4), with 8 or 9 rooms (`LEVEL_SIZES`),
+  and under them the Lord of the Pit's throne hall, his arena, drawn as the Pit is (*Floors, arenas
+  and boss fights*); two or three mini-bosses besides its masters (`MINIS`).
 - **A master on every level** (its realm's `warden`; a pack with the role `"warden"`, its first
-  foe `warden`): in the room furthest in, by the portal down, two or three of its guard about it;
-  on the bottom level, in the last room on the way through before the arena. A rank of its own
+  foe `warden`): in the room furthest in, by the portal down, two or three of its guard about it
+  (the Pit's, by the portal down to the lord's hall). A rank of its own
   between a mini-boss's and the boss's (`play.js` `CHAMPIONS.floor`: three times the hit points,
   its blows 1.2 times as hard; drawn 1.16 times its kind's size, its eyes brighter:
   `beasts/champions.js` `CHAMPION_LOOKS.floor`). Its fall is told to whoever's in the hell: "The
@@ -259,7 +386,7 @@ Greenflame*, whose quest ends going down through one).
   level's master's pack has fallen (the link's `seal`: the map it's sealed from, the level and the
   pack; `host.js` `enter`). Till it has, whoever tries is told "The portal won't let you through
   while this level's master still stands." The way back up is never sealed.
-- **The way out**: on the bottom level, beyond the throne, a portal dug into the arena's far wall
+- **The way out**: in the lord's throne hall, beyond the throne, a portal dug into its far wall
   as stairs down are (the level's `exit`: `place.js`), the Lord of the Pit between it and the way
   in. It leads back to the wilds, before the hell's way in. It's a way only out: its end outside
   has nothing to go in by (no squares), so no one's led in by it (`interiors.js` `routeBetween`,
@@ -517,8 +644,9 @@ dungeon's way in (`wild: false`), and there's one a world.
      Its warden, **the Lector of the Choir** (a knight of the Choir, the Choir about him).
   4. **The Belfry** (`axial`): the bell-ringers' hall, the knights' hall, the tower, the Black
      Choir's own (its knights in pairs, with brothers, with spear-brothers, and bowmen). The
-     Bell-ringer or the Precentor among them. Its master in the bell chamber, before his hoard at
-     its head: **Prior Osric Vane, the Voice of the Bell** (`priorVane`, the Choir about him), in
+     Bell-ringer or the Precentor among them. Above it, the Bell Chamber, a floor of its own (the
+     keep's arena: *Floors, arenas and boss fights*), its master in it, before his hoard at its
+     head: **Prior Osric Vane, the Voice of the Bell** (`priorVane`, the Choir about him), in
      gilded plate under a halo of thorns and a head and more taller than the heroes (Alexander
      Lenski's Cathedral Guardian, drawn 2.6 metres tall): his war mace and shield, a swing wound up
      from behind, a swing and a blow back, two blows from on high and four together; his toll (his
@@ -617,6 +745,10 @@ coming in arrives two steps off the landing or door, facing into the level. No o
 
 ### The layouts (`layouts.js`)
 
+Each could dig its bottom level a boss's arena (`arena`: a great room at the far end, a dead
+end), as every dungeon's was before its boss had a level of its own; none of a dungeon's levels
+asks for one now (`build.js`), its boss's is `arenaLevel`'s (the last bullet).
+
 - **`caves`**: the mouth by the way in. On the bottom level, a great arena far from it (a radius
   of 8 to 10 m). Then two or three great caverns, four to six middling and the rest small, each
   scattered at least 4 m of rock from the others. The caverns are joined along the shortest tree
@@ -660,6 +792,12 @@ coming in arrives two steps off the landing or door, facing into the level. No o
     (but where a chamber has no room for it at its middle, about one in a hundred).
   - then smoothed once, so the lobes stay crisp, and one or two walls broken through where that
     saves 25 m or more, never into the queen's chamber.
+- **`arenaLevel`** (a boss's arena, a level of its own: *Floors, arenas and boss fights*): its way
+  in at the top of the level (room 0: a cave's mouth, a hideout's gate, a temple's vestibule), a
+  passage three squares wide down to the arena (room 1), and the arena: a round, its edge wobbling
+  with noise, 11 or 12 m from its middle (`ARENA.radius`), smoothed once; or, for a hideout, a
+  temple, a hell and the keep (`hall`), a hall 20 to 22 m by 24 to 26 (`ARENA.hall`). Kept 4
+  squares from the level's edge (`ARENA.margin`), whatever can't be walked to filled in.
 
 ### What's put in (`place.js`)
 
@@ -1171,7 +1309,19 @@ code is here.
   - in a world: made as a player comes near, its first level woken and its chests set out; gone
     into and down its stairs, each level woken and the one above let go; the hoard locked till the
     boss falls; a share of a small chest and of the hoard; cleared; kept in a snapshot and taken up
-    again with the player in it; made again once everyone's gone, the next generation.
+    again with the player in it; made again once everyone's gone, the next generation;
+  - a floor's boss: the stairs down barred and its chest locked till it falls; the level below
+    woken before the player gets there and the one above let go; the boss's arena shut once its
+    fight begins, its way in refused, and everyone in it fallen, lost: its boss whole again, the
+    fallen up outside it, gone in again; what its fight sets out round its arena's edge.
+- **`test/fights.test.js`**, every boss's fight (`core/fights.js`, `battle.js` `#boss`): one for
+  every dungeon's boss, hell's master and keep's warden; each well made (its phases' marks
+  falling, its moves shown first, what it calls and sets out real); laid onto its kind's ways; each
+  phase in turn at its mark, told, setting out what's to be broken, quicker; a wedge struck where
+  it was shown, a pool left; half harm while two of what shields it stand; what falls shown first
+  under whoever's there, hurting whoever's still there; regrowing, stopped by fire; bloodlust;
+  hatching; a boulder at whoever's furthest; its enrage; what's falling kept and let go of with its
+  arena.
 - **`e2e/pellagos.spec.js`**: in the game, a dungeon's way in gone into, its first level drawn and
   lit, down its stairs to the next and out again. And a hell, the nearest to the start: its way
   in shut by day, no one there; by night its cult there, shut till they're slain to the last,

@@ -18,7 +18,7 @@ const $ = (selector) => document.querySelector(selector);
 const GROUNDS = { caves: ["#5d5447", "#17130f"], hideout: ["#6b5a43", "#1a140e"], ancient: ["#7a766c", "#15140f"], nest: ["#6e4c34", "#1a110a"], hell: ["#5a3a32", "#140806"], keep: ["#bdb7a9", "#15140f"] };
 
 // Each room's part, tinted
-const ROLES = { entry: ["#46c46a", "the way in"], stairs: ["#5b8cff", "stairs down"], arena: ["#ff4b3a", "the boss's arena"], mini: ["#ff9f1a", "a mini-boss's room"], warden: ["#d83c9a", "a hell's level's boss's room"], pack: ["#c9b28a", "a pack's room"], quiet: [null, "an empty room"] };
+const ROLES = { entry: ["#46c46a", "the way in"], stairs: ["#5b8cff", "stairs down"], arena: ["#ff4b3a", "the boss's arena"], mini: ["#ff9f1a", "a mini-boss's room"], warden: ["#d83c9a", "a floor's boss's room"], pack: ["#c9b28a", "a pack's room"], quiet: [null, "an empty room"] };
 
 // What stands on the squares, by plan character
 const PROPS = {
@@ -387,7 +387,8 @@ function levelButtons() {
             const button = document.createElement("button");
 
             button.type = "button";
-            button.textContent = `Level ${k + 1}`;
+            // (The boss's arena, a level of its own under the last: build.js)
+            button.textContent = level.arena ? "Arena" : `Level ${k + 1}`;
             button.setAttribute("aria-pressed", String(k === state.level));
             button.addEventListener("click", () => {
                 state.level = k;
@@ -413,18 +414,22 @@ function count() {
     }
 
     const boss = level.packs.find(({ role }) => role === "boss");
+    const warden = level.packs.find(({ role }) => role === "warden");
     const minis = level.packs.filter(({ role }) => role === "mini");
+    const deep = dungeon.levels.filter((each) => !each.arena).length;
+    const next = dungeon.levels[level.index + 1]?.arena ? "its arena" : `level ${level.index + 2}`;
+    const way = `stairs ${THEMES[dungeon.theme].rises ? "up" : "down"} to ${next}`;
 
     $("#name").textContent = dungeon.name;
     $("#counts").replaceChildren(
         ...[
-            `${THEMES[dungeon.theme].name}, ${dungeon.levels.length} level${dungeon.levels.length > 1 ? "s" : ""} ${THEMES[dungeon.theme].rises ? "high" : "deep"}, tier ${dungeon.tier}; made in ${state.took.toFixed(0)} ms`,
-            `level ${level.index + 1}: ${level.width} × ${level.height} metres, ${level.rooms.length} rooms, ${level.rows.join("").replace(/#/g, "").length} m² to walk, ${level.loops} loop${level.loops === 1 ? "" : "s"}${level.attempt ? `, dug ${level.attempt + 1} times` : ""}`,
+            `${THEMES[dungeon.theme].name}, ${deep} level${deep > 1 ? "s" : ""} ${THEMES[dungeon.theme].rises ? "high" : "deep"} and its boss's arena, tier ${dungeon.tier}; made in ${state.took.toFixed(0)} ms`,
+            `${level.arena ? "its arena" : `level ${level.index + 1}`}: ${level.width} × ${level.height} metres, ${level.rooms.length} rooms, ${level.rows.join("").replace(/#/g, "").length} m² to walk, ${level.loops} loop${level.loops === 1 ? "" : "s"}${level.attempt ? `, dug ${level.attempt + 1} times` : ""}; its foes at tier ${level.tier}`,
             `the way through: ${level.path.length} rooms`,
-            boss ? `the boss: ${boss.title} (${boss.foes[0].creature}, tier ${boss.foes[0].tier}) and ${boss.foes.length - 1} more` : `stairs ${THEMES[dungeon.theme].rises ? "up" : "down"} to level ${level.index + 2}`,
+            boss ? `the boss: ${boss.title} (${boss.foes[0].creature}, tier ${boss.foes[0].tier}) and ${boss.foes.length - 1} more` : warden ? `its floor's boss: ${warden.title} (${warden.foes[0].creature}, tier ${warden.foes[0].tier}) and ${warden.foes.length - 1} more, by the ${way}` : way,
             minis.length ? `mini-bosses: ${minis.map(({ title, foes: [mini] }) => `${title} (tier ${mini.tier})`).join(", ")}` : "no mini-boss on this level",
             `${level.packs.filter(({ role }) => role === "pack").length} packs, ${foes.length} foes in all: ${[...kinds].map(([creature, n]) => `${n} ${creature}`).join(", ")}`,
-            `${level.chests.filter(({ kind }) => kind === "small").length} small chests${level.chests.some(({ kind }) => kind === "hoard") ? " and the boss's hoard" : ""}${level.chests.some(({ kind }) => kind === "remains") ? `; ${level.chests.filter(({ kind }) => kind === "remains").length} of the fallen to search` : ""}`,
+            `${level.chests.filter(({ kind }) => kind === "small").length} small chests${level.chests.some(({ kind }) => kind === "floor") ? " and its floor's boss's chest" : ""}${level.chests.some(({ kind }) => kind === "hoard") ? " and the boss's hoard" : ""}${level.chests.some(({ kind }) => kind === "remains") ? `; ${level.chests.filter(({ kind }) => kind === "remains").length} of the fallen to search` : ""}`,
             `${level.lights.filter(({ kind }) => kind === "torch").length} torches, ${level.lights.filter(({ kind }) => kind !== "torch").length} fires`,
         ].map((text) => Object.assign(document.createElement("li"), { textContent: text })),
     );

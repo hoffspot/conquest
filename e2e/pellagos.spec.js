@@ -8565,7 +8565,8 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await page.evaluate(() => window.pellagos.game.toggleJournal());
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
-    await expect(journal).toContainText("1 of 124 kinds of creature met");
+    // (Every kind there is: what's set out in a boss's arena to be broken among them, creatures.js `object`)
+    await expect(journal).toContainText("1 of 127 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them
@@ -14051,6 +14052,20 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
         await until(() => pictures.every(({ userData }) => userData.loaded?.value === 1) && props().length > 0, 300);
         Object.assign(first, { pictures: pictures.length, compressed: pictures.every((texture) => texture.userData.loaded.value === 1 && compressed(texture)), props: props().length, propsCompressed: props().every(compressed) });
 
+        // (Its floor's boss slain first, if it has one: its stairs down barred till it falls)
+        const [warden] = [...game.host.wild].find(([each, one]) => one.dungeon === site.id && one.champion === "floor" && game.battle.actor(each)?.map === player.map) ?? [];
+
+        first.warden = Boolean(warden);
+
+        if (warden) {
+            const end = building.flights[0].ends.find(({ map }) => map === player.map);
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, path: [], order: null, progress: null });
+            first.barred = game.host.command("player", { type: "enter", link: building.flights[0].id }).reason;
+            game.battle.afflict(warden, "poison", { by: "player", damage: 1e7 });
+            await until(() => game.battle.actor(warden)?.dead ?? true, 100);
+        }
+
         await through(building.flights[0]);
 
         const second = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), woken: game.host.dungeons.get(site.id).awake[1]?.length ?? 0 };
@@ -14071,6 +14086,8 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved.first.pictures).toBeGreaterThanOrEqual(2);
     expect(delved.first.props).toBeGreaterThan(0);
     expect(delved.first).toMatchObject({ compressed: true, propsCompressed: true });
+    // (A floor's boss on it, as a dungeon two levels deep or more has: its stairs down barred till it falls)
+    expect(delved.first.barred ?? null).toBe(delved.first.warden ? "downBarred" : null);
     expect(delved.second).toMatchObject({ map: delved.maps[1], drawn: true });
     expect(delved.second.woken).toBeGreaterThan(0);
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
@@ -14128,11 +14145,14 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             }
         }
 
-        // Its most open square and its tightest that can be stood on, away from its stairs
+        // Its most open square and its tightest that can be stood on, away from its stairs, in a
+        // tunnel (open three squares either way along it, the rock within three either side of it
+        // across it: not a nook in a cavern's rock, nor a cavern's edge)
         const map = game.world.maps[player.map];
         const squares = squaresOf(map);
         const [mx, mz] = game.originOf(player.map);
         const rock = view.room.rock;
+        const passage = (x, y) => [[1, 0], [0, 1]].some(([dx, dy]) => [-3, -2, -1, 1, 2, 3].every((d) => !squares.blocked(x + dx * d, y + dy * d)) && [1, -1].every((side) => [1, 2, 3].some((d) => squares.blocked(x + dy * d * side, y + dx * d * side))));
         let [open, tight] = [null, null];
 
         for (let y = 2; y < map.height - 2; y++) {
@@ -14141,7 +14161,7 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
                     const how = openness(rock, mx + x + 0.5, mz + y + 0.5);
 
                     open = !open || how > open.how ? { x, y, how } : open;
-                    tight = !tight || how < tight.how ? { x, y, how } : tight;
+                    tight = passage(x, y) && (!tight || how < tight.how) ? { x, y, how } : tight;
                 }
             }
         }
@@ -14184,7 +14204,8 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
             const room = (yaw) => view.roomAt(yaw);
             const crowded = ways.reduce((a, b) => (room(b) < room(a) ? b : a));
-            const along = ways.reduce((a, b) => (room(b) > room(a) ? b : a));
+            // (The roomiest way with ground to walk to four steps along it)
+            const along = [...ways].sort((a, b) => room(b) - room(a)).find((way) => !squares.blocked(Math.round(tight.x - Math.sin(way) * 4), Math.round(tight.y - Math.cos(way) * 4))) ?? ways.reduce((a, b) => (room(b) > room(a) ? b : a));
 
             game.cameraSettings = { ...game.cameraSettings, openWay: finds, follows: false };
             Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
@@ -14207,15 +14228,17 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
         // In a fight in the tunnel, a foe a few steps along it: the battle cam frames it from where
         // the rock leaves the camera room, not crowded in against it
         const fight = () => {
-            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp);
+            // (One of its packs, not its floor's boss: too big to be framed in full in a tunnel)
+            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp && !actor.wild?.champion);
             const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
 
             // (Settled in the tunnel first: the camera as its space has it)
             Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
             game.advance(5);
 
-            const along = ways.reduce((a, b) => (view.roomAt(b) > view.roomAt(a) ? b : a));
-            const [fx, fy] = [3, 2, 4].map((d) => [Math.round(tight.x - Math.sin(along) * d), Math.round(tight.y - Math.cos(along) * d)]).find(([x, y]) => !squares.blocked(x, y));
+            // (A few steps along the roomiest way with ground to stand on there)
+            const roomiest = [...ways].sort((a, b) => view.roomAt(b) - view.roomAt(a));
+            const [along, fx, fy] = roomiest.flatMap((way) => [3, 2, 4].map((d) => [way, Math.round(tight.x - Math.sin(way) * d), Math.round(tight.y - Math.cos(way) * d)])).find(([, x, y]) => !squares.blocked(x, y));
 
             Object.assign(foe, { dead: false, hp: foe.maxHp, respawnAt: undefined, x: fx + 0.5, y: fy + 0.5, square: [fx, fy], path: [], order: null, attack: null, target: "player", stunnedUntil: game.battle.time + 60000 });
             game.cameraSettings = { ...game.cameraSettings, battle: true, openWay: true };
@@ -14851,21 +14874,22 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
         const downs = building.flights.filter(({ id }) => id.endsWith("/stairs"));
         const out = building.flights.find(({ id }) => id.endsWith("/exit"));
 
-        for (let k = 0; k < 4; k++) {
-            const level = { ...seen(), sealed: k < 3 ? await through(downs[k]) : await through(out) };
+        // (Its four realms, then the lord's throne hall under them, his arena: docs/DUNGEONS.md)
+        for (let k = 0; k < 5; k++) {
+            const level = { ...seen(), sealed: k < 4 ? await through(downs[k]) : await through(out) };
 
-            level.slain = await slay(k < 3 ? "floor" : "boss");
+            level.slain = await slay(k < 4 ? "floor" : "boss");
             await until(() => false, 10);
-            level.after = k < 3 ? await through(downs[k]) : await through(out);
+            level.after = k < 4 ? await through(downs[k]) : await through(out);
             levels.push(level);
         }
 
         return { made, camp, maps: building.maps, levels, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
     });
 
-    // (Not made till the player came near, then four levels deep)
+    // (Not made till the player came near, then four levels deep, and the lord's hall under them)
     expect(hell.made).toBe(false);
-    expect(hell.maps).toHaveLength(4);
+    expect(hell.maps).toHaveLength(5);
 
     // (Shut by day, the cult not there; by night its high priest and its faithful at their rite,
     // the way shut till they're slain, then in)
@@ -14874,21 +14898,26 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
     expect(hell.camp.cult.slice(1).every((kind) => kind === "cultist")).toBe(true);
 
     // (Each its realm's, a portal of fire on it, in its own air; sealed till its master's slain,
-    // then through)
+    // then through; the lord's hall drawn and heard as the Pit)
     hell.levels.forEach((level, k) => {
         expect(level.map).toBe(hell.maps[k]);
-        expect(level.look).toBe(["hell-breach", "hell-bone", "hell-fire", "hell-pit"][k]);
+        expect(level.look).toBe(["hell-breach", "hell-bone", "hell-fire", "hell-pit", "hell-pit"][k]);
         expect(level.veils).toBeGreaterThan(0);
-        expect(level.background).toBe([0x140806, 0x120606, 0x1e0804, 0x0a0404][k]);
-        expect(level.sealed).toBe(k < 3 ? "sealed" : "throne");
+        expect(level.background).toBe([0x140806, 0x120606, 0x1e0804, 0x0a0404, 0x0a0404][k]);
+        expect(level.sealed).toBe(k < 4 ? "sealed" : "throne");
         expect(level.slain).toBe(true);
         expect(level.after).toBe(null);
 
         // (Heard as its realm: its drone, lower than the realm's above; the Halls' heart)
-        expect(level.heard.place).toBe(["hellBreach", "hellBone", "hellFire", "hellPit"][k]);
+        expect(level.heard.place).toBe(["hellBreach", "hellBone", "hellFire", "hellPit", "hellPit"][k]);
         expect(level.heard.beds).toContain("hellDrone");
         expect(level.heard.beds.includes("heartbeat")).toBe(k === 1);
-        expect(level.heard.drone).toBeLessThan(k ? hell.levels[k - 1].heard.drone : 1.01);
+
+        if (k < 4) {
+            expect(level.heard.drone).toBeLessThan(k ? hell.levels[k - 1].heard.drone : 1.01);
+        } else {
+            expect(level.heard.drone).toBe(hell.levels[3].heard.drone);
+        }
     });
 
     // (Out beyond the throne to before its way in)

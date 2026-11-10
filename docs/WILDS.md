@@ -95,6 +95,7 @@ two tiers above it, up to their most.
 | Dungeon scorpion | 64 | aggressive | an ants' nest's packs, 1–2 | 3–10 | the ants' nests only |
 | Black widow | 54 | aggressive | alone under a gallery's roof, lurking; or a mini-boss, the Widow matriarch | 3–10 | the ants' nests only |
 | Ant Monster | 96 | aggressive | 1, calling its flock | 4–10 | the ants' nests: their boss |
+| Egg clutch, egg sac, soul jar | 40, 34, 44 | none: never moves or strikes, hatching what's in it now and then | set out as a boss's fight has them | at its boss's tier | a dungeon boss's arena only: the Ant Monster's, the Broodmother's, the Tomb Lord's (docs/DUNGEONS.md *Every boss's fight*) |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Drake | 90 | aggressive | 1 | 10 | the drake's lair |

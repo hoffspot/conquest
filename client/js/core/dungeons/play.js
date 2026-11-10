@@ -32,6 +32,13 @@ export const CHAMPIONS = Object.freeze({ boss: { hp: 4, power: 1.3 }, floor: { h
 export const COFFER = Object.freeze({ gold: [6, 18], gear: 0.4, potion: 0.3 });
 
 /**
+ * What's in a floor's boss's chest (place.js: a wild dungeon's levels but its last; a share for
+ * each player near it when it's opened, once its boss has fallen), at its boss's tier, a tier over
+ * its level: more gold than a small chest's, always a piece of gear, a healing draught likelier.
+ */
+export const FLOOR_CHEST = Object.freeze({ gold: [20, 45], gear: 1, potion: 0.6 });
+
+/**
  * What's left on one of the fallen (the remains of an adventurer who died there, in a theme whose
  * fallen can be searched: themes.js `fallen`), searched once (a share for each player near them):
  * a few coins (`gold`, more each tier), a piece of their gear now and then (`gear`), a healing
@@ -71,6 +78,21 @@ export function rollCoffer(tier, random, { people = "human", maker = people, lev
     }
 
     return { gold: goldAt(COFFER.gold, tier, random), items };
+}
+
+/** A share of a floor's boss's chest (FLOOR_CHEST) at its boss's tier: { gold, items }. */
+export function rollFloorChest(tier, random, { people = "human", maker = people, level = 1, falloff = 1 } = {}) {
+    const items = [];
+
+    if (random.chance(FLOOR_CHEST.gear)) {
+        items.push(gearPiece(tier, random, people, { level, falloff, maker }));
+    }
+
+    if (random.chance(FLOOR_CHEST.potion)) {
+        items.push({ id: "potion", quality: "common" });
+    }
+
+    return { gold: goldAt(FLOOR_CHEST.gold, tier, random), items };
 }
 
 /** A share of what's left on one of the fallen (FALLEN) at a level's tier: { gold, items }. */

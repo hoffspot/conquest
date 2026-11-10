@@ -316,6 +316,11 @@ export const SPOILS = Object.freeze({
     // (The Lord of the Pit's henchmen: what he pays them in; a hell's walkers, what they've taken)
     henchman: { gold: [12, 30], items: [{ id: "soulShard", chance: 0.3 }, { id: "obsidian", chance: 0.3 }, { id: "crownShard", chance: 0.1 }] },
     ...Object.fromEntries(["brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"].map((id) => [id, { gold: [6, 16], items: [{ id: "boneDust", chance: 0.35 }, { id: "soulShard", chance: 0.15 }, { id: "obsidian", chance: 0.2 }] }])),
+    // (What's set out in a boss's arena to be broken: what was in it, an egg clutch's royal jelly,
+    // an egg sac's silk, a soul jar's shard)
+    antClutch: { items: [{ id: "royalJelly", chance: 0.3 }] },
+    eggSac: { items: [{ id: "spiderSilk", chance: 0.6, count: [1, 2] }] },
+    soulJar: { items: [{ id: "soulShard", chance: 0.3 }] },
 });
 
 /**
