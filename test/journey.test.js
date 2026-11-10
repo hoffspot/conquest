@@ -10,7 +10,7 @@ import { CROSSING, crossingsOf, JOURNEY, lengthOf, nearestAlong, pointAlong, way
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CELL, CELLS, WATER } from "../client/js/core/worldplan/plan.js";
 import { FAR } from "../client/js/world/far/levels.js";
-import { PING_COLUMN, PingBeacons, PIN_COLUMN, PinMarks, WAY_LINE } from "../client/js/world/pin3d.js";
+import { floatingOver, PING_COLUMN, PingBeacons, PIN_COLUMN, PinMarks, WAY_LINE, WAY_WISPS } from "../client/js/world/pin3d.js";
 
 const world = buildWorld({ seed: 1 });
 const plan = world.plan;
@@ -111,6 +111,17 @@ describe("ways across the world (core/journey.js)", () => {
         assert.deepEqual(wayFrom(way, 20), [[20, 0], [30, 0], [30, 40]]);
         assert.deepEqual(wayFrom(way, 999), [[30, 40]]);
     });
+
+    it("finds where along a way that comes back close to itself someone is, near where they were last, not further on where it passes them again", () => {
+        // (Up a slope's zigzag: out 30 m east, 2 m north, back 30 m west)
+        const way = [[0, 0], [30, 0], [30, 2], [0, 2]];
+
+        assert.equal(nearestAlong(way, [10, 1.2]).along, 52, "anywhere: the way back, nearer");
+        assert.deepEqual(nearestAlong(way, [10, 1.2], { from: 5, to: 20 }), { along: 10, off: 1.2, segment: 0 });
+        // (Only within it, its ends where it's cut)
+        assert.deepEqual(nearestAlong(way, [40, 0], { to: 25 }), { along: 25, off: 15, segment: 0 });
+        assert.deepEqual(nearestAlong(way, [0, 0], { from: 40, to: 45 }), { along: 45, off: Math.hypot(17, 2), segment: 2 });
+    });
 });
 
 describe("running somewhere far (app/journey.js)", () => {
@@ -193,21 +204,29 @@ describe("the pin in the world (world/pin3d.js)", () => {
         assert.equal(near.children.length + far.children.length, 0);
     });
 
-    it("lays the line to it along the ground, a strip each side of the way, as long as it goes", () => {
+    it("lays the way to it floating over the ground, two corners at each point of its middle, turned to the camera in its shader, as long as it goes", () => {
         const marks = new PinMarks(new THREE.Scene(), new THREE.Scene());
         const points = Array.from({ length: 11 }, (_, k) => [k, 2 + k * 0.1, 0]);
 
         marks.setLine(points);
 
-        const { position, along, across } = marks.line.geometry.attributes;
+        const { position, ahead, along, across } = marks.line.geometry.attributes;
         const buffer = position.array;
 
         assert.equal(marks.line.visible, true);
+        assert.equal(marks.wisps.points.visible, true);
         assert.equal(marks.lineLength.value, 10);
         assert.deepEqual([along.array[0], along.array[21]], [0, 10]);
         assert.deepEqual([across.array[0], across.array[1]], [-1, 1]);
+        // (Both corners at its middle, WAY_LINE.over over the ground: a slope as it is, smoothed)
+        assert.deepEqual([...position.array.slice(0, 3)], [...position.array.slice(3, 6)]);
         assert.ok(Math.abs(position.array[1] - (2 + WAY_LINE.over)) < 1e-6, "over the ground");
-        assert.ok(Math.abs(Math.abs(position.array[2]) - WAY_LINE.half) < 1e-6, "its width across the way");
+        assert.ok(Math.abs(position.array[5 * 6 + 1] - (2.5 + WAY_LINE.over)) < 1e-6, "over the ground along it");
+        // (Which way it runs: along the slope)
+        assert.ok(Math.abs(ahead.array[0] - 1 / Math.hypot(1, 0.1)) < 1e-6 && Math.abs(ahead.array[1] - 0.1 / Math.hypot(1, 0.1)) < 1e-6 && ahead.array[2] === 0);
+        assert.match(marks.line.material.vertexShader, new RegExp(`max\\(${WAY_LINE.half.toFixed(3)}, far \\* ${WAY_LINE.least.toFixed(5)}\\)`), "its width, turned to the camera");
+        assert.match(marks.line.material.vertexShader, new RegExp(`distance - ${WAY_LINE.through.toFixed(2)}`), "drawn nearer the camera than it is");
+        assert.ok(marks.line.material.depthTest && !marks.line.material.depthWrite, "hidden by what's in front of it");
         assert.deepEqual(marks.line.geometry.drawRange, { start: 0, count: 10 * 6 });
 
         // (Laid again: the same room, nothing made anew; no longer than it has room for)
@@ -216,7 +235,58 @@ describe("the pin in the world (world/pin3d.js)", () => {
         assert.equal(marks.line.geometry.drawRange.count, (Math.floor(WAY_LINE.reach / WAY_LINE.step) + 1) * 6);
 
         marks.setLine([[0, 0, 0]]);
-        assert.equal(marks.line.visible, false);
+        assert.equal(marks.line.visible || marks.wisps.points.visible, false);
+        marks.dispose();
+    });
+
+    it("floats the way over the ground, gliding over a bump and across a dip, never lower over it than WAY_LINE.over", () => {
+        const flat = Array.from({ length: 11 }, (_, k) => [k, 0, 0]);
+        const bump = flat.map(([x, , z], k) => [x, k === 5 ? 1 : 0, z]);
+        const dip = flat.map(([x, , z], k) => [x, k === 5 ? -1 : 0, z]);
+        const over = (points) => floatingOver(points).map(([, y], k) => y - points[k][1]);
+
+        assert.ok(over(flat).every((y) => Math.abs(y - WAY_LINE.over) < 1e-9), "flat: just over it");
+        assert.ok(over(bump).every((y) => y >= WAY_LINE.over - 1e-9), "never lower");
+        assert.ok(Math.abs(over(bump)[5] - WAY_LINE.over) < 1e-9, "over the bump's top as over the rest");
+        assert.ok(over(bump)[4] > WAY_LINE.over && over(bump)[4] < WAY_LINE.over + 0.5, "risen to it a little before it");
+        assert.ok(over(dip)[5] > WAY_LINE.over + 0.5, "across the dip, not down into it");
+        assert.ok(over(dip).every((y) => y >= WAY_LINE.over - 1e-9));
+    });
+
+    it("sends a pulse along the way from the player as time goes on, follows where they've come to along it, and lets wisps rise off it near them", () => {
+        const marks = new PinMarks(new THREE.Scene(), new THREE.Scene());
+
+        marks.update(10, 3000, [0, 0]);
+        marks.update(10.2, 3000, [0, 0]);
+        assert.ok(Math.abs(marks.pulse.value - 0.2 * WAY_LINE.pulse.speed) < 1e-9, "on as far as it runs in the time");
+        assert.match(marks.line.material.fragmentShader, new RegExp(`float spacing = ${(WAY_LINE.pulse.every * WAY_LINE.pulse.speed).toFixed(2)}`), "one every WAY_LINE.pulse.every seconds");
+
+        marks.setLine(Array.from({ length: 81 }, (_, k) => [k, 0, 0]));
+        marks.update(11, 3000, [6.2, 0.4]);
+        assert.ok(Math.abs(marks.from.value - 6.2) < 1e-9, "where they've come to along it");
+
+        const lit = () => {
+            const colours = marks.wisps.points.geometry.attributes.color.array;
+            const positions = marks.wisps.points.geometry.attributes.position.array;
+
+            return Array.from({ length: WAY_WISPS.count }, (_, k) => ({ lit: colours[k * 3 + 2], at: [positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]] })).filter(({ lit }) => lit > 0.01);
+        };
+
+        for (let t = 11.1; t < 14; t += 0.1) {
+            marks.update(t, 3000, [6.2, 0.4]);
+        }
+
+        const risen = lit();
+
+        assert.ok(risen.length > WAY_WISPS.count / 3, `as many rising at a time (${risen.length})`);
+        assert.ok(
+            risen.every(({ at: [x, y] }) => x >= 6.2 + WAY_WISPS.from - 1 && x <= 6.2 + WAY_WISPS.to + 1 && y >= WAY_LINE.over - 0.01 && y <= WAY_LINE.over + WAY_WISPS.rise + 0.01),
+            "off it near them, rising",
+        );
+
+        marks.setLine(null);
+        marks.update(14.1, 3000, [6.2, 0.4]);
+        assert.equal(lit().length, 0, "none once it's gone");
         marks.dispose();
     });
 
