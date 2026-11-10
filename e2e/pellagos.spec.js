@@ -14144,11 +14144,14 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             }
         }
 
-        // Its most open square and its tightest that can be stood on, away from its stairs
+        // Its most open square and its tightest that can be stood on, away from its stairs, in a
+        // tunnel (open three squares either way along it, the rock within three either side of it
+        // across it: not a nook in a cavern's rock, nor a cavern's edge)
         const map = game.world.maps[player.map];
         const squares = squaresOf(map);
         const [mx, mz] = game.originOf(player.map);
         const rock = view.room.rock;
+        const passage = (x, y) => [[1, 0], [0, 1]].some(([dx, dy]) => [-3, -2, -1, 1, 2, 3].every((d) => !squares.blocked(x + dx * d, y + dy * d)) && [1, -1].every((side) => [1, 2, 3].some((d) => squares.blocked(x + dy * d * side, y + dx * d * side))));
         let [open, tight] = [null, null];
 
         for (let y = 2; y < map.height - 2; y++) {
@@ -14157,7 +14160,7 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
                     const how = openness(rock, mx + x + 0.5, mz + y + 0.5);
 
                     open = !open || how > open.how ? { x, y, how } : open;
-                    tight = !tight || how < tight.how ? { x, y, how } : tight;
+                    tight = passage(x, y) && (!tight || how < tight.how) ? { x, y, how } : tight;
                 }
             }
         }
@@ -14200,7 +14203,8 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
             const room = (yaw) => view.roomAt(yaw);
             const crowded = ways.reduce((a, b) => (room(b) < room(a) ? b : a));
-            const along = ways.reduce((a, b) => (room(b) > room(a) ? b : a));
+            // (The roomiest way with ground to walk to four steps along it)
+            const along = [...ways].sort((a, b) => room(b) - room(a)).find((way) => !squares.blocked(Math.round(tight.x - Math.sin(way) * 4), Math.round(tight.y - Math.cos(way) * 4))) ?? ways.reduce((a, b) => (room(b) > room(a) ? b : a));
 
             game.cameraSettings = { ...game.cameraSettings, openWay: finds, follows: false };
             Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
@@ -14223,15 +14227,17 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
         // In a fight in the tunnel, a foe a few steps along it: the battle cam frames it from where
         // the rock leaves the camera room, not crowded in against it
         const fight = () => {
-            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp);
+            // (One of its packs, not its floor's boss: too big to be framed in full in a tunnel)
+            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp && !actor.wild?.champion);
             const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
 
             // (Settled in the tunnel first: the camera as its space has it)
             Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
             game.advance(5);
 
-            const along = ways.reduce((a, b) => (view.roomAt(b) > view.roomAt(a) ? b : a));
-            const [fx, fy] = [3, 2, 4].map((d) => [Math.round(tight.x - Math.sin(along) * d), Math.round(tight.y - Math.cos(along) * d)]).find(([x, y]) => !squares.blocked(x, y));
+            // (A few steps along the roomiest way with ground to stand on there)
+            const roomiest = [...ways].sort((a, b) => view.roomAt(b) - view.roomAt(a));
+            const [along, fx, fy] = roomiest.flatMap((way) => [3, 2, 4].map((d) => [way, Math.round(tight.x - Math.sin(way) * d), Math.round(tight.y - Math.cos(way) * d)])).find(([, x, y]) => !squares.blocked(x, y));
 
             Object.assign(foe, { dead: false, hp: foe.maxHp, respawnAt: undefined, x: fx + 0.5, y: fy + 0.5, square: [fx, fy], path: [], order: null, attack: null, target: "player", stunnedUntil: game.battle.time + 60000 });
             game.cameraSettings = { ...game.cameraSettings, battle: true, openWay: true };
