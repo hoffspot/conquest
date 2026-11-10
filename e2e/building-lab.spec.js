@@ -228,7 +228,8 @@ test("stands a fingerpost among a people's own places: a board for each town, le
 
         window.buildingLab.state.built.traverse((node) => {
             if (node.isMesh && node.material.name?.startsWith("finger ")) {
-                boards.push({ name: node.material.name, sign: node.material.map.userData.sign, size: [node.material.map.image.width, node.material.map.image.height] });
+                // (As it was painted: its canvas let go of once it's on the graphics card, kits/signs.js)
+                boards.push({ name: node.material.name, sign: node.material.map.userData.sign, size: node.material.map.userData.size });
             }
         });
 

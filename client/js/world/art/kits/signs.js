@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import { WENCHES } from "../../../core/lore/taverns.js";
+import { released } from "../../release.js";
 import { paintEmblem } from "./emblems.js";
 
 /** The font the tavern's name is lettered in, and where it's served from. */
@@ -35,20 +36,51 @@ export function loadSignFont() {
 
 const lettering = (size) => `${size}px "${SIGN_FONT.family}", "Palatino Linotype", Georgia, serif`;
 
+// How finely the signs are painted, of their full size each way (view.js QUALITY `signs`: half on
+// Low), and what each kind's painted at
+let detail = 1;
+
+/**
+ * How finely signs are painted from now on (`scale`: of their full size, each way: view.js QUALITY
+ * `signs`). Those painted already stay as they are till they're let go of and painted again.
+ */
+export function signDetail(scale) {
+    detail = Math.min(1, Math.max(0.25, scale || 1));
+}
+
+// A canvas to paint a sign on, `width` by `height` as it's painted (its pixels as fine as `detail`
+// has them: drawn on as if it were full size)
 function canvasOf(width, height) {
     const canvas = document.createElement("canvas");
 
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = Math.max(1, Math.round(width * detail));
+    canvas.height = Math.max(1, Math.round(height * detail));
 
-    return { canvas, context: canvas.getContext("2d") };
+    const context = canvas.getContext("2d");
+
+    context.scale(canvas.width / width, canvas.height / height);
+
+    return { canvas, context };
 }
 
+// A sign's picture, from its canvas: the canvas's pixels let go of once they're on the graphics
+// card (drawn from there, never read again: world/release.js), the canvas left a pixel square. A
+// board was a 2048 by 330 canvas, 2.6 MB on the page besides its picture on the graphics card,
+// and a capital's boards, signs and fingerboards about 60 MB on the page all told
 function textureOf(canvas) {
     const texture = new THREE.CanvasTexture(canvas);
 
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
+    // (How big it was painted, its canvas let go of)
+    texture.userData.size = [canvas.width, canvas.height];
+    texture.onUpdate = () => {
+        if (canvas.width > 1 || canvas.height > 1) {
+            canvas.width = 1;
+            canvas.height = 1;
+            released.any = true;
+        }
+    };
 
     return texture;
 }
@@ -95,8 +127,11 @@ function gold(context, top, bottom) {
 const textures = new Map();
 const holds = new Map();
 
-// A picture painted once for all that show it (by what it shows)
-function once(key, paint) {
+// A picture painted once for all that show it (by what it shows, and how finely, if it's not at
+// full size: signDetail)
+function once(what, paint) {
+    const key = detail < 1 ? `${what}|${detail}` : what;
+
     if (!textures.has(key)) {
         const texture = paint();
 
