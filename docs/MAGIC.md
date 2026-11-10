@@ -284,7 +284,7 @@ tomes, above, are the guild's to sell, never found or given.)
 | Summon | common | a creature, or a player | 1500 ms | 60 s | one of the creatures of these parts at your side, an hour, as many at once as its level, 1 to 5; or another player, if they'll come |
 | Levitate | common | oneself | 600 ms | 20 s | float above the ground, five minutes: nothing on it touches you |
 | Fear | uncommon | an enemy | 500 ms | 8 s | it runs blindly away, ten seconds |
-| Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's |
+| Polymorph | rare | an enemy | 900 ms | 20 s | a creature turned into another of the world's, at any of its tiers, whole |
 | Explosion | rare | an enemy | 1400 ms | 20 s | a blast round them (*Explosion*, below): every foe within 4 m hurt, 20–32 at its heart and half that at its edge, and thrown |
 | Attraction | uncommon | oneself | 800 ms | 30 s | a puff of smoke, and out of it one of the creatures of these parts |
 | Inertial Barrier | uncommon | oneself or a friend | 700 ms | 20 s | a quarter less from blows and arrows, five minutes |
@@ -381,9 +381,9 @@ known.
 
 Fear, Pacify and Polymorph bend a creature's will. The mightier may shrug them off: none at tier 4,
 15% likelier each tier beyond, up to 90% (`RESIST`); the unique (the perilous places' own), and
-players, always do ("Resisted", "Immune"). Fear frightens a creature for ten seconds; cast on
-it again within a minute of first frightening it (`FEAR_MEMORY`), half as long, and a third time,
-not at all ("is past fearing you, for now"). A frightened creature runs from the caster, blindly.
+players, always do ("Resisted", "Immune"), and a champion always shrugs off Polymorph (below).
+Fear frightens a creature for ten seconds; cast on it again within a minute of first frightening
+it (`FEAR_MEMORY`), half as long, and a third time, not at all ("is past fearing you, for now"). A frightened creature runs from the caster, blindly.
 Pacify leaves it no longer hostile to the caster till they strike it (`spared`).
 
 ## Spell scrolls
@@ -442,7 +442,13 @@ same for everyone playing (docs/GAME.md: hosting and joining):
   the nearest temple; **Wizard's Walk** to the place they pick on the world map (the map opens to
   pick on: anywhere they've uncovered). Whoever was with them is left behind.
 - **Polymorph** turns a creature into another of the world's creatures, any but the perilous
-  places' own, as strong as its tier has it.
+  places' own, each as likely. A true gamble: what it becomes is as a fresh one of that kind, at
+  any of its tiers, each as likely (`CREATURES` `tiers`: a rat 1 to 3, a wolf 2 to 5, a Flayed
+  Hierarch 9 to 10). It has that tier's hit points, blows, armour and wards, and its whole health,
+  however hurt it was. It leaves that kind's spoils at that tier when it falls (spoils.js
+  `rollSpoils`). A tier-1 rat near dead may come out a tier-9 Flayed Hierarch, whole; a tier-9
+  creature, a rat. A champion can't be changed: a dungeon's boss, floor boss or mini-boss, an elite
+  or Lunara's guardian, and the unique ("Immune").
 
 ## The spellbook (app/spellbook.js)
 
