@@ -1554,7 +1554,8 @@ export class Host {
          * generation (how many times it's been cleared and made again), awake (by level: the ids
          * of its foes out now, or null), dead (its foes slain: foeKey's, staying slain till it's
          * made again), opened (its chests opened: their ids), cleared (its hoard opened: it's made
-         * again once everyone's left) }.
+         * again once everyone's left), arena (its boss's arena's way in: { on, since }, shut while
+         * its fight goes on, #arenaWatch) }.
          */
         this.dungeons = new Map();
 

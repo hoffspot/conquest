@@ -5739,7 +5739,10 @@ export class Game {
         }
 
         if (actor && me && !me.dead && (me.target === event.id || me.order?.target === event.id || actor.target === this.me)) {
-            this.hud.message(`The ${actor.name} takes to the air, out of reach of blows!`, 2.5);
+            // (A dungeon's boss by its title, "the" in it already: the Broodmother, the Dread Wraith)
+            const named = /^the /i.test(actor.name) ? actor.name.slice(4) : actor.name;
+
+            this.hud.message(`The ${named} takes to the air, out of reach of blows!`, 2.5);
         }
     }
 
