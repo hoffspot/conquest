@@ -10438,7 +10438,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     // (Its key folded away at first to its "Key" button in the corner, the map seen whole; tapped,
     // open above it, within the screen: each kind of building gone into, a barracks' and the seven
     // shops among them; the fog; the circles of what's been heard tell of, and a hell's cult's; a
-    // camp or lair tracked home; and the pin. Tapped again, folded away)
+    // camp or lair tracked home; a hell rift, known or not; and the pin. Tapped again, folded away)
     const key = page.getByRole("button", { name: "Key", exact: true });
     const viewport = page.viewportSize();
 
@@ -10448,8 +10448,10 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await key.click();
     await expect(key).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#worldmapkey")).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(21);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(23);
     await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "A hell rift: close it before it seals itself" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "A hell rift, somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Your markers (up to 10): tap one to share it or take it away" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Heard tell of: somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Strange lights by night" })).toBeVisible();
