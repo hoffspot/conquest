@@ -3292,9 +3292,20 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   could take it. Bryn has it already."). From then on each has their own: done, it's told of to
   whoever asked by each for their own reward; failed or given up, by each alone. Refused out of a
   party ("You've no party to share it with."), or for a request they don't carry.
+- **Ready check** (`readyCheck`, `ready` with `answer` true or false, `countdown` with
+  `seconds`: `READY`; docs/GAME.md *The party*). Its leader alone asks whether everyone's ready
+  (refused anyone else, "Only the party's leader can do that.", or while one's going, "A ready
+  check's going already."); each in it is told (`party` events, `change: "readyCheck"`, with when
+  it ends). The rest each say, Ready or Not ready (`ready`), and may say again till it's over; the
+  leader's counted ready. Each answer's told to the party (`readyAnswer`). It's over once everyone
+  in it has said, or 30 seconds on (`READY.askMs`), whoever hadn't said counted as no answer; and
+  one who leaves isn't waited for. Over, each is told what everyone said (`readyDone`: `answers`,
+  `"ready"`, `"not"` or `"none"`, and `all`). Its leader can start a countdown at any time, 3, 5
+  or 10 seconds (`countdown`, `READY.countdowns`), a ready check going over first; each is told
+  when it ends (`at`). Kept, a check going, with the party.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161; with places seen from high ground, 162; with the moon roads, 167; with requests shared, 186).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161; with places seen from high ground, 162; with the moon roads, 167; with requests shared, 186; with the ready check, 222).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host
