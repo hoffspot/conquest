@@ -9,6 +9,7 @@ import { CREATURES, tierPower } from "../client/js/core/creatures.js";
 import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
 import { Battle, FEAR_MEMORY, FOLLOW, SEE_THROUGH, STAMINA_DRAIN, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, SUMMONING_MS } from "../client/js/core/host.js";
+import { calledTier, mightOf } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { GROWTH_XP, SPELL_XP, SPELLS, WARD } from "../client/js/core/spells.js";
@@ -440,10 +441,10 @@ describe("the tomes' wonders (host.js)", () => {
     };
 
     // A host with its player (and what they know), the world's own folk left out
-    const hosted = (spells = [], { weapon = "sword", seed = 2 } = {}) => {
+    const hosted = (spells = [], { weapon = "sword", seed = 2, skills = {} } = {}) => {
         const host = new Host(buildWorld({ seed }), { populate: false });
 
-        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon }, progress: { spells, gear: { mainHand: { id: weapon, quality: "common" } } } });
+        host.join({ id: HOST_PLAYER, hero: { ...HERO, weapon }, progress: { spells, skills, gear: { mainHand: { id: weapon, quality: "common" } } } });
 
         return host;
     };
@@ -586,6 +587,7 @@ describe("the tomes' wonders (host.js)", () => {
 
         assert.equal(host.battle.actor(id).leader, HOST_PLAYER);
         assert.equal(one.risen, false);
+        assert.equal(one.tier, 1, "a fresh hero's, the first tier's");
 
         const events = castHere(host, "attraction");
         const drawn = events.find(({ type }) => type === "attracted");
@@ -593,6 +595,32 @@ describe("the tomes' wonders (host.js)", () => {
         assert.ok(drawn);
         assert.ok(host.wild.has(drawn.ids[0]));
         assert.ok(host.battle.hostile(host.battle.actor(drawn.ids[0]), host.battle.actor(HOST_PLAYER)));
+    });
+
+    it("calls as strong a creature as the caster is with Summon (their might's tier), not as the land is where they stand", () => {
+        const ranks = (xp) => Object.fromEntries(["blade", "marksman", "hexes", "endurance", "evasion", "shield", "trade", "talk", "command"].map((tree) => [tree, xp]));
+        const called = (skills) => {
+            const host = hosted(["summon"], { skills });
+            const might = mightOf(host.players.get(HOST_PLAYER).progress);
+
+            castHere(host, "summon");
+
+            const [[id, one]] = [...host.companions];
+
+            return { might, tier: one.tier, hp: host.battle.actor(id).maxHp, creature: one.creature };
+        };
+        const fresh = called({});
+        const veteran = called(ranks(800));
+
+        assert.equal(fresh.might, 0);
+        assert.ok(veteran.might >= 10, `a veteran's might: ${veteran.might}`);
+
+        for (const { might, tier } of [fresh, veteran]) {
+            assert.equal(tier, calledTier(might), `a hero of ${might}`);
+        }
+
+        assert.ok(veteran.tier > fresh.tier, "the mightier, the stronger");
+        assert.ok(veteran.hp / CREATURES[veteran.creature].hp > fresh.hp / CREATURES[fresh.creature].hp, "and as hardy as its tier");
     });
 
     it("turns a creature into another of the world's with Polymorph", () => {

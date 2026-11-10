@@ -29,7 +29,7 @@ import { cardOf as rareCard, DEBUG_CARDS, gatesHold, hourOf, keeperOf, Legends, 
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
-import { falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packPower, partsOf, powerOf, tierPowerOf } from "./might.js";
+import { calledTier, falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packPower, partsOf, powerOf, tierPowerOf } from "./might.js";
 import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.js";
 import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
 import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
@@ -51,7 +51,7 @@ import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, ORDER, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
+import { calledAt, CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, ORDER, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
@@ -15538,10 +15538,23 @@ export class Host {
         return found ?? { creature: "wolf", tier: 1 };
     }
 
-    // Summon, on themselves: a creature of these parts at their side a while
+    // What comes to a player's call (Summon): one of the creatures that live where they are, as
+    // strong as they are (might.js calledTier: their might's tier), not as the land is there
+    // (creatures.js calledAt); a wolf with no world plan
+    #answering(player) {
+        const actor = this.battle.actor(player.id);
+        const plan = this.world.plan;
+        const at = this.#whereIs(player) ?? [actor.x, actor.y];
+        const tier = calledTier(mightOf(player.progress));
+        const found = plan ? calledAt(landAt(plan, ...at), tier, this.random, this.#dark()) : null;
+
+        return found ?? { creature: "wolf", tier };
+    }
+
+    // Summon, on themselves: a creature of these parts, as strong as they are, at their side a while
     #call(player, level = 1) {
         const actor = this.battle.actor(player.id);
-        const { creature, tier } = this.#local(player);
+        const { creature, tier } = this.#answering(player);
 
         this.#companion(player, creature, tier, { map: actor.map, square: this.#behind(actor) ?? actor.square }, { level });
     }
