@@ -1437,7 +1437,12 @@ dismiss a specific purchased mount").
   `REIN_HOLD`, `pinchOf`), as far as their feet are in the stirrups; else the reins hang on its
   neck as its clips have them (mounts3d.js `REINS`). The camera looks a little higher at them
   (`HORSEBACK.camera`). Without the licensed models a bay built in code stands in (looks.js
-  `horse`) and the rider's sat on it as on a bench.
+  `horse`) and the rider's sat on it as on a bench. A horse is shown once it's ready to draw: made
+  hidden, its shaders compiled in the background where the browser can and its pictures sent
+  (view.js `prepare`, `upload`), the one it takes the place of drawn till then (the stand-in, once
+  the model's read, carrying on from where it was: mounts3d.js `#ready`). The model's shaders
+  compiled as it was first drawn held a frame up 3.1 s on an iPhone (a player's debug log,
+  2026-11-10).
 - **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
   its hooves a stride at a time, its whinny as it comes, and its fall.
 
@@ -2280,12 +2285,15 @@ the 3D view drawn at the screen's pixels again if they change (`matchMedia` on t
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
+(Signs are the buildings' name boards and hanging signs and the roads' fingerboards, painted half
+size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
+`signDetail`.)
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it | full size |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel | full size |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -6913,7 +6921,11 @@ the page reads once it's made, the page's copy is let go of once it's there (wor
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
 (kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
 pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
-copy kept to hand it to the next atlas made; and each of the game's characters' own skin, 4 MB of
+copy kept to hand it to the next atlas made; the buildings' name boards and hanging signs and the
+roads' fingerboards (kits/signs.js `textureOf`: each its canvas, left a pixel square; a board was
+2048 by 330, 2.6 MB on the page; a capital's 38, all sent, were 63 MB on the page, besides 63 MB
+more of them on the graphics card at full size than at Low's half, a player's iPhone let go of in a
+cat folk's capital, 2026-11-10); and each of the game's characters' own skin, 4 MB of
 colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
 again, as a disguise or a change of look does, it's sent and let go of again). Not the pictures of
 what characters wear (composited from each garment's, and painted into a crowd's figure:

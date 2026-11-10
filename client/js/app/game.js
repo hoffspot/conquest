@@ -171,6 +171,7 @@ import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { linkAt as interiorLinkAt } from "../core/interiors.js";
 import { THEMES } from "../core/dungeons/themes.js";
+import { signDetail } from "../world/art/kits/signs.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
@@ -2121,6 +2122,8 @@ export class Game {
             // more as they go)
             const [x, y] = this.battle.actor(this.me)?.map === "town" ? this.battle.actor(this.me).square : world.spawns.player;
 
+            // (The signs painted as finely as the quality has them: half size on Low, world/art/kits/signs.js)
+            signDetail(view.quality.signs);
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs, rocks: view.quality.rocks });
             // (The settlements' houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
             this.chunks.burntOf = (place, index) => this.#burntStage(place, index);
@@ -2342,8 +2345,11 @@ export class Game {
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
         this.spellFx = new SpellFx(this.effects, view.scene, { lights: [] });
-        // (Those riding's horses: world/mounts3d.js)
-        this.mounts = new Mounts(view.scene, { fx: this.spellFx, sound: { play: (...heard) => this.sound?.play(...heard) } });
+        // (Those riding's horses: world/mounts3d.js. Each shown once it's ready to draw: its
+        // shaders compiled, in the background where the browser can, and its pictures sent)
+        const readyHorse = (object) => view.prepare(object).then(() => view.upload([object], { hidden: true }));
+
+        this.mounts = new Mounts(view.scene, { fx: this.spellFx, sound: { play: (...heard) => this.sound?.play(...heard) }, prepare: readyHorse });
         this.spellFx.camera = view.camera;
         this.spellFx.onShake = (amount) => {
             // (A game controller rumbles with it, Camera shake on or off: app/padplay.js)
@@ -4231,6 +4237,7 @@ export class Game {
             this.chunks.setSpacing(this.view.quality.ground);
             this.chunks.setCliffs(this.view.quality.cliffs);
             this.chunks.setRocks(this.view.quality.rocks);
+            signDetail(this.view.quality.signs);
 
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();

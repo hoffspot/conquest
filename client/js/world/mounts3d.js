@@ -98,12 +98,16 @@ export class Mounts {
      * @param {object} options
      * @param {object} [options.fx] - The game's spell effects (world/spellfx.js SpellFx): the rings they come and go in.
      * @param {object} [options.sound] - The game's sounds (audio/sound.js), or null.
+     * @param {Function} [options.prepare] - Gets a horse ready to draw before it's shown: its shaders compiled and its pictures sent, in the background where the browser can (world/view.js prepare); a promise. None, it's shown at once.
      */
-    constructor(scene, { fx = null, sound = null } = {}) {
+    constructor(scene, { fx = null, sound = null, prepare = null } = {}) {
         this.scene = scene;
         this.fx = fx;
         this.sound = sound;
+        this.prepare = prepare;
         this.horses = new Map();
+        /** Each rider's horse made and being got ready to draw (`prepare`), shown once it is. */
+        this.coming = new Map();
         /** Each rider's hands' grips on the reins, fitted to their hands (by their body's rig). */
         this.grips = new WeakMap();
         this.clips = null;
@@ -152,16 +156,16 @@ export class Mounts {
 
         this.#want();
 
-        // (A new horse, or its model read since it was made: made afresh)
+        // (A new horse, or its model read since it was made: made afresh, shown once it's ready to
+        // draw, the one it takes the place of drawn till then: #ready)
         const model = Boolean(modelOf(HORSE_MODEL));
 
         if (!one || one.horse !== mount.horse.id || one.model !== model) {
-            if (one) {
-                this.#remove(one);
-            }
+            one = this.#ready(actor.id, mount.horse, model, one);
 
-            one = this.#make(mount.horse, model);
-            this.horses.set(actor.id, one);
+            if (!one) {
+                return;
+            }
         }
 
         const since = Math.max(0, time - mount.at) / 1000;
@@ -464,6 +468,58 @@ export class Mounts {
         return _cg.y - _feet.y - SEAT.under;
     }
 
+    /**
+     * A rider's horse as it's to be drawn now (`horse`, from its `model` or not), taking the place
+     * of the one drawn (`was`): made, hidden, and got ready to draw (`prepare`: its shaders
+     * compiled and its pictures sent, in the background where the browser can), shown only once
+     * it is, as it goes on from where the one before was (getting up, riding...), which is drawn
+     * till then. The model's shaders compiled as it was first drawn held an iPhone's frame up 3.1
+     * s (a player's debug log, 2026-11-10). The horse drawn now, or null for none yet.
+     */
+    #ready(id, horse, model, was) {
+        let next = this.coming.get(id);
+
+        if (next && (next.horse !== horse.id || next.model !== model)) {
+            this.#remove(next);
+            next = null;
+        }
+
+        if (!next) {
+            next = this.#make(horse, model);
+            next.beast.object.visible = false;
+            next.ready = !this.prepare;
+            this.coming.set(id, next);
+
+            if (this.prepare) {
+                const ready = () => (next.ready = true);
+
+                this.prepare(next.beast.object).then(ready, ready);
+            }
+        }
+
+        // (Not ready yet: the one drawn drawn on, if it's this horse; another let go of)
+        if (!next.ready) {
+            if (was && was.horse !== horse.id) {
+                this.#remove(was);
+                this.horses.delete(id);
+                was = null;
+            }
+
+            return was;
+        }
+
+        this.coming.delete(id);
+
+        if (was) {
+            Object.assign(next, { phase: was.phase, dead: was.dead, sank: was.sank, seated: was.seated });
+            this.#remove(was);
+        }
+
+        this.horses.set(id, next);
+
+        return next;
+    }
+
     // A horse to draw: in its coat, with its mane (tinted its whistle's tint), saddled
     #make(horse, model) {
         const mane = MANES[horse.mane] ?? MANES.dark;
@@ -555,6 +611,12 @@ export class Mounts {
     /** An actor's horse no longer drawn (it's gone, or they have), their body let go of it. */
     drop(id, avatar = null) {
         const one = this.horses.get(id);
+        const next = this.coming.get(id);
+
+        if (next) {
+            this.#remove(next);
+            this.coming.delete(id);
+        }
 
         if (!one) {
             return;
@@ -574,10 +636,11 @@ export class Mounts {
 
     /** Every horse let go of (the game's over, or the world's drawn afresh). */
     dispose() {
-        for (const one of this.horses.values()) {
+        for (const one of [...this.horses.values(), ...this.coming.values()]) {
             this.#remove(one);
         }
 
         this.horses.clear();
+        this.coming.clear();
     }
 }

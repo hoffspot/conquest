@@ -383,6 +383,54 @@ describe("landmarks (kits/landmarks.js)", () => {
         assert.notEqual(nameBoardTexture({ name: "The Kept Sign" }), board, "painted again when wanted again");
     });
 
+    it("paints the signs as finely as the quality has them, half size on Low, and lets go of each one's canvas once it's on the graphics card", async () => {
+        // (A capital's boards and signs at full size were 78 MB on the graphics card, and their
+        // canvases about 60 MB more on the page: an iPhone's tab was let go of there, a player's
+        // debug log, 2026-11-10)
+        const { emblemSignTexture, fingerboardTexture, nameBoardTexture, signDetail } = await import("../client/js/world/art/kits/signs.js");
+        const { released } = await import("../client/js/world/release.js");
+        const { QUALITY } = await import("../client/js/world/view.js");
+        const size = (texture) => [texture.image.width, texture.image.height];
+        const painted = (texture) => texture.userData.size;
+        const signs = () => [nameBoardTexture({ name: "The Finely Painted" }), emblemSignTexture({ name: "The Finely Painted", emblem: "shield" }), fingerboardTexture({ name: "Finely", km: 3 })];
+
+        assert.deepEqual([QUALITY.low.signs, QUALITY.medium.signs, QUALITY.high.signs], [0.5, 1, 1]);
+
+        const full = signs();
+
+        assert.deepEqual(full.map(size), [[2048, 330], [512, 614], [960, 192]]);
+        assert.deepEqual(full.map(painted), full.map(size));
+        assert.equal(full[2].userData.sign, "finger|Finely|3|right", "kept by what it shows, at full size");
+
+        try {
+            signDetail(QUALITY.low.signs);
+
+            const half = signs();
+
+            assert.ok(half.every((texture, k) => texture !== full[k]), "painted again, as finely as asked");
+            assert.deepEqual(half.map(size), [[1024, 165], [256, 307], [480, 96]]);
+            assert.deepEqual(half.map(painted), half.map(size));
+
+            // (Back to High: those painted at full size before, still kept)
+            signDetail(QUALITY.high.signs);
+            assert.deepEqual(signs(), full);
+        } finally {
+            signDetail(1);
+        }
+
+        // (Sent to the graphics card: the canvas's pixels let go of, a pixel square left, and the
+        // page told it can't send it again should the drawing be lost: main.js loads it again)
+        const [board] = full;
+        const was = released.any;
+
+        released.any = false;
+        board.onUpdate(board);
+        assert.deepEqual(size(board), [1, 1]);
+        assert.deepEqual(painted(board), [2048, 330], "how big it was painted, still told");
+        assert.equal(released.any, true);
+        released.any = was || released.any;
+    });
+
     it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
         for (const piece of landmarks.filter(({ name }) => name === "tavern" || name === "guild" || name === "church")) {
             const names = materialsOf(await landmark(piece));
