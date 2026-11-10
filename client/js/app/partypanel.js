@@ -11,8 +11,9 @@
 //
 // Playing together, above them, the players in their party (core/host.js partyFor), its leader
 // crowned, each with who's with them; its leader can make another leader or put them out (asked
-// twice), and anyone can leave it; and below, the other players in the world, each to be asked to
-// it ("Invite"), or said to be asked already.
+// twice), and ask whether they're ready ("Ready check": app/game.js readyCheck), and anyone can
+// leave it; and below, the other players in the world, each to be asked to it ("Invite"), or said
+// to be asked already.
 //
 // Playing together, it has three tabs: the party (all that, above); its chat: what's been said
 // in the party (core/netplay.js: sent to those in it alone), its newest at the foot, with the
@@ -480,6 +481,15 @@ export class PartyPanel {
                       }
 
                       if (me) {
+                          // (Its leader's ready check: whether the rest are ready, app/game.js readyCheck)
+                          if (leads && players.length > 1) {
+                              const ready = element("button", "journal-button party-ready", "Ready check");
+
+                              ready.type = "button";
+                              ready.addEventListener("click", () => this.onParty("readyCheck", id));
+                              actions.append(ready);
+                          }
+
                           actions.append(this.#sure("Leave party", "Leave?", () => this.onParty("leave", id)));
                       } else if (leads) {
                           const promote = element("button", "journal-button party-promote", "Make leader");

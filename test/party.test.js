@@ -4,13 +4,14 @@
 // player's set on, or to go; and what a creature at their side brings down counting for them.
 // And parties of players (host.js PARTY, the "party" command): asked, and joined, said no to, or
 // let lapse; four at most; left, put out of, led; never each other's enemies, whatever their
-// peoples; and a foe one of them fells near the others counting for each of them
+// peoples; and a foe one of them fells near the others counting for each of them; its leader's
+// ready check, and countdown
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { HOST_PLAYER, Host, PARTY } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, PARTY, READY } from "../client/js/core/host.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { placesOf } from "../client/js/core/places.js";
@@ -405,6 +406,109 @@ describe("parties of players (host.js PARTY, the party command)", () => {
         assert.equal(host.partyFor(HOST_PLAYER), null);
         assert.ok(told(events, HOST_PLAYER).includes("disbanded"));
         assert.equal(party(host, HOST_PLAYER, "leave").reason, "unpartied");
+    });
+
+    it("checks whether its members are ready: its leader asks, the rest each say, the leader ready; over once everyone's said, or its time's up with no answer from some, each told who was ready", () => {
+        const host = together(2);
+        const ask = (from, to) => {
+            party(host, from, "invite", to);
+            party(host, to, "accept");
+        };
+        const check = (id, what, more = {}) => host.command(id, { type: "party", do: what, ...more });
+        const changes = (events, id) => events.filter(({ type, id: whose }) => type === "party" && whose === id);
+
+        assert.equal(check(HOST_PLAYER, "readyCheck").reason, "unpartied");
+        ask(HOST_PLAYER, "guest");
+        ask(HOST_PLAYER, "guest-2");
+        run(host, 100);
+
+        // (Its leader's alone, and one at a time)
+        assert.equal(check("guest", "readyCheck").reason, "leader");
+        assert.equal(check("guest", "ready", { answer: true }).reason, "noReadyCheck");
+        assert.equal(check(HOST_PLAYER, "readyCheck").ok, true);
+        assert.equal(check(HOST_PLAYER, "readyCheck").reason, "readying");
+
+        let events = run(host, 100);
+
+        for (const id of [HOST_PLAYER, "guest", "guest-2"]) {
+            const [asked] = changes(events, id).filter(({ change }) => change === "readyCheck");
+
+            assert.deepEqual({ who: asked.who, name: asked.name, until: asked.until }, { who: HOST_PLAYER, name: "Ada", until: host.partyFor(HOST_PLAYER).ready.until }, id);
+        }
+
+        // (Each says; said again, the last word theirs; once everyone has, over)
+        assert.equal(check("guest", "ready", { answer: "yes" }).reason, "command");
+        assert.equal(check("guest", "ready", { answer: false }).ok, true);
+        assert.equal(check("guest", "ready", { answer: true }).ok, true);
+        events = run(host, 100);
+        assert.deepEqual(
+            changes(events, "guest-2")
+                .filter(({ change }) => change === "readyAnswer")
+                .map(({ who, ready }) => [who, ready]),
+            [
+                ["guest", false],
+                ["guest", true],
+            ],
+        );
+        assert.equal(check("guest-2", "ready", { answer: true }).ok, true);
+        events = run(host, 100);
+
+        const [done] = changes(events, HOST_PLAYER).filter(({ change }) => change === "readyDone");
+
+        assert.deepEqual(done.answers, { [HOST_PLAYER]: "ready", guest: "ready", "guest-2": "ready" });
+        assert.equal(done.all, true);
+        assert.equal(host.partyFor(HOST_PLAYER).ready, null);
+
+        // (Again: one says not, one says nothing; over as its time's up)
+        assert.equal(check(HOST_PLAYER, "readyCheck").ok, true);
+        assert.equal(check("guest", "ready", { answer: false }).ok, true);
+        events = run(host, READY.askMs - 500);
+        assert.ok(!changes(events, "guest-2").some(({ change }) => change === "readyDone"), "not over yet");
+        events = run(host, 1000);
+
+        const [lapsed] = changes(events, "guest-2").filter(({ change }) => change === "readyDone");
+
+        assert.deepEqual(lapsed.answers, { [HOST_PLAYER]: "ready", guest: "not", "guest-2": "none" });
+        assert.equal(lapsed.all, false);
+
+        // (One who leaves while it's going not waited for)
+        assert.equal(check(HOST_PLAYER, "readyCheck").ok, true);
+        assert.equal(check("guest", "ready", { answer: true }).ok, true);
+        assert.equal(check("guest-2", "leave").ok, true);
+        events = run(host, 100);
+
+        const [left] = changes(events, "guest").filter(({ change }) => change === "readyDone");
+
+        assert.deepEqual(left.answers, { [HOST_PLAYER]: "ready", guest: "ready" });
+        assert.equal(left.all, true);
+    });
+
+    it("counts down for its leader, whoever's ready or not: 3, 5 or 10 seconds, told to each in it with when it ends; a ready check going, over first", () => {
+        const host = together(1);
+
+        party(host, HOST_PLAYER, "invite", "guest");
+        party(host, "guest", "accept");
+        run(host, 100);
+
+        const count = (id, seconds) => host.command(id, { type: "party", do: "countdown", seconds });
+
+        assert.equal(count("guest", 5).reason, "leader");
+        assert.equal(count(HOST_PLAYER, 4).reason, "command");
+        assert.deepEqual(READY.countdowns, [3, 5, 10]);
+        assert.equal(host.command(HOST_PLAYER, { type: "party", do: "readyCheck" }).ok, true);
+        run(host, 100);
+
+        const at = host.battle.time;
+
+        assert.equal(count(HOST_PLAYER, 10).ok, true);
+
+        const events = run(host, 100).filter(({ type, id }) => type === "party" && id === "guest");
+        const changes = events.map(({ change }) => change);
+
+        assert.deepEqual(changes, ["readyDone", "countdown"], "the check over first");
+        assert.deepEqual(events[0].answers, { [HOST_PLAYER]: "ready", guest: "none" });
+        assert.deepEqual({ who: events[1].who, seconds: events[1].seconds, at: events[1].at }, { who: HOST_PLAYER, seconds: 10, at: at + 10000 });
+        assert.equal(count(HOST_PLAYER, 3).ok, true, "(again, with no check going)");
     });
 
     it("counts a foe one of a party fells for each of the others near it (as much skill as it had hit points, and what's on it), not for one far off", () => {
