@@ -246,13 +246,17 @@ function alike(a, b) {
     return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && alike(a[key], b[key]));
 }
 
-// Whether a field's value is its default (an empty list or table, for those whose default is one)
-function unchanged(value, usual) {
-    if (value === usual) {
-        return true;
-    }
+// Each default by its field's name (none of them undefined: no default, by that), the fields
+// every character has with theirs, in order, and those fields' names, for looking up quickly:
+// a snapshot's taken on the world's own thread, of every character in it
+const USUAL = new Map(Object.entries(ACTOR_DEFAULTS));
+const LAID = ACTOR_FIELDS.map((key) => ({ key, defaulted: USUAL.has(key), usual: USUAL.get(key) }));
+const KNOWN = new Set(ACTOR_FIELDS);
 
-    if (usual === null || typeof usual !== "object" || value === null || typeof value !== "object") {
+// Whether a field's value is its default, where that's a list or a table (an empty one, or the
+// same in every part)
+function unchanged(value, usual) {
+    if (value === null || typeof value !== "object") {
         return false;
     }
 
@@ -279,8 +283,13 @@ export function spareActor(actor) {
 
     for (const key in actor) {
         const value = actor[key];
+        const usual = USUAL.get(key);
 
-        if (Object.hasOwn(ACTOR_DEFAULTS, key) ? !unchanged(value, ACTOR_DEFAULTS[key]) : key !== "arms" || !alike(value, armsFor(actor))) {
+        if (usual === undefined) {
+            if (key !== "arms" || !alike(value, armsFor(actor))) {
+                kept[key] = value;
+            }
+        } else if (value !== usual && (usual === null || typeof usual !== "object" || !unchanged(value, usual))) {
             kept[key] = value;
         }
     }
@@ -290,18 +299,18 @@ export function spareActor(actor) {
 
 /**
  * A character as it's kept (spareActor's, or one kept whole), whole again: each field left out
- * back at its default, its attacks made from its weapon if they were left out, its fields in the
- * order the battle makes a character with them (ACTOR_FIELDS).
+ * back at its default, its attacks its weapon's own if they were left out (the weapon's very
+ * lists: Battle.restore, which this is for, copies all it's given), its fields in the order the
+ * battle makes a character with them (ACTOR_FIELDS), then any others as they were kept.
  */
 export function wholeActor(kept) {
     const actor = {};
-    const armed = Object.hasOwn(kept, "arms");
 
-    for (const key of ACTOR_FIELDS) {
-        if (Object.hasOwn(kept, key)) {
+    for (const { key, defaulted, usual } of LAID) {
+        if (key in kept) {
             actor[key] = kept[key];
-        } else if (Object.hasOwn(ACTOR_DEFAULTS, key)) {
-            actor[key] = fresh(ACTOR_DEFAULTS[key]);
+        } else if (defaulted) {
+            actor[key] = fresh(usual);
         } else if (key === "arms") {
             // (Its place among its fields held, till its weapon, boots and place in a line are read: below)
             actor.arms = null;
@@ -309,13 +318,13 @@ export function wholeActor(kept) {
     }
 
     for (const key in kept) {
-        if (!Object.hasOwn(actor, key)) {
+        if (!KNOWN.has(key)) {
             actor[key] = kept[key];
         }
     }
 
-    if (!armed) {
-        actor.arms = structuredClone(armsFor(actor));
+    if (!("arms" in kept)) {
+        actor.arms = armsFor(actor);
     }
 
     return actor;
