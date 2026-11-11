@@ -3032,7 +3032,10 @@ export class Host {
             }
 
             const at = [actor.x, actor.y];
-            const unfound = this.#findables().filter(({ id, at: [x, y] }) => hypot(x - at[0], y - at[1]) <= SIGHTING.reach[1] && !player.explored.knows(id, x, y));
+            // (Those within a square of that reach first: most of the world's aren't, and needn't
+            // be measured)
+            const reach = SIGHTING.reach[1];
+            const unfound = this.#findables().filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
             const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
 
             if (!seen.length) {
@@ -6232,8 +6235,22 @@ export class Host {
         war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.camps.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
+    // One of the plan's places, by its id (or undefined). Looked up in a table made once: the
+    // plan's places never change, and the look round asks for every town of the war's, twice a
+    // second, where reading down all of them each time was a quarter of #muster
     #placeOf(id) {
-        return this.world.plan.places.find((place) => place.id === id);
+        if (!this.placesById) {
+            this.placesById = new Map();
+
+            // (The first of an id, as reading down them found it)
+            for (const place of this.world.plan.places) {
+                if (!this.placesById.has(place.id)) {
+                    this.placesById.set(place.id, place);
+                }
+            }
+        }
+
+        return this.placesById.get(id);
     }
 
     // Where a place's middle is: the town the player starts in is set in a little off its place
@@ -10994,8 +11011,27 @@ export class Host {
         }
     }
 
+    // One of the plan's sites, or a scene's keep (#keeps), by its id (or undefined): from a table
+    // made once, as #placeOf's (the plan's first, then the keeps')
     #siteOf(id) {
-        return this.world.plan.sites.find((site) => site.id === id) ?? this.#keeps().find((site) => site.id === id);
+        if (!this.sitesById) {
+            this.sitesById = new Map();
+
+            for (const site of [...this.world.plan.sites, ...this.#keeps()]) {
+                if (!this.sitesById.has(site.id)) {
+                    this.sitesById.set(site.id, site);
+                }
+            }
+        }
+
+        return this.sitesById.get(id);
+    }
+
+    // The dungeons' sites (the plan's, and the scenes' keeps), in that order: found once
+    #dungeonSites() {
+        this.dungeonSites ??= [...this.world.plan.sites, ...this.#keeps()].filter(({ kind }) => kind === "dungeon");
+
+        return this.dungeonSites;
     }
 
     // The keeps of the scenes set into the world (core/scenery.js keepSiteOf: Bellhaven's), each
@@ -14152,11 +14188,7 @@ export class Host {
             }
         }
 
-        for (const site of [...this.world.plan.sites, ...this.#keeps()]) {
-            if (site.kind !== "dungeon") {
-                continue;
-            }
-
+        for (const site of this.#dungeonSites()) {
             const within = (reach) => this.#byWayIn(site, places, reach);
             const near = within(DELVES.near);
             const levels = on.get(site.id) ?? new Set();
@@ -18605,7 +18637,14 @@ export class Host {
             }
         }
 
-        for (const building of [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
+        // (In that order as they were when the look began, sorted again only when the world's
+        // buildings have changed, interiors.version: a thousand of them sorted twice a second
+        // was most of a look round a well-travelled world)
+        if (this.buildingsInOrder?.of !== interiors || this.buildingsInOrder.version !== interiors.version) {
+            this.buildingsInOrder = { of: interiors, version: interiors.version, list: [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
+        }
+
+        for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {
                 continue;
             }
