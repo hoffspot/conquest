@@ -646,6 +646,7 @@ the checks CI runs and how to run them, and how to open a pull request that's sa
 ```sh
 npm run lint        # ESLint
 npm test            # unit tests (Node's built-in test runner)
+npm run test:affected   # the same unit tests, those your change can reach first
 npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
 npm run build:manifest  # after changing what the game downloads: lists it for the loading screen, and the catalog
