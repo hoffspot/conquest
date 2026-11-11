@@ -7954,8 +7954,8 @@ export class Host {
                     actor.formation = { id: met.formation, slot: places[n], role: actor.formation.role };
                     actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
                     actor.power.melee = this.soldiers.get(actor.id)?.power ?? 1;
-                    delete actor.sight;
-                    delete actor.keep;
+                    actor.sight = undefined;
+                    actor.keep = undefined;
                 });
 
                 this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, hold: false, seek: null, speed: ARMY_NEAR.pace });
@@ -8545,8 +8545,8 @@ export class Host {
             met.household = null;
 
             for (const actor of met.ids.map((one) => this.battle.actor(one)).filter((actor) => actor?.formation)) {
-                delete actor.formation.post;
-                delete actor.formation.facing;
+                actor.formation.post = undefined;
+                actor.formation.facing = undefined;
                 actor.siege = null;
                 actor.holds = null;
                 actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
