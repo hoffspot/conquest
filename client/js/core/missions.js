@@ -369,12 +369,20 @@ export function chanceOf(war, mission, at) {
     return { until, ...(kept ? { due: dueAt(at, target.at, war.turn) } : {}), met: true };
 }
 
+// "A human convoy of stone", "An elven convoy of iron": a thing's name ("the ... convoy of ...")
+// as one of its kind, with "an" before a vowel's sound (ADJECTIVES: "elven", "orcish")
+function aOf(name) {
+    const rest = name.replace(/^the /, "");
+
+    return `${/^[aeiou]/i.test(rest) ? "An" : "A"} ${rest}`;
+}
+
 function missionText(war, kind, target, them) {
     switch (kind) {
         case "rout":
             return `${them} have a camp near${target.town && war.town(target.town) ? ` ${war.town(target.town).name}` : " here"}. Break it: bring its soldiers down until it's too few to hold.`;
         case "plunder":
-            return `${target.name.replace(/^the /, "A ")} is on the road near you: their towers and garrisons are built of it. Fall on it, bring its guard down, and its goods are ours.`;
+            return `${aOf(target.name)} is on the road near you: their towers and garrisons are built of it. Fall on it, bring its guard down, and its goods are ours.`;
         case "wagons":
             return `${them}'s army is fed by wagons on the road near you. Fall on them before they get there, and their soldiers go hungry.`;
         case "intercept":
