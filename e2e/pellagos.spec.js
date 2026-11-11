@@ -3156,13 +3156,14 @@ test("those attacking the player have an icon each down the right side, a likene
 
             const target = document.querySelector("#attackers .attacker.target");
 
-            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target).animationName : null, lock: player.lock, locked: [...document.querySelectorAll("#attackers .attacker.locked")].map((icon) => icon.dataset.id) };
+            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target, "::after").animationName : null, lock: player.lock, locked: [...document.querySelectorAll("#attackers .attacker.locked")].map((icon) => icon.dataset.id) };
         }, seconds);
     const orcIcon = page.locator('#attackers .attacker[data-id="orc"]');
     const slimeIcon = page.locator('#attackers .attacker[data-id="slime"]');
     const start = await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square]);
 
-    // Tapped: set on the orc where the player stands, its icon glowing; then on the slime
+    // Tapped: set on the orc where the player stands, its icon glowing (the glow a layer over it,
+    // its ::after, faded in and out: styles.css attacker-pulse); then on the slime
     await orcIcon.click();
 
     const tapped = await state(0.5);
