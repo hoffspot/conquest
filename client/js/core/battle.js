@@ -680,6 +680,10 @@ const CORNER_SLACK = 0.6;
 // new or has gone further than INDEX_SLACK metres from where it was made (a step's walk is far less)
 const INDEX_CELL = 8;
 const INDEX_SLACK = 1;
+// Two no more than so many squares apart are no more than that many metres apart and this much
+// (each's middle anywhere on its own square: a square's diagonal, and a little): what's added to
+// a reach in squares to look for those within it by where they stand (#standingNear)
+const SQUARE_SLACK = 1.5;
 
 // Getting no nearer where it's going (by PROGRESS metres) for STUCK_MS, jostling with others in
 // a narrow way, a character squeezes past them for SQUEEZE_MS, through anyone (not walls)
@@ -737,10 +741,12 @@ export class Battle {
     #index = null;
     #version = 0;
 
-    // The players in the battle, and how many of their enemies are set on each (melee, ranged),
-    // as they are this step (#drawnTo); and who's after whom as the step began (#inFight: id ->
-    // the ids of those set on, attacking or told to fight them)
+    // The players in the battle still standing as the step began, and how many of their enemies
+    // are set on each (melee, ranged), as they are this step (#drawnTo); every player in it,
+    // fallen or not (`#heroes`: #beckon, #rest); and who's after whom as the step began
+    // (#inFight: id -> the ids of those set on, attacking or told to fight them)
     #players = [];
+    #heroes = [];
     #onPlayers = new Map();
     #chasers = new Map();
 
@@ -1211,7 +1217,8 @@ export class Battle {
 
         let took = 0;
 
-        for (const other of this.actors) {
+        // (Squares apart, each's middle anywhere on its own: no further than that in metres)
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (!other.dead && other.map === actor.map && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor) && this.taunt(id, other.id, { over, ms, cried: true })) {
                 took++;
             }
@@ -1241,7 +1248,7 @@ export class Battle {
 
         let from = 0;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (other.dead || other.map !== actor.map || distanceBetween(actor.square, other.square) > reach) {
                 continue;
             }
@@ -3015,7 +3022,8 @@ export class Battle {
             return false;
         }
 
-        const player = this.actors.find((other) => other.kind === "player" && !other.dead && this.canSee(actor, other));
+        // (Among the players only, #heroes: not everyone asked whether they're one)
+        const player = this.#heroes.find((other) => !other.dead && this.canSee(actor, other));
 
         if (player) {
             // Back in sight after a while out of it
@@ -3049,7 +3057,7 @@ export class Battle {
             return false;
         }
 
-        if (!this.actors.some((other) => other.kind === "player" && !other.dead && this.canSee(other, actor))) {
+        if (!this.#heroes.some((other) => !other.dead && this.canSee(other, actor))) {
             actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + actor.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
 
             return false;
@@ -3209,7 +3217,8 @@ export class Battle {
             // (Locked on one in reach: it, not whoever's nearest. Not a creature that's leaving
             // everyone be: only on purpose, told to engage it or locked on it)
             const locked = actor.lock ? this.actor(actor.lock) : null;
-            const target = locked && locked.map === actor.map && this.#reachable(actor, locked) ? locked : this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
+            // (Whoever's nearest: looked for no further off than their weapon reaches)
+            const target = locked && locked.map === actor.map && this.#reachable(actor, locked) ? locked : this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null), longestReach(actor.arms) + 1, null, true);
 
             if (target) {
                 this.#attack(actor, target);
@@ -4904,7 +4913,7 @@ export class Battle {
     // ground (told as "telegraph", as a blow's warning is, `fall` its kind) and coming down
     // `delay` ms later (#falling)
     #drop(actor, { under = 0, count = 0, reach = 12, radius, delay, damage, kind, element = "earth", afflict = null, toss = 0, pool = null }) {
-        const foes = this.actors.filter((other) => !other.dead && other.map === actor.map && this.hostile(actor, other) && !other.wild?.object && hypot(other.x - actor.x, other.y - actor.y) <= reach);
+        const foes = this.#standingNear(actor.map, actor.x, actor.y, reach, actor).filter((other) => !other.wild?.object);
         const spots = [];
 
         for (let k = 0; k < under && foes.length; k++) {
@@ -4980,7 +4989,7 @@ export class Battle {
     #farthest(actor, least, most) {
         let [best, far] = [null, -1];
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, most)) {
             const off = other.map === actor.map && !other.dead && !other.wild?.object ? hypot(other.x - actor.x, other.y - actor.y) : -1;
 
             if (off >= least && off <= most && off > far && this.hostile(actor, other) && this.canSee(actor, other, Math.max(SIGHT, most))) {
@@ -5160,7 +5169,8 @@ export class Battle {
     // A fortification (KINDS fort): the nearest enemy within reach of its loops shot at, whatever
     // else; never moving
     #hold(actor) {
-        const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy));
+        // (Looked for no further off than its loops reach: all it could shoot at)
+        const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy), longestReach(actor.arms) + 1, null, true);
 
         actor.target = target?.id ?? null;
 
@@ -5200,8 +5210,10 @@ export class Battle {
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
-    // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it)
-    #nearestEnemy(actor, test, within = Infinity, enemy = null) {
+    // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it). With
+    // `wide`, those standing over more than their own square too, however far off their middles
+    // are (a `footprint`: what's within reach of one is its nearest square, #aimAt)
+    #nearestEnemy(actor, test, within = Infinity, enemy = null, wide = false) {
         const actors = this.actors;
         const square = actor.square;
         let best = null;
@@ -5209,10 +5221,10 @@ export class Battle {
         let bestK = Infinity;
 
         // (One looked at: the cheap checks first, and `test` for none no nearer than the nearest yet)
-        const look = (k) => {
+        const look = (k, far = false) => {
             const other = actors[k];
 
-            if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || !this.#near(actor, other, within)) {
+            if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || (!far && !this.#near(actor, other, within))) {
                 return;
             }
 
@@ -5231,7 +5243,7 @@ export class Battle {
 
         if (within === Infinity || !Battle.indexing) {
             for (let k = 0; k < actors.length; k++) {
-                look(k);
+                look(k, wide && Boolean(actors[k].footprint));
             }
 
             return best;
@@ -5241,7 +5253,14 @@ export class Battle {
         // nearest first, and none gone on to that's too far off to hold anyone nearer than the
         // nearest yet. Anyone in a cell r rings out is at least r - 1 cells' width off, less how far
         // they may have gone since the index was made, and a square's rounding)
-        const cells = this.#indexed().cells.get(actor.map);
+        const index = this.#indexed();
+        const cells = index.cells.get(actor.map);
+
+        // (Those over more than their square, wherever they stand: looked at twice, if they're
+        // near too, which changes nothing)
+        for (let i = 0; wide && i < index.wide.length; i++) {
+            look(index.wide[i], true);
+        }
 
         if (!cells) {
             return best;
@@ -5467,7 +5486,8 @@ export class Battle {
         const chasing = (id, by) => id !== null && id !== undefined && (chasers.get(id) ?? chasers.set(id, []).get(id)).push(by);
 
         chasers.clear();
-        this.#players = this.actors.filter((actor) => actor.kind === "player" && !actor.dead);
+        this.#heroes = this.actors.filter((actor) => actor.kind === "player");
+        this.#players = this.#heroes.filter((actor) => !actor.dead);
         this.#onPlayers.clear();
 
         const players = new Set(this.#players.map(({ id }) => id));
@@ -5590,7 +5610,8 @@ export class Battle {
 
     // Where everyone stands, kept by cell (INDEX_CELL): made again if it might be out of date. {
     // cells: map id -> cell -> indices into `actors` (in their order), at: where each was (x, y),
-    // order: each one's index }
+    // order: each one's index, wide: the indices of those standing over more than their own
+    // square (a `footprint`: struck at its nearest square, however far off its middle is) }
     #indexed() {
         const index = this.#index;
 
@@ -5601,6 +5622,7 @@ export class Battle {
         const cells = new Map();
         const at = new Float64Array(this.actors.length * 2);
         const order = new Map();
+        const wide = [];
 
         this.actors.forEach((actor, k) => {
             const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
@@ -5616,9 +5638,13 @@ export class Battle {
             at[2 * k] = actor.x;
             at[2 * k + 1] = actor.y;
             order.set(actor, k);
+
+            if (actor.footprint) {
+                wide.push(k);
+            }
         });
 
-        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order });
+        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order, wide });
     }
 
     // Everyone on a map who might be within `reach` metres either way of a point (x, y): their
@@ -5647,6 +5673,30 @@ export class Battle {
         }
 
         return found;
+    }
+
+    /**
+     * Everyone still standing on a map within `radius` metres of a point (x, y), and with `of`
+     * given only its enemies (hostile(of, other)): in their order in `actors`, as going through
+     * everyone comes on them, so whatever's done to each in turn (a blow, a roll of the dice) is
+     * done in the order it always was. Looked for among those near (#indexed), not through
+     * everyone, which changes nothing (Battle.indexing off, it goes through everyone: the tests'
+     * check). A list of its own, so whoever asked may search again while going through it.
+     */
+    #standingNear(mapId, x, y, radius, of = null) {
+        const actors = this.actors;
+        const near = [];
+        const found = Battle.indexing && radius < Infinity ? this.#within(mapId, x, y, radius).sort((a, b) => a - b) : null;
+
+        for (let i = 0; i < (found ?? actors).length; i++) {
+            const other = found ? actors[found[i]] : actors[i];
+
+            if (!other.dead && other.map === mapId && hypot(other.x - x, other.y - y) <= radius && (!of || this.hostile(of, other))) {
+                near.push(other);
+            }
+        }
+
+        return near;
     }
 
     // The same as #within, into the one list `#found` and none made: how many it found there
@@ -6588,7 +6638,7 @@ export class Battle {
             if (this.time >= hazard.next) {
                 hazard.next += every;
 
-                for (const actor of this.actors) {
+                for (const actor of this.#standingNear(hazard.map, hazard.x, hazard.y, hazard.radius)) {
                     const theirs = side ? this.hostile(side, actor) : actor.team !== hazard.team && !actor.neutral;
 
                     if (!actor.dead && actor.map === hazard.map && theirs && hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
@@ -6642,7 +6692,7 @@ export class Battle {
     // them, but for the mightiest, who lose PRISMATIC.mighty of their whole health. The sigil spent,
     // every stack and piece with it. How many it struck
     #prismatic(caster, target, id, spell) {
-        const struck = [target, ...this.actors.filter((other) => other !== target && !other.dead && other.map === target.map && this.hostile(caster, other) && hypot(other.x - target.x, other.y - target.y) <= spell.area)];
+        const struck = [target, ...this.#standingNear(target.map, target.x, target.y, spell.area, caster).filter((other) => other !== target)];
 
         for (const one of struck) {
             const damage = mighty(one) ? Math.max(1, Math.ceil(PRISMATIC.mighty * one.maxHp)) : Math.max(1, one.hp);
@@ -6727,7 +6777,7 @@ export class Battle {
     // round it)
     #spellStruck(caster, target, spell, { beyond = false } = {}) {
         const struck = [{ one: target, leap: 0 }];
-        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
+        const near = (from, reach) => this.#standingNear(from.map, from.x, from.y, reach, caster).filter((other) => !struck.some(({ one }) => one === other));
 
         if (spell.area) {
             struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
@@ -7045,7 +7095,7 @@ export class Battle {
     // The foes of `actor` within `radius` metres of (x, y) on `map`, the nearest first (`first`, if
     // given, before them all)
     #foesNear(actor, map, x, y, radius, first = null) {
-        const near = this.actors.filter((one) => !one.dead && one.map === map && one !== actor && hypot(one.x - x, one.y - y) <= radius && this.hostile(actor, one));
+        const near = this.#standingNear(map, x, y, radius, actor).filter((one) => one !== actor);
 
         near.sort((a, b) => (a === first ? -1 : b === first ? 1 : hypot(a.x - x, a.y - y) - hypot(b.x - x, b.y - y)));
 
@@ -7255,7 +7305,7 @@ export class Battle {
     #blast(by, side, map, x, y, { radius, damage, power = 1, toss, kind, spell = null, heart = null, away = null, bomb = null, spare = null, element: given, reaction = "crush", stagger = 300, afflict: leaves = null, cone = null }) {
         const half = cone ? (cone.arc * Math.PI) / 360 : null;
         const inCone = (actor) => !cone || hypot(actor.x - x, actor.y - y) < 0.8 || Math.abs(wrapAngle(atan2(actor.x - x, actor.y - y) - cone.facing)) <= half;
-        const caught = this.actors.filter((actor) => !actor.dead && actor.map === map && !spare?.has(actor.id) && hypot(actor.x - x, actor.y - y) <= radius && inCone(actor) && this.hostile(side, actor));
+        const caught = this.#standingNear(map, x, y, radius, side).filter((actor) => !spare?.has(actor.id) && inCone(actor));
         // (How near the heart each was, before any's thrown)
         const near = caught.map((actor) => hypot(actor.x - x, actor.y - y));
         const throws = caught.map((actor, k) => this.#toss(actor, [x, y], near[k] / radius, toss, heart, away)).filter(Boolean);
@@ -7408,7 +7458,7 @@ export class Battle {
     #seeThrough(actor) {
         const seconds = STEP_MS / 1000;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, SEE_THROUGH.near)) {
             const mighty = (other.wild?.tier ?? 0) >= SEE_THROUGH.tier || Boolean(other.wild?.unique);
             const near = mighty && !other.dead && other.map === actor.map && this.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) <= SEE_THROUGH.near && this.canSee(other, actor);
 
@@ -7844,7 +7894,7 @@ export class Battle {
         const { reach, many, cooldown } = TAUNT.cry;
         let crowding = 0;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (!other.dead && other.map === actor.map && this.#guards(actor, leader, other.target) && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor)) {
                 crowding++;
             }
@@ -7861,7 +7911,7 @@ export class Battle {
             return;
         }
 
-        const on = this.actors.some((other) => !other.dead && other.map === actor.map && other.target === actor.id && distanceBetween(actor.square, other.square) <= SLIP.reach && this.hostile(other, actor));
+        const on = this.#standingNear(actor.map, actor.x, actor.y, SLIP.reach + SQUARE_SLACK).some((other) => !other.dead && other.map === actor.map && other.target === actor.id && distanceBetween(actor.square, other.square) <= SLIP.reach && this.hostile(other, actor));
 
         if (on) {
             this.slipAway(actor.id);

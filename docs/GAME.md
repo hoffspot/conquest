@@ -984,7 +984,26 @@ the first in the battle's list, as looking through everyone found. It makes no d
 happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
 (`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for. Whether
 anyone's after one further off than it can see is looked up among who was after whom as the step
-began (`#chasers`), not through everyone.
+began (`#chasers`), not through everyone, and before it looks round at all.
+
+Whatever asks who's round a point asks the same cells (`#standingNear`): a spell that strikes all
+round its target or leaps on, a bomb's or a blast's burst, what lies burning on the ground, what
+falls across a boss's arena, a war cry, a slipping away, a beast that sees through Invisibility.
+It's given them in the battle's list's order, so each blow and each roll of the dice falls as it
+did when everyone was gone through. A guard tower, and a player standing still, look for the
+nearest enemy only as far off as their weapon reaches, and at anything standing over more than
+its own square (a `footprint`: struck at its nearest square) however far off its middle is. A
+courtesan's beckoning and the folk's resting ask only the players whether they're in sight. A
+second battle (a tower, a standing player, casters, bombs, a cry, one unseen) plays out the same
+either way too. This is the multiplayer scaling plan's rule for its grids, slice 1-10's
+(`generated/multiplayer_scaling_plan.md`): the cells only cull, the test asked of each is the one
+it always was, in the order it always was.
+
+A search among those near makes no list of its own: it fills one the battle keeps (`#found`) and
+says how many, read before anything else may search (those that nest, the colossal's, ask for
+lists of their own). Points are read by index (`a[0]`, `a[1]`), not taken apart. Measured on the
+host's field battle of 50 a side, that halved what a step leaves to be collected (about 1 MB to
+about 0.4) and took a sixth off the step.
 
 **Lines of battle** (`formation`; core/formation.js; the research behind them in
 [WAR.md](WAR.md#lines-of-battle-m17)). A formation is an army's line: where the middle of its

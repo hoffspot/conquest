@@ -117,6 +117,81 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(["a", "b"].every((team) => indexed.battle.actors.some((actor) => actor.team === team && actor.dead)));
     });
 
+    // Everything that asks who's near a point (#standingNear) or who's nearest within reach
+    // (#hold, #obey), on an open field: a guard tower shooting from its loops, a player standing
+    // among their enemies, the tower's own footprint within a swordsman's reach, casters whose
+    // spells strike all round and leap on, bombs, a war cry and a slipping away, and one unseen
+    // beside a beast that sees through it
+    const melee = () => {
+        const battle = new Battle({ blocked: Array.from({ length: 120 }, () => new Uint8Array(120)) }, { seed: 11 });
+        const weapons = ["sword", "bow", "hammer", "staff", "gauntlets", "cleaver", "wand"];
+        const spells = [["burstflame", "fireball"], ["lightning", "shockbolt"], ["shatterstone", "rumble"], ["steamblast", "waterbolt"]];
+        const events = [];
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [60, 58], hp: 4000, armed: true });
+        battle.add({ id: "unseen", kind: "player", team: "a", weapon: "bow", square: [52, 60], hp: 4000 });
+        battle.add({ id: "tower", kind: "fort", team: "a", weapon: "tower", square: [60, 70], ai: "fort", armed: true, hp: 1200, footprint: [58, 68, 62, 72] });
+        battle.add({ id: "seer", kind: "beast", team: "b", weapon: "claws", square: [50, 57], ai: "wild", hp: 2000, wild: { creature: "wolf", tier: 8, temper: "aggressive", guard: 0, roam: 6, leash: 40, pack: null, leader: null } });
+
+        for (const [team, y, to] of [
+            ["a", 66, 50],
+            ["b", 44, 60],
+        ]) {
+            for (let k = 0; k < 30; k++) {
+                const x = 46 + (k % 15) * 2;
+                const caster = k % 5 === 3;
+
+                battle.add({ id: `${team}-${k}`, kind: "soldier", team, weapon: caster ? "staff" : weapons[(k + (team === "b")) % weapons.length], square: [x, y - Math.floor(k / 15) * 2 * (team === "a" ? -1 : 1)], ai: "patrol", patrol: [[x, to]], leash: 60, hp: 400, armed: k % 2 === 0, ...(caster ? { casts: spells[k % spells.length] } : {}), ...(k % 5 === 4 ? { heals: ["vigor", "mendWounds"] } : {}) });
+            }
+        }
+
+        battle.buff("unseen", "invisibility", { ms: 20000 });
+
+        for (let t = 0; t < 30000; t += STEP_MS) {
+            const foe = battle.actors.find((other) => other.team === "b" && !other.dead && Math.hypot(other.x - battle.actor("hero").x, other.y - battle.actor("hero").y) < 9);
+
+            // (Every two seconds, as each is allowed: a bomb among them, a cry, a slipping away)
+            if (t % 2000 === 0 && foe) {
+                battle.lob("hero", foe.id, { kind: "goblinBomb", damage: [6, 10], reach: 10 });
+            }
+
+            if (t % 3000 === 1000) {
+                battle.warCry("hero");
+                battle.slipAway("a-0");
+            }
+
+            events.push(...battle.advance(STEP_MS));
+        }
+
+        const state = battle.actors.map((actor) => [actor.id, actor.x, actor.y, actor.hp, actor.dead, actor.target, actor.facing, Object.keys(actor.seeing ?? {}).join()]);
+
+        return { hash: createHash("sha1").update(JSON.stringify([state, battle.random.state, events.map((event) => [event.type, event.time, event.id, event.target, event.amount, event.damage, event.took, event.from])])).digest("hex"), events, battle };
+    };
+
+    it("finds those near a point, and the nearest within reach, exactly as looking through everyone does", () => {
+        const indexed = melee();
+
+        Battle.indexing = false;
+
+        try {
+            assert.equal(indexed.hash, melee().hash);
+        } finally {
+            Battle.indexing = true;
+        }
+
+        // (And all of it happened: the tower shot, the player struck, spells struck several at
+        // once, a bomb burst, the cry took, and the unseen one was seen through)
+        const types = (type, test = () => true) => indexed.events.filter((event) => event.type === type && test(event)).length;
+
+        assert.ok(types("attack", ({ id }) => id === "tower") > 3, "the tower shoots");
+        assert.ok(types("attack", ({ id }) => id === "hero") > 3, "the player strikes");
+        assert.ok(types("blast") > 0, "a bomb bursts");
+        assert.ok(types("cried", ({ took }) => took > 0) > 0, "a war cry takes");
+        assert.ok(types("slipped") > 0, "one slips away");
+        assert.ok(types("spell") > 10, "spells are cast");
+        assert.ok(types("seen") > 0, "the unseen one is seen through");
+    });
+
     it("finds everyone by id as they come and go, and after it's carried on from a snapshot", () => {
         const { host } = outOfTown();
         const battle = host.battle;
