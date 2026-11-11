@@ -39,7 +39,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, WAITING } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_PARTS, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
+const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_PARTS, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, packedFigure, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
 const { folkFigureLook } = await import("../client/js/characters/folkcrowd.js");
 const { released } = await import("../client/js/world/release.js");
 
@@ -497,6 +497,230 @@ describe("a kind's moves kept as half floats (crowd.js templateFrom)", () => {
         }
 
         assert.ok(worst < 0.002, `${worst} out at most`);
+    });
+});
+
+describe("a kind's figure kept as what it's drawn with (crowd.js packedFigure, templateFrom)", () => {
+    // Every `every`th triangle of a figure's, from its `from`th: a list of corners, as its fewer
+    // triangles near and far are
+    const fewer = (geometry, every, from = 0) => {
+        const list = [];
+
+        for (let k = from * 3; k + 2 < geometry.index.count; k += every * 3) {
+            list.push(geometry.index.getX(k), geometry.index.getX(k + 1), geometry.index.getX(k + 2));
+        }
+
+        return list;
+    };
+
+    it("keeps only the corners its triangles near and far use, each where it was, bound as it was to within two millimetres posed; its facing, picture, colour, bones, weights and shine as bytes and shorts, not floats", () => {
+        const { character, look } = soldier();
+        const { geometry } = figureOf(character, 64, { stowed: true });
+        const [near, far] = [fewer(geometry, 4), fewer(geometry, 9, 1)];
+        const used = new Set([...near, ...far]);
+        const { geometry: packed, indices } = packedFigure(geometry, [near, far]);
+        const { position, normal, uv, color, crowdBones, crowdWeights, crowdSet, crowdSurface, crowdPart } = packed.attributes;
+
+        assert.equal(position.count, used.size);
+        assert.ok(used.size < geometry.attributes.position.count * 0.8, `${used.size} of ${geometry.attributes.position.count} corners`);
+        assert.equal(packed.index, indices[0]);
+        assert.deepEqual(packed.boundingBox, geometry.boundingBox);
+
+        // (What each is kept as: 37 bytes a corner, where it was 92)
+        assert.deepEqual(
+            [position, normal, uv, color, crowdBones, crowdWeights, crowdSet, crowdSurface, crowdPart].map(({ array, itemSize, normalized }) => [array.constructor.name, itemSize, normalized]),
+            [
+                ["Float32Array", 3, false],
+                ["Int8Array", 3, true],
+                ["Uint16Array", 2, true],
+                ["Uint16Array", 3, true],
+                ["Uint8Array", 4, false],
+                ["Uint8Array", 4, true],
+                ["Uint8Array", 1, false],
+                ["Uint8Array", 2, true],
+                ["Uint8Array", 1, false],
+            ],
+        );
+        assert.equal(
+            Object.values(packed.attributes).reduce((sum, { array }) => sum + array.byteLength, 0),
+            used.size * 37,
+        );
+
+        // (Each triangle's corners what they were, by its new numbers; near and far)
+        const was = geometry.attributes;
+        let [facing, placed, coloured, shining, bound] = [0, 0, 0, 0, 0];
+
+        for (const [list, index] of [
+            [near, indices[0]],
+            [far, indices[1]],
+        ]) {
+            assert.equal(index.count, list.length);
+            assert.ok(index.array instanceof Uint16Array);
+
+            for (let k = 0; k < list.length; k++) {
+                const [from, to] = [list[k], index.getX(k)];
+
+                for (let c = 0; c < 3; c++) {
+                    assert.equal(position.getComponent(to, c), was.position.getComponent(from, c));
+                    facing = Math.max(facing, Math.abs(normal.getComponent(to, c) - was.normal.getComponent(from, c)));
+                    coloured = Math.max(coloured, Math.abs(color.getComponent(to, c) - was.color.getComponent(from, c)));
+                }
+
+                for (let c = 0; c < 2; c++) {
+                    placed = Math.max(placed, Math.abs(uv.getComponent(to, c) - was.uv.getComponent(from, c)));
+                    shining = Math.max(shining, Math.abs(crowdSurface.getComponent(to, c) - was.crowdSurface.getComponent(from, c)));
+                }
+
+                assert.equal(crowdSet.getX(to), was.crowdSet.getX(from));
+                assert.equal(crowdPart.getX(to), was.crowdPart.getX(from));
+                assert.deepEqual(
+                    [0, 1, 2, 3].map((c) => crowdBones.getComponent(to, c)),
+                    [0, 1, 2, 3].map((c) => was.crowdBones.getComponent(from, c)),
+                );
+
+                // (Bound to its bones as much as it was, all told: no corner drawn bigger or
+                // smaller; and to each within a byte's step)
+                const [bytes, shares] = [crowdWeights.array.subarray(to * 4, to * 4 + 4), was.crowdWeights.array.subarray(from * 4, from * 4 + 4)];
+
+                assert.equal(bytes[0] + bytes[1] + bytes[2] + bytes[3], Math.round((shares[0] + shares[1] + shares[2] + shares[3]) * 255));
+                bound = Math.max(bound, ...[0, 1, 2, 3].map((c) => Math.abs(bytes[c] / 255 - shares[c])));
+            }
+        }
+
+        assert.ok(bound <= 2.5 / 255, `its weights ${bound} out`);
+
+        assert.ok(facing <= 0.5 / 127 + 1e-6, `its facing ${facing} out`);
+        assert.ok(placed <= 0.5 / 65535 + 1e-7, `its picture's place ${placed} out`);
+        assert.ok(coloured <= 0.5 / 65535 + 1e-7, `its colour ${coloured} out`);
+        assert.ok(shining <= 0.5 / 255 + 1e-6, `its shine ${shining} out`);
+
+        // (Posed as its skeleton is, on guard and mid-swing: every corner kept where the
+        // soldier's own is; what it carries put away isn't on the soldier then, only what's
+        // drawn of it in hand)
+        const shown = [];
+
+        for (let v = 0; v < position.count; v++) {
+            if (crowdSet.getX(v) !== CROWD_SETS.weaponAway && crowdSet.getX(v) !== CROWD_SETS.shieldAway) {
+                shown.push(v);
+            }
+        }
+
+        const apart = () => {
+            const posed = posedFigure(character, packed);
+
+            return furthestFrom(
+                shown.flatMap((v) => [posed[v * 3], posed[v * 3 + 1], posed[v * 3 + 2]]),
+                cornersOf(character),
+            );
+        };
+
+        assert.ok(apart() < 0.002, "on guard");
+
+        const avatar = new Avatar(character, { walk: look.walk, guard: "sword" });
+
+        avatar.place(0, 0, 0);
+        avatar.actions.setGuard(true);
+        avatar.actions.startAttack("sword", { hitAt: 0.38, duration: 0.76 });
+
+        for (let k = 0; k < 7; k++) {
+            avatar.update(1 / 20, 0, 0, 0, true);
+        }
+
+        assert.ok(apart() < 0.002, "mid-swing");
+    });
+
+    it("keeps how much a corner's bound to its bones adding up to what it did, whatever rounding leaves; and as floats what bytes can't hold; with no lists, every corner as it's numbered", () => {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1], 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute([0.2, 0.4, 0.6, 1.5, 0, 0, 0, 0, 0, 1, 1, 1], 3));
+        geometry.setAttribute("crowdBones", new THREE.Float32BufferAttribute([0, 1, 2, 0, 300, 0, 0, 0, 5, 0, 0, 0, 7, 8, 9, 10], 4));
+        geometry.setAttribute("crowdWeights", new THREE.Float32BufferAttribute([1 / 3, 1 / 3, 1 / 3, 0, 1, 0, 0, 0, 0.5, 0.5, 0, 0, 0.3, 0.3, 0.2, 0.2], 4));
+        geometry.setIndex([0, 1, 2, 2, 1, 3]);
+
+        const { geometry: packed, indices } = packedFigure(geometry);
+
+        assert.equal(indices, null);
+        assert.equal(packed.attributes.position.count, 4);
+        assert.deepEqual([...packed.index.array], [0, 1, 2, 2, 1, 3]);
+        // (A half and a half are 128 and 128 as bytes, one too many: taken off the first of the
+        // most; three tenths twice and two tenths twice the same)
+        assert.deepEqual([...packed.attributes.crowdWeights.array], [85, 85, 85, 0, 255, 0, 0, 0, 127, 128, 0, 0, 76, 77, 51, 51]);
+
+        // (A colour brighter than one, a bone past a byte's count: as they were)
+        assert.ok(packed.attributes.color.array instanceof Float32Array && !packed.attributes.color.normalized);
+        assert.equal(packed.attributes.color.getX(1), 1.5);
+        assert.ok(packed.attributes.crowdBones.array instanceof Float32Array);
+        assert.equal(packed.attributes.crowdBones.getX(1), 300);
+
+        // (Only the corners a list uses, numbered as they're first used)
+        const some = packedFigure(geometry, [[2, 1, 3]]);
+
+        assert.equal(some.geometry.attributes.position.count, 3);
+        assert.deepEqual([...some.indices[0].array], [0, 1, 2]);
+        assert.deepEqual([...some.geometry.attributes.position.array], [0, 1, 0, 1, 0, 0, 0, 0, 1]);
+        assert.ok(some.geometry.attributes.crowdBones.array instanceof Float32Array, "the bone past a byte's count is among them");
+        assert.ok(packedFigure(geometry, [[2, 3, 0]]).geometry.attributes.crowdBones.array instanceof Uint8Array);
+    });
+
+    it("makes a template of the corners its fewer triangles use once both lists have come, and lets go of the page's copies of them, its triangles and its moves once the graphics card has them", async () => {
+        const { character } = soldier();
+        const { geometry, picture, height } = figureOf(character, 64);
+        const recorded = { data: new Float32Array(64).fill(0.25), rows: 2, width: 8, flags: 7, moves: {} };
+        const all = geometry.attributes.position.count;
+        // (Its fewer triangles, made elsewhere: a moment later)
+        const lods = { of: (name, make) => new Promise((resolve) => setTimeout(() => resolve(fewer({ index: new THREE.BufferAttribute(make().indices, 1) }, name.endsWith("@near") ? 2 : 5)), 5)) };
+        const steps = templateFrom({ lods }, "human:m:sword", { geometry, picture, height, recorded });
+        let step = steps.next();
+
+        while (!step.done) {
+            if (step.value === WAITING) {
+                await new Promise((resolve) => setTimeout(resolve, 1));
+            }
+
+            step = steps.next();
+        }
+
+        const template = step.value;
+        const used = new Set([...fewer(geometry, 2), ...fewer(geometry, 5)]).size;
+
+        assert.equal(template.packed, true);
+        assert.equal(template.geometry.attributes.position.count, used);
+        assert.ok(used < all);
+        assert.equal(template.geometry.index, template.nearIndex);
+        assert.ok(Math.max(...template.nearIndex.array, ...template.farIndex.array) < used);
+        assert.ok(template.geometry.attributes.normal.array instanceof Int8Array);
+        assert.ok(furthestFrom(posedFigure(character, template.geometry), cornersOf(character)) < 0.002);
+
+        // (As three.js's renderer does once each is on the graphics card)
+        released.any = false;
+
+        for (const attribute of [...Object.values(template.geometry.attributes), template.nearIndex, template.farIndex]) {
+            assert.ok(attribute.array);
+            attribute.onUploadCallback();
+            assert.equal(attribute.array, null);
+        }
+
+        assert.ok(template.moves.image.data);
+        template.moves.onUpdate(template.moves);
+        assert.equal(template.moves.image.data, null);
+        assert.equal(released.any, true);
+        assert.equal(template.geometry.attributes.position.count, used, "how many corners it has, still known");
+    });
+
+    it("keeps every corner as it's numbered while either list is still to come, so one that comes late is drawn as it comes", () => {
+        const { character } = soldier();
+        const { geometry, picture, height } = figureOf(character, 64);
+        const all = geometry.attributes.position.count;
+        const merged = [...geometry.index.array];
+        // (Never made: waited for as long as a figure's are, then drawn as merged)
+        const template = allAtOnce(templateFrom({ lods: { of: () => new Promise(() => {}) } }, "human:m:sword", { geometry, picture, height, recorded: { data: new Float32Array(8), rows: 1, width: 2, flags: 1, moves: {} } }));
+
+        assert.equal(template.packed, false);
+        assert.equal(template.nearIndex, null);
+        assert.equal(template.geometry.attributes.position.count, all);
+        assert.deepEqual([...template.geometry.index.array], merged);
+        assert.ok(template.geometry.attributes.crowdWeights.array instanceof Uint8Array);
     });
 });
 
@@ -1199,5 +1423,88 @@ describe("one of the townsfolk in a crowd (crowd.js CrowdAvatar, Batch)", () => 
         assert.match(shader.fragmentShader, /diffuseColor\.rgb = mix\( diffuseColor\.rgb, vCrowdDye \* dot\( diffuseColor\.rgb, vec3\( 0\.2126, 0\.7152, 0\.0722 \) \), vCrowdDyed \);/);
 
         crowd.dispose();
+    });
+
+    it("given more room as its crowd grows, lets go of only what was its own off the graphics card, not its figure's corners and triangles, which what's made in its place draws too; and of all of it once its kind's let go of", () => {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0.5, 1.7, 0, -0.5, 1.7, 0], 3));
+        geometry.setAttribute("crowdBones", new THREE.BufferAttribute(new Uint8Array(12), 4));
+        geometry.setIndex([0, 1, 2]);
+        geometry.computeBoundingSphere();
+
+        const farIndex = new THREE.BufferAttribute(new Uint16Array([2, 1, 0]), 1);
+        const template = { key: "folk:human:f", geometry, nearIndex: geometry.index, farIndex, picture: new THREE.Texture(), moves: new THREE.DataTexture(new Uint16Array(4), 1, 1), table: calm, flags: -1, height: 1.7 };
+        const crowd = new Crowd(new THREE.Scene(), kit);
+        const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+
+        crowd.template("folk:human:f", {
+            // eslint-disable-next-line require-yield
+            make: function* () {
+                return template;
+            },
+        });
+        crowd.work(performance.now() + 1000);
+        camera.position.set(0, 1, 30);
+        camera.lookAt(0, 1, 0);
+        camera.updateMatrixWorld();
+
+        const some = Array.from({ length: 40 }, (_, k) => {
+            const one = new CrowdAvatar(crowd, "folk:human:f");
+
+            one.place((k % 8) - 4, -Math.floor(k / 8), 0);
+
+            return one;
+        });
+        const batch = crowd.kinds.get("folk:human:f").batch;
+
+        // (What three.js lets go of off the graphics card as a geometry's let go of: every
+        // attribute it has then, and its index)
+        const gone = [];
+        const watch = (mesh, name) => mesh.geometry.addEventListener("dispose", ({ target }) => gone.push({ name, attributes: Object.keys(target.attributes).sort(), index: target.index }));
+
+        some.slice(8).forEach((one) => (one.object.visible = false));
+        assert.equal(crowd.draw(camera, 600, 0), 8);
+
+        const [near, far] = [batch.near, batch.far];
+
+        assert.equal(near.instanceMatrix.count, 32);
+        watch(near, "near");
+        watch(far, "far");
+
+        // (More of them than there's room for: made again, bigger)
+        some.forEach((one) => (one.object.visible = true));
+        assert.equal(crowd.draw(camera, 600, 0), 40);
+        assert.equal(batch.near.instanceMatrix.count, 64);
+        assert.notEqual(batch.near, near);
+        assert.deepEqual(gone, [
+            { name: "near", attributes: ["crowdFrame", "crowdState"], index: null },
+            { name: "far", attributes: ["crowdFrame", "crowdState"], index: null },
+        ]);
+
+        // (Its figure's, the same ones, on what's drawn in its place)
+        assert.equal(batch.near.geometry.attributes.position, geometry.attributes.position);
+        assert.equal(batch.far.geometry.attributes.crowdBones, geometry.attributes.crowdBones);
+        assert.equal(batch.near.geometry.index, geometry.index);
+        assert.equal(batch.far.geometry.index, farIndex);
+
+        // (Its figure's corners let go of off the page since, once sent: what's made in its
+        // place has the figure's bounds, which three.js asks of it to sort what it draws)
+        geometry.attributes.position.array = null;
+        assert.equal(batch.near.geometry.boundingSphere, geometry.boundingSphere);
+        assert.equal(batch.far.count, 40, "all of them far off");
+        batch.near.computeBoundingSphere();
+        batch.far.computeBoundingSphere();
+        assert.ok(batch.far.boundingSphere.radius > 0.5);
+
+        // (Its kind let go of: all of it, its figure's with it)
+        gone.length = 0;
+        watch(batch.near, "near");
+        watch(batch.far, "far");
+        crowd.dispose();
+        assert.deepEqual(gone, [
+            { name: "near", attributes: ["crowdBones", "crowdFrame", "crowdState", "position"], index: geometry.index },
+            { name: "far", attributes: ["crowdBones", "crowdFrame", "crowdState", "position"], index: farIndex },
+        ]);
     });
 });

@@ -22,6 +22,13 @@ function dropArray() {
     released.any = true;
 }
 
+/** Let go of one attribute's numbers (or an index's) once it's on the graphics card. Returns it. */
+export function releaseAttribute(attribute) {
+    attribute?.onUpload(dropArray);
+
+    return attribute;
+}
+
 /** Let go of a geometry's attributes and index once they're on the graphics card. Returns it. */
 export function releaseGeometry(geometry) {
     // (Its bounds worked out first: culling's done by them, and they're read from its corners)

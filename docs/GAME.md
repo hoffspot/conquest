@@ -4417,6 +4417,28 @@ now in their crowd):
   - **Half floats.** Kept as half floats (`templateFrom`, three.js HalfFloatType): a millimetre or
     so out at most on a body two metres tall, half the memory. A kind's moves are 440 KB so, where
     its fewer moves were 365 KB as floats.
+- **Kept as what it's drawn with** (`packedFigure`, once both lists of fewer triangles have come).
+  The figure as merged holds every corner of the far level of detail, and what it carries twice
+  over: a human swordsman's 28,973, of which its triangles near and far use 9,080, under a third.
+  Only those are kept, numbered anew, and each attribute as what it is, not floats: where it is
+  as floats still; which way it faces a signed byte each way (half a degree out at most); where
+  its picture is and its colour sixteen bits each (its colour's in linear light, where a byte's
+  steps would show in its darks); the bones it's bound to and how much to each a byte each, as a
+  body's own are, the weights still adding up to what they did; its shine, its set and its part
+  bytes. 37 bytes a corner where each was 92, and posed it's where it was (`test/crowd.test.js`:
+  within two millimetres of the soldier's own, as before). Then the page's copies of its corners,
+  its triangles and its moves are let go of once the graphics card has them (world/release.js):
+  nothing reads them once it's made. Measured in Node (`size` 256): a human swordsman's figure
+  3.91 MB on the graphics card before and 1.66 MB after (its corners 2.54 MB to 0.32), and on the
+  page 3.70 MB before and 0.63 MB once it's sent (its picture's canvas); an elf archer's 3.44 to
+  1.47 MB on the card; one of the townsfolk's 1.39 to 1.05. With a list still to come after the
+  longest wait (`CROWD.wait`), every corner's kept as it's numbered, packed the same, and the
+  list drawn as it comes.
+- **Given more room as a crowd grows** (`Batch`), what draws a kind is made again twice as big, and
+  the old one's own (each instance's moment and state) let go of off the graphics card, the
+  figure's corners and triangles taken off it first: three.js lets go of every attribute a
+  geometry has when it's let go of. Till 2026-11-11 its own were taken off instead, so each time
+  a crowd doubled its figure was let go of and sent again (2.5 MB), and its own never were.
 - **Drawn all at once.** Everyone of a kind is an instance of its figure, drawn in one go near and
   one far: a draw or two a kind, whatever how many. Each is posed on the graphics card from the
   picture of moves, between the two moments it's between (`crowdFrame`), nothing of it posed on the
@@ -4473,7 +4495,7 @@ now in their crowd):
   made a minute and a half in.
 - **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
   minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
-  graphics card (6 MB or so on Low), made again should one of its kind come. Kept for good, as
+  graphics card (under 2 MB on Low; 4 or so till 2026-11-11), made again should one of its kind come. Kept for good, as
   they were till 2026-10-25, an iPhone that let the game's tab go held 18 kinds.
 
 Drawn so, a frame's work hardly grows with the crowd: in headless Chromium on "medium", out on open
