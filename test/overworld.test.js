@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { squaresOf } from "../client/js/core/grid.js";
-import { buildWorld, CHUNK, CHUNKS, FLORA, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
+import { buildWorld, CHUNK, CHUNKS, FLORA, KEEP, MAKING, Overworld, WET, WORLD_SIZE } from "../client/js/core/overworld.js";
 import { navigatorOf, releaseNavigation } from "../client/js/core/navigation.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
 import { siteSize, Sites } from "../client/js/core/sites.js";
@@ -120,6 +120,144 @@ describe("the world outside (overworld.js)", () => {
 
             assert.deepEqual(reversed.get(key).trees, chunk.trees, `${key}: trees`);
         }
+    });
+
+    it("makes the same chunk a piece at a time as all at once, whatever's made between its pieces (chunkWithin)", () => {
+        const fresh = () => new Overworld({ plan: world.plan, stamp: world.stamp, start: world.start });
+        const [whole, pieced] = [fresh(), fresh()];
+        const [cx, cy] = [Math.floor(world.stamp.at[0] / CHUNK), Math.floor(world.stamp.at[1] / CHUNK)];
+        const wanted = [];
+
+        for (let y = cy - 3; y <= cy + 3; y++) {
+            for (let x = cx - 3; x <= cx + 3; x++) {
+                wanted.push([x, y]);
+            }
+        }
+
+        // (A clock that's always past the time allowed: a piece each time it's asked, no more)
+        const piece = (x, y) => pieced.chunkWithin(x, y, 0, () => 1);
+        const waiting = wanted.map(([x, y]) => [x, y]);
+        const begun = [];
+        let [pieces, most, asked] = [0, 0, 0];
+
+        // Several half made at once, a piece of each in turn; now and then another made whole
+        // between them, and one of those half made asked for whole
+        while (waiting.length || begun.length) {
+            while (begun.length < MAKING.most && waiting.length) {
+                begun.push(waiting.shift());
+            }
+
+            for (const [x, y] of [...begun]) {
+                pieces++;
+                most = Math.max(most, pieced.making.size);
+
+                if (piece(x, y)) {
+                    begun.splice(begun.findIndex((one) => one[0] === x && one[1] === y), 1);
+                    assert.ok(pieced.made(x * CHUNK, y * CHUNK, x * CHUNK, y * CHUNK), "kept once it's made");
+                } else {
+                    assert.ok(!pieced.made(x * CHUNK, y * CHUNK, x * CHUNK, y * CHUNK), "not there till it's whole");
+                }
+            }
+
+            if (pieces % 7 === 0 && waiting.length) {
+                pieced.chunk(...waiting.pop());
+            }
+
+            if (pieces % 11 === 0 && begun.length > 1) {
+                const [x, y] = begun.pop();
+
+                assert.ok(pieced.making.has(y * CHUNKS + x), "(half made)");
+                pieced.chunk(x, y);
+                assert.ok(!pieced.making.has(y * CHUNKS + x), "finished where it was asked for whole");
+                asked++;
+            }
+        }
+
+        assert.ok(pieces > wanted.length * 8 && most > 1 && asked > 0, `${pieces} pieces for ${wanted.length} chunks, ${most} half made at once, ${asked} asked for whole`);
+        assert.equal(pieced.making.size, 0);
+
+        for (const [x, y] of wanted) {
+            assert.deepEqual(pieced.chunk(x, y), whole.chunk(x, y), `${x}, ${y}`);
+        }
+
+        // (One made already: given at once)
+        assert.equal(piece(cx, cy), pieced.chunk(cx, cy));
+    });
+
+    it("begins a chunk half made again when what stands in the world changes, so it's never made of the world at two moments", () => {
+        const fresh = () => new Overworld({ plan: world.plan, stamp: world.stamp, start: world.start });
+        const [before, during] = [fresh(), fresh()];
+        const [cx, cy] = [Math.floor(world.stamp.at[0] / CHUNK) + 2, Math.floor(world.stamp.at[1] / CHUNK) + 2];
+        const fort = { id: "fort-1", kind: "tower", realm: "human", at: [cx * CHUNK + 30, cy * CHUNK + 30] };
+
+        // (Half made, then a tower goes up in it: begun again, and made with the tower)
+        for (let k = 0; k < 6; k++) {
+            assert.equal(during.chunkWithin(cx, cy, 0, () => 1), null);
+        }
+
+        assert.equal(during.making.size, 1);
+        during.setForts([fort]);
+        assert.equal(during.making.size, 0, "let go of");
+        before.setForts([fort]);
+
+        let made = null;
+
+        while (!made) {
+            made = during.chunkWithin(cx, cy, 0, () => 1);
+        }
+
+        assert.deepEqual(made, before.chunk(cx, cy));
+        assert.equal(made.blocked[30 * CHUNK + 30], 1, "the tower standing in it");
+
+        // (No more than a few half made at once: the longest begun let go of)
+        for (let k = 0; k < MAKING.most + 2; k++) {
+            during.chunkWithin(cx - 6 - k, cy, 0, () => 1);
+        }
+
+        assert.equal(during.making.size, MAKING.most);
+        assert.ok(!during.making.has(cy * CHUNKS + cx - 6) && during.making.has(cy * CHUNKS + cx - 6 - MAKING.most - 1));
+    });
+
+    it("keeps as many chunks as it's told to (a world server's, with players in many places), never fewer than a browser's", () => {
+        const fresh = new Overworld({ plan: world.plan, stamp: world.stamp, start: world.start });
+        const made = (k) => fresh.made((k % 32) * CHUNK, (40 + Math.floor(k / 32)) * CHUNK, (k % 32) * CHUNK, (40 + Math.floor(k / 32)) * CHUNK);
+
+        assert.equal(fresh.kept, KEEP);
+        fresh.keep(KEEP + 40);
+        assert.equal(fresh.kept, KEEP + 40);
+        assert.equal(fresh.ground.kept, KEEP + 40, "its ground keeps as many chunks' heights");
+
+        // (Made a piece at a time or whole, they're kept alike: only their squares matter here,
+        // so the plainest land there is, far out to sea, where they're quickly made)
+        for (let k = 0; k < KEEP + 40; k++) {
+            fresh.chunk(k % 32, 40 + Math.floor(k / 32));
+        }
+
+        assert.equal(fresh.chunks.size, KEEP + 40);
+        assert.ok(made(0) && made(KEEP + 39), "none let go");
+        fresh.chunk(0, 60);
+        assert.ok(!made(0) && made(1), "one more than it keeps: the longest unused let go");
+
+        // (Told to keep fewer: the longest unused let go; never fewer than KEEP)
+        fresh.keep(10);
+        assert.equal(fresh.kept, KEEP);
+        assert.equal(fresh.chunks.size, KEEP);
+        assert.ok(fresh.ground.chunks.size <= KEEP && fresh.ground.natural.size <= KEEP);
+        assert.ok(!made(40) && made(KEEP + 39));
+        assert.deepEqual(fresh.chunk(1, 40).blocked, new Overworld({ plan: world.plan, stamp: world.stamp, start: world.start }).chunk(1, 40).blocked, "one let go, made again the same");
+
+        // (One marked as wanted still, though nothing's read it since: the last let go, not the
+        // first, and its ground with it; one that isn't made isn't made for the asking)
+        const oldest = [...fresh.chunks.values()][0];
+        const [next, size] = [[...fresh.chunks.values()][1], fresh.chunks.size];
+
+        assert.equal(fresh.wanted(oldest.cx, oldest.cy), true);
+        assert.equal([...fresh.chunks.values()].at(-1), oldest);
+        assert.equal(fresh.wanted(5, 70), false);
+        assert.equal(fresh.chunks.size, size);
+        fresh.chunk(6, 70);
+        assert.ok(fresh.made(oldest.x0, oldest.y0, oldest.x0, oldest.y0) && !fresh.made(next.x0, next.y0, next.x0, next.y0));
+        assert.ok(fresh.ground.peek(oldest.cx, oldest.cy), "its ground kept with it");
     });
 
     it("sets the town in where the player's people start, just as it was made", () => {

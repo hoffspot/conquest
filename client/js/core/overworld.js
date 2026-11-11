@@ -201,8 +201,20 @@ const CLEAR_OF_PLACES = 12;
 /** How much further than its own flats' reach a camp's pitched if all near it is a place's ground. */
 export const CAMP_FARTHER = 3;
 
-// How many chunks to keep once made (the rest are made again when they're needed)
-const KEEP = 256;
+/**
+ * How many chunks are kept once made, at the least (the rest are made again when they're needed):
+ * enough for one player's surroundings, a browser's. A world server, with players in several
+ * places at once, keeps as many as they need (Overworld keep: server/ahead.js), or it would let
+ * one go to make another, over and over.
+ */
+export const KEEP = 256;
+
+/**
+ * How a chunk's made a piece at a time (Overworld chunkWithin): its squares so many rows to a
+ * piece, and no more than `most` chunks half made at once (the longest begun let go of, to be
+ * begun again if it's asked for).
+ */
+export const MAKING = Object.freeze({ rows: 8, most: 4 });
 
 // A camp's pad (metres from its middle), levelled into the ground: pitched on the flattest ground
 // within FLATS.reach of its cell's middle (terrain/flats.js)
@@ -357,6 +369,13 @@ export class Overworld {
         this.waters = watersOf(plan);
         this.last = null;
 
+        /** How many chunks are kept once made (keep): KEEP, or more. */
+        this.kept = KEEP;
+
+        // The chunks being made a piece at a time (chunkWithin), by key: each one's making, to be
+        // carried on
+        this.making = new Map();
+
         /** The fortifications standing (setForts): by id, { kind, box (footprintOf's squares) }. */
         this.forts = new Map();
 
@@ -494,8 +513,14 @@ export class Overworld {
         return changed;
     }
 
-    // The chunks over boxes of squares ([x0, y0, x1, y1]) let go, to be made again
+    // The chunks over boxes of squares ([x0, y0, x1, y1]) let go, to be made again (and any half
+    // made, chunkWithin, begun again when it's next asked for: what was made of it may have been
+    // made as things stood before)
     #remake(boxes) {
+        if (boxes.length) {
+            this.making.clear();
+        }
+
         for (const [x0, y0, x1, y1] of boxes) {
             for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
                 for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
@@ -612,17 +637,118 @@ export class Overworld {
             // (Most recently used last, for letting go of the oldest)
             this.chunks.delete(key);
         } else {
-            chunk = this.#make(cx, cy);
+            // (One half made, chunkWithin, finished here and now: the same chunk either way)
+            const making = this.making.get(key) ?? this.#making(cx, cy);
 
-            if (this.chunks.size >= KEEP) {
-                this.chunks.delete(this.chunks.keys().next().value);
+            this.making.delete(key);
+
+            let step = making.next();
+
+            while (!step.done) {
+                step = making.next();
             }
+
+            chunk = step.value;
+            this.#letGo();
         }
 
         this.chunks.set(key, chunk);
         this.last = chunk;
 
         return chunk;
+    }
+
+    // The chunk longest unused let go of, with as many kept as are to be (keep)
+    #letGo() {
+        while (this.chunks.size >= this.kept) {
+            this.chunks.delete(this.chunks.keys().next().value);
+        }
+    }
+
+    /**
+     * A chunk made a piece at a time, for whoever makes the world ahead of need between the
+     * world's steps or a page's frames (server/ahead.js, app/game.js): a piece of its making at
+     * the least each time it's asked for, and more until `clock()` (ms) reaches `until`. Returns
+     * the chunk once it's made (kept, as chunk keeps it; at once, if it was), else null: asked
+     * again, it's carried on from where it was left. Asked for whole meanwhile (chunk), it's
+     * finished there and then. The chunk is the same however it was made: nothing of a chunk
+     * hangs on which others were made before it, or between its pieces.
+     */
+    chunkWithin(cx, cy, until, clock = () => performance.now()) {
+        const key = cy * CHUNKS + cx;
+
+        if (this.chunks.has(key)) {
+            return this.chunk(cx, cy);
+        }
+
+        let making = this.making.get(key);
+
+        if (!making) {
+            // (No more than a few half made at once: the longest begun let go of)
+            while (this.making.size >= MAKING.most) {
+                this.making.delete(this.making.keys().next().value);
+            }
+
+            making = this.#making(cx, cy);
+            this.making.set(key, making);
+        }
+
+        for (;;) {
+            const step = making.next();
+
+            if (step.done) {
+                this.making.delete(key);
+                this.#letGo();
+                this.chunks.set(key, step.value);
+
+                return step.value;
+            }
+
+            if (clock() >= until) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Whether a chunk's made (and kept); and if it is, it and its ground are marked as used just
+     * now, the last to be let go: for whoever keeps the chunks its players need made (server/
+     * ahead.js). A chunk a player's standing three chunks from is never read by the world's
+     * steps, and without this it would be the first let go as another's made.
+     */
+    wanted(cx, cy) {
+        const key = cy * CHUNKS + cx;
+        const chunk = this.chunks.get(key);
+
+        if (!chunk) {
+            return false;
+        }
+
+        this.chunks.delete(key);
+        this.chunks.set(key, chunk);
+        this.ground.touch(cx, cy);
+
+        return true;
+    }
+
+    /**
+     * Keep as many chunks once made as this (never fewer than KEEP): a world server's, as its
+     * players come and go (server/ahead.js). Its ground keeps as many chunks' heights
+     * (terrain/ground.js). Fewer than are kept now, the longest unused are let go.
+     */
+    keep(most) {
+        this.kept = Math.max(KEEP, Math.floor(most) || 0);
+        this.ground.keep(this.kept);
+
+        while (this.chunks.size > this.kept) {
+            const oldest = this.chunks.keys().next().value;
+
+            if (this.last && this.last.cy * CHUNKS + this.last.cx === oldest) {
+                this.last = null;
+            }
+
+            this.chunks.delete(oldest);
+        }
     }
 
     /** The land (BIOMES id) at a point (metres). */
@@ -1145,7 +1271,14 @@ export class Overworld {
 
     // --- Making a chunk ---
 
-    #make(cx, cy) {
+    // A chunk made, a piece at a time (each `yield` the end of a piece: chunk runs it to the end
+    // at once, chunkWithin as far as it has time for). What it reads of the world between its
+    // pieces is either the same whenever it's asked (the plan, the settlements and sites near it
+    // as they're laid out and set down, which its first piece does, the ground) or, what stands
+    // there by the war's doing or the wild's (the fortifications, the stockades, what's fallen
+    // across the way), lets go of every chunk half made when it changes (#remake): so a chunk is
+    // never made of the world at two moments, and is the same chunk however many pieces it took
+    *#making(cx, cy) {
         const [x0, y0] = [cx * CHUNK, cy * CHUNK];
         const blocked = new Uint8Array(SQUARES);
         const opaque = new Uint8Array(SQUARES);
@@ -1165,8 +1298,14 @@ export class Overworld {
         let town = false;
 
         this.sites.settle(cx, cy);
+        yield;
 
         for (let j = 0; j < CHUNK; j++) {
+            // (A piece: so many rows of its squares)
+            if (j > 0 && j % MAKING.rows === 0) {
+                yield;
+            }
+
             for (let i = 0; i < CHUNK; i++) {
                 const [x, y] = [x0 + i, y0 + j];
                 const k = j * CHUNK + i;
@@ -1282,9 +1421,13 @@ export class Overworld {
             }
         }
 
+        yield;
+
         // The ground: too steep to climb is blocked, but for roads, bridges and what's built on
         // (levelled into it)
         const { heights, slopes } = this.ground.chunk(cx, cy);
+
+        yield;
 
         for (let k = 0; k < SQUARES; k++) {
             if (slopes[k] === SLOPE_CLASS.cliff && !built[k] && !bridge[k] && ground[k] !== GROUND.road) {
@@ -1308,8 +1451,11 @@ export class Overworld {
         const walks = this.#walksIn(cx, cy);
         const chunk = { cx, cy, x0, y0, blocked, opaque, ground, water, bridge, solid, built, crops, heights, slopes, trees: [], bridges, walks, town };
 
+        yield;
         this.#plant(chunk);
+        yield;
         chunk.features = this.#features(chunk);
+        yield;
 
         // The sites' own trees (a graveyard's yew): each one's trunk fills the four squares round
         // its point, as a planted tree's does, in this chunk or the next (a tree is in the chunk

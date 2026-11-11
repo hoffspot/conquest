@@ -310,7 +310,17 @@ where a player of that people starts (`startFor`), and makes the world outside, 
 map like any other (`core/grid.js`: blocked, opaque and ground for any square), all 8 km of it on
 1-metre squares, made a chunk at a time as it's needed and kept (the last 256 used: about 5 megabytes), the same
 every time it's made again. The game draws it round the player as they go (`world/chunks3d.js`:
-see GAME.md). Each square of a chunk comes from the plan's cell under it:
+see GAME.md). A world server, with players in several places at once, keeps as many chunks as
+they need (`keep`, told by `server/ahead.js`; its ground's heights with them, `Ground.keep`):
+never fewer than the 256. A chunk can be made a piece at a time by whoever makes the world ahead
+of need (`chunkWithin`, `MAKING`: its squares eight rows a piece, then its ground, its trees, its
+features; a piece at the least each time it's asked for, the chunk kept once it's whole, and
+finished at once if it's asked for whole meanwhile), which is how the server makes what's round
+its players between its steps and the game makes the ground the world will soon want between its
+frames (docs/WAR.md *Made ahead on the world server*). The chunk is the same however it was
+made; one half made when a fortification, a stockade or what's fallen across the way changes is
+begun again, so none is made of the world at two moments. Each square of a chunk comes from the
+plan's cell under it:
 
 - **The town**, where it's set in: its own squares, just as it was made.
 - **The other settlements** (`core/settlements.js`): each capital, city, town, village, hamlet
@@ -318,7 +328,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   main streets heading the ways its roads leave it) when the world within a chunk of its square
   is first made, and kept. The same place is laid out the same every time. A town takes tens of
   milliseconds to lay out, a capital up to two hundred (more on a phone), so the game lays out
-  those within five chunks of the player ahead, in a worker (`world/layouts.js`), and gives them
+  those within five chunks of the player ahead, and those by the ground the world will soon want
+  (`core/host.js` `soon`), in a worker (`world/layouts.js`), and gives them
   to the world (`give`), which takes one when it's first wanted if it was laid out from just what
   it would be laid out from here (`specOf`), and otherwise lays it out itself: the same either
   way, so everyone playing together has the same world, and in the same order. Where it has
@@ -1117,8 +1128,9 @@ The world is played on the land's height with what's built levelled into it (`Gr
   each square's two triangles, split from north-west to south-east, exactly as the ground's drawn,
   so whatever stands on the ground stands on what's seen. They're the same whatever order chunks
   are made in (a road's or pad's height is worked out from the land's own, never from kept
-  chunks). The land's own heights for chunks ahead of the player are worked out off the page's
-  thread (`world/terrains.js`, `terrain-worker.js`).
+  chunks). The land's own heights for chunks ahead of the player, and for the ground the world
+  will soon want (`want`), are worked out off the page's thread (`world/terrains.js`,
+  `terrain-worker.js`); a world server's the same, off its world's thread (`server/ahead.js`).
 - **The overworld** (`overworld.js`) gives each chunk its corner heights and each square's slope
   class: squares steeper than 38° are blocked, but for roads, bridges and what's built. Lakes and
   the sea are wet where the ground's below their water. `heightAt(x, y)` is the ground, or a
