@@ -527,17 +527,22 @@ const wrapAngle = (angle) => angle - Math.PI * 2 * Math.floor((angle + Math.PI) 
 
 // How far a square is from a patrol's round (metres): from the nearest point of the way between
 // its points, each to the next and the last back to the first (a post's: from the post)
-function offRound(patrol, [x, y]) {
-    let nearest = distanceBetween(patrol[0], [x, y]);
+function offRound(patrol, square) {
+    const x = square[0];
+    const y = square[1];
+    let nearest = distanceBetween(patrol[0], square);
 
     for (let k = 0; patrol.length > 1 && k < patrol.length; k++) {
-        const [ax, ay] = patrol[k];
-        const [bx, by] = patrol[(k + 1) % patrol.length];
-        const [dx, dy] = [bx - ax, by - ay];
+        const ax = patrol[k][0];
+        const ay = patrol[k][1];
+        const dx = patrol[(k + 1) % patrol.length][0] - ax;
+        const dy = patrol[(k + 1) % patrol.length][1] - ay;
         const length = dx * dx + dy * dy;
         const along = length ? Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / length)) : 0;
+        const px = ax + dx * along;
+        const py = ay + dy * along;
 
-        nearest = Math.min(nearest, distanceBetween([ax + dx * along, ay + dy * along], [x, y]));
+        nearest = Math.min(nearest, Math.sqrt((px - x) * (px - x) + (py - y) * (py - y)));
     }
 
     return nearest;
@@ -738,6 +743,15 @@ export class Battle {
     #players = [];
     #onPlayers = new Map();
     #chasers = new Map();
+
+    // Those found near a point by the search just made (#foundNear: their places in `actors`), in
+    // the one list every such search fills, so none makes a list of its own: read at once by whoever
+    // asked, before anything else can search (nothing a loop over it calls may, or it would be
+    // filled again under it: the colossal's searches, which nest, ask #within for lists of their
+    // own). And #provoke's marks of whom it's looked at already, by place in `actors`
+    #found = new Int32Array(64);
+    #marks = [];
+    #marking = 0;
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -2612,29 +2626,41 @@ export class Battle {
             return true;
         }
 
-        const after = (other) => other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id);
+        const id = actor.id;
+        const chasers = this.#chasers.get(id);
 
-        // (The cheap checks first: whether it's after it, or near enough to be seen, before how
-        // their peoples stand, and only then whether anything's in the way. Those near first; then
-        // anyone further off who was after it as the step began, and is still: #chasers)
-        return (
-            this.#nearSquare(actor, SIGHT).some((k) => {
-                const other = this.actors[k];
+        // (Whoever was after it as the step began, and is still, #chasers: no looking round for
+        // them, and nothing in the way asked about)
+        if (chasers) {
+            for (let i = 0; i < chasers.length; i++) {
+                const other = this.actor(chasers[i]);
 
-                if (other.dead || other.map !== actor.map) {
-                    return false;
+                if (other && !other.dead && other.map === actor.map && (other.target === id || other.attack?.target === id || (other.order?.type === "engage" && other.order.target === id)) && this.hostile(other, actor)) {
+                    return true;
                 }
+            }
+        }
 
-                const chasing = after(other);
+        // (Then those near. The cheap checks first: whether it's after it, or near enough to be
+        // seen, before how their peoples stand, and only then whether anything's in the way)
+        const count = this.#nearSquare(actor, SIGHT);
+        const near = this.#found;
 
-                return (chasing || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (chasing || this.canSee(actor, other));
-            }) ||
-            (this.#chasers.get(actor.id) ?? []).some((id) => {
-                const other = this.actor(id);
+        for (let i = 0; i < count; i++) {
+            const other = this.actors[near[i]];
 
-                return other && !other.dead && other.map === actor.map && after(other) && this.hostile(other, actor);
-            })
-        );
+            if (other.dead || other.map !== actor.map) {
+                continue;
+            }
+
+            const chasing = other.target === id || other.attack?.target === id || (other.order?.type === "engage" && other.order.target === id);
+
+            if ((chasing || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (chasing || this.canSee(actor, other))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // --- Deciding what to do ---
@@ -5175,39 +5201,77 @@ export class Battle {
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
     // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it)
-    #nearestEnemy(actor, test, within = Infinity, enemy = (other) => this.hostile(other, actor)) {
+    #nearestEnemy(actor, test, within = Infinity, enemy = null) {
+        const actors = this.actors;
+        const square = actor.square;
         let best = null;
         let bestDistance = Infinity;
         let bestK = Infinity;
 
-        // (The cheap checks first, and `test` for none no nearer than the nearest yet; only those
-        // near enough to be within `within`, if it's not everyone, the nearest cells first, and
-        // none in cells too far off to beat the nearest yet. Of two as near, the first)
-        for (const ring of within === Infinity ? [this.actors.keys()] : this.#ringsNear(actor, within)) {
-            if (ring.least > bestDistance) {
+        // (One looked at: the cheap checks first, and `test` for none no nearer than the nearest yet)
+        const look = (k) => {
+            const other = actors[k];
+
+            if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || !this.#near(actor, other, within)) {
+                return;
+            }
+
+            if (Math.abs(square[0] - other.square[0]) > bestDistance || Math.abs(square[1] - other.square[1]) > bestDistance) {
+                return;
+            }
+
+            const distance = distanceBetween(square, other.square);
+
+            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && (enemy ? enemy(other) : this.hostile(other, actor)) && this.#noticed(actor, other) && test(other)) {
+                best = other;
+                bestDistance = distance;
+                bestK = k;
+            }
+        };
+
+        if (within === Infinity || !Battle.indexing) {
+            for (let k = 0; k < actors.length; k++) {
+                look(k);
+            }
+
+            return best;
+        }
+
+        // (Among those near only: the rings of cells round its own cell walked in place, the
+        // nearest first, and none gone on to that's too far off to hold anyone nearer than the
+        // nearest yet. Anyone in a cell r rings out is at least r - 1 cells' width off, less how far
+        // they may have gone since the index was made, and a square's rounding)
+        const cells = this.#indexed().cells.get(actor.map);
+
+        if (!cells) {
+            return best;
+        }
+
+        const x = square[0] + 0.5;
+        const y = square[1] + 0.5;
+        const out = within + 1 + INDEX_SLACK;
+        const cx = Math.floor(x / INDEX_CELL);
+        const cy = Math.floor(y / INDEX_CELL);
+        const left = Math.floor((x - out) / INDEX_CELL);
+        const right = Math.floor((x + out) / INDEX_CELL);
+        const top = Math.floor((y - out) / INDEX_CELL);
+        const bottom = Math.floor((y + out) / INDEX_CELL);
+        const rings = Math.max(cx - left, right - cx, cy - top, bottom - cy);
+
+        for (let r = 0; r <= rings; r++) {
+            if ((r - 1) * INDEX_CELL - INDEX_SLACK - 2 > bestDistance) {
                 break;
             }
 
-            for (const k of ring) {
-                const other = this.actors[k];
+            for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
+                for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
+                    if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
+                        const list = cells.get(cellOf(nx, ny));
 
-                // (Nor a section of a palisade, nor a rift's tear or altar: none set on one of their
-                // own accord)
-                if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || !this.#near(actor, other, within)) {
-                    continue;
-                }
-
-                // (Further either way than the nearest yet is: no nearer, and not worth working out)
-                if (Math.abs(actor.square[0] - other.square[0]) > bestDistance || Math.abs(actor.square[1] - other.square[1]) > bestDistance) {
-                    continue;
-                }
-
-                const distance = distanceBetween(actor.square, other.square);
-
-                if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && enemy(other) && this.#noticed(actor, other) && test(other)) {
-                    best = other;
-                    bestDistance = distance;
-                    bestK = k;
+                        for (let i = 0; list && i < list.length; i++) {
+                            look(list[i]);
+                        }
+                    }
                 }
             }
         }
@@ -5234,7 +5298,11 @@ export class Battle {
         let bestK = Infinity;
 
         // (The cheap checks first, and sight last. Of two as near, the first)
-        for (const k of this.#nearSquare(actor, SIGHT)) {
+        const count = this.#nearSquare(actor, SIGHT);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             if (other === actor || other.dead || other.target === null || other.ai !== "patrol" || other.team !== actor.team || other.map !== actor.map || !this.#near(actor, other, SIGHT)) {
@@ -5488,7 +5556,11 @@ export class Battle {
         let worst = best ? firstShare : HEALING.below;
         let bestK = Infinity;
 
-        for (const k of best ? [] : this.#nearSquare(actor, reach)) {
+        const count = best ? 0 : this.#nearSquare(actor, reach);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             // (One knocked down the most hurt of all: healing has it up again)
@@ -5577,49 +5649,51 @@ export class Battle {
         return found;
     }
 
-    // The same as #nearSquare, in rings of cells round the character's, nearest first: each its
-    // places in `actors`, and `least`, how near any of them could be (squares, distanceBetween)
-    #ringsNear(actor, reach) {
+    // The same as #within, into the one list `#found` and none made: how many it found there
+    #foundNear(mapId, x, y, reach) {
+        let found = this.#found;
+        let count = 0;
+
+        if (found.length < this.actors.length) {
+            found = this.#found = new Int32Array(Math.max(64, this.actors.length * 2));
+        }
+
         if (!Battle.indexing) {
-            return [Object.assign([...this.actors.keys()], { least: -Infinity })];
+            for (let k = 0; k < this.actors.length; k++) {
+                found[count++] = k;
+            }
+
+            return count;
         }
 
         const index = this.#indexed();
-        const cells = index.cells.get(actor.map);
-        const [x, y] = [actor.square[0] + 0.5, actor.square[1] + 0.5];
-        const out = reach + 1 + INDEX_SLACK;
-        const [cx, cy] = [Math.floor(x / INDEX_CELL), Math.floor(y / INDEX_CELL)];
-        const [left, right, top, bottom] = [Math.floor((x - out) / INDEX_CELL), Math.floor((x + out) / INDEX_CELL), Math.floor((y - out) / INDEX_CELL), Math.floor((y + out) / INDEX_CELL)];
-        const rings = [];
+        const cells = index.cells.get(mapId);
+        const out = reach + INDEX_SLACK;
 
         if (!cells) {
-            return rings;
+            return 0;
         }
 
-        for (let r = 0; r <= Math.max(cx - left, right - cx, cy - top, bottom - cy); r++) {
-            // (Anyone in a cell r out is at least r - 1 cells' width off, less how far they may
-            // have gone since the index was made, and a square's rounding)
-            const ring = Object.assign([], { least: (r - 1) * INDEX_CELL - INDEX_SLACK - 2 });
+        const x1 = Math.floor((x + out) / INDEX_CELL);
+        const y1 = Math.floor((y + out) / INDEX_CELL);
 
-            for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
-                for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
-                    if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
-                        for (const k of cells.get(cellOf(nx, ny)) ?? []) {
-                            ring.push(k);
-                        }
-                    }
+        for (let cy = Math.floor((y - out) / INDEX_CELL); cy <= y1; cy++) {
+            for (let cx = Math.floor((x - out) / INDEX_CELL); cx <= x1; cx++) {
+                const list = cells.get(cellOf(cx, cy));
+
+                for (let i = 0; list && i < list.length; i++) {
+                    found[count++] = list[i];
                 }
             }
-
-            rings.push(ring);
         }
 
-        return rings;
+        return count;
     }
 
-    // Everyone who might be within `reach` squares either way of a character's square (#near)
+    // Everyone who might be within `reach` squares either way of a character's square (#near): how
+    // many, their places in `actors` in `#found` (#foundNear)
     #nearSquare(actor, reach) {
-        return this.#within(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
+        return this.#foundNear(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
     }
 
     // A character's walked on: the index made again before it's next asked, if it's gone further
@@ -5840,7 +5914,7 @@ export class Battle {
         if (!actor.path.length || held) {
             actor.progress = null;
         } else {
-            const left = this.#distanceLeft(actor, { reach: false });
+            const left = this.#distanceLeft(actor, false);
 
             if (!actor.progress || left < actor.progress.left - PROGRESS) {
                 actor.progress = { left, at: this.time };
@@ -5868,13 +5942,16 @@ export class Battle {
 
     // How far a character has to go along its path (to where the one it's after is within
     // reach, unless `reach` is false), in metres
-    #distanceLeft(actor, { reach = true } = {}) {
+    #distanceLeft(actor, reach = true) {
+        const path = actor.path;
         let left = 0;
-        let [x, y] = [actor.x, actor.y];
+        let x = actor.x;
+        let y = actor.y;
 
-        for (const [px, py] of actor.path) {
-            left += hypot(px - x, py - y);
-            [x, y] = [px, py];
+        for (let k = 0; k < path.length; k++) {
+            left += hypot(path[k][0] - x, path[k][1] - y);
+            x = path[k][0];
+            y = path[k][1];
         }
 
         if (reach && (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter"))) {
@@ -6031,7 +6108,11 @@ export class Battle {
         let nearestK = Infinity;
 
         // (Of two as near, the first)
-        for (const k of this.#within(actor.map, x, y, 2 * BODY)) {
+        const count = this.#foundNear(actor.map, x, y, 2 * BODY);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             // (Nor one lurking overhead: #lurk)
@@ -7282,7 +7363,7 @@ export class Battle {
                 }
             }
 
-            if (this.buffOf(actor, "invisibility")) {
+            if (actor.buffs?.length && this.buffOf(actor, "invisibility")) {
                 this.#seeThrough(actor);
             }
         }
@@ -7877,12 +7958,38 @@ export class Battle {
             // theirs, watching it strike the town's soldiers)
             const spares = (other) => attacker.lone && this.relations && !this.relations(attacker, other);
 
-            for (const other of this.actors) {
+            const wide = !Battle.indexing || Boolean(target.footprint) || Boolean(attacker.footprint);
+            const saw = (other) => {
                 // (A creature: only its own pack)
                 const own = other.team === target.team && (!target.wild || other.wild?.pack === target.wild.pack);
 
                 if (other === target || (own && !target.lone && !other.neutral && !other.dead && other.map === target.map && !spares(other) && (this.canSee(other, target) || this.canSee(other, attacker)))) {
                     other.foes[attacker.id] = until;
+                }
+            };
+
+            if (wide) {
+                for (const other of this.actors) {
+                    saw(other);
+                }
+            } else {
+                const marks = this.#marks;
+                const marking = ++this.#marking;
+
+                target.foes[attacker.id] = until;
+
+                for (const one of attacker.map === target.map ? [target, attacker] : [target]) {
+                    const count = this.#nearSquare(one, SIGHT);
+                    const near = this.#found;
+
+                    for (let i = 0; i < count; i++) {
+                        const k = near[i];
+
+                        if (marks[k] !== marking) {
+                            marks[k] = marking;
+                            saw(this.actors[k]);
+                        }
+                    }
                 }
             }
         }

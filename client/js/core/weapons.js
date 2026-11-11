@@ -1129,10 +1129,10 @@ export function armsOf(weapon, boots = false) {
 }
 
 /** How far apart two squares are for an attack: rings of squares round `from` ([x, y]). */
-export const ringsApart = ([ax, ay], [bx, by]) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+export const ringsApart = (a, b) => Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
 
 /** Straight-line distance between two squares' middles. */
-export const distanceBetween = ([ax, ay], [bx, by]) => Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+export const distanceBetween = (a, b) => Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]));
 
 /**
  * Can an attack from square `from` reach square `to`? Melee reaches the squares touching the
@@ -1164,7 +1164,15 @@ const listOf = (arms) => (typeof arms === "string" ? weaponOf(arms).attacks : (a
  * createRandom's; without it, the first).
  */
 export function chooseAttack(arms, from, to, random = null) {
-    const attack = listOf(arms).find((each) => inReach(each, from, to)) ?? null;
+    const list = listOf(arms);
+    let attack = null;
+
+    for (let k = 0; k < list.length; k++) {
+        if (inReach(list[k], from, to)) {
+            attack = list[k];
+            break;
+        }
+    }
 
     if (attack?.either) {
         return random ? random.pick(attack.either) : attack.either[0];
@@ -1175,7 +1183,14 @@ export function chooseAttack(arms, from, to, random = null) {
 
 /** The furthest any attack of a weapon (a WEAPONS key) or a character's (armsOf) reaches, in squares (0: none). */
 export function longestReach(arms) {
-    return Math.max(0, ...listOf(arms).map((attack) => attack.reach));
+    const list = listOf(arms);
+    let longest = 0;
+
+    for (let k = 0; k < list.length; k++) {
+        longest = Math.max(longest, list[k].reach);
+    }
+
+    return longest;
 }
 
 /** How long from one blow of an attack to the next (ms), sooner by a `haste` (a share: core/gear.js Swift), never sooner than the blow itself takes. */

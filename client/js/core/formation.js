@@ -209,8 +209,12 @@ function wedgeOf(by, places, row) {
  * middle of its front rank) and `facing` (radians from south, towards east), its place
  * ([right, back]: placesOf; to its right as it faces, and behind).
  */
-export function placeAt({ anchor, facing }, [right, back]) {
-    const [ax, ay] = [sin(facing), cos(facing)];
+export function placeAt(formation, slot) {
+    const anchor = formation.anchor;
+    const ax = sin(formation.facing);
+    const ay = cos(formation.facing);
+    const right = slot[0];
+    const back = slot[1];
 
     return [anchor[0] - ay * right - ax * back, anchor[1] + ax * right - ay * back];
 }
