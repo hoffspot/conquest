@@ -122,8 +122,8 @@ export function memoryLines(memory, gpu = memory?.gpu ?? null) {
         return [`Memory ${card}${heap ? `  JS heap ${formatBytes(heap.usedJSHeapSize)} of ${formatBytes(heap.jsHeapSizeLimit)}` : ""}`];
     }
 
-    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, interiorsMB, modelsMB, held, guard = 0 } = memory;
-    const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`]), ...(interiorsMB === undefined ? [] : [`, floors' ${interiorsMB} MB`]), ...(modelsMB === undefined ? [] : [`, models' ${modelsMB} MB`])].join("");
+    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, interiorsMB, modelsMB, kitMB, held, guard = 0 } = memory;
+    const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`]), ...(interiorsMB === undefined ? [] : [`, floors' ${interiorsMB} MB`]), ...(modelsMB === undefined ? [] : [`, models' ${modelsMB} MB`]), ...(kitMB === undefined ? [] : [`, character kit's ${kitMB} MB`])].join("");
     const beasts = held.beasts ? `  ${held.beasts.looks} beast looks (${held.beasts.MB} MB, ${held.beasts.unheld} none drawn)` : "";
     const models = held.models ? `  ${held.models.models} models (${held.models.unheld} none drawn from)` : "";
 

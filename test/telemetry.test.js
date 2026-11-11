@@ -372,7 +372,7 @@ describe("the debug log (telemetry.js)", () => {
 
     it("a crash keeps the minute before it: what was held at each of the notes, when the last were written, and the work begun lately, that begun after the last notes marked (likely under way as it fell)", () => {
         const at = logOn();
-        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, interiorsMB: avatars, held: { avatars }, guard: totalMB >= 400 ? 1 : 0 } });
+        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, interiorsMB: avatars, modelsMB: 6, kitMB: 38.3, held: { avatars }, guard: totalMB >= 400 ? 1 : 0 } });
 
         at.log.playing = true;
         at.log.job("dressing player player", 357);
@@ -395,7 +395,7 @@ describe("the debug log (telemetry.js)", () => {
         const crash = logOn(at.kept, { now: 300, clock: at.time.clock + 1500 }).log.recover("back_forward");
 
         assert.equal(crash.trend.length, TELEMETRY.trend, "a minute of the notes' readings");
-        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, interiorsMB: 40, heapMB: null, avatars: 40, actors: 32, guard: 1 });
+        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, interiorsMB: 40, modelsMB: 6, kitMB: 38.3, heapMB: null, avatars: 40, actors: 32, guard: 1 });
         assert.ok(crash.trend[0].totalMB < crash.trend.at(-2).totalMB, "rising");
         assert.equal(crash.trend[0].guard, 0, "and the memory guard's level at each, to see it come and go");
         assert.equal(crash.pageAt, at.time.now - 800);
@@ -494,6 +494,11 @@ describe("the debug log (telemetry.js)", () => {
         assert.match(
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, interiorsMB: 62.4, modelsMB: 18.7, held: { avatars: 30, chunks: 9, interiors: 21, crowds: 0 } })[0],
             /bodies' own copies 154\.5 MB, floors' 62\.4 MB, models' 18\.7 MB, JS heap not told by this browser$/,
+        );
+        // (And what the character kit keeps: its wardrobe's pictures and the body's own data)
+        assert.match(
+            memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, interiorsMB: 62.4, modelsMB: 18.7, kitMB: 38.3, held: { avatars: 30, chunks: 9, interiors: 21, crowds: 0 } })[0],
+            /models' 18\.7 MB, character kit's 38\.3 MB, JS heap not told by this browser$/,
         );
         assert.equal(
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 2, beasts: { looks: 12, unheld: 3, MB: 9.4 } } })[1],

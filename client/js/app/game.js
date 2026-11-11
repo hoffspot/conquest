@@ -26,6 +26,7 @@ import { ATTACKS, DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js"
 import { Character } from "../characters/character.js";
 import { folkLook, followerLook } from "../characters/folk.js";
 import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/folkcrowd.js";
+import { heldByKit, letGoOfIdle } from "../characters/kit.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
@@ -1826,9 +1827,9 @@ export class Game {
                 letGo: () => {
                     // (The beasts' bodies and models none's drawn from)
                     this.#forgetting(0, { now: true });
-                    // HOOK (the performance review, for whoever integrates it): the character kit's
-                    // idle caches let go of here too, `letGoOfIdle(kit)` from characters/kit.js once
-                    // that's merged. One line; test/memoryguard.test.js checks letGo is called.
+                    // (And what the character kit keeps that no one's wearing or drawing with:
+                    // outfits' and garments' pictures, looks of eye, all made again when wanted)
+                    letGoOfIdle(this.kit);
                 },
             }),
             { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), clock: MEMORY_GUARD.every },
@@ -2023,9 +2024,10 @@ export class Game {
         );
         const interiors = this.#interiorsHeld();
         const modelled = modelsHeld(counted);
-        // (THE KIT'S LINE GOES HERE: what the character kit holds on the page, characters/kit.js
-        // heldByKit(this.kit), added to `page` below and told as its own line beside modelsMB)
-        const page = bodies + interiors + modelled;
+        // (What the character kit holds on the page: its wardrobe's pictures, its looks of eye,
+        // the body's and the skin atlas's own data)
+        const kit = heldByKit(this.kit);
+        const page = bodies + interiors + modelled + kit;
         const total = (heap?.usedJSHeapSize ?? page) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
         const beasts = keptBodies();
         const models = keptModels();
@@ -2040,6 +2042,7 @@ export class Game {
             bodiesMB: megabytes(bodies),
             interiorsMB: megabytes(interiors),
             modelsMB: megabytes(modelled),
+            kitMB: megabytes(kit),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
             // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
             guard: this.memoryGuard?.level ?? 0,
@@ -5859,11 +5862,11 @@ export class Game {
     // it changing)
     #memoryLook() {
         // (Counted as Safari's crash reports count it, whatever the browser: the graphics card's, the
-        // sound's, the way-finding's, and the bodies' and floors' copies on the page, not a heap
-        // only some browsers tell of, so its marks mean the same everywhere. A reading the notes
-        // took within the last second will do)
+        // sound's, the way-finding's, and the bodies', floors', models' and character kit's copies
+        // on the page, not a heap only some browsers tell of, so its marks mean the same
+        // everywhere. A reading the notes took within the last second will do)
         const memory = this.memoryLately(MEMORY_GUARD.every * 500);
-        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB;
+        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB + memory.modelsMB + memory.kitMB;
 
         this.memoryGuard.look(held, this.clock);
     }

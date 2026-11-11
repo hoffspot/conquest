@@ -3466,9 +3466,15 @@ dressed and let go of at its door as any building's.
 **The memory guard** (app/memoryguard.js `MEMORY_GUARD`, app/game.js `#memoryGuarding`): on a
 touch screen (a phone or a tablet), what the game holds is looked at every 2 seconds, as Safari's
 debug log tells it whatever the browser (`memoryNow`: the graphics card's, the sound's, the
-way-finding's, and the bodies' and the floors' copies on the page; not the page's heap, which only
+way-finding's, and the bodies', the floors', the models' and the character kit's copies on the
+page; not the page's heap, which only
 Chromium's tell of: with it, a city on an emulated phone in headless Chromium came to 443 MB with
-nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
+nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2; the
+marks were set on 2026-11-10 against a count that told a compressed picture as four bytes a pixel
+and left the models' and the kit's page copies out, and against a tab an iPhone closed at 541 to
+548 MB so counted. Counted as it is now the same town reads about as much or a little less, the
+pictures' over-count gone and the kit and the models come in, while what's held and counted
+nowhere fell much further, so the marks leave more room than they did and are kept):
 no more than 20 bodies in full, then 12 (the rest drawn in their crowds, the furthest first, by the
 bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers; the room those drawn
 from a bought model have of their own, `QUALITY.models`, isn't cut, a copy sharing its model's
@@ -7204,7 +7210,8 @@ and the Debug log page, above the events ("This copy: code 9c6a608eb2, put toget
   the game fell over (a phone's browser loads the page again when it runs out of memory): kept as
   a crash, with those notes, what the game held then among them. With them, how what was held went
   over the minute before (`trend`: at each of the last 30 notes, what was held all told, the
-  graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, how many
+  graphics card's, the sounds', the bodies', the floors', the models' and the character kit's own
+  copies, the heap where it's told, how many
   bodies and actors, and the memory guard's level, `guard`: rising as more are dressed, or jumping
   at the end; the guard coming and going every minute or so would be it undoing its own work,
   *The memory guard*), and the work begun lately
@@ -7267,7 +7274,10 @@ graphics card, counted again only when one's built or let go of or its wares com
 (`modelsMB`, beasts/model.js `modelsHeld`: their shapes, their clips' keys, and their pictures
 and their skins' till the graphics card has them, each file once; what the bodies drawn from a
 model share with it is counted with the bodies, not again; "models'" in the overlay: one read
-near its lair and never drawn from was counted nowhere till 2026-11-11), all of them
+near its lair and never drawn from was counted nowhere till 2026-11-11), the character kit's
+(`kitMB`, characters/kit.js `heldByKit`: its wardrobe's pictures, each garment's and each
+outfit's, its looks of eye, and the body's and the skin atlas's own data; "character kit's" in the
+overlay; let go of, all that's idle, as the memory guard goes up a level: `letGoOfIdle`), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept, and the beasts' looks
 kept (how many, their sculpted bodies' and folded pieces' size, and how many none is drawn on:
 beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). A compressed picture (a
