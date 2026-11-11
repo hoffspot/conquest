@@ -17,6 +17,53 @@ import { releaseCompressed } from "../../release.js";
 // transcoder's WebAssembly; a texture takes a few hundredths of a second)
 const KTX2_WORKERS = 2;
 
+// How long those workers are kept with nothing being read (ms): then let go of, and made again
+// when the next picture's read (resting, below)
+const KTX2_REST = 60000;
+
+// A timer that keeps nothing running just to wait for it (Node's, in the tests)
+const waiting = (call, ms) => {
+    const timer = setTimeout(call, ms);
+
+    timer?.unref?.();
+
+    return timer;
+};
+
+/**
+ * Work told of as it begins and ends (`began()`, `ended()`: any number of them going at once), and
+ * `rest()` called once none's been going for `after` ms (the returned `after`: it can be changed);
+ * never while any is, and once for each quiet spell. `set` and `clear`: setTimeout and
+ * clearTimeout.
+ */
+export function restingAfter(after, rest, { set = waiting, clear = clearTimeout } = {}) {
+    let going = 0;
+    let timer = null;
+    const resting = {
+        after,
+        began() {
+            going++;
+
+            if (timer !== null) {
+                clear(timer);
+                timer = null;
+            }
+        },
+        ended() {
+            going = Math.max(0, going - 1);
+
+            if (going === 0 && timer === null) {
+                timer = set(() => {
+                    timer = null;
+                    rest();
+                }, resting.after);
+            }
+        },
+    };
+
+    return resting;
+}
+
 const manager = new THREE.LoadingManager();
 const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
 const fetcher = new THREE.FileLoader(manager).setResponseType("arraybuffer");
@@ -29,6 +76,14 @@ const fetcher = new THREE.FileLoader(manager).setResponseType("arraybuffer");
 const loaded = new Map();
 const files = new Map();
 let ktx2 = null;
+
+// The transcoder's workers let go of once nothing's been read for a while (KTX2_REST): each holds
+// the transcoder's WebAssembly, whose memory grows to the biggest picture it's turned (a scene's
+// kit's are 2048 across) and never shrinks, counted by nothing, and three.js keeps them for as
+// long as its loader. The loader itself is kept, with the transcoder's files as fetched: the next
+// picture read has them made again (a few hundredths of a second, the WebAssembly put together
+// anew)
+const resting = restingAfter(KTX2_REST, () => ktx2?.workerPool?.dispose());
 
 // Whether the pictures of what's read are let go of off the page once they're on the graphics
 // card (readKtx2With's `release`: the game's are)
@@ -67,20 +122,26 @@ function releasePictures(gltf) {
 // every material in the file, made first (gltf.materials, in the file's order), those no mesh of
 // its own wears too (a skin's file is only its materials: beasts/model.js readSkins)
 async function read(url, { materials = false } = {}) {
-    const data = await fetcher.loadAsync(url);
-    const gltf = await loader.parseAsync(await readable(data), THREE.LoaderUtils.extractUrlBase(url));
+    resting.began();
 
-    if (materials) {
-        gltf.materials = await gltf.parser.getDependencies("material");
+    try {
+        const data = await fetcher.loadAsync(url);
+        const gltf = await loader.parseAsync(await readable(data), THREE.LoaderUtils.extractUrlBase(url));
+
+        if (materials) {
+            gltf.materials = await gltf.parser.getDependencies("material");
+        }
+
+        gltf.parser = null;
+
+        if (releasing) {
+            releasePictures(gltf);
+        }
+
+        return gltf;
+    } finally {
+        resting.ended();
     }
-
-    gltf.parser = null;
-
-    if (releasing) {
-        releasePictures(gltf);
-    }
-
-    return gltf;
 }
 
 /**
@@ -132,12 +193,14 @@ export function readModelsFrom(resolve) {
  * "basis_transcoder.wasm": url }), fetched only once a model has a KTX2 texture. `release`: each
  * file's pictures let go of off the page once they're on the graphics card (releasePictures), as
  * the game's are; not a lab's that sends them again at other sizes or counts them (the castle
- * lab), nor anywhere they're drawn by a second renderer.
+ * lab), nor anywhere they're drawn by a second renderer. `rest`: how long the transcoder's
+ * workers are kept with nothing being read (ms: KTX2_REST).
  */
-export function readKtx2With(renderer, transcoder, { release = false } = {}) {
+export function readKtx2With(renderer, transcoder, { release = false, rest = KTX2_REST } = {}) {
     const fetched = new THREE.LoadingManager();
 
     releasing = release;
+    resting.after = rest;
 
     // (KTX2Loader asks for them where they're copied beside it, vendor/three-r186/addons/libs/basis:
     // known by their names, they're fetched from where `transcoder` says instead)
@@ -158,7 +221,13 @@ export function readsKtx2() {
  * card takes it. Rejected if KTX2 pictures can't be read yet (readKtx2With).
  */
 export function readKtx2(bytes) {
-    return ktx2 ? new Promise((resolve, reject) => ktx2.parse(bytes, resolve, reject)) : Promise.reject(new Error("KTX2 pictures can't be read before readKtx2With"));
+    if (!ktx2) {
+        return Promise.reject(new Error("KTX2 pictures can't be read before readKtx2With"));
+    }
+
+    resting.began();
+
+    return new Promise((resolve, reject) => ktx2.parse(bytes, resolve, reject)).finally(() => resting.ended());
 }
 
 /** A copy of the model in a glTF file, with materials the art's lights work with. */

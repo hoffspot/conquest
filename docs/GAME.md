@@ -7216,7 +7216,11 @@ that; one whose skin's been let go of is coloured by its material there). A garm
 picture, which outfits are put together from, is kept on the page till it's been unused half a
 minute, then painted again when it's wanted (characters/wardrobe.js; CHARACTERS.md, *What the kit
 lets go of*). Not the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged,
-cloned, posed or bent. What each body keeps that's the same for every body of its build is kept once for them all:
+cloned, posed or bent. The two workers that turn KTX2 pictures into what the graphics card takes
+are let go of too, once nothing's been read for a minute (art/engine/models.js `KTX2_REST`,
+`restingAfter`): each holds the transcoder's WebAssembly, whose memory grows to the biggest
+picture it's turned and never shrinks, counted by nothing, and three.js kept them for good; the
+next model read has them made again, a few hundredths of a second (`e2e/models.spec.js`). What each body keeps that's the same for every body of its build is kept once for them all:
 its skin's bones and weights as drawn, where its picture is and where its face's moves are kept
 (`skinningOf`, by the body's data: one attribute of each for every body, so the graphics card's
 given each once, 0.33 MB a body before; taken off a body's geometry before that's let go of, as
