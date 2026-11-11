@@ -10,6 +10,7 @@ import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
 import { LOOKS, peopleLook } from "../characters/peoples.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
+import { createRandom } from "../core/random.js";
 import { cleanName, defaultHero, HERO_PEOPLES } from "./hero-basics.js";
 
 // (A hero's basics, apart so that what reads characters without drawing them needn't bring the engine)
@@ -132,4 +133,33 @@ export function randomHero(hero = defaultHero(), random = Math.random) {
             hair: { style: pick(styles.filter((style) => HAIRSTYLES[style])), beard: pick(beards.filter((beard) => BEARDS[beard])), colour: pick(hairColours) },
         },
     };
+}
+
+// How many bodies of a seed the quick start can be asked for (`&hero=`: quickStartHero)
+const QUICK_HEROES = 1000;
+
+/**
+ * The hero the quick start plays (`?play`, main.js: the tests' and developers' way straight into
+ * a game, not a player's): a random one, named, made from the world's `seed` with the game's own
+ * seeded numbers, so the same every time for a seed, in every browser. What's true of one body
+ * isn't of every other (how high a tall one's hips ride in the saddle), so a test's hero mustn't
+ * change from run to run. `which` (`&hero=`: 0, 1, 2...) is another body of the same seed;
+ * `people` (`&people=`), one of that people.
+ */
+export function quickStartHero(seed, { which = 0, people = null } = {}) {
+    // (Each body's numbers from a seed of its own, drawn in turn from the world's)
+    const seeds = createRandom(seed);
+    let own = seeds.seed();
+
+    for (let k = Math.min(QUICK_HEROES, Math.max(0, Math.floor(Number(which)) || 0)); k > 0; k--) {
+        own = seeds.seed();
+    }
+
+    const random = createRandom(own).next;
+    const human = randomHero(defaultHero(), random);
+    const hero = people ? heroOfPeople(human, people, random) : human;
+
+    hero.name = suggestName(hero, "", random);
+
+    return hero;
 }

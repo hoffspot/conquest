@@ -609,8 +609,11 @@ npm start
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
 <http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town,
-`&people=elf` for one of another people, `&quality=low`, or `&flyin` for the opening fly-in, which
-the quick start leaves out). `?join=ABCD` opens Join a World on another Device with a
+`&people=elf` for one of another people, `&quality=low`, `medium` or `high` to draw at that level
+this once, whatever Game options has, or `&flyin` for the opening fly-in, which
+the quick start leaves out). The character's made from the seed, so it's the same one every time
+for a seed (the browser tests come in this way, and what's true of one body isn't of the next);
+`&hero=1`, `2` and so on is another of the same seed. `?join=ABCD` opens Join a World on another Device with a
 world's code in it.
 
 The server also carries the relay that games playing together talk through (at `/relay`: a
