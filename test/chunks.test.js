@@ -81,6 +81,42 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.dispose();
     });
 
+    it("makes a chunk's squares a piece a step as it draws it, where the world hasn't made them yet: begun in its first step, the chunk there in the world only once they're whole", () => {
+        // (A world of its own: none of its chunks made but the town's; and somewhere a few
+        // chunks out of the town)
+        const fresh = buildWorld({ seed: 1 });
+        const overworld = fresh.maps.town;
+        const chunks = new Chunks(fresh, { undergrowth: 0 });
+        const [x, z] = [fresh.spawns.player[0] + 0.5 + 4 * CHUNK, fresh.spawns.player[1] + 0.5];
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(z / CHUNK)];
+        const made = () => overworld.made(cx * CHUNK, cy * CHUNK, cx * CHUNK, cy * CHUNK);
+
+        assert.ok(!made(), "(not made yet)");
+        chunks.update(x, z, { budget: 0 });
+
+        const [first] = chunks.drawn.values();
+
+        assert.deepEqual([first.cx, first.cy, first.drawing], [cx, cy, true]);
+        assert.ok(overworld.making.has(cy * CHUNKS + cx) && !made(), "its squares begun, a piece of them made");
+
+        let frames = 1;
+
+        while (!made()) {
+            chunks.update(x, z, { budget: 0 });
+            frames++;
+        }
+
+        assert.ok(frames >= 10, `${frames} frames, a piece each`);
+        assert.ok(first.drawing && !first.object.visible && first.object.children.length === 0, "then it's drawn");
+
+        // (And in a frame with time, as many pieces as there's time for: the next whole in one)
+        chunks.update(x, z, { budget: 100000 });
+        assert.ok(!first.drawing && first.object.visible);
+        chunks.update(x, z, { budget: 100000 });
+        assert.equal([...chunks.drawn.values()].filter(({ drawing }) => !drawing).length, 2);
+        chunks.dispose();
+    });
+
     it("throws a chunk away half drawn if the player's gone, and draws at once what it's asked to fill", () => {
         const chunks = new Chunks(world, { undergrowth: 0 });
         const [x, z] = world.spawns.player.map((v) => v + 0.5);

@@ -2755,7 +2755,10 @@ The world is drawn a chunk at a time round the player: the 25 chunks within two 
 metres or more each way, into the fog). Loading, those round where they start are built (about
 a second); after, as they go, the nearest chunk not yet drawn is built, and those more than three
 chunks away are thrown away, so however far they go there's only so much of it, and never a
-loading screen. A chunk is drawn a step at a time, hidden till it's whole: its ground's splat a
+loading screen. A chunk is drawn a step at a time, hidden till it's whole: its squares first,
+where the world hasn't made them yet, a piece a step (core/overworld.js `chunkWithin`: fourteen
+pieces of about a millisecond, where the chunk whole was 12 to 15 ms of one frame, twice its
+budget), then its ground's splat a
 few rows at a time, the looks its features want (each made the first time it's wanted) one a
 step, then its features, its trees. Each frame draws what it can in its budget (`BUILD_BUDGET`, 6
 ms, shared with the settlements' buildings and the undergrowth), a step at least, and begins no
