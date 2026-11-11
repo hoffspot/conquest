@@ -395,7 +395,8 @@ export class Steering {
             return null;
         }
 
-        let [forward, right, run] = [0, 0, false];
+        let [forward, right] = [0, 0];
+        let run;
 
         if (this.#stick && this.#stick.far * REACH > DEADZONE) {
             forward = this.#stick.forward;

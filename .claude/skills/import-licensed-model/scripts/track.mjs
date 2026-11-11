@@ -28,11 +28,8 @@ for (const channel of clip.listChannels()) {
 
 const lerp = (a, b, u) => a.map((v, i) => v + (b[i] - v) * u);
 const slerp = (a, b, u) => {
-    let dot = a.reduce((s, v, i) => s + v * b[i], 0);
+    const dot = a.reduce((s, v, i) => s + v * b[i], 0);
     const c = dot < 0 ? b.map((v) => -v) : b;
-
-    dot = Math.abs(dot);
-
     const q = lerp(a, c, u);
     const l = Math.hypot(...q);
 

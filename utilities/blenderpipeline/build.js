@@ -51,7 +51,7 @@ export async function buildAsset(config, { blender, out = config.out, keep = fal
         } catch (error) {
             const said = readJson(stageReport)?.error;
 
-            throw new Error(said ? `${config.name}: ${said}` : error.message);
+            throw new Error(said ? `${config.name}: ${said}` : error.message, { cause: error });
         }
 
         const stage = readJson(stageReport);

@@ -216,7 +216,7 @@ describe("a player's part in their people (host.js, standing.js)", () => {
         // Out at home: there to hold it; the one run out of time failed
         put(actor, "town", host.world.spawns.player);
 
-        let events = run(host, 600);
+        const events = run(host, 600);
 
         assert.ok(events.some(({ type, change, request: asked }) => type === "request" && change === "there" && asked.kind === "defend"));
         assert.ok(events.some(({ type, change, request: asked }) => type === "request" && change === "failed" && asked.kind === "wild"));
@@ -224,12 +224,12 @@ describe("a player's part in their people (host.js, standing.js)", () => {
 
         // Near the enemy's town: seen
         Object.assign(actor, { x: theirs.at[0] + 50, y: theirs.at[1] });
-        events = run(host, 600);
+        run(host, 600);
         assert.equal(player.standing.requests.find(({ kind }) => kind === "scout").state, "done");
 
         // The camp gone, the town still theirs: held
         host.war.camps = host.war.camps.filter(({ id }) => id !== "camp-900");
-        events = run(host, 600);
+        run(host, 600);
         assert.equal(player.standing.requests.find(({ kind }) => kind === "defend").state, "done");
 
         // Given up: a little standing lost

@@ -599,7 +599,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
             result.retargeted.push({ from: path.basename(spec.from), bones: made.bones.length, hips: made.hips, scale: round(made.scale), clips: made.clips });
         } catch (error) {
-            throw new Error(`retarget[${i}] (${path.basename(spec.from)}): ${error.message}`);
+            throw new Error(`retarget[${i}] (${path.basename(spec.from)}): ${error.message}`, { cause: error });
         }
     }
 
@@ -1046,7 +1046,7 @@ function seamAttributes(primitive) {
             normal.getElement(v, element);
             attributes[at++] = element[0];
             attributes[at++] = element[1];
-            attributes[at++] = element[2];
+            attributes[at] = element[2];
         }
     }
 

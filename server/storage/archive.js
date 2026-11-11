@@ -230,7 +230,7 @@ export function worldsIn(archive) {
         const meta = metaIn(archive, id);
         const save = newestSave(archive, id);
         const kept = [...archive.files.keys()].filter((file) => file.startsWith(`${WORLDS}/${id}/${HEROES}/`)).length;
-        let players = 0;
+        let players;
 
         try {
             players = Object.keys(JSON.parse(bytesOf(archive.files.get(`${WORLDS}/${id}/access.json`)).toString("utf8")).players ?? {}).length;

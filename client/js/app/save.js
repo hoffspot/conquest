@@ -1131,7 +1131,7 @@ export function exportCharacter(save, { world: id } = {}) {
     const kept = Object.fromEntries(
         KINDS.filter((kind) => kind !== "world" && kind !== "save").map((kind) => [kind, PLACED.includes(kind) ? (stay ? marked(own(stay.place, kind)) : null) : marked(own(save, kind))]),
     );
-    let world = null;
+    let world;
 
     try {
         const text = stay ? globalThis.localStorage?.getItem(keyOf(stay.war, "world")) : null;

@@ -80,13 +80,7 @@ export function keepInWorld(storage, record, now = Date.now()) {
 
 /** Where the player was, if they were in another's world within REJOIN.within of `now`; else null (and anything kept, forgotten). */
 export function inWorldOf(storage, now = Date.now()) {
-    let record = null;
-
-    try {
-        record = valid(JSON.parse(storage?.getItem(REJOIN.key) ?? "null"));
-    } catch {
-        record = null;
-    }
+    const record = lastInWorld(storage);
 
     if (record && now - record.at >= 0 && now - record.at < REJOIN.within) {
         return record;

@@ -251,7 +251,7 @@ async function heard(peer, text) {
         return;
     }
 
-    let message = null;
+    let message;
 
     try {
         message = decode(text);

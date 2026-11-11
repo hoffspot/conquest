@@ -40,7 +40,7 @@ export function readReleaseKey(file = new URL("./release-key.pem", import.meta.u
             return null;
         }
 
-        throw new Error(`The release key (${file}) isn't one: ${error.message}`);
+        throw new Error(`The release key (${file}) isn't one: ${error.message}`, { cause: error });
     }
 }
 
@@ -105,7 +105,7 @@ export async function fetchLatest({ url = RELEASES, fetch = globalThis.fetch, ti
     try {
         response = await fetch(url, { headers: { Accept: "application/vnd.github+json", "User-Agent": "pellagos-server" }, signal: AbortSignal.timeout(timeout) });
     } catch (error) {
-        throw new Error(`The releases couldn't be asked for (${error.cause?.code ?? error.message}).`);
+        throw new Error(`The releases couldn't be asked for (${error.cause?.code ?? error.message}).`, { cause: error });
     }
 
     if (!response.ok) {
@@ -122,7 +122,7 @@ export async function fetchBytes(url, { fetch = globalThis.fetch, limit = ARCHIV
     try {
         response = await fetch(url, { headers: { "User-Agent": "pellagos-server" }, signal: AbortSignal.timeout(timeout) });
     } catch (error) {
-        throw new Error(`${url} couldn't be downloaded (${error.cause?.code ?? error.message}).`);
+        throw new Error(`${url} couldn't be downloaded (${error.cause?.code ?? error.message}).`, { cause: error });
     }
 
     if (!response.ok) {
