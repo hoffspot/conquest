@@ -132,6 +132,15 @@ release's code, and a game under way keeps its own release's modules even if an 
   by the page's own script, as the page is read (from November 2026; before, by `main.js` once it
   and its 68 imports had loaded, the loader then waiting for it).
 
+- What it did on every load that nothing used is gone (November 2026). As a page starts it goes
+  through what it keeps for what no release lists: it sized every file with a look-up of its own,
+  some 480 of them, though only the catalog's sizes are counted (against their room). Now only
+  the catalog's are sized, each once, its size kept with what the worker knows. Each cache is
+  opened once while the worker runs, not by name on every request. And the loader asks which of
+  its files are kept before it starts (one message, answered from each cache's list): it used to
+  ask for every one, 400 of them code, and read 13 MB through only to count it, the page then
+  asking for each again to import it.
+
 ### 3.3a The page's first requests
 
 `main.js` imports 68 modules itself, found nine levels of imports deep (27, 8, 6, 6, 8, 5, 5 and 3

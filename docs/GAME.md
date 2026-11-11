@@ -6192,7 +6192,12 @@ the Bindings page till one's chosen.
    loading screen says "Loading" for a file from this device (a copy the service worker keeps,
    which says so: `X-Pellagos-Kept`) and "Downloading" for one that's downloaded, and how much of
    it all was downloaded ("13.9 MB in 0.4 s: 0.1 MB downloaded, the rest from this device"), so a
-   load that downloads nothing doesn't look like one that downloads everything. Installed (on the
+   load that downloads nothing doesn't look like one that downloads everything. On a visit after
+   the first the loader asks the service worker which of its files it keeps, before it starts, and
+   doesn't ask for those it only downloads (the code, the fonts, the WebAssembly): they're counted
+   as loaded, from this device, and first asked for when the page imports them. (It used to ask
+   for all 400 code files and read through their 13 MB only to count them.) The data it keeps in
+   memory it still reads, from what's kept. Installed (on the
    Home Screen, or as an app), the game asks the browser to keep what it's downloaded for good
    (`navigator.storage.persist`: `device.js keepDownloads`), where browsers grant it without
    asking; on an iPhone in Safari, Game options says it's kept for good on the Home Screen, as

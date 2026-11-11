@@ -8,6 +8,12 @@
 // import or ask for straight after (the code by the same address, from its import map; the rest
 // by name, which the service worker maps to the same copy).
 //
+// On a visit after the first the service worker keeps nearly all of it. The loader asks it which
+// addresses it keeps before it starts (sw.js keptOf), and doesn't ask for those it only downloads:
+// they're counted as loaded, from this device, at once. Without that every one was asked for and
+// read through, 400 code files and 13 MB of them, only to be counted, and then asked for again as
+// the page imported it. What's kept in memory is still read from there (a kept copy, quickly).
+//
 // No Three.js here: this runs before it has downloaded.
 
 import { hashed } from "./catalog.js";
@@ -19,14 +25,50 @@ const AT_ONCE = 16;
 
 const TYPES = { json: "application/json", bin: "application/octet-stream", jpg: "image/jpeg", png: "image/png", gltf: "model/gltf+json" };
 
+// How long the service worker's given to say what it keeps (ms): it answers from two lists it
+// has to hand, in a few ms; one that doesn't know the question (an older release's, still looking
+// after the page till this one's takes over) never answers, and everything's asked for as before
+const KEPT_WAIT = 1000;
+
+/**
+ * Which of `urls` the service worker keeps (sw.js keptOf), as a Set: none if no worker's looking
+ * after the page, or it doesn't say within `wait` ms.
+ */
+export function keptBy(worker, urls, wait = KEPT_WAIT) {
+    if (!worker || !urls.length || !globalThis.MessageChannel) {
+        return Promise.resolve(new Set());
+    }
+
+    return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        const answered = (kept) => {
+            clearTimeout(timer);
+            channel.port1.close();
+            resolve(new Set(Array.isArray(kept) ? kept : []));
+        };
+        const timer = setTimeout(answered, wait);
+
+        channel.port1.onmessage = (event) => answered(event.data?.kept);
+
+        try {
+            worker.postMessage({ kind: "kept", urls }, [channel.port2]);
+        } catch {
+            answered();
+        }
+    });
+}
+
 export class Loader {
     /**
      * @param {Array} manifest - Groups of files: [{ id, label, detail, files: [[path, bytes, hash?]] }].
      * @param {object} [options]
      * @param {string} [options.base] - What the paths are relative to (the page).
+     * @param {object} [options.worker] - The service worker looking after the page, if one is
+     *     (asked what it keeps).
      */
-    constructor(manifest, { base = document.baseURI } = {}) {
+    constructor(manifest, { base = document.baseURI, worker = globalThis.navigator?.serviceWorker?.controller ?? null } = {}) {
         this.base = base;
+        this.worker = worker;
         this.groups = manifest.map((group) => ({ ...group, total: group.files.reduce((sum, [, bytes]) => sum + bytes, 0), loaded: 0, done: 0, time: 0, started: 0 }));
         this.total = this.groups.reduce((sum, group) => sum + group.total, 0);
         this.loaded = 0;
@@ -52,8 +94,23 @@ export class Loader {
      * `total`, `current` and each group's `loaded`, `total`, `done` (files) and `time` (ms).
      */
     async load(onProgress = () => {}) {
-        const queue = this.groups.flatMap((group) => group.files.map(([path, bytes, hash]) => ({ group, path, bytes, hash })));
+        const all = this.groups.flatMap((group) => group.files.map(([path, bytes, hash]) => ({ group, path, bytes, hash })));
         const started = performance.now();
+
+        // (What the service worker keeps already, of what's only downloaded (the code, the fonts,
+        // the WebAssembly: not the data kept in memory): counted, not asked for)
+        const only = new Map(all.filter(({ path, hash }) => hash && !TYPES[path.split(".").pop()]).map((file) => [this.resolve(hashed(file.path, file.hash)), file]));
+        const here = new Set([...(await keptBy(this.worker, [...only.keys()]))].map((url) => only.get(url)));
+        const queue = [];
+
+        for (const file of all) {
+            if (here.has(file)) {
+                this.#here(file, onProgress);
+            } else {
+                queue.push(file);
+            }
+        }
+
         const next = async () => {
             while (queue.length) {
                 await this.#download(queue.shift(), onProgress);
@@ -64,6 +121,29 @@ export class Loader {
         this.time = performance.now() - started;
         this.current = "";
         onProgress(this);
+    }
+
+    // A file the service worker keeps, that's only downloaded: all of it loaded, from this device
+    #here({ group, path, bytes }, onProgress) {
+        group.started ||= performance.now();
+        this.current = path;
+        this.currentKept = true;
+        group.loaded += bytes;
+        this.loaded += bytes;
+        this.kept += bytes;
+        this.#done(group);
+        onProgress(this);
+
+        return true;
+    }
+
+    // One more of a group's files loaded
+    #done(group) {
+        group.done++;
+
+        if (group.done === group.files.length) {
+            group.time = performance.now() - group.started;
+        }
     }
 
     async #download({ group, path, bytes, hash }, onProgress) {
@@ -139,12 +219,7 @@ export class Loader {
             this.files.set(url, new Blob(chunks, { type: TYPES[path.split(".").pop()] ?? "application/octet-stream" }));
         }
 
-        group.done++;
-
-        if (group.done === group.files.length) {
-            group.time = performance.now() - group.started;
-        }
-
+        this.#done(group);
         onProgress(this);
     }
 

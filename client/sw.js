@@ -10,7 +10,9 @@
 // loading) hands that one on, which is used but not kept. One being fetched (the loader's) is
 // waited for, not fetched twice (generated/game_delivery_plan.md). What a page loaded before the
 // worker took over (on a first visit, main.js and what it imports) is kept when the page asks,
-// from the browser's own copy (keepLoaded).
+// from the browser's own copy (keepLoaded). A page's loader asks which of its files are kept
+// here as it starts (keptOf), and then asks only for the rest and for the data it reads itself:
+// the code kept is first asked for when the page imports it.
 //
 // A file asked for by name that a release keeps by hash (a worker's modules, as the import map
 // doesn't reach into workers; the font; the WebAssembly the navigation's glue fetches) is its copy
@@ -104,6 +106,22 @@ const ROOM_MOST = 1024 ** 3;
 // asked for it may not have said its release yet
 const GRACE = 10 * 60000;
 
+// The worker's own caches, each opened once and kept open while it runs: every request looks in
+// one or two of them, and opening one by its name each time is a turn through the browser's
+// storage that the look-up itself doesn't need. (One that couldn't be opened is tried again.)
+const opened = new Map();
+
+function cacheOf(name) {
+    if (!opened.has(name)) {
+        const opening = caches.open(name);
+
+        opened.set(name, opening);
+        opening.catch(() => opened.get(name) === opening && opened.delete(name));
+    }
+
+    return opened.get(name);
+}
+
 self.addEventListener("install", () => {
     self.skipWaiting();
 });
@@ -136,6 +154,8 @@ self.addEventListener("message", (event) => {
         event.waitUntil(prefetch(event.source, message));
     } else if (message?.kind === "keep" && Array.isArray(message.urls)) {
         event.waitUntil(keepLoaded(message.urls));
+    } else if (message?.kind === "kept" && Array.isArray(message.urls) && event.ports?.[0]) {
+        event.waitUntil(keptOf(message.urls).then((kept) => event.ports[0].postMessage({ kept })));
     }
 });
 
@@ -230,14 +250,14 @@ async function byHash(request, hash, event, destination = request.destination) {
 // says it's being kept, and gives what to call once it is)
 async function fromKept(request, hash, event, part, destination, kept) {
     const url = request.url;
-    const boot = await (await caches.open(BOOT)).match(url);
+    const boot = await (await cacheOf(BOOT)).match(url);
 
     if (boot) {
         return handed(boot, destination);
     }
 
     // (The catalog's are let go of the least recently used first, so when each is used counts)
-    const asset = await (await caches.open(ASSETS)).match(url);
+    const asset = await (await cacheOf(ASSETS)).match(url);
 
     if (asset) {
         event.waitUntil(used(url));
@@ -408,7 +428,7 @@ async function byName(request, event) {
 
 async function keptCopy(url) {
     for (const name of [BOOT, ASSETS]) {
-        const kept = await (await caches.open(name)).match(url);
+        const kept = await (await cacheOf(name)).match(url);
 
         if (kept) {
             return kept;
@@ -416,6 +436,22 @@ async function keptCopy(url) {
     }
 
     return undefined;
+}
+
+// Which of the addresses a page asks about are kept here (the loader as it starts, js/app/
+// loader.js: it then downloads only the rest, and reads only the data it needs in hand, where it
+// used to ask for every file, 400 of them code, 13 MB, only to count it). From each cache's list
+// of what it holds, read once, not a look-up for each address
+async function keptOf(urls) {
+    const kept = new Set();
+
+    for (const name of [BOOT, ASSETS]) {
+        for (const request of await (await cacheOf(name)).keys()) {
+            kept.add(request.url);
+        }
+    }
+
+    return urls.filter((url) => typeof url === "string" && kept.has(url));
 }
 
 // Keep a file by its hash if its bytes are that file's (true if kept)
@@ -432,7 +468,7 @@ async function keep(url, hash, bytes, headers) {
     kept.delete("Content-Encoding");
     kept.set("Content-Length", String(bytes.byteLength));
 
-    await (await caches.open(listed ? ASSETS : BOOT)).put(url, new Response(bytes, { status: 200, headers: kept }));
+    await (await cacheOf(listed ? ASSETS : BOOT)).put(url, new Response(bytes, { status: 200, headers: kept }));
     await used(url);
 
     return true;
@@ -462,7 +498,7 @@ async function keepLoaded(urls) {
         await ready;
 
         try {
-            if (!(await (await caches.open(BOOT)).match(url)) && !(await (await caches.open(ASSETS)).match(url))) {
+            if (!(await (await cacheOf(BOOT)).match(url)) && !(await (await cacheOf(ASSETS)).match(url))) {
                 const response = await fetch(url, { cache: "force-cache" });
 
                 if (response.ok && response.type === "basic") {
@@ -484,7 +520,7 @@ async function takeOn(url, hash) {
 
     plain.search = "";
 
-    const shell = await caches.open(SHELL);
+    const shell = await cacheOf(SHELL);
     const saved = await shell.match(plain.href);
 
     if (!saved) {
@@ -513,7 +549,8 @@ async function hashOf(bytes) {
 
 // What the worker knows (STATE): each release heard of ({ boot, assets }: the full URLs of the
 // files it keeps by hash), the newest and when its page started, each page's release (by the
-// page's id), and when each kept file was last used (ms)
+// page's id), when each kept file was last used (ms), and how big each of the catalog's files
+// kept is (bytes: looked up once)
 let state;
 let saving = Promise.resolve();
 let unsaved = false;
@@ -522,10 +559,10 @@ const stateKey = () => new URL("sw-state.json", self.location.href).href;
 
 function readState() {
     state ??= (async () => {
-        const saved = await (await caches.open(STATE)).match(stateKey());
+        const saved = await (await cacheOf(STATE)).match(stateKey());
         const read = saved ? await saved.json().catch(() => ({})) : {};
 
-        return { releases: {}, newest: null, newestAt: 0, pages: {}, used: {}, ...read };
+        return { releases: {}, newest: null, newestAt: 0, pages: {}, used: {}, sizes: {}, ...read };
     })();
 
     return state;
@@ -540,7 +577,7 @@ function saveState() {
 
             const body = JSON.stringify(await readState());
 
-            await (await caches.open(STATE)).put(stateKey(), new Response(body, { headers: { "Content-Type": "application/json" } }));
+            await (await cacheOf(STATE)).put(stateKey(), new Response(body, { headers: { "Content-Type": "application/json" } }));
         }).catch((error) => console.warn("Couldn't save what the service worker knows:", error));
     }
 
@@ -662,17 +699,32 @@ async function collect() {
     known.pages = Object.fromEntries(Object.entries(known.pages).filter(([page]) => open.has(page)));
     known.releases = Object.fromEntries(names.map((name) => [name, known.releases[name]]));
 
+    const listed = new Set(names.flatMap((name) => known.releases[name].assets));
     const entries = [];
 
+    // (Only the catalog's files are sized: theirs are the sizes counted, against the room they're
+    // given. What the game needs to start, some 480 files, is never let go of for room, and was
+    // looked up a file at a time on every page's start all the same. And each of the catalog's
+    // once: a file kept by its hash never changes, so its size is kept with what's known)
     for (const name of [BOOT, ASSETS]) {
-        const cache = await caches.open(name);
+        const cache = await cacheOf(name);
 
         for (const request of await cache.keys()) {
-            entries.push({ cache, url: request.url, bytes: await sizeOf(cache, request), used: known.used[request.url] ?? 0 });
+            const url = request.url;
+            let bytes = 0;
+
+            if (listed.has(url)) {
+                bytes = known.sizes[url] ?? (await sizeOf(cache, request));
+
+                if (bytes > 0) {
+                    known.sizes[url] = bytes;
+                }
+            }
+
+            entries.push({ cache, url, bytes, used: known.used[url] ?? 0 });
         }
     }
 
-    const listed = new Set(names.flatMap((name) => known.releases[name].assets));
     const optional = entries.filter(({ url }) => listed.has(url)).reduce((sum, { bytes }) => sum + bytes, 0);
     const doomed = toLetGo({ entries, releases: names.map((name) => known.releases[name]), budget: await room(optional) });
 
@@ -680,16 +732,17 @@ async function collect() {
         await cache.delete(url);
     }
 
-    // (And when files no longer kept were last used)
+    // (And when files no longer kept were last used, and how big they were)
     const kept = new Set(entries.filter((entry) => !doomed.includes(entry)).map(({ url }) => url));
 
     known.used = Object.fromEntries(Object.entries(known.used).filter(([url]) => kept.has(url)));
+    known.sizes = Object.fromEntries(Object.entries(known.sizes).filter(([url]) => kept.has(url)));
     await saveState();
 
     // (And the parts of files no release in use lists, or kept whole now: the downloader lets go
     // of a file's parts once it's all here, but not if the page closed first)
     const wanted = new Set(names.flatMap((name) => [...known.releases[name].boot, ...known.releases[name].assets]));
-    const parts = await caches.open(PARTS);
+    const parts = await cacheOf(PARTS);
 
     for (const request of await parts.keys()) {
         const file = request.url.replace(PART, "");
@@ -724,7 +777,7 @@ async function takeOver() {
         return;
     }
 
-    const [old, shell] = await Promise.all([caches.open(OLD_CACHE), caches.open(SHELL)]);
+    const [old, shell] = await Promise.all([caches.open(OLD_CACHE), cacheOf(SHELL)]);
 
     for (const request of await old.keys()) {
         const response = await old.match(request);
@@ -745,7 +798,7 @@ async function takeOver() {
 // --- Files without a hash ---
 
 async function savedFirst(request) {
-    const cache = await caches.open(SHELL);
+    const cache = await cacheOf(SHELL);
     const cached = await cache.match(request);
 
     if (cached) {
@@ -763,7 +816,7 @@ async function savedFirst(request) {
 
 // From the saved copy, checked with the server afterwards (at most once a minute)
 async function savedThenChecked(request, event) {
-    const cache = await caches.open(SHELL);
+    const cache = await cacheOf(SHELL);
     const cached = await cache.match(request);
     const check = async () => {
         const response = await fetch(request.url, { cache: "no-cache" });
@@ -792,7 +845,7 @@ async function savedThenChecked(request, event) {
 }
 
 async function networkFirst(request, event) {
-    const cache = await caches.open(SHELL);
+    const cache = await cacheOf(SHELL);
     const key = event.clientId ? `${event.clientId} ${request.url}` : null;
 
     // (Checked for this page a moment ago: the copy saved then)

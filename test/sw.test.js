@@ -37,6 +37,10 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
     const deleted = [];
     const clock = { now: 1000000, network: offline ? "offline" : "online" };
 
+    // (Each cache opened by name, and each address looked up in one: how often)
+    const opens = [];
+    const matched = [];
+
     const cache = (name) => {
         if (!store.has(name)) {
             store.set(name, new Map());
@@ -48,6 +52,8 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
         return {
             match: async (request) => {
                 const entry = entries.get(key(request));
+
+                matched.push(key(request));
 
                 return entry && new Response(entry.bytes.slice(0), { status: entry.status, headers: entry.headers });
             },
@@ -77,7 +83,11 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
         },
         caches: {
             keys: async () => [...store.keys()],
-            open: async (name) => cache(name),
+            open: async (name) => {
+                opens.push(name);
+
+                return cache(name);
+            },
             delete: async (name) => {
                 deleted.push(name);
 
@@ -150,11 +160,12 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
         await finish(waiting);
     };
 
-    // Any other message from a page (`source`: the page, as the worker sees it)
-    const send = async (message, source) => {
+    // Any other message from a page (`source`: the page, as the worker sees it; `ports`: where it
+    // answers, if it's to)
+    const send = async (message, source, ports = []) => {
         const waiting = [];
 
-        handlers.message({ data: message, source, waitUntil: (promise) => waiting.push(promise) });
+        handlers.message({ data: message, source, ports, waitUntil: (promise) => waiting.push(promise) });
         await finish(waiting);
     };
 
@@ -168,7 +179,10 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
     // The addresses a cache holds
     const kept = (name) => [...(store.get(name)?.keys() ?? [])];
 
-    return { request, requests, tell, send, activate, kept, deleted, clock, files, open, names: () => [...store.keys()], context };
+    // What the worker knows, as it's saved it
+    const known = () => JSON.parse(new TextDecoder().decode(store.get("pellagos-state-v2").get(`${ORIGIN}/sw-state.json`).bytes));
+
+    return { request, requests, tell, send, activate, kept, deleted, clock, files, open, opens, matched, known, names: () => [...store.keys()], context };
 }
 
 // A release, as a page tells it (catalog.js, releaseOf): files given as [path, body]
@@ -730,6 +744,87 @@ describe("service worker", () => {
 
         assert.deepEqual(worker.kept(ASSETS), [full(address(assets[0]))]);
         assert.deepEqual(worker.kept(BOOT), [full(address(boot[0]))]);
+    });
+
+    it("sizes only the catalog's files as a page starts, and each of those once: never the files the game needs to start, whose sizes nothing uses", async () => {
+        const boot = [["/characters/human.bin", "a body"], ["/js/app/game.js", "the game"], ["/js/app/hud.js", "the hud"]];
+        const assets = [["/models/dragon.glb", "a".repeat(300)], ["/models/wyvern.glb", "b".repeat(200)]];
+        const worker = loadServiceWorker({
+            estimate: { quota: 100000, usage: 800 },
+            stored: { [BOOT]: Object.fromEntries(boot.map((file) => [address(file), file[1]])), [ASSETS]: Object.fromEntries(assets.map((file) => [address(file), file[1]])) },
+        });
+        const looked = (files) => worker.matched.filter((url) => files.some((file) => url === full(address(file))));
+
+        // (A page starts: what's kept gone through, for what no release lists and how much room
+        // the catalog's take)
+        await worker.tell("page-1", release("r1", { boot, assets }, 1));
+        assert.deepEqual(looked(boot), [], "no file needed to start looked up");
+        assert.deepEqual(looked(assets).toSorted(), assets.map((file) => full(address(file))).toSorted(), "each of the catalog's, once");
+        assert.deepEqual(worker.known().sizes, { [full(address(assets[0]))]: 300, [full(address(assets[1]))]: 200 });
+
+        // (Another page, and that one again: sized already, kept with what the worker knows)
+        worker.matched.length = 0;
+        await worker.tell("page-2", release("r1", { boot, assets }, 2));
+        await worker.tell("page-1", release("r1", { boot, assets }, 1));
+        assert.deepEqual(looked([...boot, ...assets]), []);
+        assert.deepEqual([worker.kept(BOOT).length, worker.kept(ASSETS).length], [3, 2]);
+    });
+
+    it("still makes room by the catalog's sizes, and forgets the size of what it lets go of", async () => {
+        const boot = [["/characters/human.bin", "a body that's needed to start, and bigger than any room"]];
+        const assets = [["/models/dragon.glb", "a".repeat(300)], ["/models/wyvern.glb", "b".repeat(300)]];
+
+        // Room for 400 bytes of the catalog's: half of what's free (200) and what they take (600)
+        const worker = loadServiceWorker({
+            estimate: { quota: 1000, usage: 800 },
+            stored: { [BOOT]: { [address(boot[0])]: boot[0][1] }, [ASSETS]: Object.fromEntries(assets.map((file) => [address(file), file[1]])) },
+        });
+
+        await worker.tell("page-1", { kind: "used", urls: [full(address(assets[1]))] });
+        await worker.tell("page-1", release("r1", { boot, assets }, 1));
+
+        assert.deepEqual(worker.kept(ASSETS), [full(address(assets[1]))]);
+        assert.deepEqual(worker.kept(BOOT), [full(address(boot[0]))]);
+        assert.deepEqual(worker.known().sizes, { [full(address(assets[1]))]: 300 });
+    });
+
+    it("opens each of its caches once, however many files are asked for", async () => {
+        const boot = [["/js/app/game.js", "the game"], ["/js/app/hud.js", "the hud"], ["/characters/human.bin", "a body"]];
+        const worker = loadServiceWorker({ files: Object.fromEntries(boot), stored: { [BOOT]: { [address(boot[0])]: boot[0][1] } } });
+
+        await worker.tell("page-1", release("r1", { boot }, 1));
+
+        for (let times = 0; times < 5; times++) {
+            for (const file of boot) {
+                assert.equal(await (await worker.request(address(file))).text(), file[1]);
+            }
+
+            await worker.request("/js/app/version.js");
+        }
+
+        for (const name of [SHELL, BOOT, ASSETS, "pellagos-state-v2"]) {
+            assert.equal(worker.opens.filter((each) => each === name).length, 1, name);
+        }
+    });
+
+    it("says which of the addresses a page's loader asks about it keeps, from each cache's own list, not a look-up for each", async () => {
+        const game = ["/js/app/game.js", "the game"];
+        const hud = ["/js/app/hud.js", "the hud"];
+        const dragon = ["/models/dragon.glb", "a dragon"];
+        const worker = loadServiceWorker({ stored: { [BOOT]: { [address(game)]: game[1] }, [ASSETS]: { [address(dragon)]: dragon[1] } } });
+        const answers = [];
+        const port = { postMessage: (message) => answers.push(JSON.parse(JSON.stringify(message))) };
+
+        await worker.send({ kind: "kept", urls: [game, hud, dragon].map((file) => full(address(file))).concat(["https://elsewhere.example/js/app/game.js?h=0123456789", 7]) }, { id: "page-1" }, [port]);
+
+        assert.deepEqual(answers, [{ kept: [full(address(game)), full(address(dragon))] }]);
+        assert.deepEqual(worker.matched.filter((url) => !url.endsWith("sw-state.json")), [], "no file looked up");
+        assert.deepEqual(worker.requests, [], "nor anything asked of the server");
+
+        // (Asked with nowhere to answer, or about nothing: left alone)
+        await worker.send({ kind: "kept", urls: [full(address(game))] }, { id: "page-1" });
+        await worker.send({ kind: "kept" }, { id: "page-1" }, [port]);
+        assert.equal(answers.length, 1);
     });
 
     it("keeps the parts of a model the downloader has so far (a download cut off by a reload carries on), till no release in use lists it or it's kept whole", async () => {
