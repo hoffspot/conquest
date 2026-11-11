@@ -89,6 +89,25 @@ export function pixelsAcross(pixels, fov, aspect) {
     return (pixels / (2 * tan)) * (1 + tan * tan * (1 + aspect * aspect));
 }
 
+/**
+ * A scene's lights, kept from one asking to the next: `kept` (what this gave before, if anything)
+ * again while the scene has as many things of its own in it as it had then; else found by walking
+ * all of it, what's hidden too, and kept anew ({ lights, children }). (None is added or taken
+ * away in play: three.js makes every lit shader again when one is. A likeness walked a town's
+ * two thousand nodes for them twice, and the picture behind the pack once more.)
+ */
+export function sceneLights(scene, kept = null) {
+    if (kept?.children === scene.children.length) {
+        return kept;
+    }
+
+    const lights = [];
+
+    scene.traverse((node) => node.isLight && lights.push(node));
+
+    return { lights, children: scene.children.length };
+}
+
 // This device, as its browser tells of it: whether it's pointed at with a finger, its memory (GB:
 // Chromium's alone tells) and cores, and what the browser says it is
 const thisDevice = () => ({ touch: matchMedia("(pointer: coarse)").matches, memory: navigator.deviceMemory, cores: navigator.hardwareConcurrency, agent: navigator.userAgent });
@@ -2038,7 +2057,7 @@ export class View {
         // middle of a fight, for each new kind of attacker. Drawn once they're ready, as it is
         // then, if it's still there)
         subject.traverse((node) => node.layers.enable(layer));
-        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+        this.#lights().forEach((light) => light.layers.enable(layer));
         renderer.setRenderTarget(target);
 
         const making = [...renderer.compile(subject, camera, this.scene)].map((material) => renderer.properties.get(material).currentProgram);
@@ -2121,7 +2140,7 @@ export class View {
         }
 
         subject.traverse((node) => node.layers.enable(layer));
-        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+        this.#lights().forEach((light) => light.layers.enable(layer));
 
         const background = this.scene.background;
         const shadows = renderer.shadowMap.autoUpdate;
@@ -2192,7 +2211,6 @@ export class View {
         const picture = new THREE.FramebufferTexture(size.x, size.y);
         const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { picture: { value: picture }, dim: { value: FROZEN_DIM } }, vertexShader: FROZEN_VERTEX, fragmentShader: FROZEN_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false }));
         const scene = new THREE.Scene();
-        const lights = [];
 
         this.#cutAway(0);
         this.sky.update(this.camera, performance.now() / 1000);
@@ -2201,8 +2219,14 @@ export class View {
         this.#draw(this.camera);
         this.renderer.copyFramebufferToTexture(picture);
         scene.add(quad);
-        this.scene.traverse((node) => node.isLight && lights.push(node));
-        this.frozen = { picture, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights };
+        this.frozen = { picture, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights: this.#lights() };
+    }
+
+    // The scene's lights (the sun, the lamps, any another hand's put in it), kept: sceneLights
+    #lights() {
+        this.lightsKept = sceneLights(this.scene, this.lightsKept);
+
+        return this.lightsKept.lights;
     }
 
     // The picture of the world let go (the pack closed)

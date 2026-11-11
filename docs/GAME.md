@@ -2056,7 +2056,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   brighter to read so small). Drawn into a picture of its own, each of its materials wants a
   shader of its own: they're made first, in the background where the browser can
   (KHR_parallel_shader_compile, Safari and Chrome), and it's drawn once they're ready (made as it
-  was drawn, they held a fight's frame up, each new kind of attacker's); one of a
+  was drawn, they held a fight's frame up, each new kind of attacker's). It's lit by the scene's
+  lights, kept in a list (view.js `sceneLights`: found by walking the scene once, and again only
+  once the scene's been given or lost something of its own; each likeness walked a town's two
+  thousand nodes for them twice, hidden floors and all, and the picture behind the pack once
+  more); one of a
   crowd shows their name's first letter till they're drawn in full. Tapped, an icon sets the
   player on them where they stand (an `engage` order with `stand`, as tapping them does);
   tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
