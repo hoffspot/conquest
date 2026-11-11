@@ -2,7 +2,8 @@ name: A share of the browser tests
 description: >-
   One job's share of the Playwright browser tests (scripts/e2e-shard.js, split by how long each
   took on CI: e2e/durations.json): Chromium installed, the share chosen, run, and its JSON report
-  kept with the run as e2e-report-<share>, for npm run e2e:durations to time the tests by.
+  kept with the run as e2e-report-<share>, for npm run e2e:durations to time the tests by. If a
+  test failed, what Playwright kept of it (test-results/) is kept too, as e2e-failures-<share>.
 
 inputs:
   share:
@@ -61,5 +62,19 @@ runs:
       with:
         name: e2e-report-${{ steps.share.outputs.number }}
         path: e2e-report.json
+        retention-days: 14
+        if-no-files-found: ignore
+
+    # (What a failed test left to look at: Playwright's test-results folder, a folder for each
+    # test that failed, holding whatever playwright.config.js has it keep of one, such as a
+    # picture of the page as it ended. Only when a step of this action failed, the tests' most
+    # likely (failure() here is this action's own, not the job's, so not for a unit test that
+    # failed before it): a share that passed leaves nothing worth keeping)
+    - name: Keep what the failed tests left
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-failures-${{ steps.share.outputs.number || inputs.share }}
+        path: test-results/
         retention-days: 14
         if-no-files-found: ignore

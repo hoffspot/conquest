@@ -132,6 +132,14 @@ share chosen and run), and its JSON report is kept with the run as `e2e-report-<
 or not: how long each test took there, to time them by (below). If the unit tests or the motion
 check take much longer or shorter, change their minutes in `E2E_AHEAD`.
 
+**What a failed browser test leaves.** When a job's browser tests fail, Playwright's
+`test-results/` folder is kept with the run for 14 days as `e2e-failures-<share>` (the run's
+page, Artifacts, or `gh run download <run> -p 'e2e-failures-*'`). It has a folder for each test
+that failed, with Playwright's own note of it (`error-context.md`: the error, and an outline of
+what was on the page as it ended) and whatever else `playwright.config.js` has it keep of a
+failure, such as a picture of the page. `<share>` is the job's: an `e2e` job's own number, and
+the two after the last of those for `motion` and `test`.
+
 **The licensed models** (`docs/LICENSED_MODELS.md`) are kept in the private repository
 `hoffspot/conquest-models`. Every job that needs them starts with `.github/actions/licensed-models`:
 it checks that repository out into `.models` with the read-only deploy key (its private half the
@@ -563,7 +571,8 @@ git status               # only the files you meant to change
 3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about half an hour, then `ci`,
    which says in a few seconds whether they all passed. A first-time contributor's CI may wait
    for a maintainer to approve the run.
-4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
+4. If CI fails, read the failing job's log (for a browser test, look too at what it left: the
+   run's `e2e-failures-<share>` artifact, section 2), reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
    failed. Don't push empty commits, or close and reopen the pull request, to set CI going again.
 5. If `main` moves on, bring your branch up to date (section 6).
