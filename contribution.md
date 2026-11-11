@@ -265,11 +265,17 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   the land, which is slow to draw in software. One that times out on CI only for being slow is
   given longer, said why in the pull request; one that hangs (waiting on what never comes) is
   fixed.
-- Time the tests by how long they took on CI, so its split stays even: once a run's done, its
-  ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
-  Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit
+- Time the tests by how long they took on CI, so its split stays even. CI runs for pull requests
+  alone, so the run is your pull request's: `gh run list --workflow ci.yml --branch <your branch>`
+  gives its number, as does its page's address. Once it's done, download its reports, one from
+  each job (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page, Artifacts),
+  then `npm run e2e:durations -- reports/*/e2e-report.json` on the branch the run was of. Commit
   `e2e/durations.json`, not the reports. Do it after adding browser tests, making them much
   slower or quicker, or whenever CI's `e2e` jobs end far apart.
+- The run needn't be green. A test is timed only where it passed: one that failed or ran out of
+  time keeps the time it had (out of time, it took its time limit, which says nothing of how long
+  it takes), and the script names them. A time kept for a test that's since been taken out or
+  renamed is dropped: the script lists the tests there are now (`playwright test --list`).
 - To time some locally instead (for a new test before it's been on CI; a machine of your own
   can be quicker or slower than CI's, so a CI run's times are better): `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1
   --reporter=json`, then `npm run e2e:durations -- report.json`.

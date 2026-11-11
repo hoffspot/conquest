@@ -682,7 +682,8 @@ each job its share by how long each test last took (`e2e/durations.json`; a test
 counts as the median), and the job runs it with `--test-list`. After adding tests or making them
 much slower or quicker, time them one at a time as CI runs them and keep the times:
 `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`, then
-`npm run e2e:durations -- report.json`. CI runs for each pull request, and not again for main
+`npm run e2e:durations -- report.json` (a test is timed only where it passed, and a time kept
+for a test that's gone is dropped). CI runs for each pull request, and not again for main
 once it's merged (contribution.md, section 2); lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
