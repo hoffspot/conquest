@@ -144,14 +144,10 @@ past the full tier should be a figure, not a merged body.
 a step or more a frame. One step of an outfit's picture, the first, is long (it finds how far
 inside every garment every corner of the body is, in one go), as it is for any guard built.
 
-## Questions still open
+## What the owner decided
 
 The plan fixes 100 players a world, and the setting "Other players in full: Automatic, 4, 8, 16,
-All"; those are answered. Still open:
-
-1. Will there be friends or guilds for the order to know of, or parties only?
-2. A bar's hidden once more than half of it lies under those before it. "Don't draw the ones in
-   the back" could mean at any overlap: is half right?
+All". Nothing of this stage's is still open.
 
 Answered by the owner on 2026-11-11:
 
@@ -166,6 +162,10 @@ Answered by the owner on 2026-11-11:
 - **Whoever's fighting the player's party keeps its place in the order,** after the player's
   own attackers and before whoever they're talking with: the scaling plan's wording has it now.
 - **A hired adventurer's bar is never hidden,** as the party's aren't.
+- **A bar's hidden once more than half of it lies under those before it:** half is right, not
+  any overlap.
+- **Parties only, for now:** no friends or guilds for the order to know of. Should they come,
+  they're a standing of their own in `client/js/app/precedence.js`, after the party.
 
 ## Sources
 
