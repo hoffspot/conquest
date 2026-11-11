@@ -4488,7 +4488,8 @@ export class Battle {
     // one that flanks for whom its leader's fighting. As it's told (core/host.js #orderUnit):
     // falling back (`fallBackUntil`), it runs back to its leader, after no one; guarding them
     // (`guarding`), it takes on only those after it, or after them near them (GUARD_REACH);
-    // holding fire (`holdFire`), only those after it
+    // holding fire (`holdFire`), only those after it. Its leader down, or on another floor, it
+    // holds where it is and only defends itself
     #follow(actor) {
         const leader = this.actor(actor.leader);
 
@@ -4500,8 +4501,22 @@ export class Battle {
             return;
         }
 
+        // (Its leader down, or on another floor: it defends itself where it stands, striking back
+        // at whoever's on it or has struck it lately, or struck its leader down beside it
+        // (DEFEND_MS: their `struckBy`); after no one else, and going nowhere. The owner: "a
+        // follower whose leader is down or on another floor defends itself")
         if (!leader || leader.dead || leader.map !== actor.map) {
-            actor.target = null;
+            const struck = (one, enemy) => (one?.struckBy?.[enemy.id] ?? -Infinity) > this.time;
+            const fallen = leader && leader.dead && leader.map === actor.map ? leader : null;
+            const foe = this.#nearestSeen(actor, (enemy) => enemy.target === actor.id || enemy.attack?.target === actor.id || struck(actor, enemy) || struck(fallen, enemy));
+
+            if (foe) {
+                this.#fightFor(actor, foe);
+
+                return;
+            }
+
+            Object.assign(actor, { target: null, path: [], pathGoal: null });
 
             return;
         }

@@ -3684,6 +3684,13 @@ say what they'd want and stay where they are.
   too (someone's after them, or they're after someone), when they fight on where they are. One
   told to wait stays where they were told;
 - they go after any enemy of their leader's they can see within 12 steps of them;
+- **their leader down, or on another floor, they defend themselves** (the owner: "a follower
+  whose leader is down or on another floor defends itself"): they strike back at whoever they
+  can see that's on them (set on them, or striking at them), has struck them in the last 10
+  seconds (`DEFEND_MS`), or struck their leader in the 10 seconds before they fell beside them;
+  a mage with their spells, as ever. With no one to strike back at they hold where they are:
+  they don't go looking for a fight, nor walk on. (Before, they did nothing at all, not even
+  when struck.)
 - through a door or up the stairs, they come out beside their leader;
 - they stand with their leader against the wild, and as their people stand with the others;
 - what they bring down counts for their leader: its loot is theirs, and it counts towards their

@@ -521,6 +521,94 @@ describe("stuns wear thin on a boss (battle.js STUNS)", () => {
     });
 });
 
+describe("a follower whose leader is down or on another floor defends itself (battle.js #follow)", () => {
+    // A hired sword by its leader, who's fallen (`down`) or gone to another floor; and foes
+    const company = (down = true) => {
+        const world = open(60);
+        const battle = new Battle({ maps: { town: world, loft: open(20) }, links: [] }, { seed: 4 });
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [20, 30], hp: 50 });
+        battle.add({ id: "sword", kind: "follower", team: "a", weapon: "sword", square: [21, 31], ai: "follow", leader: "hero", hp: 9000, rises: 1 });
+        run(battle, 500);
+
+        if (down) {
+            Object.assign(battle.actor("hero"), { dead: true, respawnAt: Infinity });
+        } else {
+            battle.place("hero", "loft", [5, 5]);
+        }
+
+        return battle;
+    };
+    const foe = (battle, id, square, more = {}) => battle.add({ id, kind: "soldier", team: "b", weapon: "sword", square, hp: 9000, ...more });
+
+    for (const down of [true, false]) {
+        const when = down ? "its leader down" : "its leader on another floor";
+
+        it(`holds where it is, after no one it only sees, ${when}`, () => {
+            const battle = company(down);
+            const sword = battle.actor("sword");
+            const at = [sword.x, sword.y];
+
+            // (An enemy in plain sight that leaves it be: left be; and it walks nowhere)
+            foe(battle, "idle", [21, 25]);
+
+            const events = run(battle, 5000);
+
+            assert.equal(sword.target, null);
+            assert.deepEqual([sword.x, sword.y], at);
+            assert.ok(!events.some(({ type, id }) => type === "attack" && id === "sword"));
+        });
+
+        it(`strikes back at whoever's on it, ${when}`, () => {
+            const battle = company(down);
+            const sword = battle.actor("sword");
+
+            guard(battle, "raider", [21, 24], { team: "b", hp: 9000, armed: true });
+
+            const events = run(battle, 6000);
+
+            assert.equal(battle.actor("raider").target, "sword");
+            assert.equal(sword.target, "raider");
+            assert.ok(events.some(({ type, id, by }) => type === "hit" && id === "raider" && by === "sword"), "it strikes back");
+        });
+
+        it(`strikes back at one that struck it from afar and is after no one, ${when}`, () => {
+            const battle = company(down);
+            const sword = battle.actor("sword");
+
+            // (A fireball out of nowhere: whoever cast it isn't set on the follower, nor striking
+            // at it; struck, it goes for them all the same)
+            foe(battle, "mage", [21, 24]);
+            assert.equal(battle.cast("mage", "fireball", "sword").ok, true);
+
+            const events = run(battle, 6000);
+
+            assert.equal(sword.target, "mage");
+            assert.ok(events.some(({ type, id, by }) => type === "hit" && id === "mage" && by === "sword"), "it strikes back");
+        });
+    }
+
+    it("goes for whoever struck its leader down beside it, and no one else", () => {
+        const world = open(60);
+        const battle = new Battle(world, { seed: 4 });
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [20, 30], hp: 5 });
+        battle.add({ id: "sword", kind: "follower", team: "a", weapon: "sword", square: [21, 31], ai: "follow", leader: "hero", hp: 9000, rises: 1, holdFire: true });
+        foe(battle, "bystander", [16, 27]);
+        // (Its leader felled by a spell from one who then stands, after no one; the follower
+        // holding fire till then, so in no fight of its own)
+        foe(battle, "killer", [20, 25]);
+        assert.equal(battle.cast("killer", "fireball", "hero", { level: 5 }).ok, true);
+
+        const events = run(battle, 8000);
+
+        assert.ok(events.some(({ type, id }) => type === "death" && id === "hero"), "its leader falls");
+        assert.equal(battle.actor("sword").target, "killer");
+        assert.ok(events.some(({ type, id, by }) => type === "hit" && id === "killer" && by === "sword"));
+        assert.ok(!events.some(({ type, id, by }) => type === "hit" && id === "bystander" && by === "sword"));
+    });
+});
+
 describe("every character of one shape (battle.js OPTIONAL)", () => {
     const shapes = (battle) => [...new Set(battle.actors.map((actor) => Object.keys(actor).join()))];
 
