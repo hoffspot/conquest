@@ -1,18 +1,25 @@
 name: CI
 
-# Pull requests, and main when they're merged (a branch's pushes are tested once, in its pull
-# request, not twice). A pull request's run tests it merged into main as main is then; with
-# others merging too, main may move on after, so a pull request is merged only once it's green
-# brought up to date with main (contribution.md, "Merging cleanly")
+# Pull requests, and by hand (Actions, CI, Run workflow, on any branch). A pull request's run
+# tests it merged into main as main is then; with others merging too, main may move on after, so
+# a pull request is merged only once it's green brought up to date with main (contribution.md,
+# "Merging cleanly").
+#
+# Not main when one's merged: main's ruleset lets a pull request in only with every required
+# check green on a head that's up to date with main (contribution.md, "The repository's
+# settings"), so what a merge makes of main is, file for file, what that run tested. For each of
+# the 60 merges before this was written the merge commit's tree was its branch head's. Tested
+# again on main, those runs were a third of all CI's, held half of GitHub's 20 jobs at a time for
+# most of an hour after every merge while the next pull request waited, and one in four failed,
+# always on a test that fails now and then, never on a fault. If either of those two rules is
+# ever turned off, put "push: branches: [main]" back here first
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 # A pull request's run is let go of when it's pushed to again (only its newest head matters, and
-# GitHub runs 20 jobs at a time across everyone's); main's each run alone to the end (a group of
-# their own, run_id)
+# GitHub runs 20 jobs at a time across everyone's); one run by hand runs alone to the end (a
+# group of its own, run_id)
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -108,8 +115,8 @@ jobs:
   # unit tests' and the motion check's jobs take shares too, after their own work: env above).
   # Eight jobs take about 28 minutes each (and another 30 s or so getting ready): more would be
   # quicker, down to the longest test's 4¾ minutes, but a run is 10 jobs (with the unit tests
-  # and the motion check), and two runs at once (a merge's and the next pull request's) stay
-  # within GitHub's 20 at a time
+  # and the motion check), and two runs at once (two pull requests') stay within GitHub's 20 at
+  # a time
   e2e:
     runs-on: ubuntu-latest
     # (Eighty minutes is twice the longest a job's taken, 40; a job hung longer is ended rather

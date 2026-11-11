@@ -90,9 +90,22 @@ files. Read what it wants to do, above all a `git push`.
 
 ## 2. The checks: what CI runs, and how to run them yourself
 
-CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged. A
-pull request's run is cancelled when you push to it again; only its newest commit's run counts.
-`main`'s runs always run to the end. A job that hangs is ended at about twice the longest it
+CI (`.github/workflows/ci.yml`) runs on every pull request, and by hand (the Actions tab, CI,
+*Run workflow*, on any branch). A pull request's run is cancelled when you push to it again; only
+its newest commit's run counts. A run by hand always runs to the end.
+
+**CI doesn't run on `main` when a pull request is merged.** `main`'s ruleset (section 6, *The
+repository's settings*) lets a pull request in only with its required checks green on a head
+that's up to date with `main`, so what the merge makes of `main` is, file for file, what that run
+tested. For each of the 60 merges before this was decided (2026-11-11), the merge commit's tree
+was its branch head's. Tested again on `main`, those runs were a third of all CI's runs. They
+held half of GitHub's 20 jobs at a time for most of an hour after every merge, while the next
+pull request waited, and one in four failed, always on a test that fails now and then, never on
+a fault. This rests on two of the ruleset's rules, *Require status checks to pass* and *Require
+branches to be up to date before merging*: if either is ever turned off, `push: branches: [main]`
+goes back into `ci.yml` first.
+
+A job that hangs is ended at about twice the longest it
 should take, rather than held to GitHub's 6 hours: `test` at 60 minutes (its own work about 19½,
 then its share of the browser tests about 8), `motion` at 60 (about 13, then about 15), each
 `e2e` job at 80 (about 28; its Chromium download is tried three times, 5 minutes a try). Every
@@ -123,14 +136,18 @@ fork's pull request is given no secrets, so its run leaves them out, with a noti
 no key fails the job. A maintainer brings a fork's pull request into a branch here before it's
 merged.
 
-`.github/workflows/pages.yml` runs when `main` changes: the licensed models fetched, lint and the
-unit tests again, then `npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
+`.github/workflows/pages.yml` runs when `main` changes: the licensed models fetched, then
+`npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
 debug log: the commit and the time, in place of `client/js/app/version.js`'s noughts
 (`scripts/stamp-version.js`; as kept in the repository, the game says it's "dev"). Then it
 publishes the copy to GitHub Pages
-(<https://hoffspot.github.io/conquest/>); its build is ended at 30 minutes (it takes about 13½)
-and its deploy at 15.
-Whatever is merged to `main` goes live, so `main` must always be green.
+(<https://hoffspot.github.io/conquest/>); its build is ended at 10 minutes (it takes under one)
+and its deploy at 15 (under two).
+It tests nothing: lint and the unit tests have just passed on the pull request, on the very files
+merged (above), and run again here they kept the site waiting 17 minutes. So whatever is merged
+to `main` goes live a minute or two later, and the pull request's checks are all that stand
+between a change and the players. Its `npm ci` installs nothing the build needs: it keeps npm's
+cache on `main`, where every pull request's run can take it from.
 
 `.github/workflows/soak.yml` is the cross-engine soak (`npm run soak`, below). It's run by hand
 from the Actions tab (Soak, Run workflow: how many minutes, the seed, which browsers), and for
@@ -540,7 +557,9 @@ git status               # only the files you meant to change
 6. Answer every review comment: change the code, or say why not.
 7. A maintainer merges it, with a merge commit, once CI is green on a head that's up to date with
    `main` and it's been reviewed. Don't merge your own pull request unless the owner has said you
-   may. Once it's merged, GitHub Pages publishes the game from `main`.
+   may. Once it's merged, GitHub Pages publishes the game from `main` a minute or two later.
+   Nothing is tested again on `main` (section 2): the pull request's green run was of those very
+   files.
 
 ## 6. Merging cleanly when others are working too
 
@@ -576,7 +595,7 @@ owner.
 | | Block force pushes | On |
 | | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |
 | | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)` |
-| | Require branches to be up to date before merging | On |
+| | Require branches to be up to date before merging | On. With the required checks, it's why CI needn't run on `main` again after a merge (section 2): neither is turned off without `push: branches: [main]` put back into `ci.yml` first |
 | *Settings → General → Pull Requests* | Allow auto-merge | On |
 | | Always suggest updating pull request branches | On (the *Update branch* button) |
 | | Merge methods | Merge commits, squash and rebase are all allowed; this repository's convention is a merge commit |
@@ -657,3 +676,4 @@ A good first message in a session:
 | Another CI job "has exceeded the maximum execution time" | It ran twice as long as it ever has. A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
 | A CI job cancelled after about 15 minutes, with no steps and no logs | It was never given a runner: GitHub's doing, not your change. *Re-run failed jobs* on the run |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |
+| There's no CI run on `main` after a merge | As it's meant to be (section 2): the pull request's last run tested those very files. To run it on `main` all the same: the Actions tab, CI, *Run workflow* |

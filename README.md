@@ -1,6 +1,6 @@
 # conquest
 
-[![CI](https://github.com/hoffspot/conquest/actions/workflows/ci.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/ci.yml)
+[![Deploy to GitHub Pages](https://github.com/hoffspot/conquest/actions/workflows/pages.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/pages.yml)
 
 **Pellagos**: make a character, choose a weapon, and defend a market town from the orc that
 prowls its fields, then walk out of it into the world round it: 8 kilometres of fields, woods,
@@ -634,7 +634,9 @@ also plays offline.
 ### Hosting on GitHub Pages
 
 [.github/workflows/pages.yml](.github/workflows/pages.yml) publishes the `client/` folder to
-GitHub Pages every time `main` changes, once the lint and unit tests pass. To set it up, in the
+GitHub Pages every time `main` changes. It tests nothing again: a pull request is merged only
+once CI has passed on the very files it makes of `main` ([contribution.md](contribution.md),
+section 2). To set it up, in the
 repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow can also be
 run by hand from the **Actions** tab.
 
@@ -680,8 +682,8 @@ each job its share by how long each test last took (`e2e/durations.json`; a test
 counts as the median), and the job runs it with `--test-list`. After adding tests or making them
 much slower or quicker, time them one at a time as CI runs them and keep the times:
 `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`, then
-`npm run e2e:durations -- report.json`. CI runs for each pull request, and for main as each is
-merged; lint and the unit tests are a job of their own.
+`npm run e2e:durations -- report.json`. CI runs for each pull request, and not again for main
+once it's merged (contribution.md, section 2); lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
 `pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds
