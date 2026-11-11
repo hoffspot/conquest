@@ -26,6 +26,27 @@ export const CHUNKS = WORLD_SIZE / CHUNK;
 const PLANNED = new Map();
 const KEPT = 4;
 
+// Somewhere plans are kept besides (keepPlans), or null: the game keeps them nowhere else
+let kept = null;
+
+/**
+ * Keep the plans laid out somewhere that outlasts this copy of the game's code, for planWorld to
+ * ask before it lays one out: `store` is { get(seed) (what was put for it, or null), put(seed,
+ * laid) }, or null for nowhere. What's put is { plan, land }: the plan as layOutWorld made it,
+ * and the land its waters were worked out on (the land as it was settled, with nothing standing
+ * on it yet: settle.js), so that one taken back is given the same waters. Both are plain data
+ * sharing their arrays: kept together, they still do when they're given back. Whoever keeps them
+ * answers for giving back only what layOutWorld would make now (the unit tests keep them on disk
+ * between their processes, by the planner's code: test/plan-cache.js). Returns the one before.
+ */
+export function keepPlans(store) {
+    const before = kept;
+
+    kept = store;
+
+    return before;
+}
+
 function freeze(value) {
     if (value && typeof value === "object" && !ArrayBuffer.isView(value) && !Object.isFrozen(value)) {
         Object.freeze(value);
@@ -56,7 +77,23 @@ function freeze(value) {
  * }
  */
 export function planWorld(seed) {
-    const plan = PLANNED.get(seed) ?? freeze(layOutWorld(seed));
+    let plan = PLANNED.get(seed);
+
+    if (!plan) {
+        const had = kept?.get(seed) ?? null;
+
+        if (had) {
+            // (Its waters the land's as it was settled, as layOutWorld gives them: made from the
+            // plan itself they'd be worked out on the land with Bellhaven's crag set into it)
+            plan = had.plan;
+            watersOf(plan, watersOf(had.land));
+        } else {
+            plan = layOutWorld(seed);
+            kept?.put(seed, { plan, land: watersOf(plan).plan });
+        }
+
+        freeze(plan);
+    }
 
     // (The most recently asked for kept last, the longest unasked for let go)
     PLANNED.delete(seed);

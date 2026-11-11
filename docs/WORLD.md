@@ -10,7 +10,12 @@ The plan is pure data: typed arrays and plain objects, with no DOM or Three.js. 
 Node for the tests, and later in a worker. Laying one out takes about a second, so it's laid out
 once for a seed (`planWorld`): the few most recently asked for are kept and shared, frozen so
 nothing can change one for everyone else (`layOutWorld` lays one out afresh). Going back into a
-world, or a test building it again, it's there at once.
+world, or a test building it again, it's there at once. The unit tests, each file in a process of
+its own, keep them on disk between processes as well (`keepPlans`; `test/plan-cache.js`, each
+plan by its seed and a hash of the planner's code, so none outlives a change to it). What's kept
+is the plan and the land its waters were worked out on: its rivers' surfaces are those of the
+land as it was settled, before Bellhaven's crag was set into it, and a plan taken back is given
+the same.
 
 See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` and open
 <http://localhost:8080/world-map.html>). Try `?seed=12&race=orc` to choose the world and the start.
