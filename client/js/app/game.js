@@ -122,7 +122,7 @@ import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { FortAvatar, Forts } from "../world/forts3d.js";
 import { HellRifts, RiftThingAvatar } from "../world/hellrift3d.js";
-import { HELL_RIFT, hellFor, letterOf } from "../core/hellrift.js";
+import { HELL_RIFT, hellFor, letterOf, RIFT_DEMONS, RIFT_GUARDS } from "../core/hellrift.js";
 import { EngineAvatar } from "../world/siege3d.js";
 import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
@@ -678,6 +678,11 @@ const KEEP_MODELS = 2000;
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
 const MODELLING = 2;
+
+// How far past an open hell rift's land the player may be (metres) for the models of the demons it
+// pours out and its warden to be asked for and kept (#modelsOfRift): read before the first of them
+// is met, so it's drawn from its model, not its stand-in
+const RIFT_MODELS = 250;
 
 // How near a place's way in the player must be (metres, out in the world) for the models of the
 // creatures in it to be fetched, not read (beasts/model.js fetchModel), so they're kept by the time
@@ -5024,7 +5029,11 @@ export class Game {
     // fighting the player first, then the nearest the camera (those on another map last); the rest
     // drawn in their kind's crowd, their body in full let go (or not built at all), and built in
     // full again once there's room for them. A dungeon's level, put out at once, had seventy-two
-    // bodies held on an iPhone, which let the game's tab go (the crash report of 2026-10-14). A
+    // bodies held on an iPhone, which let the game's tab go (the crash report of 2026-10-14). Those
+    // drawn from their kind's bought model, once it's read, held in full in a room of their own
+    // beside the budget (QUALITY models), the first of them so: a copy of a model shares its shapes
+    // and pictures with every other of its kind, its skeleton and colours its own, where a
+    // character's body has skins of its own painted; past it, in the budget with the rest. A
     // couple of times a second (MARSHAL.every)
     #rationing(dt) {
         if ((this.rationClock = (this.rationClock ?? 0) - dt) > 0) {
@@ -5046,8 +5055,16 @@ export class Game {
         // bodies shared, each one small)
         const room = Math.max(this.view.quality.soldiers?.full ?? 0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
         const crowded = (id) => this.avatars.get(id) instanceof CrowdAvatar;
+        // (Those drawn from their kind's model, read, as many as there's room for beside the budget;
+        // not one drawn still as its stand-in, a character built before the model was read: it's in
+        // the budget till it's drawn again from the model, #modelling)
+        const modelled = (actor) => Boolean(MODELS[actor.wild.creature] && modelOf(actor.wild.creature)) && !(this.avatars.get(actor.id) instanceof Avatar);
+        const spare = this.view.quality.models ?? 0;
+        const beside = Math.min(spare, rationed.filter(modelled).length);
 
-        if (rationed.length <= room && !rationed.some(({ id }) => crowded(id)) && !this.rationWaiting.size) {
+        this.rationed = { rationed: rationed.length, room, models: beside };
+
+        if (rationed.length - beside <= room && !rationed.some(({ id }) => crowded(id)) && !this.rationWaiting.size) {
             return;
         }
 
@@ -5055,11 +5072,13 @@ export class Game {
         const ranked = rationed
             .map((actor) => [actor.map === me.map ? this.#awayFromCamera(actor) - (fighting(actor) ? DRAW_REACH : 0) : Infinity, actor])
             .sort((a, b) => a[0] - b[0]);
+        // (Each one's place in the budget's room, in order, but those in the models' own, -1)
+        let [models, next] = [0, 0];
+        const placed = ranked.map(([, actor]) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
 
-        this.rationed = { rationed: rationed.length, room };
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
-        ranked.forEach(([, actor], place) => {
+        placed.forEach(([actor, place]) => {
             const avatar = this.avatars.get(actor.id);
 
             // (With room: in full, built so if it's in its crowd, the crowd in its place till it is)
@@ -5100,7 +5119,7 @@ export class Game {
 
         // (Those waiting on a figure that couldn't be made, built in full after all; those gone,
         // dead (never drawn) or drawn, forgotten; those with room now, built in full)
-        const places = new Map(ranked.map(([, actor], place) => [actor.id, place]));
+        const places = new Map(placed.map(([actor, place]) => [actor.id, place]));
 
         for (const id of this.rationWaiting) {
             const actor = this.battle.actor(id);
@@ -5344,7 +5363,7 @@ export class Game {
         if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
             this.modelClock = MODELLING;
 
-            for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()])) {
+            for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere(), ...this.#modelsOfRift()])) {
                 wantModel(kind);
             }
 
@@ -5441,6 +5460,19 @@ export class Game {
         return actor?.map === "town" && this.world.plan ? modelsMet(this.world.plan, [actor.x, actor.y], this.world.start?.at ?? [0, 0], torchesLit(elapsedOf(this.host.war))) : [];
     }
 
+    // The kinds an open hell rift near the player pours out and guards its altar with
+    // (core/hellrift.js RIFT_DEMONS, RIFT_GUARDS' warden), drawn from a model (RIFT_MODELS)
+    #modelsOfRift() {
+        const open = this.host?.hellRifts?.open;
+        const actor = this.battle.actor(this.me);
+
+        if (!open || actor?.map !== "town" || Math.hypot(open.at[0] - actor.x, open.at[1] - actor.y) > HELL_RIFT.radius + RIFT_MODELS) {
+            return [];
+        }
+
+        return [...RIFT_DEMONS.map(({ creature }) => creature), RIFT_GUARDS.warden].filter((kind) => MODELS[kind]);
+    }
+
     // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
     // (FORGET_EVERY); and the models none has been drawn from for a while, but those whose lairs
     // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
@@ -5457,7 +5489,7 @@ export class Game {
 
         const me = this.avatars.get(this.me)?.object.position;
 
-        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout()] : [], this.#modelsInside());
+        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
