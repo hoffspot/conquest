@@ -1502,8 +1502,9 @@ player first*).
   (battle.js `formation` `charge`: an invasion's, *Invasions* below) runs on to where it's going
   whoever of it is fighting, each of it running with it (at its chase), and stops charging once
   it's there. A player in among them has at
-  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`); the rest fight the
-  player's own.
+  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`), and whoever they've
+  struck besides: the cap holds back only those they haven't (docs/GAME.md *The player first*);
+  the rest fight the player's own.
 
 **Tried** (a field battle on open ground, `test/formation.test.js` and play-testing): 50 a side
 fight to the last few in under two minutes; 200 a side take longer, as a Total War battle
@@ -3745,6 +3746,13 @@ say what they'd want and stay where they are.
   too (someone's after them, or they're after someone), when they fight on where they are. One
   told to wait stays where they were told;
 - they go after any enemy of their leader's they can see within 12 steps of them;
+- **their leader down, or on another floor, they defend themselves** (the owner: "a follower
+  whose leader is down or on another floor defends itself"): they strike back at whoever they
+  can see that's on them (set on them, or striking at them), has struck them in the last 10
+  seconds (`DEFEND_MS`), or struck their leader in the 10 seconds before they fell beside them;
+  a mage with their spells, as ever. With no one to strike back at they hold where they are:
+  they don't go looking for a fight, nor walk on. (Before, they did nothing at all, not even
+  when struck.)
 - through a door or up the stairs, they come out beside their leader;
 - they stand with their leader against the wild, and as their people stand with the others;
 - what they bring down counts for their leader: its loot is theirs, and it counts towards their

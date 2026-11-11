@@ -5,12 +5,13 @@
 // played two minutes, a fight in it, is kept and carried on, and every field of the host, the
 // battle and each character must come back as it was, or be listed here with why it needn't.
 // The same of a copy set right in place (Host.adopt), its rare encounters too. And how each
-// character is kept (core/keptactor.js): without what it has as one just added has it.
+// character is kept (core/keptactor.js): without what it has as one just made has it, the battle
+// making it whole again (battle.js restore, #made), of the one shape every character is.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { Battle, KINDS, STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, SNAPSHOT_VERSION } from "../client/js/core/host.js";
-import { ACTOR_DEFAULTS, ACTOR_FIELDS, keptOf, spareActor, wholeActor } from "../client/js/core/keptactor.js";
+import { ACTOR_DEFAULTS, keptOf, spareActor, spareBattle } from "../client/js/core/keptactor.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
@@ -220,7 +221,7 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
         assert.equal(JSON.stringify(one.snapshot().travel).includes("guest-1"), false);
     });
 
-    it("keeps each character without what it has as one just added has it, and reads it back whole", () => {
+    it("keeps each character without what it has as one just made has it, and the battle reads it back whole, of the one shape every character is", () => {
         const whole = host.battle.snapshot();
         const kept = host.snapshot().battle;
         const text = { whole: encode(whole.actors), kept: encode(kept.actors) };
@@ -229,22 +230,32 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
         assert.equal(kept.actors.length, whole.actors.length);
 
         for (const [index, actor] of whole.actors.entries()) {
-            const back = wholeActor(decode(encode(spareActor(actor))));
+            // (As the world's snapshot has it, made straight from the battle's own: what's left
+            // of the battle's own snapshot of it, in the same order)
+            assert.deepEqual(kept.actors[index], spareActor(actor), actor.id);
+            assert.deepEqual(Object.keys(kept.actors[index]), Object.keys(spareActor(actor)), actor.id);
+            assert.deepEqual(keptOf(host.battle.actors[index]), kept.actors[index], actor.id);
+            // (Nothing that isn't there kept as if it were: what a character's only made with)
+            assert.ok(Object.values(kept.actors[index]).every((value) => value !== undefined), actor.id);
+        }
 
-            assert.deepEqual(back, actor, actor.id);
-            // (Laid out as it was: the fields every character has in the same order, the rest after)
-            assert.deepEqual(
-                Object.keys(back).filter((key) => ACTOR_FIELDS.includes(key)),
-                Object.keys(actor).filter((key) => ACTOR_FIELDS.includes(key)),
-                actor.id,
-            );
-            // (One kept whole, as an older version kept it, reads the same)
-            assert.deepEqual(wholeActor(decode(encode(actor))), actor, actor.id);
-            // (As the world's snapshot has it, made straight from the battle's own: the same, in
-            // the same order, and none of it the battle's own to be changed with it)
-            assert.deepEqual(kept.actors[index], spareActor(actor));
-            assert.deepEqual(Object.keys(kept.actors[index]), Object.keys(spareActor(actor)));
-            assert.deepEqual(keptOf(host.battle.actors[index]), kept.actors[index]);
+        // Carried on from what's kept, as text and back; from the battle's own snapshot, whole
+        // (as an older version kept a world); and from that spared (as SNAPSHOT_STEPS brings one
+        // forward): each the battle as it was, every character with every field as it had it
+        const world = buildWorld({ seed: 2 });
+        const shape = Object.keys(host.battle.actors[0]).join();
+
+        for (const [how, from] of [["kept", kept], ["whole", whole], ["whole, then spared", spareBattle(whole)]]) {
+            const back = Battle.restore(world, decode(encode(from)));
+
+            assert.deepEqual(back.snapshot(), whole, how);
+            assert.deepEqual(back.snapshot({ keep: keptOf }), kept, how);
+
+            // (And laid out as it was: one shape, the battle's own, whatever was left out)
+            for (const [index, actor] of back.actors.entries()) {
+                assert.equal(Object.keys(actor).join(), shape, `${how}: ${actor.id}`);
+                assert.equal(Object.keys(host.battle.actors[index]).join(), shape, actor.id);
+            }
         }
 
         // (Nothing of the battle's own in it: a snapshot changed changes no one)
@@ -255,41 +266,53 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
         snapped.spawn[0] += 100;
         assert.notEqual(live.path[0][0], snapped.path[0][0]);
         assert.notEqual(live.spawn[0], snapped.spawn[0]);
-        assert.equal(host.battle.actors.length, whole.actors.length, "the battle has its characters still");
 
-        // (Half the text and less; and scarcely a number JSON can't carry left in it, so whoever
-        // reads it needn't go through it: core/wire.js decode)
+        // (Half the text and less, 1 KB a character and less; and scarcely a number JSON can't
+        // carry left in it, so whoever reads it needn't go through it: core/wire.js decode)
         assert.ok(text.kept.length < text.whole.length * 0.5, `${text.kept.length} characters of text kept, ${text.whole.length} whole`);
+        assert.ok(text.kept.length / kept.actors.length < 1024, `${Math.round(text.kept.length / kept.actors.length)} characters a character`);
         assert.ok(text.kept.split('"$"').length < text.whole.split('"$"').length / 4, "few marks left");
     });
 
-    it("leaves out only fields every character has from the moment it's added, in the battle's own order (battle.js add)", () => {
+    it("leaves out only what the battle makes every character with, of whatever kind, given nothing else (battle.js #made): so what's left out comes back as it was", () => {
         const world = buildWorld({ seed: 2 });
-        const fresh = new Host(world, { populate: false });
+        const battle = new Battle(world, { seed: 2 });
 
-        fresh.join({ id: HOST_PLAYER, hero: { name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false } });
-        fresh.populate();
+        // (One of each kind, made with nothing but who and where it is, as restore makes one
+        // before it puts on what was kept: each field left out must be just what it's made with)
+        for (const kind of Object.keys(KINDS)) {
+            const made = battle.add({ id: `a ${kind}`, kind, team: "x", square: [5362, 6638] });
 
-        const added = fresh.battle.add({ id: "just-added", kind: "player", team: "x", square: fresh.battle.actor(HOST_PLAYER).square });
-
-        // (A field in ACTOR_DEFAULTS that only some characters had would come back on the rest)
-        for (const actor of [...host.battle.actors, ...fresh.battle.actors]) {
-            for (const key of Object.keys(ACTOR_DEFAULTS)) {
-                assert.ok(Object.hasOwn(actor, key), `${actor.id} has no ${key}: take it out of ACTOR_DEFAULTS`);
+            for (const [key, usual] of Object.entries(ACTOR_DEFAULTS)) {
+                assert.ok(Object.hasOwn(made, key), `${kind} has no ${key}: take it out of ACTOR_DEFAULTS`);
+                assert.deepEqual(made[key], usual, `a ${kind} just made has ${key} as ACTOR_DEFAULTS has it`);
             }
         }
 
-        // (As one just added has them: add a new field to ACTOR_FIELDS where battle.js add has it,
-        // and to ACTOR_DEFAULTS if every character's made with it)
+        // (So one just made is kept as very little: who, what and where it is, and its kind's own)
         assert.deepEqual(
-            Object.keys(added).filter((key) => key !== "restVariety" && key !== "chance"),
-            [...ACTOR_FIELDS],
+            Object.keys(spareActor(battle.snapshot().actors.find(({ kind }) => kind === "player"))).sort(),
+            ["chance", "chaseSpeed", "hp", "id", "kind", "map", "maxHp", "maxStamina", "name", "pace", "respawnMs", "restVariety", "spawn", "spawnMap", "speed", "square", "stamina", "team", "walkPace", "x", "y"].sort(),
         );
 
-        for (const [key, usual] of Object.entries(ACTOR_DEFAULTS)) {
-            assert.deepEqual(added[key], usual, `a character just added has ${key} as ACTOR_DEFAULTS has it`);
+        // (And every character of the played world has every one of them)
+        for (const actor of host.battle.actors) {
+            for (const key of Object.keys(ACTOR_DEFAULTS)) {
+                assert.ok(Object.hasOwn(actor, key), `${actor.id} has no ${key}`);
+            }
         }
 
-        assert.deepEqual(Object.keys(spareActor(fresh.battle.snapshot().actors.at(-1))).sort(), ["chance", "chaseSpeed", "hp", "id", "kind", "map", "maxHp", "maxStamina", "name", "pace", "respawnMs", "restVariety", "spawn", "spawnMap", "speed", "square", "stamina", "team", "walkPace", "x", "y"].sort());
+        // One whose attacks aren't its weapon's own keeps them; one whose are has them made again
+        const archer = battle.add({ id: "archer", kind: "folk", team: "x", weapon: "bow", square: [5362, 6638], formation: { id: "line", slot: [0, 0], role: "archer" } });
+
+        assert.equal(Object.hasOwn(spareActor(battle.snapshot().actors.at(-1)), "arms"), false);
+        archer.arms = archer.arms.slice(1);
+        assert.equal(Object.hasOwn(spareActor(battle.snapshot().actors.at(-1)), "arms"), true);
+        archer.arms = [archer.arms[0], ...archer.arms];
+
+        const back = Battle.restore(world, decode(encode(battle.snapshot({ keep: keptOf }))));
+
+        assert.deepEqual(back.snapshot(), battle.snapshot());
+        assert.equal(back.actor("archer").arms.length, archer.arms.length);
     });
 });

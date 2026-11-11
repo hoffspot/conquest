@@ -58,7 +58,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
-import { keptOf, spareBattle, wholeBattle } from "./keptactor.js";
+import { keptOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -916,7 +916,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // director had counted the rare encounters' clock (#caches: from now), and when the Order's
     // court last warned each player off (#courtsAbout: not yet). Nothing left of players gone:
     // the way they'd walked (`travel`), and word of a messenger too old to hold the next back.
-    // And each character kept without what it has as one just added has it (core/keptactor.js)
+    // And each character kept without what it has as one just added has it (core/keptactor.js);
+    // and how far each shot in the air has flown (battle.js SHOT_FLIES: no way yet, so one let go
+    // before shots gave up flies on as far again as it may)
     52: (snapshot) => {
         const here = new Set(snapshot.players.map(({ id }) => id));
 
@@ -928,7 +930,7 @@ export const SNAPSHOT_STEPS = Object.freeze({
             courtWarned: [],
             travel: (snapshot.travel ?? []).filter(([id]) => here.has(id)),
             ...(snapshot.messengersHeard ? { messengersHeard: snapshot.messengersHeard.filter(([id, at]) => here.has(id) || snapshot.battle.time - at < MESSENGER_EVERY) } : {}),
-            battle: spareBattle(snapshot.battle),
+            battle: { ...spareBattle(snapshot.battle), projectiles: (snapshot.battle.projectiles ?? []).map((projectile) => ({ flown: 0, ...projectile })) },
         };
     },
 });
@@ -3143,7 +3145,8 @@ export class Host {
             messengersAt: this.messengersAt ?? 0,
             rareLooked: this.rareLooked ?? null,
             courtWarned: [...this.courtWarned.entries()],
-            battle: this.#battleKept(),
+            // (Each character without what it has as one just made has it: core/keptactor.js)
+            battle: this.battle.snapshot({ keep: keptOf }),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
@@ -3216,29 +3219,6 @@ export class Host {
             done: structuredClone(this.done),
             legends: this.legends.toJSON(),
         };
-    }
-
-    // The battle as a snapshot keeps it: the battle's own snapshot of itself (battle.js), but each
-    // of its characters without what it has as one just added has it (core/keptactor.js), made
-    // straight from the battle's own. Left to the battle, each would be copied whole, 120 fields,
-    // for two thirds of them to be left out again: so it's asked for the rest of itself with none
-    // of its characters, for that moment, and they're kept here
-    #battleKept() {
-        const { battle } = this;
-        const { actors } = battle;
-        let kept;
-
-        battle.actors = [];
-
-        try {
-            kept = battle.snapshot();
-        } finally {
-            battle.actors = actors;
-        }
-
-        kept.actors = actors.map(keptOf);
-
-        return kept;
     }
 
     /**
@@ -3349,7 +3329,7 @@ export class Host {
         host.messengersAt = snapshot.messengersAt ?? 0;
         host.rareLooked = snapshot.rareLooked ?? null;
         host.courtWarned = new Map(snapshot.courtWarned ?? []);
-        host.battle = Battle.restore(world, wholeBattle(snapshot.battle), { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;

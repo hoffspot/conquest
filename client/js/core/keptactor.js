@@ -1,142 +1,33 @@
 // A character of the battle as a snapshot keeps it (core/host.js snapshot, SNAPSHOT_VERSION 53):
-// only what isn't as a character just added has it. A character has some 120 fields, and at any
-// moment most of them say nothing: no target, no order, no spell being cast, never yet in a fight.
-// Kept whole, each took about 2 KB of a snapshot's text, half of it those; and its "never yet"s
-// (-Infinity, which JSON can't carry: core/wire.js) were the only marks in most snapshots, which
-// is what whoever reads one has to go through it for.
+// only what isn't as a character just made has it. A character has some 120 fields it's always
+// made with, and at any moment most of them say nothing: no target, no order, no spell being
+// cast, never yet in a fight. Kept whole, each took about 2 KB of a snapshot's text, half of it
+// those; and its "never yet"s (-Infinity, which JSON can't carry: core/wire.js) were the only
+// marks in most snapshots, which is what whoever reads one has to go through it for.
 //
-// So a field in ACTOR_DEFAULTS is left out while it has that value, and put back when the snapshot
-// is read; and a character's attacks (`arms`) are left out while they're its weapon's own, as the
-// battle makes them (battle.js armsIn), and made again from its weapon. Anything else is kept as
-// it is, so a field this file has never heard of is kept whole: nothing is lost by its being
-// out of date, only bytes. A snapshot kept whole (an older version's) reads the same way.
+// So a field in ACTOR_DEFAULTS is left out while it has that value; and a character's attacks
+// (`arms`) are left out while they're its weapon's own, as the battle makes them (battle.js
+// armsIn). Anything else it's been given is kept as it is, so a field this file has never heard
+// of is kept whole: nothing is lost by its being out of date, only bytes. (What a character's
+// only made with and never was given, the battle's OPTIONAL, undefined, isn't kept at all: text
+// can't hold it.)
 //
-// What must hold, and test/snapshot-fields.test.js checks: every field in ACTOR_DEFAULTS is one every
-// character has from the moment it's added (battle.js add). One that only some had would come
-// back on those that never had it.
+// The battle makes a character whole again, not this file: Battle.restore makes each as add makes
+// one (#made), which is every field at just these defaults, and puts what was kept on it; one
+// whose attacks weren't kept has its weapon's. So a snapshot kept whole (an older version's)
+// reads the same way, and every character carried on is of the one shape every character is.
+//
+// What must hold, and test/snapshot-fields.test.js checks: every field in ACTOR_DEFAULTS is one
+// the battle makes every character with, at that value given nothing else (battle.js #made). One
+// it made otherwise would come back as it makes it, not as it was.
 //
 // Pure: no DOM, no network.
 
-import { armsOf, KNIFE } from "./weapons.js";
+import { armsIn } from "./battle.js";
 
 /**
- * The fields every character has, in the order the battle makes one with them (battle.js add): a
- * character read back from a snapshot has these in this order, then any others as they were kept
- * (those only some have: `wards`, `tactic`, `keep`, `lone`, `sight`, and what the host and the
- * battle put on later), so it's laid out as the one it was kept from is.
- */
-export const ACTOR_FIELDS = Object.freeze([
-    "id",
-    "kind",
-    "name",
-    "weapon",
-    "boots",
-    "arms",
-    "armed",
-    "drawing",
-    "foughtAt",
-    "team",
-    "ai",
-    "patrol",
-    "leash",
-    "leader",
-    "assist",
-    "post",
-    "foes",
-    "struckBy",
-    "enmity",
-    "taunted",
-    "power",
-    "armor",
-    "empowered",
-    "shield",
-    "map",
-    "spawnMap",
-    "crossed",
-    "hp",
-    "maxHp",
-    "stamina",
-    "maxStamina",
-    "speed",
-    "chaseSpeed",
-    "respawnMs",
-    "spawn",
-    "x",
-    "y",
-    "square",
-    "path",
-    "offPath",
-    "aside",
-    "progress",
-    "squeezeUntil",
-    "pace",
-    "walkPace",
-    "running",
-    "facing",
-    "neutral",
-    "routine",
-    "role",
-    "side",
-    "afraid",
-    "calmAt",
-    "lookAt",
-    "reseat",
-    "stop",
-    "arrived",
-    "stopSince",
-    "restAt",
-    "restingUntil",
-    "beckoned",
-    "sawPlayerAt",
-    "beckoningUntil",
-    "talkingTo",
-    "order",
-    "lock",
-    "striking",
-    "attack",
-    "readyAt",
-    "staggeredUntil",
-    "stunnedUntil",
-    "downUntil",
-    "casting",
-    "spellReadyAt",
-    "spellsReadyAt",
-    "prism",
-    "dead",
-    "respawnAt",
-    "rises",
-    "downed",
-    "dodge",
-    "afflictions",
-    "footprint",
-    "engine",
-    "buffs",
-    "spared",
-    "feared",
-    "seeing",
-    "target",
-    "lastSeen",
-    "lastPathAt",
-    "pathGoal",
-    "blockedSince",
-    "patrolIndex",
-    "waitUntil",
-    "wild",
-    "waryUntil",
-    "aloft",
-    "hoverAt",
-    "mount",
-    "lurking",
-    "droppedAt",
-    "formation",
-    "rethinkAt",
-    "casts",
-    "heals",
-]);
-
-/**
- * What a character just added has in each field left out of a snapshot while it has it (battle.js
- * add: what it's made with, given nothing else). Every one of them a field every character has.
+ * What a character just made has in each field left out of a snapshot while it has it (battle.js
+ * #made: what it's made with, given nothing else).
  */
 export const ACTOR_DEFAULTS = Object.freeze({
     weapon: null,
@@ -246,12 +137,9 @@ function alike(a, b) {
     return keys.length === Object.keys(b).length && keys.every((key) => Object.hasOwn(b, key) && alike(a[key], b[key]));
 }
 
-// Each default by its field's name (none of them undefined: no default, by that), the fields
-// every character has with theirs, in order, and those fields' names, for looking up quickly:
-// a snapshot's taken on the world's own thread, of every character in it
+// Each default by its field's name (none of them undefined: no default, by that), for looking up
+// quickly: a snapshot's taken on the world's own thread, of every character in it
 const USUAL = new Map(Object.entries(ACTOR_DEFAULTS));
-const LAID = ACTOR_FIELDS.map((key) => ({ key, defaulted: USUAL.has(key), usual: USUAL.get(key) }));
-const KNOWN = new Set(ACTOR_FIELDS);
 
 // Whether a field's value is its default, where that's a list or a table (an empty one, or the
 // same in every part)
@@ -263,20 +151,10 @@ function unchanged(value, usual) {
     return Array.isArray(usual) ? Array.isArray(value) && value.length === 0 : !Array.isArray(value) && alike(value, usual);
 }
 
-// A default of a character's own (a list or a table isn't shared between them)
-const fresh = (usual) => (usual === null || typeof usual !== "object" ? usual : Array.isArray(usual) ? [] : { ...usual });
-
-/** A character's attacks as the battle makes them from its weapon (battle.js armsIn): an archer's or a caster's in a line, its knife first. */
-export function armsFor({ weapon, boots, formation }) {
-    const arms = armsOf(weapon, boots);
-
-    return formation?.role === "archer" || formation?.role === "caster" ? [KNIFE, ...arms] : arms;
-}
-
 /**
- * A character as a snapshot has it whole (battle.js snapshot's), as it's kept: without each
- * field that's at its default, and without its attacks if they're its weapon's own. A new object;
- * what it holds is the character's own.
+ * A character as a snapshot has it whole (battle.js snapshot's: all it's been given), as it's
+ * kept: without each field that's at its default, and without its attacks if they're its
+ * weapon's own. A new object; what it holds is the character's own.
  */
 export function spareActor(actor) {
     const kept = {};
@@ -285,8 +163,12 @@ export function spareActor(actor) {
         const value = actor[key];
         const usual = USUAL.get(key);
 
+        if (value === undefined) {
+            continue;
+        }
+
         if (usual === undefined) {
-            if (key !== "arms" || !alike(value, armsFor(actor))) {
+            if (key !== "arms" || !alike(value, armsIn(actor.weapon, actor.boots, actor.formation))) {
                 kept[key] = value;
             }
         } else if (value !== usual && (usual === null || typeof usual !== "object" || !unchanged(value, usual))) {
@@ -295,39 +177,6 @@ export function spareActor(actor) {
     }
 
     return kept;
-}
-
-/**
- * A character as it's kept (spareActor's, or one kept whole), whole again: each field left out
- * back at its default, its attacks its weapon's own if they were left out (the weapon's very
- * lists: Battle.restore, which this is for, copies all it's given), its fields in the order the
- * battle makes a character with them (ACTOR_FIELDS), then any others as they were kept.
- */
-export function wholeActor(kept) {
-    const actor = {};
-
-    for (const { key, defaulted, usual } of LAID) {
-        if (key in kept) {
-            actor[key] = kept[key];
-        } else if (defaulted) {
-            actor[key] = fresh(usual);
-        } else if (key === "arms") {
-            // (Its place among its fields held, till its weapon, boots and place in a line are read: below)
-            actor.arms = null;
-        }
-    }
-
-    for (const key in kept) {
-        if (!KNOWN.has(key)) {
-            actor[key] = kept[key];
-        }
-    }
-
-    if (!("arms" in kept)) {
-        actor.arms = armsFor(actor);
-    }
-
-    return actor;
 }
 
 // Plain data copied (numbers, strings, lists and tables, however deep); anything else, as the
@@ -364,24 +213,25 @@ function copied(value) {
 
 /**
  * One of the battle's own characters as a snapshot keeps it: what spareActor makes of the battle's
- * snapshot of it (battle.js snapshot: a copy of it whole, its dice as their state and its rests'
- * variety as what it remembers), made straight from the character, so only what's kept is copied.
- * A character has 120 fields and two thirds of them are left out: copied whole first, a snapshot
- * of the battle took six times as long.
+ * own snapshot of it (a copy of all it's been given, its dice as their state and its rests'
+ * variety as what it remembers), made straight from the character, so only what's kept is copied
+ * (Battle.snapshot's `keep`, as the host takes a snapshot). Two thirds of what a character's been
+ * given is left out: copied whole first, a snapshot of the battle took four times as long.
  */
 export function keptOf(actor) {
     const kept = {};
 
     for (const key in actor) {
-        if (key === "chance" || key === "restVariety") {
+        const value = actor[key];
+
+        if (value === undefined || key === "chance" || key === "restVariety") {
             continue;
         }
 
-        const value = actor[key];
         const usual = USUAL.get(key);
 
         if (usual === undefined) {
-            if (key !== "arms" || !alike(value, armsFor(actor))) {
+            if (key !== "arms" || !alike(value, armsIn(actor.weapon, actor.boots, actor.formation))) {
                 kept[key] = copied(value);
             }
         } else if (value !== usual && (usual === null || typeof usual !== "object" || !unchanged(value, usual))) {
@@ -395,12 +245,10 @@ export function keptOf(actor) {
     return kept;
 }
 
-/** A battle's snapshot (battle.js snapshot's) with each of its characters as it's kept (spareActor). */
+/**
+ * A battle's snapshot kept whole (battle.js snapshot's, or an older version's) with each of its
+ * characters as it's kept now (spareActor).
+ */
 export function spareBattle(battle) {
     return { ...battle, actors: battle.actors.map(spareActor) };
-}
-
-/** A battle's snapshot as it's kept, whole again for the battle to carry on from (Battle.restore). */
-export function wholeBattle(battle) {
-    return { ...battle, actors: battle.actors.map(wholeActor) };
 }

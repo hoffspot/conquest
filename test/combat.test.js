@@ -292,7 +292,8 @@ describe("the battle (battle.js)", () => {
         const away = events.find((event) => event.type === "draw" && event.id === "player");
 
         assert.equal(away?.on, false);
-        assert.ok(away.time >= gone + SHEATHE_AFTER_MS - STEP_MS && away.time <= gone + SHEATHE_AFTER_MS + 2 * STEP_MS, String(away.time - gone));
+        // (In its own step of the five, set on no one: up to a quarter second after, RETHINK_MS)
+        assert.ok(away.time >= gone + SHEATHE_AFTER_MS - STEP_MS && away.time <= gone + SHEATHE_AFTER_MS + 2 * STEP_MS + 250, String(away.time - gone));
         assert.ok(!battle.actor("player").armed && !battle.actor("player").drawing);
     });
 
