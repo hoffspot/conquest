@@ -58,6 +58,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
+import { spareBattle, wholeBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -910,6 +911,26 @@ export const SNAPSHOT_STEPS = Object.freeze({
     50: (snapshot) => ({ ...snapshot, version: 51, ...(snapshot.messengers ? { messengers: snapshot.messengers.map(([id, one]) => [id, { ...one, found: one.found ?? one.since, arrived: one.arrived ?? one.state !== "coming" }]) } : {}) }),
     // 52: the hell rifts (core/hellrift.js, Host #hellRifts): none yet
     51: (snapshot) => ({ ...snapshot, version: 52, hellRifts: { last: -1, open: null, next: 1 } }),
+    // 53: three clocks a world carried on from a snapshot began afresh, and so does this one: when
+    // the war's messengers are next looked to (Host #sendMessengers: at once), how far the wilds
+    // director had counted the rare encounters' clock (#caches: from now), and when the Order's
+    // court last warned each player off (#courtsAbout: not yet). Nothing left of players gone:
+    // the way they'd walked (`travel`), and word of a messenger too old to hold the next back.
+    // And each character kept without what it has as one just added has it (core/keptactor.js)
+    52: (snapshot) => {
+        const here = new Set(snapshot.players.map(({ id }) => id));
+
+        return {
+            ...snapshot,
+            version: 53,
+            messengersAt: 0,
+            rareLooked: null,
+            courtWarned: [],
+            travel: (snapshot.travel ?? []).filter(([id]) => here.has(id)),
+            ...(snapshot.messengersHeard ? { messengersHeard: snapshot.messengersHeard.filter(([id, at]) => here.has(id) || snapshot.battle.time - at < MESSENGER_EVERY) } : {}),
+            battle: spareBattle(snapshot.battle),
+        };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1963,6 +1984,20 @@ export class Host {
 
         this.battle.remove(id);
         this.players.delete(id);
+
+        // (Nothing of theirs left behind, in the world or in every snapshot of it after: the way
+        // they'd walked across the wilds, when the Order's court last warned them off, and, of
+        // anyone gone, word of a messenger too old to hold their next back. One newer is kept
+        // till it is, or coming back in would bring them a messenger before their half hour's up)
+        this.travel.delete(id);
+        this.courtWarned.delete(id);
+
+        for (const [one, at] of [...this.messengersHeard]) {
+            if (!this.players.has(one) && this.battle.time - at >= MESSENGER_EVERY) {
+                this.messengersHeard.delete(one);
+            }
+        }
+
         this.#event("leave", { id, name: player.hero.name });
 
         // (Everyone left resting, waiting on them: their time passed now)
@@ -3100,7 +3135,14 @@ export class Host {
             made: [...(this.world.interiors?.order ?? [])],
             open: [...this.open.keys()],
             lookAt: this.lookAt,
-            battle: this.battle.snapshot(),
+            // (Its clocks that aren't the battle's: a copy made from this keeps them, or it would
+            // send its messengers, count the rare encounters' time and warn players off the
+            // Order's court at other steps than this world does, and go astray)
+            messengersAt: this.messengersAt ?? 0,
+            rareLooked: this.rareLooked ?? null,
+            courtWarned: [...this.courtWarned.entries()],
+            // (Each character without what it has as one just added has it: core/keptactor.js)
+            battle: spareBattle(this.battle.snapshot()),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
@@ -3278,7 +3320,12 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
+        // (Its rare encounters as the snapshot has them: a copy set right, adopt, had its own)
+        host.legends = new Legends(snapshot.legends);
+        host.messengersAt = snapshot.messengersAt ?? 0;
+        host.rareLooked = snapshot.rareLooked ?? null;
+        host.courtWarned = new Map(snapshot.courtWarned ?? []);
+        host.battle = Battle.restore(world, wholeBattle(snapshot.battle), { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
