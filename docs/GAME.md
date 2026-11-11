@@ -7187,12 +7187,24 @@ all of them in the frame the camera first turned round, and what the page lets g
 sent it kept till then. Now what's newly built is drawn once wherever the camera looks
 (`sendSoon`: each chunk's meshes as it's shown, each tile of its undergrowth, its buildings as
 they're merged, its rocks and its ground drawn again, a sign painted again; the start town's
-blocks, trees' shells and smoke, banners and lights): not culled for a frame, the graphics card
-throwing away what's out of view for the cost of its corners, once, then culled again as it was.
-No more than 2 MB of corners are let through a frame (`SEND_SOON`, a mesh with fewer counted a
-quarter of a megabyte for its pictures; `sendSome`, each frame before the view draws), so the
-land round the start, all built before the first frame, goes over the first second or so of
-play; what the camera does see meanwhile is sent as it always was.
+blocks, trees' shells and smoke, banners and lights), in a pass of its own after the frame's
+(`sendSome`, which the view calls each frame once it's drawn): the next of what's waiting put on
+a layer of its own with the lights the frame's camera sees (all of them, so three.js draws each
+with the shader it has for it and makes no other), culled by nothing, and drawn into no pixel at
+all (a scissor round none of them), so the picture's as the frame left it; the shadows aren't
+drawn again for it, and the renderer, the scene and the meshes are left as they were. It's a
+pass of its own, and not a frame in which they're simply not culled, so that none of it counts
+among what the frame draws (`renderer.info.render`, put back as the frame left it: the labs' and
+the browser tests' counts of draw calls and triangles are the frame's alone) and none of it is
+drawn into the sun's shadows. And it comes after the frame, not before: the frame has drawn the
+shadow maps its lit shaders read, and a map just made (the first frame's, a lamp's just set to
+cast) has nothing in it till then, which the graphics card refuses to draw with
+(`GL_INVALID_OPERATION`, the sampler's kind and the picture's at odds). No more than 2 MB of
+corners go a frame (`SEND_SOON`, a mesh with fewer counted a quarter of a megabyte for its
+pictures), so the land round the start, all built before the first frame, goes over the first
+second or so of play; what the camera does see meanwhile is sent as it always was and takes no
+turn, what's hidden (a tile of undergrowth not yet near, a chunk still being drawn) waits till
+it's shown, and `view.sentAhead` counts what's gone this way.
 
 **The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
 reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
@@ -7472,12 +7484,15 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
   has let go, and given back: the page loaded again, the title carrying on with the same
   character.
-- `test/sending.test.js`: what's newly built let through to the graphics card 2 MB a frame, in
-  the order it was built, each drawn once wherever the camera looks and culled again as it was; a
-  mesh with few corners, or none left on the page, counted a quarter of a megabyte; no turn for
-  one the camera saw meanwhile, one told what it was told before, one that's hidden waited for;
-  what's never culled, or seen by no ordinary camera, left alone. `test/chunks.test.js` also: all
-  of a chunk it's drawn sent over the frames after, and its ground again, drawn coarser.
+- `test/sending.test.js`: what's newly built drawn once in a pass of its own, 2 MB of it a frame
+  in the order it was built: nothing culled, alone with every light the frame's camera sees, into
+  no pixel, nothing cleared and the shadows not drawn again; the renderer, its count of what the
+  frame drew, the scene and the meshes as they were after, if the drawing throws too; a mesh with
+  few corners, or none left on the page, counted a quarter of a megabyte; no turn for one the
+  camera saw meanwhile, one told what it was told before, one that's hidden or in no scene yet
+  waited for, one in another scene left to it; what's never culled, or seen by no ordinary
+  camera, left alone. `test/chunks.test.js` also: all of a chunk it's drawn sent over the frames
+  after, each mesh once, and its ground again, drawn coarser.
 - `test/corners.test.js`: which way a corner faces in three bytes (a wall's, a floor's and a 45
   degree roof's exact, any other within a third of a degree and a thirtieth on average, never
   further than each side rounded on its own, a vector that isn't a unit long too); corners alike

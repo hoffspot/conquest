@@ -618,6 +618,9 @@ export class View {
         this.gpuTimer = new GpuTimer(this.renderer.getContext());
         this.timingGpu = false;
 
+        /** How many newly built meshes have been given to the graphics card before they were seen (sending.js). */
+        this.sentAhead = 0;
+
         this.scene = new THREE.Scene();
 
         // (Only what's shown has its place in the world worked out before it's drawn (#updateShown),
@@ -2251,9 +2254,6 @@ export class View {
             this.#cutAway(dt);
             this.sky.update(camera, now / 1000);
             WINDOW_LIGHT.value.z = (now / 1000) % 1000;
-            // (The next of what's newly built let through to the graphics card, wherever the
-            // camera looks: sending.js)
-            sendSome();
             this.#updateShown();
             lampShadowsDrawn(this);
         }
@@ -2277,6 +2277,10 @@ export class View {
 
         if (scene === this.scene) {
             this.#draw(camera);
+            // (The next of what's newly built given to the graphics card, wherever the camera
+            // looks: drawn once in a pass of its own, sending.js, which is none of what the frame
+            // draws and no pixel of its picture)
+            this.sentAhead += sendSome(this.renderer, scene, () => this.#lights());
         } else {
             this.renderer.render(scene, camera);
         }
