@@ -15057,7 +15057,32 @@ test("on the world map a pin's dropped where it's held: a column of light where 
         const ray = new THREE.Raycaster();
         const over = [];
 
-        session.view.scene.traverse((object) => object.isMesh && object.name === "ground" && grounds.push(object));
+        // (A chunk's ground lets go of its corners once the graphics card has them (world/
+        // release.js), so there's nothing of it on the page to meet a ray: the same ground made
+        // again here, from the chunk's heights with its corners as far apart as it's drawn, as
+        // world/ground.js makes it, and stood where it stands)
+        const { groundGeometry } = await import("/js/world/ground.js");
+        const { CHUNK } = await import("/js/core/terrain/ground.js");
+
+        session.view.scene.traverse((object) => {
+            if (!object.isMesh || object.name !== "ground") {
+                return;
+            }
+
+            if (object.geometry.attributes.position.array) {
+                grounds.push(object);
+
+                return;
+            }
+
+            const chunk = game.chunks.overworld.chunk(Math.round(object.position.x / CHUNK), Math.round(object.position.z / CHUNK));
+            const again = new THREE.Mesh(groundGeometry(chunk.heights, object.userData.step ?? 1));
+
+            again.userData.step = object.userData.step;
+            again.position.copy(object.position);
+            again.updateMatrixWorld(true);
+            grounds.push(again);
+        });
 
         // (Two corners a point, across the line; six indices a piece of it between two points; and
         // how high it is over the ground as it's drawn there, its corners further apart away from
