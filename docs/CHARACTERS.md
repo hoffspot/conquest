@@ -2543,6 +2543,27 @@ resting and sitting. What went:
 - **Sprinting curves walking.** The sprint's curves (made of keys, each read making four small
   arrays) were worked out and multiplied by nothing while walking. Now they're not, and reading
   keys makes no arrays.
+- **Nothing made keeping a scabbard off the leg, swinging a skirt or setting the walk's joints.**
+  A settled town of 18 made about 0.7 MB a frame, 47% of it posing its people. Most of that was
+  three places. `Character.hang` asks how clear a hung blade is of the leg 86 times a frame, and
+  made an arrow function for each blade and another inside it each time it was asked, with a
+  list or a pair for every swing tried; the arm's part of it (`armPush`) the same. A skirt's
+  swing made an object for every length measured, one for each ring of its cloth looked at and
+  a list for each of the legs' points (`keep`, `clothAt`, `lean`). The walk made a name and a
+  set of angles for every joint, sixty of each (`#setJoints`, `closeHand`). Now what they ask
+  is module functions (`hangNearest`, `hiltOff`, `offSegment`: how far a point is from a limb,
+  in the numbers themselves), their names and sets of angles are made once and filled in each
+  time, and what they find is kept in plain numbers. Poses come out the same to the last bit:
+  six bodies' every bone, blade and skirt bone hashed frame by frame through walking, running,
+  guarding, a blow, sheathing and sitting, before and after. Over that run what posing made
+  fell by 28%, and by 80% for the blade, 61% for the skirt and 89% for the walk's joints (the
+  numbers handed between functions are what's left of theirs); a soldier with a sword at the
+  hip and a woman in a skirt, walking, make 20 KB a frame for the blade where it was 110, 16 for
+  49 for the skirt and 0.2 for 21 for the joints (`test/posing-garbage.test.js` samples
+  everything made and holds them between). What makes most now is the
+  arm's reach and the actions' keys (`Rig.evaluate`, `Actions.sample`). Fitting a blade to its
+  hip, once as its body's built, made 10 MB of cells' names and lists; its cells are numbered
+  now.
 
 **How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
 `posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player

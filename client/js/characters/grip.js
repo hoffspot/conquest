@@ -321,17 +321,27 @@ const CLOSED = Object.fromEntries(["Left", "Right"].map((Side) => [Side, { finge
  */
 export function closeHand(rig, side, grip, weight = 1) {
     const names = CLOSED[side === "left" || side === "Left" ? "Left" : "Right"];
-    const set = (name, angles) => {
-        const index = rig.index.get(name);
-        const { kind, side: sign } = rig.joints[index];
 
-        if (weight >= 1) {
-            jointRotation(kind, sign, angles, rig.rotations[index]);
-        } else if (weight > 0) {
-            blendRotation(kind, sign, rig.rotations[index], jointRotation(kind, sign, angles, _rotation), weight, rig.rotations[index]);
+    // (Nothing made closing it: it's closed every time its body's posed)
+    for (let k = 0; k < names.fingers.length; k++) {
+        for (let j = 0; j < names.fingers[k].length; j++) {
+            closeJoint(rig, names.fingers[k][j], grip.fingers[k][j], weight);
         }
-    };
+    }
 
-    names.fingers.forEach((bones, k) => bones.forEach((name, j) => set(name, grip.fingers[k][j])));
-    names.thumb.forEach((name, k) => set(name, grip.thumb[k]));
+    for (let k = 0; k < names.thumb.length; k++) {
+        closeJoint(rig, names.thumb[k], grip.thumb[k], weight);
+    }
+}
+
+// One of a hand's joints turned to the angles a grip has for it, `weight` of the way (closeHand)
+function closeJoint(rig, name, angles, weight) {
+    const index = rig.index.get(name);
+    const { kind, side: sign } = rig.joints[index];
+
+    if (weight >= 1) {
+        jointRotation(kind, sign, angles, rig.rotations[index]);
+    } else if (weight > 0) {
+        blendRotation(kind, sign, rig.rotations[index], jointRotation(kind, sign, angles, _rotation), weight, rig.rotations[index]);
+    }
 }
