@@ -5,7 +5,7 @@
 // follower defending itself with its leader down; and whom the cap on a player's foes holds back.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, STEP_MS, STUNS, TAUNT } from "../client/js/core/battle.js";
+import { AGGRO, Battle, STEP_MS, STUNS, TAUNT } from "../client/js/core/battle.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -606,6 +606,91 @@ describe("a follower whose leader is down or on another floor defends itself (ba
         assert.equal(battle.actor("sword").target, "killer");
         assert.ok(events.some(({ type, id, by }) => type === "hit" && id === "killer" && by === "sword"));
         assert.ok(!events.some(({ type, id, by }) => type === "hit" && id === "bystander" && by === "sword"));
+    });
+});
+
+describe("the cap on who goes for a player holds back only those they haven't struck (battle.js AGGRO)", () => {
+    // A player standing, and ten guards at their posts in sight of them, two rows of five
+    const crowd = (weapon = "sword") => {
+        const battle = new Battle(open(80), { seed: 6 });
+        const ids = Array.from({ length: 10 }, (_, k) => `e${k}`);
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [40, 40], hp: 90000 });
+        ids.forEach((id, k) => guard(battle, id, [36 + (k % 5) * 2, 31 + Math.floor(k / 5)], { team: "b", weapon, hp: 9000, leash: 30 }));
+
+        return { battle, ids, on: () => ids.filter((id) => battle.actor(id).target === "hero") };
+    };
+
+    // (A bomb thrown as soon as the player's free to, between the blows on them and their own)
+    const lob = (battle, target, bomb) => {
+        for (let t = 0; t < 5000; t += STEP_MS) {
+            if (battle.lob("hero", target, { reach: 20, ...bomb }).ok) {
+                return true;
+            }
+
+            battle.advance(STEP_MS);
+        }
+
+        return false;
+    };
+
+    it("lets six go for them up close and four from afar, the rest standing by", () => {
+        assert.deepEqual([AGGRO.melee, AGGRO.ranged], [6, 4]);
+
+        for (const [weapon, most] of [["sword", AGGRO.melee], ["bow", AGGRO.ranged]]) {
+            const { battle, on } = crowd(weapon);
+
+            // (Never more on them than the cap, all the while; and that many are)
+            run(battle, 8000, () => assert.ok(on().length <= most, `${on().length} ${weapon}s on them`));
+            assert.equal(on().length, most);
+        }
+    });
+
+    it("lets everyone they strike come for them, however many are on them already", () => {
+        const { battle, ids, on } = crowd();
+
+        run(battle, 6000);
+
+        const held = ids.filter((id) => battle.actor(id).target === null);
+
+        assert.equal(held.length, 10 - AGGRO.melee, "four held back, standing by");
+
+        // (A bomb among those held back: each it catches is struck by the player)
+        assert.ok(lob(battle, held[0], { kind: "bigBomb", damage: [4, 6] }));
+
+        const struck = new Set(
+            run(battle, 4000)
+                .filter(({ type, id, by }) => type === "hit" && by === "hero" && held.includes(id))
+                .map(({ id }) => id),
+        );
+
+        assert.ok(struck.size >= 2, `${struck.size} of those held back struck`);
+        assert.ok([...struck].every((id) => battle.actor(id).target === "hero"), "each one struck comes for them");
+        assert.equal(on().length, AGGRO.melee + struck.size, "past the cap");
+
+        // (And those of them not struck are held back still)
+        assert.ok(held.filter((id) => !struck.has(id)).every((id) => battle.actor(id).target === null));
+    });
+
+    it("lets one they strike leave whoever it was on for them, the cap full", () => {
+        const { battle, on } = crowd();
+
+        // (The cap full; then one more of theirs, in sight of the player, busy with a soldier of
+        // the player's people beside it: no room on the player for it)
+        run(battle, 6000);
+        battle.add({ id: "decoy", kind: "soldier", team: "a", weapon: "sword", square: [48, 40], hp: 90000, speed: 0, chase: 0 });
+        guard(battle, "busy", [48, 38], { team: "b", hp: 9000, leash: 30, armed: true });
+        run(battle, 4000);
+        assert.equal(on().length, AGGRO.melee, "the cap full");
+        assert.equal(battle.actor("busy").target, "decoy");
+
+        // (Struck by the player, harder than the soldier's struck it: its enmity has it turn on
+        // them, room or no)
+        assert.ok(lob(battle, "busy", { kind: "goblinBomb", damage: [400, 400] }));
+        // (The bomb burst, and whoever it threw up again)
+        run(battle, 7000);
+        assert.equal(battle.actor("busy").target, "hero");
+        assert.ok(on().length >= AGGRO.melee, "and the cap was full all the while");
     });
 });
 

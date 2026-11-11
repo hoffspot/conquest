@@ -419,7 +419,8 @@ const COLOSSAL_ENMITY = 2;
 
 // Enemies near a player go for them before anyone else: those within `reach` squares, at most
 // `melee` of them up close and `ranged` shooting or casting at once (the rest fight whoever else
-// is near)
+// is near). The cap holds back only those the player hasn't struck: one they strike (or stun, or
+// cast at, or taunt) may come for them however many are on them already (#turnOn, #roomOn)
 export const AGGRO = Object.freeze({ reach: 15, melee: 6, ranged: 4 });
 
 // One struck (or cast at) goes after whoever did it, however far that is beyond the leash that
@@ -5707,9 +5708,14 @@ export class Battle {
     }
 
     // Whether there's room for one more on someone: anyone but a player; a player it's on already;
-    // or one fewer than so many are on, up close or from afar as it fights (AGGRO)
+    // a player who's struck it lately (DEFEND_MS: its `struckBy`), whoever it's on and however
+    // many are on them (the owner: "If a player strikes an enemy, it can be hostile beyond the
+    // cap". Set on no one, it turned on them at the blow already, #turnOn; on someone else, its
+    // enmity has it leave them for the player only with room, and this is that room); or one
+    // fewer than so many are on, up close or from afar as it fights (AGGRO). So the cap holds
+    // back only those the player hasn't struck
     #roomOn(actor, other) {
-        return other.kind !== "player" || actor.target === other.id || this.#onPlayer(other)[this.#shoots(actor) ? "ranged" : "melee"] < AGGRO[this.#shoots(actor) ? "ranged" : "melee"];
+        return other.kind !== "player" || actor.target === other.id || (actor.struckBy?.[other.id] ?? -Infinity) > this.time || this.#onPlayer(other)[this.#shoots(actor) ? "ranged" : "melee"] < AGGRO[this.#shoots(actor) ? "ranged" : "melee"];
     }
 
     // A player near (AGGRO), its enemy, seen and within its leash, it goes for before anyone else,

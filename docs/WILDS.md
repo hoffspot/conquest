@@ -1965,7 +1965,8 @@ warrior can take it off whoever it's on.
   cleric 1, a ranger 0.7, a rogue 0.5; a creature called 3, one raised 1.5 (followers.js
   `ENMITY_WEIGHTS`); a soldier or a creature 1.
 - **Whom it goes for.** The one with the most that it can see and go for (within its leash, and
-  for a guard, AGGRO's room on a player). But it keeps to the one it's on till another's past them
+  for a guard, AGGRO's room on a player: there's always room on a player for one they've struck
+  in the last 10 seconds, docs/GAME.md *The player first*). But it keeps to the one it's on till another's past them
   by a tenth, if they're within 3 squares of it (`near`, `hand`), or by three tenths from further
   off (`far`), as in World of Warcraft: no one's pulled back and forth across a fight, and a
   creature fighting up close doesn't cross the field after a mage who's edged ahead. Of two with

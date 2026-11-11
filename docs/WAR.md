@@ -1502,8 +1502,9 @@ player first*).
   (battle.js `formation` `charge`: an invasion's, *Invasions* below) runs on to where it's going
   whoever of it is fighting, each of it running with it (at its chase), and stops charging once
   it's there. A player in among them has at
-  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`); the rest fight the
-  player's own.
+  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`), and whoever they've
+  struck besides: the cap holds back only those they haven't (docs/GAME.md *The player first*);
+  the rest fight the player's own.
 
 **Tried** (a field battle on open ground, `test/formation.test.js` and play-testing): 50 a side
 fight to the last few in under two minutes; 200 a side take longer, as a Total War battle

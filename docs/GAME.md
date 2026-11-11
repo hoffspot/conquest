@@ -1093,11 +1093,27 @@ hurt enough, it fights as any other.
 whose leash reaches them, goes for them before anyone else (`#drawnTo`), so long as there's room
 on them: at most 6 of their enemies up close and 4 shooting or casting at once (`#roomOn`, from
 who's on each player as the step begins, `#mustered`, and anyone newly set on them since). The
-same holds for the nearest enemy and an alarm raised, but not for one the player's struck (or
-stunned, or cast at): set on, an enemy always turns on whoever did it (`#turnOn`), however many
-are on them already (the user: "make sure any unit that is attacked attempts to defend itself").
+same holds for the nearest enemy and an alarm raised.
+
+**The cap holds back only those the player hasn't struck** (the owner: "If a player strikes an
+enemy, it can be hostile beyond the cap"; the user before: "make sure any unit that is attacked
+attempts to defend itself"). Anyone a player strikes, stuns, casts at or taunts may come for
+them, however many are on them already:
+
+- set on no one, it turns on them at the blow (`#turnOn`), room or no;
+- on someone else, it leaves them for the player as its enmity has it (the harm the player's
+  done it past what the other has, docs/WILDS.md *Whom they go for*), room or no: for 10
+  seconds after each blow there's always room on a player for one they've struck (`#roomOn`,
+  its `struckBy`, `DEFEND_MS`). Before, such a one was kept on whoever it was fighting while the
+  cap was full;
+- once on the player, it stays on them as anyone does: the cap never takes off one that's on.
+
+So an archer who puts an arrow into each of twenty has twenty on them, and a bomb among those
+standing by brings every one it catches. Those of the struck one's own who only saw it are the
+player's enemies from then, but are held back by the cap like any other. It's the guards' and
+soldiers' cap (`ai` "patrol"): the wild's creatures have none, a pack of ten all come.
 The rest fight whoever else is near: a player in a battle of hundreds has a fight, not a crowd,
-on them. That's whom each goes for first; once set on, it keeps to whoever's top of its enmity,
+on them (`test/battle-rules.test.js`: six of ten up close, four of ten shooting). That's whom each goes for first; once set on, it keeps to whoever's top of its enmity,
 whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they go for*).
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
