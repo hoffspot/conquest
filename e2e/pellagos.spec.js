@@ -12335,7 +12335,10 @@ test("a wary wolf out in the wilds is minded by a reaction roll: warning the pla
 
 test("meat bait the player carries goes on an enemy's wheel of itself the first time; thrown from it to a curious wolf, it arcs to its feet and is eaten; fed enough, the wolf follows them, tamed, down the party's side", async ({ page }) => {
     test.setTimeout(300000);
-    await playing(page, "/?play&seed=1");
+    // (Seen from where the camera starts: the wolf a few metres ahead is by the top of the screen
+    // there, and its wheel, held open on it, is slid down onto the screen, which is what lets the
+    // mouse choose its slices: wheel.js `clickable`)
+    await playing(page, "/?play&seed=1", { view: "start" });
 
     const wheel = page.locator(".action-wheel");
 
@@ -12426,7 +12429,9 @@ test("meat bait the player carries goes on an enemy's wheel of itself the first 
 
 test("Endurance at Adept brings Taunt: put on an enemy's wheel and chosen on a wary wolf warning the player off, it's made to come at them, heard and told (Taunted over it); its slice greyed as it cools down, and chosen again too soon, refused", async ({ page }) => {
     test.setTimeout(300000);
-    await playing(page, "/?play&seed=1");
+    // (Seen from where the camera starts: the wolf by the top of the screen there, its wheel slid
+    // down onto the screen, as the bait's test above)
+    await playing(page, "/?play&seed=1", { view: "start" });
 
     const wheel = page.locator(".action-wheel");
 
@@ -14487,7 +14492,8 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     // (Walked out to its way in, the camera looking out across the land, slow to draw in
     // software, and waited at its door: more than the usual time)
     test.setTimeout(600000);
-    await playing(page, "/?play&seed=1");
+    // (Of its air, among the rest: the spores adrift in it are motes, and Low draws none: at High)
+    await playing(page, "/?play&seed=1", { quality: "high" });
 
     // (The nearest ants' nest not made yet: none within 200 metres of the start; the ground about
     // it found from far enough off that it isn't made yet, then before its door, facing it, where

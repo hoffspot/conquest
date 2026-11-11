@@ -683,7 +683,8 @@ it's playing (`playing`, which every spec opens the game with), which in softwar
 as many frames a second as High from where the camera starts, out across the land. A test of
 what's drawn at a higher quality, of shadows, or of the camera, asks for what it needs
 (`playing`'s `quality`, `shadows` and `view`, or `keeping`; `test.use({ drawing: "full" })` for
-a whole spec) and says why. A test that waits on the game's time
+a whole spec) and says why; one that looks at nothing drawn (menus, chat, who's let into which
+world) stops the drawing once the game's playing (`undrawn`, or `playing`'s `drawn: false`). A test that waits on the game's time
 stops it and plays it on by hand (`playUntil` in e2e/fixtures.js): drawn without a GPU, a
 frame takes a second or more and the game goes on a tenth of a second a frame at most, so
 waiting on it as it's drawn is waiting on how slow the machine is. What a test waits for is given

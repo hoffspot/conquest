@@ -84,8 +84,10 @@ async function ready(page, { character = null, blocked = false } = {}) {
     });
 }
 
-// (Two games got ready side by side, one through the server: each given longer than one alone to be playing)
-const LONGER = { timeout: 180000 };
+// (Two games got ready side by side, one through the server: each given longer than one alone to
+// be playing; and neither world drawn once it is: what's looked at here is who's listed, linked
+// and let in, in the menus and on the server)
+const LONGER = { timeout: 180000, drawn: false };
 
 // The host plays, and opens their world from the menu: through the server, a code
 async function opened(host) {

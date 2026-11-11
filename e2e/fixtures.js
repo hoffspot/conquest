@@ -47,12 +47,17 @@ const TOLD_WITHIN = 5000;
 const PICTURED_WITHIN = 20000;
 
 // A page drawn cheaply: the game's settings kept as CHEAP before it loads, unless it keeps settings
-// already (a test's own, kept after this by its own script, take their place)
+// already (a test's own, kept after this by its own script, take their place). (Where a page has
+// no storage, as about:blank hasn't, nothing's kept, and nothing's thrown at the test)
 async function cheaply(page) {
     await page.addInitScript(
         ([key, cheap]) => {
-            if (!localStorage.getItem(key)) {
-                localStorage.setItem(key, cheap);
+            try {
+                if (!localStorage.getItem(key)) {
+                    localStorage.setItem(key, cheap);
+                }
+            } catch {
+                // (No storage here)
             }
         },
         [SETTINGS, JSON.stringify(CHEAP)],
@@ -70,10 +75,14 @@ async function cheaply(page) {
 export async function keeping(page, settings = {}) {
     await page.addInitScript(
         ([key, cheap, own]) => {
-            const kept = localStorage.getItem(key);
+            try {
+                const kept = localStorage.getItem(key);
 
-            if (!kept || kept === cheap) {
-                localStorage.setItem(key, own);
+                if (!kept || kept === cheap) {
+                    localStorage.setItem(key, own);
+                }
+            } catch {
+                // (No storage here: about:blank)
             }
         },
         [SETTINGS, JSON.stringify(CHEAP), JSON.stringify({ ...CHEAP, ...settings })],
@@ -117,17 +126,18 @@ export async function overlook(page) {
  * timer: a page with nothing changing on it may draw no frames). If it isn't in time, what the
  * loading screen says, and the page's errors, are in the failure.
  *
- * Then the camera's turned to look down on the player (`view: "down"`: as `overlook` has it, but
- * for how far back it is, left as the game starts it; the world played on a frame without drawing
- * it, so the camera's there), which is far quicker to draw in software than the view the game
- * starts in, out across the land. A test of that view, or of how the camera starts and moves,
- * asks for `view: "start"`.
+ * Then, out of doors, the camera's turned to look down on the player (`view: "down"`: as `overlook`
+ * has it, but for how far back it is, left as the game starts it; the world played on a frame
+ * without drawing it, so the camera's there), which is far quicker to draw in software than the
+ * view the game starts in, out across the land. A test of that view, of how the camera starts and
+ * moves, or of where something is on the screen seen from there, asks for `view: "start"`.
  *
  * `quality` and `shadows`: the game drawn so, not cheaply (`keeping`), for a test of what's drawn;
- * only with an `address`, as they're kept before the page loads. `timeout` (ms): how long it's
- * given to be playing; two games loading side by side need longer than one.
+ * only with an `address`, as they're kept before the page loads. `drawn: false`: the world not
+ * drawn from here on (`undrawn`), for a test that looks at nothing drawn. `timeout` (ms): how
+ * long it's given to be playing; two games loading side by side need longer than one.
  */
-export async function playing(page, address = null, { timeout = 90000, view = "down", quality, shadows } = {}) {
+export async function playing(page, address = null, { timeout = 90000, view = "down", quality, shadows, drawn = true } = {}) {
     const errors = [];
     const failed = (error) => errors.push(error.message);
     const said = (message) => message.type() === "error" && errors.push(message.text());
@@ -167,15 +177,20 @@ export async function playing(page, address = null, { timeout = 90000, view = "d
         expect(loaded.done).toBe(loaded.total);
     }
 
+    // (Out of doors: come into the game in a room, its own view's left as the game has it)
     if (view === "down") {
         await page.evaluate((pitch) => {
-            const { game } = window.pellagos;
+            const { game, session } = window.pellagos;
 
-            if (game?.cameraFollow) {
+            if (game?.cameraFollow && !session.view.room) {
                 game.cameraFollow.pitch = pitch;
                 game.advance(1 / 30, { render: false, wait: true });
             }
         }, DOWN.pitch);
+    }
+
+    if (!drawn) {
+        await undrawn(page);
     }
 }
 
@@ -354,5 +369,6 @@ export const test = base.extend({
         await use(page);
     },
 });
+
 
 export { expect };

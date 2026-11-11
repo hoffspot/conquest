@@ -72,8 +72,10 @@ async function ready(page, character) {
     });
 }
 
-// (A world on a server, made ready there and sent: given longer than one on the device to be playing)
-const LONGER = { timeout: 180000 };
+// (A world on a server, made ready there and sent: given longer than one on the device to be
+// playing; and not drawn once it is: what's looked at here is who's let into which world, as whom,
+// in the menus and on the server)
+const LONGER = { timeout: 180000, drawn: false };
 
 // The world's life on the server, and its clock
 const lifeOf = (world) => server.registry.lifeOf(world);

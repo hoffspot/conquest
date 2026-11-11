@@ -108,8 +108,9 @@ test("from the internet, over TLS alone: a page asked for plainly sent on to htt
     await page.goto(link);
     await expect(page.locator("#worldask #worldasktitle")).toHaveText("Who goes into Farhold?", { timeout: 60000 });
     await page.locator("#worldask").getByRole("button", { name: /^A new character/ }).click();
-    // (A world on a server, made ready there and sent: given longer than one on the device)
-    await playing(page, null, { timeout: 180000 });
+    // (A world on a server, made ready there and sent: given longer than one on the device; not
+    // drawn once it's playing: what's looked at is how it's linked)
+    await playing(page, null, { timeout: 180000, drawn: false });
 
     const [place] = server.play.places.values();
 
