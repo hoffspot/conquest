@@ -319,15 +319,98 @@ function lingerie(name, colour) {
 // Footwear with a toe box is cut this far along the foot (1 is the ball of the foot)
 export const TOE_CUT = 0.85;
 
+/** The regions of the body a vertex of it can be in (measureBody: by the bone that moves it most). */
+export const REGIONS = Object.freeze(["head", "torso", "arm", "hand", "leg", "foot"]);
+
+// What's measured at each vertex that's a number, in a row of this many: how much of it moves
+// with the arm's bones and with the leg's, how far down the arm and the leg it is and how far
+// along the foot, and where it is
+const MEASURED = 8;
+const [ARM_SHARE, LEG_SHARE, ARM, LEG, FOOT, X, Y, Z] = [0, 1, 2, 3, 4, 5, 6, 7];
+
+/**
+ * A body's vertices' measurements (measureBody's `vertices`), for `count` of them, none measured
+ * yet: { length, regions (each one's region: its place in REGIONS), sides (1 left, -1 right),
+ * fields (the rest, eight numbers a vertex) }. Held in columns, not an object a vertex: a third
+ * of the room (a kit's own body's were 3 MB of objects), and what the skins' worker can be sent
+ * as it is.
+ */
+export function measuredVertices(count) {
+    return { length: count, regions: new Uint8Array(count), sides: new Int8Array(count), fields: new Float64Array(count * MEASURED) };
+}
+
+/** One vertex's measurements set (`measured`: vertexAt's). */
+export function measureVertex(vertices, v, { region, side, armShare, legShare, arm, leg, foot, x, y, z }) {
+    vertices.regions[v] = REGIONS.indexOf(region);
+    vertices.sides[v] = side;
+    vertices.fields.set([armShare, legShare, arm, leg, foot, x, y, z], v * MEASURED);
+}
+
+/**
+ * One vertex's measurements, as a garment's region is asked of them (GARMENTS' `inside`), in
+ * `out` (or a new object): { region, side, armShare, legShare, arm, leg, foot, x, y, z }.
+ */
+export function vertexAt(vertices, v, out = {}) {
+    const { fields } = vertices;
+    const at = v * MEASURED;
+
+    out.region = REGIONS[vertices.regions[v]];
+    out.side = vertices.sides[v];
+    out.armShare = fields[at + ARM_SHARE];
+    out.legShare = fields[at + LEG_SHARE];
+    out.arm = fields[at + ARM];
+    out.leg = fields[at + LEG];
+    out.foot = fields[at + FOOT];
+    out.x = fields[at + X];
+    out.y = fields[at + Y];
+    out.z = fields[at + Z];
+
+    return out;
+}
+
+/** Every vertex's (vertexAt), an object each: for what looks through them all (tests, tools). */
+export function everyVertex(vertices) {
+    return Array.from({ length: vertices.length }, (_, v) => vertexAt(vertices, v));
+}
+
+/** The region one vertex is in (REGIONS'). */
+export function regionAt(vertices, v) {
+    return REGIONS[vertices.regions[v]];
+}
+
+/** Which side one vertex is on (1 left, -1 right). */
+export function sideAt(vertices, v) {
+    return vertices.sides[v];
+}
+
+/** How far along the foot one vertex is, from the ankle (0) to the ball of the foot (1). */
+export function footAt(vertices, v) {
+    return vertices.fields[v * MEASURED + FOOT];
+}
+
+// How far inside a garment's region each of the body's vertices is, its toes too (a footwear's
+// toe box and all): the pictures', which are painted over all of it
+function insidesOf(garment, { vertices, landmarks }) {
+    const inside = new Float32Array(vertices.length);
+    const point = {};
+
+    for (let v = 0; v < vertices.length; v++) {
+        inside[v] = insideAt(garment, landmarks, vertexAt(vertices, v, point), true);
+    }
+
+    return inside;
+}
+
 /**
  * How far inside a garment's region each of the body's vertices is (above 0 inside it; between
  * two, its edge: insideBetween). Footwear with a toe box stops at the ball of the foot, unless `toes`.
  */
 export function insideOf(human, garment, { vertices, landmarks }, { toes = false } = {}) {
     const inside = new Float32Array(human.vertexCount);
+    const point = {};
 
     for (let v = 0; v < human.vertexCount; v++) {
-        inside[v] = human.partOf[v] === 0 ? insideAt(garment, landmarks, vertices[v], toes) : OUTSIDE;
+        inside[v] = human.partOf[v] === 0 ? insideAt(garment, landmarks, vertexAt(vertices, v, point), toes) : OUTSIDE;
     }
 
     return inside;
@@ -346,22 +429,22 @@ function insideAt(garment, landmarks, point, toes) {
  * field: it's measured at every texel of every garment's picture)
  */
 function pointBetween(vertices, a, b, c, wa, wb, wc, out) {
-    const pa = vertices[a];
-    const pb = vertices[b];
-    const pc = vertices[c];
-    const nearest = wa >= wb && wa >= wc ? pa : wb >= wc ? pb : pc;
+    const { fields } = vertices;
+    const pa = a * MEASURED;
+    const pb = b * MEASURED;
+    const pc = c * MEASURED;
+    const nearest = wa >= wb && wa >= wc ? a : wb >= wc ? b : c;
 
-    out.region = nearest.region;
-    out.side = nearest.side;
-    out.face = nearest.face;
-    out.armShare = wa * pa.armShare + wb * pb.armShare + wc * pc.armShare;
-    out.legShare = wa * pa.legShare + wb * pb.legShare + wc * pc.legShare;
-    out.arm = wa * pa.arm + wb * pb.arm + wc * pc.arm;
-    out.leg = wa * pa.leg + wb * pb.leg + wc * pc.leg;
-    out.foot = wa * pa.foot + wb * pb.foot + wc * pc.foot;
-    out.x = wa * pa.x + wb * pb.x + wc * pc.x;
-    out.y = wa * pa.y + wb * pb.y + wc * pc.y;
-    out.z = wa * pa.z + wb * pb.z + wc * pc.z;
+    out.region = REGIONS[vertices.regions[nearest]];
+    out.side = vertices.sides[nearest];
+    out.armShare = wa * fields[pa + ARM_SHARE] + wb * fields[pb + ARM_SHARE] + wc * fields[pc + ARM_SHARE];
+    out.legShare = wa * fields[pa + LEG_SHARE] + wb * fields[pb + LEG_SHARE] + wc * fields[pc + LEG_SHARE];
+    out.arm = wa * fields[pa + ARM] + wb * fields[pb + ARM] + wc * fields[pc + ARM];
+    out.leg = wa * fields[pa + LEG] + wb * fields[pb + LEG] + wc * fields[pc + LEG];
+    out.foot = wa * fields[pa + FOOT] + wb * fields[pb + FOOT] + wc * fields[pc + FOOT];
+    out.x = wa * fields[pa + X] + wb * fields[pb + X] + wc * fields[pc + X];
+    out.y = wa * fields[pa + Y] + wb * fields[pb + Y] + wc * fields[pc + Y];
+    out.z = wa * fields[pa + Z] + wb * fields[pb + Z] + wc * fields[pc + Z];
 
     return out;
 }
@@ -550,7 +633,7 @@ export function* compositingGarments(map, layers, measures) {
 
     // How far inside each garment's region each of the body's vertices is (how fast that changes
     // across a texel, between its triangle's corners)
-    const insides = layers.map(({ garment }) => Float32Array.from(vertices, (vertex) => insideAt(garment, landmarks, vertex, true)));
+    const insides = layers.map(({ garment }) => insidesOf(garment, measures));
     const colour = [0, 0, 0, 0, 0, 0];
 
     for (let i = 0; i < count; i++) {
@@ -751,7 +834,7 @@ export function* paintingGarment(map, garment, measures = null) {
     const mixed = { r: 0, g: 0, b: 0 };
     // (How far inside its edge each of the body's vertices is, if it's painted by that, and how
     // far inside that's measured at each texel: beads all over)
-    const inside = EDGED.has(pattern) ? Float32Array.from(vertices, (vertex) => insideAt(garment, landmarks, vertex, true)) : null;
+    const inside = EDGED.has(pattern) ? insidesOf(garment, measures) : null;
     const inward = pattern === "beads" ? Infinity : EDGE_PAINTED.inside;
     const points = pointsOf(map, measures);
 

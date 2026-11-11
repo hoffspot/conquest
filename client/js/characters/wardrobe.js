@@ -829,8 +829,9 @@ export function letGoOfWardrobe(kit) {
 
 /**
  * How many bytes of pictures the wardrobe holds on the page: each garment's own, the designs',
- * each outfit's (as they're painted, and at their least size), and the painters' own (each
- * buffer counted once: `seen`, a Set of those counted already). (kit.js heldByKit.)
+ * each outfit's (as they're painted, and at their least size), and the painters' own (where each
+ * texel is on the body, and what's measured of the body they're painted on; each buffer counted
+ * once: `seen`, a Set of those counted already). (kit.js heldByKit.)
  */
 export function heldInWardrobe(kit, seen = new Set()) {
     let bytes = 0;
@@ -861,7 +862,7 @@ export function heldInWardrobe(kit, seen = new Set()) {
         }
     }
 
-    for (const data of Object.values(kit.texelMap ?? {})) {
+    for (const data of [...Object.values(kit.texelMap ?? {}), ...Object.values(kit.referenceMeasures?.vertices ?? {})]) {
         count(ArrayBuffer.isView(data) ? data : null);
     }
 

@@ -14,13 +14,12 @@
 // it's not drawn), and so is any garment under another.
 
 import * as THREE from "three";
-import { faceFrame } from "./face.js";
-import { designSolid, GARMENTS, insideBetween, insideOf, TOE_CUT } from "./garment-pictures.js";
+import { designSolid, footAt, GARMENTS, insideBetween, insideOf, measuredVertices, measureVertex, regionAt, sideAt, TOE_CUT } from "./garment-pictures.js";
 import { smoothstep } from "./noise.js";
 import { allAtOnce } from "../core/steps.js";
 
 // (What each garment is, and its pictures: garment-pictures.js, handed on from here)
-export { COMPOSITE_BUMP, compositeGarments, compositingGarments, DESIGNS, designSolid, emblemAt, forgetPoints, GARMENTS, insideBetween, insideOf, paintGarment, paintingGarment, pointsHeld, texelMap } from "./garment-pictures.js";
+export { COMPOSITE_BUMP, compositeGarments, compositingGarments, DESIGNS, designSolid, emblemAt, everyVertex, forgetPoints, GARMENTS, insideBetween, insideOf, paintGarment, paintingGarment, pointsHeld, texelMap, vertexAt } from "./garment-pictures.js";
 
 const ARM = /^(Left|Right)(Arm|ForeArm)$/;
 const HAND = /^(Left|Right)Hand/;
@@ -37,10 +36,10 @@ export const MEASURED = { bodies: 0 };
  * Measurements of the body at every vertex, for garments' regions: { region ("head", "torso",
  * "arm", "hand", "leg", "foot": by the bone that moves it most), armShare and legShare (how much
  * of it moves with the arm's bones, the hand's included, and the leg's, the foot's included: 0
- * to 1), side (1 left, -1 right), arm and leg (fractions down the limb), x, y, z, face ([x, y, z]
- * face coordinates) },
- * plus the landmarks' heights: { waist, hips, crotch, chest, armpit, neck }, and the neck's
- * radius (`neckRadius`).
+ * to 1), side (1 left, -1 right), arm and leg (fractions down the limb), foot (how far along
+ * it), x, y, z }, held in columns (`vertices`: garment-pictures.js measuredVertices; one vertex's
+ * as an object, vertexAt), plus the landmarks' heights: { waist, hips, crotch, chest, armpit,
+ * neck }, and the neck's radius (`neckRadius`).
  */
 export function measureBody(character) {
     const { human, rig, positions } = character;
@@ -63,7 +62,6 @@ export function measureBody(character) {
         balls: [head("LeftToeBase"), head("RightToeBase")],
         height: character.height,
     };
-    const face = faceFrame(human, positions);
     const chains = {};
 
     for (const side of ["Left", "Right"]) {
@@ -93,7 +91,7 @@ export function measureBody(character) {
 
         return first.distance <= second.distance ? first.t * 0.5 : 0.5 + second.t * 0.5;
     };
-    const vertices = [];
+    const vertices = measuredVertices(human.vertexCount);
     const armBone = human.bones.map(({ name }) => ARM.test(name) || HAND.test(name));
     const legBone = human.bones.map(({ name }) => LEG.test(name) || FOOT.test(name));
 
@@ -118,7 +116,7 @@ export function measureBody(character) {
             leg += legBone[bone] ? weight : 0;
         }
 
-        vertices.push({
+        measureVertex(vertices, v, {
             region,
             armShare: total ? arm / total : 0,
             legShare: total ? leg / total : 0,
@@ -129,13 +127,20 @@ export function measureBody(character) {
             x: p.x,
             y: p.y,
             z: p.z,
-            face: face.toFace(p.x, p.y, p.z),
         });
     }
 
     // How far the neck's skin is from its middle, at the neck's height (the middle of its sides)
     const neckBone = human.bones.findIndex(({ name }) => name === "Neck");
-    const round = vertices.flatMap(({ x, y, z }, v) => (human.partOf[v] === 0 && human.skinIndices[v * 4] === neckBone && Math.abs(y - neck.y) < 0.01 ? [Math.hypot(x, z - neck.z)] : [])).sort((a, b) => a - b);
+    const round = [];
+
+    for (let v = 0; v < human.vertexCount; v++) {
+        if (human.partOf[v] === 0 && human.skinIndices[v * 4] === neckBone && Math.abs(positions[v * 3 + 1] - neck.y) < 0.01) {
+            round.push(Math.hypot(positions[v * 3], positions[v * 3 + 2] - neck.z));
+        }
+    }
+
+    round.sort((a, b) => a - b);
 
     landmarks.neckRadius = round.length ? round[round.length >> 1] : 0.07 * (character.height / 1.7);
 
@@ -196,7 +201,7 @@ function cutGarment(human, garment, measures) {
     // (the toes under a toe box aren't drawn)
     if (garment.toeBox) {
         for (let t = 0; t < body.length; t += 3) {
-            if ([body[t], body[t + 1], body[t + 2]].some((r) => vertices[source[r]].region === "foot" && vertices[source[r]].foot > TOE_CUT - 0.05)) {
+            if ([body[t], body[t + 1], body[t + 2]].some((r) => regionAt(vertices, source[r]) === "foot" && footAt(vertices, source[r]) > TOE_CUT - 0.05)) {
                 covers.add(t / 3);
             }
         }
@@ -320,10 +325,9 @@ function cutGarment(human, garment, measures) {
 
     if (garment.toeBox) {
         list.forEach(({ a, b, t }, i) => {
-            const va = vertices[source[a]];
-            const vb = vertices[source[b]];
+            const [va, vb] = [source[a], source[b]];
 
-            if (va.region === "foot" && vb.region === "foot" && Math.abs(va.foot * (1 - t) + vb.foot * t - TOE_CUT) < 1e-4) {
+            if (regionAt(vertices, va) === "foot" && regionAt(vertices, vb) === "foot" && Math.abs(footAt(vertices, va) * (1 - t) + footAt(vertices, vb) * t - TOE_CUT) < 1e-4) {
                 onCut[sharedOf[i]] = 1;
             }
         });
@@ -796,9 +800,8 @@ function addToeCap(cap, { loop, fractions }, side) {
 
     for (const r of human.renderIndices("body")) {
         const v = human.renderSource[r];
-        const vertex = vertices[v];
 
-        if (!seen.has(r) && vertex.region === "foot" && vertex.side === side && vertex.foot > TOE_CUT - 0.02) {
+        if (!seen.has(r) && regionAt(vertices, v) === "foot" && sideAt(vertices, v) === side && footAt(vertices, v) > TOE_CUT - 0.02) {
             seen.add(r);
             toes.push(Object.assign([0, 1, 2].map((k) => positions[v * 3 + k] + normals[v * 3 + k] * thickness), { r }));
         }

@@ -864,7 +864,11 @@ its new character's built a step at a time while the title's up: GAME.md, *Makin
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
 again for anyone carrying anything). A body's own measurements (`measureBody`: 13 to 34 ms, and
 5 MB of short-lived objects) are taken only when a skirt, a gown or an apron is built for it,
-which alone hang by them: every body was measured as it was dressed, soldiers too. Tests build soldiers, folk and a hero both ways and check
+which alone hang by them: every body was measured as it was dressed, soldiers too. What's measured at each
+vertex is held in columns (`garment-pictures.js` `measuredVertices`: its region, its side, eight
+numbers), not as an object a vertex: the kit's own body's (`referenceMeasures`, kept for good)
+are 1.4 MB where they were 5.6 MB, and are copied for the skins' worker in under a millisecond
+(58 ms as objects). One vertex's as an object: `vertexAt`. Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
 
 **Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
