@@ -7204,7 +7204,16 @@ corners go a frame (`SEND_SOON`, a mesh with fewer counted a quarter of a megaby
 pictures), so the land round the start, all built before the first frame, goes over the first
 second or so of play; what the camera does see meanwhile is sent as it always was and takes no
 turn, what's hidden (a tile of undergrowth not yet near, a chunk still being drawn) waits till
-it's shown, and `view.sentAhead` counts what's gone this way.
+it's shown, and `view.sentAhead` counts what's gone this way. In the start town (headless
+Chromium, High, seed 2) 157 meshes go in the first 9 frames, 8 a frame, the frame's own draw
+calls and shaders the same through them. And with what else was done with it (every merged mesh
+let go of, the town's trees the woodland's, the buildings' corners shared, the shadow maps'
+colour a byte): the page's copies of the town's, the chunks' and the insides' meshes and
+pictures (`heldOnPage`) were 142 MB as play began and 95 MB once the camera had turned all the
+way round, and are 57 MB from the first second, the camera turned or not; and the graphics card,
+the camera turned all the way round, held 300 MB by the counter and holds 243 MB (corners 76 MB
+and 59 MB; pictures 222 MB and 182 MB, by a counter that no longer takes a compressed picture
+for four times its size, gpumemory.js).
 
 **The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
 reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
