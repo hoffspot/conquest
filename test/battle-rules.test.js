@@ -745,6 +745,9 @@ describe("every character of one shape (battle.js OPTIONAL)", () => {
         const kept = decode(text);
         const of = (id) => kept.actors.find((actor) => actor.id === id);
 
+        // (The snapshot itself holds what its text does: nothing undefined in it)
+        assert.deepEqual(battle.snapshot(), kept);
+
         // (What a character wasn't given isn't in the text: as when it wasn't on the character)
         assert.ok(!("wards" in of("raider")) && !("tactic" in of("raider")) && !("keep" in of("hero")) && !("lone" in of("hero")) && !("sight" in of("hero")) && !("oil" in of("hero")));
         assert.deepEqual(of("hero").wards, { fire: 0.2 });

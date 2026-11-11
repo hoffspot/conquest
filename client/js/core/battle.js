@@ -1772,11 +1772,14 @@ export class Battle {
             lag: this.lag,
             random: this.random.state,
             nextProjectile: this.nextProjectile,
-            actors: this.actors.map(({ chance, restVariety, ...actor }) => ({
-                ...structuredClone(actor),
-                chance: chance.state,
-                restVariety: restVariety.toJSON(),
-            })),
+            actors: this.actors.map((actor) => {
+                const kept = structuredClone(Battle.#given(actor));
+
+                kept.chance = actor.chance.state;
+                kept.restVariety = actor.restVariety.toJSON();
+
+                return kept;
+            }),
             projectiles: structuredClone(this.projectiles),
             hazards: structuredClone(this.hazards),
             nextHazard: this.nextHazard,
@@ -1789,6 +1792,22 @@ export class Battle {
             breaths: structuredClone(this.breaths),
             formations: structuredClone(this.formations),
         };
+    }
+
+    // What a character's been given, for what's kept of it (snapshot, fork): all it has but its
+    // own chances (kept as their states), and nothing of what it's only made with and never was
+    // given, OPTIONAL's undefined: a snapshot's text leaves those out anyway, and copying the
+    // sixty of them for every character made a snapshot half as slow again
+    static #given(actor) {
+        const given = {};
+
+        for (const key in actor) {
+            if (actor[key] !== undefined && key !== "chance" && key !== "restVariety") {
+                given[key] = actor[key];
+            }
+        }
+
+        return given;
     }
 
     /**
@@ -1805,7 +1824,7 @@ export class Battle {
             lag: 0,
             random: this.random.state,
             nextProjectile: this.nextProjectile,
-            actors: this.actors.filter(({ id }) => wanted.has(id)).map(({ chance, restVariety, ...actor }) => ({ ...actor, chance: chance.state, restVariety: restVariety.toJSON() })),
+            actors: this.actors.filter(({ id }) => wanted.has(id)).map((actor) => Object.assign(Battle.#given(actor), { chance: actor.chance.state, restVariety: actor.restVariety.toJSON() })),
             // (Nothing in the air, on the ground or lined up of its own)
             projectiles: [],
             hazards: [],
