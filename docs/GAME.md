@@ -1226,7 +1226,15 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   or it leaps to), stunning, lasting on whoever it's cast on, and the wonders the host works.
   **Stun** (the Hexes') is cast on an enemy within 18 metres that the caster can see (0.4 s): for
   3 seconds it can't move, attack, cast or think, and whatever it was starting is called off;
-  the orc then turns on whoever stunned it. Each spell has its own cooldown, and after any, none
+  the orc then turns on whoever stunned it. **On a boss a stun wears thin** (`STUNS`; whatever
+  resists taunts: a dungeon's boss, a hell level's own, one of a kind, an elite, the Behemoth):
+  any stun (a spell's, a shield bash's, a legendary weapon's) lasts half as long on one, and each
+  one within 20 seconds of the last half as long again, till it would last less than a step and
+  is shrugged off ("Resisted"; it still counts as one). Hold's 6 seconds are 3, then 1.5, 0.75...
+  on a boss; left alone for 20 seconds, it's 3 again. Before, Hold alone, cast again as it came
+  ready, kept a tier-10 boss stunned 99.5% of two minutes, never beginning a blow; now 6% (10%
+  with the Hexes skill at its last level), and it begins 42. What's kept of it is on the boss
+  (`stunned`: how many in the run, and when the last was), in the snapshot with it. Each spell has its own cooldown, and after any, none
   can be cast for a second. A spell that can't be cast says why (`cooldown`, `busy` while
   staggered, stunned or casting, `healthy` at full health, `range`, `sight`, `lifeless` with no
   one living there, `friendly` on someone who isn't an enemy...) and nothing happens; none of
@@ -1334,7 +1342,7 @@ none: it looks as his own.
 | --- | --- | --- | --- | --- | --- |
 | Vigor | anyone | 16 m | 500 ms | 8–12 hit points back | 4000 ms |
 | Burn | an enemy | 16 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
-| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms | 5000 ms |
+| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms (a boss half as long, and less each time) | 5000 ms |
 
 (The rest, each school's tiers and the tomes' spells, are in docs/MAGIC.md.)
 

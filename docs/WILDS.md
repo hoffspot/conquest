@@ -2001,7 +2001,9 @@ warrior can take it off whoever it's on.
     `CALLED_CRY_MS`); told to cover its caller, it roars again, every 30 seconds.
 - **Bosses resist** (`TAUNT.resist`): a dungeon's boss, a hell level's own, one of a kind (the
   Behemoth among them) or an elite is made to for half as long, and taunted three times within 20
-  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Their
+  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Stuns
+  wear thin on the same ones (`STUNS`: half as long, and each within 20 seconds of the last half
+  as long again; docs/MAGIC.md *Hexes*). Their
   tables work as anyone's, and some of their specials read them (docs/DUNGEONS.md: the Goblin
   King's volley at whoever's second, the Ant Monster's flock set on her top). The Behemoth weighs
   whom it's most set on as two more of their fellows near them (battle.js `COLOSSAL_ENMITY`).

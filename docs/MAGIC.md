@@ -141,6 +141,17 @@ The Hexes skill's (core/progress.js): **Stun** (an enemy within 18 metres, 400 m
 cooldown: it can't move, fight, cast or think for 3 seconds, and turns on whoever did it) and,
 once the skill brings it, **Hold** (600 ms, 6 s cooldown, 6 seconds).
 
+**A boss isn't held for long** (battle.js `STUNS`; the owner: "For hold, halve stuns on bosses and
+shorten each repeat, as Fear already wears thin"). On whatever resists taunts (a dungeon's boss,
+a hell level's own, one of a kind, an elite, the Behemoth), any stun lasts half as long, and each
+one within 20 seconds of the last half as long again: Hold 3 seconds, then 1.5, 0.75, 0.375...
+till it would last less than a twentieth of a second and is shrugged off ("Resisted"). Twenty
+seconds with none, and the next lasts its half again. A stronger stunner's stuns (the Hexes
+skill) are halved from their own length, and a shield bash's and a legendary weapon's count in
+the same run. So Hold on a boss is a breathing space (to heal, to get away, to cut a blow
+short), not a lock: cast again as it came ready, it used to keep a boss stunned through the
+whole fight. Both spells say so where they're described.
+
 ### Prismatic Destruction
 
 A reason to practise all four elements (core/prismatic.js, kept on the player's battle actor,

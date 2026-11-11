@@ -5,7 +5,8 @@
 // follower defending itself with its leader down; and whom the cap on a player's foes holds back.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { Battle, STEP_MS, STUNS, TAUNT } from "../client/js/core/battle.js";
+import { SPELLS } from "../client/js/core/spells.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
@@ -396,6 +397,127 @@ describe("a line's ranks closed over its fallen (battle.js #closeRanks)", () => 
         // fallen one's place standing empty)
         assert.deepEqual(slots().sort(), closed);
         assert.notEqual(battle.actor("late").formation.slot.join(), "9,9");
+    });
+});
+
+describe("stuns wear thin on a boss (battle.js STUNS)", () => {
+    // A hero and a foe that only stands; how long each stun cast on it lasts, as told
+    const field = (wild = {}) => {
+        const battle = new Battle(open(60), { seed: 3 });
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [20, 30], hp: 9000 });
+        battle.add({ id: "foe", kind: "beast", team: "beasts", weapon: "claws", square: [28, 30], hp: 9000, speed: 0, chase: 0, ai: "wild", wild: { creature: "wolf", tier: 3, temper: "defensive", guard: 0, roam: 0, leash: 40, pack: null, leader: null, ...wild } });
+
+        return battle;
+    };
+    // (Cast, and played on till it's landed: what it did, and how long the stun it laid lasts)
+    const cast = (battle, spell) => {
+        // (The last one over first, so each is told at its own length)
+        while (battle.time < battle.actor("foe").stunnedUntil) {
+            battle.advance(STEP_MS);
+        }
+
+        Object.assign(battle.actor("hero"), { spellReadyAt: 0, spellsReadyAt: {} });
+        assert.equal(battle.cast("hero", spell, "foe").ok, true);
+
+        const told = run(battle, 1000).find(({ type, id }) => (type === "stunned" || type === "resisted") && id === "foe");
+
+        return told.type === "stunned" ? told.until - told.time : told;
+    };
+
+    it("is what resists taunts: a dungeon's boss, a hell level's own, one of a kind, an elite, what stands over more than its square", () => {
+        assert.deepEqual(STUNS, { share: TAUNT.resist.share, within: TAUNT.resist.within });
+
+        for (const [wild, boss] of [[{}, false], [{ champion: "boss" }, true], [{ champion: "floor" }, true], [{ unique: true }, true], [{ elite: true }, true], [{ champion: "pack" }, false]]) {
+            assert.equal(cast(field(wild), "hold"), boss ? SPELLS.hold.stun / 2 : SPELLS.hold.stun, JSON.stringify(wild));
+        }
+    });
+
+    it("holds anyone else as long as ever, however often", () => {
+        const battle = field();
+
+        assert.deepEqual([cast(battle, "hold"), cast(battle, "hold"), cast(battle, "stun"), cast(battle, "hold")], [6000, 6000, 3000, 6000]);
+    });
+
+    it("halves a stun on a boss, and each one within twenty seconds of the last again, till it's shrugged off", () => {
+        const battle = field({ champion: "boss", unique: true });
+        const lasted = [];
+
+        for (let k = 0; k < 6; k++) {
+            lasted.push(cast(battle, "hold"));
+            run(battle, 5000);
+        }
+
+        // (Half of Hold's six seconds, then half of that each time: 6 s apart, each within 20 s
+        // of the last)
+        assert.deepEqual(lasted, [3000, 1500, 750, 375, 188, 94]);
+
+        // (The next would last under a step: shrugged off, nothing of it laid on the boss, though
+        // it turns on whoever cast it and it still counts as one)
+        const foe = battle.actor("foe");
+        const before = foe.stunnedUntil;
+        const told = cast(battle, "hold");
+
+        assert.equal(told.type, "resisted");
+        assert.deepEqual([told.by, told.spell, told.always, told.worn], ["hero", "hold", false, true]);
+        assert.equal(foe.stunnedUntil, before);
+        assert.equal(foe.target, "hero");
+        assert.equal(foe.stunned.count, 7);
+    });
+
+    it("lasts its half again once none's been laid on it for twenty seconds", () => {
+        const battle = field({ champion: "boss" });
+
+        assert.deepEqual([cast(battle, "hold"), cast(battle, "stun")], [3000, 750]);
+        run(battle, STUNS.within);
+        assert.equal(cast(battle, "stun"), 1500);
+        // (Counted from the last, not the first: one every fifteen seconds keeps wearing thinner)
+        run(battle, 15000);
+        assert.equal(cast(battle, "hold"), 1500);
+        run(battle, 15000);
+        assert.equal(cast(battle, "hold"), 750);
+    });
+
+    it("counts a stronger stunner's stuns the same way (the Hexes skill), and a shield bash's", () => {
+        const battle = field({ champion: "boss" });
+
+        battle.actor("hero").power.stun = 2;
+        assert.deepEqual([cast(battle, "hold"), cast(battle, "hold")], [6000, 3000]);
+
+        // (A bash: a blow that stuns as it lands, the third in the run)
+        const bash = new Battle(open(60), { seed: 3 });
+
+        bash.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [20, 30], hp: 9000, armed: true });
+        bash.add({ id: "foe", kind: "beast", team: "beasts", weapon: "claws", square: [21, 30], hp: 9000, speed: 0, chase: 0, ai: "wild", wild: { creature: "wolf", tier: 3, temper: "defensive", guard: 0, roam: 0, leash: 40, pack: null, leader: null, champion: "boss" } });
+
+        const lasted = [];
+
+        for (let k = 0; k < 2; k++) {
+            bash.empower("hero", "melee", 1, { stun: 2000 });
+            bash.command("hero", { type: "engage", target: "foe", stand: true });
+
+            const told = run(bash, 3000).find(({ type, ability }) => type === "stunned" && ability === "shieldBash");
+
+            lasted.push(told.until - told.time);
+        }
+
+        assert.deepEqual(lasted, [1000, 500]);
+    });
+
+    it("is kept in a snapshot: carried on from one, the next stun's as short as it would have been", () => {
+        const battle = field({ champion: "boss" });
+
+        assert.equal(cast(battle, "hold"), 3000);
+
+        const again = Battle.restore(battle.world, decode(encode(battle.snapshot())));
+
+        assert.deepEqual(again.actor("foe").stunned, battle.actor("foe").stunned);
+        assert.equal(cast(again, "hold"), 1500);
+    });
+
+    it("says so where the spells are told", () => {
+        assert.match(SPELLS.stun.about, /boss/);
+        assert.match(SPELLS.hold.about, /boss/);
     });
 });
 
