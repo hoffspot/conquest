@@ -4627,6 +4627,20 @@ now in their crowd):
   that falls while it waits is forgotten, never seen, and one that goes out of reach waits on: not
   built in full, as they were till 2026-10-25 (a joined game in the midst of an invasion had 38 of
   its dead in line to be, far off).
+- **Not begun in full till the marshal's looked** (`#unlooked`, `#nextEnlistee`). The marshal
+  looks a couple of times a second, and between its looks whoever's next of those waiting to be
+  dressed is begun as soon as the one before is done, or let go. So a soldier brought out since
+  it last looked, or looked at with other room than there is now (the bodies' budget cut by the
+  memory guard, the quality changed: `#roomSaid`), isn't begun: the marshal's asked to look in
+  the next frame (its clock set to 0), and only what it leaves to be dressed is. One of the
+  wild's people-shaped creatures waits on the rationing the same way. Till 2026-11-11 such a one
+  could be begun in that while with no room for it: a second of the processor and ten megabytes
+  on a phone just as its budget was cut, and, built, left in full, as one only just past the room
+  is (`MARSHAL.margin`). With each of the frame's jobs on its own clock (*The frame's own jobs*,
+  under *Performance*), the folk's room is looked at a quarter of a second before the marshal
+  next looks, and whoever it stopped dressing left the next soldier to be begun: seed 2's start
+  town's nearest guard, its budget cut to no room at all, was built in full and stayed so
+  (`e2e/pellagos.spec.js`, "a guard in its crowd").
 - **Sooner while they're unseen** (`FIGURES`). While any soldier near waits so, unseen, the figures
   are made with 10 ms of each frame (`FIGURES.budget`) rather than that share, the kinds of those
   nearest the player first (whoever's fighting them before anyone: `Crowd.first`, `#marshal`),

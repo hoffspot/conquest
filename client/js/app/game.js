@@ -1921,6 +1921,11 @@ export class Game {
         // (#rationing)
         this.rationWaiting = new Set();
 
+        // Whom the marshal and the rationing each last looked at (ids), and with what room in full
+        // (#roomSaid): one of theirs come out since, or looked at with other room than there is
+        // now, isn't begun in full till it's been looked at again (#unlooked, #nextEnlistee)
+        this.looked = { soldiers: new Set(), soldiersRoom: null, creatures: new Set(), creaturesRoom: null };
+
         // The folk out in the world past the bodies' budget, not drawn till there's room for them
         // (#folkRoom)
         this.folkWaiting = new Set();
@@ -5034,6 +5039,10 @@ export class Game {
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
         const room = soldiers.length > MARSHAL.from ? full : Math.max(full, this.#bodiesBudget() - this.#heldInFull((id) => !ids.has(id)));
         const viewer = this.#viewer(me);
+
+        // (Whom it's looked at now, and with what room: #unlooked)
+        this.looked.soldiers = ids;
+        this.looked.soldiersRoom = this.#roomSaid();
         // (Past the reach from the camera: in their crowd, whatever room there is, but whoever
         // the order puts before those who merely stand about; the rest in the order, #stature)
         const far = new Set();
@@ -5314,9 +5323,12 @@ export class Game {
     // The soldiers about the player (`me`) the marshal draws, in full or in their crowds: alive, on
     // their map and within DRAW_REACH of them, not a siege engine's (of `among`, if not everyone)
     #soldiersAbout(me, among = this.battle.actors) {
-        const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
+        return among.filter((actor) => this.#soldierAbout(actor, me));
+    }
 
-        return among.filter((actor) => actor?.kind === "soldier" && !actor.engine && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+    // Whether someone's one of those soldiers about the player (`me`)
+    #soldierAbout(actor, me) {
+        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH && this.host.soldiers.has(actor.id);
     }
 
     // How many kinds of soldiers' figures look to be made while the game loads (#figuresFirst): of
@@ -5530,6 +5542,11 @@ export class Game {
 
         const rationed = this.battle.actors.filter((actor) => !actor.dead && this.#rationed(actor));
         const ids = new Set(rationed.map(({ id }) => id));
+
+        // (Whom it's looked at now, and with what room: #unlooked)
+        this.looked.creatures = ids;
+        this.looked.creaturesRoom = this.#roomSaid();
+
         // (Room beside everyone else held in full, but the wild's beasts built in code: their
         // bodies shared, each one small)
         const room = Math.max(this.view.quality.soldiers?.full ?? 0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
@@ -6008,6 +6025,36 @@ export class Game {
     // guard holding less, no more than its level allows (app/memoryguard.js MEMORY_GUARD)
     #bodiesBudget() {
         return Math.min(this.view.quality.bodies ?? Infinity, MEMORY_GUARD.bodies[this.memoryGuard.level] ?? Infinity);
+    }
+
+    // What says how much room there is in full, whoever's about: the bodies' budget, the few a
+    // battle's soldiers have in full, and the models' own room, as the quality and the memory
+    // guard have them now. A look taken with any of them other than it is now is out of date
+    // (#unlooked)
+    #roomSaid() {
+        return `${this.#bodiesBudget()} ${this.view.quality.soldiers?.full ?? ""} ${this.view.quality.models ?? ""}`;
+    }
+
+    // Whether someone waiting to be dressed in full has still to be looked at by whoever says if
+    // there's room for them so: one of the soldiers about by the marshal, one of the wild's
+    // people-shaped creatures by the rationing. Come out since it last looked, or looked at with
+    // other room than there is now (`said`: #roomSaid; the memory guard's cut the bodies' budget,
+    // the quality's changed), it mustn't be begun: each looks a couple of times a second, each at
+    // its own time (PACED), and anyone's dressing done, or the folk let go, frees the next to be
+    // begun at once. A soldier with no room in full was begun so in that while, a second of the
+    // processor and ten megabytes on a phone the moment its budget was cut, and then left in
+    // full, as one built only just past the room is (MARSHAL.margin). Returns the clock of
+    // whoever's to look, or null: its own to dress now
+    #unlooked(actor, me, said) {
+        if (!me) {
+            return null;
+        }
+
+        if (actor.kind === "soldier") {
+            return this.#soldierAbout(actor, me) && !(this.looked.soldiers.has(actor.id) && this.looked.soldiersRoom === said) ? "marshalClock" : null;
+        }
+
+        return this.#rationed(actor) && !actor.dead && this.#bodiesBudget() !== Infinity && !(this.looked.creatures.has(actor.id) && this.looked.creaturesRoom === said) ? "rationClock" : null;
     }
 
     // The memory guard (app/memoryguard.js): on a touch screen, what's held looked at every so
@@ -11014,9 +11061,20 @@ export class Game {
         // (The colossal before anyone: it's seen from far off, and comes for everyone; and a town's
         // siege engines with it, quick to make, each its model at once)
         const colossal = (actor) => Boolean(actor.wild?.colossus || actor.engine);
+        const said = this.#roomSaid();
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {
+                continue;
+            }
+
+            // (One not begun that whoever says if there's room for it in full has still to look
+            // at: not begun till then, and looked at in the next frame, not at its next turn)
+            const looking = this.enlistees.has(actor.id) ? null : this.#unlooked(actor, me, said);
+
+            if (looking) {
+                this[looking] = 0;
+
                 continue;
             }
 
