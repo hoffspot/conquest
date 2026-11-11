@@ -369,7 +369,10 @@ gl_FragColor = vec4(waterLight / max(waterAlpha, 0.001), waterAlpha);`);
  * same blur), as much as a surface reflecting 0.04 square on reflects of it at that roughness and
  * that glancing a look (Karis's fit); the sun as sharply as that roughness has it (Blinn-Phong,
  * its highlight as high); and what comes up through it, less what's reflected (Schlick, 0.02
- * square on).
+ * square on). The sky's there to reflect where three.js says the light from all round is the
+ * kind it is here: `ENVMAP_TYPE_CUBE_UV` as r186 has it, `ENVMAP_TYPE_PMREM` as r187 names it
+ * (either: with neither defined the water would mirror nothing, and say nothing of it;
+ * test/far.test.js fails if three.js has neither).
  */
 export const STILL_WATER = Object.freeze({
     pars: `float stillWet;
@@ -383,7 +386,7 @@ vec3 stillWater(vec3 bed, float depth, float up) {
     vec3 stillUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
     float stillAcross = saturate(dot(stillUp, geometryViewDir));
     vec3 stillSky = vec3(0.0);
-#if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV )
+#if defined( USE_ENVMAP ) && ( defined( ENVMAP_TYPE_CUBE_UV ) || defined( ENVMAP_TYPE_PMREM ) )
     vec4 stillRough = ${WATER.roughness.toFixed(2)} * vec4(-1.0, -0.0275, -0.572, 0.022) + vec4(1.0, 0.0425, 1.04, -0.04);
     vec2 stillFit = vec2(-1.04, 1.04) * (min(stillRough.x * stillRough.x, exp2(-9.28 * stillAcross)) * stillRough.x + stillRough.y) + stillRough.zw;
 

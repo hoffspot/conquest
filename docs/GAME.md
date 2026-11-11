@@ -4087,7 +4087,11 @@ longer in software rendering, for the same picture.) Glass (windows, leaded ones
 well or a pool; obsidian), iron, gold and silver, and slate shine (`SHINES`): a highlight where
 the sun or a lamp catches them, and the sky reflected in them, more of it at a glancing look
 (Fresnel, less so the rougher the surface: Karis's fit for phones), and that much less of the
-sky's light taken in beneath. Glass mirrors the sky sharply; iron has a broad dull sheen; gold
+sky's light taken in beneath. (The sky's there to reflect only where three.js says the light
+from all round is the baked kind, by a name of its own: `ENVMAP_TYPE_CUBE_UV` in r186,
+`ENVMAP_TYPE_PMREM` in r187. The atlas and still water, world/water.js, ask for either, and a
+test fails if three.js has neither: without it what shines would mirror nothing, and nothing
+would say so.) Glass mirrors the sky sharply; iron has a broad dull sheen; gold
 and silver reflect in their own colour, their own paint half as bright; slate has a soft sheen,
 mostly at a glancing look. What's painted, dyed or woven in gold or silver has a colour of its
 own that doesn't shine (`paint-gold`, `cloth-gold`, `cloth-saffron`, `cloth-silver`; golden

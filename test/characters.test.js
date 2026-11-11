@@ -2431,6 +2431,31 @@ describe("faces and skin (face.js, skin.js)", () => {
         assert.equal(new SkinMaterial().clone().customProgramCacheKey(), "skin");
         assert.equal(new HairMaterial().clone().customProgramCacheKey(), "hair");
         assert.equal(new SkinMaterial().roughness, 1, "the picture's roughness as it is");
+
+        // three.js r187's lighting, which works a surface's diffuse term out before the line that
+        // adds it (for its rough-diffuse option): skin wrapped the same in it, hair banded; and
+        // lighting unlike either says so, rather than leaving skin unlit by it
+        const ours = THREE.ShaderChunk.lights_physical_pars_fragment;
+        const r186 = "reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );";
+        const r187 = "vec3 diffuseBRDF = BRDF_Lambert( material.diffuseContribution );\n\n\treflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );";
+
+        assert.ok(ours.includes(r186) || ours.includes(r187.split("\n\n\t")[1]), "(this three.js's lighting: one or the other)");
+
+        try {
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours.replace(r186, r187);
+
+            const later = compiled(new SkinMaterial());
+
+            assert.ok(later.includes("vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP )") && later.includes("reflectedLight.directDiffuse += skinLit * directLight.color * diffuseBRDF * ( 1.0 - F );"), "wrapped, in r187's");
+            assert.ok(!later.includes("reflectedLight.directDiffuse += irradiance * diffuseBRDF"), "in place of three.js's");
+            assert.ok(compiled(new HairMaterial()).includes("hairBand( hairStrand, geometryNormal, hairHalfway"));
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours.replace(r186, "reflectedLight.directDiffuse += somethingElse;");
+            assert.throws(() => compiled(new SkinMaterial()), /three\.js's lighting has changed/);
+        } finally {
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours;
+        }
+
+        assert.equal(compiled(new SkinMaterial()), skin, "(as it was)");
     });
 
     it("paints eyes with a dark pupil in the middle", () => {

@@ -181,6 +181,12 @@ describe("the far land (world/far)", () => {
         assert.ok(shader.fragmentShader.indexOf(STILL_WATER.reflected) < shader.fragmentShader.indexOf("#include <opaque_fragment>"), "(reflected once it's lit)");
         assert.match(STILL_WATER.reflected, /getIBLRadiance\(geometryViewDir, stillUp, 0\.12\)/, "(the sky as blurred as the water nearer has it)");
         assert.match(STILL_WATER.reflected, /BRDF_BlinnPhong\(directionalLights\[0\]\.direction/, "(and the sun)");
+        // (The sky's there to reflect by three.js's name for the light from all round, baked:
+        // ENVMAP_TYPE_CUBE_UV in r186, ENVMAP_TYPE_PMREM in r187, either asked for. If this
+        // three.js has neither, the water would mirror nothing and say nothing of it: water.js
+        // and the atlas must follow its new name)
+        assert.ok(STILL_WATER.reflected.includes("#if defined( USE_ENVMAP ) && ( defined( ENVMAP_TYPE_CUBE_UV ) || defined( ENVMAP_TYPE_PMREM ) )\n"), "either name");
+        assert.equal(["ENVMAP_TYPE_CUBE_UV", "ENVMAP_TYPE_PMREM"].filter((name) => THREE.ShaderChunk.lights_fragment_maps.includes(`defined( ${name} )`) && THREE.ShaderChunk.envmap_physical_pars_fragment.includes(`#ifdef ${name}`)).length, 1, "three.js's name for it");
         material.dispose();
 
         // (The water nearer: not faded out with what's near, but drawn to where the near world ends,

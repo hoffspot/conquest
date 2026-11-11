@@ -650,9 +650,12 @@ void RE_Direct_Atlas(const in IncidentLight directLight, const in vec3 geometryP
 #define RE_Direct RE_Direct_Atlas`;
 
 // (The sky, or the room, reflected, and that much less of their light taken in and given back
-// from under the surface)
+// from under the surface: where three.js says the light from all round is the kind it is here,
+// ENVMAP_TYPE_CUBE_UV as r186 has it, ENVMAP_TYPE_PMREM as r187 names it. Either: with neither
+// defined nothing would be reflected, and nothing said of it; test/buildings.test.js fails if
+// three.js has neither)
 const SHINE_REFLECTED_GLSL = `
-#if defined(USE_ENVMAP) && defined(ENVMAP_TYPE_CUBE_UV)
+#if defined(USE_ENVMAP) && (defined(ENVMAP_TYPE_CUBE_UV) || defined(ENVMAP_TYPE_PMREM))
 if (atlasGloss > 0.0) {
     vec3 atlasReflected = atlasReflectance(geometryNormal, geometryViewDir);
 

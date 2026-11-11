@@ -1362,6 +1362,17 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.match(atlas.fragmentShader, /#define RE_Direct RE_Direct_Atlas/);
         assert.match(atlas.fragmentShader, /atlasShine\(diffuseColor\);\n#include <lights_lambert_fragment>/);
         assert.match(atlas.fragmentShader, /#include <lights_fragment_end>\n[^]*getIBLRadiance\(geometryViewDir, geometryNormal, atlasRoughness\)/);
+
+        // (The sky's reflected only where three.js says the light from all round is the kind it
+        // is here, by a name of its own: ENVMAP_TYPE_CUBE_UV in r186, ENVMAP_TYPE_PMREM in r187.
+        // The atlas asks for either. If this three.js has neither, what shines would reflect
+        // nothing and say nothing of it: its name's changed again, and atlas.js and water.js
+        // must follow)
+        const named = ["ENVMAP_TYPE_CUBE_UV", "ENVMAP_TYPE_PMREM"].filter((name) => THREE.ShaderChunk.lights_fragment_maps.includes(`defined( ${name} )`) && THREE.ShaderChunk.envmap_physical_pars_fragment.includes(`#ifdef ${name}`));
+
+        assert.equal(named.length, 1, "three.js's name for the light from all round, baked");
+        assert.match(THREE.ShaderChunk.envmap_physical_pars_fragment, /vec3 getIBLRadiance\( const in vec3 viewDir, const in vec3 normal, const in float roughness \)/);
+        assert.ok(atlas.fragmentShader.includes("#if defined(USE_ENVMAP) && (defined(ENVMAP_TYPE_CUBE_UV) || defined(ENVMAP_TYPE_PMREM))\nif (atlasGloss > 0.0) {"), "either name");
         assert.match(atlas.fragmentShader, /outgoingLight = [^;]*reflectedLight\.directSpecular \+ reflectedLight\.indirectSpecular/);
         assert.doesNotMatch(wilds.fragmentShader, /atlasShine|RE_Direct_Atlas/);
         assert.match(wilds.vertexShader, /vLayer = mod\(layer/);

@@ -525,7 +525,10 @@ lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
   green, 0.08 blue), as light scattered under the skin does, so a shadow's edge on a face is soft
   and warm, not a grey line; its highlights are the sharper for being wet or oily where it is. A
   handful of operations a pixel, no more memory; with three people close in the taproom, no
-  difference to the time a frame takes that could be measured.
+  difference to the time a frame takes that could be measured. It's one line of three.js's own
+  lighting changed (hair's another), found by its text: as r186 has it, or as r187 does, which
+  works a surface's diffuse term out first; with neither in it the material says so rather than
+  leave skin lit as anything else is (`surfaces.js` `lighting`).
 
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
 on MakeHuman's eye helper mesh with a glossy clear coat. Each look of eye is painted once and its
