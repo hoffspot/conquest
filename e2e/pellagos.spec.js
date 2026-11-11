@@ -14157,6 +14157,136 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
+test("coming up to a city, the ground its soldiers and townsfolk are stood on is made a piece a frame before the steps that bring them out, which make none; and a dungeon's levels are worked out before the player's at its door, and it's made of them", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=2");
+
+    const came = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+        const overworld = game.world.maps.town;
+        const { nearestFree, squaresOf } = await import("/js/core/grid.js");
+        const { SETTLEMENT_KINDS } = await import("/js/core/setpieces/town.js");
+        const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        game.stop();
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (The chunks the world's steps make for themselves, counted, with what each step did:
+        // those made between steps, by the drawing or ahead, aren't)
+        const steps = [];
+        let stepping = false;
+        const [advance, ground] = [host.advance.bind(host), overworld.ground.chunk.bind(overworld.ground)];
+
+        host.advance = (ms) => {
+            steps.push({ chunks: 0, types: [] });
+            stepping = true;
+
+            try {
+                const events = advance(ms);
+
+                steps.at(-1).types = [...new Set(events.map(({ type }) => type))];
+
+                return events;
+            } finally {
+                stepping = false;
+            }
+        };
+        overworld.ground.chunk = (cx, cy) => {
+            if (stepping && !overworld.ground.peek(cx, cy)) {
+                steps.at(-1).chunks++;
+            }
+
+            return ground(cx, cy);
+        };
+
+        // The player put somewhere out in the world, what's drawn round them there drawn (their
+        // chunks made by the drawing, as they are when they walk there), no step played
+        const put = async ([x, y]) => {
+            Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await turn();
+            }
+        };
+        // Frames played, a step in each (without drawing), till `done` or so many
+        const frames = async (most, done = () => false) => {
+            let played = 0;
+
+            for (; played < most && !done(); played++) {
+                game.advance(0.05, { render: false });
+                await turn();
+            }
+
+            return played;
+        };
+        const free = (x, y, within = 40) => nearestFree(squaresOf(overworld), [Math.round(x), Math.round(y)], { within });
+        const made = ([x0, y0, x1, y1]) => overworld.made(x0, y0, x1, y1);
+
+        // A city, come up to from the west: 180 m from its edge, further than its soldiers
+        // muster at (120 m: core/host.js MUSTER) and within the 80 m more at which its ground's
+        // wanted (SOON)
+        const place = game.world.plan.places.find(({ id }) => id === "human-city-1");
+        const edge = SETTLEMENT_KINDS[place.kind].radius;
+        const from = (off) => free(place.at[0] - edge - off, place.at[1]);
+        const holds = ([x0, y0, x1, y1]) => place.at[0] >= x0 && place.at[0] <= x1 && place.at[1] >= y0 && place.at[1] <= y1;
+
+        await put(from(180));
+
+        const wanted = host.soon().boxes.filter(holds);
+        const unmade = wanted.filter((box) => !made(box)).length;
+        const before = steps.length;
+        const taken = await frames(1500, () => wanted.every(made));
+        const waiting = game.soonChunks?.length ?? null;
+        const far = { wanted: wanted.length, unmade, taken, made: wanted.every(made), mustered: host.mustered.has(place.id), waiting, inSteps: steps.slice(before + 1).reduce((sum, step) => sum + step.chunks, 0) };
+
+        // (Nearer: its soldiers out, then its townsfolk, in steps that make no ground)
+        await put(from(110));
+        await frames(60, () => host.mustered.has(place.id));
+        await put(from(90));
+        await frames(60, () => host.townsfolk.has(place.id));
+
+        const out = { mustered: host.mustered.has(place.id), townsfolk: host.townsfolk.has(place.id), muster: steps.find(({ types }) => types.includes("muster"))?.chunks ?? null, folk: steps.filter(({ types }) => types.includes("townsfolk")).at(-1)?.chunks ?? null };
+
+        // A dungeon out in the wilds, come up to: 100 m from its way in, nearer than its levels
+        // are wanted at (150 m: SOON.delve) and further than it's made at (45 m: DELVES.near)
+        const site = game.world.plan.sites
+            .filter(({ kind }) => kind === "dungeon")
+            .sort((a, b) => Math.hypot(a.at[0] - place.at[0], a.at[1] - place.at[1]) - Math.hypot(b.at[0] - place.at[0], b.at[1] - place.at[1]))
+            .find((one) => {
+                try {
+                    return Boolean(free(one.at[0] - 100, one.at[1], 20));
+                } catch {
+                    return false;
+                }
+            });
+        const building = () => game.world.interiors.buildings.get(`site:${site.id}`);
+
+        await put(free(site.at[0] - 100, site.at[1], 20));
+
+        const waited = await frames(600, () => Boolean(building()?.given));
+        const given = building()?.given ?? null;
+        const ahead = { waited, given: Boolean(given), madeYet: Boolean(building()?.made), told: host.soon().dungeons.map(({ key }) => key), tier: given?.from.tier ?? null };
+
+        await put(free(site.at[0] - 25, site.at[1], 20));
+        await frames(60, () => Boolean(building()?.made));
+
+        return { far, out, ahead, delved: { made: Boolean(building()?.made), taken: Boolean(given) && building().dungeon === given.dungeon, tier: building().tier ?? null, kept: building().given ?? null, key: `site:${site.id}` } };
+    });
+
+    // (Its ground wanted, not all of it made by what's drawn round the player; made ahead in
+    // frames, none of it by a step, before its soldiers are out)
+    expect(came.far.wanted).toBeGreaterThan(0);
+    expect(came.far.unmade).toBeGreaterThan(0);
+    expect(came.far).toMatchObject({ made: true, mustered: false, inSteps: 0 });
+    expect(came.far.taken).toBeGreaterThan(20);
+    expect(came.out).toEqual({ mustered: true, townsfolk: true, muster: 0, folk: 0 });
+    // (The dungeon's levels given before it's made, and it's made of them, at the tier they were worked out for)
+    expect(came.ahead).toMatchObject({ given: true, madeYet: false, told: [came.delved.key] });
+    expect(came.delved).toMatchObject({ made: true, taken: true, tier: came.ahead.tier, kept: null });
+});
+
 test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
     test.setTimeout(300000);
     // (Of where a dungeon puts the camera: left to the game from the start)

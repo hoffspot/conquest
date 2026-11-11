@@ -2762,7 +2762,23 @@ ms, shared with the settlements' buildings and the undergrowth), a step at least
 more than one chunk; while the game loads, a turn gets 40 ms (`LOAD_BUDGET`). A chunk is 64
 metres, so it's a few frames from begun to drawn, two chunks off in the fog. The settlements a
 little further off (within five chunks) are laid out ahead in a worker (world/layouts.js: see
-WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
+WORLD.md), so coming near a town doesn't stall a frame laying it out.
+
+**The ground the world will soon want** (app/game.js `#groundAhead`, core/host.js `soon`:
+docs/WAR.md *Made ahead on the world server*). A town's soldiers come out when the player's 120 m
+from its edge and its townsfolk at 100, on ground further off than the 25 chunks drawn: a city's
+far side is 300 m away. The step that brought them out made that ground, 4 to 8 chunks at once,
+and the game stood still for a tenth of a second or two (120 to 480 ms here, by the clock) coming
+up to every town, city and capital, an army or a camp. So the game asks the host twice a second
+what ground it will soon want (once the player's within 80 m more), has the chunks' own workers
+work out those chunks' heights, lay out the settlements by them and find the trails near them,
+and makes one of them a piece a frame (`Overworld.chunkWithin`: fourteen pieces to a chunk, about
+a millisecond each here), one whose settlement or trail is still with a worker left till it's
+back (3 seconds at most). The same answer names the dungeons the player's coming to, whose
+levels are worked out on the layouts' worker before they're within sight of the way in
+(docs/DUNGEONS.md *Its levels*). A copy of someone else's world does the same: its steps want the
+same ground. Nothing hangs on it being done in time: the step makes what it finds missing, as it
+always did, and the world's the same either way. Each chunk has:
 
 - **Its ground** (above).
 - **Water** (world/water.js): a sheet over the lakes, the sea, rivers and mountain streams, its

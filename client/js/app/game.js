@@ -105,7 +105,7 @@ import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } f
 import { MARKER_NAMES, MARKERS, markersOf, withMarker } from "../core/markers.js";
 import { MARGIN as WAY_MARGIN, navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
-import { RAISED } from "../core/overworld.js";
+import { CHUNKS, RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt, scenesIn } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { buffsDue, cureFor } from "../core/smartcast.js";
@@ -673,7 +673,12 @@ function realmMixed(mix, realm) {
 const FOLLOWED = 0.1;
 const ICONS_NEAR = Object.freeze({ every: 0.25, moved: 4, past: 12 });
 
-const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
+const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, soon: 0.125, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
+
+// The ground the world will soon want, made ahead (#groundAhead): the host asked what it is every
+// `every` seconds (as often as it looks round: core/host.js RELEVANCE); and a chunk left waiting
+// on a worker (its settlement's layout, a trail near it) no longer than `patience` seconds
+const SOON_GROUND = Object.freeze({ every: 0.5, patience: 3 });
 
 // Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
 // they can't see from there (#walledOff, #onlySeenAbout) held in full only for `after` seconds of
@@ -3786,6 +3791,77 @@ export class Game {
         this.runner.bakeAhead(this.#navBaker());
     }
 
+    // What the world will soon want made (core/host.js soon), made before the step that wants it:
+    // the ground a town's soldiers, its townsfolk, a camp or an army will be stood on in the step
+    // a player comes near enough, further off than the chunks drawn round the player reach. Made
+    // in that step, as it was, a city's was 4 to 8 chunks at once: the game stood still a tenth
+    // of a second or two, coming up to a town, with the town in plain view. So the host's asked
+    // every SOON_GROUND.every seconds, the chunks it names have their land's heights, the
+    // settlements by them and the trails near them asked of the chunks' own workers (world/
+    // terrains.js, world/layouts.js), and one of them is made a piece a frame (core/overworld.js
+    // chunkWithin: a millisecond or so, a phone's two or three), one whose settlement or trail is
+    // still with a worker left till it's back. And the dungeons it names have their levels
+    // worked out on the layouts' worker (core/insides.js give), tens of milliseconds that were
+    // spent in the step a player came within sight of the way in. In a copy of someone else's
+    // world too: its steps want the same ground. Nothing hangs on any of it being done in time:
+    // a step makes what it finds missing, as ever, and the world's the same either way.
+    #groundAhead(dt) {
+        const overworld = this.world.maps?.town;
+
+        if (!overworld?.chunkWithin || !this.host?.soon) {
+            return;
+        }
+
+        const { layouts = null, terrains = null } = this.chunks ?? {};
+        const made = ([cx, cy]) => overworld.made(cx * CHUNK, cy * CHUNK, cx * CHUNK, cy * CHUNK);
+
+        if (this.#due("soonAt", dt, SOON_GROUND.every, PACED.soon)) {
+            const { boxes, dungeons } = this.host.soon();
+            const wanted = new Map();
+
+            for (const [x0, y0, x1, y1] of boxes) {
+                for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
+                    for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
+                        wanted.set(cy * CHUNKS + cx, [cx, cy]);
+                    }
+                }
+            }
+
+            this.soonChunks = [...wanted.values()].filter((chunk) => !made(chunk));
+            terrains?.want(this.soonChunks);
+
+            // (The settlements near them: the layouts look five chunks round each asked about, so
+            // one in every four each way finds them all)
+            for (const [cx, cy] of new Map(this.soonChunks.map(([x, y]) => [Math.floor(y / 4) * CHUNKS + Math.floor(x / 4), [x, y]])).values()) {
+                layouts?.ahead(cx, cy);
+            }
+
+            if (layouts && this.world.interiors) {
+                layouts.interiors = this.world.interiors;
+                layouts.delve(dungeons);
+            }
+        }
+
+        // (The first of them that isn't made, nor waiting on a worker; one that's waited
+        // SOON_GROUND.patience seconds, a worker gone quiet, made whatever)
+        const waiting = this.soonChunks ?? [];
+        const patient = (this.soonWaited ?? 0) < SOON_GROUND.patience;
+        const next = waiting.findIndex((chunk) => !made(chunk) && !(patient && (layouts?.pending(...chunk) || terrains?.finding(...chunk))));
+
+        if (next < 0) {
+            this.soonWaited = waiting.some((chunk) => !made(chunk)) ? (this.soonWaited ?? 0) + dt : 0;
+
+            return;
+        }
+
+        this.soonWaited = 0;
+
+        // (A piece of it: the time allowed already gone by, as this clock has it)
+        if (overworld.chunkWithin(...waiting[next], 0, () => 1)) {
+            waiting.splice(next, 1);
+        }
+    }
+
     // The navigation tiles round the player that the ways found near them never wait for
     // (core/battle.js WAIT_BEYOND, and the few metres round a way its tiles are made for), baked
     // off the page's thread all at once as the game loads: resolves once they're in
@@ -4605,6 +4681,7 @@ export class Game {
         }
 
         this.#bakeAhead();
+        this.#groundAhead(dt);
         telemetry.mark(PHASE.effects);
 
         // The time of day, out in the world and indoors
