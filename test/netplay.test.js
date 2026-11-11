@@ -16,7 +16,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host, OWN } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { AGAIN, CHAT, chatLine, characterFrom, CHECK_EVERY, HEARD, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -27,7 +27,7 @@ const guest = (name, race = "human", weapon = "bow") => ({ hero: { name, shape: 
 
 // A host's world with its player in it, opened to others over a link that carries what's said
 // (queued, both ways, as a relay would), and a way to deliver all of it
-function opened({ seed = 2 } = {}) {
+function opened({ seed = 2, clock = null } = {}) {
     const host = new Host(buildWorld({ seed }), { populate: false });
 
     host.join({ id: HOST_PLAYER, hero: HERO });
@@ -35,7 +35,7 @@ function opened({ seed = 2 } = {}) {
 
     const post = [];
     const joiners = new Map();
-    const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }) });
+    const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }), clock });
     let next = 1;
 
     // Someone joining (with a clock, if it's to time the link; on a link of their own, unless
@@ -524,6 +524,172 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(positions(joining.host), positions(host));
     });
 
+    it("gives a copy set right the host's rare encounters too: one that skipped steps has the host's clock for them, not its own (core/rare.js Legends)", () => {
+        const { host, join, play, deliver } = opened();
+        const { joining } = join(guest("Bryn"));
+
+        // (Too far behind to catch up: none of the steps played, the rare encounters' time with them)
+        play(PACE.tooFar + 60);
+        assert.equal(joining.step(), null);
+        assert.equal(joining.farBehind, true);
+        assert.ok(joining.host.legends.played < host.legends.played);
+
+        deliver();
+        assert.equal(joining.resyncs, 1);
+        assert.deepEqual(joining.host.legends.toJSON(), host.legends.toJSON());
+        assert.equal(joining.host.rareLooked, host.rareLooked);
+        assert.equal(joining.host.messengersAt, host.messengersAt);
+    });
+
+    it("sends the world again for the asking at once, and again no sooner than AGAIN.every by the host's clock, one snapshot for all who ask together", () => {
+        let now = 50000;
+        const { host, hosting, join, post, deliver } = opened({ clock: () => now });
+        const bryn = join(guest("Bryn"));
+        const cai = join(guest("Cai"));
+        const states = (peer) => post.filter(({ to, text }) => to === peer && text.startsWith('{"kind":"state"')).length;
+        const snapshot = host.snapshot.bind(host);
+        let taken = 0;
+
+        host.snapshot = () => {
+            taken++;
+
+            return snapshot();
+        };
+
+        // The first asking: answered at once, with their own of their hero
+        post.length = 0;
+        hosting.hear(bryn.peer, encode({ kind: "again" }));
+        assert.equal(states(bryn.peer), 1);
+        assert.equal(taken, 1);
+
+        // Asked again and again within the time: not answered, however often (100 askings took
+        // 650 ms of the host's thread and 12 MB to send)
+        for (let k = 0; k < 100; k++) {
+            now += 10;
+            hosting.hear(bryn.peer, encode({ kind: "again" }));
+        }
+
+        hosting.flush();
+        assert.equal(states(bryn.peer), 1);
+        assert.equal(taken, 1);
+
+        // Its time come, they're sent it once as they're next heard from (a ping, each second:
+        // the world needn't be going), and Cai, asking in the same breath, from the same snapshot
+        now = 50000 + AGAIN.every - 1;
+        hosting.hear(bryn.peer, encode({ kind: "ping", t: 1 }));
+        assert.equal(states(bryn.peer), 1);
+        hosting.asked.add(cai.peer);
+        now += 1;
+        hosting.hear(bryn.peer, encode({ kind: "ping", t: 2 }));
+        assert.deepEqual([states(bryn.peer), states(cai.peer), taken], [2, 1, 2]);
+        assert.equal(hosting.asked.size, 0);
+
+        // (And both carry on from it)
+        deliver();
+        assert.deepEqual([bryn.joining.resyncs, cai.joining.resyncs], [2, 1]);
+        assert.equal(bryn.joining.host.checksum(), host.checksum());
+        assert.equal(cai.joining.host.checksum(), host.checksum());
+
+        // One gone and come back isn't held to what they asked before
+        hosting.gone(bryn.peer);
+        assert.equal(hosting.worldAt.has(bryn.peer), false);
+    });
+
+    it("takes commands from one who's joined no faster than HEARD allows, and nothing longer than a character: more is let go of, the world none the worse", () => {
+        let now = 0;
+        const { host, hosting, join, post } = opened({ clock: () => now });
+        const bryn = join(guest("Bryn"));
+        const done = [];
+        const command = host.command.bind(host);
+
+        host.command = (id, order) => {
+            done.push(id);
+
+            return command(id, order);
+        };
+
+        // A burst: HEARD.burst of them done, the rest let go of
+        for (let seq = 1; seq <= HEARD.burst + 40; seq++) {
+            hosting.hear(bryn.peer, encode({ kind: "command", seq, command: { type: "stop" } }));
+        }
+
+        assert.equal(done.length, HEARD.burst);
+        assert.equal(hosting.dropped, 40);
+
+        // A second on, HEARD.commands more, and no more
+        now += 1000;
+
+        for (let seq = 200; seq < 200 + HEARD.commands + 5; seq++) {
+            hosting.hear(bryn.peer, encode({ kind: "command", seq, command: { type: "stop" } }));
+        }
+
+        assert.equal(done.length, HEARD.burst + HEARD.commands);
+
+        // (A stick turning, 16 a second, is never held back)
+        now += 5000;
+        done.length = 0;
+
+        for (let k = 0; k < 160; k++) {
+            now += 1000 / 16;
+            hosting.hear(bryn.peer, encode({ kind: "command", seq: 1000 + k, command: { type: "stop" } }));
+        }
+
+        assert.equal(done.length, 160);
+
+        // Something longer than anything a game says: not read, from one who's in; one coming in
+        // with it is told they can't
+        const long = encode({ kind: "command", seq: 5000, command: { type: "stop", padding: "x".repeat(HEARD.most) } });
+
+        done.length = 0;
+        post.length = 0;
+        hosting.hear(bryn.peer, long);
+        assert.deepEqual([done.length, post.length], [0, 0]);
+
+        const big = guest("Vast");
+
+        big.hero.look = { padding: "x".repeat(HEARD.most) };
+        hosting.hear("p9", encode({ kind: "hello", version: NET_VERSION, character: big }));
+        assert.deepEqual(post.map(({ to, text }) => [to, decode(text).kind, decode(text).reason]), [["p9", "refused", "character"]]);
+        assert.equal(host.players.size, 2);
+    });
+
+    it("keeps how many steps a joined game has in hand apart from whether its player's menu holds the world: a menu shut that wasn't open says nothing and slows nothing; back on its link, it says how its menu is", () => {
+        const { join, play, post, deliver } = opened();
+        const { joining } = join(guest("Bryn"));
+        const said = () => post.filter(({ from }) => from).map(({ text }) => decode(text));
+
+        // (Playing a while, as its game does each frame)
+        for (let frame = 0; frame < 120; frame++) {
+            if (frame % 3 === 0) {
+                play(1);
+            }
+
+            joining.pace(1000 / 60);
+            joining.step();
+        }
+
+        const [inHand, pace] = [joining.inHand, joining.pace(0)];
+
+        assert.equal(joining.held, false);
+        assert.ok(inHand > 0);
+
+        // A menu shut that wasn't open (every time a map or a menu closes): nothing said, and
+        // the steps in hand as they were, so its world plays no slower for it
+        post.length = 0;
+        joining.hold(false);
+        assert.deepEqual(said(), []);
+        assert.equal(joining.inHand, inHand);
+        assert.equal(joining.pace(0), pace);
+
+        // Its menu open, and its link back after a drop: it says its menu's open, as it is
+        joining.hold(true);
+        joining.pace(1000 / 60);
+        post.length = 0;
+        joining.resync();
+        assert.deepEqual(said().find(({ kind }) => kind === "hold"), { kind: "hold", held: true, everyone: false });
+        deliver();
+    });
+
     it("sends everyone the world again when the host's link comes back after a drop, what was sent meanwhile lost; one whose own came back asks for it", () => {
         const { host, hosting, join, play, catchUp, post, deliver } = opened();
         const bryn = join(guest("Bryn"));
@@ -750,6 +916,16 @@ describe("playing together (netplay.js)", () => {
 
         // (Heard directly: another version, told the host's, for the joiner to say which is the newer)
         hosting.send = (peer, text) => hear(peer).hear(text);
+        // (A game of the version before meeting this host is told this host's version, as one of
+        // the version after is: its own words for it, versionWords above, say the host's the
+        // newer and to reload; and this game, told an older host's, that the host's to reload)
+        hosting.hear("p8", encode({ kind: "hello", version: NET_VERSION - 1, character: guest("Older") }));
+        assert.deepEqual(refusals, ["version"]);
+        assert.equal(said[0].net, NET_VERSION);
+        assert.match(versionWords(said[0].net - 1), /older version of the game than yours\. Ask whoever's hosting it to reload/);
+        assert.match(versionWords(said[0].net + 1), /newer version of the game than yours\. Reload this page/);
+        refusals.length = 0;
+        said.length = 0;
         hosting.hear("p9", encode({ kind: "hello", version: NET_VERSION + 1, character: guest("Old") }));
         hosting.hear("p9", encode({ kind: "hello", version: NET_VERSION, character: { hero: { name: "" } } }));
         assert.deepEqual(refusals, ["version", "character"]);
@@ -807,7 +983,7 @@ describe("playing together (netplay.js)", () => {
         assert.equal(characterFrom(null), null);
     });
 
-    it("has every copy compare where the host's characters stand, every few steps: none astray in a long play, one 2 cm off found at once", () => {
+    it("has every copy compare how the world stands every few steps, among what's done: none astray in a long play, one a hair off found at once; where the characters stand is sent only by a host asked to", () => {
         const { host, hosting, join, play, catchUp } = opened();
         const { joining } = join(guest("Bryn"));
         const me = () => host.battle.actor(HOST_PLAYER);
@@ -822,50 +998,70 @@ describe("playing together (netplay.js)", () => {
                 joining.command({ type: "move", to: [Math.floor(me().x) + 3, Math.floor(me().y) - 2] });
             }
 
-            play(MOTION.every);
+            play(CHECK_EVERY);
             catchUp(joining);
         }
 
-        assert.equal(joining.motionChecks, 60);
-        assert.equal(joining.checks, Math.floor((60 * MOTION.every) / CHECK_EVERY));
+        // (A fifth of a second apart: the sum, among what's done. Nothing else is sent for it)
+        assert.equal(CHECK_EVERY * STEP_MS, 200);
+        assert.equal(joining.checks, 60);
+        assert.equal(joining.motionChecks, 0);
         assert.equal(joining.desyncs, 0);
         assert.equal(joining.resyncs, 0);
         assert.deepEqual(kinds, []);
-        assert.ok(hosting.sent.motion > 0 && hosting.sent.ops > 0);
-        assert.equal(joining.received.motion, hosting.sent.motion);
+        assert.ok(hosting.sent.ops > 0);
+        assert.equal(hosting.sent.motion, undefined, "no motion stream");
+        assert.equal(joining.received.motion, undefined);
 
-        // (A hair's difference, never: half a centimetre off is within rounding)
         const index = joining.host.battle.actors.findIndex(({ id }) => id === "guest-1");
         const theirs = joining.host.battle.actors[index];
 
         // (Their last walk done, however the town's market lies in their way)
         for (let more = 0; more < 20 && theirs.progress !== null; more++) {
-            play(MOTION.every);
+            play(CHECK_EVERY);
             catchUp(joining);
         }
 
         assert.equal(theirs.progress, null, "(standing: the copy's guest stays put, nudged)");
+
+        // (Four millimetres off: found the next time the sum comes, a fifth of a second on, and
+        // set right. The motion stream let a centimetre by; the sum lets nothing)
         theirs.x += 0.004;
-        play(MOTION.every);
-        catchUp(joining);
-        assert.equal(joining.desyncs, 0);
-        theirs.x -= 0.004;
-
-        // (Two centimetres off: found the next time it's sent, well before the checksum, and set right)
-        const checks = joining.checks;
-
-        theirs.x += 0.02;
-        play(MOTION.every);
+        play(CHECK_EVERY);
         catchUp(joining);
         assert.equal(joining.desyncs, 1);
-        assert.equal(joining.checks, checks, "(no checksum came meanwhile)");
         assert.deepEqual(kinds, ["state"]);
         assert.deepEqual(positions(joining.host), positions(host));
 
-        play(MOTION.every * 4);
+        play(CHECK_EVERY * 4);
         catchUp(joining);
         assert.equal(joining.desyncs, 1);
         assert.equal(joining.host.checksum(), host.checksum());
+
+        // A host asked to send where its characters stand as well (the motion stream: Hosting
+        // sendsPlaces) does, every MOTION.every steps, and a copy compares them as it did
+        const checks = joining.checks;
+
+        hosting.sendsPlaces = true;
+
+        for (let round = 0; round < 10; round++) {
+            play(MOTION.every);
+            catchUp(joining);
+        }
+
+        assert.equal(joining.motionChecks, 10);
+        assert.equal(joining.checks, checks + (10 * MOTION.every) / CHECK_EVERY);
+        assert.ok(hosting.sent.motion > 0);
+        assert.equal(joining.received.motion, hosting.sent.motion);
+        assert.equal(joining.desyncs, 1);
+
+        // (Two centimetres off, with the sums not looked at: the places alone find it)
+        joining.host.battle.actor("guest-1").x += 0.02;
+        play(MOTION.every);
+        joining.queue = joining.queue.filter(([op]) => op !== "k");
+        catchUp(joining);
+        assert.equal(joining.desyncs, 2);
+        assert.deepEqual(kinds, ["state", "state"]);
     });
 
     it("stamps each sending with the host's step; times a word to the host and back by the joiner's clock", () => {
@@ -880,8 +1076,9 @@ describe("playing together (netplay.js)", () => {
             hear(text);
         };
 
-        play(MOTION.every);
-        assert.deepEqual(heard.map(({ kind }) => kind), ["ops", "motion", "self"]);
+        play(CHECK_EVERY);
+        assert.deepEqual(heard.map(({ kind }) => kind), ["ops", "self"]);
+        assert.deepEqual(heard[0].ops.at(-1), ["k", host.checksum()], "how the world should stand, the last of what's done");
         assert.ok(heard.every(({ step }) => step === host.battle.time / STEP_MS));
         assert.equal(joining.hostStep, host.battle.time / STEP_MS);
 
