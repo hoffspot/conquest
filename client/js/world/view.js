@@ -32,7 +32,7 @@ import { hollowed } from "./landmarkdress.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
-import { fadeShadowEdges, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
+import { fadeShadowEdges, shadowMapOf, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
 import { CUTAWAY } from "./town3d.js";
@@ -760,8 +760,7 @@ export class View {
         this.gpuTimer.clear();
         this.#light();
         this.#outdoors();
-        this.sun.shadow.map?.dispose();
-        this.sun.shadow.map = null;
+        this.#shadowMap(this.sun);
         this.#thaw();
         this.size = null;
         this.resize();
@@ -1062,10 +1061,17 @@ export class View {
         this.#haze();
         this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
-        this.sun.shadow.map?.dispose();
-        this.sun.shadow.map = null;
+        this.#shadowMap(this.sun);
         this.#lampShadowing();
         this.resize();
+    }
+
+    // A light's shadow map made anew, as big as its shadow's now set (or the drawing lost and
+    // given back): the one before let go of, and the view's own made in its place before three.js
+    // makes its (shadows.js shadowMapOf: a quarter of the colour bytes, which nothing reads)
+    #shadowMap(light) {
+        light.shadow.map?.dispose();
+        shadowMapOf(light);
     }
 
     // Which of the lamps cast shadows (QUALITY lampShadows: how many, their maps' size, how often
@@ -1079,8 +1085,7 @@ export class View {
         this.lamps.forEach(({ light }, k) => {
             light.castShadow = (this.shadowsOn ?? true) && k < lamps;
             light.shadow.mapSize.set(size, size);
-            light.shadow.map?.dispose();
-            light.shadow.map = null;
+            this.#shadowMap(light);
             light.shadow.needsUpdate = true;
         });
     }

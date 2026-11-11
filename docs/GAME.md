@@ -1546,6 +1546,16 @@ drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium a
 about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
 7 cm.
 
+**The shadow maps the view's own** (world/shadows.js `shadowMapOf`). three.js makes a light's
+shadow map the first time it's drawn into, if its shadow has none: a depth picture, which the
+lit shaders read (compared and filtered by the graphics card), and with it a colour picture of
+four bytes a texel that's drawn into every time and never read, 4 MB for the sun's map on Low and
+16 MB on Medium and High. The view makes each map first (the sun's whenever its size is set, a
+lamp's cube with it), the same in every way but that colour picture, a byte a texel, the least a
+render target can have: 1 MB and 4 MB. It's set up as three.js r186 sets its own up
+(`WebGLShadowMap`), so `test/light.test.js` has three.js make its own beside it and fails if
+they're alike no longer: a newer three.js that sets its maps up otherwise is noticed there.
+
 **Shadow maps drawn with only what they need** (world/shadowpasses.js; the terrain plan's M7k).
 three.js asks each mesh whether it's in a shadow camera's view, with that light's own frustum;
 the view answers for the sun and the lamps (`watchShadows`):
