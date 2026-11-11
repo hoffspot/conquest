@@ -1,6 +1,7 @@
 // The memory guard (app/game.js #memoryGuarding): on a touch screen (a phone or a tablet), what the
-// game holds is looked at every so often, as the debug log tells it (game.js memoryNow `totalMB`:
-// the graphics card's, the sound's, the bodies' and the buildings' floors' copies on the page),
+// game holds is looked at every so often, as Safari's debug log tells it (game.js memoryNow: the
+// graphics card's, the sound's, the way-finding's, and the bodies' and the buildings' floors'
+// copies on the page; not the page's heap, which only some browsers tell of, whatever the browser),
 // and past a mark it holds less: fewer bodies in full (the rest drawn in their crowds, the furthest
 // first: game.js #rationing, #folkRoom, #marshal), less of the sound kept decoded (audio/sound.js
 // squeeze), and the beasts' bodies and models none's drawn from let go of at once, not after a
@@ -14,7 +15,7 @@
 /**
  * How the memory guard holds the game to a phone's memory:
  *  - `every`: how often what's held is looked at (seconds);
- *  - `marks`: what's held (MB, as memoryNow's `totalMB`) past which it holds less, a level for
+ *  - `marks`: what's held (MB, as memoryNow's `totalMB` without a heap: Safari's) past which it holds less, a level for
  *    each (1, then 2);
  *  - `ease`, `hold`: back down a level once it's this much (MB) under that level's mark, and has
  *    been at it this long (seconds), so it isn't let go and taken up again and again;

@@ -5480,7 +5480,7 @@ export class Game {
     }
 
     // The memory guard (app/memoryguard.js): on a touch screen, what's held looked at every so
-    // often (MEMORY_GUARD.every: memoryNow), and its level (guardLevel) put into effect as it
+    // often (MEMORY_GUARD.every: memoryNow, without the page's heap), and its level (guardLevel) put into effect as it
     // changes: the bodies' budget (#bodiesBudget: those past it in their crowds, by the rationing),
     // the sound squeezed or not (audio/sound.js squeeze), and, coming to a higher level, the beasts'
     // bodies and models none's drawn from let go of at once (#forgetting); told in the debug log
@@ -5495,7 +5495,12 @@ export class Game {
         guard.clock = MEMORY_GUARD.every;
 
         const was = guard.level;
-        const { level, since } = guardLevel(this.memoryNow().totalMB, { level: guard.level, since: guard.since, now: this.clock });
+        // (Counted as Safari's crash reports count it, whatever the browser: the graphics card's, the
+        // sound's, the way-finding's, and the bodies' and floors' copies on the page, not a heap
+        // only some browsers tell of, so its marks mean the same everywhere)
+        const memory = this.memoryNow();
+        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB;
+        const { level, since } = guardLevel(held, { level: guard.level, since: guard.since, now: this.clock });
 
         Object.assign(guard, { level, since });
 

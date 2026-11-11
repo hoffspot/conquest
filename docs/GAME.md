@@ -3366,9 +3366,11 @@ back); the plans are kept. Wenches and Ale's floors are built at the start and k
 dressed and let go of at its door as any building's.
 
 **The memory guard** (app/memoryguard.js `MEMORY_GUARD`, app/game.js `#memoryGuarding`): on a
-touch screen (a phone or a tablet), what the game holds is looked at every 2 seconds, as the debug
-log tells it (`memoryNow` `totalMB`: the graphics card's, the sound's, the bodies' and the floors'
-copies on the page), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
+touch screen (a phone or a tablet), what the game holds is looked at every 2 seconds, as Safari's
+debug log tells it whatever the browser (`memoryNow`: the graphics card's, the sound's, the
+way-finding's, and the bodies' and the floors' copies on the page; not the page's heap, which only
+Chromium's tell of: with it, a city on an emulated phone in headless Chromium came to 443 MB with
+nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
 no more than 20 bodies in full, then 12 (the rest drawn in their crowds, the furthest first, by the
 bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers), the recorded sounds
 kept decoded to 24 MB, then 12 (audio/sound.js `squeeze`: past it, those played least lately let go
