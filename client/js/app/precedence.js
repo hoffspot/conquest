@@ -3,15 +3,17 @@
 // (#thronging: a crowded fight that comes too slowly), or their bar shown over their head where
 // bars overlap (the frame's plates: app/hud.js Covering). One order for them all: the "full-tier
 // order" of the scaling plan's Stage 5 (generated/multiplayer_scaling_plan.md: "the party, the
-// target, attackers, whoever the player is trading or talking with, then the biggest on screen"),
+// target, attackers, whoever is fighting the party, whoever the player is trading or talking
+// with, then the biggest on screen"),
 // as the games that draw crowds of players have it (generated/crowd_rendering_plan.md):
 //
 //   the player themself; their party; whoever they're set on; whoever's attacking them; whoever's
 //   fighting their party; whoever they're trading or talking with; then the biggest on the screen
 //   (the nearer first, of two as big); and those on another map after everyone on the player's.
 //
-// It says one thing the plan's wording doesn't: whoever's fighting the party comes after the
-// player's own attackers and before whoever they're talking with. The plan's slices that let the
+// Whoever's fighting the party comes after the player's own attackers and before whoever they're
+// talking with: the plan's first wording left them out, and the owner kept them (2026-11-11), so
+// an enemy on the party's healer isn't ranked with the bystanders. The plan's slices that let the
 // other players into the bodies' budget and the crowds (5-2), choose how many of them are in full
 // (5-4) and queue a crowd arriving at once (5-6) are to rank by this, not by an order of their own.
 //

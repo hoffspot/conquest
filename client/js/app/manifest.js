@@ -69,7 +69,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/peer.js", 33675, "236595671e"],
             ["js/app/plan-worker.js", 1669, "a83a0bcb7e"],
             ["js/app/plans.js", 11719, "4ec56330af"],
-            ["js/app/precedence.js", 7563, "e868f485a9"],
+            ["js/app/precedence.js", 7700, "1e7af7cc42"],
             ["js/app/quickbar.js", 23812, "7e20ba2a2d"],
             ["js/app/reader.js", 4532, "a5f95519c9"],
             ["js/app/readying.js", 5230, "bc26d0c358"],

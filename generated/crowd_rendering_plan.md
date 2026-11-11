@@ -149,19 +149,23 @@ inside every garment every corner of the body is, in one go), as it is for any g
 The plan fixes 100 players a world, and the setting "Other players in full: Automatic, 4, 8, 16,
 All"; those are answered. Still open:
 
-1. In full, drawn all at once is within 0.2% of one by one. Under 360 pixels tall, at the
-   quarter level of detail, plate differs by 3.2% and the humans' and elves' uniforms by 2.0 to
-   2.4%, because an outfit's lowered as one mesh, as the soldiers' are. Is that within what
-   `5-5` means by the existing 2%, or should plate stay one by one?
-2. Is `5-5`'s 35% counted in the frame's own pass (41%, met) or with the shadow maps' draws
-   (24 to 30%, not met)? With them, the rest is in what another player casts: about six draws a
-   hero near the camera and eleven far.
-3. Whoever's fighting the player's party comes before whoever they're talking with: the plan's
-   order doesn't say. Is that right?
-4. Will there be friends or guilds for the order to know of, or parties only?
-5. A bar's hidden once more than half of it lies under those before it. "Don't draw the ones in
-   the back" could mean at any overlap: is half right? The player's own hired adventurers' bars
-   are never hidden, as the party's aren't.
+1. Will there be friends or guilds for the order to know of, or parties only?
+2. A bar's hidden once more than half of it lies under those before it. "Don't draw the ones in
+   the back" could mean at any overlap: is half right?
+
+Answered by the owner on 2026-11-11:
+
+- **Plate stays drawn all at once.** In full, drawn all at once is within 0.2% of one by one.
+  Under 360 pixels tall, at the quarter level of detail, plate differs by 3.2% and the humans'
+  and elves' uniforms by 2.0 to 2.4%, because an outfit's lowered as one mesh, as the soldiers'
+  are: over `5-5`'s 2%, and kept.
+- **`5-5`'s 35% is counted in the frame's own pass** (41%: met), not with the shadow maps' draws
+  (24 to 30%). A hero's garments cast no shadow of their own, so putting them together can't
+  lessen those: about six draws a hero near the camera and eleven far, which the gate on
+  players' draws (60 of a frame's 300) will have to deal with in its own slice.
+- **Whoever's fighting the player's party keeps its place in the order,** after the player's
+  own attackers and before whoever they're talking with: the scaling plan's wording has it now.
+- **A hired adventurer's bar is never hidden,** as the party's aren't.
 
 ## Sources
 
