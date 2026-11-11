@@ -1,11 +1,13 @@
 // The page letting go of what the graphics card has (client/js/world/release.js): a static mesh's
-// attributes once uploaded, a picture's pixels once uploaded (and whatever else holds them); how
+// attributes once uploaded, a picture's pixels once uploaded (and whatever else holds them), the
+// atlas's painted layers held by its texture alone (art/engine/atlas.js prepareAtlas); how
 // much of its own copies the page still holds (heldOnPage); and Recast's WebAssembly starting with
 // the memory it needs (scripts/wasm-memory.js, the vendored copy)
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import * as THREE from "three";
+import { atlasMaterial, LAYERS, prepareAtlas } from "../client/js/world/art/engine/atlas.js";
 import { heldOnPage, released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
 import { startingMemory, withStartingMemory } from "../scripts/wasm-memory.js";
 
@@ -63,6 +65,24 @@ describe("letting go of what the graphics card has (release.js)", () => {
         waiting.onUpdate(waiting);
         assert.equal(waiting.image.data, null);
         assert.equal(also, 1);
+    });
+
+    it("hands the atlas's painted layers to nothing that waits for them: its texture alone has them, till it's sent", async () => {
+        // (Small layers, painted here and now: Node has no workers of the page's kind)
+        const waited = prepareAtlas(8);
+        const texture = atlasMaterial().userData.atlas;
+
+        assert.equal(texture.image.data, null, "asked for while they're painted: none yet");
+        // (A promise keeps what it resolved with as long as anything keeps the promise, and the
+        // game's build keeps this one in a closure for the whole game)
+        assert.equal(await waited, undefined, "what waits for them is given nothing to keep");
+        assert.equal(prepareAtlas(8), waited);
+        assert.equal(texture.image.data.byteLength, 8 * 8 * 4 * LAYERS.length, "the texture has them once they're painted");
+
+        // (As three.js's renderer does once a picture's on the graphics card)
+        texture.onUpdate(texture);
+        assert.equal(texture.image.data, null);
+        assert.equal(await prepareAtlas(8), undefined);
     });
 });
 

@@ -1166,9 +1166,13 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.equal(texture.version, 0, "not to be drawn yet");
         assert.equal(wildsMaterial({ value: 0 }).userData.uniforms.atlasMap.value, texture);
 
-        const painted = await painting;
+        // (What waits for them is given nothing to keep: a promise keeps what it resolved with, and
+        // the game's build keeps this one for the whole game)
+        assert.equal(await painting, undefined);
 
-        assert.equal(texture.image.data, painted);
+        // (Those painted for it, at its size: not painted again here, at the atlas's own)
+        const painted = texture.image.data;
+
         assert.deepEqual([texture.image.width, texture.image.depth, painted.length], [16, LAYERS.length, 16 * 16 * 4 * LAYERS.length]);
         assert.equal(texture.version, 1);
     });

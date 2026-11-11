@@ -7035,7 +7035,9 @@ the page reads once it's made, the page's copy is let go of once it's there (wor
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
 (kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
 pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
-copy kept to hand it to the next atlas made; the buildings' name boards and hanging signs and the
+copy kept to hand it to the next atlas made (`prepareAtlas` resolves with nothing: a promise
+keeps what it resolved with, and the game's build kept its promise of the layers in a closure
+for the whole game, 15 MB the graphics card had long had); the buildings' name boards and hanging signs and the
 roads' fingerboards (kits/signs.js `textureOf`: each its canvas, left a pixel square; a board was
 2048 by 330, 2.6 MB on the page; a capital's 38, all sent, were 63 MB on the page, besides 63 MB
 more of them on the graphics card at full size than at Low's half, a player's iPhone let go of in a
@@ -7327,7 +7329,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/release.test.js`: a mesh's attributes and index let go of as each is uploaded, its bounds
   worked out first and how many corners it has still known; a picture's pixels once uploaded, and
   whatever else held them, what it was told before still told, and a picture waiting for its pixels
-  let go of only once it has them; Recast's WebAssembly starting with 16 MB, still a module with
+  let go of only once it has them; the atlas's painted layers handed to nothing that waits for
+  them (`prepareAtlas` resolving with nothing), its texture alone having them till it's sent;
+  Recast's WebAssembly starting with 16 MB, still a module with
   its memory its own, and made to start with 64 again the module as built but for two bytes.
   `test/crowd.test.js` also: a character's skin and bumps let go of once they're sent, if it's one
   of the game's (not otherwise), painted again into the same texture, sent and let go of again,
