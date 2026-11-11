@@ -5,6 +5,10 @@
 //
 //     npm run build:manifest
 //
+// `node scripts/build-manifest.js --root <folder>` makes them for a copy of client/ instead, in
+// that copy: the site as the Pages deploy puts it together, whose code is stripped of its comments
+// and whitespace first, so its hashes are its own (scripts/build-site.js).
+//
 // The game's code is followed from its entry modules through their imports and the workers they
 // start (and the import map's "three" and "three/addons/" in index.html), leaving out what
 // main.js imports itself (it is already loaded when the loader starts). The character data, masks
@@ -26,15 +30,39 @@ import { fileURLToPath } from "node:url";
 import { GAME_BODY } from "../client/js/characters/body.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const client = path.join(root, "client");
-const output = path.join(client, "js/app/manifest.js");
-const catalogOutput = path.join(client, "js/app/assets.js");
-const catalogInput = path.join(client, "models/assets.json");
-const page = path.join(client, "index.html");
 
-// (Files changed after this is made, so they can't be named by a hash: version.js, stamped with
-// the commit by the Pages deploy and the Mac app, scripts/stamp-version.js. Asked for by name)
-const UNHASHED = new Set(["js/app/version.js"]);
+// Where the game's files are, with those made here and those they're made from: the repository's
+// client folder, or a copy of it (rootAt, `--root`)
+let client;
+let output;
+let catalogOutput;
+let catalogInput;
+let page;
+
+/**
+ * Make the lists for the game's files in `folder`, a copy of client/, not for the repository's
+ * own: the site as the Pages deploy puts it together, whose code is stripped, so that every hash
+ * is of the file as the site serves it (scripts/build-site.js). The same as
+ * `node scripts/build-manifest.js --root <folder>`. With no folder, the repository's own again.
+ */
+export function rootAt(folder = path.join(root, "client")) {
+    client = path.resolve(folder);
+    output = path.join(client, "js/app/manifest.js");
+    catalogOutput = path.join(client, "js/app/assets.js");
+    catalogInput = path.join(client, "models/assets.json");
+    page = path.join(client, "index.html");
+}
+
+rootAt();
+
+/**
+ * Files changed after this is made, so they can't be named by a hash: version.js, stamped with
+ * the commit by the Pages deploy and the Mac app, scripts/stamp-version.js. Asked for by name.
+ */
+export const UNHASHED = new Set(["js/app/version.js"]);
+
+/** The manifest and the catalog, made here: their paths from the page. */
+export const MADE = Object.freeze(["js/app/manifest.js", "js/app/assets.js"]);
 
 // What the loading screen says each body is (body.js BODIES)
 const BODY_DETAILS = {
@@ -354,12 +382,33 @@ export async function pageSource(html, groups, started, made) {
     return html.replace(IMPORT_MAP, (_, open, __, close) => `${open}\n${indent}    ${map}\n${indent}${close}`).replace(MAIN_SCRIPT, `<script type="module" src="js/main.js?h=${main[1]}"></script>`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+/**
+ * Write the manifest, the catalog and the page's import map, for the folder rootAt names (the
+ * repository's client folder, unless told). `made(source, file)` gives each of the two modules as
+ * it's to be written (the Pages deploy's are stripped, as the rest of its code is).
+ */
+export async function build({ made = (source) => source } = {}) {
     const groups = await manifestGroups();
     const started = await startFiles();
 
-    await writeFile(output, await manifestSource(groups));
-    await writeFile(catalogOutput, await catalogSource(groups, undefined, started));
+    await writeFile(output, await made(await manifestSource(groups), MADE[0]));
+    await writeFile(catalogOutput, await made(await catalogSource(groups, undefined, started), MADE[1]));
     await writeFile(page, await pageSource(undefined, groups, started));
+
+    return { groups, started };
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    const at = process.argv.indexOf("--root");
+
+    if (at >= 0) {
+        if (!process.argv[at + 1]) {
+            throw new Error("--root <folder>: a copy of client/ to make the lists for");
+        }
+
+        rootAt(process.argv[at + 1]);
+    }
+
+    await build();
     console.log(`Wrote ${path.relative(root, output)}, ${path.relative(root, catalogOutput)} and the import map in ${path.relative(root, page)}`);
 }

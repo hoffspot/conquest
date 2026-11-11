@@ -44,12 +44,19 @@ jobs:
       # one every pull request's CI can take, where one kept in a pull request is its own alone)
       - run: npm ci
 
-      # (Which code this is written into the site's copy for the debug log: the commit and when,
-      # in place of client/js/app/version.js's noughts: scripts/stamp-version.js)
       - name: Put the site together
         run: |
           npm run build:manifest
           cp -R client _site
+
+      # (The site's copy alone: the comments and indentation taken out of the game's code, a source
+      # map beside each file, and the manifest and the page's import map made again, so every hash
+      # is of the file as the site serves it: scripts/build-site.js. Then which code this is,
+      # written into the copy for the debug log: the commit and when, in place of
+      # client/js/app/version.js's noughts: scripts/stamp-version.js, after the manifest's made)
+      - name: Strip the site's code and stamp its version
+        run: |
+          node scripts/build-site.js _site
           node scripts/stamp-version.js _site/js/app/version.js "$GITHUB_SHA"
 
       - uses: actions/configure-pages@v6

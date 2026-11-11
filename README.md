@@ -643,6 +643,15 @@ section 2). To set it up, in the
 repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow can also be
 run by hand from the **Actions** tab.
 
+The site's copy of the game's own code has its comments and indentation taken out as it's put
+together (`scripts/build-site.js`: esbuild's whitespace-only minify, so no name changes and no
+code's rewritten). Each file is still a module of its own at its own address, with a source map
+beside it (`game.js.map`), and the copy's manifest and import map are made again, so every hash
+is of the file as the site serves it. The game's 450 modules go from 3.69 MB to 2.14 MB as the
+site sends them (gzipped). Only the site's copy: the repository, `npm start`, the tests and the
+Mac app run the code as it's written. To make one here:
+`cp -R client _site && node scripts/build-site.js _site`.
+
 ## Development
 
 Contributing, with Claude Code or without it: [contribution.md](contribution.md) explains how to set up,

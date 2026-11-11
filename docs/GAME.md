@@ -6192,7 +6192,11 @@ the Bindings page till one's chosen.
    browser says it has left, 1 GiB at most (recent Chrome says 10 GiB more than it's using,
    whatever the disk). The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
-   date a release gave it, and sends code and pages compressed (brotli or gzip).
+   date a release gave it, and sends code and pages compressed (brotli or gzip). The game's website
+   (GitHub Pages) serves the game's own code with its comments and indentation taken out
+   (`scripts/build-site.js`, as the site's put together: 3.69 MB of it to download becomes 2.14
+   MB), each file still its own module, by the hash of the file as it's served, a source map
+   beside it.
    An update's downloaded in the background while the game's open (`app/updater.js`): every 15
    minutes (and as the title screen's shown, after that), the page asks for itself afresh and
    reads its import map; a release with another name is newer. Its manifest and catalog (named

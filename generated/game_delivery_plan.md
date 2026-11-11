@@ -173,6 +173,32 @@ The loading screen says how much came from this device and how much was download
 0.4 MB downloaded"), and the debug overlay the same, so a reload that downloads everything again
 shows at once.
 
+### 3.8 The website's code, stripped
+
+The game's own code is a quarter comments and a fifth indentation: 12.86 MB in 450 modules, 3.69
+MB as GitHub Pages sends it (gzip). The Pages deploy takes both out of the site's copy
+(`scripts/build-site.js`, esbuild's `minifyWhitespace` alone, a file at a time): 6.93 MB, 2.14 MB
+gzipped, 42% less to download on a first visit and after every update (`game.js`, 245 KB gzipped,
+becomes 130 KB).
+
+- Whitespace only: no name's changed and no code's rewritten, so the site runs the code the tests
+  ran, and a stack trace still names its functions. A source map beside each file
+  (`game.js.map`) names it as the repository has it and carries its text.
+- Every file's still a module of its own, at its own address. The copy's manifest, catalog and
+  import map are made again after the strip (`scripts/build-manifest.js --root`), so every hash is
+  of the file as the site serves it: the service worker keeps a file only if its bytes match its
+  hash, and gives a worker its modules, asked for by name, from the same copies. An update still
+  downloads only the files it changed.
+- `version.js` is left as written, and stamped with the commit after, as before.
+- Only the site's copy. The repository, `npm start`, the world server, the tests and the Mac app
+  run the code as it's written.
+
+Not a bundle. Measured: one bundle with splitting, minified, is 2.13 MB gzipped in 94 files with
+the engine (48% less against 42%), but its main chunk is 1.0 MB and changes with nearly every
+merge, where the median update is 0.37 MB of changed files (§1); it would need nine worker entry
+points built and the fifteen `import.meta.url` addresses kept right; and the loader already
+fetches everything sixteen at a time before importing, so it would save no round trips.
+
 ## 4. Stages
 
 | Stage | What | Where |
