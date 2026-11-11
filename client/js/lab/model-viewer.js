@@ -1994,10 +1994,11 @@ async function wear(name) {
     }
 
     if (url && !skinsRead.has(url)) {
-        skinsRead.set(url, loadGltf(url));
+        // (A skin's file is only its materials: made as it's read, the loader's parser let go of)
+        skinsRead.set(url, loadGltf(url, { materials: true }));
     }
 
-    const materials = url ? await (await skinsRead.get(url)).parser.getDependencies("material") : [];
+    const materials = url ? (await skinsRead.get(url)).materials : [];
 
     // (Something else shown or worn meanwhile)
     if (current !== shown || ticket !== wearing) {

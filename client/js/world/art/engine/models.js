@@ -19,45 +19,67 @@ const KTX2_WORKERS = 2;
 const manager = new THREE.LoadingManager();
 const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
 const fetcher = new THREE.FileLoader(manager).setResponseType("arraybuffer");
+
+// What's read here and kept for good, by its address: each model given out as a copy (loadModel:
+// its scene), and each file as it is (loadGltf: its scene, with its meshes' shapes, its materials
+// and their pictures, and its clips). Neither forgets, so what's read through them (the props,
+// what's carried, the chest, a dungeon's and a siege's pieces, the labs') stays for the session;
+// nothing of the file itself does (its bytes, its map: read, below)
 const loaded = new Map();
 const files = new Map();
 let ktx2 = null;
 
 // A glTF file read: fetched (through the manager, so from the game's downloaded copy where it has
-// one), unscrambled if it's a licensed model's, and parsed
-async function read(url) {
+// one), unscrambled if it's a licensed model's, and parsed. What three.js's loader read it with
+// (its `parser`) is let go of at once: it holds the file's bytes again, each of its pictures'
+// bytes once more, its map as text and as objects and all it made on the way, 4 to 19 MB for a
+// creature's model and 24 for a scene's, and nothing reads it once the file's read. `materials`:
+// every material in the file, made first (gltf.materials, in the file's order), those no mesh of
+// its own wears too (a skin's file is only its materials: beasts/model.js readSkins)
+async function read(url, { materials = false } = {}) {
     const data = await fetcher.loadAsync(url);
+    const gltf = await loader.parseAsync(await readable(data), THREE.LoaderUtils.extractUrlBase(url));
 
-    return loader.parseAsync(await readable(data), THREE.LoaderUtils.extractUrlBase(url));
+    if (materials) {
+        gltf.materials = await gltf.parser.getDependencies("material");
+    }
+
+    gltf.parser = null;
+
+    return gltf;
 }
 
 /**
  * A glTF file as it is ({ scene, animations }: its materials and animations its own), read once
- * and shared (copy its scene to use it: scene.clone(true)). One that couldn't be read is read
- * again the next time it's asked for.
+ * and shared (copy its scene to use it: scene.clone(true)); with `materials`, every material in
+ * it too ({ materials }: read's). One that couldn't be read is read again the next time it's
+ * asked for.
  */
-export function loadGltf(url) {
-    if (!files.has(url)) {
+export function loadGltf(url, { materials = false } = {}) {
+    const key = materials ? `${url}#materials` : url;
+
+    if (!files.has(key)) {
         files.set(
-            url,
-            read(url).catch((error) => {
-                files.delete(url);
+            key,
+            read(url, { materials }).catch((error) => {
+                files.delete(key);
                 throw error;
             }),
         );
     }
 
-    return files.get(url);
+    return files.get(key);
 }
 
 /**
- * A glTF file read afresh, not kept here ({ scene, animations }): one read from a downloaded copy
- * (a blob: URL, made for the one read), its owner keeping it while it's wanted and letting it go
- * when it isn't (beasts/model.js forgetModels). Kept by its URL, as loadGltf keeps them, such a
- * read would be held for good, every read of it again another copy.
+ * A glTF file read afresh, not kept here ({ scene, animations }; with `materials`, every material
+ * in it too: read's): one read from a downloaded copy (a blob: URL, made for the one read), its
+ * owner keeping it while it's wanted and letting it go when it isn't (beasts/model.js
+ * forgetModels). Kept by its URL, as loadGltf keeps them, such a read would be held for good,
+ * every read of it again another copy.
  */
-export function readGltf(url) {
-    return read(url);
+export function readGltf(url, { materials = false } = {}) {
+    return read(url, { materials });
 }
 
 /**

@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MeshoptEncoder } from "meshoptimizer";
-import { loadGltf } from "../client/js/world/art/engine/models.js";
+import { loadGltf, readGltf } from "../client/js/world/art/engine/models.js";
 
 // (Three.js's file loader tells of its progress as a browser does)
 globalThis.ProgressEvent ??= class ProgressEvent extends Event {
@@ -69,7 +69,9 @@ async function compressedGlb() {
             { bufferView: 2, componentType: 5126, count: 2, type: "SCALAR", min: [0], max: [1] },
             { bufferView: 3, componentType: 5126, count: 2, type: "VEC4" },
         ],
-        meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+        // (Two materials: one its mesh wears, one nothing wears, as a skin's file has them)
+        materials: [{ name: "Hide" }, { name: "Spare" }],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
         nodes: [{ name: "Triangle", mesh: 0 }],
         scenes: [{ nodes: [0] }],
         scene: 0,
@@ -111,6 +113,31 @@ describe("models compressed with meshoptimizer", () => {
             [["Turn", 1]],
         );
         assert.deepEqual([...animations[0].tracks[0].values], [...TURNS]);
+    });
+
+    it("are kept without what three.js's loader read them with (its parser: the file's bytes and its map again); a skin's file gives every material in it first, those nothing wears too", async () => {
+        const { glb } = await compressedGlb();
+        const url = `data:model/gltf-binary;base64,${Buffer.from(glb).toString("base64")}`;
+        const kept = await loadGltf(url);
+        const afresh = await readGltf(url);
+        const skin = await readGltf(url, { materials: true });
+
+        for (const gltf of [kept, afresh, skin]) {
+            assert.equal(gltf.parser, null);
+            assert.ok(gltf.scene.getObjectByName("Triangle").geometry.getAttribute("position"));
+        }
+
+        assert.equal(afresh.materials, undefined);
+        assert.deepEqual(
+            skin.materials.map((material) => material.name),
+            ["Hide", "Spare"],
+        );
+        assert.equal(skin.scene.getObjectByName("Triangle").material.name, "Hide");
+
+        // (Kept by its address, once: with its materials and without, each its own)
+        assert.equal(await loadGltf(url), kept);
+        assert.notEqual(await loadGltf(url, { materials: true }), kept);
+        assert.equal((await loadGltf(url, { materials: true })).materials.length, 2);
     });
 
     it("are decoded by the copy of meshoptimizer's decoder the game loads in the browser", async () => {

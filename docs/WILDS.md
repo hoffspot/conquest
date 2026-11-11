@@ -2658,6 +2658,16 @@ what's downloaded before the game starts.
   as well, under an address made for that read, so every model let go of and read again was
   another copy held. Told in the debug overlay and log, under *Held*: how many models are read,
   and how many of them none is drawn from (`keptModels`).
+- **Kept without what read it** (world/art/engine/models.js `read`): three.js's loader hands back
+  what it read a file with beside the model (its `parser`), and that holds the file's bytes again,
+  each of its pictures' bytes once more, and its map as text and as objects. Nothing reads it once
+  the file's read, so it's let go of at once; a skin's file, which is only its materials, has them
+  made first (`readGltf`'s `materials`: the model viewer's skins too). Kept with the model as it
+  was till 2026-11-11, it was most of what a model none was drawn from held: in Node, without
+  their pictures, the werewolf's as read kept 6.6 MB on the page and keeps 2.2, the Order's 23.8
+  and 10.1, its riders' 34.5 and 15.3. What `loadGltf` and `loadModel` read (the props, what's
+  carried, a dungeon's pieces) they still keep for the session, by its address: its scene, its
+  shapes, its materials and pictures and its clips, and now nothing of the file.
 - **A body like any other** (`modelBody`): `BeastAvatar` takes it as its `plan`, as it does one
   built in code. `MODELS` names which of its clips are what (standing, walking, flying, gliding,
   struck, falling; its bite, claw and tail sweep, its breath; its roar) and which bones are its

@@ -1019,12 +1019,12 @@ export function fetchModelsWith(downloader) {
 }
 
 // A model fetched (a Blob) read: not kept by the loader (readGltf), as it's let go of here
-// (forgetModels)
-async function readBlob(blob) {
+// (forgetModels); `options` as readGltf takes them (a skin's `materials`)
+async function readBlob(blob, options) {
     const url = URL.createObjectURL(blob);
 
     try {
-        return await readGltf(url);
+        return await readGltf(url, options);
     } finally {
         URL.revokeObjectURL(url);
     }
@@ -1052,10 +1052,11 @@ async function readSkins(id, gltf, { priority, page }) {
                     skin,
                     (async () => {
                         try {
-                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await readGltf(new URL(hashed(file.path, file.hash), page).href);
+                            // (Its materials made as it's read: no mesh of its own need wear them)
+                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob, { materials: true })) : await readGltf(new URL(hashed(file.path, file.hash), page).href, { materials: true });
 
                             if (worn) {
-                                gltf.skins[skin] = await worn.parser.getDependencies("material");
+                                gltf.skins[skin] = worn.materials;
                             }
                         } catch (error) {
                             console.warn(`Couldn't read ${id}'s skin ${skin}`, error);
