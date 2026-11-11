@@ -98,7 +98,7 @@ await Promise.all(saving);
 const runner = new WorldRunner(host, { clock });
 const keeper = new Keeper(runner, stored);
 const ahead = new Ahead(host.world, { host, clock });
-const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }) });
+const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), clock });
 
 runner.hosting = hosting;
 

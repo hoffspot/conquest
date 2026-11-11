@@ -1089,6 +1089,7 @@ export const REFUSALS = Object.freeze({
     trading: "You're trading with someone already.",
     elsewhere: "They're trading with someone else.",
     changed: "Something offered isn't there any more: look again.",
+    reoffered: "The offer changed as you agreed: look again.",
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
     boosted: "One's still working: only one at a time.",
@@ -2085,8 +2086,9 @@ export class Host {
      *    { type: "share", request }: share one with the others of their party (#shareRequest);
      *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
      *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
-     *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
-     *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
+     *    give (all of it, each time); { type: "agree", rev }: take the other's offer for theirs,
+     *    as it stood when they looked (`rev`: the trade's, one on with each offer; once both
+     *    have, it's done); { type: "cancel", with }: call off the trade (or say no to a
      *    player's asking, or stop asking).
      *  - { type: "outfit", follower, index }: give one of their hired adventurers (by id) near them
      *    a weapon or body armour from their pack (core/followers.js wearable), what they wore
@@ -2336,7 +2338,7 @@ export class Host {
             case "offer":
                 return this.#offer(player, command);
             case "agree":
-                return this.#agree(player);
+                return this.#agree(player, command.rev);
             case "cancel":
                 return this.#cancel(player, command.with ?? null);
             case "travel":
@@ -5107,7 +5109,7 @@ export class Host {
                 }
             }
 
-            Object.assign(asked, { open: true, until: null, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
+            Object.assign(asked, { open: true, until: null, rev: 0, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
             this.#tellTrade(asked, "open");
 
             return { ok: true, trade: asked.id, open: true };
@@ -5129,7 +5131,8 @@ export class Host {
     }
 
     // What a player will give, in place of what they offered before: gold, and things from their
-    // pack (as many as they have of each, of each make). Neither's agreed to it yet.
+    // pack (as many as they have of each, of each make). Neither's agreed to it yet: the trade's
+    // another `rev` on, and only an agreeing that names it counts (#agree).
     #offer(player, { gold = 0, items = [] }) {
         const trade = this.#tradeOf(player.id);
 
@@ -5174,18 +5177,25 @@ export class Host {
         }
 
         trade.offers[player.id] = { gold, items: offered };
+        trade.rev = (trade.rev ?? 0) + 1;
         trade.agreed = { [trade.from]: false, [trade.to]: false };
         this.#tellTrade(trade, "offer", { by: player.id });
 
         return OK;
     }
 
-    // A player takes the other's offer for theirs: once both have, what's offered changes hands
-    #agree(player) {
+    // A player takes the other's offer for theirs: once both have, what's offered changes hands.
+    // They say which offers they saw (`rev`: the trade's, as their game had it): if either's
+    // changed since, while their word was on its way, it isn't taken for what they never saw
+    #agree(player, rev) {
         const trade = this.#tradeOf(player.id);
 
         if (!trade) {
             return refuse("trade");
+        }
+
+        if (rev !== (trade.rev ?? 0)) {
+            return refuse("reoffered");
         }
 
         const other = trade.from === player.id ? trade.to : trade.from;

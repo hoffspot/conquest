@@ -3161,7 +3161,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
 
     // (Nothing downloaded till the steps it keeps in hand have settled, 5 s at least, and 30 s at
     // most: a game that can't keep up with the host may never settle)
-    fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.held - game.remote.delay) < 1, most: 30000 });
+    fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.inHand - game.remote.delay) < 1, most: 30000 });
 }
 
 // Out of a world joined (its host gone, or the link lost): back to the title, saying why; the link
@@ -6289,9 +6289,9 @@ document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);
     state.together?.hosting?.pause(document.hidden ? "away" : state.everyone ? "host" : null);
 
-    if (state.onServer) {
-        state.together?.joining?.away(document.hidden);
-    }
+    // (A joined game says so to whoever hosts its world: a world server, which stops for its one
+    // player; a player's own, which knows who's away: core/netplay.js Hosting `hidden`)
+    state.together?.joining?.away(document.hidden);
 
     if (document.hidden) {
         pause();
