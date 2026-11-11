@@ -52,7 +52,7 @@ describe("work that's to be quick enough (helpers.js quickEnough)", () => {
         assert.deepEqual(left, [99]);
 
         // (Over both times, or right on the limit: it fails, worded as it's asked to be)
-        ({ time, left } = timed(7, 6));
+        ({ time } = timed(7, 6));
         assert.throws(() => quickEnough(5, time, (ms) => `${ms} ms a chunk`), { name: "AssertionError", message: "6 ms a chunk (7 ms a chunk the first time)" });
         assert.throws(() => quickEnough(5, timed(5, 5).time), /5\.0 ms \(5\.0 ms the first time\)/);
     });
