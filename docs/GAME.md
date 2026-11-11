@@ -3476,9 +3476,22 @@ shapes and pictures with every other of its kind), the recorded sounds
 kept decoded to 24 MB, then 12 (audio/sound.js `squeeze`: past it, those played least lately let go
 of at once, and the made sounds let go of after a minute unplayed, not five), and, coming to a
 higher level, the beasts' bodies and models none's drawn from let go of at once, not after a while
-(`#forgetting`). It comes back down a level once it's 40 MB under that level's mark and has been at
-it 30 seconds (`guardLevel`), so it isn't let go of and taken up again and again. The debug overlay
-says so ("holding less (memory guard 1)"), and the debug log carries its level (`memory.guard`).
+(`#forgetting`; `MemoryGuard`'s `letGo`, which is where anything else held idle is let go of). It
+comes back down a level once it's 40 MB under that level's mark and has been at it 30 seconds
+(`guardLevel`), so it isn't let go of and taken up again and again. But holding less itself takes
+what's held well under the mark (the sound alone goes from 82 MB to 24, a body's 10 to 15), so in
+a busy place it came down, built its bodies and decoded its sound again, passed the mark and went
+back up: every 38 seconds in the city of the report below at 15 MB a body, 88 bodies built again
+in ten minutes; every 78 in a town just over the mark (the real `guardLevel`, on a model of what its
+levels save). So a level come to within 2 minutes of coming down (`again`) doubles the wait before it
+next comes down: 30 seconds, a minute, two, four, eight, then ten, forgotten once it's held as
+much as ever for 10 minutes (`forget`). The same city: 10 changes of level in its first ten
+minutes, not 32, and 29 bodies built again, not 88; over an hour 20 changes, not 189, and 56
+bodies, not 508. What's held is read once every 2
+seconds for the guard and the debug log's notes both (`memoryLately`), in a task just after the
+frame, not in it: reading it walks every body about. The debug overlay
+says so ("holding less (memory guard 1)"), and the debug log carries its level (`memory.guard`,
+and at each of the notes' readings, `trend`).
 Safari on an iPhone closes a page that holds too much with no warning, and tells it nothing of its
 memory: two players' crash reports of 2026-11-11 had it let the game's tab go at 541 MB (in a human
 city, 30 bodies about, the sound 82 MB, the graphics card 312) and at 551 MB (out in the cat folk's
@@ -7156,8 +7169,10 @@ and the Debug log page, above the events ("This copy: code 9c6a608eb2, put toget
   the game fell over (a phone's browser loads the page again when it runs out of memory): kept as
   a crash, with those notes, what the game held then among them. With them, how what was held went
   over the minute before (`trend`: at each of the last 30 notes, what was held all told, the
-  graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, and how many
-  bodies and actors: rising as more are dressed, or jumping at the end), and the work begun lately
+  graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, how many
+  bodies and actors, and the memory guard's level, `guard`: rising as more are dressed, or jumping
+  at the end; the guard coming and going every minute or so would be it undoing its own work,
+  *The memory guard*), and the work begun lately
   (`begun`: the last six, each written down as it takes its first step, `pellagos.working`, core/
   steps.js `Steps.begun`; one begun after the last notes, `afterNotes`, was likely under way as the
   page fell, as a step of it taking half a second can be, the page never back from it to say so).

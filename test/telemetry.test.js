@@ -372,7 +372,7 @@ describe("the debug log (telemetry.js)", () => {
 
     it("a crash keeps the minute before it: what was held at each of the notes, when the last were written, and the work begun lately, that begun after the last notes marked (likely under way as it fell)", () => {
         const at = logOn();
-        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, interiorsMB: avatars, held: { avatars } } });
+        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, interiorsMB: avatars, held: { avatars }, guard: totalMB >= 400 ? 1 : 0 } });
 
         at.log.playing = true;
         at.log.job("dressing player player", 357);
@@ -395,8 +395,9 @@ describe("the debug log (telemetry.js)", () => {
         const crash = logOn(at.kept, { now: 300, clock: at.time.clock + 1500 }).log.recover("back_forward");
 
         assert.equal(crash.trend.length, TELEMETRY.trend, "a minute of the notes' readings");
-        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, interiorsMB: 40, heapMB: null, avatars: 40, actors: 32 });
+        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, interiorsMB: 40, heapMB: null, avatars: 40, actors: 32, guard: 1 });
         assert.ok(crash.trend[0].totalMB < crash.trend.at(-2).totalMB, "rising");
+        assert.equal(crash.trend[0].guard, 0, "and the memory guard's level at each, to see it come and go");
         assert.equal(crash.pageAt, at.time.now - 800);
         assert.deepEqual(
             crash.jobs.map(({ label }) => label),

@@ -32,7 +32,7 @@ import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/
 import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
-import { guardLevel, MEMORY_GUARD } from "./memoryguard.js";
+import { MEMORY_GUARD, MemoryGuard } from "./memoryguard.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
@@ -1568,7 +1568,9 @@ export class Game {
                 // (Joined: how often its own hero, drawn ahead, has been put right, and by how much
                 // at most: app/forecast.js)
                 ...(this.forecast ? { forecast: { ...this.forecast.corrections, most: one(this.forecast.corrections.most) } } : {}),
-                memory: this.memoryNow(),
+                // (On a phone, as the memory guard read it within the last couple of seconds: one
+                // walk over every body about, not two: memoryLately)
+                memory: this.memoryGuard.touch ? this.memoryLately(MEMORY_GUARD.every * 1250) : this.memoryNow(),
                 device: { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${view.renderer.domElement.width}x${view.renderer.domElement.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null },
             };
         };
@@ -1768,9 +1770,27 @@ export class Game {
         /**
          * The memory guard (app/memoryguard.js, #memoryGuarding): only on a touch screen (a phone or
          * a tablet: `touch`), its level now (0: holding as much as ever), since when (the game's
-         * clock, s), and how long till what's held is looked at again (s).
+         * clock, s), and how long till what's held is looked at again (s). As its level changes,
+         * the sound's squeezed or let be (the bodies' budget reads the level: #bodiesBudget); and
+         * as it goes up, whatever's held that nothing's using is let go of at once (`letGo`).
          */
-        this.memoryGuard = { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), level: 0, since: 0, clock: MEMORY_GUARD.every };
+        this.memoryGuard = Object.assign(
+            new MemoryGuard({
+                onLevel: (level) => this.sound?.squeeze?.(MEMORY_GUARD.sound[level] ?? null),
+                letGo: () => {
+                    // (The beasts' bodies and models none's drawn from)
+                    this.#forgetting(0, { now: true });
+                    // HOOK (the performance review, for whoever integrates it): the character kit's
+                    // idle caches let go of here too, `letGoOfIdle(kit)` from characters/kit.js once
+                    // that's merged. One line; test/memoryguard.test.js checks letGo is called.
+                },
+            }),
+            { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), clock: MEMORY_GUARD.every },
+        );
+
+        // (What's held as it was last read, and when (performance.now, ms): one reading every
+        // couple of seconds serves the guard and the debug log's notes both: memoryLately)
+        this.memoryRead = { at: -Infinity, memory: null };
 
         /**
          * Their party's ready check (core/host.js READY, #readyEvent): what each in it has said
@@ -1978,6 +1998,26 @@ export class Game {
             // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
             guard: this.memoryGuard?.level ?? 0,
         };
+    }
+
+    /**
+     * What the game holds (memoryNow) as it was last read, if that was within `within` ms; else
+     * read now, and kept. Reading it walks every body about, so on a phone, where the memory guard
+     * reads it every couple of seconds, the debug log's notes are given the guard's reading and
+     * the guard the notes' (the guard's level as it is now, either way).
+     */
+    memoryLately(within) {
+        const read = this.memoryRead;
+        const now = performance.now();
+
+        if (!read.memory || now - read.at > within) {
+            read.memory = this.memoryNow();
+            read.at = now;
+        }
+
+        read.memory.guard = this.memoryGuard?.level ?? 0;
+
+        return read.memory;
     }
 
     // The buildings' floors' own copies on the page (world/release.js heldOnPage: their meshes and
@@ -5679,6 +5719,11 @@ export class Game {
     // the sound squeezed or not (audio/sound.js squeeze), and, coming to a higher level, the beasts'
     // bodies and models none's drawn from let go of at once (#forgetting); told in the debug log
     // (memoryNow `guard`)
+    //
+    // What's held is read in a task of its own just after the frame, as the debug log's notes are
+    // written, not in it: reading it walks every body about (1 to 9 ms for 30 to 100 of them,
+    // measured on stand-ins), and the notes read it again a moment later. One reading serves both
+    // (memoryLately). Played on by hand (advance: `waits` off), it's read there and then.
     #memoryGuarding(dt) {
         const guard = this.memoryGuard;
 
@@ -5688,25 +5733,32 @@ export class Game {
 
         guard.clock = MEMORY_GUARD.every;
 
-        const was = guard.level;
+        if (!this.waits) {
+            this.#memoryLook();
+        } else if (!guard.looking) {
+            guard.looking = true;
+            setTimeout(() => {
+                guard.looking = false;
+
+                // (Not once the game's over: nothing's held to look at)
+                if (this.running) {
+                    this.#memoryLook();
+                }
+            }, 0);
+        }
+    }
+
+    // The memory guard's look at what's held (MemoryGuard.look: its level, and what follows from
+    // it changing)
+    #memoryLook() {
         // (Counted as Safari's crash reports count it, whatever the browser: the graphics card's, the
         // sound's, the way-finding's, and the bodies' and floors' copies on the page, not a heap
-        // only some browsers tell of, so its marks mean the same everywhere)
-        const memory = this.memoryNow();
+        // only some browsers tell of, so its marks mean the same everywhere. A reading the notes
+        // took within the last second will do)
+        const memory = this.memoryLately(MEMORY_GUARD.every * 500);
         const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB;
-        const { level, since } = guardLevel(held, { level: guard.level, since: guard.since, now: this.clock });
 
-        Object.assign(guard, { level, since });
-
-        if (level === was) {
-            return;
-        }
-
-        this.sound?.squeeze?.(MEMORY_GUARD.sound[level] ?? null);
-
-        if (level > was) {
-            this.#forgetting(0, { now: true });
-        }
+        this.memoryGuard.look(held, this.clock);
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past

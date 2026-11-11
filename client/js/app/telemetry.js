@@ -524,7 +524,7 @@ export class Telemetry {
 
         // (What's held, read at each of the notes: the last minute of it)
         if (memory) {
-            this.#trend.push({ at: round(now / 1000), totalMB: memory.totalMB, gpuMB: memory.gpu?.totalMB ?? null, soundMB: memory.soundMB, bodiesMB: memory.bodiesMB ?? null, interiorsMB: memory.interiorsMB ?? null, heapMB: memory.heapMB, avatars: memory.held?.avatars ?? null, actors: noted.actors ?? null });
+            this.#trend.push({ at: round(now / 1000), totalMB: memory.totalMB, gpuMB: memory.gpu?.totalMB ?? null, soundMB: memory.soundMB, bodiesMB: memory.bodiesMB ?? null, interiorsMB: memory.interiorsMB ?? null, heapMB: memory.heapMB, avatars: memory.held?.avatars ?? null, actors: noted.actors ?? null, guard: memory.guard ?? null });
             this.#trend.splice(0, Math.max(0, this.#trend.length - TELEMETRY.trend));
         }
 
