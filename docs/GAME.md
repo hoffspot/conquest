@@ -4886,7 +4886,15 @@ own, and why:
 - **Held or let go, by how big they'd be seen, in view or not** (`#stature`: the soldiers, the
   creatures, the folk). One out of view isn't ranked last, as one who only stands in is: a body
   let go of as the camera turns from it would be built again as it turns back, seconds of work.
-  One not drawn yet is taken to be as tall as its kind is.
+  Each is taken to be as tall as its kind is (a person's height; a creature as big as its seed
+  makes it), however it's drawn now, never as tall as its own body where it has one: its place
+  must not change as it's built in full or let go. Measured by its own body's height (as it was
+  for a day, 2026-11-11), a soldier is as tall as its kind's figure in its crowd and as tall as
+  itself in full, so one ranked within the room in its crowd and more than the margin past it in
+  full was built, let go and built again for as long as it stood there: two of a field battle's
+  eighty were, some twenty times each in two minutes, a body built every few seconds for nothing
+  and a soldier forever fading between its crowd's figure and itself (`e2e/pellagos.spec.js`,
+  the debug overlay's field battle, waits for them all to be drawn and sorted).
 - **Standing in** (`#crowdable`): the four allies nearest the players and one thrown by a blast
   come before the rest (`STANDING.kept`, after everyone the order names): the nearest allies
   cast shadows and are drawn in more detail, which a stand-in can't, and a crowd's figure has no

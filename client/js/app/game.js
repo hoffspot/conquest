@@ -5218,11 +5218,18 @@ export class Game {
     // there, in view or not, as its height over that (the same for everyone but for what a
     // metre is in pixels, which ranks no one). Not nothing for one out of view, as for those
     // who only stand in (#crowdable): a body let go of as the camera turns from it would be
-    // built again as it turns back, seconds of work each time. One not drawn yet is taken to be
-    // as tall as its kind is, a person's height else
+    // built again as it turns back, seconds of work each time. Each is taken to be as tall as
+    // its kind is (a creature as big as its own seed makes it), a person's height else, however
+    // it's drawn now: never its own body's height where it has one. In its crowd it's as tall as
+    // its kind's figure, in full as tall as itself, so its place in the order changed as it was
+    // built in full and as it was let go again: one of a battle's soldiers ranked within the
+    // room in its crowd and more than the margin past it in full was built, let go and built
+    // again for as long as it stood there (two of a field battle's eighty, some twenty times
+    // each in two minutes: a body built every few seconds for nothing, and to the player a
+    // soldier forever fading between its crowd's figure and itself)
     #stature = (entry) => {
         const { actor } = entry;
-        const height = this.avatars.get(actor.id)?.character?.height ?? PERSON * (actor.kind === "beast" && actor.wild ? sizeOf(actor.wild.creature, this.#seedOf(actor)) : 1);
+        const height = PERSON * (actor.kind === "beast" && actor.wild ? sizeOf(actor.wild.creature, this.#seedOf(actor)) : 1);
 
         entry.away = this.#awayFromCamera(actor);
         entry.tall = height / Math.max(entry.away, 0.1);
