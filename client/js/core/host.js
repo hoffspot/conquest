@@ -106,6 +106,26 @@ export const ORC_ROUTED_MS = 600000;
  */
 export const MUSTER = Object.freeze({ near: 120, far: 250 });
 
+/**
+ * What the world will soon want made (Host soon: generated/multiplayer_scaling_plan.md 1-6), for
+ * whoever makes it ahead of need between its steps (server/ahead.js) or a page's frames
+ * (app/game.js). A town's soldiers, a settlement's townsfolk, a works' guards, a camp, an army,
+ * an envoy, a convoy, a wagon or a fortification comes out in the step a player comes within its
+ * own distance (MUSTER.near and the like), and that step reads the ground it stands them on: so
+ * once a player's within `margin` metres more than that, the ground's said to be wanted, the
+ * squares within so many metres of where it'll stand:
+ *  - `town`: beyond a settlement's edge, for its guards' posts and its patrols' rounds (just
+ *    outside it, each point a free square within 24 m: #stations); `folk`: beyond it, or a
+ *    castle's, for its townsfolk's errands;
+ *  - `works`, `camp` (its scout's round is CAMP_NEAR.scout out), `army` (its line of battle, at
+ *    its camp's parade ground or where it is), `road` (an envoy, a convoy or a wagon, and the way
+ *    a little ahead of it), `fort` (a tower); a forward garrison's squads walk SQUADS_NEAR.rounds
+ *    out from it, and `squads` beyond those.
+ * And a dungeon's levels (core/dungeons/build.js), made when a player's within DELVES.near of its
+ * way in: wanted once one's within `delve`.
+ */
+export const SOON = Object.freeze({ margin: 80, town: 40, folk: 16, works: 64, camp: 72, army: 72, road: 56, fort: 24, squads: 16, delve: 150 });
+
 /** How far from its post (or a patrol from its round) a guard goes after an enemy (metres). */
 export const LEASH = 14;
 
@@ -283,6 +303,10 @@ export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.
  * fortification stood up within reach.
  */
 export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 4 });
+
+// How far from its point a squad's gate or one of its rounds' stops may be put, on the nearest
+// free square (metres: #musterSquads)
+const SQUAD_FREE = Object.freeze({ gate: 12, stop: 16 });
 
 /**
  * A town's barracks near a player (docs/WAR.md M16): its guardsmen (war/muster.js QUARTERED) and
@@ -6235,6 +6259,135 @@ export class Host {
         war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.camps.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
+    /**
+     * What the world will soon want made (SOON), for whoever makes it ahead of need: nothing in
+     * the world changes for the asking, so its steps come out the same whether it's asked or
+     * not, and whether what it says is made in time or not (a step makes what it finds missing,
+     * as ever). The distances are the world's own (#muster, #townsfolk, #dungeons), which is why
+     * it's the host that says, and the server and the game only make. Returns:
+     *  - `around`: where each player is out in the world, or the door of the building they're in
+     *    ([[x, y]...], metres): what's round them is wanted while they're there;
+     *  - `boxes`: the ground each town's soldiers, settlement's townsfolk, works' guards, camp,
+     *    army, envoy, convoy, wagon or fortification not out yet will stand on, a player being
+     *    within SOON.margin of where it comes out ([[x0, y0, x1, y1]...], squares, both ends in);
+     *  - `dungeons`: the dungeons not made yet with a player within SOON.delve of their way in,
+     *    each as it would be made were they to come to it as they are ([{ key, seed, theme, tier,
+     *    generation }]: the building's key and core/dungeons/build.js buildDungeon's own; the
+     *    tier its finders' might would give it, #findersTier).
+     */
+    soon() {
+        const places = this.world.plan && this.world.maps?.town?.chunk ? this.#whereabouts() : [];
+        const boxes = [];
+        const dungeons = [];
+
+        if (!places.length) {
+            return { around: places, boxes, dungeons };
+        }
+
+        const { margin } = SOON;
+        const near = ([ax, ay], within) => places.some(([x, y]) => hypot(x - ax, y - ay) < within + margin);
+        const box = ([x, y], reach) => boxes.push([Math.floor(x - reach), Math.floor(y - reach), Math.ceil(x + reach), Math.ceil(y + reach)]);
+        const war = this.war;
+
+        // Each settlement's townsfolk, and a castle's in its wards (#townsfolk)
+        this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
+
+        for (const place of this.settlementPlaces) {
+            const edge = SETTLEMENT_KINDS[place.kind].radius;
+
+            if (!this.townsfolk.has(place.id) && near(this.#middleOf(place), edge + TOWNSFOLK_REACH.near)) {
+                box(this.#middleOf(place), edge + SOON.folk);
+            }
+        }
+
+        for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
+            if (set && (set.site.kind === "castle" || set.citadel) && !this.townsfolk.has(set.site.id) && near([set.x, set.y], set.radius + TOWNSFOLK_REACH.near)) {
+                box([set.x, set.y], set.radius + SOON.folk);
+            }
+        }
+
+        // The war's: each town's soldiers, the works' guards, the camps and depots, the armies,
+        // what's on the roads and the fortifications (#muster)
+        for (const town of war?.towns ?? []) {
+            const place = this.#placeOf(town.id);
+            const edge = place ? SETTLEMENT_KINDS[place.kind].radius : 0;
+
+            if (place && !this.mustered.has(town.id) && near(this.#middleOf(place), edge + MUSTER.near)) {
+                box(this.#middleOf(place), edge + SOON.town);
+            }
+        }
+
+        for (const works of war?.works ?? []) {
+            if (!this.worksOut.has(works.id) && near(works.at, WORKS_OUT.near)) {
+                box(works.at, SOON.works);
+            }
+        }
+
+        for (const camp of war ? [...war.camps, ...war.depots] : []) {
+            if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp.at, CAMP_NEAR.near)) {
+                box(camp.at, SOON.camp);
+            }
+        }
+
+        // (An army met too where it's near enough one met already to fight it, whoever's it is)
+        const met = [...this.armies.values()].map(({ at }) => at);
+
+        for (const force of war?.forces ?? []) {
+            const road = { envoy: [ENVOY, this.envoys], convoy: [CONVOY_NEAR, this.convoys], supply: [WAGON_NEAR, this.supplies] }[force.kind];
+
+            if (road) {
+                if (!road[1].has(force.id) && near(force.at, road[0].near)) {
+                    box(force.at, SOON.road);
+                }
+            } else if (["army", "reserve", "reinforcement"].includes(force.kind) && force.size > 0 && this.#afield(force) && !this.armies.has(force.id)) {
+                if (near(force.at, ARMY_NEAR.near) || met.some(([x, y]) => hypot(x - force.at[0], y - force.at[1]) <= ARMY_NEAR.fight + margin)) {
+                    box(force.at, SOON.army);
+                }
+            }
+        }
+
+        for (const fort of war?.forts ?? []) {
+            if (this.fortsOut.has(fort.id) || !near(fort.at, FORT_NEAR.near)) {
+                continue;
+            }
+
+            box(fort.at, fortSize(fort) / 2 + SOON.fort);
+
+            // (A forward garrison's squads: the ground at its gate and at each stop of their rounds)
+            if (fort.squads && !this.squadsOut.has(fort.id)) {
+                const points = this.#squadPoints(fort);
+
+                for (const point of points.rounds.flat()) {
+                    box(point, SQUAD_FREE.stop + SOON.squads);
+                }
+            }
+        }
+
+        // The dungeons near, not made yet: each as those within reach of its way in would find it
+        // (only those the world's set down already: asking sets nothing down)
+        const interiors = this.world.interiors;
+
+        for (const site of interiors ? this.#dungeonSites() : []) {
+            const key = `site:${site.id}`;
+            const building = interiors.buildings.get(key);
+
+            if (!building || building.made || building.kind !== "dungeon" || !this.#byWayIn(site, places, SOON.delve)) {
+                continue;
+            }
+
+            const finders = [...this.players.values()].filter((player) => {
+                const actor = this.battle.actor(player.id);
+
+                return actor && !actor.dead && (site.parent ? this.#byKeepDoors(actor, site, SOON.delve) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < SOON.delve);
+            });
+            const tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))));
+
+            dungeons.push({ key, seed: building.seed, theme: building.theme ?? "caves", tier, generation: building.generation ?? 0 });
+        }
+
+        return { around: places, boxes, dungeons };
+    }
+
     // One of the plan's places, by its id (or undefined). Looked up in a table made once: the
     // plan's places never change, and the look round asks for every town of the war's, twice a
     // second, where reading down all of them each time was a quarter of #muster
@@ -9423,9 +9576,6 @@ export class Host {
         }
 
         const squares = squaresOf(this.world.maps.town);
-        const toward = this.war.town(fort.toward)?.at;
-        // (Its gate at its back, away from the enemy it faces: world/forts3d.js)
-        const facing = toward ? atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0;
         const near = ([x, y], within) => {
             try {
                 return nearestFree(squares, [Math.round(x), Math.round(y)], { within });
@@ -9433,15 +9583,9 @@ export class Host {
                 return null;
             }
         };
-        const reach = fortSize(fort) / 2 + SQUADS_NEAR.gate;
-        const gate = near([fort.at[0] + sin(facing) * reach, fort.at[1] + cos(facing) * reach], 12);
-        const rounds = SQUADS_NEAR.rounds.map((radius, k) =>
-            Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
-                const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;
-
-                return near([fort.at[0] + sin(angle) * radius, fort.at[1] + cos(angle) * radius], 16);
-            }).filter(Boolean),
-        );
+        const points = this.#squadPoints(fort);
+        const gate = near(points.gate, SQUAD_FREE.gate);
+        const rounds = points.rounds.map((round) => round.map((point) => near(point, SQUAD_FREE.stop)).filter(Boolean));
 
         if (!gate) {
             return;
@@ -9449,6 +9593,27 @@ export class Host {
 
         this.squadsOut.set(fort.id, { people: fort.realm, gate, rounds, ids: Object.fromEntries(SQUAD_NAMES.map((name) => [name, []])), next: Object.fromEntries(SQUAD_NAMES.map((name) => [name, 0])), target: null, broken: false });
         this.#fillSquads(fort, { first: true });
+    }
+
+    // Where a forward garrison's squads go, before each point's put on a free square near it
+    // (SQUAD_FREE): its gate at its back, away from the enemy it faces (world/forts3d.js), and
+    // its patrols' rounds, a ring of stops each, the second turned half a stop on from the first:
+    // { gate: [x, y], rounds: [[[x, y]...]...] } (metres)
+    #squadPoints(fort) {
+        const toward = this.war.town(fort.toward)?.at;
+        const facing = toward ? atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0;
+        const reach = fortSize(fort) / 2 + SQUADS_NEAR.gate;
+
+        return {
+            gate: [fort.at[0] + sin(facing) * reach, fort.at[1] + cos(facing) * reach],
+            rounds: SQUADS_NEAR.rounds.map((radius, k) =>
+                Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
+                    const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;
+
+                    return [fort.at[0] + sin(angle) * radius, fort.at[1] + cos(angle) * radius];
+                }),
+            ),
+        };
     }
 
     // A forward garrison's squads made up to what the war has in each: the first out where they'd

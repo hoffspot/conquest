@@ -7,16 +7,27 @@
 // of milliseconds a chunk, a couple of hundred a capital, held up in the middle of a step.
 //
 // So round each player out in the world (core/runner.js bakeAhead asks: around), the chunks within
-// AHEAD.chunks are made a few at a time between steps (pump, AHEAD.budget each time), the
-// settlements near laid out on a worker, and the navigation's tiles baked on another once their
-// ground's made (server/workers.js gives Node the workers). And the insides of the buildings
-// opened near them (core/host.js open: their folk about) have their meshes baked between steps
-// too, a tile at a time, before their folk first walk there.
+// AHEAD.chunks are made between steps, a piece of one at a time (pump, AHEAD.budget each time:
+// core/overworld.js chunkWithin), their land's heights worked out on a worker first (world/
+// terrains.js), the settlements near laid out on another, and the navigation's tiles baked on a
+// third once their ground's made (server/workers.js gives Node the workers). And the insides of
+// the buildings opened near them (core/host.js open: their folk about) have their meshes baked
+// between steps too, a tile at a time, before their folk first walk there.
+//
+// Given the world's host, it asks it besides what the world will soon want (core/host.js soon,
+// twice a second: generated/multiplayer_scaling_plan.md 1-6): the ground a town's soldiers, its
+// townsfolk, a camp or an army will be stood on in the step a player comes near enough, made
+// after what's round the players; and a dungeon's levels, worked out on the layouts' worker
+// before anyone's at its door. From the same answer it knows where the players are now: what was
+// waiting round one who's gone (out of the world, or through a portal to somewhere else) is let
+// go, and the world keeps as many chunks as those who are here want (core/overworld.js keep), so
+// that it never lets one go to make another.
 
 import { keepRooms, navigatorOf } from "../client/js/core/navigation.js";
 import { CHUNK, CHUNKS } from "../client/js/core/overworld.js";
 import { Layouts } from "../client/js/world/layouts.js";
 import { NavBaker } from "../client/js/world/navbaker.js";
+import { Terrains } from "../client/js/world/terrains.js";
 
 export const AHEAD = Object.freeze({
     // How far round a player (chunks, each way) the world's chunks are made; and how far round
@@ -35,14 +46,29 @@ export const AHEAD = Object.freeze({
     // How long (ms) each pump may spend making chunks; and how many navigation tiles it sends off
     budget: 8,
     tiles: 8,
+    // How many more chunks the world keeps than its players and what's wanted soon take (those
+    // the steps make for themselves besides: a way's far end, an army's road), so that making
+    // one of those never lets go of one a player's standing by
+    spareChunks: 64,
+    // How long (ms) a chunk waits for its land's heights, or a settlement by it, to come back
+    // from a worker before it's made without them (worked out here, as ever: a worker gone quiet)
+    patience: 2000,
 });
 
 export class Ahead {
     /**
+     * Whether what the host says the world will soon want (core/host.js soon) is made ahead, as
+     * it always is, or only what's round the players: only for the tests and scripts that check
+     * the world's steps come out the same either way, and what it saves them.
+     */
+    static soon = true;
+
+    /**
      * @param {object} world - The world (core/overworld.js buildWorld's: its overworld, maps.town).
      * @param {object} [options]
      * @param {object} [options.host] - The world's host (core/host.js), for the buildings it's
-     *     opened (their insides' meshes baked ahead too); none, they aren't.
+     *     opened (their insides' meshes baked ahead too), where its players are and what it will
+     *     soon want (soon); none, only what's asked for (around) is made.
      * @param {function} [options.clock] - The time (ms), to keep each pump within AHEAD.budget.
      */
     constructor(world, { host = null, clock = () => performance.now() } = {}) {
@@ -64,14 +90,28 @@ export class Ahead {
             navigation.widenLater = true;
         }
 
-        this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements) : null;
+        this.layouts = this.overworld.settlements ? new Layouts(this.overworld.settlements, world.interiors ?? null) : null;
 
-        /** The chunks waiting to be made ([cx, cy], nearest a player first). */
+        // The land's heights for the chunks waiting, and the trails' ways near them, worked out
+        // on a worker as the browser's are (a fifth of a chunk's making, off the world's thread)
+        this.terrains = this.overworld.ground ? new Terrains(world.plan, this.overworld.ground, this.overworld.trails ?? null) : null;
+
+        /** The chunks waiting to be made ([cx, cy], nearest a player first, then what's wanted soon). */
         this.chunks = [];
 
         /** How many chunks it's made (not what the steps made), and buildings' insides' tiles baked. */
         this.made = 0;
         this.rooms = 0;
+
+        /** How many chunks the players and what's wanted soon take now (with a host: #review). */
+        this.wanted = 0;
+
+        // When the host was last asked what's wanted (its look round's time: asked again once
+        // it's looked round again, or a player's moved), and since when each chunk has waited on
+        // a worker (#awaited)
+        this.asked = null;
+        this.stale = true;
+        this.waited = new Map();
     }
 
     /**
@@ -81,46 +121,145 @@ export class Ahead {
      */
     around(x, y, reach) {
         const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
-        const wanted = [];
+        const wanted = this.#ring(cx, cy).filter(([ax, ay]) => !this.#made(ax, ay));
+
+        wanted.sort((a, b) => a[2] - b[2]);
+        this.#first(wanted);
+        this.layouts?.ahead(cx, cy);
+        this.terrains?.ahead(cx, cy);
+        this.navBaker.around(x, y, Math.max(reach, AHEAD.reach));
+        this.stale = true;
+    }
+
+    // The chunks within AHEAD.chunks of one, each with how many chunks off it is: [[cx, cy, rings]]
+    #ring(cx, cy) {
+        const ring = [];
 
         for (let dy = -AHEAD.chunks; dy <= AHEAD.chunks; dy++) {
             for (let dx = -AHEAD.chunks; dx <= AHEAD.chunks; dx++) {
                 const [ax, ay] = [cx + dx, cy + dy];
 
-                if (ax >= 0 && ay >= 0 && ax < CHUNKS && ay < CHUNKS && !this.#made(ax, ay)) {
-                    wanted.push([ax, ay, Math.max(Math.abs(dx), Math.abs(dy))]);
+                if (ax >= 0 && ay >= 0 && ax < CHUNKS && ay < CHUNKS) {
+                    ring.push([ax, ay, Math.max(Math.abs(dx), Math.abs(dy))]);
                 }
             }
         }
 
-        wanted.sort((a, b) => a[2] - b[2]);
+        return ring;
+    }
 
-        const first = new Set(wanted.map(([ax, ay]) => ay * CHUNKS + ax));
+    // Chunks put first among those waiting (in the order given), what was waiting after them
+    #first(chunks) {
+        const first = new Set(chunks.map(([ax, ay]) => ay * CHUNKS + ax));
 
-        this.chunks = [...wanted.map(([ax, ay]) => [ax, ay]), ...this.chunks.filter(([ax, ay]) => !first.has(ay * CHUNKS + ax))];
-        this.layouts?.ahead(cx, cy);
-        this.navBaker.around(x, y, Math.max(reach, AHEAD.reach));
+        this.chunks = [...chunks.map(([ax, ay]) => [ax, ay]), ...this.chunks.filter(([ax, ay]) => !first.has(ay * CHUNKS + ax))];
+    }
+
+    // With a host: what's wanted now looked over, each time its look round's gone by or a player's
+    // moved (around). Where its players are (core/host.js soon `around`), the chunks round each;
+    // and what it will soon want (`boxes`), after those. What was waiting that none of them takes
+    // is let go: a chunk or a tile round a player who's gone. A chunk they take that isn't made
+    // (never made, or let go of since) waits again. The world's told to keep as many chunks as
+    // all that takes, and AHEAD.spareChunks more; and each dungeon to come has its levels worked
+    // out on the layouts' worker (`dungeons`)
+    #review() {
+        const host = this.host;
+
+        if (!host?.soon || (!this.stale && this.asked === host.lookAt)) {
+            return;
+        }
+
+        this.asked = host.lookAt;
+        this.stale = false;
+
+        const { around, boxes, dungeons } = host.soon();
+        const rings = new Map();
+        const soon = new Map();
+
+        for (const [x, y] of around) {
+            for (const [cx, cy, off] of this.#ring(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
+                const key = cy * CHUNKS + cx;
+
+                rings.set(key, Math.min(off, rings.get(key) ?? Infinity));
+            }
+        }
+
+        for (const [x0, y0, x1, y1] of Ahead.soon ? boxes : []) {
+            for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
+                for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
+                    if (!rings.has(cy * CHUNKS + cx)) {
+                        soon.set(cy * CHUNKS + cx, [cx, cy]);
+                    }
+                }
+            }
+        }
+
+        // (Those waiting: round the players nearest first, in the order they were, then what's
+        // wanted soon. Those made are marked as wanted still, so that what the world lets go of
+        // as it makes another is what no one wants any more, never one a player's standing by
+        // that its steps happen not to have read)
+        const waiting = (key) => !(this.overworld.wanted?.(key % CHUNKS, Math.floor(key / CHUNKS)) ?? this.#made(key % CHUNKS, Math.floor(key / CHUNKS)));
+        const near = [...rings.keys()].filter(waiting).sort((a, b) => rings.get(a) - rings.get(b));
+        const later = [...soon.keys()].filter(waiting);
+
+        this.chunks = [...near, ...later].map((key) => [key % CHUNKS, Math.floor(key / CHUNKS)]);
+        this.wanted = rings.size + soon.size;
+        this.overworld.keep?.(this.wanted + AHEAD.spareChunks);
+
+        for (const key of this.waited.keys()) {
+            if (!rings.has(key) && !soon.has(key)) {
+                this.waited.delete(key);
+            }
+        }
+
+        // (Their land's heights, and the settlements by them: asked of the workers now, to be
+        // back by the time they're made)
+        this.terrains?.want(this.chunks);
+
+        for (const [cx, cy] of this.#spread(later)) {
+            this.layouts?.ahead(cx, cy);
+        }
+
+        // (The navigation's tiles waiting round where no player is any more: let go)
+        const { tile } = this.navBaker.navigation.measures;
+        const reach = AHEAD.reach + tile;
+
+        this.navBaker.queue = this.navBaker.queue.filter(([tx, ty]) => around.some(([x, y]) => Math.abs((tx + 0.5) * tile - x) <= reach && Math.abs((ty + 0.5) * tile - y) <= reach));
+
+        this.layouts?.delve(Ahead.soon ? dungeons : []);
+    }
+
+    // A few chunks among some (keys) that the settlements near all of them are near one of: one
+    // in every so many each way, as the layouts look that far round a chunk (world/layouts.js)
+    #spread(keys) {
+        const seen = new Map();
+
+        for (const key of keys) {
+            const [cx, cy] = [key % CHUNKS, Math.floor(key / CHUNKS)];
+
+            seen.set(Math.floor(cy / 4) * CHUNKS + Math.floor(cx / 4), [cx, cy]);
+        }
+
+        return [...seen.values()];
     }
 
     /**
-     * Between steps: make the chunks waiting for as long as AHEAD.budget allows (at least one);
-     * with none waiting, a tile of an open building's inside; then send the next of the
-     * navigation's tiles off to be baked.
+     * Between steps: with a host, what's wanted now looked over (#review); then the chunks
+     * waiting made for as long as AHEAD.budget allows, a piece of one at the least (core/
+     * overworld.js chunkWithin: one left half made is carried on the next time), those whose
+     * heights or settlement are still with a worker passed over for now; with none waiting, a
+     * tile of an open building's inside; then the next of the navigation's tiles sent off to be
+     * baked.
      */
     pump() {
+        this.#review();
+
         const until = this.clock() + AHEAD.budget;
 
-        while (this.chunks.length) {
-            const [cx, cy] = this.chunks.shift();
-
-            if (!this.#made(cx, cy)) {
-                this.overworld.chunk(cx, cy);
-                this.made++;
-            }
-
-            if (this.clock() >= until) {
-                break;
-            }
+        // (Those with nothing to wait for; then, sooner than stand idle, those whose heights
+        // alone aren't back yet, worked out here)
+        if (this.#make(until, false)) {
+            this.#make(until, true);
         }
 
         if (!this.chunks.length) {
@@ -128,6 +267,63 @@ export class Ahead {
         }
 
         this.navBaker.pump(AHEAD.tiles);
+    }
+
+    // The chunks waiting made, in their order, till the clock reaches `until` (a piece of one at
+    // the least): but those better left a moment (#awaited), a settlement's layout still to come
+    // or, unless they're to be made `unheighted`, their heights. Returns whether there's time left
+    #make(until, unheighted) {
+        let k = 0;
+
+        while (k < this.chunks.length) {
+            const [cx, cy] = this.chunks[k];
+
+            if (this.#made(cx, cy)) {
+                this.chunks.splice(k, 1);
+                continue;
+            }
+
+            const waits = this.#awaited(cx, cy);
+
+            if (waits === "layout" || (waits === "heights" && !unheighted)) {
+                k++;
+                continue;
+            }
+
+            if (this.overworld.chunkWithin(cx, cy, until, this.clock)) {
+                this.chunks.splice(k, 1);
+                this.waited.delete(cy * CHUNKS + cx);
+                this.made++;
+            }
+
+            if (this.clock() >= until) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // What a chunk waiting is better left a moment for, if anything: a settlement by it still
+    // being laid out on its worker, or a trail near it still being found on the heights' ("layout":
+    // made now, the chunk would do that here on the world's thread, a couple of hundred
+    // milliseconds for a capital; waited for no longer than AHEAD.patience, should the worker
+    // have gone quiet), or its land's heights asked of theirs and not back yet ("heights": a few
+    // milliseconds' work here, so only while there's another chunk to make meanwhile)
+    #awaited(cx, cy) {
+        const key = cy * CHUNKS + cx;
+
+        if (this.layouts?.pending(cx, cy) || this.terrains?.finding(cx, cy)) {
+            if (!this.waited.has(key)) {
+                this.waited.set(key, this.clock());
+            }
+
+            if (this.clock() - this.waited.get(key) < AHEAD.patience) {
+                return "layout";
+            }
+        }
+
+        return this.terrains?.worker && this.terrains.asked.has(key) && !this.overworld.ground.has(cx, cy) ? "heights" : null;
     }
 
     // The next tile not baked yet of the insides of the buildings the host has open, baked
@@ -181,14 +377,27 @@ export class Ahead {
     }
 
     /**
-     * Whether all that's been asked for is made: no chunk waiting, no navigation tile waiting or
-     * being baked. (A player arriving waits for this before their world's clock starts:
-     * generated/world_server_plan.md §4.)
+     * Whether all that's been asked for is made: no chunk waiting, no navigation tile being
+     * baked, none waiting whose ground is made (one whose ground isn't, and isn't waiting to be,
+     * is a way's far off from every player: nothing here makes its ground, and it's no reason
+     * to keep anyone waiting), and no open building's inside with a tile to bake. (A player
+     * arriving waits for this before their world's clock starts: generated/world_server_plan.md
+     * §4.)
      */
     get settled() {
         const baker = this.navBaker;
 
-        return !this.chunks.length && !baker.queue.length && !baker.wanted.length && !baker.asked.size && !this.#insideWaiting();
+        this.#review();
+
+        return !this.chunks.length && !baker.asked.size && ![...baker.queue, ...baker.wanted].some(([tx, ty]) => this.#bakeable(tx, ty)) && !this.#insideWaiting();
+    }
+
+    // Whether a navigation tile waiting could be sent off now: not in, and its ground made
+    #bakeable(tx, ty) {
+        const { navigation } = this.navBaker;
+        const { tile, border } = navigation.measures;
+
+        return !navigation.has(tx, ty) && this.overworld.made(tx * tile - border, ty * tile - border, (tx + 1) * tile + border, (ty + 1) * tile + border);
     }
 
     // Whether any open building's inside has a tile not baked yet
@@ -217,6 +426,7 @@ export class Ahead {
     dispose() {
         this.navBaker.dispose();
         this.layouts?.dispose();
+        this.terrains?.dispose();
         this.chunks = [];
     }
 }

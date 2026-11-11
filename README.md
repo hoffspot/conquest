@@ -849,7 +849,8 @@ client/                 The game (static files served to the browser)
                         the trails' signs read and the homes tracked
     portals.js          The guild's portals: the branches open to step through to, and their fares
     host.js             The one authority over a running world: its players (by id), their
-                        commands, the buildings near them got ready, kept and made again
+                        commands, the buildings near them got ready, kept and made again; and
+                        what ground and which dungeons it will soon want made (soon)
     wire.js             What goes between host and players, and into a save, as text
     netplay.js          Playing together: what's done in a hosted world, sent to those who've
                         joined it and done again on their copies of it, step for step
@@ -931,7 +932,8 @@ client/                 The game (static files served to the browser)
                         and the settlements' buildings, each drawn a step at a time in each
                         frame's budget
     layouts.js          The settlements a little way ahead, laid out in a worker
-                        (layout-worker.js) for the world to take when it first wants them
+                        (layout-worker.js) for the world to take when it first wants them;
+                        and the levels of a dungeon the player's coming to, worked out there
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
                         rooms and furniture, the fires, the boar on its spit, and taking

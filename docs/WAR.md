@@ -3161,12 +3161,51 @@ server draws nothing, so it makes it ahead, between its steps, or its steps woul
 settlement and navigation tile the moment someone first walked into it:
 - **Workers.** Node has no Web Workers, so the server gives it one on its own threads
   (`ThreadWorker`), and the game's own workers run there unchanged: the navigation's tiles baked
-  (world/navworker.js) and settlements laid out (world/layout-worker.js), to the same bytes as here.
-- **Round each player** (`Ahead`): the chunks within 3 of their own made a few at a time between
-  steps (8 ms a time), nearest first; the settlements near laid out on a worker; the navigation's
-  tiles within 160 m baked on another, once their ground's made; and the insides of the buildings
-  open near them baked between steps, a tile at a time. A player arriving waits for all of it
+  (world/navworker.js), settlements laid out (world/layout-worker.js) and the land's heights
+  worked out and the trails found (world/terrain-worker.js: a fifth of a chunk's making), to the
+  same bytes as here.
+- **Round each player** (`Ahead`): the chunks within 3 of their own made between steps, nearest
+  first, a piece of one at a time (8 ms a time, `AHEAD.budget`: `Overworld.chunkWithin`, below); the
+  settlements near laid out on a worker; the navigation's tiles within 160 m baked on another,
+  once their ground's made; and the insides of the buildings open near them baked between steps, a
+  tile at a time. A chunk whose settlement is still being laid out, or a trail near it found, on a
+  worker waits for it (2 seconds at most, `patience`: made first, the chunk would do that work on
+  the world's thread, a couple of hundred milliseconds for a capital), and one whose heights
+  aren't back waits while there's another to make. A player arriving waits for all of it
   (`settled`) before their world's clock starts.
+- **A chunk a piece at a time** (core/overworld.js `chunkWithin`, `MAKING`). A chunk took 20 to 28
+  ms of the world's thread in one go, two or three times what a pump is allowed, so each one made
+  ran on into the next step's time. It's made in fourteen pieces now (its squares eight rows at a
+  time, its ground, its trees, its features: about a millisecond each, the features four), a pump
+  doing as many as it has time for and carrying the chunk on at the next. One asked for whole
+  meanwhile (a step's: `chunk`) is finished there and then; one half made when what stands in
+  the world changes (a fortification, a stockade, what's fallen across the way) is begun again.
+  The chunk is the same however it was made (test/overworld.test.js).
+- **What the world will soon want** (core/host.js `soon`, `SOON`; generated/
+  multiplayer_scaling_plan.md 1-6). A town's soldiers, its townsfolk, a works' guards, a camp, an
+  army, an envoy, a convoy, a wagon or a fortification comes out in the step a player comes
+  within its distance, and that step stands them on free ground: a city's was 4 to 8 chunks not
+  made yet, further off than the 3 round the player, and the step made them (75 to 155 ms on a
+  world server, 120 to 480 in a browser's world, with the town in plain view). The distances are
+  the host's, so it's the host that says: once a player's within 80 m more (`margin`), the
+  squares within so many metres of where they'll stand are wanted (a settlement's own and 40 m
+  past its edge; 72 m round an army or a camp; the stops of a forward garrison's squads'
+  rounds). `Ahead` asks twice a second and makes them after what's round the players; the
+  browser's game makes them a piece a frame (docs/GAME.md *The world outside*). Asking changes
+  nothing, and a step makes what it finds missing as ever, so the world's the same whether it's
+  made in time or not (test/soon.test.js: step for step, with and without). `Ahead.soon` turns
+  it off, for the tests and scripts that compare.
+- **As many chunks as its players need** (`Overworld.keep`, `Ground.keep`). The world kept 256
+  chunks, a browser's, and each player's surroundings are 49: six players apart wanted 294, and
+  it let one go to make another over and over (eight players remade 1,233 chunks in five
+  minutes, 60% of the world thread's time, and never settled). `Ahead` tells the world to keep
+  what its players and what's wanted soon take, and 64 more (`spareChunks`), as they come and go;
+  never fewer than 256. About 70 KB a chunk.
+- **Where the players are, from the host.** What's wanted is looked over from where the host says
+  its players are (`soon`'s `around`: out in the world, or the door of the building they're in):
+  what was waiting round one who's left the world, or gone through a portal to somewhere else,
+  is let go (49 chunks and 121 tiles made for no one, before), and a chunk a player still needs
+  that was let go waits to be made again.
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).

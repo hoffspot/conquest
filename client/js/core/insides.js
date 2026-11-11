@@ -1267,6 +1267,12 @@ export function dungeonTier(plan, site) {
 const DEEP = Object.freeze(["", "the second level", "the third level", "the fourth level"]);
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
+// What a dungeon's made from (buildDungeon's own), each part of it
+const SAME_DUNGEON = Object.freeze(["seed", "theme", "tier", "generation"]);
+
+/** What a dungeon's building is made from, as the dungeon builder takes it (core/dungeons/build.js buildDungeon): { seed, theme, tier, generation }. */
+export const dungeonFrom = (building) => ({ seed: building.seed, theme: building.theme ?? "caves", tier: building.tier ?? 1, generation: building.generation ?? 0 });
+
 /**
  * A dungeon's levels (insides.js `rooms`): cooked up by the dungeon builder from its site's seed
  * and theme, its tier and how many times it's been made (`generation`), each level a floor (a
@@ -1274,7 +1280,13 @@ const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
  * the building (`dungeon`).
  */
 export function dungeonRooms(building) {
-    const dungeon = buildDungeon({ seed: building.seed, theme: building.theme ?? "caves", tier: building.tier ?? 1, generation: building.generation ?? 0 });
+    const from = dungeonFrom(building);
+    // (Worked out elsewhere ahead of need from what it's made from here, Interiors give, or
+    // here: the same either way)
+    const given = building.given && SAME_DUNGEON.every((part) => building.given.from[part] === from[part]) ? building.given.dungeon : null;
+    const dungeon = given ?? buildDungeon(from);
+
+    building.given = null;
     const realms = THEMES[dungeon.theme]?.realms ?? null;
     const named = building.name ?? dungeon.name;
 
@@ -1925,6 +1937,23 @@ export class Interiors {
         this.version++;
 
         return building;
+    }
+
+    /**
+     * A dungeon's levels worked out elsewhere ahead of its making (off the page's or the world's
+     * thread: world/layouts.js delve), from what it would be made from were its finders to come
+     * to it as they are (`from`: { seed, theme, tier, generation }, core/host.js soon): kept on
+     * its building, and taken when it's made if it's made from just that (dungeonRooms); if not
+     * (a mightier finder's come, so its tier's another), it's worked out there as ever. Nothing
+     * of the world changes for it: the dungeon is the same wherever it was worked out. Given
+     * none (`dungeon` null: its finders gone by), what was kept for it is let go.
+     */
+    give(key, from, dungeon) {
+        const building = this.buildings.get(key);
+
+        if (building?.kind === "dungeon" && !building.made) {
+            building.given = dungeon ? { from: { seed: from.seed, theme: from.theme, tier: from.tier, generation: from.generation }, dungeon } : null;
+        }
     }
 
     /**

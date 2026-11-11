@@ -885,6 +885,17 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   `creatures.js` `tierAt`), or the mightiest of those finding it (in it, or by its way in) as a
   cache would be (`caches.js` `cacheTier`), whichever's the more (`host.js` `#findersTier`,
   `insides.js` `setTier`), and its generation (`buildDungeon`).
+- **Worked out before then, off the step.** Building it takes 40 to 80 ms (170 to 260 the first
+  of a session, its code not yet run), which was spent in the step a player came within sight of
+  the way in. So the host says which dungeons are wanted soon (`host.js` `soon`: a player within
+  `SOON.delve`, 150 m, of the way in), each as it would be made were they to come to it as they
+  are (`{ seed, theme, tier, generation }`), and its levels are worked out on the layouts' worker
+  (`world/layouts.js` `delve`, `layout-worker.js`; the world server's too, `server/ahead.js`) and
+  given to the world's buildings (`insides.js` `give`). Made, it takes what was given if that's
+  just what it's made from (`dungeonRooms`), and otherwise works it out there as ever (a
+  mightier finder come near meanwhile: another tier): the same dungeon either way, so every
+  copy of a world agrees whichever of them had it ready (test/soon.test.js, test/ahead.test.js).
+  What was given for one its finders went by is let go.
 - **Each level's foes as many and as tough as the side there** as it wakes (docs/WILDS.md, *A
   side's strength*): the boss and mini-bosses tougher, more of each pack and each a little tougher,
   the more set on free ground beside those the plan has.
