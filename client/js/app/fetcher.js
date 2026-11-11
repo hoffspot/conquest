@@ -802,8 +802,11 @@ export class Fetcher {
                 }
             }
         } finally {
-            // (What's left: the last of it, or the last before it was cut off)
-            await store();
+            // (What's left, the last before it was cut off or dropped: not the last of a file
+            // that's all here, about to be kept whole and its parts let go of)
+            if (entry.received !== entry.bytes) {
+                await store();
+            }
         }
     }
 

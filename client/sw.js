@@ -155,7 +155,8 @@ self.addEventListener("message", (event) => {
     } else if (message?.kind === "keep" && Array.isArray(message.urls)) {
         event.waitUntil(keepLoaded(message.urls));
     } else if (message?.kind === "kept" && Array.isArray(message.urls) && event.ports?.[0]) {
-        event.waitUntil(keptOf(message.urls).then((kept) => event.ports[0].postMessage({ kept })));
+        // (Answered whatever comes of it: with none, should what's kept not be readable)
+        event.waitUntil(keptOf(message.urls).catch(() => []).then((kept) => event.ports[0].postMessage({ kept })));
     }
 });
 

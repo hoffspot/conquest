@@ -825,6 +825,19 @@ describe("service worker", () => {
         await worker.send({ kind: "kept", urls: [full(address(game))] }, { id: "page-1" });
         await worker.send({ kind: "kept" }, { id: "page-1" }, [port]);
         assert.equal(answers.length, 1);
+
+        // (What it keeps unreadable: answered all the same, with none, so the loader asks for
+        // everything rather than waiting)
+        const unreadable = loadServiceWorker();
+
+        unreadable.context.caches.open = async () => ({
+            keys: async () => {
+                throw new Error("The operation failed for reasons unrelated to the database itself");
+            },
+        });
+        await unreadable.send({ kind: "kept", urls: [full(address(game))] }, { id: "page-1" }, [port]);
+        assert.deepEqual(answers.at(-1), { kept: [] });
+        assert.equal(answers.length, 2);
     });
 
     it("keeps the parts of a model the downloader has so far (a download cut off by a reload carries on), till no release in use lists it or it's kept whole", async () => {

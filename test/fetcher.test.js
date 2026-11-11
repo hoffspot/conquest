@@ -29,6 +29,9 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
     const clock = { now: 0 };
     let hear = null;
     const requests = [];
+
+    // (Every address put in a cache, as it is)
+    const puts = [];
     const stores = new Map();
     const served = new Map(files.map((each) => [`/conquest/${each.path}`, each]));
 
@@ -43,6 +46,7 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
             return {
                 match: async (url) => store.get(url)?.clone(),
                 put: async (url, response) => {
+                    puts.push(url);
                     store.set(url, new Response(await response.arrayBuffer(), { headers: response.headers }));
                 },
                 delete: async (url) => store.delete(url),
@@ -144,7 +148,7 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
 
     const kept = (path) => stores.get("pellagos-assets-v2")?.get(new URL(`${path}?h=${files.find((each) => each.path === path)?.hash}`, BASE).href);
 
-    return { fetcher, another, clock, requests, kept, stores };
+    return { fetcher, another, clock, requests, kept, stores, puts };
 }
 
 const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
@@ -491,7 +495,7 @@ describe("the downloader", () => {
         const address = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
         const parts = (stores) => [...(stores.get("pellagos-parts-v1")?.keys() ?? [])];
         const keptAt = [];
-        const { fetcher, requests, stores, kept } = world({ files: [dragon], onPiece: (_, at) => at === 592 * KB && keptAt.push(...parts(stores)) });
+        const { fetcher, requests, stores, kept, puts } = world({ files: [dragon], onPiece: (_, at) => at === 592 * KB && keptAt.push(...parts(stores)) });
 
         assert.deepEqual(await bytesOf(await fetcher.want(dragon, "soon", { hurry: true })), dragon.data);
 
@@ -507,6 +511,9 @@ describe("the downloader", () => {
         assert.deepEqual(new Uint8Array(await kept(dragon.path).arrayBuffer()), dragon.data);
         assert.equal(fetcher.done, 1);
         assert.equal(fetcher.fetched, 600 * KB);
+
+        // (The last of it never kept as a part: all here, it's kept whole at once)
+        assert.deepEqual(puts, [`${address}&part=0`, `${address}&part=${256 * KB}`, address]);
     });
 
     it("keeps to parts for whatever isn't waited for, for everything while playing together, and for a file some of which is here", async () => {
