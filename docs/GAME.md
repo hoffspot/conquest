@@ -1444,7 +1444,11 @@ dismiss a specific purchased mount").
   (view.js `prepare`, `upload`), the one it takes the place of drawn till then (the stand-in, once
   the model's read, carrying on from where it was: mounts3d.js `#ready`). The model's shaders
   compiled as it was first drawn held a frame up 3.1 s on an iPhone (a player's debug log,
-  2026-11-10).
+  2026-11-10). Its model, and the rider's clips, are asked for as anyone calls a horse, and asked
+  for again every `ASK_AGAIN` seconds while a horse is out and either isn't had: the model's let go
+  of like any other while no one rides (beasts/model.js `forgetModels`: after `MODEL_LINGER`, or at
+  once by *The memory guard*), or couldn't be read. Asked for only once, every horse called after
+  that was a stand-in for the rest of the game (a player's party on an iPhone, 2026-11-11).
 - **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
   its hooves a stride at a time, its whinny as it comes, and its fall.
 
@@ -3364,6 +3368,28 @@ ready, none of their floors built, where all four were. Once the player is
 folk out of the battle, their characters and any floors thrown away (built again if they come
 back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
 dressed and let go of at its door as any building's.
+
+**The memory guard** (app/memoryguard.js `MEMORY_GUARD`, app/game.js `#memoryGuarding`): on a
+touch screen (a phone or a tablet), what the game holds is looked at every 2 seconds, as Safari's
+debug log tells it whatever the browser (`memoryNow`: the graphics card's, the sound's, the
+way-finding's, and the bodies' and the floors' copies on the page; not the page's heap, which only
+Chromium's tell of: with it, a city on an emulated phone in headless Chromium came to 443 MB with
+nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
+no more than 20 bodies in full, then 12 (the rest drawn in their crowds, the furthest first, by the
+bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers; the room those drawn
+from a bought model have of their own, `QUALITY.models`, isn't cut, a copy sharing its model's
+shapes and pictures with every other of its kind), the recorded sounds
+kept decoded to 24 MB, then 12 (audio/sound.js `squeeze`: past it, those played least lately let go
+of at once, and the made sounds let go of after a minute unplayed, not five), and, coming to a
+higher level, the beasts' bodies and models none's drawn from let go of at once, not after a while
+(`#forgetting`). It comes back down a level once it's 40 MB under that level's mark and has been at
+it 30 seconds (`guardLevel`), so it isn't let go of and taken up again and again. The debug overlay
+says so ("holding less (memory guard 1)"), and the debug log carries its level (`memory.guard`).
+Safari on an iPhone closes a page that holds too much with no warning, and tells it nothing of its
+memory: two players' crash reports of 2026-11-11 had it let the game's tab go at 541 MB (in a human
+city, 30 bodies about, the sound 82 MB, the graphics card 312) and at 551 MB (out in the cat folk's
+wilds with 98 beasts and people about, after 575), the same mark as a city smithy's 537 MB on
+2026-10-27; till then nothing held less as it came near it.
 
 **A dungeon's levels, only those about the player** (`#dungeonHeld`, `#dungeonFloors`): a
 dungeon's floors aren't all built and kept as a building's are, but only the level the player's on
@@ -5681,7 +5707,8 @@ note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where t
 than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1 kHz) the
 sound held at the start came from 100 MB to 90. Where it can't be (no `OfflineAudioContext`, or
 one that won't make or decode at that rate), it's decoded at the browser's rate, as before.
-So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else. Past it,
+So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else (less, a
+phone short of memory: the memory guard's `squeeze`, *The memory guard* above). Past it,
 as each sound's decoded, those played least lately (or decoded, not played since) are let go of
 first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
 out; a sound played and not done), one being decoded, or the one just decoded. Their MP3s are

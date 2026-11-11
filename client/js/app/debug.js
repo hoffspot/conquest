@@ -122,14 +122,14 @@ export function memoryLines(memory, gpu = memory?.gpu ?? null) {
         return [`Memory ${card}${heap ? `  JS heap ${formatBytes(heap.usedJSHeapSize)} of ${formatBytes(heap.jsHeapSizeLimit)}` : ""}`];
     }
 
-    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, interiorsMB, held } = memory;
+    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, interiorsMB, held, guard = 0 } = memory;
     const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`]), ...(interiorsMB === undefined ? [] : [`, floors' ${interiorsMB} MB`])].join("");
     const beasts = held.beasts ? `  ${held.beasts.looks} beast looks (${held.beasts.MB} MB, ${held.beasts.unheld} none drawn)` : "";
     const models = held.models ? `  ${held.models.models} models (${held.models.unheld} none drawn from)` : "";
 
     return [
         `Memory ${totalMB} MB held: ${card}, sound ${soundMB} MB${page}, JS heap ${heapMB === null ? "not told by this browser" : `${heapMB} of ${limitMB} MB`}`,
-        `Held ${held.avatars} bodies  ${held.chunks} chunks  ${held.interiors} interiors  ${held.crowds} crowd kinds${beasts}${models}`,
+        `Held ${held.avatars} bodies  ${held.chunks} chunks  ${held.interiors} interiors  ${held.crowds} crowd kinds${beasts}${models}${guard ? `  holding less (memory guard ${guard})` : ""}`,
     ];
 }
 

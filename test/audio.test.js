@@ -11,7 +11,7 @@ import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, MADE_KEPT, MADE_QUICK, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, MADE_KEPT, MADE_QUICK, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, SQUEEZED_KEPT, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
@@ -2081,6 +2081,33 @@ describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)
         assert.ok(!sound.recorded.has("stepGrass") && !sound.recorded.has("slash"));
         assert.equal(sound.mp3s.get("stepGrass").filter(Boolean).length, RECORDED.stepGrass.length, "its MP3s kept");
         assert.equal(sound.mp3s.size, Object.keys(RECORDED).filter((name) => !ON_DEMAND.includes(name)).length + 1, "and every other's");
+        sound.close();
+    });
+
+    it("squeezed (a phone short of memory: app/memoryguard.js), keeps less decoded at once, never more than it was made to, the made sounds let go of sooner; let go, as before", async () => {
+        const { sound } = await started();
+        const full = sound.budget;
+
+        for (const name of ["stepGrass", "stepStone", "stepDirt"]) {
+            assert.ok(sound.play(name));
+        }
+
+        sound.context.currentTime += 5;
+        assert.ok(decoded(sound) > 0);
+
+        // (Squeezed to nothing: everything decoded and not sounding let go of at once)
+        sound.squeeze(0);
+        assert.equal(sound.budget, 0);
+        assert.equal(sound.squeezed, true);
+        assert.equal(decoded(sound), 0);
+        assert.equal(sound.madeLooked, 0, "the made sounds looked over at the next tick");
+
+        // (Never more than it was made to keep; and let go, as it was)
+        sound.squeeze(full * 2);
+        assert.equal(sound.budget, full);
+        sound.squeeze(null);
+        assert.deepEqual([sound.budget, sound.squeezed], [full, false]);
+        assert.ok(SQUEEZED_KEPT < MADE_KEPT);
         sound.close();
     });
 

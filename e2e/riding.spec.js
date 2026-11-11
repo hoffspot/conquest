@@ -268,6 +268,50 @@ test("buys a horse from the stablemaster, calls it up with its whistle, rides it
     expect(gone.hips, JSON.stringify(gone)).toBeLessThan(gone.stands + 0.1);
     expect(gone.bar).toBe(false);
 
+    // Its model let go of while none rides (beasts/model.js forgetModels: none drawn from it for
+    // MODEL_LINGER, or at once by the memory guard), and called again: its model asked for again
+    // and drawn from once it's read, not its stand-in from then on (an iPhone's party, 2026-11-11:
+    // every horse a stand-in), and down again
+    if (licensedModelsHere()) {
+        const again = await page.evaluate(async () => {
+            const { game } = window.pellagos;
+            const { forgetModels, MODEL_LINGER, modelOf } = await import("./js/beasts/model.js");
+            const { HORSE_MODEL } = await import("./js/core/mounts.js");
+            const read = Boolean(modelOf(HORSE_MODEL));
+
+            forgetModels(performance.now() + 2 * MODEL_LINGER);
+
+            const forgotten = !modelOf(HORSE_MODEL);
+
+            game.host.command(game.me, { type: "use", item: "mountWhistle" });
+
+            const start = performance.now();
+
+            while (!game.mounts.horses.get(game.me)?.model && performance.now() - start < 60000) {
+                game.advance(1 / 30, { render: false, wait: true });
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+
+            const one = game.mounts.horses.get(game.me);
+
+            return { read, forgotten, model: one?.model ?? null, visible: one?.beast.object.visible ?? null, phase: game.battle.actor(game.me).mount?.phase ?? null };
+        });
+
+        expect(again.read).toBe(true);
+        expect(again.forgotten).toBe(true);
+        expect(again.model, JSON.stringify(again)).toBe(true);
+        expect(again.visible).toBe(true);
+
+        await play(page, 4);
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            game.host.command(game.me, { type: "use", item: "mountWhistle" });
+        });
+        await play(page, 4);
+        expect((await ridden(page)).drawn).toBe(false);
+    }
+
     // Called again and struck down under its rider: thrown, the horse fallen on its whistle, and
     // brought back at the stable
     const fell = await page.evaluate(async () => {

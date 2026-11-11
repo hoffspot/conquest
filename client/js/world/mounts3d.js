@@ -49,6 +49,16 @@ export const STIRRUPS = Object.freeze({ ball: 0.35, up: 0.04, treads: 12, into: 
  */
 export const REINS = Object.freeze({ bones: Object.freeze({ Left: "Reins_Bn_Hand_L", Right: "Reins_Bn_Hand_R" }) });
 
+/**
+ * How often the horse's model and its rider's clips are asked for again, while a horse is out and
+ * either isn't had (seconds): the model let go of like any other while none rode (beasts/model.js
+ * forgetModels: none drawn from it MODEL_LINGER, or at once by the memory guard), or either not
+ * read (not fetched, while saving data, or its download failed). Asked for only once, every horse
+ * called after its model was let go of was its stand-in for the rest of the game (a player's party
+ * on an iPhone, 2026-11-11).
+ */
+export const ASK_AGAIN = 5;
+
 const ease = (u) => {
     const t = Math.min(1, Math.max(0, u));
 
@@ -111,22 +121,38 @@ export class Mounts {
         /** Each rider's hands' grips on the reins, fitted to their hands (by their body's rig). */
         this.grips = new WeakMap();
         this.clips = null;
-        this.asked = false;
+        /** When the horse's model and its rider's clips were last asked for (performance.now()'s), and whether the clips are being read. */
+        this.askedAt = -Infinity;
+        this.clipping = false;
     }
 
-    // The horse's model, and its rider's clips, asked for once anyone has a horse out
+    // The horse's model, and its rider's clips, asked for once anyone has a horse out, and again
+    // every ASK_AGAIN seconds while either isn't had
     #want() {
-        if (this.asked) {
+        const now = performance.now();
+
+        if ((modelOf(HORSE_MODEL) && this.clips) || now - this.askedAt < ASK_AGAIN * 1000) {
             return;
         }
 
-        this.asked = true;
-        wantModel(HORSE_MODEL, "now");
-        wantClips(RIDER_CLIPS, "now")?.then((gltf) => {
-            if (gltf) {
-                this.clips = new RiderClips(gltf);
-            }
-        });
+        this.askedAt = now;
+
+        if (!modelOf(HORSE_MODEL)) {
+            wantModel(HORSE_MODEL, "now");
+        }
+
+        const clips = this.clips || this.clipping ? null : wantClips(RIDER_CLIPS, "now");
+
+        if (clips) {
+            this.clipping = true;
+            clips
+                .then((gltf) => {
+                    if (gltf) {
+                        this.clips = new RiderClips(gltf);
+                    }
+                })
+                .finally(() => (this.clipping = false));
+        }
     }
 
     /** Whether someone's up on their horse (getting up, riding or getting down), for the camera. */

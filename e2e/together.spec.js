@@ -654,8 +654,19 @@ test("a guest whose game's reloaded goes straight back into the host's world by 
     expect(Math.hypot(now.x - stood.x, now.y - stood.y)).toBeLessThan(1.5);
 
     // Gone back into a world no longer open under its code: that stage crossed out, said why, Try
-    // again; cancelled, the title, nothing to go back into
-    await guest.evaluate(() => localStorage.setItem("pellagos.inworld", JSON.stringify({ ...JSON.parse(localStorage.getItem("pellagos.inworld")), code: "ZZZZ" })));
+    // again; cancelled, the title, nothing to go back into. (Where she is, written again every
+    // REJOIN.every as she plays (main.js inWorld), not let put the code back as it was before the
+    // page is left: on CI it once did, and she went straight back in)
+    await guest.evaluate(() => {
+        const setItem = Storage.prototype.setItem;
+
+        Storage.prototype.setItem = function (key, value) {
+            if (key !== "pellagos.inworld") {
+                setItem.call(this, key, value);
+            }
+        };
+        setItem.call(localStorage, "pellagos.inworld", JSON.stringify({ ...JSON.parse(localStorage.getItem("pellagos.inworld")), code: "ZZZZ" }));
+    });
     await guest.goto("/");
     await expect(rejoin.locator('li[data-stage="find"]')).toHaveAttribute("data-state", "failed", { timeout: 60000 });
     await expect(rejoin.locator('li[data-stage="reach"]')).toHaveAttribute("data-state", "done");
