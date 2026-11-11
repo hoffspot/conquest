@@ -12,7 +12,8 @@
 // (characters/wardrobe.js, world/crowd.js). A character's own skin is let go of in the game
 // (character.js `release`: painted again whole whenever it changes, and held smaller while the
 // body's seen small), the crowd's figures being made from characters of their own, before
-// they're ever sent.
+// they're ever sent; a crowd's figure's own corners, triangles and moves are let go of once
+// they're sent (world/crowd.js templateFrom), its bounds kept for what draws it.
 
 /** Whether anything's been let go of (the drawing, lost, can't be given it back: main.js). */
 export const released = { any: false };
