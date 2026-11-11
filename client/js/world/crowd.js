@@ -29,7 +29,8 @@ import { Avatar } from "./avatar.js";
 import { REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { LODS } from "../characters/lod.js";
-import { Steps, WAITING } from "../core/steps.js";
+import { NOW, Steps, WAITING } from "../core/steps.js";
+import { figureBytes, figureFrom, figureId, figureStore } from "./figurestore.js";
 import { releaseAttribute, releaseGeometry, releaseTexture } from "./release.js";
 
 /**
@@ -1425,6 +1426,42 @@ export function* templateFrom(kit, key, { geometry, picture, height, recorded })
 }
 
 /**
+ * A kind's figure read from where an earlier session kept it (`store`, under `id`:
+ * world/figurestore.js), a step at a time while it's looked for; or, not kept there (or its bytes
+ * no figure's, or there's no waiting on the storage), made as ever (makingTemplate) and then kept
+ * for the next session, if it's as it's meant to be kept (packed: templateFrom).
+ */
+function* keptOrMade(store, id, kit, key, spec) {
+    let found;
+
+    store.find(id).then((bytes) => {
+        found = bytes;
+    });
+
+    // (Looked for elsewhere, a frame or two: waited on, as long as a figure's fewer triangles are)
+    for (let k = 0; found === undefined && k < CROWD.wait; k++) {
+        if ((yield WAITING) === NOW) {
+            break;
+        }
+    }
+
+    if (found) {
+        try {
+            return figureFrom(found, key);
+        } catch (error) {
+            console.warn(`The crowd's ${key} as it was kept couldn't be read: made again`, error);
+        }
+    }
+
+    const template = yield* makingTemplate(kit, key, spec);
+
+    // (Its bytes read now, before any of it's on the graphics card and let go of off the page)
+    store.keep(id, figureBytes(template));
+
+    return template;
+}
+
+/**
  * The crowds: everyone drawn as one of a kind (CrowdAvatar), each kind's figure made once (a step
  * at a time, in the frame's time to spare: work), and drawn each frame (draw).
  */
@@ -1434,11 +1471,13 @@ export class Crowd {
      * @param {object} kit - What characters are made from (characters/kit.js).
      * @param {object} [options]
      * @param {number} [options.size] - Each figure's pictures' size (pixels square).
+     * @param {object} [options.store] - Where figures are kept between sessions (world/figurestore.js FigureStore), or null: each made every session.
      */
-    constructor(scene, kit, { size = 256 } = {}) {
+    constructor(scene, kit, { size = 256, store = figureStore() } = {}) {
         this.scene = scene;
         this.kit = kit;
         this.size = size;
+        this.store = store;
 
         /** Each kind's figure: key -> { template, batch } once made, or { making } (Steps: makingTemplate's), or { failed }. */
         this.kinds = new Map();
@@ -1459,7 +1498,12 @@ export class Crowd {
             return kind.template ?? null;
         }
 
-        this.kinds.set(key, { making: new Steps((spec.make ?? makingTemplate)(this.kit, key, { size: this.size, ...spec }), `crowd figure ${key}`) });
+        // (One kept by an earlier session read, not made: a soldier's or one of the townsfolk's,
+        // not one made its own way)
+        const told = { size: this.size, ...spec };
+        const id = this.store ? figureId(this.kit, key, told) : null;
+
+        this.kinds.set(key, { making: new Steps(id ? keptOrMade(this.store, id, this.kit, key, told) : (spec.make ?? makingTemplate)(this.kit, key, told), `crowd figure ${key}`) });
         this.waiting.push(key);
 
         return null;

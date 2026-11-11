@@ -41,6 +41,7 @@ const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
 const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_PARTS, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, packedFigure, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
 const { folkFigureLook } = await import("../client/js/characters/folkcrowd.js");
+const { FigureStore } = await import("../client/js/world/figurestore.js");
 const { released } = await import("../client/js/world/release.js");
 
 const humanFiles = readHumanFiles();
@@ -721,6 +722,111 @@ describe("a kind's figure kept as what it's drawn with (crowd.js packedFigure, t
         assert.equal(template.geometry.attributes.position.count, all);
         assert.deepEqual([...template.geometry.index.array], merged);
         assert.ok(template.geometry.attributes.crowdWeights.array instanceof Uint8Array);
+    });
+});
+
+describe("a kind's figure kept between sessions (crowd.js Crowd, figurestore.js)", () => {
+    // The browser's Cache storage, as much as the store asks of
+    const storage = () => {
+        const entries = new Map();
+        const cache = {
+            match: async (url) => (entries.has(String(url)) ? new Response(entries.get(String(url)).slice(0)) : undefined),
+            put: async (url, response) => void entries.set(String(url), await response.arrayBuffer()),
+            delete: async (url) => entries.delete(String(url)),
+            keys: async () => [...entries.keys()].map((url) => ({ url })),
+        };
+
+        return { entries, open: async () => cache };
+    };
+    // Every `every`th triangle of a figure's: its fewer triangles, made elsewhere a moment later
+    const lods = {
+        of: (name, make) =>
+            new Promise((resolve) => {
+                const { indices } = make();
+                const every = name.endsWith("@near") ? 2 : 5;
+
+                setTimeout(() => resolve(Array.from(indices).filter((_, k) => Math.floor(k / 3) % every === 0)), 2);
+            }),
+    };
+    // A kind's figure asked of a crowd and worked at till it's made, the page's other work let in
+    // between (the storage answering, the fewer triangles coming); how many steps it took
+    const made = async (crowd, key, spec, { wait = true } = {}) => {
+        let steps = 0;
+
+        crowd.template(key, spec);
+
+        while (!crowd.made(key) && !crowd.failed(key) && steps++ < 5000) {
+            crowd.work(performance.now() + 20, { wait });
+            await new Promise((resolve) => setTimeout(resolve, 1));
+        }
+
+        return { template: crowd.kinds.get(key).template, steps };
+    };
+
+    it("is made the first time and kept, then read, not made, by the next session's crowd: the same corners, triangles, moves and picture; made again where there's no waiting on the storage, and by other code", async () => {
+        const look = soldierLook({ people: "human", weapon: "sword", seed: 3 });
+        const spec = { look, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash" };
+        const caches = storage();
+        const session = (version = "0123456789") => new Crowd(new THREE.Scene(), { ...kit, lods }, { size: 64, store: new FigureStore({ caches, version, base: "https://pellagos.test/", settle: 0 }) });
+        const first = await made(session(), "human:m:sword", spec);
+
+        assert.ok(first.template.packed && !first.template.kept, "made");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.equal([...caches.entries.keys()].filter((url) => url.endsWith(".bin")).length, 1);
+
+        // (The next session: read from where it was kept, in a few steps, nothing built)
+        const second = await made(session(), "human:m:sword", spec);
+
+        assert.equal(second.template.kept, true);
+        assert.ok(second.steps < 20, `${second.steps} steps`);
+        assert.deepEqual(second.template.table, first.template.table);
+        assert.deepEqual([second.template.height, second.template.flags, second.template.key], [first.template.height, first.template.flags, "human:m:sword"]);
+
+        for (const [name, attribute] of Object.entries(first.template.geometry.attributes)) {
+            assert.deepEqual(second.template.geometry.attributes[name].array, attribute.array, name);
+        }
+
+        assert.deepEqual(second.template.nearIndex.array, first.template.nearIndex.array);
+        assert.deepEqual(second.template.farIndex.array, first.template.farIndex.array);
+        assert.deepEqual(second.template.moves.image.data, first.template.moves.image.data);
+        assert.deepEqual([second.template.picture.image.width, second.template.picture.image.height], [first.template.picture.image.width, first.template.picture.image.height]);
+
+        // (Another kind, or the same told to be made another way: not this one's)
+        const calm = await made(session(), "human:m:sword", { ...spec, calm: true, attack: null });
+
+        assert.ok(!calm.template.kept && !calm.template.table.attack);
+
+        // (No waiting on what's done elsewhere, as when a figure's wanted at once: made)
+        const hurried = await made(session(), "human:m:sword", spec, { wait: false });
+
+        assert.ok(!hurried.template.kept);
+
+        // (Other code's: made again, and the old one let go of)
+        const newer = await made(session("abcdef0123"), "human:m:sword", spec);
+
+        assert.ok(!newer.template.kept);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.ok([...caches.entries.keys()].filter((url) => url.endsWith(".bin")).every((url) => url.includes("/figures/abcdef0123/")));
+    });
+
+    it("keeps none with no store (a copy run from the repository), nor a kind made its own way", async () => {
+        const caches = storage();
+        const store = new FigureStore({ caches, version: "0123456789", base: "https://pellagos.test/", settle: 0 });
+        const crowd = new Crowd(new THREE.Scene(), kit, { store });
+        const own = { key: "herd:wolf:0", table: {}, height: 1, packed: true };
+
+        assert.equal(new Crowd(new THREE.Scene(), kit).store, null);
+
+        const { template } = await made(crowd, "herd:wolf:0", {
+            // eslint-disable-next-line require-yield
+            make: function* () {
+                return own;
+            },
+        });
+
+        assert.equal(template, own);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        assert.equal(caches.entries.size, 0);
     });
 });
 

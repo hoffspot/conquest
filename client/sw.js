@@ -77,7 +77,12 @@ const STATE = `${CACHE_PREFIX}state-v2`;
 const PARTS = `${CACHE_PREFIX}parts-v1`;
 const PART = /&part=\d+$/;
 
-const CACHES = [SHELL, BOOT, ASSETS, STATE, PARTS];
+// The crowds' figures as the page made them (js/world/figurestore.js FIGURES_KEPT: the same name),
+// kept to be read, not made again, the next session. The page's own: it reads and writes them and
+// lets go of the old ones, and nothing's served from here. Listed so it's left alone below
+const FIGURES = `${CACHE_PREFIX}figures-v1`;
+
+const CACHES = [SHELL, BOOT, ASSETS, STATE, PARTS, FIGURES];
 
 // The one cache the game kept everything in before these (by name): its copies are taken on
 const OLD_CACHE = `${CACHE_PREFIX}v1`;

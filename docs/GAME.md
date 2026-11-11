@@ -4493,6 +4493,30 @@ now in their crowd):
   seconds longer (the most), it sees 64 to 69 of the 126 from the first frame, 10 or 11 kinds made
   while it loaded: 46 of the 53 within 60 metres, and all of them 6 seconds on; and 21 kinds are
   made a minute and a half in.
+- **Kept between sessions** (world/figurestore.js; `Crowd`'s `store`). A kind's figure comes out
+  the same for the same kind, picture size and code, and making it is one to seven seconds of the
+  processor (measured in Node: 1.3 s for one of the townsfolk, 3.1 for an elf archer, 6.6 for a
+  human swordsman, the first, its garments painted too), a step at a time while its soldiers wait
+  unseen. So once made, as it's packed, it's kept in the browser's Cache storage (the cache
+  `pellagos-figures-v1`, listed in client/sw.js so the service worker leaves it alone; nothing's
+  ever served from it) as one run of bytes: its corners, its triangles near and far, its picture's
+  pixels and its moves, about 1.5 MB for a soldier. The next session's crowd looks there first
+  (`keptOrMade`: a frame or two, waited on as work done elsewhere is) and draws from what it
+  finds, its numbers read where they are in the bytes and let go of off the page once sent; the
+  picture's pixels are what the canvas had, drawn the same way.
+  - **Under the code's version** (app/version.js `codeVersion`: the commit the site was put
+    together from), so a figure made by other code is never read, and is let go of the first
+    time the store's opened. A copy run from the repository ("dev": `npm start`, the tests) keeps
+    none and makes each as ever.
+  - **By what it's made from** (`figureId`): its kind, its picture's size, the kit's skin size and
+    all its maker's told (its look, its weapon's ways), hashed. A kind made its own way (a
+    beast's: beasts/herd.js) isn't kept.
+  - **The 40 most recent** (`FIGURES_KEPT.most`), by when each was last made or read (written
+    down beside them, `figures/used.json`), the rest let go of: 60 MB at the very most.
+  - **Never needed.** Where the storage can't be had, refuses, or gives back what isn't a figure
+    as this code lays one out (`FIGURES_KEPT.format`), or there's no waiting on it (a figure
+    wanted at once), the figure's made as it always was; one whose fewer triangles hadn't both
+    come isn't kept.
 - **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
   minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
   graphics card (under 2 MB on Low; 4 or so till 2026-11-11), made again should one of its kind come. Kept for good, as

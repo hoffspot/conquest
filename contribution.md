@@ -562,7 +562,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      hash of its bytes, so a changed model, body or image needs nothing. Change the shell's
      (`SHELL`) only to let go of code no release uses any more, such as an old Three.js's
      folder; the others only when how they're laid out changes. Changing one lets go of all it
-     holds, and nothing else.
+     holds, and nothing else. The crowds' figures kept between sessions
+     (`client/js/world/figurestore.js`, the cache `pellagos-figures-v1`) are kept under the
+     code's version, so a release needs nothing: change `FIGURES_KEPT.format` there only when
+     how a figure's laid out as bytes changes without the code's version changing (it can't, on
+     the deployed site), and its cache's name there and in `client/sw.js` together.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
    rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
    screen. Never skip, disable or loosen a test to get CI green: fix the cause. A test that
