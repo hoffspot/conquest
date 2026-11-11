@@ -8,10 +8,22 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 import { atlasMaterial, LAYERS, prepareAtlas } from "../client/js/world/art/engine/atlas.js";
-import { heldOnPage, released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
+import { heldOnPage, releaseCompressed, released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
 import { startingMemory, withStartingMemory } from "../scripts/wasm-memory.js";
 
 const RECAST = new URL("../client/vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", import.meta.url);
+
+// A square ETC2 picture's levels as KTX2Loader makes them (half a byte a pixel, eight a block of
+// four by four), down to a pixel
+function etc2Levels(size) {
+    const levels = [];
+
+    for (let side = size; side >= 1; side >>= 1) {
+        levels.push({ data: new Uint8Array(Math.ceil(side / 4) ** 2 * 8), width: side, height: side });
+    }
+
+    return levels;
+}
 
 describe("letting go of what the graphics card has (release.js)", () => {
     it("lets go of a mesh's attributes and index once each is uploaded, its bounds worked out first", () => {
@@ -84,6 +96,58 @@ describe("letting go of what the graphics card has (release.js)", () => {
         assert.equal(texture.image.data, null);
         assert.equal(await prepareAtlas(8), undefined);
     });
+
+    it("lets go of a compressed picture's bytes once uploaded: its levels left as new ones of their sizes, so a copy made before still has them to send; marked to be sent again, it isn't", () => {
+        const texture = new THREE.CompressedTexture(etc2Levels(64), 64, 64, THREE.RGB_ETC2_Format);
+        const levels = texture.mipmaps;
+        let [was, also] = [0, 0];
+
+        texture.needsUpdate = true;
+        texture.onUpdate = () => was++;
+        released.any = false;
+        assert.equal(releaseCompressed(texture, () => also++), texture);
+        assert.ok(texture.mipmaps[0].data, "nothing gone till it's uploaded");
+
+        // (A copy made before it's sent shares its levels, as three.js's clone does)
+        const copy = texture.clone();
+        const version = texture.version;
+
+        // (As three.js's renderer does once a picture's on the graphics card)
+        texture.onUpdate(texture);
+        assert.deepEqual(
+            texture.mipmaps.map(({ width, height, data }) => [width, height, data]),
+            levels.map(({ width, height }) => [width, height, undefined]),
+        );
+        assert.ok(
+            levels.every((level) => level.data),
+            "the levels it had, as they were",
+        );
+        assert.ok(
+            copy.mipmaps.every((level, k) => level === levels[k] && level.data),
+            "its copy's, still to send",
+        );
+        assert.deepEqual([was, also, released.any], [1, 1, true]);
+
+        // (Marked again, by what sets it up for another use: nothing to send, so it isn't sent)
+        texture.needsUpdate = true;
+        assert.equal(texture.version, version);
+        texture.onUpdate(texture);
+        assert.deepEqual([was, also], [2, 1], "let go of once");
+
+        // (A copy of it is its own to mark)
+        copy.needsUpdate = true;
+        assert.ok(copy.version > 0);
+    });
+
+    it("lets go of a compressed picture given as any picture is (releaseTexture): its bytes are its levels', not its image's", () => {
+        const texture = new THREE.CompressedTexture(etc2Levels(16), 16, 16, THREE.RGB_ETC2_Format);
+        let also = 0;
+
+        releaseTexture(texture, () => also++);
+        texture.onUpdate(texture);
+        assert.ok(texture.mipmaps.length > 1 && texture.mipmaps.every((level) => !("data" in level)));
+        assert.equal(also, 1);
+    });
 });
 
 describe("Recast's WebAssembly memory (scripts/wasm-memory.js)", () => {
@@ -112,6 +176,33 @@ describe("Recast's WebAssembly memory (scripts/wasm-memory.js)", () => {
         geometry.attributes.position.array = null;
         data.image.data = null;
         assert.equal(heldOnPage([body]), once - 120 - 16 * 16 * 4);
+    });
+
+    it("counts a compressed picture as its levels' bytes, as compressed as they are, not four bytes a pixel; none once they're let go of; and the pictures of materials no mesh wears, asked for", () => {
+        const levels = etc2Levels(1024);
+        const held = levels.reduce((sum, { data }) => sum + data.byteLength, 0);
+        const texture = new THREE.CompressedTexture(levels, 1024, 1024, THREE.RGB_ETC2_Format);
+        const skin = new THREE.CompressedTexture(etc2Levels(256), 256, 256, THREE.RGB_ETC2_Format);
+        const body = new THREE.Group();
+        const mesh = new THREE.Mesh(new THREE.BufferGeometry(), [new THREE.MeshStandardMaterial({ map: texture }), new THREE.MeshStandardMaterial({ normalMap: texture })]);
+
+        // (Bones and empty nodes: nothing of theirs to count)
+        body.add(mesh, new THREE.Bone(), new THREE.Object3D());
+
+        // (A 1024-pixel ETC2 picture with its levels: 0.67 MB, where it was counted 4)
+        assert.ok(held > 0.66 * 1048576 && held < 0.67 * 1048576, `${held} bytes`);
+        assert.equal(heldOnPage([body]), held);
+
+        // (A skin's materials, which nothing of the model's own wears)
+        const worn = [new THREE.MeshStandardMaterial({ map: skin, normalMap: texture })];
+
+        assert.equal(heldOnPage([body], worn), held + etc2Levels(256).reduce((sum, { data }) => sum + data.byteLength, 0));
+        assert.equal(heldOnPage([], worn) > 0, true);
+
+        // (Let go of once uploaded: no longer counted)
+        releaseCompressed(texture);
+        texture.onUpdate(texture);
+        assert.equal(heldOnPage([body]), 0);
     });
 
     it("starts with 16 MB, not the 64 it was built with, and grows from there; nothing else in it changed", async () => {

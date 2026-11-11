@@ -16,6 +16,7 @@ import { candidatesAt, tierAt } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
 import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
+import { heldOnPage } from "../world/release.js";
 import { BEAMS, EnergyBreath } from "./beam.js";
 import { Breath } from "./breath.js";
 
@@ -1505,6 +1506,56 @@ export function keptModels() {
     const assets = new Set([...read.keys()].map((id) => MODELS[id]?.asset ?? id));
 
     return { models: assets.size, unheld: [...unheld.keys()].filter((asset) => assets.has(asset)).length };
+}
+
+// How many bytes a model's clips' keys are (each track's times and values, once however many share
+// them), worked out again only when it has more clips (one lent it: lend)
+const clipsCounted = new WeakMap();
+
+function clipBytes(gltf) {
+    const known = clipsCounted.get(gltf);
+
+    if (known?.clips === gltf.animations.length) {
+        return known.bytes;
+    }
+
+    const arrays = new Set();
+    let bytes = 0;
+
+    for (const clip of gltf.animations) {
+        for (const track of clip.tracks) {
+            for (const array of [track.times, track.values]) {
+                if (array && !arrays.has(array)) {
+                    arrays.add(array);
+                    bytes += array.byteLength;
+                }
+            }
+        }
+    }
+
+    clipsCounted.set(gltf, { clips: gltf.animations.length, bytes });
+
+    return bytes;
+}
+
+/**
+ * How many bytes of the page's own copies the models and the scenes read hold (world/release.js
+ * heldOnPage): their meshes' shapes, their pictures and their skins' till the graphics card has
+ * them (let go of then: releaseCompressed), and their clips' keys; each file once, however many
+ * kinds are drawn from it, whether any is or not. For the game's memoryNow: one read and never
+ * drawn from is held here alone, its pictures and all. `counted`: what's been counted already (a
+ * Set, heldOnPage's: the bodies drawn from them share their shapes and pictures), left out.
+ */
+export function modelsHeld(counted = new Set()) {
+    const gltfs = [...new Set([...read.values(), ...sceneries.values()])];
+    const skins = gltfs.flatMap((gltf) => Object.values(gltf.skins ?? {}).flat());
+    const copies = heldOnPage(
+        gltfs.map((gltf) => gltf.scene),
+        skins,
+        counted,
+    );
+
+    return copies + gltfs.reduce((sum, gltf) => sum + clipBytes(gltf), 0);
 }
 
 /**

@@ -11,6 +11,7 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 import { readable } from "../../../app/scramble.js";
+import { releaseCompressed } from "../../release.js";
 
 // How many workers turn KTX2 textures into what the GPU takes, at most (each holds the
 // transcoder's WebAssembly; a texture takes a few hundredths of a second)
@@ -29,6 +30,35 @@ const loaded = new Map();
 const files = new Map();
 let ktx2 = null;
 
+// Whether the pictures of what's read are let go of off the page once they're on the graphics
+// card (readKtx2With's `release`: the game's are)
+let releasing = false;
+
+// Every compressed picture of a file as read (its scene's materials', and `materials`: a skin's)
+// let go of off the page once it's on the graphics card (world/release.js releaseCompressed): each
+// held twice till then, the page's copy as big as the card's (2 to 10 MB a creature's kind on a
+// phone, 22 for Bellhaven), and read by nothing. One nothing's drawn with yet keeps its bytes till
+// it is: they're its only copy
+function releasePictures(gltf) {
+    const materials = new Set(gltf.materials ?? []);
+    const pictures = new Set();
+
+    gltf.scene?.traverse((node) => {
+        for (const material of [node.material ?? []].flat()) {
+            materials.add(material);
+        }
+    });
+
+    for (const material of materials) {
+        for (const value of Object.values(material)) {
+            if (value?.isCompressedTexture && !value.isCompressedArrayTexture && !value.isCompressedCubeTexture && !pictures.has(value)) {
+                pictures.add(value);
+                releaseCompressed(value);
+            }
+        }
+    }
+}
+
 // A glTF file read: fetched (through the manager, so from the game's downloaded copy where it has
 // one), unscrambled if it's a licensed model's, and parsed. What three.js's loader read it with
 // (its `parser`) is let go of at once: it holds the file's bytes again, each of its pictures'
@@ -45,6 +75,10 @@ async function read(url, { materials = false } = {}) {
     }
 
     gltf.parser = null;
+
+    if (releasing) {
+        releasePictures(gltf);
+    }
 
     return gltf;
 }
@@ -95,10 +129,15 @@ export function readModelsFrom(resolve) {
  * of the memory a decoded picture takes, or less), each turned in a worker into the compressed
  * format `renderer`'s GPU takes (ASTC on most phones, BC7 on desktops, ETC2...). `transcoder`:
  * where the Basis Universal transcoder's two files are ({ "basis_transcoder.js": url,
- * "basis_transcoder.wasm": url }), fetched only once a model has a KTX2 texture.
+ * "basis_transcoder.wasm": url }), fetched only once a model has a KTX2 texture. `release`: each
+ * file's pictures let go of off the page once they're on the graphics card (releasePictures), as
+ * the game's are; not a lab's that sends them again at other sizes or counts them (the castle
+ * lab), nor anywhere they're drawn by a second renderer.
  */
-export function readKtx2With(renderer, transcoder) {
+export function readKtx2With(renderer, transcoder, { release = false } = {}) {
     const fetched = new THREE.LoadingManager();
+
+    releasing = release;
 
     // (KTX2Loader asks for them where they're copied beside it, vendor/three-r186/addons/libs/basis:
     // known by their names, they're fetched from where `transcoder` says instead)

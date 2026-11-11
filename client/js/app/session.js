@@ -31,7 +31,9 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 
     const view = new View(canvas, { quality, far: true });
 
-    readKtx2With(view.renderer, filesOf(ASSETS, TRANSCODER, document.baseURI));
+    // (Each model's, scene's and kit's pictures let go of off the page once the graphics card has
+    // them: world/release.js releaseCompressed)
+    readKtx2With(view.renderer, filesOf(ASSETS, TRANSCODER, document.baseURI), { release: true });
 
     onProgress("Unpacking the body and mapping its skin");
 

@@ -29,7 +29,7 @@ import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/fol
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
+import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsHeld, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { guardLevel, MEMORY_GUARD } from "./memoryguard.js";
@@ -1906,20 +1906,32 @@ export class Game {
      * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), the
      * way-finding's WebAssembly (core/navigation/recast.js wasmBytes), the bodies' own copies on
      * the page (their meshes and pictures, kept to be posed and painted again: world/release.js
-     * heldOnPage), the buildings' floors' own copies on the page (#interiorsHeld), all of them
-     * together, and how many of what's kept for the world (the beasts' looks, and the models
-     * read: beasts/model.js keptModels). Where the heap isn't told (Safari), the bodies' and the
-     * floors' copies stand in for it in the total: the least of it, the most of what grows as more
-     * are about (measured in Chromium, a town's 30 bodies took the heap from 325 to 485 MB).
+     * heldOnPage), the buildings' floors' own copies on the page (#interiorsHeld), the models' and
+     * the scenes' as they're read (beasts/model.js modelsHeld: their shapes, their clips, and
+     * their pictures till the graphics card has them; what the bodies drawn from them share is
+     * the bodies', counted there), all of them together, and how many of what's kept for the
+     * world (the beasts' looks, and the models read: beasts/model.js keptModels). Where the heap
+     * isn't told (Safari), the bodies', the floors' and the models' copies stand in for it in the
+     * total: the least of it, the most of what grows as more are about (measured in Chromium, a
+     * town's 30 bodies took the heap from 325 to 485 MB).
      */
     memoryNow() {
         const heap = globalThis.performance?.memory;
         const gpu = this.view.gpuMemory?.report() ?? null;
         const sound = this.sound?.memory?.() ?? 0;
         const wasm = wasmBytes();
-        const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
+        const counted = new Set();
+        const bodies = heldOnPage(
+            [...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object),
+            [],
+            counted,
+        );
         const interiors = this.#interiorsHeld();
-        const total = (heap?.usedJSHeapSize ?? bodies + interiors) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
+        const modelled = modelsHeld(counted);
+        // (THE KIT'S LINE GOES HERE: what the character kit holds on the page, characters/kit.js
+        // heldByKit(this.kit), added to `page` below and told as its own line beside modelsMB)
+        const page = bodies + interiors + modelled;
+        const total = (heap?.usedJSHeapSize ?? page) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
         const beasts = keptBodies();
         const models = keptModels();
 
@@ -1932,6 +1944,7 @@ export class Game {
             wasmMB: megabytes(wasm),
             bodiesMB: megabytes(bodies),
             interiorsMB: megabytes(interiors),
+            modelsMB: megabytes(modelled),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
             // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
             guard: this.memoryGuard?.level ?? 0,

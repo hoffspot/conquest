@@ -472,7 +472,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - A mesh or picture made once and never read on the page again (not merged, cloned, posed or
      bent, nor composited or sampled by code) can let go of the page's copy once it's on the
      graphics card: `releaseGeometry` and `releaseTexture` (`client/js/world/release.js`), as
-     the undergrowth, hedges, ground and building atlas do. On a phone the graphics card shares
+     the undergrowth, hedges, ground and building atlas do, and `releaseCompressed` for a
+     compressed (KTX2) picture, as every bought model's, scene's and kit's is when its file's read
+     (`client/js/world/art/engine/models.js`). So a model's picture mustn't be let go of off the
+     graphics card and drawn again, have its wrapping, filtering or colour space changed once
+     it's been drawn, or be drawn by a second renderer. On a phone the graphics card shares
      the page's memory, so the copy costs twice. Don't for anything read again, unless it can
      be made again when it's wanted: a garment's own picture, which outfits are put together
      from, is kept till it's been unused half a minute and painted again after

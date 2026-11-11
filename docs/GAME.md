@@ -7111,11 +7111,19 @@ tiles are baked and gives nothing back), the bodies' own copies on the page (`bo
 kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), the
 buildings' floors' (`interiorsMB`: theirs the same way, the hidden ones never given to the
 graphics card, counted again only when one's built or let go of or its wares come in, game.js
-`#interiorsHeld`; "floors'" in the overlay), all of them
+`#interiorsHeld`; "floors'" in the overlay), the models' and the scenes' as they're read
+(`modelsMB`, beasts/model.js `modelsHeld`: their shapes, their clips' keys, and their pictures
+and their skins' till the graphics card has them, each file once; what the bodies drawn from a
+model share with it is counted with the bodies, not again; "models'" in the overlay: one read
+near its lair and never drawn from was counted nowhere till 2026-11-11), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept, and the beasts' looks
 kept (how many, their sculpted bodies' and folded pieces' size, and how many none is drawn on:
-beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). Where the heap isn't
-told, the bodies' and the floors' copies stand in for it in the total, the least of it: in Chromium, playing on
+beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). A compressed picture (a
+model's, a scene's, a kit's: KTX2) is counted as its levels' bytes, as compressed as the page
+holds them, and as nothing once it's let go of: counted as four bytes a pixel till 2026-11-11, a
+1024-pixel ETC2 picture of 0.67 MB was 4 MB, so one knight of the Bell in view added some 60 MB
+to the bodies' that wasn't there, and a floor's bought furniture as much to the floors'. Where the heap isn't
+told, the bodies', the floors' and the models' copies stand in for it in the total, the least of it: in Chromium, playing on
 in a town while 30 bodies were dressed took the heap from 325 to 485 MB and the page's own
 resident memory to 1.2 GB, the bodies' copies growing about 4.5 MB a body, three-quarters of the
 heap's growth, over a fixed 300 MB or so of the world's own. On a phone the graphics card shares
@@ -7145,7 +7153,14 @@ for the whole game, 15 MB the graphics card had long had); the buildings' name b
 roads' fingerboards (kits/signs.js `textureOf`: each its canvas, left a pixel square; a board was
 2048 by 330, 2.6 MB on the page; a capital's 38, all sent, were 63 MB on the page, besides 63 MB
 more of them on the graphics card at full size than at Low's half, a player's iPhone let go of in a
-cat folk's capital, 2026-11-10); and each of the game's characters' own skin, 4 MB of
+cat folk's capital, 2026-11-10); every picture of a bought model, a scene and a kit, as its file's
+read (art/engine/models.js `releasePictures`, `releaseCompressed`: a KTX2 picture's levels, as
+compressed as the graphics card keeps them, so the page's copy was as big again: 2 to 10 MB for a
+creature's kind on a phone, about 21 for an ants' nest's nine kinds and 22 for Bellhaven; one
+nothing's drawn with yet keeps them, its only copy; its levels are left as new, empty ones, and
+marked to be sent again it isn't, as a keep's wall and floor are for each of its levels,
+world/dungeons3d.js `setKitPicture`; the labs keep theirs, the castle lab sending them again at
+other sizes); and each of the game's characters' own skin, 4 MB of
 colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
 again, as a disguise or a change of look does, it's sent and let go of again; and held a quarter
 the size while the body's small on the screen, as its outfit's pictures are: CHARACTERS.md,

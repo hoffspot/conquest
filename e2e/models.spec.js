@@ -52,14 +52,44 @@ test("reads a model's KTX2 textures, kept compressed on the GPU, with the transc
 
         camera.position.set(0, 2, 8);
         camera.lookAt(0, 0.5, 0);
-        renderer.render(scene, camera);
+        scene.add(new THREE.AmbientLight(0xffffff, 3));
 
         const gl = renderer.getContext();
+        // (What the page holds of its pictures: their levels' bytes)
+        const held = () => [...textures].reduce((sum, texture) => sum + texture.mipmaps.reduce((bytes, level) => bytes + (level.data?.byteLength ?? 0), 0), 0);
+        const drawn = () => {
+            const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+            gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+            return pixels;
+        };
+        const before = held();
+        const first = drawn();
+        const after = held();
+        const colours = new Set();
+
+        for (let k = 0; k < first.length; k += 4) {
+            colours.add((first[k] << 16) | (first[k + 1] << 8) | first[k + 2]);
+        }
+
+        // (Marked to be sent again, as what sets a picture up for another use does: nothing to
+        // send, and drawn as it was)
+        for (const texture of textures) {
+            texture.needsUpdate = true;
+        }
+
+        const second = drawn();
 
         return {
             levels: [...levels].sort(),
             textures: [...textures].map((texture) => ({ mimeType: texture.userData.mimeType, compressed: Boolean(texture.isCompressedTexture), mipmaps: texture.mipmaps.length })),
             error: gl.getError(),
+            held: { before, after },
+            colours: colours.size,
+            same: first.every((value, k) => value === second[k]),
         };
     }, [...(await readFile(DRAGON))]);
 
@@ -72,6 +102,13 @@ test("reads a model's KTX2 textures, kept compressed on the GPU, with the transc
     }
 
     expect(read.error).toBe(0);
+
+    // (Its pictures let go of off the page once the graphics card has them, world/release.js
+    // releaseCompressed: drawn from the card's copy, the same again, in its picture's colours)
+    expect(read.held.before).toBeGreaterThan(100000);
+    expect(read.held.after).toBe(0);
+    expect(read.colours).toBeGreaterThan(50);
+    expect(read.same).toBe(true);
 
     // (Its two files, each at its address with its hash, as the catalog has them)
     const transcoder = fetched.filter((url) => url.includes("/libs/basis/"));
