@@ -3340,7 +3340,10 @@ townsfolk, the crier, guards and barracks soldiers drawn in full as the player w
 door), 537 MB in all (a player's crash report, 2026-10-27). In seed 2's start town on Low, its
 smithy held 10 rather than 19 (the bodies' own copies 24 MB, not 65), and five seconds out again
 the townsfolk were all but all dressed. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
-furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
+furniture laid out, made into meshes, made ready to merge, merged; its builders, every corner
+they laid merged, are let go of then, and nothing the floor keeps, its `update`, its `drive`
+or its furnishing, reads what was built: they read it once, and two floors held 4.2 MB of
+builders for as long as they were held). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
 in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
@@ -7275,7 +7278,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   counter and filing at the shelves, adventurers of every calling at the board and the tables,
   the receptionist in the guild's uniform with twin tails or a bob, adventurers sheathed and
   those drinking holding tankards; every kind of building drawn by its style, and a floor built
-  a step at a time the same as at once; the
+  a step at a time the same as at once, none of its builders kept once it's built (each held
+  weakly and the garbage collector run: none left), its grindstone turning still while it's
+  cranked; the
   settlements' taverns', smithies', temples' and guilds' doors among the world's links as they're laid
   out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
