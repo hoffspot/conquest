@@ -198,6 +198,7 @@ import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
+import { clockTurn, DUE, nextSlot, PUT_OFF } from "./clocks.js";
 import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
@@ -648,6 +649,11 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // only once it's `margin` places past the last drawn in full. Each kind's figure made with `share`
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
+
+// The frame's jobs done a couple of times a second, each at its own share of the time (seconds
+// into each half second: app/clocks.js nextSlot), so no two are due in the same frame at 60 frames
+// a second; the models looked for every couple of seconds too
+const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
 
 // Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
 // they can't see from there (#walledOff, #onlySeenAbout) held in full only for `after` seconds of
@@ -1511,6 +1517,17 @@ export class Game {
         this.hostileTo = (a, b) => this.battle.hostile(a, b);
         this.seenBy = (a, b) => this.battle.canSee(a, b);
         this.waryTurn = 0;
+
+        // (Whether the frame stepped the battle, and the jobs done a couple of times a second
+        // that count their own clocks down, as functions to give their turn to: #inTurn)
+        this.stepped = false;
+        this.jobs = {
+            marshal: (dt) => this.#marshal(dt),
+            rationing: (dt) => this.#rationing(dt),
+            shutIn: (dt) => this.#shutIn(dt),
+            folkRoom: (dt) => this.#folkRoom(dt),
+            thronging: (dt) => this.#thronging(dt),
+        };
 
         /**
          * Keeping up (Game options: Adaptive, app/governor.js): from the quality chosen down, as a
@@ -4038,10 +4055,46 @@ export class Game {
             this.remote.ping();
         }
 
+        // (Whether this frame stepped the battle: the jobs done a couple of times a second wait
+        // for the next if they're due on it, #due)
+        this.stepped = steps > 0;
         this.#update(dt, (this.remote ? this.accumulator : this.runner.lag) / STEP_MS);
         telemetry.mark(PHASE.bars);
 
         return steps;
+    }
+
+    // Is a job of the frame's that's done every `every` seconds due (its clock the field `field`:
+    // seconds till then, 0 or less now)? Not on a frame that stepped the battle, unless it's been
+    // asked for now: the next. Done, it's next due at its own share of the time (`offset`,
+    // PACED), so the jobs don't all land in one frame: app/clocks.js
+    #due(field, dt, every, offset) {
+        const left = this[field] ?? 0;
+        const turn = clockTurn(left, dt, this.stepped);
+
+        this[field] = turn === DUE ? nextSlot(this.clock, every, offset) : turn === PUT_OFF ? 0 : left - dt;
+
+        return turn === DUE;
+    }
+
+    // One of those jobs that counts its own clock down (`field`, set back to MARSHAL.every by the
+    // job as it's done: #marshal, #rationing, #shutIn, #folkRoom, #thronging), given its turn the
+    // same way: not begun on a frame that stepped the battle, and next due at its own share of
+    // the time
+    #inTurn(field, offset, dt, job) {
+        const left = this[field] ?? 0;
+
+        if (clockTurn(left, dt, this.stepped) === PUT_OFF) {
+            this[field] = 0;
+
+            return;
+        }
+
+        job(dt);
+
+        if (this[field] > left) {
+            this[field] = nextSlot(this.clock, MARSHAL.every, offset);
+        }
     }
 
     // Why nothing's happening, while playing together: this game's link dropped (it's coming back),
@@ -4127,10 +4180,9 @@ export class Game {
         // (The fortifications and the camps' stockades standing near the player drawn, a couple of
         // times a second, named in the debug log if that's slow; a stockade's mended stakes rising
         // every frame)
-        if ((this.fortsClock -= dt) <= 0) {
+        if (this.#due("fortsClock", dt, MARSHAL.every, PACED.forts)) {
             const started = performance.now();
 
-            this.fortsClock = 0.5;
             this.#syncForts();
             this.#syncStockades();
             this.#syncBurnt();
@@ -4145,13 +4197,15 @@ export class Game {
 
         this.stockades?.update(dt);
         this.contacts?.begin();
-        this.#marshal(dt);
+        // (Each of these a couple of times a second, at its own time and not on a frame that
+        // stepped the battle: #inTurn)
+        this.#inTurn("marshalClock", PACED.marshal, dt, this.jobs.marshal);
         this.#bossBar(dt);
         this.#allying();
-        this.#rationing(dt);
-        this.#shutIn(dt);
-        this.#folkRoom(dt);
-        this.#thronging(dt);
+        this.#inTurn("rationClock", PACED.ration, dt, this.jobs.rationing);
+        this.#inTurn("shutClock", PACED.shut, dt, this.jobs.shutIn);
+        this.#inTurn("folkClock", PACED.folk, dt, this.jobs.folkRoom);
+        this.#inTurn("throngClock", PACED.throng, dt, this.jobs.thronging);
         this.#crowding();
         this.#forgetting(dt);
         this.#memoryGuarding(dt);
@@ -4369,10 +4423,7 @@ export class Game {
         this.sound?.setBattle(battle.time - (this.foughtAt ?? -Infinity) < FIGHT_LINGERS);
 
         // (The criers near calling out, as often as what's heard is worked out)
-        this.crying = (this.crying ?? 0) - dt;
-
-        if (this.crying <= 0) {
-            this.crying = HEARD_EVERY;
+        if (this.#due("crying", dt, HEARD_EVERY, PACED.criers)) {
             this.#cryOut();
         }
         this.#castsHeard();
@@ -5543,9 +5594,7 @@ export class Game {
     #modelling(dt) {
         const me = this.avatars.get(this.me)?.object.position;
 
-        if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
-            this.modelClock = MODELLING;
-
+        if (this.#due("modelClock", dt, MODELLING, PACED.models) && me) {
             const sparing = this.memoryGuard.touch;
             const ahead = modelsAhead({
                 predicted: [...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()],
@@ -9985,13 +10034,11 @@ export class Game {
     #hearAround(dt, { now = false } = {}) {
         const me = this.avatars.get(this.me)?.object.position;
 
-        this.hearing = (this.hearing ?? 0) - dt;
+        const due = this.#due("hearing", dt, HEARD_EVERY, PACED.heard);
 
-        if (!this.sound || !me || (this.hearing > 0 && !now)) {
+        if (!this.sound || !me || (!due && !now)) {
             return;
         }
-
-        this.hearing = HEARD_EVERY;
 
         const time = timeOfDay(elapsedOf(this.host.war));
         const interior = this.interiors.get(this.mapId);
@@ -10613,10 +10660,7 @@ export class Game {
             }
         }
 
-        this.visitClock -= dt;
-
-        if (this.visitClock <= 0) {
-            this.visitClock = VISITS.every;
+        if (this.#due("visitClock", dt, VISITS.every, PACED.doors)) {
             this.doors?.sync();
         }
     }
@@ -17915,8 +17959,7 @@ export class Game {
     #bossBar(dt) {
         const me = this.battle.actor(this.me);
 
-        if ((this.bossClock = (this.bossClock ?? 0) - dt) <= 0) {
-            this.bossClock = MARSHAL.every;
+        if (this.#due("bossClock", dt, MARSHAL.every, PACED.boss)) {
             this.bossId = me ? (this.battle.actors.find((actor) => (actor.ai === "colossus" || actor.wild?.worldBoss) && !actor.dead && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= BOSS_NEAR)?.id ?? null) : null;
         }
 
@@ -19147,13 +19190,9 @@ export class Game {
     // SIZE_UP seconds: its plate coloured by how a fight with it would go for them, and, while
     // Evaluate's on them (spells.js evaluate), its power by its name
     #sizeUp(dt) {
-        this.sizingIn = (this.sizingIn ?? 0) - dt;
-
-        if (this.sizingIn > 0) {
+        if (!this.#due("sizingIn", dt, SIZE_UP, PACED.sizeUp)) {
             return;
         }
-
-        this.sizingIn = SIZE_UP;
 
         const me = this.battle.actor(this.me);
         const evaluating = Boolean(me && this.battle.buffOf(me, "evaluate"));

@@ -7472,6 +7472,22 @@ Chromium at 1280 × 720, the median and the 90th percentile, went from 2.3 and 4
 2.1 in the town, 2.6 and 4.7 to 1.9 and 3.0 in the taproom (nearly everyone there's big on the
 screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of the town.
 
+**The frame's own jobs** (app/game.js `#update`; the performance review of 2026-11). What a frame
+does besides moving and drawing everyone is spread so that no one frame carries much of it:
+
+- **The jobs done a couple of times a second** (the fortifications near drawn, the soldiers
+  marshalled, the boss's bar, the bodies' budget, who's shut in, the folk's room, the throng,
+  what's heard, the criers, sizing up, the doors; the models looked for every 2 seconds) each
+  have their own share of each half second (`PACED`, a twentieth of a second apart; app/clocks.js
+  `nextSlot`), kept to whenever each is done, and one that comes due on a frame that stepped the
+  battle waits for the next (`clockTurn`; never one asked for now, its clock set to 0). They all
+  began at 0 and were set back to the same half second by the same arithmetic, so one frame in
+  thirty did all of them, for ever, and a third of the time that frame stepped the battle too.
+- **Whether an enemy's close by**, for the guard stance, is kept for each character and worked
+  out again every quarter second (*Characters in the world*, above), not asked of everyone for
+  everyone every frame.
+- **What's held is read once every 2 seconds, after the frame** (*The memory guard*, above).
+
 ## Testing
 
 - `test/setpieces.test.js`: settlement layouts (farmsteads, hamlets, villages, towns, cities and
@@ -7653,7 +7669,18 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   below 30, a step at a time, not before it's played a while, settled at each; back near 60 a
   while, up again to the quality chosen and no further; a step that let it fall tried again only
   later, longer each time; a hitch now and then and a game stopped a while forgiven; carrying on
-  from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
+  from a game before, and back to the quality chosen when it's chosen again; every step put back
+  once none has bought anything, tried again after a minute, then two; 30 a second on a beat of 30
+  left as it is, and well behind it not; steps taken before the beat was known to have slowed put
+  back; a stretch of building at 25 frames a second leaving the quality alone.
+  `test/frames.test.js`: the window of frames (the same middle as a sorted copy, frames not to be
+  judged by left out, nothing said once they're most); the beat (60 till shown otherwise, 30 for a
+  browser asking for no more, not taken from frames the game itself made late, a game stopped
+  saying nothing); and the frame loop's three fed a steady 30, however the times are rounded:
+  nothing taken away. `test/graphicsnotes.test.js`: what Game options says of a device saving its
+  battery, and of smoother edges waiting on a reload. `test/clocks.test.js`: the frame's jobs done a
+  couple of times a second, never two in one frame at 60 frames a second, none begun on a frame
+  that stepped the battle unless asked for now, all still done when every frame steps. E2E: told it can't
   keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
   quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
 - `test/version.test.js`: which code this is (app/version.js): "dev" as kept in the repository;
@@ -7684,7 +7711,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
   spare a while, a few back at a time, all in the end; more drawn in full that made it too slow
   tried again only later, longer each time; a hitch now and then and a game stopped a while
-  forgiven; all in full again with few about. `test/governor.test.js` also: held while the throng
+  forgiven; all in full again with few about; all in full again once as many as can be are in the
+  crowds and it's no quicker; 30 a second on a beat of 30 leaving all in full; a stretch of
+  building leaving them so. `test/governor.test.js` also: held while the throng
   changes what's drawn. `test/crowd.test.js` also: a stand-in drawn where the one it stands for
   is, as big, going as it goes, told what it's told (its own actions put back after, a class's or
   its own), lying if it's down; what's drawn of the one in full kept from being seen and seen again
