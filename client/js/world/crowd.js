@@ -30,7 +30,7 @@ import { REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { LODS } from "../characters/lod.js";
 import { NOW, Steps, WAITING } from "../core/steps.js";
-import { figureBytes, figureFrom, figureId, figureStore } from "./figurestore.js";
+import { figureBytes, figureFrom, figureId, FIGURES_KEPT, figureStore } from "./figurestore.js";
 import { releaseAttribute, releaseGeometry, releaseTexture } from "./release.js";
 
 /**
@@ -1438,8 +1438,8 @@ function* keptOrMade(store, id, kit, key, spec) {
         found = bytes;
     });
 
-    // (Looked for elsewhere, a frame or two: waited on, as long as a figure's fewer triangles are)
-    for (let k = 0; found === undefined && k < CROWD.wait; k++) {
+    // (Looked for elsewhere, a frame or two: waited on a while at most)
+    for (let k = 0; found === undefined && k < FIGURES_KEPT.wait; k++) {
         if ((yield WAITING) === NOW) {
             break;
         }

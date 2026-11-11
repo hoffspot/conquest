@@ -26,8 +26,10 @@ import { releaseAttribute, releaseGeometry, releaseTexture } from "./release.js"
  * - `format`: how a figure's laid out as bytes (figureBytes): another's not read.
  * - `settle`: how long after a figure's read or kept its time's written down (ms: once for the
  *   several read as a game starts).
+ * - `wait`: how many frames the storage is waited on for a figure, at most (world/crowd.js
+ *   keptOrMade): it answers in one or two; one that never does is made.
  */
-export const FIGURES_KEPT = Object.freeze({ cache: "pellagos-figures-v1", most: 40, format: 1, settle: 2000 });
+export const FIGURES_KEPT = Object.freeze({ cache: "pellagos-figures-v1", most: 40, format: 1, settle: 2000, wait: 180 });
 
 // What a figure's bytes begin with ("PFIG"), then FIGURES_KEPT.format, then how long its facts are
 const MAGIC = 0x47494650;
