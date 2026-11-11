@@ -15,7 +15,7 @@ import { Silhouettes } from "../client/js/world/far/silhouettes.js";
 import { CARD_FLOATS, FAR_TREES, FORMS, gatherTrees, treeCards, TREE_FLOATS } from "../client/js/world/far/trees.js";
 import { QUALITY } from "../client/js/world/view.js";
 import { STILL_WATER } from "../client/js/world/water.js";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => {
     let world;
@@ -130,14 +130,11 @@ describe("the trees and rivers seen from afar (far/trees.js, rivers.js)", () => 
 
             quickEnough(
                 3000,
-                () => {
-                    const started = performance.now();
-
-                    trees = gatherTrees(world.plan, { x: 2928, z: 5072, reach: quality.farTrees, from: 100 });
-                    rivers = gatherRivers(world.plan, { x: 2928, z: 5072, reach: farReach(quality.far), from: 100 });
-
-                    return performance.now() - started;
-                },
+                () =>
+                    cpuMs(() => {
+                        trees = gatherTrees(world.plan, { x: 2928, z: 5072, reach: quality.farTrees, from: 100 });
+                        rivers = gatherRivers(world.plan, { x: 2928, z: 5072, reach: farReach(quality.far), from: 100 });
+                    }),
                 (ms) => `${name}: ${ms.toFixed(0)} ms`,
             );
 

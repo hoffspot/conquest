@@ -6,7 +6,7 @@ import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
 import { armsOf, averageDamage, chooseAttack, inReach, longestReach, MELEE_REACH, NATURAL, rollDamage, STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { generateWorld } from "../client/js/core/world.js";
-import { parseGrid, quickEnough } from "./helpers.js";
+import { cpuMs, parseGrid, quickEnough } from "./helpers.js";
 
 /** A world from rows of text ("#" blocked): just what a battle needs. */
 function worldOf(rows) {
@@ -1159,11 +1159,7 @@ describe("the battle (battle.js)", () => {
                 // (The first step bakes the town's navigation mesh, once: test/navigation.test.js has
                 // what that takes; this is the battle's own)
                 const events = run(battle, STEP_MS);
-                const start = performance.now();
-
-                events.push(...run(battle, 60000));
-
-                const elapsed = performance.now() - start;
+                const elapsed = cpuMs(() => events.push(...run(battle, 60000)));
 
                 assert.ok(!events.some((event) => event.type === "attack"), "too far apart to fight");
                 assert.ok(orc.square[0] <= world.patrol[0][0] + 2, "the orc keeps to its patrol");

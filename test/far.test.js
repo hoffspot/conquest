@@ -13,7 +13,7 @@ import { FADE, FAR_FOG, farHaze, hazeAt } from "../client/js/world/fog.js";
 import { groundMaterial, UNREPEATED } from "../client/js/world/ground.js";
 import { primingWater, STILL_WATER } from "../client/js/world/water.js";
 import { QUALITY } from "../client/js/world/view.js";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 // (The ground's textures paint a canvas: enough of one for them to in Node, every other drawing
 // call doing nothing)
@@ -236,15 +236,12 @@ describe("the far land (world/far)", () => {
 
         quickEnough(
             60,
-            () => {
-                const start = performance.now();
-
-                for (let level = 0; level < 4; level++) {
-                    sampleLevel(plan, level, middleOf(level, 2928, 5072));
-                }
-
-                return (performance.now() - start) / 4;
-            },
+            () =>
+                cpuMs(() => {
+                    for (let level = 0; level < 4; level++) {
+                        sampleLevel(plan, level, middleOf(level, 2928, 5072));
+                    }
+                }) / 4,
             (ms) => `${ms.toFixed(1)} ms a level`,
         );
     });

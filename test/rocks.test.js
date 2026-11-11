@@ -4,7 +4,7 @@
 // drawn with them: the cliffs' scree, the fords' stepping stones, the rockslides
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 // (Textured materials paint a canvas: enough of one for them to in Node)
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) }) };
@@ -168,15 +168,12 @@ describe("rocks' shapes (world/art/kits/rocks.js)", () => {
     it("are made quickly enough to make a few a frame, near and far", () => {
         // A rock of each family at a detail, each made in full (nothing of a shape is kept), and
         // how long one took (ms)
-        const each = (detail, seed) => () => {
-            const start = performance.now();
-
-            for (const family of FAMILIES) {
-                rockLook(randomOf(seed), { family, detail });
-            }
-
-            return (performance.now() - start) / FAMILIES.length;
-        };
+        const each = (detail, seed) => () =>
+            cpuMs(() => {
+                for (const family of FAMILIES) {
+                    rockLook(randomOf(seed), { family, detail });
+                }
+            }) / FAMILIES.length;
 
         // Timed once made a first time: the first of each detail makes its ball (sphereOf) and
         // the engine compiles the code that shapes it, once a game, not once a rock. Timed cold,
@@ -347,13 +344,7 @@ describe("the wilds' rocks (kits/wilds.js)", () => {
     it("are made a chunk's at a time quickly enough", () => {
         const chunk = stony[0];
 
-        quickEnough(400, () => {
-            const start = performance.now();
-
-            stoneMesh(chunk.features, landAt, [chunk.x0, chunk.y0], (x, z) => overworld.heightAt(x, z), { rocks: ROCK_TIERS.near });
-
-            return performance.now() - start;
-        });
+        quickEnough(400, () => cpuMs(() => stoneMesh(chunk.features, landAt, [chunk.x0, chunk.y0], (x, z) => overworld.heightAt(x, z), { rocks: ROCK_TIERS.near })));
     });
 });
 

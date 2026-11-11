@@ -12,7 +12,7 @@ import { siteSize, Sites } from "../client/js/core/sites.js";
 import { ENTERED, GROUND, HOME_TREES, PLOT, SHOP_LANDMARKS, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
 import { layoutTown, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 let world;
 let overworld;
@@ -318,11 +318,9 @@ describe("the world outside (overworld.js)", () => {
 
                 navigation = navigatorOf(overworld);
 
-                const start = performance.now();
-
-                path = navigation.path([world.spawns.player[0] + 0.5, world.spawns.player[1] + 0.5], [goal[0] + 0.5, goal[1] + 0.5]);
-
-                return performance.now() - start;
+                return cpuMs(() => {
+                    path = navigation.path([world.spawns.player[0] + 0.5, world.spawns.player[1] + 0.5], [goal[0] + 0.5, goal[1] + 0.5]);
+                });
             },
             (ms) => `${ms.toFixed(0)} ms`,
         );
@@ -489,13 +487,14 @@ describe("the world outside (overworld.js)", () => {
             40,
             () => {
                 const fresh = new Overworld({ plan: world.plan, stamp: world.stamp, start: world.start });
-                const start = performance.now();
 
-                for (let k = 0; k < 16; k++) {
-                    fresh.chunk(40 + (k % 4), 60 + Math.floor(k / 4));
-                }
-
-                return (performance.now() - start) / 16;
+                return (
+                    cpuMs(() => {
+                        for (let k = 0; k < 16; k++) {
+                            fresh.chunk(40 + (k % 4), 60 + Math.floor(k / 4));
+                        }
+                    }) / 16
+                );
             },
             (ms) => `${ms.toFixed(1)} ms a chunk`,
         );

@@ -12,7 +12,7 @@ import { propOutlines } from "../client/js/core/setpieces/standing.js";
 import { onWalk, WALK_LAYERS } from "../client/js/core/setpieces/town.js";
 import { WADE } from "../client/js/core/terrain/waters.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
-import { parseGrid, quickEnough } from "./helpers.js";
+import { cpuMs, parseGrid, quickEnough } from "./helpers.js";
 
 // The world of seed 1: its start town, the middle of the river to its south (2 m deep), and the
 // road's stone bridge over the river to the town's south-east, up a ramp from each bank (found by
@@ -634,10 +634,8 @@ describe("navigation meshes (navigation.js)", () => {
 
                 for (let dx = -2; dx <= 2; dx++) {
                     const input = tileInput(town, tx + dx, ty + 1);
-                    const start = performance.now();
 
-                    mesh.add(tx + dx, ty + 1, bakeTile(recast, input, tx + dx, ty + 1));
-                    bakes.push(performance.now() - start);
+                    bakes.push(cpuMs(() => mesh.add(tx + dx, ty + 1, bakeTile(recast, input, tx + dx, ty + 1))));
                 }
 
                 mesh.dispose();
@@ -659,11 +657,13 @@ describe("navigation meshes (navigation.js)", () => {
                 for (let k = 0; k < 100; k++) {
                     const from = [middle[0] - 40 + ((k * 37) % 80), middle[1] - 40 + ((k * 53) % 80)];
                     const to = [middle[0] - 40 + ((k * 71) % 80), middle[1] - 40 + ((k * 29) % 80)];
-                    const start = performance.now();
-                    const path = navigation.path(from, to);
+                    let path;
+                    const took = cpuMs(() => {
+                        path = navigation.path(from, to);
+                    });
 
                     if (path.length && Math.hypot(path.at(-1)[0] - to[0], path.at(-1)[1] - to[1]) < 1) {
-                        times.push(performance.now() - start);
+                        times.push(took);
                     }
                 }
 
