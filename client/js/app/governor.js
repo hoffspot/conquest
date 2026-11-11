@@ -5,6 +5,14 @@
 // it's been back near 60 a while it tries the step above again; one that let it fall below 30 is
 // tried again only after a minute, then two, then four... so it doesn't see-saw. A step changes
 // nothing that's already drawn but the pixels; a level redraws the far land and the undergrowth.
+//
+// It's judged against the frames the browser's asking for (the beat: app/frames.js Beat), not
+// against 60 whatever the screen: a phone saving its battery asks for 30, and 30 drawn is then all
+// there is to draw. Frames the game spent building in aren't judged by (drawing less cures nothing
+// of them: frames.js BUILDING). And steps down that bought nothing are put back: an iPhone's slow
+// stretches were its building, and it was drawn at 0.7 of Low's pixels for them.
+
+import { BEAT, beatChanged, BUILDING, FrameWindow } from "./frames.js";
 
 /**
  * `warmup`: how long it plays before it's judged at all (ms: things being got ready make it slow
@@ -14,7 +22,13 @@
  * have been near the target before it steps up (ms); `pause`: a gap longer than this between
  * frames (ms) is the game stopped (in the background), not slow; `scales`: the share of the pixels
  * drawn at each step of a level; `lowest`: and at the lowest level, past those; `retry`: how long
- * before a step that fell below the floor is tried again (ms, doubling each time it does).
+ * before a step that fell below the floor is tried again (ms, doubling each time it does);
+ * `every`: how often it's judged (ms: the frames are only kept in between); `over`: on a beat
+ * slower than 60 a second, too slow only at more than this many beats a frame; `gain`: a step
+ * down has bought something once the frames come this much quicker than before it. Stepped down
+ * to the last step with nothing bought, the steps are all put back and held there: not tried
+ * again till the beat changes, the frames come `worse` times as slowly as they did then, or
+ * `retry` has gone by (doubling each time).
  */
 export const GOVERNOR = Object.freeze({
     warmup: 5000,
@@ -28,13 +42,11 @@ export const GOVERNOR = Object.freeze({
     scales: Object.freeze([1, 0.85, 0.7]),
     lowest: Object.freeze([0.6, 0.5]),
     retry: 60000,
+    every: 250,
+    over: 1.3,
+    gain: 0.05,
+    worse: 1.2,
 });
-
-const median = (values) => {
-    const sorted = [...values].sort((a, b) => a - b);
-
-    return sorted[Math.floor(sorted.length / 2)];
-};
 
 /**
  * The steps down from the quality `ceiling` (a name in `levels`, lowest first): { quality, scale }
@@ -52,11 +64,17 @@ export function ladder(levels, ceiling) {
 }
 
 export class Governor {
-    #frames = [];
+    #frames = new FrameWindow(GOVERNOR.window);
+    #looked = -Infinity;
     #since = null;
     #good = null;
     #blocked = new Map();
     #failed = new Map();
+    // (Steps down being tried: the step they began at, and how the frames came there)
+    #run = null;
+    // (Steps down that bought nothing, put back: held where it is; and how many times that's been)
+    #held = null;
+    #futile = 0;
 
     /**
      * @param {object} [options]
@@ -98,15 +116,17 @@ export class Governor {
     }
 
     /**
-     * A frame drawn at `now` (ms), `interval` ms after the last: where it's to be drawn from now
-     * on ({ quality, scale }) if that's to change, or null.
+     * A frame drawn at `now` (ms), `interval` ms after the last, on a `beat` (ms a frame the
+     * browser's asking for: frames.js Beat), the frame before it having spent `built` ms building
+     * (app/game.js #visit): where it's to be drawn from now on ({ quality, scale }) if that's to
+     * change, or null.
      */
-    observe(now, interval) {
+    observe(now, interval, { beat = BEAT.least, built = 0 } = {}) {
         this.#since ??= now;
 
         // (The game stopped a while: judged afresh)
         if (interval > GOVERNOR.pause) {
-            this.#frames = [];
+            this.#frames.clear();
             this.#good = null;
 
             return null;
@@ -116,31 +136,72 @@ export class Governor {
             return null;
         }
 
-        this.#frames.push({ now, interval });
+        // (A frame that went to building isn't judged by: kept, as one that says nothing)
+        this.#frames.push(now, built > beat * BUILDING ? NaN : interval);
 
-        while (this.#frames[0].now < now - GOVERNOR.window) {
-            this.#frames.shift();
-        }
-
-        // (A whole window of frames: none dropped at the start of it)
-        if (this.#frames.length < 2 || now - this.#frames[0].now < GOVERNOR.window * 0.9) {
+        // (Judged a few times a second: nothing's worked out in between)
+        if (now - this.#looked < GOVERNOR.every) {
             return null;
         }
 
-        const typical = median(this.#frames.map(({ interval }) => interval));
+        this.#looked = now;
 
-        // Below the floor: a step down (and the step it was at let it, so it's tried again later)
-        if (typical > 1000 / GOVERNOR.floor && this.step < this.steps.length - 1) {
+        // (A whole window of frames: none dropped at the start of it)
+        if (this.#frames.length < 2 || now - this.#frames.first < GOVERNOR.window * 0.9) {
+            return null;
+        }
+
+        const typical = this.#frames.median();
+
+        // (Most of them went to building: nothing to judge by)
+        if (Number.isNaN(typical)) {
+            return null;
+        }
+
+        // Below the floor (on a slower beat, well behind it): a step down
+        if (typical > Math.max(1000 / GOVERNOR.floor, beat * GOVERNOR.over)) {
+            const last = this.steps.length - 1;
+            const run = this.#run;
+            const bought = !run || typical <= run.typical * (1 - GOVERNOR.gain);
+
+            this.#good = null;
+
+            // (Every step there is tried, and the frames no quicker than where they began: what's
+            // slow isn't what's drawn. A step alone isn't judged so: on a screen that shows a
+            // frame late or not at all, the frames come no quicker till enough's been taken away.)
+            if (!bought && this.step >= last) {
+                return this.#putBack(now, beat);
+            }
+
+            if (this.step >= last || this.#holding(now, typical, beat)) {
+                return null;
+            }
+
+            // (The step it was at let it, so it's tried again later)
             const failed = (this.#failed.get(this.step) ?? 0) + 1;
 
             this.#failed.set(this.step, failed);
             this.#blocked.set(this.step, now + GOVERNOR.retry * 2 ** (failed - 1));
 
-            return this.#move(now, this.step + 1);
+            const trying = bought ? { from: this.step, typical, beat } : run;
+            const rung = this.#move(now, this.step + 1);
+
+            this.#run = trying;
+
+            return rung;
         }
 
+        // (Not too slow where the steps tried left it: they stand. Unless it's the beat that's
+        // slowed since they began, the browser asking for fewer frames, a phone set to save its
+        // battery: they answered a slowness that wasn't one, and are put back)
+        if (this.#run && beat > this.#run.beat && beatChanged(beat, this.#run.beat)) {
+            return this.#putBack(now, beat);
+        }
+
+        this.#run = null;
+
         // Near the target a while: a step up, unless that step fell below the floor lately
-        if (typical <= 1000 / (GOVERNOR.target * GOVERNOR.near)) {
+        if (typical <= beat / GOVERNOR.near) {
             this.#good ??= now;
         } else {
             this.#good = null;
@@ -153,11 +214,59 @@ export class Governor {
         return null;
     }
 
+    // Held where it is, steps down having bought nothing (#putBack)? Till the beat changes (and
+    // nothing's held against the new one), the frames come a good deal slower than they did then,
+    // or it's time to try again
+    #holding(now, typical, beat) {
+        const held = this.#held;
+
+        if (!held) {
+            return false;
+        }
+
+        if (beatChanged(beat, held.beat)) {
+            this.#futile = 0;
+        } else if (typical <= held.typical * GOVERNOR.worse && now < held.until) {
+            return true;
+        }
+
+        this.#held = null;
+
+        return false;
+    }
+
+    // The steps down just tried put back (they bought nothing: what's slow isn't what's drawn),
+    // and held there; none of them held against being stepped up to, as one that failed is
+    #putBack(now, beat) {
+        const { from, typical } = this.#run;
+
+        for (let step = from; step < this.step; step++) {
+            const failed = (this.#failed.get(step) ?? 1) - 1;
+
+            this.#blocked.delete(step);
+
+            if (failed > 0) {
+                this.#failed.set(step, failed);
+            } else {
+                this.#failed.delete(step);
+            }
+        }
+
+        const rung = this.#move(now, from);
+
+        this.#futile++;
+        this.#held = { beat, typical, until: now + GOVERNOR.retry * 2 ** (this.#futile - 1) };
+
+        return rung;
+    }
+
     // To a step: judged again only once it's settled there
     #move(now, step) {
         this.step = step;
-        this.#frames = [];
+        this.#frames.clear();
         this.#good = null;
+        this.#run = null;
+        this.#held = null;
         this.#since = now - GOVERNOR.warmup + GOVERNOR.settle;
 
         return this.rung;
@@ -168,18 +277,23 @@ export class Governor {
      * again only once that's settled, where it is.
      */
     hold(now) {
-        this.#frames = [];
+        this.#frames.clear();
         this.#good = null;
+        this.#run = null;
         this.#since = Math.max(this.#since ?? now, now - GOVERNOR.warmup + GOVERNOR.settle);
     }
 
     /** Start again at the quality chosen, every pixel, nothing held against any step. */
     reset() {
         this.step = 0;
-        this.#frames = [];
+        this.#frames.clear();
+        this.#looked = -Infinity;
         this.#good = null;
         this.#since = null;
         this.#blocked.clear();
         this.#failed.clear();
+        this.#run = null;
+        this.#held = null;
+        this.#futile = 0;
     }
 }

@@ -2390,6 +2390,45 @@ the pixels"), and debug mode shows it on the quality line. Not under automation
 (`navigator.webdriver`): a test's frames, drawn in software, are always slow, and what it measures
 mustn't change.
 
+**Against the frames the browser asks for** (`app/frames.js` `Beat`, kept by `Pacing.beat`). A
+phone saving its battery asks for 30 frames a second, not 60 (an iPhone's Low Power Mode; a
+browser's energy saver and a 30 Hz screen do the same), and 30 drawn is then all there is to draw.
+Fed a steady 30, the crowded fight below used to be left with 6 bodies in full for good, and the
+steps above could go down to Low at half the pixels, for nothing. So "too slow" and "near 60" are
+judged against the beat:
+
+- **The beat** is the shortest time between two frames drawn over the last 10 seconds (`BEAT.span`),
+  never shorter than 60 a second's, which it's taken to be till it's shown otherwise. Only a frame
+  the game's own work left room for shows it (its work before it no more than half the time it
+  came after, `BEAT.room`): one the game itself made late says nothing of what the browser asked
+  for, so a device too slow for 60 is still judged against 60, however long it lasts.
+- **Too slow** is slower than 30 a second and more than 1.3 beats a frame (`GOVERNOR.over`: 23 a
+  second on a beat of 30); **near enough** is within a tenth of the beat. The crowded fight's 48
+  a second is of 60: 24 on a beat of 30.
+- **Frames that went to building aren't judged by** (`frames.js` `BUILDING`): one that came after
+  more than half a beat of building (`#visit`: the buildings' insides and their folk, the crowds'
+  figures, the soldiers and creatures dressed a step at a time) is kept as one that says nothing,
+  and a window most of whose frames are such isn't judged at all. Drawing less cures none of it:
+  an iPhone's slow stretches (2026-11-11, its debug log) were all building, 18.5 to 31.6 ms a
+  frame of it for three seconds at 20 to 28 frames a second, and it was drawn at 0.85 and 0.7 of
+  Low's pixels for them.
+- **Steps that bought nothing are put back.** Each step down is judged against how the frames
+  came before it: 5% quicker (`gain`) and it's bought something. Down at the last step with
+  nothing bought, what's slow isn't what's drawn: every step is put back at once, and it's held
+  there, not stepping down again till the beat changes, the frames come a fifth slower than they
+  did (`worse`), or a minute's gone by (then two, four...). Not judged a step at a time: on a
+  screen that shows a frame late or not at all, the frames come no quicker till enough's been
+  taken away. Steps taken on a beat that's since slowed (the phone set to save its battery as it
+  played) are put back as soon as the new beat's known.
+- Game options says so on a phone or a tablet ("Your device is saving its battery and asking for
+  30 frames a second, so the game draws 30, and takes nothing away for it": `app/graphicsnotes.js`
+  `powerNote`, on a beat of 25 to 36 a second), and the debug log's `frame.beat` carries the beat.
+
+The frames are kept in typed rings (`FrameWindow`) and their middle looked for four times a
+second, sorted in a scratch array: a list of frames mapped, copied and sorted every frame made
+149 KB of garbage a frame for the governor, the throng and the invasion budget together (about
+290 µs a frame in Node; 5 µs now).
+
 **A crowded fight first** (Adaptive too; `app/throng.js`). With more than 10 about who can be drawn
 in their kind's crowd (hired adventurers, and the wild's people-shaped creatures and beasts, within
 80 metres),
@@ -2398,14 +2437,22 @@ their crowds, and so on every 3 seconds or so while it stays slow, never fewer t
 (*Standing in*, below). Meanwhile the steps above wait (`Governor.hold`), so those far off are
 drawn for less before everything is. After 6 seconds near 60 again, 2 are drawn in full again at
 a time; 2 drawn in full again that made it too slow go back to their crowds, and aren't tried again
-for 20 seconds, then 40, 80..., so it doesn't see-saw.
+for 20 seconds, then 40, 80..., so it doesn't see-saw. Judged against the beat and not by frames
+of building, as the steps above are; and with as many in the crowds as can be and the frames no
+quicker than before any were, they're all drawn in full again and left so (for 20 seconds, then
+40..., or till the beat changes or the frames come a fifth slower).
 
 **How big an invasion** (`app/budget.js`, with Adaptive on or off). While there's no invasion on,
 the game measures how long its frames take to update and draw (after 5 seconds of play, the middle
-of the last 10 seconds'), works out how many soldiers it has room for at 30 frames a second
-(core/invasions.js `sizeFor`: at most 360 on a computer, 160 on a phone, 120 on a smaller one,
-never fewer than 60) and tells the host whenever that changes by a tenth (its `budget` command):
-an invasion's as big as the smallest told by the players in its town (docs/WAR.md *Invasions*).
+of the last 10 seconds', looked at twice a second), works out how many soldiers it has room for at
+30 frames a second (core/invasions.js `sizeFor`: at most 360 on a computer, 160 on a phone, 120 on
+a smaller one, never fewer than 60) and tells the host whenever that changes by a tenth (its
+`budget` command): an invasion's as big as the smallest told by the players in its town
+(docs/WAR.md *Invasions*). A frame's work is the processor's alone (it ends when the drawing's
+handed over, not when the picture's made), so a device kept back by its graphics tells the least,
+60, whatever its work says: while Adaptive's drawing less than the quality chosen (any step down),
+or while the middle frame comes more than a fifth behind the beat (`BUDGET.behind`). A bigger
+invasion would only take more of the picture away.
 
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
@@ -6876,7 +6923,11 @@ the Bindings page till one's chosen.
      and Bar""): the Action wheels page (the player's own, a foe's and their followers': *The
      action wheel*) and the Action Bar page (*The Action Bar*).
    - **Graphics:** the Visual quality slider (Low, Medium, High) and the Adaptive switch
-     (Keeping up, above), full screen while playing (below), screen shake, and with a mouse the
+     (Keeping up, above; under it, what it's drawing while it keeps up, that a phone's saving
+     its battery and asking for 30 frames a second, and that the quality chosen smooths edges, or
+     doesn't, only once the game's next loaded: the picture's drawing surface is made smoothed or
+     not when the game loads, world/view.js, so the rest of a level changes at once and its edges
+     then; `app/graphicsnotes.js`), full screen while playing (below), screen shake, and with a mouse the
      sword pointer and under it, while it's on, the large pointer (*The mouse pointer*, above).
    - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
      bus: sound effects, environment and music (a sound plays as the first two are moved, to

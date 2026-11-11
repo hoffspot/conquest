@@ -1493,8 +1493,18 @@ export class Game {
         this.accumulator = 0;
         this.lastFrame = 0;
 
-        /** When to draw the world: no oftener than the quality level does (app/pacing.js). */
+        /**
+         * When to draw the world: no oftener than the quality level does (app/pacing.js); and the
+         * beat, how often the browser's asking for frames (`pacing.beat`), which keeping up is
+         * judged against.
+         */
         this.pacing = new Pacing();
+
+        // (How long the last frame's own work took, and how long it spent building (#visit): the
+        // next frame comes the later for them, and is judged knowing it, #frame)
+        this.worked = 0;
+        this.built = 0;
+        this.budgetAbout = { beat: 0, step: 0 };
 
         /**
          * Keeping up (Game options: Adaptive, app/governor.js): from the quality chosen down, as a
@@ -1546,7 +1556,8 @@ export class Game {
                 actors: this.battle.actors.length,
                 avatars: this.avatars.size,
                 drawn: { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 },
-                frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render) },
+                // (And the beat: how many frames a second the browser's asking for, app/frames.js)
+                frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render), beat: one(1000 / this.pacing.beat.value) },
                 together: this.remote ? "joined" : this.hosting ? "hosting" : null,
                 // (Joined: how often its own hero, drawn ahead, has been put right, and by how much
                 // at most: app/forecast.js)
@@ -3702,6 +3713,11 @@ export class Game {
         const frameStart = performance.now();
         const elapsed = Math.max(0, (now - this.lastFrame) / 1000);
         const dt = Math.min(0.1, elapsed);
+        // (How often the browser's asking for frames, by how long after the last this one came
+        // and how long the game's own work took before it; and how long the frame before spent
+        // building, which this one came the later for: what keeping up is judged by, below)
+        const beat = this.pacing.beat.observe(now, elapsed * 1000, this.worked);
+        const built = this.built;
 
         this.lastFrame = now;
         telemetry.begin(frameStart);
@@ -3742,15 +3758,21 @@ export class Game {
 
         // (Less drawn while it can't keep up, more again when it can, if that's left to it:
         // Adaptive. In a crowded fight, those least seen drawn in their kind's crowd first,
-        // app/throng.js; then fewer pixels and a lower level, app/governor.js)
+        // app/throng.js; then fewer pixels and a lower level, app/governor.js. Both judged against
+        // the beat, and not by a frame that came late for the building before it)
         if (this.view.adaptive) {
-            const full = this.throng.observe(now, elapsed * 1000, this.throngCount);
+            const about = this.throngCount;
+
+            about.beat = beat;
+            about.built = built;
+
+            const full = this.throng.observe(now, elapsed * 1000, about);
 
             if (full !== null) {
                 this.throngClock = 0;
                 this.governor.hold(now);
             } else {
-                const rung = this.governor.observe(now, elapsed * 1000);
+                const rung = this.governor.observe(now, elapsed * 1000, about);
 
                 if (rung) {
                     this.adapt(rung);
@@ -3765,7 +3787,7 @@ export class Game {
         smooth("update", updated - frameStart);
         smooth("render", rendered - updated);
         this.stats.steps = steps;
-        this.#budget(now, elapsed * 1000, rendered - frameStart);
+        this.#budget(now, elapsed * 1000, rendered - frameStart, beat);
 
         if (steps) {
             this.#begin?.();
@@ -3786,13 +3808,15 @@ export class Game {
         // written down now and then, for a crash to be found by: just after the frame, not in it)
         telemetry.end(elapsed * 1000, this.telemetryState);
         telemetry.aliveSoon(this.telemetryState);
+        this.worked = performance.now() - frameStart;
     }
 
     // How big an invasion this device can draw (app/budget.js), from a frame's work (ms: updated
     // and drawn), told the host whenever it's changed enough: not while one's on (its frames
     // aren't what's measured), and not as the player's own doing (#command: nothing they were
-    // about, a journey or the way to a portal, given up for it)
-    #budget(now, interval, work) {
+    // about, a journey or the way to a portal, given up for it). The least, while the game's
+    // drawing less than the quality chosen to keep up, or its frames come well behind the `beat`
+    #budget(now, interval, work, beat) {
         if (this.host.invasions.length) {
             this.invasionBudget.hold();
 
@@ -3800,8 +3824,10 @@ export class Game {
         }
 
         this.device ??= detectQuality();
+        this.budgetAbout.beat = beat;
+        this.budgetAbout.step = this.view.adaptive ? this.governor.step : 0;
 
-        const size = this.invasionBudget.observe(now, interval, work, this.device);
+        const size = this.invasionBudget.observe(now, interval, work, this.device, this.budgetAbout);
 
         if (size !== null) {
             const command = { type: "budget", invasion: size };
@@ -4428,7 +4454,12 @@ export class Game {
         }
 
         telemetry.mark(PHASE.world);
+
+        // (How long the building took, for whoever judges how the game's keeping up: #frame)
+        const building = performance.now();
+
         this.#visit(dt);
+        this.built = performance.now() - building;
         this.#follow(dt);
         this.#inside(dt);
         telemetry.mark(PHASE.inside);

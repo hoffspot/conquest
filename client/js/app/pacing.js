@@ -6,8 +6,22 @@
 // every one at 90 (which has no even 60: never fewer frames than the rate asks for, rather than
 // uneven ones), and every one whenever drawing takes longer than the rate allows.
 
+//
+// The browser may ask for fewer than the screen shows: a phone saving its battery asks for 30 (an
+// iPhone's Low Power Mode), as a browser's energy saver does. That's the beat (app/frames.js Beat),
+// kept here from the frames drawn: 30 drawn on a beat of 30 is keeping up, and nothing's taken away
+// for it (app/governor.js, app/throng.js); Game options says so (`savingPower`).
+
+import { Beat } from "./frames.js";
+
 // A frame's drawn if it's come within this share of the screen's refresh of when one's due
 const WITHIN = 0.6;
+
+/**
+ * A beat (ms a frame) that's a device saving its power: the browser asking for about 30 frames a
+ * second (between 25 and 36), where the game draws 60.
+ */
+export const savingPower = (beat) => beat >= 1000 / 36 && beat <= 1000 / 25;
 
 // The screen's refresh is the shortest time between the browser's asking, over this many askings
 // (so it follows a phone's screen changing its rate)
@@ -18,6 +32,12 @@ export class Pacing {
     #index = 0;
     #asked = -Infinity;
     #drawn = -Infinity;
+
+    /**
+     * The beat of the frames drawn (frames.js Beat): told each frame drawn, with how long the
+     * game's own work before it took (app/game.js #frame), and what those keeping up judge by.
+     */
+    beat = new Beat();
 
     /** How long the screen shows each frame for (ms), as far as it's been seen; Infinity till it has. */
     get refresh() {
