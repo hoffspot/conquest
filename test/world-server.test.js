@@ -124,19 +124,27 @@ async function connect(server) {
     return game;
 }
 
+// How long a game may wait to be let into a world and welcomed (ms, by the clock). A world that
+// isn't running is made and restored first, in a thread of its own: about 7 seconds of the
+// processor's time over that thread and this (4 with its plan kept: test/plan-cache.js). By the
+// clock that takes as many times longer as the machine is busy, with the other test files beside
+// this one: at a load of 20 on 4 cores, 15 seconds wasn't enough, and half a minute might not be.
+// A minute is eight times what it takes, and still far short of a world that never comes
+const ENTERING = 60000;
+
 // Into a world by its session, hello'd with a hero (a slot, or "new"), and ready: the game, once welcomed
 async function play(server, world, session, { hero = "new", character = { hero: HERO } } = {}) {
     const game = await connect(server);
 
     game.send(`enter ${world} ${session}`);
-    await until(() => game.line("entered") || game.line("closed"), "entered");
+    await until(() => game.line("entered") || game.line("closed"), "entered", ENTERING);
 
     if (game.line("closed")) {
         return game;
     }
 
     game.say({ kind: "hello", version: NET_VERSION, character, hero });
-    await until(() => game.message("welcome") || game.message("refused"), "welcome");
+    await until(() => game.message("welcome") || game.message("refused"), "welcome", ENTERING);
     game.say({ kind: "ready" });
 
     return game;
@@ -185,7 +193,7 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         let game = await play(server, world.world, entered.json.session);
 
         assert.equal(game.message("welcome").id, `${entered.json.player}.1`);
-        assert.ok(Date.now() - started < 15000, "entered, the world made and restored, within a while");
+        assert.ok(Date.now() - started < ENTERING, "entered, the world made and restored, within a while");
         await until(() => server.registry.lifeOf(world.world).state?.running, "the clock to run");
         await wait(2000);
 
