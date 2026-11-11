@@ -705,4 +705,78 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.equal(entry.users, 0);
         assert.ok([...kit.eyes.values()].includes(entry), "kept a while");
     });
+
+    it("makes an outfit's picture, and each garment's, once for two in it built turn and turn about, and counts both its wearers", () => {
+        // (Two soldiers in one uniform, one put by for the other as a nearer one is: app/game.js
+        // #nextEnlistee. Each used to make the outfit's picture for itself)
+        const looks = [1, 2].map((seed) => soldierLook({ people: "human", weapon: "sword", seed }));
+        const outfitOf = (character) => character.garments.find(({ name }) => name === "garments").material;
+
+        assert.deepEqual(looks[0].equipment, looks[1].equipment, "one uniform");
+
+        for (const merge of [true, false]) {
+            const kit = kitOf();
+            const [a, b] = looks.map((look) => Character.building(kit, options(look, merge)));
+            let [first, second] = [a.next(), b.next()];
+
+            // (The first well into its garments' pictures, then the second from its start, in turns)
+            for (let k = 0; k < 40 && !first.done; k++) {
+                first = a.next();
+            }
+
+            while (!first.done || !second.done) {
+                second = second.done ? second : b.next();
+                first = first.done ? first : a.next();
+            }
+
+            const [one, two] = [first.value, second.value];
+
+            if (!merge) {
+                // (Garments drawn one by one: each one's material the kit's own, for both)
+                for (const mesh of one.garments) {
+                    assert.equal(mesh.material, kit.garmentMaterials.get(mesh.name), mesh.name);
+                    assert.equal(two.garments.find(({ name }) => name === mesh.name).material, mesh.material, mesh.name);
+                }
+
+                continue;
+            }
+
+            assert.equal(kit.composites.size, 1);
+
+            const entry = kit.composites.get(one.composite);
+
+            assert.equal(outfitOf(one), entry.value, "the first wears the kit's");
+            assert.equal(outfitOf(two), entry.value, "and so does the second");
+            assert.equal(entry.users, 2, "both counted");
+            assert.equal(kit.making.size, 0, "nothing left being made");
+
+            let disposed = 0;
+
+            entry.value.map.addEventListener("dispose", () => disposed++);
+            one.dispose();
+            assert.equal(entry.users, 1, "still worn by the second");
+            two.dispose();
+            assert.equal(entry.users, 0);
+            assert.equal(disposed, 0, "kept a while, for the next to wear it");
+        }
+    });
+
+    it("carries on making an outfit's picture begun by one who's given up on, for the next to want it", () => {
+        const kit = kitOf();
+        const given = Character.building(kit, options(soldier));
+
+        // (Begun, and stopped part way through its garments' pictures: app/game.js #unenlist)
+        for (let k = 0; k < 40; k++) {
+            assert.ok(!given.next().done);
+        }
+
+        assert.ok(kit.making.size > 0, "part made");
+
+        const next = allAtOnce(Character.building(kit, options(soldier)));
+        const whole = new Character(kitOf(), options(soldier));
+
+        assert.equal(kit.making.size, 0);
+        assert.equal(kit.composites.get(next.composite).users, 1);
+        assert.equal(hashOf(next), hashOf(whole), "the same as one built alone");
+    });
 });

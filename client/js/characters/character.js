@@ -71,6 +71,52 @@ const TORCH_TURN = 0.25;
 // (Given to the constructor by Character.building: built a step at a time there, not at once)
 const LATER = Symbol("later");
 
+// What's being made for a kit a step at a time (`making`: its steps, a generator's, which keep
+// what they make in the kit's cache as they end) and isn't done yet, by `name`: whoever wants it
+// meanwhile takes steps of the same making, each in its turn, till it's done. So two bodies in
+// one outfit built turn and turn about (app/game.js #nextEnlistee puts one by for a nearer one)
+// make its picture once between them: each used to look for it, find none, and make its own
+// over many steps, and the kit kept the second's, counting one wearer of it for the two (the
+// first's never let go of). Anything a kit keeps that's made across a yield is made through this
+function* shared(kit, name, making) {
+    kit.making ??= new Map();
+
+    let work = kit.making.get(name);
+
+    if (!work) {
+        work = { steps: making(), done: false, failed: null };
+        kit.making.set(name, work);
+    }
+
+    let told;
+
+    while (!work.done) {
+        // (Its making failed in another's turn: failed for everyone waiting on it)
+        if (work.failed) {
+            throw work.failed;
+        }
+
+        let step;
+
+        try {
+            step = work.steps.next(told);
+        } catch (error) {
+            // (Not left half made, for the next to want it to trip over: begun again, then)
+            work.failed = error;
+            kit.making.delete(name);
+
+            throw error;
+        }
+
+        if (step.done) {
+            work.done = true;
+            kit.making.delete(name);
+        } else {
+            told = yield step.value;
+        }
+    }
+}
+
 // Something made once for a kit and shared by the characters with it, by key (a cache of them:
 // { value, users }): made by `make` the first time it's wanted, if it isn't there already
 function take(cache, key, make) {
@@ -1302,52 +1348,64 @@ export class Character {
     }
 
     // The same, a step at a time (each a yield: its picture painted a few rows at a time, the
-    // first time), returning it
+    // first time), returning it. Painted once, whoever else wants it meanwhile (shared)
     *#readying(id) {
         const kit = this.kit;
-        const garment = GARMENTS[id];
 
         kit.garmentMaterials ??= new Map();
 
-        if (garment.base && !kit.garmentMaterials.has(id)) {
-            const material = (yield* this.#readying(garment.base)).clone();
-            const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
-
-            material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
-            kit.garmentMaterials.set(id, material);
-        }
-
-        if (garment.design && !kit.garmentMaterials.has(id)) {
-            kit.garmentMaterials.set(id, this.#designMaterial(garment));
-        }
-
-        if (!kit.garmentMaterials.has(id)) {
-            if (!kit.texelMap) {
-                kit.texelMap = texelMap(this.human, 512);
-                yield;
-            }
-
-            // (Painted on the body of the usual shape, as it's cut)
-            const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
-            const material = new THREE.MeshStandardMaterial({
-                map: dataTexture(painted.data, painted.size, true),
-                bumpMap: dataTexture(painted.bump, painted.size, false),
-                bumpScale: garment.metalness ? 0.6 : 1.5,
-                roughness: garment.roughness ?? 0.8,
-                metalness: garment.metalness ?? 0,
-                side: THREE.DoubleSide,
-            });
-
-            kit.garmentMaterials.set(id, material);
+        while (!kit.garmentMaterials.has(id)) {
+            yield* shared(kit, `garment ${id}`, () => this.#materialOf(id));
         }
 
         return kit.garmentMaterials.get(id);
     }
 
+    // A garment's material made, a step at a time, and kept by the kit (#readying)
+    *#materialOf(id) {
+        const kit = this.kit;
+        const garment = GARMENTS[id];
+
+        if (garment.base) {
+            const material = (yield* this.#readying(garment.base)).clone();
+            const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
+
+            material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
+            kit.garmentMaterials.set(id, material);
+
+            return;
+        }
+
+        if (garment.design) {
+            kit.garmentMaterials.set(id, this.#designMaterial(garment));
+
+            return;
+        }
+
+        if (!kit.texelMap) {
+            kit.texelMap = texelMap(this.human, 512);
+            yield;
+        }
+
+        // (Painted on the body of the usual shape, as it's cut)
+        const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
+        const material = new THREE.MeshStandardMaterial({
+            map: dataTexture(painted.data, painted.size, true),
+            bumpMap: dataTexture(painted.bump, painted.size, false),
+            bumpScale: garment.metalness ? 0.6 : 1.5,
+            roughness: garment.roughness ?? 0.8,
+            metalness: garment.metalness ?? 0,
+            side: THREE.DoubleSide,
+        });
+
+        kit.garmentMaterials.set(id, material);
+    }
+
     /**
      * The material of an outfit's garments drawn all at once (ids, outermost last): one picture of
      * them all (garments.js compositeGarments), its heights, roughness and metalness in another.
-     * Made once per kit for each outfit, and let go when no one's worn it for a while.
+     * Made once per kit for each outfit, whoever else comes to wear it while it's made (shared),
+     * and let go when no one's worn it for a while.
      */
     *#compositing(ids) {
         const kit = this.kit;
@@ -1355,51 +1413,58 @@ export class Character {
 
         kit.composites ??= new Map();
 
-        if (!kit.composites.has(key)) {
-            kit.texelMap ??= texelMap(this.human, 512);
-
-            // (Each garment's own picture painted, in steps the first time: then them all)
-            for (const id of ids) {
-                yield* this.#readying(id);
-                yield;
-            }
-
-            const layers = ids.map((id) => {
-                const garment = GARMENTS[id];
-                const material = this.#garmentMaterial(id);
-
-                return {
-                    data: material.map.image.data,
-                    bump: material.bumpMap.image.data,
-                    tint: garment.base ? material.color.toArray() : null,
-                    bumpScale: material.bumpScale,
-                    roughness: material.roughness,
-                    metalness: material.metalness,
-                    garment,
-                };
-            });
-            const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
-            const surfaceMap = dataTexture(surface, size, false);
-            const material = new THREE.MeshStandardMaterial({
-                map: dataTexture(data, size, true),
-                bumpMap: surfaceMap,
-                bumpScale: COMPOSITE_BUMP,
-                roughnessMap: surfaceMap,
-                roughness: 1,
-                metalnessMap: surfaceMap,
-                metalness: 1,
-                side: THREE.DoubleSide,
-            });
-
-            // (Metal and cloth both: wounds.js tells which is where)
-            material.userData.mixed = true;
-            kit.composites.set(key, { value: material, users: 0 });
-            yield;
+        while (!kit.composites.has(key)) {
+            yield* shared(kit, `outfit ${key}`, () => this.#picturing(key, ids));
         }
 
         this.composite = key;
 
         return take(kit.composites, key);
+    }
+
+    // An outfit's material made, a step at a time, and kept by the kit (#compositing)
+    *#picturing(key, ids) {
+        const kit = this.kit;
+
+        kit.texelMap ??= texelMap(this.human, 512);
+
+        // (Each garment's own picture painted, in steps the first time: then them all)
+        for (const id of ids) {
+            yield* this.#readying(id);
+            yield;
+        }
+
+        const layers = ids.map((id) => {
+            const garment = GARMENTS[id];
+            const material = this.#garmentMaterial(id);
+
+            return {
+                data: material.map.image.data,
+                bump: material.bumpMap.image.data,
+                tint: garment.base ? material.color.toArray() : null,
+                bumpScale: material.bumpScale,
+                roughness: material.roughness,
+                metalness: material.metalness,
+                garment,
+            };
+        });
+        const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
+        const surfaceMap = dataTexture(surface, size, false);
+        const material = new THREE.MeshStandardMaterial({
+            map: dataTexture(data, size, true),
+            bumpMap: surfaceMap,
+            bumpScale: COMPOSITE_BUMP,
+            roughnessMap: surfaceMap,
+            roughness: 1,
+            metalnessMap: surfaceMap,
+            metalness: 1,
+            side: THREE.DoubleSide,
+        });
+
+        // (Metal and cloth both: wounds.js tells which is where)
+        material.userData.mixed = true;
+        kit.composites.set(key, { value: material, users: 0 });
+        yield;
     }
 
     // No longer wearing the outfit whose picture it was drawn with: kept a while, for the next

@@ -811,7 +811,11 @@ slots, sockets and hidden skin.
    each garment's picture is painted for the usual shape, and cut where a player's own body put
    it, a surcoat's hem ran across its trim, ragged at the hips. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
    while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
-   metal from cloth by the metalness picture.
+   metal from cloth by the metalness picture. Whoever else comes to wear an outfit while its
+   picture's being made takes steps of the same making (`shared`), and so with each garment's:
+   two in one uniform built turn and turn about make it once between them and are both counted
+   wearing it (each used to make its own; the kit kept one, counted one wearer for the two, and
+   never let go of the other).
 
 **Built a step at a time.** Building someone takes a few hundred milliseconds on a desktop (their
 skin painted, hair grown, each garment fitted, their outfit's picture painted the first time it's
