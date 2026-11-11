@@ -5162,23 +5162,47 @@ test("the bars over others: each stays on the head it's over as the camera turns
     });
 
     await test.step("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async () => {
-        // Four slimes in a line the way the camera looks, 6, 24, 48 and 66 m ahead of the player (by
-        // day: full size within 12 m, gone at 60 m)
+        // Four slimes before the camera, 6, 24, 48 and 66 m from the player (by day: full size
+        // within 12 m, gone at 60 m), 20 degrees to one side of the way the camera looks and the
+        // other, turn about: in a line straight ahead, each one's bar lay over the next one's,
+        // and a bar more than half under another isn't shown (hud.js Covering), where this is of
+        // how big and how faint each is drawn
         await page.evaluate(() => {
             const { game, session } = window.pellagos;
             const me = game.battle.actor(game.me);
             const looking = session.view.camera.getWorldDirection(session.view.camera.position.clone());
             const length = Math.hypot(looking.x, looking.z);
+            const [ahead, across] = [[looking.x / length, looking.z / length], [-looking.z / length, looking.x / length]];
+
+            // (Where so far ahead of the player, the way the camera looks, and so far to its side, is)
+            window.before = (forward, sideways) => [me.x + ahead[0] * forward + across[0] * sideways, me.y + ahead[1] * forward + across[1] * sideways];
 
             game.stop();
             Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-            [6, 24, 48, 66].forEach((ahead, k) => {
-                const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
+            [6, 24, 48, 66].forEach((away, k) => {
+                const aside = ((k % 2 ? -20 : 20) * Math.PI) / 180;
+                const [x, y] = window.before(away * Math.cos(aside), away * Math.sin(aside));
 
                 game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
                 Object.assign(game.battle.actor(`slime${k}`), { x, y });
                 game.enlisting.push(`slime${k}`);
             });
+        });
+
+        // (Where each slime's bar is put on the screen, frame by frame, from the first: what the
+        // game tells the hud)
+        await page.evaluate(() => {
+            const { hud } = window.pellagos.game;
+            const place = hud.place.bind(hud);
+
+            window.barsPut = {};
+            hud.place = (id, point, options) => {
+                if (point && String(id).startsWith("slime")) {
+                    (window.barsPut[id] ??= []).push([point.x, point.y]);
+                }
+
+                return place(id, point, options);
+            };
         });
         expect(await playUntil(page, () => [0, 1, 2, 3].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
 
@@ -5234,16 +5258,33 @@ test("the bars over others: each stays on the head it's over as the camera turns
         expect(near.layer).toBeGreaterThan(middle.layer);
         expect(middle.layer).toBeGreaterThan(far.layer);
 
+        // Each bar was over its slime's head from the first frame it was put anywhere: none
+        // over a body the frame it's drawn, not yet stood on its ground, which put it far down
+        // the screen for a frame (and, there under a nearer one's, hidden for half a second after)
+        const put = await page.evaluate(() => window.barsPut);
+
+        for (const id of ["slime0", "slime1", "slime2"]) {
+            // (The frame after: the camera's still coming to rest behind the player meanwhile, a
+            // pixel or so a frame, where a bar put at no height was hundreds from its place)
+            const [first, next] = put[id];
+
+            expect(put[id].length).toBeGreaterThanOrEqual(2);
+            expect(Math.hypot(first[0] - next[0], first[1] - next[1]), `${id}: ${JSON.stringify(put[id].slice(0, 3))}`).toBeLessThan(10);
+        }
+
         // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
         expect(plates.stacking).toBe("0");
         expect(plates.each.slice(0, 3).map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
 
-        // The farthest seen comes near: its bar grows as it comes, to full size
+        // The farthest seen comes near: its bar grows as it comes, to full size. (To beside the
+        // nearest, 4 m further out to its side, where their two bars, each full size, lie clear
+        // of one another: a metre from it, the one would be under the other, and not shown)
         await page.evaluate(() => {
             const { game } = window.pellagos;
-            const [near, far] = [game.battle.actor("slime0"), game.battle.actor("slime2")];
+            const aside = (20 * Math.PI) / 180;
+            const [x, y] = window.before(6 * Math.cos(aside), 6 * Math.sin(aside) + 4);
 
-            Object.assign(far, { square: [near.square[0] + 1, near.square[1]], x: near.x + 1, y: near.y });
+            Object.assign(game.battle.actor("slime2"), { square: [Math.floor(x), Math.floor(y)], x, y });
         });
 
         // (Frame by frame, as its figure walks up)

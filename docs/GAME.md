@@ -7077,13 +7077,21 @@ the Bindings page till one's chosen.
    would lie under those before it isn't shown** (hud.js `Covering`): once more than half of it
    is under them (`PLATE_COVER.covered`; each bar's taken to be as big as its kind's drawn,
    `PLATE_BOX`, not measured on the page), so a file of soldiers seen end-on has a few bars, not
-   a stack of them. Never hidden: the bar of the one the player's set on, those of their party
-   and their own, and an attacker's. One hidden comes back only once less than three tenths of
+   a stack of them. Never hidden: the bar of the one the player's set on, those of the other
+   players in their party, those of their own (a hired adventurer, a creature tamed, called or
+   raised) and their party's own, and that of whoever's attacking them. One hidden comes back only once less than three tenths of
    it is covered (`clear`), and nothing changes twice within half a second (`hold`), so none
-   flickers as two change places. The party's icons are as they were. A soldier has a bar only
+   flickers as two change places. It's everyone's bar that's hidden so, not only a soldier's: a
+   wild creature's, a townsperson's, another player's, a fortification's. The party's icons
+   are as they were. A soldier has a bar only
    within 60 m of the player (and 6 m further once it has one; the one the player's set on
    wherever it is): a hundred in an invasion each had one in the page, most of them past where
-   a bar's drawn at all. Each bar
+   a bar's drawn at all. And no one has a bar on the frame they're put down (drawn that frame, or
+   come through a door: game.js `#place`, `#plated`): a body's stood on its ground as the frame's
+   bodies are gone through, and one put down after that is at no height yet, so its bar was
+   drawn for a frame wherever that put its head (hundreds of pixels down the screen, out on high
+   ground), and, lying there under someone else's, would be kept hidden for the half second
+   after. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's
    placed (view.js `#place`, and again as the greater spells shake it), not only as it's drawn, so
    a bar no longer trails its character by a frame as the camera turns (it shook, the more the
@@ -7988,7 +7996,8 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   seconds of frames; none kept for soldiers 200 m off; two foes brought within sight, one a
   hand's breadth behind the other, have bars again, the one the player's set on shown, lit and
   over them all and the other's under it not shown, and the other way about from the next frame
-  once they're set on the other.
+  once they're set on the other. And, of four slimes drawn before the camera, each one's bar is
+  over its head from the first frame it's put anywhere, none on the frame its body's drawn.
 - `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
   (`Character.merging`): the same mesh and the very same material as one dressed all at once;
   one by one till the one step that puts them together; in a step where someone else wears the
