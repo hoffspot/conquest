@@ -25,16 +25,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The browser tests' split (scripts/e2e-shard.js, .github/actions/e2e-share), the same in every
-# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (share
-# 9: about 13 minutes of its own first) and the unit tests' (share 10: about 20), so that every
-# job ends about together rather than two of them standing idle for half the run
+# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (the
+# last share but one: about 13 minutes of its own first) and the unit tests' (the last: about 20),
+# so that every job ends about together rather than two of them standing idle for half the run.
+# E2E_SHARES is the e2e jobs (the matrix's shards, below) and those two: for more or fewer e2e
+# jobs, change the matrix and E2E_SHARES together and nothing else (test/contribution.test.js
+# checks every share is one job's), but only once "ci" is the ruleset's one required check
+# (contribution.md, "The repository's settings"): until then each e2e job is required by name
 env:
   E2E_SHARES: 10
-  E2E_AHEAD: "9:13,10:20"
+  E2E_AHEAD: "last-1:13,last:20"
 
 jobs:
   # Lint and the unit tests (about 19½ minutes, four test files at a time on the runner's four
-  # threads), then its share of the browser tests (share 10: about 8 minutes)
+  # threads), then its share of the browser tests (the last share: about 8 minutes)
   test:
     runs-on: ubuntu-latest
     # (Sixty minutes is twice the longest it should take, and a little more; a job hung longer is
@@ -64,7 +68,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: ./.github/actions/e2e-share
         with:
-          share: 10
+          share: last
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
 
@@ -72,7 +76,7 @@ jobs:
   # of their builds, failing on anything worse than the baseline kept with it
   # (test/motion-baseline.json). About 8 to 13 minutes on a runner's 4 threads; its report is kept
   # with the run, for the contact sheet (motion-sheet.html, "Report"). Then its share of the
-  # browser tests (share 9: about 15 minutes)
+  # browser tests (the last share but one: about 15 minutes)
   motion:
     runs-on: ubuntu-latest
     # (Twice the longest it should take, and a little more)
@@ -106,7 +110,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: ./.github/actions/e2e-share
         with:
-          share: 9
+          share: last-1
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
 
@@ -148,3 +152,24 @@ jobs:
           share: ${{ matrix.shard }}
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
+
+  # Whether every job above passed, as one check: the one main's ruleset is to require
+  # (contribution.md, "The repository's settings"), in place of each job by its name, so that
+  # jobs here are added, renamed or made more of without a setting changed. A job added above
+  # goes in its needs (test/contribution.test.js checks every one is there). It runs whatever
+  # became of them (always()): left to itself it would be skipped when one of them failed, and
+  # GitHub takes a required check that was skipped as passed
+  ci:
+    needs: [test, motion, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # (Each job's result said, the e2e jobs' as one; then failed unless every one is "success":
+      # not failure, cancelled or skipped)
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null

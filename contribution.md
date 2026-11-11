@@ -17,20 +17,23 @@ you in every session).
 > file isn't ready to merge.
 >
 > **Only the owner (hoffspot) can change the repository's settings.** When a change needs one
-> changed (a CI job added, renamed or removed; a different number of browser test jobs; a new
-> rule for `main`), say so to the owner, with the exact steps, in the pull request and in your
-> session. Update the settings table in section 6 in the same pull request, and check that the
-> owner has made the change before it's merged. Whenever a setting is changed or added, the table
-> is updated to match.
+> changed (a new rule for `main`, a secret; and, until `ci` is the one required check there
+> (section 6, *One required check*), a CI job added, renamed or removed, or a different number
+> of browser test jobs), say so to the owner, with the exact steps, in the pull request and in
+> your session. Update the settings table in section 6 in the same pull request, and check that
+> the owner has made the change before it's merged. Whenever a setting is changed or added, the
+> table is updated to match.
 
 The rule is written down three times, so no one can miss it:
 
 - here;
 - in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
-- in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job or the Node
-  version changes and this file hasn't been updated to match, and when a CI job isn't among the
-  required checks in the settings table. That test is the part of the rule a machine can check;
-  everything else is up to you and your reviewer.
+- in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job, when CI
+  runs or the Node version changes and this file hasn't been updated to match; when CI's `ci` job
+  doesn't wait for every other job, or a share of the browser tests isn't exactly one job's; and
+  when the required checks in the settings table are neither `ci` alone nor every other job by
+  its name. That test is the part of the rule a machine can check; everything else is up to you
+  and your reviewer.
 
 ## What you need
 
@@ -113,15 +116,18 @@ job ends about together, about half an hour in.
 
 | CI job | What it runs | Locally |
 | --- | --- | --- |
-| `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, four files at a time); then its share of the browser tests (share 10, below) | `npm run check`, which runs both |
+| `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, four files at a time); then its share of the browser tests (the last share, below) | `npm run check`, which runs both |
 | `e2e` (8 jobs side by side) | the licensed models fetched, then each job's share of the Playwright browser tests (`e2e/*.spec.js`: shares 1 to 8, below) | `npm run test:e2e`, or only the tests you touched (below) |
-| `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report`. Then its share of the browser tests (share 9, with the licensed models) | `npm run check:motion` |
+| `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report`. Then its share of the browser tests (the last share but one, with the licensed models) | `npm run check:motion` |
+| `ci` | Nothing of its own. It waits for every job above, whatever becomes of them, and passes only if each one passed (not failed, cancelled or skipped); its log says how each ended. It's there to be the one check `main`'s ruleset requires (section 6, *One required check*) | All of the above |
 
 **The browser tests' shares.** They're split ten ways, by how long each took on CI
 (`scripts/e2e-shard.js`, `e2e/durations.json`): a share for each `e2e` job, and one each for the
 `motion` and `test` jobs once their own work's done, given that much less (`ci.yml`'s
-`E2E_SHARES` and `E2E_AHEAD`: `9:13,10:20`, the minutes each does first), so that every job ends
-about together. Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
+`E2E_SHARES` and `E2E_AHEAD`: `last-1:13,last:20`, the minutes each does first), so that every job
+ends about together. Those two take the last two shares however many there are (`last-1` and
+`last`, which the action makes numbers), so `E2E_SHARES` is always the `e2e` jobs and two more.
+Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
 share chosen and run), and its JSON report is kept with the run as `e2e-report-<share>`, failed
 or not: how long each test took there, to time them by (below). If the unit tests or the motion
 check take much longer or shorter, change their minutes in `E2E_AHEAD`.
@@ -554,8 +560,9 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about half an hour. A first-time contributor's
-   CI may wait for a maintainer to approve the run.
+3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about half an hour, then `ci`,
+   which says in a few seconds whether they all passed. A first-time contributor's CI may wait
+   for a maintainer to approve the run.
 4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
    failed. Don't push empty commits, or close and reopen the pull request, to set CI going again.
@@ -588,10 +595,11 @@ tick may no longer be true: the two changes can conflict, or each pass alone and
 
 GitHub enforces all of that. There's no merge queue, because that's only for repositories owned by
 an organisation and this one belongs to a person. These are the settings as they stand; keep this
-table current (the standing rule). They were last checked on 2026-10-16, when the private
-repository for the licensed models was set up: the ruleset and pull requests' settings read back
-as below; the secret shown by CI fetching the models with it; the deploy key read back by the
-owner.
+table current (the standing rule). The ruleset and pull requests' settings were last read back on
+2026-11-11, as below (`gh api repos/hoffspot/conquest/rulesets/24459327` and
+`gh api repos/hoffspot/conquest`). The secret and the deploy key were last checked on 2026-10-16,
+when the private repository for the licensed models was set up: the secret shown by CI fetching
+the models with it; the deploy key read back by the owner.
 
 | Where | Setting | As it is |
 | --- | --- | --- |
@@ -600,7 +608,7 @@ owner.
 | | Restrict deletions | On |
 | | Block force pushes | On |
 | | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |
-| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)` |
+| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`. To become `ci` alone: asked of the owner on 2026-11-11, and not done yet (below, *One required check*) |
 | | Require branches to be up to date before merging | On. With the required checks, it's why CI needn't run on `main` again after a merge (section 2): neither is turned off without `push: branches: [main]` put back into `ci.yml` first |
 | *Settings → General → Pull Requests* | Allow auto-merge | On |
 | | Always suggest updating pull request branches | On (the *Update branch* button) |
@@ -608,18 +616,46 @@ owner.
 | *Settings → Secrets and variables → Actions*, Repository secrets | `MODELS_DEPLOY_KEY` | The private half of the read-only deploy key on `hoffspot/conquest-models`, for the builds to fetch the licensed models (docs/LICENSED_MODELS.md). Set on 2026-10-16. `PELLAGOS_RELEASE_KEY`, for signing the world server's releases (`npm run release-key`), is the owner's to add when they make the release key |
 | `hoffspot/conquest-models` (private) → *Settings → Deploy keys* | `conquest builds (read only)` | Read-only, fingerprint `SHA256:IQCk0zNoVFZVfSDSwMVncAy0QPQEcYYLmMecRgDtCh8`. To change it: docs/LICENSED_MODELS.md, *Changing the key* |
 
-**Every CI job is a required check.** A job that's added must be added to the ruleset once it has
-run on a pull request (GitHub only offers checks it has seen). A job that's renamed or removed must
-be changed in or taken out of the ruleset, or every pull request waits for a check that never
-comes. The same goes for the number of `e2e` jobs: each is required by its name, `e2e (N of 8)`.
-Only the owner can make these changes, so ask them, with the steps:
+**One required check.** CI's `ci` job passes only if every other job did (section 2), so
+requiring it alone requires them all, whatever they're called and however many there are. That's
+how the ruleset is meant to be, and it isn't yet:
+
+- **As it is**, the ten jobs before `ci` are each required by name, and `ci` isn't. So a job
+  that's added, renamed or removed needs the ruleset changed with it, and so does the number of
+  `e2e` jobs (each is required as `e2e (N of 8)`), or every pull request waits for a check that
+  never comes.
+- **As it's to be**, `ci` is the only required check, and none of that needs a setting changed.
+
+Only the owner can change it. The steps, to take once the pull request that added `ci` is merged
+(any time after: until then nothing breaks, as the ten are still run and still required):
 
 1. *Settings → Rules → Rulesets → main → Require status checks to pass → Add checks*.
-2. Type the job's name, and choose the one from GitHub Actions. Remove any check that no longer
-   exists.
-3. *Save changes*.
+2. Type `ci`, and choose the one from GitHub Actions.
+3. Remove the other ten: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`.
+4. Leave *Require branches to be up to date before merging* ticked.
+5. *Save changes*.
 
-Then the routine is: *Update branch* on the pull request (it merges `main` in), then *Enable
+Then whoever asked reads it back (`gh api repos/hoffspot/conquest/rulesets/24459327`: its
+`required_status_checks` holds `ci` alone, and `strict_required_status_checks_policy` is true),
+and changes the table above to say so. A pull request opened before `ci` was added gets the job
+when it's brought up to date with `main`, as it must be to merge anyway.
+
+From then on:
+
+- A job added to `ci.yml` goes in the `ci` job's `needs`, and that's all
+  (`test/contribution.test.js` fails until it's there). A job in another workflow (`soak.yml`,
+  `mac.yml`) isn't required, as before.
+- The number of `e2e` jobs is two numbers in `ci.yml`, changed together: the `e2e` job's matrix
+  (`shard: [1, 2, ...]`) and `E2E_SHARES`, which is always two more than the matrix is long (the
+  `motion` and `test` jobs take the last two shares). The test fails if a share is left to no
+  job or given to two, and until this file gives the new number of jobs. The review of
+  2026-11-11 worked out, from how fast 430 of CI's runners had been, that with 18 of them
+  (`shard` 1 to 18, `E2E_SHARES: 20`) a run would end in a median 27 minutes, not 52. A run is
+  then 20 jobs at once, which is all GitHub gives the account, so two pull requests' runs at
+  once wait on each other. **Not before the ruleset is changed:** every pull request would wait
+  for `e2e (1 of 8)` and the rest, which would never come.
+
+**The routine for a pull request** is: *Update branch* on it (it merges `main` in), then *Enable
 auto-merge*. GitHub merges the pull request once it's green on that up-to-date head. If `main`
 moves first, update the branch again.
 
@@ -676,7 +712,8 @@ A good first message in a session:
 | `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |
 | A conflict in `manifest.js`, `assets.js`, `index.html`'s import map, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
 | The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
-| A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
+| A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI doesn't run there. If it's `ci`, the branch is older than the job: bring it up to date with `main`. If it's another, a job was renamed or removed, or the number of `e2e` jobs changed, while each was still required by name: the owner updates the ruleset (section 6, *One required check*) |
+| The `ci` job failed | It runs nothing of its own: its log says which job didn't pass (failed, cancelled or skipped). Look at that one. *Re-run failed jobs* runs it and `ci` again |
 | A job failed at *Install Chromium for the browser tests* after three 5-minute tries, or an `e2e` job was ended at 80 minutes | Playwright's download hung: not your change. *Re-run failed jobs* on the run. If its log says a library is missing, the runner's image changed: CI installs Chromium without `--with-deps` (apt-get there has hung for good), so add the library to the step |
 | A job was still running its browser tests when it was ended, or the jobs end far apart | Tests added without being timed each count for the median (about 40 s), so a job can get more than its share of slow ones: time them by the run's reports (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If the unit tests or the motion check have grown, change their minutes in `ci.yml`'s `E2E_AHEAD`. If every job has grown, raise `timeout-minutes` in `ci.yml` to twice the longest, and say why in the pull request |
 | Another CI job "has exceeded the maximum execution time" | It ran twice as long as it ever has. A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
