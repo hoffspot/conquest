@@ -25,6 +25,12 @@ const LEG = /^(Left|Right)(UpLeg|Leg)$/;
 const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
 
 /**
+ * How many bodies have been measured (measureBody), for the tests: one for each kit (its body of
+ * the usual shape) and one for each body that's worn a skirt, a gown or an apron, and no others.
+ */
+export const MEASURED = { bodies: 0 };
+
+/**
  * Measurements of the body at every vertex, for garments' regions: { region ("head", "torso",
  * "arm", "hand", "leg", "foot": by the bone that moves it most), armShare and legShare (how much
  * of it moves with the arm's bones, the hand's included, and the leg's, the foot's included: 0
@@ -35,6 +41,9 @@ const FOOT = /^(Left|Right)(Foot|ToeBase)$/;
  */
 export function measureBody(character) {
     const { human, rig, positions } = character;
+
+    MEASURED.bodies++;
+
     const head = (name) => rig.heads[rig.index.get(name)];
     // (Half way up the neck, where MakeHuman's neck bone starts: up Vitruvian's, which starts at
     // the neck's foot)

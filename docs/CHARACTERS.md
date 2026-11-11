@@ -349,7 +349,8 @@ numbered as Microsoft's are), enough for talking:
   the base body), so a closed lid is lit as one, not as the fold it was. Each vertex's slot in it
   is an attribute (`faceSlot`, -1 for none); a character's skin, lashes and mouth's inside add up
   its expressions' moves and turns before skinning, by its own weights (a uniform): one more
-  texture read in their shaders (16 at most, as an iPhone allows, still).
+  texture read in their shaders (16 at most, as an iPhone allows, still). The page's copy of the
+  texture is let go of once it's on the graphics card, where alone it's read.
 - **Where they're shown.** Every character on the game's body with its own skin (a beast's hide
   shows none, nor does MakeHuman's body, which has no expressions): updated as its body's posed
   (`Avatar.update`: less often far off). A shadow isn't moved by them (three.js's depth material
@@ -836,7 +837,9 @@ still dressed at once. `new Character(...)`, `setLook` and `setEquipment` take
 every step at once, as before (the paperdoll, and the character maker as a character's changed;
 its new character's built a step at a time while the title's up: GAME.md, *Making a character*). Its hair is grown once: under a
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
-again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
+again for anyone carrying anything). A body's own measurements (`measureBody`: 13 to 34 ms, and
+5 MB of short-lived objects) are taken only when a skirt, a gown or an apron is built for it,
+which alone hang by them: every body was measured as it was dressed, soldiers too. Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
 
 **Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
@@ -987,7 +990,9 @@ cloth round the body:
   on them a third of the way to the hem). Its sides go with their own legs; its front and back
   with four bones of its own (`DRAPE_BONES`, after the body's in its own skeleton:
   `drapeSkeleton`, swung each time it's drawn, as three.js updates a skeleton before drawing what
-  it moves):
+  it moves; how far each swings worked out only when the legs have been posed since it last was,
+  30 to 35 µs each time, and between poses, most frames for most bodies, the cloth put where
+  the pelvis is now swung as it was):
   - **Above the knees**, its front swings forward about the middle of the hips as far as the
     thigh swung furthest forward from where it rests (in the pelvis's frame), and its back as far
     back as the one swung furthest back; further if a leg below needs it to keep inside.

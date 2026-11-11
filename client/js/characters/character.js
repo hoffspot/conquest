@@ -41,8 +41,12 @@ const DRAWN = ["body", "eyes", "lashes", "mouth"];
 // way round has its wearer running with their heels kept low (Character.robed)
 const ROBED = 0.9;
 
-// Each body's bones and weights at each of its drawn vertices (its human's: the same for everyone
-// of it, whatever their shape), worked out once and shared, as its eyelashes' layout is
+// What's the same at each drawn vertex of every body of a human's data, whatever its shape: where
+// its picture is (its eyelashes' laid out for their strands: lashes.js), its bones and weights,
+// and where its face's moves are kept (expressions.js: for a body with them). Worked out once,
+// and one attribute of each for all of them, so the graphics card's given each once: 0.33 MB a
+// body, sent for every body before. { uv, skinIndex, skinWeight, faceSlot }
+const SHARED = ["uv", "skinIndex", "skinWeight", "faceSlot"];
 const skinnings = new WeakMap();
 
 function skinningOf(human) {
@@ -50,15 +54,35 @@ function skinningOf(human) {
         const count = human.renderSource.length;
         const skinIndex = new Uint8Array(count * 4);
         const skinWeight = new Uint8Array(count * 4);
+        const faces = expressionData(human);
 
         human.renderSource.forEach((v, r) => {
             skinIndex.set(human.skinIndices.subarray(v * 4, v * 4 + 4), r * 4);
             skinWeight.set(human.skinWeights.subarray(v * 4, v * 4 + 4), r * 4);
         });
-        skinnings.set(human, { skinIndex, skinWeight });
+        skinnings.set(human, {
+            uv: new THREE.BufferAttribute(lashUVs(human), 2),
+            skinIndex: new THREE.BufferAttribute(skinIndex, 4),
+            skinWeight: new THREE.BufferAttribute(skinWeight, 4, true),
+            faceSlot: faces ? new THREE.BufferAttribute(faces.slotOf, 1) : null,
+        });
     }
 
     return skinnings.get(human);
+}
+
+/**
+ * A body's geometry (Character's `geometry`) let go of: but what it shares with every other body
+ * of its data (SHARED), taken off it first. three.js lets go of the graphics card's copy of every
+ * attribute a geometry has as the geometry's let go of, whoever else has it, and the others'
+ * would be sent again each time one went.
+ */
+function disposeBody(geometry) {
+    for (const name of SHARED) {
+        geometry.deleteAttribute(name);
+    }
+
+    geometry.dispose();
 }
 
 // How a carried torch's shaft lies across the palm (radians from straight across, towards the
@@ -524,7 +548,10 @@ export class Character {
         // the usual shape, as its picture is painted, so its trims are along its edges
         yield;
 
-        const measures = measureBody(this);
+        // (Its own measurements: only what hangs from it goes by them, a skirt, a gown or an
+        // apron, so it's measured when the first of those is built: 13 to 34 ms and 5 MB of
+        // short-lived objects, for every soldier that never wore one)
+        let measures = null;
         const built = yield* fittingOutfit(this, garmentIds, referenceMeasures(this.kit));
 
         yield;
@@ -631,7 +658,7 @@ export class Character {
         for (const id of [...drapeIds].sort((a, b) => Number(skirtUnder(a, drapeIds) !== null) - Number(skirtUnder(b, drapeIds) !== null))) {
             yield;
 
-            const { geometry, profile, shown, levels } = buildDrape(this, id, measures, drapeIds, worn);
+            const { geometry, profile, shown, levels } = buildDrape(this, id, (measures ??= measureBody(this)), drapeIds, worn);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;
@@ -1657,20 +1684,16 @@ export class Character {
         const human = this.human;
         const count = human.renderSource.length;
         const geometry = new THREE.BufferGeometry();
-        const { skinIndex, skinWeight } = skinningOf(human);
+        const shared = skinningOf(human);
 
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-        // (Its eyelashes' laid out for their strands: lashes.js)
-        geometry.setAttribute("uv", new THREE.BufferAttribute(lashUVs(human), 2));
-        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
-        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4, true));
 
-        // (Where each vertex's moves are kept for its face's expressions: the kit's, shared)
-        const faces = expressionData(human);
-
-        if (faces) {
-            geometry.setAttribute("faceSlot", new THREE.BufferAttribute(faces.slotOf, 1));
+        // (The same for every body of its data: theirs too, not its own. disposeBody)
+        for (const name of SHARED) {
+            if (shared[name]) {
+                geometry.setAttribute(name, shared[name]);
+            }
         }
 
         this.geometry = geometry;
@@ -1962,7 +1985,7 @@ export class Character {
         this.disposed = true;
         this.#forget();
         this.pictures.small = null;
-        this.geometry.dispose();
+        disposeBody(this.geometry);
 
         // (The skeleton's bone texture, made when it was first drawn)
         this.rig.skeleton.dispose();

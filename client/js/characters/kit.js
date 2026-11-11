@@ -94,5 +94,13 @@ export function heldByKit(kit) {
     // (The atlas's gutter is a list of numbers)
     bytes += (Array.isArray(kit.atlas?.gutter) ? kit.atlas.gutter.length : 0) * 8;
 
+    // (Its faces' moves, till they're on the graphics card; and what its wounds are painted by,
+    // world/wounds.js: where each texel is is the wardrobe's too, counted there)
+    count(expressionData(kit.human)?.texture.image?.data);
+
+    for (const value of Object.values(kit.woundMap ?? {})) {
+        count(value);
+    }
+
     return bytes;
 }

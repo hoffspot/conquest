@@ -7050,8 +7050,10 @@ picture, which outfits are put together from, is kept on the page till it's been
 minute, then painted again when it's wanted (characters/wardrobe.js; CHARACTERS.md, *What the kit
 lets go of*). Not the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged,
 cloned, posed or bent. What each body keeps that's the same for every body of its build is kept once for them all:
-its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
-coordinates are), and the moves' compiled tracks only once a move's first played (characters/
+its skin's bones and weights as drawn, where its picture is and where its face's moves are kept
+(`skinningOf`, by the body's data: one attribute of each for every body, so the graphics card's
+given each once, 0.33 MB a body before; taken off a body's geometry before that's let go of, as
+three.js lets go of the graphics card's copy of every attribute a geometry has), and the moves' compiled tracks only once a move's first played (characters/
 actions.js `tracksOf`: all of them were compiled as the page loaded before), each track's numbers
 in one run, key after key (`compile`, `width` of them a key), not an array for each key: tens of
 thousands of little arrays, 12.4 MB for every attack, rest, emote, draw and put-away, 3.3 MB so,

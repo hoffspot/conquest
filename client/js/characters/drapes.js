@@ -659,7 +659,10 @@ const lean = (from, to, back = null, out = null) => {
  * puts the middle of the knees, hangs straight down unless a leg below the knee (halfway down its
  * shin, its ankle, heel or toes: CLEAR) would come out through the cloth's front (`profile`, from
  * buildDrape: where it is at the legs ring by ring, as it rests), when it's swung forward just as
- * far as keeps it in. Its back's the same, back. `swing()` does it without drawing.
+ * far as keeps it in. Its back's the same, back. `swing()` does it without drawing. How far each
+ * swings is worked out only when the legs have been posed since it last was (`worked`: how many
+ * times it has been): most bodies are posed every second to fourth frame (world/avatar.js
+ * POSING), and till they are again the cloth's put where the pelvis is now, swung as it was.
  */
 export function drapeSkeleton(rig, profile = []) {
     const own = DRAPE_BONES.map((name) => Object.assign(new THREE.Bone(), { name: `drape ${name}` }));
@@ -712,6 +715,40 @@ export function drapeSkeleton(rig, profile = []) {
 
     const update = skeleton.update.bind(skeleton);
     const measured = {};
+
+    // The legs as they were when the swing was last worked out (each of their bones' own place and
+    // turn, in its parent's frame, and how big the body is: all the swing goes by), and how far
+    // each of its own bones was swung then (its front's thigh and shin, then its back's)
+    const posed = new Float64Array(legs.length * 7 + 1).fill(NaN);
+    const swings = [0, 0, 0, 0];
+
+    // Whether the legs have been posed since (and how they are now kept, to tell the next time).
+    // (How big the body is comes out of where its pelvis is in the world, and a hair different as
+    // that turns: the same within a millionth)
+    const moved = (size) => {
+        let changed = !(Math.abs(posed[posed.length - 1] - size) <= size * 1e-6);
+
+        if (changed) {
+            posed[posed.length - 1] = size;
+        }
+
+        for (let k = 0; k < legs.length; k++) {
+            const { position, quaternion } = rig.bones[legs[k]];
+
+            changed ||= posed[k * 7] !== position.x || posed[k * 7 + 1] !== position.y || posed[k * 7 + 2] !== position.z || posed[k * 7 + 3] !== quaternion.x || posed[k * 7 + 4] !== quaternion.y || posed[k * 7 + 5] !== quaternion.z || posed[k * 7 + 6] !== quaternion.w;
+            posed[k * 7] = position.x;
+            posed[k * 7 + 1] = position.y;
+            posed[k * 7 + 2] = position.z;
+            posed[k * 7 + 3] = quaternion.x;
+            posed[k * 7 + 4] = quaternion.y;
+            posed[k * 7 + 5] = quaternion.z;
+            posed[k * 7 + 6] = quaternion.w;
+        }
+
+        return changed;
+    };
+
+    skeleton.worked = 0;
     const keeping = [0, 1].flatMap((side) => [
         [_feet[side * 3], CLEAR.shin],
         [_at[4 + side], CLEAR.ankle],
@@ -753,6 +790,23 @@ export function drapeSkeleton(rig, profile = []) {
         rig.bones[hips].matrixWorld.decompose(_from, _pelvis, _scale);
         _back.copy(_pelvis).invert();
 
+        // (Not posed since its swing was worked out: where the pelvis is now, swung as it was)
+        if (!moved(_scale.x)) {
+            _hips.addVectors(_at[0], _at[1]).multiplyScalar(0.5);
+
+            for (let k = 0; k < 2; k++) {
+                _turn.setFromAxisAngle(_axis, -swings[k * 2]).premultiply(_pelvis);
+                own[k * 2].matrixWorld.compose(_hips, _turn, _scale);
+                _from.copy(_knees).multiply(_scale).applyQuaternion(_turn).add(_hips);
+                _turn.setFromAxisAngle(_axis, -swings[k * 2 + 1]).premultiply(_pelvis);
+                own[k * 2 + 1].matrixWorld.compose(_from, _turn, _scale);
+            }
+
+            return;
+        }
+
+        skeleton.worked++;
+
         // What of the legs below the knees keeps the cloth off: halfway down each shin, its
         // ankle, heel and toes' tips
         for (const side of [0, 1]) {
@@ -777,8 +831,13 @@ export function drapeSkeleton(rig, profile = []) {
             _turn.setFromAxisAngle(_axis, -swung).premultiply(_pelvis);
             thigh.matrixWorld.compose(_hips, _turn, _scale);
             _from.copy(_knees).multiply(_scale).applyQuaternion(_turn).add(_hips);
-            _turn.setFromAxisAngle(_axis, -pick(0, keep(_from, middle.knees, pick, way, false) ?? 0)).premultiply(_pelvis);
+
+            const below = pick(0, keep(_from, middle.knees, pick, way, false) ?? 0);
+
+            _turn.setFromAxisAngle(_axis, -below).premultiply(_pelvis);
             shin.matrixWorld.compose(_from, _turn, _scale);
+            swings[way > 0 ? 0 : 2] = swung;
+            swings[way > 0 ? 1 : 3] = below;
         }
     };
 

@@ -38,7 +38,7 @@ const { HumanData } = await import("../client/js/characters/body.js");
 const { Character } = await import("../client/js/characters/character.js");
 const { isMouth } = await import("../client/js/characters/mouth.js");
 const { buildHair, growingHair } = await import("../client/js/characters/hair.js");
-const { buildGarment, compositeGarments, compositingGarments, fittingGarment, GARMENTS, paintGarment, paintingGarment, texelMap } = await import("../client/js/characters/garments.js");
+const { buildGarment, compositeGarments, compositingGarments, fittingGarment, GARMENTS, MEASURED, paintGarment, paintingGarment, texelMap } = await import("../client/js/characters/garments.js");
 const { folkLook } = await import("../client/js/characters/folk.js");
 const { paintingSkin, paintSkin, SkinAtlas } = await import("../client/js/characters/skin.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
@@ -205,7 +205,7 @@ describe("characters built a step at a time (Character.building)", () => {
         assert.ok(faces && character.expressions && other.expressions);
         assert.notEqual(character.expressions.weights, other.expressions.weights);
         assert.equal(character.geometry.attributes.faceSlot.array, faces.slotOf);
-        assert.notEqual(character.geometry.attributes.faceSlot, other.geometry.attributes.faceSlot, "each geometry its own attribute (they're let go of with it)");
+        assert.ok(character.geometry.attributes.faceSlot === other.geometry.attributes.faceSlot, "one attribute for every body, sent once (taken off a body's geometry before that's let go of)");
 
         // Its mouth's inside drawn (its own group, with its own material: not from afar, below)
         const mouth = character.geometry.groups.find(({ materialIndex }) => character.mesh.material[materialIndex] === character.materials.mouth);
@@ -760,6 +760,61 @@ describe("characters built a step at a time (Character.building)", () => {
             assert.equal(entry.users, 0);
             assert.equal(disposed, 0, "kept a while, for the next to wear it");
         }
+    });
+
+    it("gives the graphics card once what's the same for every body: where its picture is, its bones and weights, where its face's moves are", () => {
+        const kit = kitOf();
+        const [one, two] = [new Character(kit, options(soldier)), new Character(kit, options(wench))];
+        const shared = ["uv", "skinIndex", "skinWeight", ...(one.geometry.attributes.faceSlot ? ["faceSlot"] : [])];
+
+        // (An attribute's sent once, whichever geometries have it: one each, for them all)
+        for (const name of shared) {
+            assert.ok(one.geometry.attributes[name] === two.geometry.attributes[name], name);
+        }
+
+        for (const name of ["position", "normal"]) {
+            assert.ok(one.geometry.attributes[name] !== two.geometry.attributes[name], name);
+        }
+
+        assert.ok(one.geometry.index !== two.geometry.index);
+
+        // One let go of: three.js lets go of the graphics card's copy of every attribute a geometry
+        // has as it's disposed, so what's shared is off it by then, and the other has it still
+        let left = null;
+
+        one.geometry.addEventListener("dispose", () => (left = Object.keys(one.geometry.attributes)));
+        one.dispose();
+        assert.deepEqual(left, ["position", "normal"]);
+
+        for (const name of shared) {
+            assert.ok(two.geometry.attributes[name].array.length > 0, name);
+            assert.ok(new Character(kit, options(soldier)).geometry.attributes[name] === two.geometry.attributes[name], name);
+        }
+    });
+
+    it("measures a body only when it wears a skirt, a gown or an apron, which hang by its measurements", () => {
+        const kit = kitOf();
+        const porter = folkLook({ role: "townsfolk", look: "porter", sex: "f", seed: 7 });
+
+        assert.ok(porter.equipment.includes("skirt") && porter.equipment.includes("apron"));
+
+        // (The kit's body of the usual shape measured once, for what garments are cut to)
+        new Character(kit, options(soldier));
+
+        const before = MEASURED.bodies;
+
+        new Character(kit, options(soldier));
+        new Character(kit, options(soldier, false));
+        allAtOnce(Character.building(kit, options(soldier)));
+        assert.equal(MEASURED.bodies, before, "no soldier's");
+
+        const woman = new Character(kit, options(porter));
+
+        assert.equal(MEASURED.bodies, before + 1, "once, for her skirt and her apron");
+        woman.setEquipment(porter.equipment.filter((id) => id !== "skirt" && id !== "apron"));
+        assert.equal(MEASURED.bodies, before + 1);
+        woman.setEquipment(porter.equipment);
+        assert.equal(MEASURED.bodies, before + 2, "dressed in them again");
     });
 
     it("carries on making an outfit's picture begun by one who's given up on, for the next to want it", () => {
