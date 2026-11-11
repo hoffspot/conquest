@@ -121,7 +121,7 @@ import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 223;
+export const NET_VERSION = 224;
 
 /**
  * How many steps the host plays between telling how the world should stand (a fifth of a second:

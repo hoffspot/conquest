@@ -734,7 +734,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 52;
+export const SNAPSHOT_VERSION = 53;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its

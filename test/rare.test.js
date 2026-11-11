@@ -617,7 +617,7 @@ describe("rare encounters in play (host.js)", () => {
         const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
 
         assert.deepEqual(again.legends.toJSON(), host.legends.toJSON());
-        assert.equal(SNAPSHOT_VERSION, 52);
+        assert.equal(SNAPSHOT_VERSION, 53);
 
         // (A world kept before: none met, none out; its players' progress none either)
         const old = { ...host.snapshot(), version: 46 };
