@@ -7080,7 +7080,16 @@ every material: in a town of 13 bodies, 0.34 ms where it took 0.88.
 nothing), what the graphics card's been given (world/gpumemory.js: buffers, pictures with their
 levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
 give it them and take them back, wrapped on the context; never a frame's draws, so it costs
-nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
+nothing a frame. A compressed picture, a bought model's or a prop's, is counted by its blocks,
+16 bytes or 8 for each 4 by 4 texels or more, as three.js r186 gives it: storage for every level
+with the compressed format, then each level's blocks. It was counted at four bytes a texel, a
+format the counter didn't know, so a 1024 by 1024 picture with its mipmaps came to 5.33 MB
+where it holds 1.33 (0.67 in ETC2 without alpha), and the crash reports' graphics card totals
+were that much too high wherever bought models and kits were in view: the memory guard's marks
+were set against those. And a buffer that's gone with nothing said is counted out once the
+browser collects it (a `FinalizationRegistry`): three.js gives one back only when its geometry's
+disposed of, and a body's index, made again as what it wears changes, is simply let go, so the
+count only grew, 3.5 MB over 24 bodies), the sounds' decoded copies and the samples and recordings kept to make them
 (audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of; the
 recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a budget*, under
 *Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
@@ -7430,7 +7439,13 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/gpumemory.test.js`: what the graphics card's been given to hold: buffers given data or a
   size, given again and given back; pictures by format, levels and faces (given whole, by size, as
   storage, compressed, with their mipmaps), given back; render targets with their samples; each
-  format's bytes a texel; nothing once the drawing's lost.
+  format's bytes a texel; nothing once the drawing's lost; a compressed picture given as three.js
+  gives it (storage for every level, then each level's blocks) counted by its blocks, 1.33 MB
+  for a 1024 one in ASTC, BC7 or ETC2 with alpha and half that without, a cube's faces and an
+  array's layers, a level smaller than a block still a block, and every compressed format
+  three.js can ask WebGL for known (found by its names for them: a newer three.js with one more
+  fails there); and a buffer, a picture and a render buffer gone with nothing said counted out
+  once the garbage collector's run, not one given back since nor one of a drawing lost.
 - `test/release.test.js`: a mesh's attributes and index let go of as each is uploaded, its bounds
   worked out first and how many corners it has still known; a picture's pixels once uploaded, and
   whatever else held them, what it was told before still told, and a picture waiting for its pixels
