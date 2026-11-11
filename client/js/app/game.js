@@ -2252,6 +2252,8 @@ export class Game {
             landAt: (x, z) => world.maps?.town?.biomeAt?.(x, z) ?? "meadow",
             // (Its houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
             burntOf: (index) => this.#burntStage(world.start?.id, index),
+            // (Its trees planted with the world's, each variant kept once: trees.js Woodland)
+            woodland: this.chunks?.woodland ?? null,
             onProgress: (count) => {
                 done = built + count;
                 report(count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`);

@@ -1,7 +1,8 @@
 // The town in 3D: every piece of the town's layout (houses, the tavern, church and blacksmith,
 // props, trees: core/setpieces/town.js) built by the art kits (art/kits), each turned about its
 // middle to face its street, with the trees in the fields round it, merged into as few meshes as
-// possible (the trees a tile of the map at a time, so those out of view aren't drawn: trees.js).
+// possible (the trees planted in the world's woodland, each variant kept once; or, with no world
+// round it, in the labs, merged a tile of the map at a time: trees.js).
 // The world round it is drawn a chunk at a time (chunks3d.js).
 //
 // The kits build facing south, in the art's world pixels (a plot is 20, x east, y up and z south),
@@ -128,9 +129,10 @@ export function heightMap([x0, z0, width, height]) {
  * own. `onProgress(done, total)` hears as each piece is built; `landAt(x, z)` says what land
  * (BIOMES id) a tree stands in, its leaves coloured as the land colours them (canopy.js);
  * `burntOf(index)` how far on a house of its layout's is from being burnt (core/burnt.js stageOf's),
- * or null.
+ * or null; `woodland` the world's trees' batches (trees.js Woodland: chunks3d.js's), its trees
+ * planted in them with the world's, or (without one: the labs) merged a tile at a time.
  */
-export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow", burntOf = () => null } = {}) {
+export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow", burntOf = () => null, woodland = null } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     // (The yards behind its houses too, standing on the ground as it lies under each: kits/yards.js)
@@ -189,10 +191,14 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     await breathe();
 
-    const trees = plantTrees(
-        planted.map((tree) => ({ ...tree, tint: canopyTint(landAt(tree.x, tree.z), VARIANTS[tree.variant % VARIANTS.length][0], tree.x, tree.z) })),
-        { groundAt },
-    );
+    // (In the world's woodland where there is one: each variant kept once and drawn wherever it
+    // stands, the same wood, leaves and tint, each tree culled on its own, and its box just as it
+    // was. Merged, every tree was a copy of its variant's corners: 14 MB for a town's 124 trees,
+    // on the page and again on the graphics card)
+    const placements = planted.map((tree) => ({ ...tree, tint: canopyTint(landAt(tree.x, tree.z), VARIANTS[tree.variant % VARIANTS.length][0], tree.x, tree.z) }));
+    const trees = woodland ? woodland.plant(placements, groundAt, { fitted: true }) : plantTrees(placements, { groundAt });
+
+    trees.object.name = "trees";
 
     art.updateMatrixWorld(true);
 
@@ -269,7 +275,9 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     object.name = "town";
 
-    for (const mesh of trees.object.children.filter(({ userData }) => !userData.onGround)) {
+    // (Cut through where they hide the player: the woodland's own wood and leaves too, the same
+    // materials, as chunks3d.js has them already)
+    for (const mesh of [...trees.object.children.filter(({ userData }) => !userData.onGround), ...(woodland ? [woodland.wood, woodland.leaves] : [])]) {
         cutAway(mesh.material);
     }
 

@@ -2835,8 +2835,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
-  patches round the feet merged a chunk at a time. Merged a chunk at a time as the town's are, a
-  wood of 25 chunks would take 100 megabytes or more.
+  patches round the feet merged a chunk at a time. Merged a chunk at a time, as the start
+  town's were (they're planted here with the rest now: *The town*), a wood of 25 chunks would
+  take 100 megabytes or more.
 
 - **The settlements' buildings, props and trees**: each piece whose middle is in the chunk,
   built by the art kits as the town's are and merged with the one material (the atlas, above);
@@ -4005,10 +4006,17 @@ facing south; each is turned about its middle to face the way the layout says:
   side by side on one picture), so every tree shares three materials. The leaves stir in a
   breeze (`TREE_WIND`: each part of a crown in its own time, more the higher up), and anything
   of a tree within 3 to 7 metres of the camera fades out in a dithered pattern, so the camera
-  never looks through a wall of leaves. Planted (`plantTrees`), the trees are merged a tile of
-  the map 24 metres square at a time, so the camera and the sun's shadows draw only the tiles in
-  view (about 250,000 to 300,000 triangles a frame, shadows included, on the market square or at
-  the forest's edge); the crowns' shells and the patches round the feet are one mesh each.
+  never looks through a wall of leaves. The start town's trees are planted with the world's
+  (`buildTown`'s `woodland`, the chunks' `Woodland`: each variant kept once and drawn wherever
+  it stands, each tree culled on its own), its crowns' shells and the patches round its feet one
+  mesh each. They were merged, a copy of its variant's wood and leaves for every tree, a tile of
+  the map 24 metres square at a time (`plantTrees`, which the labs, having no chunks, still
+  use): for a town's 124 trees (seed 2) 14.3 MB of corners on the page, and as much again on the
+  graphics card as its tiles came into view. Planted either way a tree's the same: the same
+  materials, every corner where its merged copy had it (to a fifth of a millimetre: the batch's
+  matrices are 32-bit floats), lit and tinted the same, and its box, which says how high it
+  stands on each square for the camera's cut-away, the same to the bit (`Woodland.plant`'s
+  `fitted`).
 
 The world round the town, its trees too, is drawn a chunk at a time (world/chunks3d.js, above).
 
@@ -7500,7 +7508,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   party's wheel's orders never set nor quick), the party's icons fitted down the side (full size,
   shrunk, then a "+N" chip) and what the party menu says each is, the
   loader's byte counting, the ground's blending, the town's
-  builders, the loading list and the service worker.
+  builders (and its trees planted in the world's woodland where it's given one, none merged a
+  copy each, standing just as high on every square; `test/trees.test.js`: a lot drawn in the
+  woodland just as `plantTrees` merges it, every corner where its merged copy has it, lit and
+  coloured the same, the same triangles, boxes, shells and patches), the loading list and the
+  service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
   their blows, a sound for every attack, each on its bus, the bow's plucked string in tune), the
   wind's seamless loop, and playing them: from where they happen, on their buses at their
