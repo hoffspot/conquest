@@ -83,14 +83,17 @@ describe("the ground (terrain/ground.js)", () => {
 
                 for (let d = 0; d < run; d += 1) {
                     const [x, y] = [ax + ((bx - ax) * d) / run, ay + ((by - ay) * d) / run];
-                    const chunk = overworld.chunkAt(Math.floor(x), Math.floor(y));
-                    const square = (Math.floor(y) - chunk.y0) * CHUNK + (Math.floor(x) - chunk.x0);
 
-                    // (Within 640 m of the town; its own streets and the settlements' aside)
+                    // (Within 640 m of the town; its own streets and the settlements' aside. Asked
+                    // before the chunk is: the roads run on across the whole world, and a chunk
+                    // asked for is made)
                     if (Math.hypot(x - mx, y - my) > 640 || overworld.settled(Math.floor(x), Math.floor(y))) {
                         last = null;
                         continue;
                     }
+
+                    const chunk = overworld.chunkAt(Math.floor(x), Math.floor(y));
+                    const square = (Math.floor(y) - chunk.y0) * CHUNK + (Math.floor(x) - chunk.x0);
 
                     assert.equal(chunk.blocked[square], 0, `walkable at ${Math.floor(x)}, ${Math.floor(y)}`);
                     samples++;
