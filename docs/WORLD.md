@@ -1167,9 +1167,13 @@ The world is played on the land's height with what's built levelled into it (`Gr
 ## Navigation meshes (`core/navigation.js`, `core/navigation/`)
 
 Where the world can be walked, as polygons rather than squares: Recast and Detour (built to
-WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.43.1/` by
+WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.44.0/` by
 `npm run vendor:recast`; about 200 KB gzipped, loaded with the rules). Everyone walks them
-(core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*).
+(core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*). Every device
+bakes its own tiles, so a new version of Recast must bake the same bytes: `test/bake.test.js`
+holds three made-up tiles' bytes and the ways over them as recorded (0.44.0 baked 1,095 tiles of
+three worlds, their towns', a scene's and their dungeons', byte for byte as 0.43.1 did, and
+found the same 2,012 ways over them to the last bit).
 
 - **Tiles.** The world is cut into 32 m tiles from its origin (256 a side). A tile is baked from
   its square and a 1 m border round it (`tiles.js tileInput`), so it depends only on the world
@@ -1310,6 +1314,10 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   say) searches every tile kept before giving up, up to 0.5 ms.
 
 ## Tests
+
+`test/bake.test.js` holds the bytes of three made-up tiles (the overworld's kind, a scene's, a map
+of squares') and the corners of a way over each as recorded: a version of Recast or a setting of
+the bake that changes one fails it, before copies of a world part over it.
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round

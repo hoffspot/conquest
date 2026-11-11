@@ -767,7 +767,7 @@ client/                 The game (static files served to the browser)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map),
                         with the Basis Universal transcoder KTX2 textures are read with (fetched
                         only once a model has one: the catalog's basis-transcoder)
-  vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
+  vendor/recast-navigation-0.44.0/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js); its memory starting with 16 MB
                         (scripts/wasm-memory.js)
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
@@ -1242,7 +1242,7 @@ what it doesn't cover.
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT
-  license), in `client/vendor/recast-navigation-0.43.1/` with both licences (its WebAssembly's
+  license), in `client/vendor/recast-navigation-0.44.0/` with both licences (its WebAssembly's
   memory made to start with 16 MB, not 64: noted there).
 
 This repository began as a modernization of Last Colony, the real-time strategy game from
