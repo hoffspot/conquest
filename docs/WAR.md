@@ -3529,10 +3529,15 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   players over six towns: a sixth to a fifth of that on its way, compressed (below).
 - **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
   made point to point passes no server that would hold them to anything):
-  - **The world again:** the first asking is answered at once, another no sooner than 10 seconds
-    after (answered when they've gone by, as the game's next heard from), and everyone asking
-    in a step is sent the one snapshot. Taking the world and writing it out is 4 to 35 ms of the
-    host's one thread each time, and asked for a hundred times over it was 650 ms and 12 MB.
+  - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
+    left unused, answered at once; past those, an asking waits till its time's come (answered
+    as the game's next heard from), and everyone asking in a step is sent the one snapshot.
+    Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
+    asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
+    that needs it twice running through no fault of its own: one slow to load that falls too far
+    behind as it comes in and again before it's found its feet, which plays nothing till the
+    world comes (with none in hand, a soak's player stood still 10 seconds so), or a link that
+    drops twice in a few seconds.
   - **Commands:** 30 a second, 60 at once (a stick turning sends 16 a second); more are let go
     of unanswered, as a world server lets go of what comes too fast.
   - **Nothing longer than 64 KB:** a character coming in is the longest thing a joined game
@@ -4255,8 +4260,12 @@ host, and was sent the whole world again, every joined game at once. `test/snaps
 holds it so: a world played two minutes with a battle in it, carried on from its snapshot and set
 right in place, has every field of the host, the battle and each character as it was, or the
 field's in the test's list with why it needn't be kept. Each character is kept without what it
-has as one just added has it (`core/keptactor.js`: about 0.8 KB each where it was 2), which is
-half the snapshot's text; and with the "never yet"s gone from them (-Infinity, which JSON can't
+has as one just made has it (`core/keptactor.js` `ACTOR_DEFAULTS`, through the battle's
+`snapshot({ keep })`: about 0.8 KB each where it was 2), which is half the snapshot's text. The
+battle makes it whole again, as it makes every character (`Battle.restore`, `#made`: one made
+with nothing else, then what was kept put on it, its attacks its weapon's if they weren't
+kept), so a world kept whole by an older version reads the same way, and the test holds every
+field left out to what the battle makes a character of every kind with; and with the "never yet"s gone from them (-Infinity, which JSON can't
 carry), what reads a snapshot reads it as plain JSON (`core/wire.js` `decode`: 2 ms for a world
 of eight players, where a reviver took 25). (`SNAPSHOT_VERSION` 53.) Buildings are looked over in the order of their keys, and the
 settlements round each player are laid out by the world itself, so what's got ready, and when,

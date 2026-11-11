@@ -1011,7 +1011,10 @@ same way before what was kept of it is put on it. A snapshot keeps only what a c
 given (`#given`), none of what's still undefined, so it holds what it held, and costs what it
 did to make (copying the sixty for each made it half as slow again); carrying on from one costs
 a quarter more than it did (4.1 ms for a hundred, from 3.2), once, as a world's joined or
-opened. A new property of the kind goes in `OPTIONAL`;
+opened. The world's own snapshot keeps less of each still (`snapshot({ keep })`, the host's
+`core/keptactor.js`: nothing a character has as one just made has it, nor its attacks while
+they're its weapon's own), and since every character carried on is made as `add` makes one
+first, what was left out is there again as it was: docs/WAR.md, *Playing together*. A new property of the kind goes in `OPTIONAL`;
 `test/field-battle.test.js` fails if the field battle's characters aren't all one shape. The
 host's own `delete actor.sight` and `delete actor.keep` once two armies' clash is over
 (`#clashOver`) are still to become undefined too.

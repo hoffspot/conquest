@@ -11,8 +11,8 @@
 // CHECK_EVERY). A copy that doesn't (a browser whose sums come out a hair different from the
 // host's) asks for the world again, and carries on from it (Host.adopt). So does one whose link
 // to the host dropped a moment and came back (what was sent meanwhile lost): the host's own link
-// back, it sends everyone the world again. One who asks is answered at once, and again no sooner
-// than AGAIN.every later, everyone asking in a step from the one snapshot.
+// back, it sends everyone the world again. One who asks is answered at once, a few times over,
+// then no oftener than every AGAIN.every; everyone asking in a step from the one snapshot.
 //
 // When the host can't move its world on (its page hidden: a phone's gone to another app), it says
 // so, and those who've joined are shown why nothing's happening.
@@ -63,7 +63,7 @@
 //                                                    owner's, the world stopped for all)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again; answered
-//                                                    no oftener than AGAIN.every)
+//                                                    no oftener than AGAIN allows)
 //                    { kind: "ping", t, rtt }                  (t: the joiner's clock, ms; rtt: how long
 //                                                    a word to the host and back's taken it lately,
 //                                                    ms, once it's timed one: Joining lately; the
@@ -132,12 +132,17 @@ export const NET_VERSION = 224;
 export const CHECK_EVERY = 4;
 
 /**
- * How often one who's joined is sent the world again for the asking, at most (ms, by the host's
- * clock): the first asking's answered at once, another before this has gone by when it has
- * (generated/multiplayer_scaling_plan.md 1-5). Taking the world and writing it out is 4 to 35 ms
- * of the host's one thread, and 60 to 300 KB to send, each time.
+ * How often one who's joined is sent the world again for the asking, at most (by the host's
+ * clock): once every `every` ms (generated/multiplayer_scaling_plan.md 1-5), with `burst` of
+ * them in hand to begin with and as they're left unused, answered at once; past those, an asking
+ * waits till its time's come. Taking the world and writing it out is 2 to 10 ms of the host's one
+ * thread, and 15 to 60 KB to send, each time: asked for a hundred times over, it was 650 ms and
+ * 12 MB. The few in hand are for a game that needs it twice running through no fault of its own:
+ * one slow to load that's fallen too far behind as it comes in, and again before it's found its
+ * feet (PACE.tooFar: it plays nothing till the world comes, so made to wait it stands still; a
+ * soak's player did, 10 s, with none in hand), or a link that drops twice in a few seconds.
  */
-export const AGAIN = Object.freeze({ every: 10000 });
+export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
 
 /**
  * What the host takes from one who's joined: nothing longer than `most` characters (a character
@@ -461,12 +466,12 @@ export class Hosting {
         this.sendsPlaces = false;
 
         /**
-         * Those who've asked for the world again and not been sent it yet (by peer), and when each
-         * was last sent it for the asking (by peer: the clock's time), so no one's sent it oftener
-         * than AGAIN.every (#worlds).
+         * Those who've asked for the world again and not been sent it yet (by peer), and how many
+         * times each may still be sent it for the asking just now (by peer: { left, at }: AGAIN,
+         * #worlds).
          */
         this.asked = new Set();
-        this.worldAt = new Map();
+        this.worlds = new Map();
 
         /** How many commands each may still give just now (by peer: { left, at }: HEARD), and how many have been let go of. */
         this.allowance = new Map();
@@ -621,17 +626,28 @@ export class Hosting {
         this.#worlds();
     }
 
-    // The world again to each who's asked for it and hasn't been sent it for the asking within
-    // AGAIN.every (after all that's been done till now: flush's), one snapshot taken for them all:
-    // one asking alone has their own of their hero in it (OWN), several at once no one's, as
-    // everyone's sent it when the host's link comes back (resync)
+    // How many times one who's joined may be sent the world again for the asking just now (AGAIN:
+    // `burst` at most, one more every `every` ms of the clock's; with no clock, always once)
+    #worldsLeft(peer) {
+        if (!this.clock) {
+            return 1;
+        }
+
+        const had = this.worlds.get(peer);
+
+        return had ? Math.min(AGAIN.burst, had.left + (this.clock() - had.at) / AGAIN.every) : AGAIN.burst;
+    }
+
+    // The world again to each who's asked for it and may have it now (AGAIN; after all that's been
+    // done till now: flush's), one snapshot taken for them all: one asking alone has their own of
+    // their hero in it (OWN), several at once no one's, as everyone's sent it when the host's
+    // link comes back (resync)
     #worlds() {
         if (!this.asked.size) {
             return;
         }
 
-        const now = this.clock?.() ?? 0;
-        const due = [...this.asked].filter((peer) => !this.clock || now - (this.worldAt.get(peer) ?? -Infinity) >= AGAIN.every);
+        const due = [...this.asked].filter((peer) => this.#worldsLeft(peer) >= 1);
 
         if (!due.length) {
             return;
@@ -641,7 +657,11 @@ export class Hosting {
 
         for (const peer of due) {
             this.asked.delete(peer);
-            this.worldAt.set(peer, now);
+
+            if (this.clock) {
+                this.worlds.set(peer, { left: this.#worldsLeft(peer) - 1, at: this.clock() });
+            }
+
             this.#send(peer, "state", text);
         }
     }
@@ -787,7 +807,7 @@ export class Hosting {
         // (One who asked for the world again a while ago, and may have it now: sent it as they're
         // next heard from, their game asking how long a word takes every second, even while the
         // world's stopped and nothing else is sent)
-        if (this.asked.has(peer) && this.clock && this.clock() - (this.worldAt.get(peer) ?? -Infinity) >= AGAIN.every) {
+        if (this.asked.has(peer) && this.#worldsLeft(peer) >= 1) {
             this.flush();
         }
     }
@@ -1027,8 +1047,8 @@ export class Hosting {
     }
 
     // One whose world's gone astray: the world again (after all that's been done till now), at
-    // once if they haven't been sent it for the asking lately, else once AGAIN.every has gone by
-    // (#worlds: asked twice meanwhile, sent it once)
+    // once if they may have it (AGAIN: a few times running, then one every so often), else once
+    // their time's come (#worlds: asked twice meanwhile, sent it once)
     #again(peer) {
         if (!this.players.has(peer)) {
             return;
@@ -1150,7 +1170,7 @@ export class Hosting {
         this.heardAt.delete(peer);
         this.quieted.delete(peer);
         this.asked.delete(peer);
-        this.worldAt.delete(peer);
+        this.worlds.delete(peer);
         this.allowance.delete(peer);
         this.hidden.delete(peer);
     }

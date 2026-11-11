@@ -541,7 +541,7 @@ describe("playing together (netplay.js)", () => {
         assert.equal(joining.host.messengersAt, host.messengersAt);
     });
 
-    it("sends the world again for the asking at once, and again no sooner than AGAIN.every by the host's clock, one snapshot for all who ask together", () => {
+    it("sends the world again for the asking at once, a few times running (AGAIN.burst), then no oftener than every AGAIN.every by the host's clock; one snapshot for all who ask together", () => {
         let now = 50000;
         const { host, hosting, join, post, deliver } = opened({ clock: () => now });
         const bryn = join(guest("Bryn"));
@@ -556,43 +556,62 @@ describe("playing together (netplay.js)", () => {
             return snapshot();
         };
 
-        // The first asking: answered at once, with their own of their hero
+        // The first askings: each answered at once, with their own of their hero (a game slow to
+        // load that falls too far behind twice as it comes in isn't left standing)
         post.length = 0;
-        hosting.hear(bryn.peer, encode({ kind: "again" }));
-        assert.equal(states(bryn.peer), 1);
-        assert.equal(taken, 1);
 
-        // Asked again and again within the time: not answered, however often (100 askings took
-        // 650 ms of the host's thread and 12 MB to send)
+        for (let k = 1; k <= AGAIN.burst; k++) {
+            now += 1000;
+            hosting.hear(bryn.peer, encode({ kind: "again" }));
+            assert.equal(states(bryn.peer), k);
+        }
+
+        assert.equal(taken, AGAIN.burst);
+
+        // Asked again and again after those: not answered, however often (100 askings took 650 ms
+        // of the host's thread and 12 MB to send)
+        const spent = now;
+
         for (let k = 0; k < 100; k++) {
             now += 10;
             hosting.hear(bryn.peer, encode({ kind: "again" }));
         }
 
         hosting.flush();
-        assert.equal(states(bryn.peer), 1);
-        assert.equal(taken, 1);
+        assert.equal(states(bryn.peer), AGAIN.burst);
+        assert.equal(taken, AGAIN.burst);
 
-        // Its time come, they're sent it once as they're next heard from (a ping, each second:
-        // the world needn't be going), and Cai, asking in the same breath, from the same snapshot
-        now = 50000 + AGAIN.every - 1;
+        // Its time come (AGAIN.every after the last it was sent, less what it had saved meanwhile:
+        // 2 s of asking nothing before it), they're sent it once as they're next heard from (a
+        // ping, each second: the world needn't be going), and Cai, asking in the same breath, from
+        // the same snapshot
+        now = spent + AGAIN.every - 2000 - 1;
         hosting.hear(bryn.peer, encode({ kind: "ping", t: 1 }));
-        assert.equal(states(bryn.peer), 1);
+        assert.equal(states(bryn.peer), AGAIN.burst);
         hosting.asked.add(cai.peer);
         now += 1;
         hosting.hear(bryn.peer, encode({ kind: "ping", t: 2 }));
-        assert.deepEqual([states(bryn.peer), states(cai.peer), taken], [2, 1, 2]);
+        assert.deepEqual([states(bryn.peer), states(cai.peer), taken], [AGAIN.burst + 1, 1, AGAIN.burst + 1]);
         assert.equal(hosting.asked.size, 0);
+
+        // (And over a long while, one every AGAIN.every and no more, however often it's asked)
+        const before = states(bryn.peer);
+
+        for (let k = 0; k < 600; k++) {
+            now += 100;
+            hosting.hear(bryn.peer, encode({ kind: "again" }));
+        }
+
+        assert.equal(states(bryn.peer) - before, 60000 / AGAIN.every);
 
         // (And both carry on from it)
         deliver();
-        assert.deepEqual([bryn.joining.resyncs, cai.joining.resyncs], [2, 1]);
         assert.equal(bryn.joining.host.checksum(), host.checksum());
         assert.equal(cai.joining.host.checksum(), host.checksum());
 
         // One gone and come back isn't held to what they asked before
         hosting.gone(bryn.peer);
-        assert.equal(hosting.worldAt.has(bryn.peer), false);
+        assert.equal(hosting.worlds.has(bryn.peer), false);
     });
 
     it("takes commands from one who's joined no faster than HEARD allows, and nothing longer than a character: more is let go of, the world none the worse", () => {
