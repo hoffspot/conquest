@@ -355,7 +355,8 @@ player may choose another) can list it there, and others join it point to point 
 for its code on the same server (**Join a World on another Device**). The server takes the game's
 calls from its own pages and the game's website (GitHub Pages) alone: a game opened from another
 server's page plays on it from its own page (Known Servers, **Open the game from this server**). When their games can't
-connect directly, the server relays them, about 2 KB/s for each player who's joined. The
+connect directly, the server relays them, 1 to 5 KB/s for each player who's joined (standing
+about, to fighting: docs/WAR.md, *What's sent, measured*). The
 **broker** and **relaying** settings turn either off.
 
 What the server sends a game is compressed when it's long (the world, as a player comes in or is

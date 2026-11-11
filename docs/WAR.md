@@ -3173,9 +3173,11 @@ settlement and navigation tile the moment someone first walked into it:
   The world's thread looks at the world when its next step is due (and every 25 ms at most, to
   make ahead meanwhile), not every 25 ms whatever's due: a timer comes a little late, so now and
   then a step came a whole look early and the rest counted late against it, which a joined game
-  covered by keeping another step in hand (measured by the reviewer: the steps' lateness against
-  the quickest of the last two seconds, 15 ms at the median and 22 at the 90th percentile, 0.7
-  and 3.9 timed to when they're due). Fallen behind its clock (a save, a slow step, the machine
+  covers by keeping another step in hand. Measured on a world server with one player in, over
+  its socket, on a machine busy with other work (three half minutes each way): the steps'
+  lateness as a joined game reckons it, against the quickest of the last two seconds, was 27 to
+  32 ms at the median and 53 to 59 at the 90th percentile, and one sending in five carried two
+  steps or more; it's 1 ms and 7 to 12, and every sending one step. Fallen behind its clock (a save, a slow step, the machine
   asleep), it plays two steps a look, each sent as it's done, hearing what's been said to it
   between looks, and lets go of all it's behind by beyond a quarter of a second: its time runs
   that much slow, and it's never further behind. It used to play every step it was behind back
