@@ -172,8 +172,12 @@ export class Navigation {
         this.size = size;
         this.keep = measures.keep ?? (measures === OVERWORLD ? KEEP_TILES : KEEP_ROOM_TILES);
         this.mesh = new recast.NavMesh();
-        this.mesh.initTiled(recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS }));
-        this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES });
+
+        // (Detour takes a copy of the mesh's params: they're let go of at once, not left for good)
+        const params = recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS });
+
+        this.mesh.initTiled(params);
+        recast.Raw.destroy(params.raw);
         this.filter = new recast.QueryFilter();
         this.filter.includeFlags = WALK;
         this.filter.excludeFlags = 0;
@@ -182,8 +186,13 @@ export class Navigation {
             this.filter.setAreaCost(Number(area), cost);
         }
 
+        // (The query's own filter this one, which every asking names anyway: it would make
+        // another, never used and never let go of)
+        this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES, defaultQueryFilter: this.filter });
+
         // The tiles in the mesh, by key: { tx, ty, ref (Detour's, or 0 for one with nothing to
-        // walk), data }, the most recently used last
+        // walk) }, the most recently used last. (Not their data: the mesh has its own copy, and a
+        // second kept here was 10 KB a tile no one read, 10 MB of a full overworld's.)
         this.tiles = new Map();
         this.baked = 0;
         this.added = 0;
@@ -231,16 +240,20 @@ export class Navigation {
 
             const added = this.mesh.addTile(raw, this.recast.Detour.DT_TILE_FREE_DATA, 0);
 
-            // (The mesh owns its data once it's in)
             if (!this.recast.statusSucceed(added.status)) {
                 raw.destroy();
                 throw new Error(`Detour wouldn't take tile ${tx}, ${ty}: ${this.recast.statusToReadableString(added.status)}`);
             }
 
+            // (The mesh owns its data once it's in, and frees it with the tile: the array that
+            // carried it there is let go of as one that only looks at it, which frees none of
+            // it. Left, an array's wrapper stayed for good for every tile ever added.)
+            raw.raw.isView = true;
+            raw.destroy();
             ref = added.tileRef;
         }
 
-        this.tiles.set(k, { tx, ty, ref, data });
+        this.tiles.set(k, { tx, ty, ref });
         this.added++;
     }
 
@@ -571,7 +584,10 @@ export class Navigation {
 
     /** Let go of the mesh and everything Detour holds for it. */
     dispose() {
+        // (The query's own, then what carries it: the binder's wrapper and its few bytes, which
+        // the query's destroy leaves)
         this.query.destroy();
+        this.recast.Raw.destroy(this.query.raw);
         this.recast.Raw.destroy(this.filter.raw);
         this.mesh.destroy();
         this.tiles.clear();

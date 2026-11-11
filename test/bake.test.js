@@ -194,6 +194,48 @@ describe("the navigation tiles' bytes (navigation/bake.js)", () => {
         assert.deepEqual(kept(recast), before);
     });
 
+    it("leaves nothing behind for a tile added and let go of, a way found, or a whole mesh made and let go of (navigation.js)", () => {
+        const squares = squaresOf({ blocked: parseGrid(FLOOR) });
+        const kind = { measures: ROOMS, input: (tx, ty) => squaresInput(squares, tx, ty, ROOMS), heightAt: () => 0, size: [squares.width, squares.height] };
+        const data = bakeTile(recast, kind.input(0, 0), 0, 0, ROOMS);
+        const navigation = new Navigation(recast, squares, kind);
+
+        navigation.add(0, 0, data);
+
+        const way = JSON.stringify(navigation.path([2.5, 2.5], [2.5, 10.5]));
+
+        // (Once first: what the binder hands back the same one of each time is made then)
+        navigation.drop(0, 0);
+        navigation.add(0, 0, data);
+
+        const before = kept(recast);
+
+        for (let k = 0; k < 12; k++) {
+            navigation.drop(0, 0);
+            navigation.add(0, 0, data);
+            // (The mesh's data its own, whole, once the array that carried it is let go of)
+            assert.equal(JSON.stringify(navigation.path([2.5, 2.5], [2.5, 10.5])), way);
+            navigation.raycast([2.5, 2.5], [7.5, 5.5]);
+            navigation.walkable(12.5, 2.5);
+            navigation.nearest([15.2, 4.4]);
+        }
+
+        assert.deepEqual(kept(recast), before);
+        // (Its tiles are in the mesh, with no second copy of their data kept beside it)
+        assert.deepEqual(Object.keys(navigation.tiles.get(0)).sort(), ["ref", "tx", "ty"]);
+
+        for (let k = 0; k < 6; k++) {
+            const one = new Navigation(recast, squares, kind);
+
+            one.add(0, 0, data);
+            assert.equal(JSON.stringify(one.path([2.5, 2.5], [2.5, 10.5])), way);
+            one.dispose();
+        }
+
+        assert.deepEqual(kept(recast), before);
+        navigation.dispose();
+    });
+
     it("bakes a map of squares' kind of tile to the bytes recorded, and finds the way recorded through its doorways", () => {
         const squares = squaresOf({ blocked: parseGrid(FLOOR) });
         const data = bakeTile(recast, squaresInput(squares, 0, 0, ROOMS), 0, 0, ROOMS);

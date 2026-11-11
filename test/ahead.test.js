@@ -86,13 +86,23 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
         const [x, y] = startFor(world.plan, world.start.race).at;
         const [tx, ty] = navigation.tileOf(x, y);
         const here = bakeTile(await loadRecast(), navigation.input(tx, ty), tx, ty);
+        // (What the worker sends back, caught as it's added: the navigation keeps no copy of a
+        // tile's data beside the mesh's own)
+        const add = navigation.add.bind(navigation);
+        let came = null;
+
+        navigation.add = (ax, ay, data) => {
+            came = ax === tx && ay === ty ? Uint8Array.from(data) : came;
+            add(ax, ay, data);
+        };
 
         assert.ok(baker.worker, "(on a worker)");
         world.maps.town.chunkAt(x, y);
         baker.bake(tx, ty);
         assert.equal(navigation.has(tx, ty), false, "(not baked here)");
         assert.ok(await until(() => navigation.has(tx, ty)), "(come back)");
-        assert.deepEqual([...navigation.tiles.values()].find((tile) => tile.tx === tx && tile.ty === ty).data, here);
+        assert.deepEqual(came, here);
+        assert.ok(here.length > 1000);
         baker.dispose();
     });
 

@@ -1320,7 +1320,14 @@ found the same 2,012 ways over them to the last bit).
   left every bake, and a wrapper for every address a heightfield or a mesh had ever been at:
   2,584 bytes of JavaScript's heap a bake, measured over 400 bakes of the start town's tile, for
   good; a world server that bakes for weeks paid most. Now the heap is level, 0.02 MB over
-  1,800 bakes, the measurement's own rounding.)
+  1,800 bakes, the measurement's own rounding.) Nor does a mesh: the array a tile's data is
+  carried into it in is let go of once the mesh has it (as one that only looks at the data,
+  which the mesh owns and frees with the tile), the mesh's params once Detour has copied them,
+  and the query's wrapper with the query; the query takes the mesh's one filter for its own. (A
+  wrapper was left for every tile ever added, and three for every mesh let go of, a building's
+  floor's each time it was walked again.) And a tile's data is kept once, in the mesh: the
+  second copy JavaScript kept beside it, which nothing read, was 10 KB a tile in a town, 10 MB
+  of an overworld's 1,024 tiles.
 
 ## Tests
 
@@ -1328,7 +1335,8 @@ found the same 2,012 ways over them to the last bit).
 of squares') and the corners of a way over each as recorded: a version of Recast or a setting of
 the bake that changes one fails it, before copies of a world part over it. And that bakes leave
 nothing behind: after a dozen rounds of each kind of tile, and of one with nothing to walk, the
-binder keeps no more wrappers of any class than before.
+binder keeps no more wrappers of any class than before; nor after a tile's added and let go of a
+dozen times with ways found between, the way the same each time, or a mesh made and let go of.
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
