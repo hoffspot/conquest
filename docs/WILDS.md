@@ -2648,9 +2648,12 @@ what's downloaded before the game starts.
   its kind's put into the battle (the game's `#modelsMet`). Read near its lair it's kept, none
   drawn from it, while they're within 600 m; one met out in the open is let go of three minutes
   after the last of them's gone, as any is, not kept while it may be met. Read from what's kept
-  already, the first of a kind met out in the open may be drawn as its stand-in up to a second
-  longer. The colossal, a world's boss, an open rift's demons and a place's creatures are read as
-  they were, and everything is on a computer.
+  already it's a moment, so the first of a kind put into the battle waits on its model to be
+  drawn, a second at most (`SPARING_MODELS.patience`, the game's `#addingBeast`): it's drawn up
+  to a second later, from its model, where its stand-in would be a whole body built only to be
+  let go of, and drawn till it's out of view; past that second (the file still coming, saving
+  data), as its stand-in, as ever. The colossal, a world's boss, an open rift's demons and a
+  place's creatures are read as they were, and everything is on a computer.
 - **Its stand-in meanwhile:** until it's read, its look (`beasts/looks.js`, a greater, darker
   drake) is drawn. Once it's read, a stand-in out of view, and not attacking, falling or coming
   down out of the sky, is let go of and drawn again from the model.

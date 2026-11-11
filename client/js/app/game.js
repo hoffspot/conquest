@@ -164,7 +164,7 @@ import { Silhouettes } from "../world/far/silhouettes.js";
 import { Volcano } from "../world/far/volcano.js";
 import { Landmarks } from "../world/landmark3d.js";
 import { Look } from "../world/look.js";
-import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
+import { allAtOnce, allWaiting, NOW, Steps, WAITING } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { HOUSE_KIT, kitBuilt } from "../world/art/kits/kithouse.js";
@@ -682,9 +682,11 @@ const KEEP_MODELS = 2000;
 // it, held for as long as the player stays within KEEP_MODELS of the lair. It's read once the
 // player's within `read` metres of the lair, or one of its kind's put into the battle, and a kind
 // read near its lair is kept, none drawn from it, while they're within `keep` (further, so it
-// isn't let go of and read again to and fro at the edge). Read from what the downloader's kept,
-// the first of a kind met out in the open may be drawn as its stand-in up to a second longer
-const SPARING_MODELS = Object.freeze({ read: 400, keep: 600 });
+// isn't let go of and read again to and fro at the edge). Read from what the downloader's kept
+// it's a moment, so the first of a kind put into the battle waits on it to be drawn, `patience`
+// ms at most (#addingBeast): drawn up to a second later, from its model; past that, as its
+// stand-in till it's out of view, as ever
+const SPARING_MODELS = Object.freeze({ read: 400, keep: 600, patience: 1000 });
 
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
@@ -3011,8 +3013,24 @@ export class Game {
         const seed = this.#seedOf(actor);
 
         // (Its model asked for now, if it's drawn from one and it isn't read yet: its stand-in's
-        // drawn till it is, #modelling)
-        wantModel(actor.wild.creature, "now");
+        // drawn till it is, #modelling. On a touch screen, where a kind only predicted has its
+        // model fetched and kept, not read, till one's put into the battle (SPARING_MODELS), its
+        // reading's waited for first, a second at most: read from what's kept it's a moment, and
+        // its stand-in would be a whole body built to be let go of, drawn till it's out of view)
+        const reading = wantModel(actor.wild.creature, "now");
+
+        if (reading && this.memoryGuard.touch && !modelOf(actor.wild.creature)) {
+            const until = performance.now() + SPARING_MODELS.patience;
+            let read = false;
+
+            reading.then(() => (read = true));
+
+            while (!read && performance.now() < until) {
+                if ((yield WAITING) === NOW) {
+                    break;
+                }
+            }
+        }
 
         // (Its weapon a player's or its kind's own: a knight of the Bell's morning star, an orc's axe)
         const weapon = weaponOf(actor.weapon);
