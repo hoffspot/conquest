@@ -10,7 +10,9 @@
 // A plan read back must be the one layOutWorld would make now. Each is kept by its seed and by a
 // hash of the planner's code: plan.js and every module it imports, and those they import, found
 // by following the imports (sourcesOf), with the engine's version. Change any of them and no plan
-// kept before is asked for again.
+// kept before is asked for again. And by the dungeons' themes as they stand when it's asked for
+// (plannerKey): the one thing the planner goes by that can be added to as the game runs, so a
+// plan laid out with a theme of a test's own is never read by a process without it.
 //
 // CI doesn't restore that folder: a CI run starts with none, so every plan there it laid out
 // itself, afresh, from the code it's testing (the first test file to want a seed's; those after it
@@ -26,6 +28,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deserialize, serialize } from "node:v8";
 import { threadId } from "node:worker_threads";
+import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { keepPlans } from "../client/js/core/worldplan/plan.js";
 import { importsIn, importsWorkedOut } from "../scripts/lib/imports.js";
 
@@ -124,66 +127,81 @@ function owned(value, done = new Map()) {
     return done.get(value);
 }
 
+// The planner's code's key, worked out when it's first wanted (the processes that never want a
+// plan read no code for it): null if it can't be
+let code;
+
+/**
+ * What the planner's plans are kept by, as it now stands: its code (keyOf), and the dungeons'
+ * themes just now (dungeons/themes.js THEMES, which registerTheme adds to: the planner gives each
+ * dungeon in the wilds one of them, so with another theme it lays out another world). Null if the
+ * planner's code can't be followed: nothing's kept then.
+ */
+export function plannerKey() {
+    if (code === undefined) {
+        try {
+            code = keyOf(PLANNER);
+        } catch {
+            code = null;
+        }
+    }
+
+    return code && `${code}-${createHash("sha256").update(JSON.stringify(THEMES)).digest("hex").slice(0, 8)}`;
+}
+
 /**
  * Plans kept in a folder, by their seed and a key (what made them: a string, or a function that
- * works it out when it's first wanted, null if it can't be): { get(seed) (what was put, or null),
- * put(seed, laid) }, as worldplan/plan.js keepPlans takes them (`laid`: { plan, land }, written
- * as one, so the arrays they share are shared when they're read back). Neither ever throws: a
- * plan that can't be read is laid out, one that can't be written isn't kept.
+ * says it each time one's asked for or kept, null if it can't): { get(seed) (what was put, or
+ * null), put(seed, laid) }, as worldplan/plan.js keepPlans takes them (`laid`: { plan, land },
+ * written as one, so the arrays they share are shared when they're read back). Neither ever
+ * throws: a plan that can't be read is laid out, one that can't be written isn't kept.
  *
  * Many processes may keep and read at once: a plan's written under a name of the writer's own and
  * given its name only once it's whole, so no one reads half of one, and two that write the same
  * plan leave one of them.
  */
 export function plansIn(folder, key) {
-    let known = typeof key === "function" ? undefined : key;
-    const keyNow = () => {
-        if (known === undefined) {
-            try {
-                known = key();
-            } catch {
-                known = null;
-            }
-        }
-
-        return known;
-    };
+    const keyNow = typeof key === "function" ? key : () => key;
     // (Whole numbers only: a seed is one, and its file's name is made of it)
-    const fileOf = (seed) => (Number.isSafeInteger(seed) && keyNow() ? path.join(folder, `plan-${seed}-${keyNow()}.v8`) : null);
+    const fileOf = (seed, by) => (Number.isSafeInteger(seed) && by ? path.join(folder, `plan-${seed}-${by}.v8`) : null);
 
     return {
         get(seed) {
             try {
-                const file = fileOf(seed);
+                const by = keyNow();
+                const file = fileOf(seed, by);
                 const kept = file ? deserialize(readFileSync(file)) : null;
 
                 // (Its own word for what it is, besides its name's)
-                return kept && kept.format === FORMAT && kept.key === keyNow() && kept.seed === seed && kept.laid?.plan?.seed === seed && kept.laid.land ? owned(kept.laid) : null;
+                return kept && kept.format === FORMAT && kept.key === by && kept.seed === seed && kept.laid?.plan?.seed === seed && kept.laid.land ? owned(kept.laid) : null;
             } catch {
                 return null;
             }
         },
 
         put(seed, laid) {
+            let writing = null;
+
             try {
-                const file = fileOf(seed);
+                const by = keyNow();
+                const file = fileOf(seed, by);
 
                 if (!file) {
                     return;
                 }
 
-                const writing = `${file}.${process.pid}-${threadId}-${randomBytes(4).toString("hex")}.tmp`;
-
+                writing = `${file}.${process.pid}-${threadId}-${randomBytes(4).toString("hex")}.tmp`;
                 mkdirSync(folder, { recursive: true });
-                writeFileSync(writing, serialize({ format: FORMAT, key: keyNow(), seed, laid }));
+                writeFileSync(writing, serialize({ format: FORMAT, key: by, seed, laid }));
                 renameSync(writing, file);
+                writing = null;
 
                 // (And what's there for other code, or was never finished, let go once it's old)
                 for (const name of readdirSync(folder)) {
                     const other = path.join(folder, name);
 
                     try {
-                        if (!name.endsWith(`-${keyNow()}.v8`) && Date.now() - statSync(other).mtimeMs > STALE) {
+                        if (!name.endsWith(`-${by}.v8`) && Date.now() - statSync(other).mtimeMs > STALE) {
                             rmSync(other, { force: true });
                         }
                     } catch {
@@ -191,15 +209,21 @@ export function plansIn(folder, key) {
                     }
                 }
             } catch {
-                // (Not kept: it's laid out again next time)
+                // (Not kept: it's laid out again next time. What was half-written isn't left)
+                try {
+                    if (writing) {
+                        rmSync(writing, { force: true });
+                    }
+                } catch {
+                    // (It's let go of once it's old)
+                }
             }
         },
     };
 }
 
 // Kept from here on (unless PLAN_CACHE=off), where npm has put the packages (never made where it
-// hasn't: nothing's kept in a checkout with no node_modules). The key's worked out when a plan's
-// first asked for: the processes that never want one read no code for it
+// hasn't: nothing's kept in a checkout with no node_modules)
 if (process.env.PLAN_CACHE !== "off" && existsSync(path.join(ROOT, "node_modules"))) {
-    keepPlans(plansIn(FOLDER, () => keyOf(PLANNER)));
+    keepPlans(plansIn(FOLDER, plannerKey));
 }

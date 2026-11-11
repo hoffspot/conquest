@@ -1,8 +1,9 @@
 // The world's plans kept between the unit tests' processes (test/plan-cache.js, through
 // worldplan/plan.js keepPlans): a plan read back is the plan laid out afresh, whole and its own,
 // with the same waters; kept by its seed and by the planner's code, every module of it found by
-// following the imports, so a change to any of them misses; and nothing but a miss ever comes of
-// what can't be read or written, or of many keeping and reading at once
+// following the imports, so a change to any of them misses, and by the dungeons' themes as they
+// stand; and nothing but a miss ever comes of what can't be read or written, or of many keeping
+// and reading at once
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -11,9 +12,10 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker } from "node:worker_threads";
+import { registerTheme, THEMES } from "../client/js/core/dungeons/themes.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { keepPlans, planWorld } from "../client/js/core/worldplan/plan.js";
-import { keyOf, PLANNER, plansIn, sourcesOf } from "./plan-cache.js";
+import { keyOf, PLANNER, plannerKey, plansIn, sourcesOf } from "./plan-cache.js";
 
 const CACHE = fileURLToPath(new URL("./plan-cache.js", import.meta.url));
 
@@ -150,6 +152,44 @@ describe("the planner's code, found by following its imports (plan-cache.js sour
         // (The planner's own: worked out, as the tests' processes do)
         assert.match(keyOf(PLANNER), /^[0-9a-f]{24}$/);
     });
+
+    it("keys the planner's plans by the dungeons' themes as they stand, too: with a theme of a test's own another key, and the first again once it's gone", () => {
+        const first = plannerKey();
+
+        assert.match(first, /^[0-9a-f]{24}-[0-9a-f]{8}$/);
+        assert.ok(first.startsWith(`${keyOf(PLANNER)}-`));
+        assert.equal(plannerKey(), first);
+
+        // (The planner gives each dungeon in the wilds one of the themes: with another to choose
+        // from it lays out another world, which no process without it may be handed)
+        registerTheme({ ...THEMES.caves, id: "keptPlansTest" });
+
+        try {
+            assert.notEqual(plannerKey(), first);
+            assert.ok(plannerKey().startsWith(`${keyOf(PLANNER)}-`));
+        } finally {
+            delete THEMES.keptPlansTest;
+        }
+
+        assert.equal(plannerKey(), first);
+    });
+
+    it("has nothing else the planner goes by that can be added to as the game runs: all its modules export is frozen, but the themes", async () => {
+        // (A scene's walk is data as the Blender pipeline writes it, read and never written)
+        const open = ["dungeons/themes.js THEMES", "scenery/bellhaven.walk.js default"];
+        const core = fileURLToPath(new URL("../client/js/core/", import.meta.url));
+        const found = [];
+
+        for (const file of sourcesOf(PLANNER)) {
+            for (const [name, value] of Object.entries(await import(pathToFileURL(file).href))) {
+                if (value && typeof value === "object" && !Object.isFrozen(value)) {
+                    found.push(`${path.relative(core, file).split(path.sep).join("/")} ${name}`);
+                }
+            }
+        }
+
+        assert.deepEqual(found.sort(), open, "what the planner goes by must be frozen, or the kept plans kept by it too (test/plan-cache.js plannerKey)");
+    });
 });
 
 describe("plans kept in a folder (plan-cache.js plansIn; plan.js keepPlans)", () => {
@@ -258,18 +298,17 @@ describe("plans kept in a folder (plan-cache.js plansIn; plan.js keepPlans)", ()
         assert.equal(store.get(SEED + 1), null);
         assert.equal(store.get(String(SEED)), null, "a seed is a number");
 
-        // (A key worked out when it's first wanted, once; one that can't be: nothing kept or read)
-        let worked = 0;
-        const late = plansIn(folder, () => {
-            worked++;
+        // (A key said each time one's asked for: once it's another, a miss; one that can't be
+        // said: nothing kept or read)
+        let now = key;
+        const live = plansIn(folder, () => now);
 
-            return key;
-        });
-
-        assert.equal(worked, 0);
-        assert.deepStrictEqual(late.get(SEED).plan, fresh);
-        assert.deepStrictEqual(late.get(SEED).plan, fresh);
-        assert.equal(worked, 1);
+        assert.deepStrictEqual(live.get(SEED).plan, fresh);
+        now = "1".repeat(24);
+        assert.equal(live.get(SEED), null);
+        now = null;
+        assert.equal(live.get(SEED), null);
+        live.put(SEED + 2, { plan: { seed: SEED + 2 }, land: {} });
 
         const unknown = plansIn(folder, () => {
             throw new Error("its imports can't be followed");
