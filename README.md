@@ -779,8 +779,11 @@ client/                 The game (static files served to the browser)
                         service worker doesn't keep, then started from the title screen
     fetcher.js          The downloader: the catalog's models in the background, a part at a time,
                         paced to keep out of the way of playing together, checked and kept; a
-                        model cut off by a reload carried on from the parts it kept
+                        model cut off by a reload carried on from the parts it kept; one the
+                        player's waiting for asked for whole, so the server compresses it
     session.js          The 3D view and the character kit, and starting games
+    plans.js            A world's plan laid out off the page's thread (plan-worker.js) and kept
+                        between visits, by the code's version and the seed
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
     camera.js           How the camera follows the player from behind, and turns and tilts by drag
@@ -1018,7 +1021,8 @@ server/                 A static file server for playing locally (npm start: par
                         together talk through (relay.js)
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
-scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
+scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-site.js (the
+                        website's copy, its code stripped: the Pages deploy's), build-music.js,
                         build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js (with
                         wasm-memory.js: how much memory a WebAssembly module starts with),
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests),
