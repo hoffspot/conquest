@@ -5,6 +5,8 @@ e2e-share.txt
 .DS_Store
 *.log
 .cache/
+# ESLint's cache (npm run lint: only files whose bytes have changed are linted again)
+.eslintcache
 client/motion-report.json
 dist/
 # (But not the Blender pipeline's: what it builds from the examples is committed, and its tests

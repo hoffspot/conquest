@@ -14,7 +14,7 @@
     "test": "node --import ./test/plan-cache.js --test test/*.test.js",
     "test:e2e": "playwright test",
     "e2e:durations": "node scripts/e2e-durations.js",
-    "lint": "eslint .",
+    "lint": "eslint . --cache --cache-strategy content",
     "check": "npm run lint && npm test",
     "check:motion": "node scripts/motion-check.js",
     "balance": "node scripts/balance.js",
