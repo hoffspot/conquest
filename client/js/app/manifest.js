@@ -383,7 +383,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/look.js", 8102, "4c31c408f5"],
             ["js/world/moongates3d.js", 4344, "5545ea6a65"],
             ["js/world/motes.js", 9877, "bad998298d"],
-            ["js/world/mounts3d.js", 25030, "3b43aabd40"],
+            ["js/world/mounts3d.js", 26235, "970f0afc0c"],
             ["js/world/navbaker.js", 7178, "cc3ae7eaba"],
             ["js/world/navview.js", 8703, "cdd71caa41"],
             ["js/world/navworker.js", 549, "076e81a4f1"],

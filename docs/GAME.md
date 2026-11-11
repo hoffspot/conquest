@@ -1444,7 +1444,11 @@ dismiss a specific purchased mount").
   (view.js `prepare`, `upload`), the one it takes the place of drawn till then (the stand-in, once
   the model's read, carrying on from where it was: mounts3d.js `#ready`). The model's shaders
   compiled as it was first drawn held a frame up 3.1 s on an iPhone (a player's debug log,
-  2026-11-10).
+  2026-11-10). Its model, and the rider's clips, are asked for as anyone calls a horse, and asked
+  for again every `ASK_AGAIN` seconds while a horse is out and either isn't had: the model's let go
+  of like any other while no one rides (beasts/model.js `forgetModels`: after `MODEL_LINGER`, or at
+  once by *The memory guard*), or couldn't be read. Asked for only once, every horse called after
+  that was a stand-in for the rest of the game (a player's party on an iPhone, 2026-11-11).
 - **Heard** (audio/catalog.js "Riding"): the whistle, the ring opening and closing, the saddle,
   its hooves a stride at a time, its whinny as it comes, and its fall.
 
