@@ -89,17 +89,30 @@ export function pixelsAcross(pixels, fov, aspect) {
     return (pixels / (2 * tan)) * (1 + tan * tan * (1 + aspect * aspect));
 }
 
-/** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
-export function detectQuality() {
-    const touch = matchMedia("(pointer: coarse)").matches;
-    const memory = navigator.deviceMemory ?? 8;
-    const cores = navigator.hardwareConcurrency ?? 8;
+// This device, as its browser tells of it: whether it's pointed at with a finger, its memory (GB:
+// Chromium's alone tells) and cores, and what the browser says it is
+const thisDevice = () => ({ touch: matchMedia("(pointer: coarse)").matches, memory: navigator.deviceMemory, cores: navigator.hardwareConcurrency, agent: navigator.userAgent });
 
-    if (touch && (memory <= 4 || cores <= 4)) {
-        return "low";
+/**
+ * A quality level for a device (this one, unless another's told: `touch`, `memory`, `cores`,
+ * `agent` as thisDevice has them): high for a computer; for a phone or a tablet, medium, or low
+ * if it's an iPhone or has 4 GB of memory or 4 cores or fewer.
+ *
+ * An iPhone is Low because of its memory, and for nothing it says of itself: Safari tells a page
+ * neither how much the device has nor how much the page holds, and closes the page at about 550
+ * MB of what the game can count (docs/GAME.md, *Crash reports*). Low's pixels, shadow map, signs
+ * and bodies are what keep the game under that. It came out Low before too, but by accident:
+ * Safari tells no memory at all, and says 4 cores for any device with fewer than 8, which every
+ * iPhone's chip has, so the cores caught it. The day an iPhone has 8, or Safari says otherwise,
+ * it would have gone to Medium by itself: 2.25 times the pixels and four times the shadow map.
+ * (An iPad, which says it's a Mac, goes by its cores as any tablet does, as it did.)
+ */
+export function detectQuality({ touch, memory = 8, cores = 8, agent = "" } = thisDevice()) {
+    if (!touch) {
+        return "high";
     }
 
-    return touch ? "medium" : "high";
+    return /\biP(hone|od)\b/.test(agent) || memory <= 4 || cores <= 4 ? "low" : "medium";
 }
 
 // How far down from the horizon a phone held upright's framing is measured against (degrees:

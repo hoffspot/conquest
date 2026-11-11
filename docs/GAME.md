@@ -2317,8 +2317,14 @@ world was left drawn stretched or squashed. The world map's canvas is watched th
 the 3D view drawn at the screen's pixels again if they change (`matchMedia` on the resolution).
 
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
-to High (suggested for the device until it's moved: older phones low, phones medium, computers
-high); debug mode can change it too. The game aims at 60 frames a second at every level:
+to High (suggested for the device until it's moved, view.js `detectQuality`: an iPhone and a
+phone or tablet with 4 GB of memory or 4 cores or fewer low, other phones and tablets medium,
+computers high); debug mode can change it too. An iPhone is Low for its memory, and said so
+outright: Safari tells a page neither what the device has nor what the page holds, and closes
+it at about 550 MB of what the game can count (*Crash reports*). It came out Low before only
+because Safari tells no memory and says 4 cores for any device with fewer than 8, which every
+iPhone's chip has; with 8, or a Safari that said otherwise, it would have gone to Medium by
+itself, 2.25 times the pixels and four times the shadow map. The game aims at 60 frames a second at every level:
 (Signs are the buildings' name boards and hanging signs and the roads' fingerboards, painted half
 size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
 `signDetail`. At every level a sign's painted so only while it's within 40 metres of the player
@@ -2327,7 +2333,7 @@ size each way further off, from when it's built: *Signs painted as they're seen*
 
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
+| Low (iPhones, older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
 | Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it | full size |
 | High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel | full size |
 
@@ -7526,6 +7532,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   each the size it's said to be and none over 128 pixels, shaken half again as big; its CSS
   value pointing with the sword's tip, both scales where the browser takes them, the system's
   pointer last; and its CSS everywhere but where one types, over the view as the game says.
+- `test/quality.test.js`: the level suggested for a device: an iPhone Low as Safari tells of it
+  (no memory told, 4 cores said for its 6), and still Low with 8 cores or its memory told; any
+  other phone or tablet, an iPad among them, by its memory and cores; a computer High; this
+  device's browser asked, told of no other.
 - `test/camera.test.js`: the camera following from the player's first step, catching up and
   turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way
   round), easing round (three-quarters of a half turn in 0.5 to 1.2 s, never a jump), steady
