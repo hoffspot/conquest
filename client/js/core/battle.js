@@ -776,8 +776,8 @@ const TALK_SEARCH = 800;
  * shapes among a field battle's hundred, as there were, every read was a slower one. Undefined
  * is left out of what a snapshot's text holds (core/wire.js), as these were when they weren't
  * there. Never `delete` one off a character (that alone made every read of it a lookup for good):
- * make it undefined. A new one of the kind goes here too (test/battle-rules.test.js checks the
- * field battle's are all one shape).
+ * make it undefined. A new one of the kind goes here too (test/field-battle.test.js checks the
+ * field battle's characters are all one shape, test/battle-rules.test.js a battle of every sort).
  */
 const OPTIONAL = Object.freeze([
     "abilityReadyAt", "abilityTimes", "backOffAt", "backing", "bleed", "bombAt", "burntAt", "callAt",

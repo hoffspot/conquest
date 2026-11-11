@@ -1019,6 +1019,17 @@ lists of their own). Points are read by index (`a[0]`, `a[1]`), not taken apart.
 Node on the host's field battle of 50 a side, a step left 1.1 MB to be collected before and under
 half a megabyte after; a hundred fighting on an open field, 265 KB and 137.
 
+**What it comes to** (the performance review of November 2026; Node 22 on a busy 4-core machine,
+each step's least time over 3 runs of the host's field battle, `core/host.js` `FIELD_BATTLE`).
+With the searches that make no lists, the one shape, looking round four times a second and ways
+found each in its own step (below), the battle's part of a step while 50 a side fight went from
+1.16 ms to 0.50, its 99th percentile from 3.7 ms to 1.4 and its worst from 7.1 to 4.0; 100 a
+side, 2.39 ms to 1.07, 9.2 to 3.1 and 12.7 to 5.7. The host's whole step while the lines march,
+before the first blow: 1.34 ms to 0.71, and 2.84 to 1.00. A phone's about five times these
+(core/netplay.js). Two hundred all fighting within sight of each other on an open field gain
+least, a tenth (1.65 ms to 1.46, three rounds of the review's `bench.mjs` back to back): every
+one of them is set on someone, and looks every step.
+
 **Lines of battle** (`formation`; core/formation.js; the research behind them in
 [WAR.md](WAR.md#lines-of-battle-m17)). A formation is an army's line: where the middle of its
 front rank is (`anchor`), the way it faces, where it's marching and how fast, and whether,
