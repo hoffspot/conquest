@@ -82,7 +82,7 @@ import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
-import { WorldRunner } from "../core/runner.js";
+import { RUNNER, WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, handInAt, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { MISSIONS, MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -1417,6 +1417,10 @@ export class Game {
             if (remote.self) {
                 this.forecast.heard(remote.self);
             }
+
+            // (The navigation's tiles under each way the host found, baked off the page's thread
+            // as it's heard, some steps before it's played: #bakeUnder)
+            remote.onWay = (id, way) => this.#bakeUnder(id, way);
         }
 
         /**
@@ -2660,6 +2664,15 @@ export class Game {
         const near = this.#bakeNear();
 
         this.#bakeAhead();
+
+        // (And the floors of the buildings got ready already: a world carried on, or joined)
+        for (const key of this.host.open.keys()) {
+            const building = this.world.interiors?.buildings.get(key);
+
+            if (building) {
+                this.#bakeFloors(building);
+            }
+        }
         step("Drawing the map");
 
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap), onHold: () => this.onWorldMap() }));
@@ -3590,6 +3603,10 @@ export class Game {
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
+        if (this.remote) {
+            this.remote.onWay = null;
+        }
+
         // (The navigation meshes of this world's maps, the WebAssembly's memory given back)
         for (const map of Object.values(this.world.maps ?? {})) {
             releaseNavigation(map);
@@ -3781,14 +3798,67 @@ export class Game {
 
     // The navigation tiles round each player in the world outside baked ahead, off the page's
     // thread (a tile sent off a frame), so the ways found near them (core/battle.js) don't wait
-    // on one being baked. (Not in a copy of someone else's world: its battle takes the host's
-    // ways, and finds none of its own.)
+    // on one being baked. A copy of someone else's world takes the host's ways and finds none of
+    // its own, but its battle still asks the mesh where a walker stepping round someone may
+    // stand, and the look ahead at its own hero finds ways over the tiles made already: so round
+    // its own hero they're baked ahead the same way (the others' as their ways are heard:
+    // #bakeUnder). Before, a copy baked none ahead: each was baked in the step that first asked.
     #bakeAhead() {
-        if (this.remote || !this.world.maps?.town?.chunkAt) {
+        if (!this.world.maps?.town?.chunkAt) {
             return;
         }
 
-        this.runner.bakeAhead(this.#navBaker());
+        const baker = this.#navBaker();
+
+        if (!this.remote) {
+            this.runner.bakeAhead(baker);
+
+            return;
+        }
+
+        const hero = this.battle?.actor(this.me);
+        const at = this.bakedRound;
+
+        if (hero && hero.map === "town" && !hero.dead && (!at || Math.abs(hero.x - at[0]) > RUNNER.bakeAgain || Math.abs(hero.y - at[1]) > RUNNER.bakeAgain)) {
+            this.bakedRound = [hero.x, hero.y];
+            baker.around(hero.x, hero.y, RUNNER.bakeReach);
+        }
+
+        baker.pump();
+    }
+
+    // The navigation tiles under a way the host found (a copy's: core/netplay.js Joining onWay,
+    // heard some steps before the way's played), baked off the page's thread meanwhile, those
+    // whose ground this copy has made: what its battle asks the mesh as the way's walked (whether
+    // a walker stepping round someone stays on it) is then asked of tiles in already, not baked
+    // in the step. The answer's the same either way: the same bytes, wherever they're baked.
+    #bakeUnder(id, way) {
+        const actor = this.battle?.actor(id);
+
+        if (actor?.map === "town" && this.world.maps?.town?.chunkAt) {
+            this.#navBaker().along([actor.x, actor.y], way);
+        }
+    }
+
+    // A building's floors' navigation tiles baked off the page's thread as it's got ready (the
+    // host's "open"), before its folk first walk them: kept till each floor's mesh is made, which
+    // takes them, not baking them in a step (core/navigation.js bakedAhead). Let go of with it.
+    #bakeFloors(building, on = true) {
+        if (!this.world.maps?.town?.chunkAt) {
+            return;
+        }
+
+        const baker = this.#navBaker();
+
+        for (const id of [...building.maps, ...(building.vaults ?? [])]) {
+            const map = this.world.maps[id];
+
+            if (map && on) {
+                baker.floor(map);
+            } else if (map) {
+                baker.forget(map);
+            }
+        }
     }
 
     // What the world will soon want made (core/host.js soon), made before the step that wants it:
@@ -3869,7 +3939,7 @@ export class Game {
     #bakeNear() {
         const player = this.battle.actor(this.me);
 
-        if (this.remote || !this.world.maps?.town?.chunkAt || player?.map !== "town") {
+        if (!this.world.maps?.town?.chunkAt || player?.map !== "town") {
             return Promise.resolve();
         }
 
@@ -13603,6 +13673,11 @@ export class Game {
             if (building && !this.visits.has(key)) {
                 this.#prepare(building);
             }
+
+            // (Its floors' navigation, any not made yet: #bakeFloors)
+            if (building) {
+                this.#bakeFloors(building);
+            }
         }
 
         this.#mirror();
@@ -16159,12 +16234,23 @@ export class Game {
                     this.#prepare(building);
                 }
 
+                if (building) {
+                    this.#bakeFloors(building);
+                }
+
                 break;
             }
-            case "close":
+            case "close": {
+                const building = this.world.interiors?.buildings.get(event.key);
+
+                if (building) {
+                    this.#bakeFloors(building, false);
+                }
+
                 this.#release(event.key);
                 this.#mirror();
                 break;
+            }
             case "join":
             case "leave":
                 // (Someone else come into the world, or gone from it: docs/WAR.md M11)

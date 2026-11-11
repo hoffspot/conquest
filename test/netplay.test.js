@@ -153,6 +153,12 @@ describe("playing together (netplay.js)", () => {
             record(op);
         };
 
+        // (Each way told to whoever's listening as it's heard, with the copy's time then: before
+        // it's played, so the game can have the navigation's tiles under it baked meanwhile)
+        const heard = [];
+
+        joining.onWay = (id, way) => heard.push([joining.host.battle.time, id, structuredClone(way)]);
+
         // The host's player and the guest walk off, and the world's people go about their business
         const [x, y] = host.battle.actor(HOST_PLAYER).square;
 
@@ -180,6 +186,11 @@ describe("playing together (netplay.js)", () => {
         assert.ok(ways.every(([, time, id, way]) => Number.isFinite(time) && typeof id === "string" && way.every(([wx, wy]) => wx === Math.round(wx * 100) / 100 && wy === Math.round(wy * 100) / 100)), "each to the centimetre");
         assert.equal(found, 0, "the copy found none of its own");
         assert.deepEqual(joining.host.replay, [], "and took every one");
+        assert.deepEqual(heard.map(([, id, way]) => [id, way]), ways.map(([, , id, way]) => [id, way]), "each told as it was heard, in order");
+        // (A way's time is that of the step it was found in, as that step began: the copy not
+        // there yet, or just there, that step still to play)
+        assert.ok(heard.every(([at], k) => at <= ways[k][1]), "before the copy came to play it");
+        assert.ok(heard.some(([at], k) => at < ways[k][1]));
         assert.deepEqual(positions(joining.host), positions(host));
         assert.equal(joining.host.checksum(), host.checksum());
     });

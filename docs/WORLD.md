@@ -1287,11 +1287,42 @@ found the same 2,012 ways over them to the last bit).
   replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
   several times that on a phone), and stands where it is, unseen, till it can go.
   At most 1,024 tiles are kept (a kilometre square), the longest unused let go first.
+  A copy of a world someone else hosts finds no ways (it takes the host's), but its battle asks
+  the mesh where a walker stepping round someone may stand (GAME.md's *Moving*), and it baked no
+  tile ahead: each was baked in the step that first asked about it, on the page's thread. Now
+  its game bakes those round its own hero ahead as a host's does (its look ahead at its hero
+  finds its ways over them too), and those under each way the host sends as the way's heard,
+  some steps before it's played (`Joining.onWay`; `NavBaker.along`: the tiles within 4 m of the
+  way's first 96 m, after those round the hero, and only those whose ground the copy has made).
+  Measured with a host and a copy in one process, in the clock's own time, over an 80 ms link,
+  both heroes walking about the start town's market for two minutes: before, 12 tiles baked
+  inside 12 of the copy's steps, 404 ms of those steps in all, 87 ms the worst; after, none,
+  77 tiles baked on the worker. (Both standing still, the folk alone stepping round each other:
+  12 tiles in 12 steps and 203 ms, and 6 in 4 and 120 ms on another world; none after.) The
+  copy's checks against the host's passed the same number of times either way, 23 of the world
+  and 599 of where everyone stood, none failing: a step's the same wherever a tile was baked.
+  A tile let go of while it's away at the worker, what stands on it changed (a fortification
+  gone up: `dropTiles`), isn't taken when it comes back, the ground as it was: it's baked again
+  from what's there now (`changed`). (It was taken, and stayed, a tile that game alone had
+  wrong.)
+- **A building's floors** are baked in the worker too, as the building's got ready (the host's
+  "open": `NavBaker.floor`, for each of its maps; a scene's 132 tiles sixteen a frame). Its mesh
+  isn't made for it (a mesh with no tile in it holds 265 KB of Recast's memory, and only 16 are
+  kept): the tiles are kept by the navigation (`bakedAhead`) till the floor's mesh is made, the
+  first time anyone walks it, and taken then, none baked (`ensure`); let go of when the building
+  is. A floor asked for before its tile's back is baked where it's wanted, as ever. A floor's
+  triangles take 0.02 to 0.25 ms on the page; Recast's part, off it now, 13 to 30 ms a tavern's
+  or a keep's floor on a busy desktop, 200 ms a dungeon's five levels, and a second for
+  Bellhaven's grounds. Measured hosting a world in the clock's own time, a player run from door
+  to door through the start town for three minutes (ten doors): before, 11 floors' tiles baked
+  inside 11 of the world's steps; after, none, each taken from the worker's (their folk first
+  walk a floor 4 to 13 seconds after it's got ready; once, a step after, as the world began,
+  and that one is baked in its step when the worker's not back yet).
 - **Maps of squares** (a building's floors, a town laid out on its own, a test's rows) have
   meshes of their own (`navigatorOf`, `squares.js`): flat, a square that isn't blocked two
   triangles of floor, in voxels a tenth of a metre across, keeping walkers 0.3 m from walls, so
   a doorway a square wide is still walked; 32 m tiles, baked as they're wanted (about 25 ms a
-  tavern floor). The 16 last walked keep theirs.
+  tavern floor) or taken, baked ahead (above). The 16 last walked keep theirs.
 - **Asking** (`Navigation`), in the rules' ground coordinates ([x, y], or [x, y, height]):
   - `path(from, to)`: the way's corners. The tiles between are made sure of first, and 4 m round
     them; if the way falls short, a ring of tiles round them and then three (across a long way,
@@ -1331,6 +1362,16 @@ found the same 2,012 ways over them to the last bit).
   of an overworld's 1,024 tiles.
 
 ## Tests
+
+`test/navbaker.test.js` checks the baking off the asking thread, on Node's threads as the world
+server runs the game's workers: each kind of mesh's tiles the same bytes from the worker as baked
+here (a scene's with its ledges left); a building's floors baked as it's got ready, taken by
+each floor's mesh when it's made, which bakes none and walks as one baked here; a big floor's
+tiles sent a few at a time, and none kept for a floor let go of; a tile let go of while it was
+away, what stands on it changed, baked again from what stands there now; the tiles a way runs over
+wanted for a copy, and nothing of a way that isn't one; and a battle given its ways asking the
+mesh about a walker stepping round another without baking a tile in a step, its walkers ending
+where they do when it's baked there.
 
 `test/bake.test.js` holds the bytes of three made-up tiles (the overworld's kind, a scene's, a map
 of squares') and the corners of a way over each as recorded: a version of Recast or a setting of

@@ -1172,11 +1172,20 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   out on its own, a test's rows) has a mesh of its own, baked from its squares a 32-metre tile
   at a time as it's wanted (`navigation/squares.js`): flat, each square that isn't blocked two
   triangles of floor, in voxels a tenth of a metre across, kept 0.3 metres from walls, so a
-  doorway or a passage a square wide is still walked. A tavern's floor takes about 25 ms to bake
-  the first time anyone walks it. The 16 maps of squares last walked keep their meshes. The
-  battle's ways are the only thing it asks of the meshes: what's in the way, and where someone
-  can be put, are still asked of the squares, so a copy of a world someone else hosts needs
-  nothing of the meshes at all (below).
+  doorway or a passage a square wide is still walked. A tavern's floor takes 10 to 30 ms to
+  bake, and it's baked off the page's thread as its building's got ready (the host's "open"),
+  kept till the floor's mesh is made the first time anyone walks it, which takes it then (WORLD.md,
+  *Navigation meshes*: baked in the step that first asked, before, or still if it's asked before
+  it's back). The 16 maps of squares last walked keep their meshes. The battle asks the meshes
+  two things: its ways, and whether someone stepping aside round another, or back towards their
+  way, thrown or leaping somewhere, or getting down from a horse, would still be standing on
+  the mesh there (`#clear`: `walkable`), which keeps them out of what's drawn where the squares
+  don't reach. What's in the way, and where someone can be put, are still asked of the squares.
+  A copy of a world someone else hosts takes the host's ways (below) and finds none, but it
+  asks the second for itself, so it needs the tiles under whoever's walking: its game has those
+  round its own hero baked ahead as the host's does, and those under each way the host sends
+  baked as the way's heard, some steps before it's played (`Joining.onWay`, `NavBaker.along`).
+  The answer's the same wherever a tile was baked, and whenever: the same bytes.
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at

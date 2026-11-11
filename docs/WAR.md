@@ -3478,6 +3478,11 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   battle takes the host's way rather than finding its own (`Host.replaying`), so what each copy
   has made of the meshes (as each has needed them) doesn't matter: a copy finds none at all. (A
   way a copy finds missing, having strayed, it finds itself, and its next check sets it right.)
+  A copy's battle still asks the mesh one thing for itself, whether a walker stepping round
+  someone stays on it, so the copy's game is told each way as it's heard (`Joining.onWay`), a few
+  steps before it's played, and has the tiles under it baked off the page's thread meanwhile
+  (WORLD.md, *Navigation meshes*): the tiles are the same bytes wherever and whenever they're
+  baked, so nothing of the copy hangs on it.
   Games before these (`NET_VERSION` 6) can't join, nor games whose ground is made otherwise
   (before mountain streams: 7; before graded roads and mountain paths: 8; before camps on
   flats and castles on rises: 9; before settlements lying with the land: 10), since where anyone can walk must be the same in every copy.
@@ -3632,7 +3637,10 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     at most). So a swing, a cast or a stagger holds them there as it does on the host, the stick's
     way slides round a lamppost there, and they stop where the host will stop them. It's made
     again at each of the host's words, and each command sent. Its ways are found over the
-    navigation tiles made already only (`bakedOnly`); off them, the stick's way goes straight on.
+    navigation tiles made already only (`bakedOnly`: those within 96 m of the hero are baked
+    ahead off the page's thread, as a host's game bakes them round each player; a copy baked
+    none ahead before, and had only those its own steps had happened to ask for); off them,
+    the stick's way goes straight on.
     What it does is only drawn: no blow it strikes lands, nothing it says is heard, and the copy
     of the world is never touched, so the rules never guess.
   - **When.** The host's time now is reckoned from the quickest of its words of the last second

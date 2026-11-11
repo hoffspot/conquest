@@ -1247,6 +1247,13 @@ export class Joining {
         this.self = null;
         this.onSelf = null;
 
+        /**
+         * Who's told each way the host found, (id, way), as it's heard: some steps before it's
+         * played (step), so the game can have the navigation's tiles under it baked meanwhile, off
+         * the page's thread (app/game.js: world/navbaker.js along). Nothing of the copy hangs on it.
+         */
+        this.onWay = null;
+
         /** Whether it's gone astray from the host's, and asked for the world again. */
         this.astray = false;
         this.resyncs = 0;
@@ -1368,6 +1375,10 @@ export class Joining {
                     for (const op of message.ops) {
                         this.queue.push(op);
                         steps += Array.isArray(op) && op[0] === "a" ? (op[2] ?? 1) : 0;
+
+                        if (this.onWay && Array.isArray(op) && op[0] === "v") {
+                            this.onWay(op[2], op[3]);
+                        }
                     }
 
                     this.#waiting += steps;

@@ -1593,6 +1593,20 @@ test("two players walk about a while: the joined copy's checked against the host
     // The guest's overlay says how the link's going
     await expect(guest.locator("#debugstats")).toContainText(/Net joined: RTT \d+ ms/, { timeout: 10000 });
 
+    // The guest's copy has its navigation's tiles baked off the page's thread, those round its
+    // hero and under the ways the host sent (a copy baked none ahead: each in the step that first
+    // asked the mesh about it, as one walker stepped round another). How many its steps still
+    // baked is noted, not held to none: one asked about before it's back is baked there, as ever
+    const tiles = await guest.evaluate(() => {
+        const { navBaker } = window.pellagos.game;
+
+        return { worker: Boolean(navBaker?.worker), added: navBaker?.navigation.added ?? 0, inSteps: navBaker?.navigation.baked ?? 0 };
+    });
+
+    test.info().annotations.push({ type: "navigation", description: `the guest's copy: ${tiles.added} tiles in its mesh, ${tiles.inSteps} of them baked in its steps` });
+    expect(tiles.worker).toBe(true);
+    expect(tiles.added - tiles.inSteps).toBeGreaterThanOrEqual(9);
+
     // The host's world stopped, all it did sent: the guest's copy comes to just the same
     await host.evaluate(() => {
         const { game } = window.pellagos;
