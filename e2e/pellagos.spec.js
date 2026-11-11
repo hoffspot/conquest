@@ -810,6 +810,10 @@ test.describe("drawn at the screen's own pixels", () => {
         await expect(page.locator("#adaptiveswitch")).toBeChecked();
         await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
         await expect(page.locator("#adapted")).toHaveText("Keeping up: drawing medium");
+        // (The picture's edges as the quality chosen has them, and no battery being saved, on a
+        // computer: nothing said of either)
+        await expect(page.locator("#edgesnote")).toBeHidden();
+        await expect(page.locator("#savingpower")).toBeHidden();
 
         // (A quality chosen: drawn at it, every pixel, starting again from there)
         await page.locator("#qualityslider").evaluate((slider) => {
@@ -827,6 +831,40 @@ test.describe("drawn at the screen's own pixels", () => {
 
         expect(chosen).toEqual({ quality: "low", chosen: "low", scale: 1, ratio: 1, step: 0, saved: "low" });
         await expect(page.locator("#adapted")).toBeHidden();
+        // (Low smooths no edges, and the picture was made at High, smoothing them: all of Low
+        // drawn at once but that, which waits on the game being loaded again, and is said so;
+        // back at High, nothing to say. And a phone or a tablet whose browser asks for 30 frames
+        // a second is told the game's drawing 30 and taking nothing away for it)
+        await expect(page.locator("#edgesnote")).toHaveText("Edges stay smoothed, as the quality before drew them, till the game's next loaded.");
+        for (const level of ["2", "0"]) {
+            await page.locator("#qualityslider").evaluate((slider, value) => {
+                slider.value = value;
+                slider.dispatchEvent(new Event("input", { bubbles: true }));
+                slider.dispatchEvent(new Event("change", { bubbles: true }));
+            }, level);
+            await expect(page.locator("#edgesnote")).toBeVisible({ visible: level === "0" });
+        }
+
+        const saving = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const touch = window.matchMedia;
+
+            // (A touch screen; and twelve seconds of a browser asking for 30 frames a second, the
+            // game's own work 5 ms of each: timed well ahead of the page's own frames, drawn in
+            // software a second apart and more, which say nothing of what a browser asks for)
+            window.matchMedia = (query) => (query === "(pointer: coarse)" ? { matches: true, addEventListener: () => {}, removeEventListener: () => {} } : touch.call(window, query));
+
+            for (let now = performance.now() + 3600000, end = now + 12000; now < end; now += 1000 / 30) {
+                game.pacing.beat.observe(now, 1000 / 30, 5);
+            }
+
+            return Math.round(1000 / game.pacing.beat.value);
+        });
+
+        expect(saving).toBe(30);
+        await page.locator("#graphicsback").click();
+        await page.locator("#graphicsbutton").click();
+        await expect(page.locator("#savingpower")).toHaveText("Your device is saving its battery and asking for 30 frames a second, so the game draws 30, and takes nothing away for it.");
 
         // (Adaptive off: remembered, and the game left at the quality chosen)
         await page.locator("label:has(#adaptiveswitch)").click();
