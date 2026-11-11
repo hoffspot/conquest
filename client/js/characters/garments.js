@@ -1969,6 +1969,19 @@ function pointsOf(map, measures) {
     return texelPoints.get(map).points;
 }
 
+/**
+ * Where each texel is on the body garments are painted for (pointsOf's, kept for the next
+ * garment painted on a texel map: 4 MB at 512) let go of: worked out again for the next.
+ */
+export function forgetPoints(map) {
+    texelPoints.delete(map);
+}
+
+/** How many bytes of it are kept for a texel map now. */
+export function pointsHeld(map) {
+    return texelPoints.get(map)?.points.byteLength ?? 0;
+}
+
 // Where in a texel (and round it) an emblem is looked for, across and up: four by four
 const EMBLEM_SAMPLES = Object.freeze([-0.75, -0.25, 0.25, 0.75]);
 

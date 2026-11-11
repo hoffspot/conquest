@@ -529,7 +529,7 @@ lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
 on MakeHuman's eye helper mesh with a glossy clear coat. Each look of eye is painted once and its
 picture shared by everyone with it (irises come from each people's few colours), kept a while
-after the last with it has gone.
+after the last with it has gone (the two most recent: `IDLE`).
 
 **Hair.** Hair is thousands of thin strips (hair cards) with a strand texture, grown from roots
 spread over the outside of the head above the style's hairline (never inside the mouth), and
@@ -812,7 +812,7 @@ slots, sockets and hidden skin.
    place on the body's surface whatever its build. So is a player's, drawn a garment at a time:
    each garment's picture is painted for the usual shape, and cut where a player's own body put
    it, a surcoat's hem ran across its trim, ragged at the hips. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
-   while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
+   while (the two most recent kept: *What the kit lets go of*); lace and drapes are drawn as before. Battle damage tells
    metal from cloth by the metalness picture. Whoever else comes to wear an outfit while its
    picture's being made takes steps of the same making (`shared`), and so with each garment's:
    two in one uniform built turn and turn about make it once between them and are both counted
@@ -917,6 +917,40 @@ quarter of it held: 1.08 MB a body.
 
 `test/pictures.test.js` has the size chosen at each height, the smaller picture against the
 bigger, and the swaps; `test/wounds.test.js` the damage's.
+
+**What the kit lets go of** (`wardrobe.js`). The kit kept every garment's own picture it had ever
+painted (1.25 MB each, 26 of them in a quiet town, 103 there are) and both of every outfit's
+pictures (2 MB an outfit) on the page for good: about 60 MB of the 100 MB the kit held in a town
+of 18. Now:
+
+- **An outfit's two pictures** are let go of from the page once they're on the graphics card
+  (`releaseTexture`). What's kept is its colour at the least size (0.25 MB), which is what a
+  crowd's figure is made from (`world/crowd.js` `figureOf` reads its character's pictures on the
+  page), and, while bigger ones are drawn, its heights at the least size, to go back to. Seen
+  bigger again (*Pictures at the size they're seen*), its pictures are made again from its
+  garments' own (`again`), 3 ms a frame (`tendKit`, which the game's bodies call as they're
+  told how they're seen), the smaller ones drawn till then.
+- **Whoever reads them on the page** (anyone not `release`: a crowd's figure's own character, a
+  lab's, a bestiary's portrait) has a material of their own for the outfit: its pictures as
+  they're painted, if they're on the page (always, in a lab), else the colour that's kept, with
+  the game's own picture of its heights. A bestiary's portrait asks for them whole
+  (`Character.whole`: made again there and then). Where a crowd's figures are made from pictures
+  512 a side (High, with skins of 1024), the colour's kept as it's painted, not at the least size
+  (`keeps`).
+- **A garment's own picture** is let go of 30 seconds after it was last used (`PICTURES.garments`:
+  an outfit made from it, or someone no longer drawing with it), by the wardrobe's own clock,
+  which goes on only while it's tended (a page put by and come back to finds them still there);
+  and painted again when it's next wanted (97 ms a garment, in steps). One a player draws with,
+  garment by garment, is kept while they do, and with it the one a people's make of it is tinted
+  from, whose pictures it draws with.
+- **Idle outfits and looks of eye** beyond two (`IDLE`) are let go of, the longest unworn first.
+- **All of it at once, when the page is short of memory**: `letGoOfIdle(kit)` (`kit.js`) lets go
+  of every outfit and look of eye no one's wearing, every garment's picture no one's drawing
+  with, and where each texel is on the body garments are painted for (`forgetPoints`: 4 MB kept
+  for the next garment painted). `heldByKit(kit)` says how many bytes the kit holds on the page.
+
+A body's own outfit seen small is then 0.25 MB on the page where it was 2 MB, and its nine
+garments' 11 MB are gone half a minute after it's dressed. `test/wardrobe.test.js`.
 
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of

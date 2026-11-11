@@ -18,9 +18,11 @@
  * painted); `down`: how tall it's seen before they're swapped back, once it's been under that
  * `after` seconds on end (so one walking about at the edge of it doesn't have them swapped back
  * and forth). `held`: how long (seconds) one asked for whole (Character.whole: for a likeness of
- * it) keeps them so.
+ * it) keeps them so. `garments`: how long (seconds) a garment's own picture is kept on the page
+ * after it was last used (wardrobe.js); `budget`: how much of a frame (ms) goes on making
+ * outfits' pictures whole again for wearers seen bigger, at most once every `every` ms.
  */
-export const PICTURES = Object.freeze({ least: 256, up: 120, down: 100, after: 3, held: 5 });
+export const PICTURES = Object.freeze({ least: 256, up: 120, down: 100, after: 3, held: 5, garments: 30, budget: 3, every: 8 });
 
 /**
  * The size (texels a side) to hold the pictures of a body `tall` pixels tall on the screen at,

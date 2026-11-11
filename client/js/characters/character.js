@@ -22,7 +22,7 @@ import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { PICTURES, pictureSize, sizingSkin } from "./pictures.js";
-import { dataTexture, fitOutfit, garmentMaterial, leaveOutfit, letGo, OUTFIT_SIZE, outfitWhole, referenceMeasures, setPicture, take, wearingOutfit } from "./wardrobe.js";
+import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitWhole, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
 import { releaseTexture } from "../world/release.js";
@@ -60,9 +60,6 @@ function skinningOf(human) {
 
     return skinnings.get(human);
 }
-
-// How many looks of eye's pictures no one has just now are kept, for the next with one
-const IDLE_EYES = 8;
 
 // How a carried torch's shaft lies across the palm (radians from straight across, towards the
 // fingers at the thumb's side: grip.js), as a staff's does
@@ -1229,10 +1226,11 @@ export class Character {
 
     /**
      * A garment's material, its texture painted once per kit; a people's make of one that only
-     * differs in colour (`base`: liveries.js), its picture tinted to its colour (wardrobe.js).
+     * differs in colour (`base`: liveries.js), its picture tinted to its colour (wardrobe.js):
+     * its own to draw with, kept by the kit while it does.
      */
     #garmentMaterial(id) {
-        return garmentMaterial(this.kit, id);
+        return drawingGarment(this, id);
     }
 
     /**
@@ -1245,10 +1243,11 @@ export class Character {
         return yield* wearingOutfit(this, ids);
     }
 
-    // No longer wearing the outfit whose picture it was drawn with: kept a while, for the next
-    // to wear it
+    // No longer wearing the outfit whose picture it was drawn with (kept a while, for the next
+    // to wear it), nor drawing with any garment's own
     #release() {
         leaveOutfit(this);
+        leaveGarments(this);
     }
 
     /** Change how the character looks: { skin, eyes, hair } (see LOOK_DEFAULTS). */
@@ -1334,14 +1333,17 @@ export class Character {
      * elsewhere (skins.js: or here, a step each time this is called, where it can't be), its
      * outfit's by its tallest wearer (wardrobe.js), its wounds' (world/wounds.js). Seen smaller a
      * while, they're swapped back. Only one of the game's (`release`): anyone else's are as
-     * they're painted. Called every frame it may be drawn.
+     * they're painted. Called every frame it may be drawn (`now`: the frame's time, ms): the
+     * kit's wardrobe is tended as it is (wardrobe.js tendKit: once a frame, whoever calls).
      */
-    fitPictures(tall, dt = 0) {
+    fitPictures(tall, dt = 0, now = performance.now()) {
         const pictures = this.pictures;
 
         if (!this.release) {
             return;
         }
+
+        tendKit(this.kit, now);
 
         pictures.held = Math.max(0, pictures.held - dt);
 
@@ -1367,15 +1369,19 @@ export class Character {
     /**
      * Its pictures as big as they're painted, however small it's seen, for a while from now
      * (PICTURES.held seconds: drawn close for a likeness of it; asked again, a while longer):
-     * whether they are yet (those of the game's: anyone else's always are).
+     * whether they are yet. Anyone else's are as they're painted: but for an outfit's, if it
+     * was given only the colour kept of them (wardrobe.js: let go of since the game's own bodies
+     * were given theirs), which is made whole here, at once.
      */
-    whole() {
+    whole(now = performance.now()) {
         if (!this.release) {
+            wholeOutfit(this);
+
             return true;
         }
 
         this.pictures.held = PICTURES.held;
-        this.fitPictures(Infinity);
+        this.fitPictures(Infinity, 0, now);
 
         return outfitWhole(this) && (this.pictures.skin === null || this.pictures.skin >= this.kit.atlas.size);
     }
@@ -1486,7 +1492,7 @@ export class Character {
 
     // No longer drawing its eyes with the picture it did: kept a while, for the next with them
     #releaseEyes() {
-        letGo(this.kit.eyes, this.eyePicture, IDLE_EYES, (texture) => texture.dispose());
+        letGo(this.kit.eyes, this.eyePicture, IDLE, (texture) => texture.dispose());
         this.materials.eyes.map = null;
         this.eyePicture = null;
     }

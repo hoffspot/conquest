@@ -37,7 +37,7 @@ const { halved, halving, PICTURES, pictureSize, reduced, sizedSkin } = await imp
 const { paintSkin, SkinAtlas } = await import("../client/js/characters/skin.js");
 const { Skins } = await import("../client/js/characters/skins.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
-const { OUTFIT_SIZE } = await import("../client/js/characters/wardrobe.js");
+const { OUTFIT_SIZE, tendKit } = await import("../client/js/characters/wardrobe.js");
 
 // The skin worker (skin-worker.js), run here: what's sent to it copied to it, and what it sends
 // back kept till it's delivered
@@ -83,6 +83,13 @@ const widths = (character) => [character.materials.body.map.image.width, charact
 // A picture sent to the graphics card, as three.js tells it (world/release.js lets go of the
 // page's copy then, if it's to)
 const sent = (texture) => texture.onUpdate?.(texture);
+
+// The frames' clock (ms: ahead of the page's own, which whatever isn't given this one goes by),
+// a frame on; and a kit's wardrobe tended to the end of whatever it's making (wardrobe.js tendKit:
+// an outfit's pictures made whole again, a little a frame in the game)
+let clock = performance.now() + 1e7;
+const frame = () => (clock += 16);
+const tended = (kit) => tendKit(kit, (clock += 1000), Infinity);
 
 describe("a body's pictures at the size it's seen (pictures.js)", () => {
     it("chooses the size by how tall the body is on the screen: bigger past 120 pixels, smaller again only under 100", () => {
@@ -209,7 +216,7 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
         const disposed = new Map([skin, bumps, cloth, surface].map((texture) => [texture, 0]));
         const fit = (tall, seconds, frames = 1) => {
             for (let k = 0; k < frames; k++) {
-                character.fitPictures(tall, seconds / frames);
+                character.fitPictures(tall, seconds / frames, frame());
             }
         };
 
@@ -218,39 +225,43 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
             sent(texture);
         }
 
-        // (Sent, the skin's page copy is let go of, as ever)
-        assert.equal(skin.image.data, null);
+        // (Sent, the page's copy of each is let go of)
+        assert.deepEqual([skin, bumps, cloth, surface].map((texture) => texture.image.data), [null, null, null, null]);
 
         // Under 120, as it was
         fit(100, 10, 60);
         fit(119, 10, 60);
         assert.deepEqual(widths(character), [256, 256, 256, 256]);
         assert.equal(character.pictures.job, null, "nothing asked for");
+        assert.equal(kit.composites.get(character.composite).again, null);
 
-        // Past 120: its outfit's at once, its skin when it's painted (here, with no worker: a step
-        // each frame)
+        // Past 120: both asked for (its skin painted here, with no worker, a step each frame; its
+        // outfit's made again from its garments', a little each frame), the smaller ones drawn
+        // till they come
         fit(121, 0.016);
-        assert.deepEqual(widths(character).slice(2), [512, 512], "its outfit's");
         assert.ok(character.pictures.job, "its skin asked for");
-        assert.equal(skin.image.width, 256, "the smaller one drawn till it comes");
+        assert.ok(kit.composites.get(character.composite).again, "its outfit's being made again");
+        assert.deepEqual(widths(character), [256, 256, 256, 256]);
 
         let frames = 1;
 
-        for (; frames < 400 && skin.image.width !== 512; frames++) {
+        for (; frames < 2000 && !(skin.image.width === 512 && cloth.image.width === 512); frames++) {
             fit(121, 0.016);
         }
 
-        assert.ok(frames > 8 && frames < 400, `${frames} frames`);
+        assert.ok(frames > 8 && frames < 2000, `${frames} frames`);
         assert.deepEqual(widths(character), [512, 512, 512, 512]);
         assert.ok(character.materials.body.map === skin && character.materials.body.bumpMap === bumps && outfitOf(character).map === cloth && outfitOf(character).bumpMap === surface, "the same pictures, in place");
         assert.deepEqual([...disposed.values()], [1, 1, 1, 1], "each smaller one off the graphics card");
         assert.ok(same(skin.image.data, whole.materials.body.map.image.data) && same(bumps.image.data, whole.materials.body.bumpMap.image.data), "its skin as it's painted");
         assert.ok(same(cloth.image.data, outfitOf(whole).map.image.data) && same(surface.image.data, outfitOf(whole).bumpMap.image.data), "its outfit as it's painted");
 
-        // (Sent: the page's copy of the skin let go of, the smaller one kept to go back to)
-        sent(skin);
-        sent(bumps);
-        assert.equal(skin.image.data, null);
+        // (Sent: the page's copies let go of, the smaller skin kept to go back to)
+        for (const texture of disposed.keys()) {
+            sent(texture);
+        }
+
+        assert.deepEqual([skin, bumps, cloth, surface].map((texture) => texture.image.data), [null, null, null, null]);
         assert.equal(character.pictures.small.width, 256);
 
         // Between 100 and 120, kept; under 100, kept a while, then swapped back
@@ -265,6 +276,7 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
         assert.deepEqual(widths(character), [256, 256, 256, 256]);
         assert.ok(same(skin.image.data, reduced(whole.materials.body.map.image.data, 512, 256, true)), "its skin the next level again");
         assert.ok(same(cloth.image.data, reduced(outfitOf(whole).map.image.data, 512, 256, true)));
+        assert.ok(same(surface.image.data, reduced(outfitOf(whole).bumpMap.image.data, 512, 256, false)));
         assert.equal(character.pictures.small, null);
         assert.deepEqual([...disposed.values()], [2, 2, 2, 2]);
         assert.ok(character.materials.body.map === skin && outfitOf(character).map === cloth);
@@ -278,19 +290,27 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
 
         assert.ok(outfitOf(far) === outfitOf(near) && outfit.users === 2);
         assert.equal(outfitOf(far).map.image.width, 256);
-        near.fitPictures(200, 0.016);
+        near.fitPictures(200, 0.016, frame());
+        tended(kit);
         assert.equal(outfitOf(far).map.image.width, 512, "one of them seen big");
-        far.fitPictures(60, 10);
+        far.fitPictures(60, 10, frame());
         assert.equal(outfitOf(far).map.image.width, 512, "the other seen small all the while");
-        near.fitPictures(60, PICTURES.after + 1);
-        near.fitPictures(60, 0.016);
+        near.fitPictures(60, PICTURES.after + 1, frame());
         assert.equal(outfitOf(far).map.image.width, 256, "both small");
-        near.fitPictures(200, 0.016);
+        near.fitPictures(200, 0.016, frame());
+        assert.ok(outfit.again, "being made again");
+        near.fitPictures(60, PICTURES.after + 1, frame());
+        assert.equal(outfit.again, null, "no longer wanted, before it's made");
+        tended(kit);
+        assert.equal(outfitOf(far).map.image.width, 256);
+        near.fitPictures(200, 0.016, frame());
+        tended(kit);
         assert.equal(outfitOf(far).map.image.width, 512);
         near.dispose();
         assert.equal(outfitOf(far).map.image.width, 256, "its tallest wearer gone");
-        far.fitPictures(200, 0.016);
+        far.fitPictures(200, 0.016, frame());
         far.dispose();
+        tended(kit);
         assert.equal(outfit.users, 0);
         assert.equal(outfit.sized.map.image.width, 256, "kept a while, at its least");
     });
@@ -301,26 +321,26 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
         const lab = new Character(kit, options(soldier));
 
         assert.equal(lab.whole(), true, "anyone else's always are");
-        assert.equal(character.whole(), false, "asked for");
+        assert.equal(character.whole(frame()), false, "asked for");
 
         let frames = 0;
 
-        for (; frames < 400 && !character.whole(); frames++) {
-            character.fitPictures(60, 0.016);
+        for (; frames < 2000 && !character.whole(frame()); frames++) {
+            character.fitPictures(60, 0.016, frame());
         }
 
-        assert.ok(frames < 400);
+        assert.ok(frames < 2000);
         assert.deepEqual(widths(character), [512, 512, 512, 512]);
 
         // (Not asked again: kept whole PICTURES.held seconds, then, seen small still, swapped back)
         for (let k = 0; k < 10; k++) {
-            character.fitPictures(60, (PICTURES.held - 0.5) / 10);
+            character.fitPictures(60, (PICTURES.held - 0.5) / 10, frame());
         }
 
         assert.deepEqual(widths(character), [512, 512, 512, 512]);
 
         for (let k = 0; k < 10; k++) {
-            character.fitPictures(60, (PICTURES.after + 1) / 10);
+            character.fitPictures(60, (PICTURES.after + 1) / 10, frame());
         }
 
         assert.deepEqual(widths(character), [256, 256, 256, 256]);
@@ -336,21 +356,21 @@ describe("a body's pictures at the size it's seen (pictures.js)", () => {
             const skin = character.materials.body.map;
 
             assert.equal(skin.image.width, 256);
-            character.fitPictures(200, 0.016);
+            character.fitPictures(200, 0.016, frame());
             assert.ok(character.pictures.job?.asked, "asked of the worker");
             assert.equal(skin.image.width, 256);
             await kit.skins.worker.deliver(character.pictures.job.asked);
-            character.fitPictures(200, 0.016);
+            character.fitPictures(200, 0.016, frame());
             assert.equal(skin.image.width, 512);
             assert.ok(same(skin.image.data, whole.materials.body.map.image.data));
             assert.equal(character.pictures.small.width, 256, "the smaller one with it");
             assert.equal(character.pictures.job, null);
 
             // (Small again before a bigger one comes: not put on, and not painted if not begun)
-            character.fitPictures(60, PICTURES.after + 1);
-            character.fitPictures(60, 0.016);
+            character.fitPictures(60, PICTURES.after + 1, frame());
+            character.fitPictures(60, 0.016, frame());
             assert.equal(skin.image.width, 256);
-            character.fitPictures(200, 0.016);
+            character.fitPictures(200, 0.016, frame());
             assert.ok(character.pictures.job?.asked);
             character.dispose();
             assert.equal(kit.skins.jobs.size, 0);

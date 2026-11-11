@@ -11712,6 +11712,10 @@ export class Game {
 
         avatar.object.position.y = y;
         avatar.object.traverse((node) => node.layers.disableAll());
+
+        // (Its outfit's pictures as they're painted, if it was given only what the kit keeps of
+        // them: characters/wardrobe.js)
+        avatar.character.whole?.();
         this.view.scene.add(avatar.object);
         this.view.upload([avatar.object], { hidden: true });
 

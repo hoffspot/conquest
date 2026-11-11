@@ -473,10 +473,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      bent, nor composited or sampled by code) can let go of the page's copy once it's on the
      graphics card: `releaseGeometry` and `releaseTexture` (`client/js/world/release.js`), as
      the undergrowth, hedges, ground and building atlas do. On a phone the graphics card shares
-     the page's memory, so the copy costs twice. Don't for anything read again: a character's
-     garment pictures are. (A game character's skin is let go of once it's sent, as it's painted
-     again whole whenever it changes. A drawing lost and given back then loads the page again,
-     where the player was: `docs/GAME.md`.)
+     the page's memory, so the copy costs twice. Don't for anything read again, unless it can
+     be made again when it's wanted: a garment's own picture, which outfits are put together
+     from, is kept till it's been unused half a minute and painted again after
+     (`client/js/characters/wardrobe.js`). (A game character's skin is let go of once it's
+     sent, as it's painted again whole whenever it changes, and so are its outfit's pictures,
+     but the small copy a crowd's figure is made from. A drawing lost and given back then loads
+     the page again, where the player was: `docs/GAME.md`.)
    - A new shield (an item in `ITEMS`, `client/js/characters/equipment.js`, held on the left
      forearm or fist) must say whether it's slung on the back once the weapons are put away:
      `sling: true` for a round, kite or other strapped shield light and short enough, `false`

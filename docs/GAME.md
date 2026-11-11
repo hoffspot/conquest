@@ -7043,12 +7043,13 @@ cat folk's capital, 2026-11-10); and each of the game's characters' own skin, 4 
 colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
 again, as a disguise or a change of look does, it's sent and let go of again; and held a quarter
 the size while the body's small on the screen, as its outfit's pictures are: CHARACTERS.md,
-*Pictures at the size they're seen*). Not the pictures of
-what characters wear (composited from each garment's, and painted into a crowd's figure:
-characters/character.js, world/crowd.js; a crowd's figure is made from a character of its own,
-before it's ever sent, and one whose skin's been let go of is coloured by its material there),
-nor the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged, cloned, posed or
-bent. What each body keeps that's the same for every body of its build is kept once for them all:
+*Pictures at the size they're seen*); and an outfit's two pictures, but its colour at the least
+size, which a crowd's figure is made from (world/crowd.js: from a character of its own, given
+that; one whose skin's been let go of is coloured by its material there). A garment's own
+picture, which outfits are put together from, is kept on the page till it's been unused half a
+minute, then painted again when it's wanted (characters/wardrobe.js; CHARACTERS.md, *What the kit
+lets go of*). Not the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged,
+cloned, posed or bent. What each body keeps that's the same for every body of its build is kept once for them all:
 its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
 coordinates are), and the moves' compiled tracks only once a move's first played (characters/
 actions.js `tracksOf`: all of them were compiled as the page loaded before), each track's numbers
