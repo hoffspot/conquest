@@ -51,6 +51,7 @@ to them.
 | `skin.js`, `face.js`, `noise.js` | Painting the skin and eyes; where the hairline and beard are |
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
+| `garment-pictures.js` | What each garment is (its region of the body, its colours and pattern) and its picture, and an outfit's: with no three.js, so the skins' worker can paint them |
 | `items.js` | Rigid equipment: weapons, shields, helmets, packs, tusks |
 | `headwear.js` | The head measured all round, the lines head-wear's rims follow, plates grown over it |
 | `equipment.js` | Slots, sockets and the equipment catalogue |
