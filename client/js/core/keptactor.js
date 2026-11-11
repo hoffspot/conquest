@@ -20,10 +20,10 @@
 import { armsOf, KNIFE } from "./weapons.js";
 
 /**
- * A character's fields in the order the battle makes one with them (battle.js add), those only
- * some have (`wards`, `tactic`, `keep`, `lone`, `sight`) among them where they'd come: a character
- * read back from a snapshot has its fields in this order, then any others as they were kept, so
- * it's laid out as the one it was kept from is.
+ * The fields every character has, in the order the battle makes one with them (battle.js add): a
+ * character read back from a snapshot has these in this order, then any others as they were kept
+ * (those only some have: `wards`, `tactic`, `keep`, `lone`, `sight`, and what the host and the
+ * battle put on later), so it's laid out as the one it was kept from is.
  */
 export const ACTOR_FIELDS = Object.freeze([
     "id",
@@ -48,7 +48,6 @@ export const ACTOR_FIELDS = Object.freeze([
     "taunted",
     "power",
     "armor",
-    "wards",
     "empowered",
     "shield",
     "map",
@@ -87,8 +86,6 @@ export const ACTOR_FIELDS = Object.freeze([
     "stopSince",
     "restAt",
     "restingUntil",
-    "restVariety",
-    "chance",
     "beckoned",
     "sawPlayerAt",
     "beckoningUntil",
@@ -135,10 +132,6 @@ export const ACTOR_FIELDS = Object.freeze([
     "rethinkAt",
     "casts",
     "heals",
-    "tactic",
-    "keep",
-    "lone",
-    "sight",
 ]);
 
 /**
