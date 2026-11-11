@@ -164,6 +164,9 @@ Answered by the owner on 2026-11-11:
 - **A hired adventurer's bar is never hidden,** as the party's aren't.
 - **A bar's hidden once more than half of it lies under those before it:** half is right, not
   any overlap.
+- **Covered bars are hidden for everyone,** not the soldiers alone: wild creatures', townsfolk's
+  and other players' as well. Never the player's target's, their party's, an attacker's or a
+  hired adventurer's.
 - **Parties only, for now:** no friends or guilds for the order to know of. Should they come,
   they're a standing of their own in `client/js/app/precedence.js`, after the party.
 
