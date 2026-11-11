@@ -199,10 +199,15 @@ function handed(response, destination) {
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+// What the downloader's request for a whole file says of itself (js/app/fetcher.js WHOLE)
+const WHOLE = "X-Pellagos-Whole";
+
 async function byHash(request, hash, event, destination = request.destination) {
     // (A part of a file: the downloader asks for one a part at a time, and keeps the whole itself:
-    // not in line)
-    const part = Boolean(request.headers?.has("range"));
+    // not in line. Nor one it asks for whole, which it says: the player's waiting for it, and the
+    // server sends it compressed. Handed on as it comes, the downloader checking and keeping it,
+    // not kept here too)
+    const part = Boolean(request.headers?.has("range") || request.headers?.has(WHOLE));
     const { ready, leave } = part ? { ready: Promise.resolve(), leave: () => {} } : inLine(request.url);
     let keeping = false;
 

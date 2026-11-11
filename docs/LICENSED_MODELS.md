@@ -441,8 +441,10 @@ afterwards.
 
 Each byte of a licensed model's file is swapped for another, through a table made from a fixed
 seed (a shuffle of the 256 values a byte can have). The same byte always becomes the same byte, so
-what repeats in the file still repeats, and gzip, which GitHub Pages sends every file with, packs
-it as small as the model itself. The game swaps the bytes back as it reads the file, a MiB at a
+what repeats in the file still repeats, and gzip, which GitHub Pages sends every file asked for
+whole with, packs it as small as the model itself. (A part of a file, as the downloader asks for
+one in the background, comes uncompressed from any server; a model the player's waiting for is
+asked for whole: `client/js/app/fetcher.js`.) The game swaps the bytes back as it reads the file, a MiB at a
 time with a turn between, so nothing else waits long; two bytes at a time, through a table of
 every pair, for speed.
 

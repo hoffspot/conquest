@@ -13,6 +13,9 @@ const BOOT = "pellagos-boot-v2";
 const ASSETS = "pellagos-assets-v2";
 const PARTS = "pellagos-parts-v1";
 
+// What the downloader's request for a whole file says of itself (client/js/app/fetcher.js WHOLE)
+const WHOLE = "X-Pellagos-Whole";
+
 // Ten minutes and a moment: past the time a file just kept is kept whatever the releases say
 const GRACE = 10 * 60000 + 1;
 
@@ -119,12 +122,12 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
 
     // Send a request to the service worker, as the page would (a path on the game's site, or an
     // address elsewhere). Returns its response, or undefined if it leaves the request alone.
-    const request = async (path, { mode = "cors", page = "page-1", range, destination = "" } = {}) => {
+    const request = async (path, { mode = "cors", page = "page-1", range, headers = {}, destination = "" } = {}) => {
         let responded;
         const waiting = [];
 
         handlers.fetch({
-            request: { url: full(path), method: "GET", mode, destination, headers: new Headers(range ? { range } : {}) },
+            request: { url: full(path), method: "GET", mode, destination, headers: new Headers(range ? { ...headers, range } : headers) },
             clientId: mode === "navigate" ? "" : page,
             respondWith: (promise) => {
                 responded = promise;
@@ -372,6 +375,24 @@ describe("service worker", () => {
 
         assert.deepEqual(worker.requests, [{ url: full(url), cache: undefined, range: "bytes=0-99" }]);
         assert.deepEqual([...worker.kept(BOOT), ...worker.kept(ASSETS)], []);
+    });
+
+    it("leaves a file the downloader asks for whole (it says so: the player's waiting for it) to the server too, handed on as it comes and not kept here as well; from what's kept, if it is", async () => {
+        const worker = loadServiceWorker({ files: { "/models/dragon.glb": "a dragon" } });
+        const url = address(["/models/dragon.glb", "a dragon"]);
+
+        await worker.tell("page-1", release("r1", { assets: [["/models/dragon.glb", "a dragon"]] }, 1));
+
+        // (The page's own request, as it is: no Range on it, so the server may compress it)
+        assert.equal(await (await worker.request(url, { headers: { [WHOLE]: "1" } })).text(), "a dragon");
+        assert.deepEqual(worker.requests, [{ url: full(url), cache: undefined }]);
+        assert.deepEqual([...worker.kept(BOOT), ...worker.kept(ASSETS)], [], "the downloader checks and keeps it");
+
+        // (Asked for without saying so, by anything else: kept here, as ever; then given from there)
+        await worker.request(url);
+        assert.deepEqual(worker.kept(ASSETS), [full(url)]);
+        assert.equal(await (await worker.request(url, { headers: { [WHOLE]: "1" } })).text(), "a dragon");
+        assert.equal(worker.requests.length, 2);
     });
 
     it("gives a file asked for by name (a worker's module, the font, the WebAssembly) its copy by hash, if the release lists it, without the network; anything else as before", async () => {

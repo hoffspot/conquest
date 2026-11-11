@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { downloadLine } from "../client/js/app/debug.js";
-import { Controller, Fetcher, PACING } from "../client/js/app/fetcher.js";
+import { Controller, Fetcher, PACING, WHOLE } from "../client/js/app/fetcher.js";
 
 const KB = 1024;
 const BASE = "https://example.github.io/conquest/";
@@ -21,9 +21,11 @@ function file(path, bytes) {
 // The world the downloader runs in: a clock that moves only when it waits or a request takes time
 // (`rtt` ms, then `speed` bytes/s, then `late` ms more before the page hears of it, busy), a server
 // with `files` (by path; serving parts unless `ranges` is false), caches, every request it was sent
-// ({ path, from, to, at }), and, if `timed`, the browser's timing of each part (Resource Timing's:
-// heard by turns before the part comes and after)
-function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 0, timed = false, connection, onRequest = () => {}, tell = () => {} } = {}) {
+// ({ path, from, to, at }; `whole` for one that says it's the downloader's for a whole file), and, if
+// `timed`, the browser's timing of each part (Resource Timing's: heard by turns before the part
+// comes and after). A whole file comes 16 KB at a time (`onPiece` hears each as it's about to), and
+// is cut off once `cut` bytes of it have come, if given, the first time it's asked for
+function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 0, timed = false, connection, onRequest = () => {}, onPiece = () => {}, cut = null, tell = () => {} } = {}) {
     const clock = { now: 0 };
     let hear = null;
     const requests = [];
@@ -52,7 +54,7 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
         const { pathname } = new URL(url);
         const found = served.get(pathname);
         const range = /^bytes=(\d+)-(\d+)$/.exec(headers.Range ?? "");
-        const request = { path: pathname.replace("/conquest/", ""), at: clock.now };
+        const request = { path: pathname.replace("/conquest/", ""), at: clock.now, ...(headers[WHOLE] ? { whole: true } : {}) };
 
         requests.push(request);
         onRequest(request, requests.length);
@@ -85,10 +87,13 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
             return new Response(found.data.slice(from, to + 1), { status: 206, headers: { "Content-Range": `bytes ${from}-${to}/${found.bytes}` } });
         }
 
-        // (All of it, as a stream of 16 KB pieces)
+        // (All of it, as a stream of 16 KB pieces, each taking its time to come; cut off, if it's
+        // to be, the once)
         const data = found.data;
+        const cutAt = cut;
         let at = 0;
 
+        cut = null;
         clock.now += rtt;
 
         return new Response(new ReadableStream({
@@ -99,10 +104,21 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, late = 
                     return;
                 }
 
+                if (cutAt !== null && at >= cutAt) {
+                    controller.error(new TypeError("network error"));
+
+                    return;
+                }
+
+                onPiece(request, at);
                 controller.enqueue(data.slice(at, at + 16 * KB));
+                clock.now += (Math.min(16 * KB, data.length - at) / speed) * 1000;
                 at += 16 * KB;
             },
-        }), { status: 200 });
+            cancel() {
+                request.cancelledAt = at;
+            },
+        }, { highWaterMark: 0 }), { status: 200 });
     };
 
     // (Another downloader on the same site: the page loaded again)
@@ -430,11 +446,18 @@ describe("the downloader", () => {
         assert.equal(requests.length, 1);
     });
 
-    it("hurries a file the player's waiting for: fetched at a quiet time, before the rest, and alone with its parts back to back; saying how much of it's here as it comes", async () => {
+    it("hurries a file the player's waiting for: fetched at a quiet time, before the rest, and alone as fast as the link goes; saying how much of it's here as it comes", async () => {
         const dragon = file("models/dragon.glb", 600 * KB);
         const wyvern = file("models/wyvern.glb", 300 * KB);
         const here = [];
-        const { fetcher, requests, clock } = world({ files: [dragon, wyvern], onRequest: () => here.push(fetcher.received(dragon)) });
+        let last = 0;
+        const { fetcher, requests, clock } = world({
+            files: [dragon, wyvern],
+            onPiece: () => {
+                here.push(fetcher.received(dragon));
+                last = clock.now;
+            },
+        });
 
         fetcher.hold("joining");
 
@@ -445,11 +468,13 @@ describe("the downloader", () => {
         assert.equal(fetcher.status.hurried, 1);
         assert.deepEqual(await bytesOf(await hurried), dragon.data);
 
-        // (Only the hurried one at the quiet time, its parts asked for as soon as the one before
-        // came: a round trip and the time 256 KB takes at 1 MB/s apart)
-        assert.deepEqual(requests.map(({ path }) => path), ["models/dragon.glb", "models/dragon.glb", "models/dragon.glb"]);
-        assert.deepEqual(here, [0, 256 * KB, 512 * KB]);
-        assert.equal(requests[1].at - requests[0].at, 50 + 250);
+        // (Only the hurried one at the quiet time, as fast as it comes: its last 16 KB a round
+        // trip and the time the 592 KB before it take at 1 MB/s after it was asked for, with no
+        // waiting between)
+        assert.deepEqual(requests.map(({ path }) => path), ["models/dragon.glb"]);
+        assert.deepEqual(here.slice(0, 4), [0, 16 * KB, 32 * KB, 48 * KB]);
+        assert.equal(here.length, Math.ceil(600 / 16));
+        assert.ok(Math.abs(last - requests[0].at - (50 + (592 / 1024) * 1000)) < 1, `${last - requests[0].at} ms`);
         assert.equal(fetcher.received(dragon), 0, "nothing in hand once it's here and handed over");
 
         // (The rest once the quiet time's over)
@@ -459,6 +484,129 @@ describe("the downloader", () => {
         await wanted;
         assert.ok(requests.at(-1).at >= after);
         assert.equal(requests.at(-1).path, "models/wyvern.glb");
+    });
+
+    it("asks for a file the player's waiting for whole, alone, in one request with no Range, so the server sends it compressed; kept as it comes, checked, and handed over", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const address = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
+        const parts = (stores) => [...(stores.get("pellagos-parts-v1")?.keys() ?? [])];
+        const keptAt = [];
+        const { fetcher, requests, stores, kept } = world({ files: [dragon], onPiece: (_, at) => at === 592 * KB && keptAt.push(...parts(stores)) });
+
+        assert.deepEqual(await bytesOf(await fetcher.want(dragon, "soon", { hurry: true })), dragon.data);
+
+        // (One request, saying it's the downloader's for the whole of it: no part asked for)
+        assert.equal(requests.length, 1);
+        assert.equal(requests[0].whole, true);
+        assert.equal(requests[0].from, undefined);
+
+        // (What came kept a part's worth at a time, 256 KB, as parts are; let go of once it's all
+        // here, checked and kept whole)
+        assert.deepEqual(keptAt, [`${address}&part=0`, `${address}&part=${256 * KB}`]);
+        assert.deepEqual(parts(stores), []);
+        assert.deepEqual(new Uint8Array(await kept(dragon.path).arrayBuffer()), dragon.data);
+        assert.equal(fetcher.done, 1);
+        assert.equal(fetcher.fetched, 600 * KB);
+    });
+
+    it("keeps to parts for whatever isn't waited for, for everything while playing together, and for a file some of which is here", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+
+        // (Wanted, not waited for: a part at a time, however wanted)
+        for (const priority of ["now", "soon", "later"]) {
+            const { fetcher, requests } = world({ files: [dragon] });
+
+            assert.deepEqual(await bytesOf(await fetcher.want(dragon, priority)), dragon.data);
+            assert.deepEqual(requests.map(({ from, whole }) => [from / KB, whole]), [[0, undefined], [256, undefined], [512, undefined]]);
+        }
+
+        // (Waited for, playing together: parts, kept to the rate, the game's own link first)
+        const together = world({ files: [dragon] });
+
+        together.fetcher.together = true;
+        assert.deepEqual(await bytesOf(await together.fetcher.want(dragon, "now", { hurry: true })), dragon.data);
+        assert.ok(together.requests.length > 3);
+        assert.ok(together.requests.every(({ from, whole }) => from !== undefined && !whole));
+
+        // (Some of it here already, fetched before the player came to wait: the rest in parts, from
+        // there, not all of it again)
+        const begun = world({
+            files: [dragon],
+            onRequest: (_, count) => {
+                if (count === 2) {
+                    begun.fetcher.want(dragon, "soon", { hurry: true });
+                }
+            },
+        });
+
+        assert.deepEqual(await bytesOf(await begun.fetcher.want(dragon, "soon")), dragon.data);
+        assert.deepEqual(begun.requests.map(({ from, whole }) => [from / KB, whole]), [[0, undefined], [256, undefined], [512, undefined]]);
+        assert.equal(begun.fetcher.fetched, 600 * KB);
+    });
+
+    it("carries on a part at a time, from what arrived, when a file asked for whole is cut off", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const { fetcher, requests, kept, stores } = world({ files: [dragon], cut: 304 * KB });
+
+        assert.deepEqual(await bytesOf(await fetcher.want(dragon, "now", { hurry: true })), dragon.data);
+
+        // (Whole first; cut off 304 KB in, the rest asked for in parts from there, a little later:
+        // nothing that arrived fetched again)
+        assert.deepEqual(requests.map(({ from, to, whole }) => [whole ?? false, from, to]), [[true, undefined, undefined], [false, 304 * KB, 560 * KB - 1], [false, 560 * KB, 600 * KB - 1]]);
+        assert.ok(requests[1].at - requests[0].at >= 2000, "tried again after a wait, as a part that failed is");
+        assert.equal(fetcher.fetched, 600 * KB);
+        assert.equal(fetcher.failed, 0);
+        assert.deepEqual(new Uint8Array(await kept(dragon.path).arrayBuffer()), dragon.data);
+        assert.deepEqual([...stores.get("pellagos-parts-v1").keys()], []);
+    });
+
+    it("carries a file asked for whole on from what was kept of it, the page loaded again before it had all come", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const address = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
+        const { fetcher, another, requests, stores, kept } = world({
+            files: [dragon],
+            // (The page closed 400 KB in)
+            onPiece: (_, at) => at === 400 * KB && fetcher.drop(dragon),
+        });
+
+        assert.equal(await fetcher.want(dragon, "now", { hurry: true }), null);
+
+        while (fetcher.running) {
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        // (No more of it read once it's no longer wanted; what had come kept: a part's worth, and
+        // the rest of what came)
+        assert.equal(requests.length, 1);
+        assert.equal(requests[0].cancelledAt, 416 * KB);
+        assert.deepEqual([...stores.get("pellagos-parts-v1").keys()], [`${address}&part=0`, `${address}&part=${256 * KB}`]);
+        assert.equal(fetcher.received(dragon), 416 * KB);
+
+        // (The page loaded again: carried on in parts from there, waited for or not)
+        const again = another();
+
+        assert.deepEqual(await bytesOf(await again.want(dragon, "now", { hurry: true })), dragon.data);
+        assert.deepEqual(requests.slice(1).map(({ from, to, whole }) => [whole ?? false, from, to]), [[false, 416 * KB, 600 * KB - 1]]);
+        assert.equal(again.fetched, 184 * KB);
+        assert.deepEqual(new Uint8Array(await kept(dragon.path).arrayBuffer()), dragon.data);
+        assert.deepEqual([...stores.get("pellagos-parts-v1").keys()], []);
+    });
+
+    it("reads a file asked for whole slowly once the player's stopped waiting for it, and not at all at a quiet time", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const { fetcher, requests, clock } = world({
+            files: [dragon],
+            onPiece: (_, at) => {
+                if (at === 96 * KB) {
+                    fetcher.calm(dragon);
+                    fetcher.hold("joining", { for: 5000 });
+                }
+            },
+        });
+
+        assert.deepEqual(await bytesOf(await fetcher.want(dragon, "now", { hurry: true })), dragon.data);
+        assert.equal(requests.length, 1);
+        assert.ok(clock.now >= 5000, `${clock.now} ms: the quiet time waited out before the rest was read`);
     });
 
     it("no longer hurries a file the player's stopped waiting for (calm): it waits out a quiet time with the rest", async () => {

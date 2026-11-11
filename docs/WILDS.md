@@ -2997,7 +2997,9 @@ they exist is left, they are unloaded out of memory but of course kept in cache"
 - **Waited for at the door.** Tapping the door of a place whose models aren't all read
   (`#readyAtDoor`), the player waits there while they're got ready (`readyModels`): each file
   fetched, hurried (the downloader's `hurry`: before anything else, at quiet times too, and
-  playing alone as fast as the link goes), then read. Alone, the world stops meanwhile, as it does
+  playing alone as fast as the link goes: a file nothing's come of yet asked for whole, in one
+  request, which GitHub Pages sends gzipped, 17% to 32% smaller than its parts come to; a nest's
+  26.1 MB is 17.8 MB to wait for), then read. Alone, the world stops meanwhile, as it does
   under the menu. Playing with others it can't: they wait at the door outside. A card over the game
   (`app/readying.js`) shows after a quarter of a second (`READYING.grace`: what's kept already is
   read in less, and nothing's seen). It has the place's name, a bar, so many MB of so many, and
@@ -3022,8 +3024,9 @@ they exist is left, they are unloaded out of memory but of course kept in cache"
 - `test/model.test.js`: a place's kinds, made or not; its models kept while the player's in it,
   let go of `AREA_LINGER` after; a place's models got ready, each file kept first, hurried, then
   read, how far it's got, calmed. `test/fetcher.test.js`: a hurried file fetched at a quiet time,
-  before the rest, its parts back to back; calmed, waiting with the rest; kept without being
-  handed over; the service worker told. `test/sw.test.js`: a file the page says was used isn't let
+  before the rest, whole in one request playing alone (in parts playing together, or with some of
+  it here), carried on in parts from what arrived when cut off; calmed, waiting with the rest; kept
+  without being handed over; the service worker told. `test/sw.test.js`: a file the page says was used isn't let
   go of first. `e2e/pellagos.spec.js`, in the game: a dungeon made a den of werewolves (a theme of
   the test's own). At its door, the world stops and the card shows, nothing ready. Not now stays
   out. Tapped again, Go in now is offered after a while, and the player goes in once both models
