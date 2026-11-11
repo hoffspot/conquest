@@ -29,7 +29,8 @@ The rule is written down three times, so no one can miss it:
 - here;
 - in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
 - in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job, when CI
-  runs or the Node version changes and this file hasn't been updated to match; when CI's `ci` job
+  runs, the time a job is ended at or the Node version changes and this file hasn't been updated
+  to match; when CI's `ci` job
   doesn't wait for every other job, or a share of the browser tests isn't exactly one job's; and
   when the required checks in the settings table are neither `ci` alone nor every other job by
   its name. That test is the part of the rule a machine can check; everything else is up to you
@@ -108,11 +109,24 @@ a fault. This rests on two of the ruleset's rules, *Require status checks to pas
 branches to be up to date before merging*: if either is ever turned off, `push: branches: [main]`
 goes back into `ci.yml` first.
 
-A job that hangs is ended at about twice the longest it
-should take, rather than held to GitHub's 6 hours: `test` at 60 minutes (its own work about 19½,
-then its share of the browser tests about 8), `motion` at 60 (about 13, then about 15), each
-`e2e` job at 80 (about 28; its Chromium download is tried three times, 5 minutes a try). Every
-job ends about together, about half an hour in.
+**How long it takes.** Every job is given about the same work, 41 minutes of it as the tests
+were last timed. Measured over 43 green runs, 9 to 11 November 2026:
+
+| | Median | From, to | Of which |
+| --- | --- | --- | --- |
+| `test` | 46½ minutes | 28 to 51½ | lint 20 seconds, the unit tests 22 minutes (13½ to 23½), its share of the browser tests 24 |
+| `motion` | 43 | 25 to 49 | the motion check 13 (7½ to 14½), its share of the browser tests 30 |
+| an `e2e` job | 41 | 23 to 57½ | getting ready 20 seconds, the rest its share of the browser tests |
+| A run, start to end | 52½ | 41 to 70 | its slowest job, and any wait for a runner |
+
+The jobs are given the same work and still end far apart, because GitHub's runners come at three
+speeds, 1.7 times apart, and about half are the slowest: a run ends with its slowest job, a
+median 23 minutes after its fastest. GitHub also runs no more than 20 jobs at a time for the
+whole account, so two runs fill it and a third waits its turn.
+
+A job that hangs is ended rather than held to GitHub's 6 hours: `test`, `motion` and each `e2e`
+job at 80 minutes, about twice the work each is given (the longest any has taken is 57½; the
+Chromium download in each is tried three times, 5 minutes a try), and `ci` at 5.
 
 | CI job | What it runs | Locally |
 | --- | --- | --- |
@@ -210,11 +224,11 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 | `npm start` | Serves the game and the multiplayer relay (kept for one release: a world server's broker takes its place) on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`; `&flyin` for the opening fly-in, which it leaves out) |
 | `npm run dev` | The same, restarting the server when its code changes |
 | `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi, and from the internet over TLS alone once it has a certificate and **Answer the internet** is on (its `internet` setting; a certificate of the owner's own is put in on the management page, or as `certificates/server.key` and `server.crt` in its data folder; or the server gets free ones from Let's Encrypt itself, set up on the management page: a DuckDNS name, a domain on Cloudflare or deSEC, or the home's IP address, with the DNS host's token kept in the Keychain on macOS, elsewhere in `certificates/tokens.json`. Its tests use a certificate authority of their own, `test/fake-acme.js`, and never reach Let's Encrypt or a DNS host; while it answers the internet it asks the home's router to forward its port (PCP, NAT-PMP or UPnP; **Ask the router** in Settings), and its tests ask a router of their own, `test/fake-router.js`, never the machine's real one; or, for a home whose provider shares its address, it lets the internet in through Tailscale Funnel (**Tailscale Funnel** on the management page, its `funnel` setting: Tailscale installed and signed in on the computer, Funnel allowed on the tailnet), which brings it to a tunnel listener on `127.0.0.1:8482`; its tests use a Tailscale of their own, `test/fake-tailscale.js`, never the machine's). `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once. Its management page is at `http://localhost:8481` on the same computer, needing no key (`-- --admin 9001` for another port), and at `/admin` on the play port from the Wi-Fi, with the admin key: its worlds (made, started, set aside, backed up, restored, exported, deleted), their keys, codes and players, its settings, what's happened, and its health. It shows itself to other servers on the Wi-Fi with Bonjour (macOS's `dns-sd`, or `avahi-utils` with avahi-daemon on Linux; its `bonjour` setting), and lists those it finds, which players add from **Worlds on servers** with a tap; macOS may ask for Local Network permission, and play carries on if it's refused. Worlds can also be made from the game it serves (the title's **Worlds on servers**: add the server, then Make a world), and the game's **Test this server** there tries its internet addresses from wherever the device is and tells the server's page how that went (from a phone on its cellular data, the page's code opens the game and tests it at once). A world a player opens to others from the game's menu (**Invite others**) goes through the server's broker (`/broker`): listed there if they like, and joined point to point (WebRTC), or relayed by the server when that can't be made (its `broker` and `relaying` settings); the tests use a WebRTC of their own, `test/fake-rtc.js`. `-- --app` runs it as the Mac app does (`mac/`, docs/MAC_APP.md): how it stands said on `@pellagos` lines, and stopped, every world saved, when its input closes. `server/world.js` is its launcher (`server/launch.js`): it runs the server itself (`server/serve.js`) as this version or a newer one an update installed in the data folder, starts it again after an update, and goes back to the version before if the new one fails. Updates are the management page's (Settings, Updates: a new version found once a day among the releases the Mac app workflow publishes, checked against GitHub's SHA-256 for its archive, or signed with the project's key where the server has its public half, installed when its owner clicks, or by itself overnight when nobody's in, its `autoUpdate` and `updateHour` settings; a copy of the repository is shown `git pull` instead); `-- --releases <url> --release-key <file>` looks for them elsewhere, as the tests do. A world exported from a server is brought in on the page's New world. The whole server is one archive (Settings, Archive; `server/storage/archive.js`): made, and restored in place of everything on a server with no worlds, or its worlds brought in as new ones (one too old to carry on started afresh from its seed). `-- --archive <file>` makes one from the data folder (the server stopped), and `-- --restore <file>` stages one to be put in place when it next starts (`--replace` where there are worlds). The owner's guide is docs/SERVER.md |
-| `npm test` | Every change. The unit tests take a few minutes |
+| `npm test` | Every change. The unit tests take about 20 minutes on four cores, an hour of one core's work (22 minutes on CI, 13½ to 23½ as its runner comes) |
 | `npm run lint` | Every change. ESLint must be clean |
 | `npm run check` | Lint and the unit tests together: run it before every push |
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
-| `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
+| `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 13 minutes on four threads (7½ to 14½ on CI's runners) |
 | `npm run balance` | Changes to how the wild answers the players' side, to whom it goes for (its enmity: docs/WILDS.md *Whom they go for*), or to how strong players, hirelings or creatures are: the balance runner (docs/WILDS.md, *Tuning it*), each side's fights at tiers 2, 5 and 8 (camped first, a player who falls out of that fight), with each side's share of what one alone loses beside its aim, and what its allies bore of the wild's blows (`borne`, `drawn`). A few minutes; `-- --tiers 5 --sides solo,four` for less. A fight goes one way or another by what's about, so a retune takes many: `-- --seeds 2,3,4,5,6,7,8,9 --fights 8` is 64 a side (each world's dice the same every run, so two settings are told apart on the very same fights) |
 | `npm run snapshot-fixture` | After bumping `SNAPSHOT_VERSION` (section 4): a snapshot of a world as the new version keeps it, `test/fixtures/snapshots/<version>.json.gz`, for `test/snapshots.test.js` to bring forward and play on. A few seconds |
 | `npm run step-budget` | Changes to the rules' steps, the navigation, or what's made ahead on the world server (`server/ahead.js`): a world stepped on Node as the world server will step it, four players walking about in four peoples' towns, every step timed. It fails if any step takes longer than a step (50 ms). About half a minute; `-- --seconds 600` for longer, `-- --no-ahead` to compare without making anything ahead |
@@ -245,7 +259,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 
 ### The browser tests
 
-They play the game in Chromium, in software without a GPU, so they're slow (each has 2 minutes).
+They play the game in Chromium, in software without a GPU, so they're slow (each has 3 minutes, and a median one takes 55 seconds on CI).
 Run the ones your change touches, one at a time:
 
 ```sh
@@ -308,7 +322,7 @@ What's wrong already is kept in `test/motion-baseline.json`. The check fails onl
 worse than that, so CI catches a change that makes any motion worse on any body.
 
 ```sh
-npm run check:motion                      # everything (about 5 minutes, all your threads)
+npm run check:motion                      # everything (about 13 minutes on four threads; it uses all yours)
 npm run check:motion -- --only attack/    # only the motions whose ids start so
 npm run check:motion -- --body orc-       # only those bodies
 npm run check:motion -- --update          # keep this run's failures as the new baseline
@@ -568,9 +582,9 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about half an hour, then `ci`,
-   which says in a few seconds whether they all passed. A first-time contributor's CI may wait
-   for a maintainer to approve the run.
+3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about 50 minutes (section 2,
+   *How long it takes*), then `ci`, which says in a few seconds whether they all passed. A
+   first-time contributor's CI may wait for a maintainer to approve the run.
 4. If CI fails, read the failing job's log (for a browser test, look too at what it left: the
    run's `e2e-failures-<share>` artifact, section 2), reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
@@ -724,8 +738,8 @@ A good first message in a session:
 | A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI doesn't run there. If it's `ci`, the branch is older than the job: bring it up to date with `main`. If it's another, a job was renamed or removed, or the number of `e2e` jobs changed, while each was still required by name: the owner updates the ruleset (section 6, *One required check*) |
 | The `ci` job failed | It runs nothing of its own: its log says which job didn't pass (failed, cancelled or skipped). Look at that one. *Re-run failed jobs* runs it and `ci` again |
 | A job failed at *Install Chromium for the browser tests* after three 5-minute tries, or an `e2e` job was ended at 80 minutes | Playwright's download hung: not your change. *Re-run failed jobs* on the run. If its log says a library is missing, the runner's image changed: CI installs Chromium without `--with-deps` (apt-get there has hung for good), so add the library to the step |
-| A job was still running its browser tests when it was ended, or the jobs end far apart | Tests added without being timed each count for the median (about 40 s), so a job can get more than its share of slow ones: time them by the run's reports (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If the unit tests or the motion check have grown, change their minutes in `ci.yml`'s `E2E_AHEAD`. If every job has grown, raise `timeout-minutes` in `ci.yml` to twice the longest, and say why in the pull request |
-| Another CI job "has exceeded the maximum execution time" | It ran twice as long as it ever has. A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
+| A job was still running its browser tests when it was ended, or the same job ends long after the others run after run | Tests added without being timed each count for the median (about 55 s), so a job can get more than its share of slow ones: time them by the run's reports (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If the unit tests or the motion check have grown, change their minutes in `ci.yml`'s `E2E_AHEAD`. If every job has grown, raise `timeout-minutes` in `ci.yml` to about twice the work a job is given, and say why in the pull request. (One run's jobs ending 20 or 30 minutes apart, a different job last each time, is the runners' speeds: section 2, *How long it takes*) |
+| Another CI job "has exceeded the maximum execution time" | It ran far longer than it ever has (section 2, *How long it takes*). A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
 | A CI job cancelled after about 15 minutes, with no steps and no logs | It was never given a runner: GitHub's doing, not your change. *Re-run failed jobs* on the run |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |
 | There's no CI run on `main` after a merge | As it's meant to be (section 2): the pull request's last run tested those very files. To run it on `main` all the same: the Actions tab, CI, *Run workflow* |

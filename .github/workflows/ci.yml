@@ -26,8 +26,9 @@ concurrency:
 
 # The browser tests' split (scripts/e2e-shard.js, .github/actions/e2e-share), the same in every
 # job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (the
-# last share but one: about 13 minutes of its own first) and the unit tests' (the last: about 20),
-# so that every job ends about together rather than two of them standing idle for half the run.
+# last share but one: about 13 minutes of its own first) and the unit tests' (the last: 20, where
+# they and lint took 22 when last measured), so that every job is given about the same work, 41
+# minutes of it, rather than two of them standing idle for half the run.
 # E2E_SHARES is the e2e jobs (the matrix's shards, below) and those two: for more or fewer e2e
 # jobs, change the matrix and E2E_SHARES together and nothing else (test/contribution.test.js
 # checks every share is one job's), but only once "ci" is the ruleset's one required check
@@ -37,13 +38,16 @@ env:
   E2E_AHEAD: "last-1:13,last:20"
 
 jobs:
-  # Lint and the unit tests (about 19½ minutes, four test files at a time on the runner's four
-  # threads), then its share of the browser tests (the last share: about 8 minutes)
+  # Lint and the unit tests (about 22 minutes, 13½ to 23½ as the runner comes, four test files
+  # at a time on its four threads), then its share of the browser tests (the last share: about
+  # 24 minutes). Measured over 43 green runs, 9 to 11 November 2026, as every time here is: the
+  # job a median 46½ minutes, 28 to 51½
   test:
     runs-on: ubuntu-latest
-    # (Sixty minutes is twice the longest it should take, and a little more; a job hung longer is
-    # ended rather than held to GitHub's six hours, as the e2e jobs are below)
-    timeout-minutes: 60
+    # (Eighty minutes, as every job that runs a share: about twice the 41 minutes of work each is
+    # given, where the longest any has taken is 57½, on a slow runner. A job hung longer is ended
+    # rather than held to GitHub's six hours. At sixty, this one had come within 8½ minutes)
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v5
 
@@ -60,7 +64,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       # (Four test files at a time, one a thread: Node's own choice is a thread fewer, and four
-      # took a little less time, 19 minutes against 19½ to 20)
+      # took a little less time when the two were tried, 19 minutes against 19½ to 20)
       - run: npm test -- --test-concurrency=4
 
       # (Whether or not the unit tests passed: the browser tests' run is whole either way)
@@ -74,13 +78,14 @@ jobs:
 
   # The motion check (scripts/motion-check.js): every motion on each people's bodies at the ends
   # of their builds, failing on anything worse than the baseline kept with it
-  # (test/motion-baseline.json). About 8 to 13 minutes on a runner's 4 threads; its report is kept
-  # with the run, for the contact sheet (motion-sheet.html, "Report"). Then its share of the
-  # browser tests (the last share but one: about 15 minutes)
+  # (test/motion-baseline.json). About 13 minutes on a runner's 4 threads, 7½ to 14½ as the runner
+  # comes; its report is kept with the run, for the contact sheet (motion-sheet.html, "Report").
+  # Then its share of the browser tests (the last share but one: about 30 minutes). The job a
+  # median 43 minutes, 25 to 49
   motion:
     runs-on: ubuntu-latest
-    # (Twice the longest it should take, and a little more)
-    timeout-minutes: 60
+    # (As the unit tests' job above)
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v5
 
@@ -117,15 +122,18 @@ jobs:
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
   # others' (scripts/e2e-shard.js: by how long each test took on CI, e2e/durations.json; the
   # unit tests' and the motion check's jobs take shares too, after their own work: env above).
-  # Eight jobs take about 28 minutes each (and another 30 s or so getting ready): more would be
-  # quicker, down to the longest test's 4¾ minutes, but a run is 10 jobs (with the unit tests
-  # and the motion check), and two runs at once (two pull requests') stay within GitHub's 20 at
-  # a time
+  # Eight jobs take a median 41 minutes each, 23 to 57½ (and another 20 s or so getting ready):
+  # GitHub's runners come at three speeds, 1.7 times apart, and a run ends with its slowest, a
+  # median 52½ minutes in. More jobs would be quicker, down to the longest test's 5 minutes (18
+  # of them would end a run in about 27), but a run is 10 jobs (with the unit tests and the
+  # motion check), so that two runs at once (two pull requests') stay within GitHub's 20 at a
+  # time; and each is required by name until "ci" is the one required check (env, above)
   e2e:
     runs-on: ubuntu-latest
-    # (Eighty minutes is twice the longest a job's taken, 40; a job hung longer is ended rather
-    # than held to GitHub's six hours. At twenty, then at forty, a job was ended still running
-    # as the tests grew: at forty, #600's merge, every test passed)
+    # (Eighty minutes is about twice the 41 a job is given, where the longest one's taken is
+    # 57½; a job hung longer is ended rather than held to GitHub's six hours. At twenty, then at
+    # forty, a job was ended still running as the tests grew: at forty, #600's merge, every test
+    # passed)
     timeout-minutes: 80
     strategy:
       fail-fast: false

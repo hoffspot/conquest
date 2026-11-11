@@ -117,6 +117,18 @@ describe("contribution.md kept up to date with the pipeline (the standing rule)"
         }
     });
 
+    it("gives the time each job is ended at as the workflows have it", () => {
+        const limit = (text) => text.match(/^ {4}timeout-minutes: (\d+)$/m)[1];
+        const hangs = guide.match(/A job that hangs is ended[^]*?\n\n/)?.[0] ?? "";
+        const pages = read(".github/workflows/pages.yml");
+
+        for (const name of jobs) {
+            assert.match(hangs, new RegExp(`\`${name}\`[^.]*? at ${limit(job(name))}\\b`), `${name}, ended at ${limit(job(name))} minutes`);
+        }
+
+        assert.match(guide, new RegExp(`its build is ended at ${limit(pages.slice(pages.indexOf("\n  build:")))} minutes[^.]*?\\s+and its deploy at ${limit(pages.slice(pages.indexOf("\n  deploy:")))}\\b`));
+    });
+
     it("has the Node version the game needs and CI uses", () => {
         const needs = pkg.engines.node.match(/>=\s*(\d+)/)[1];
         const uses = [...new Set([...read(".github/workflows/ci.yml").matchAll(/node-version: (\d+)/g), ...read(".github/workflows/pages.yml").matchAll(/node-version: (\d+)/g)].map(([, version]) => version))];

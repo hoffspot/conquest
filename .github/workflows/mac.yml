@@ -50,7 +50,7 @@ jobs:
   mac:
     # (Apple Silicon, as macOS 27 runs on nothing else)
     runs-on: macos-15
-    # (About 10 minutes: the Swift build, Node fetched, Homebrew's Node installed)
+    # (About 4 minutes, 5½ at most: the Swift build, Node fetched, Homebrew's Node installed)
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
