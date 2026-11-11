@@ -261,12 +261,43 @@ function read(key) {
     }
 }
 
+// Whoever's to be told that the browser's refused to keep something (its storage full, or taken
+// away as the game's played), and whether they have been: once, the first time. Every save after
+// a character's first went unlooked at, so a game could stop being kept with nothing said.
+let refusalHeard = null;
+let refusalTold = false;
+
+/**
+ * Have `listener(key)` called the first time the browser refuses to keep something from now on
+ * (the key it wouldn't keep), once: the game tells the player, plainly (main.js).
+ */
+export function hearRefusal(listener) {
+    refusalHeard = listener;
+    refusalTold = false;
+}
+
+function refused(key) {
+    if (refusalTold || !refusalHeard) {
+        return;
+    }
+
+    refusalTold = true;
+
+    try {
+        refusalHeard(key);
+    } catch {
+        // (Never the telling's fault that the game stops)
+    }
+}
+
 function write(key, value) {
     try {
         globalThis.localStorage?.setItem(key, JSON.stringify(value));
 
         return true;
     } catch {
+        refused(key);
+
         return false;
     }
 }
@@ -1043,6 +1074,8 @@ export function saveWorld(save, war, legends = null) {
 
         return true;
     } catch {
+        refused(keyOf(save, "world"));
+
         return false;
     }
 }

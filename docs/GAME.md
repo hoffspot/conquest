@@ -7045,6 +7045,17 @@ round it as it loads), facing as they were, or on the nearest square that can be
 eight; if none can, where the world puts them. They still get up at home if they fall. A world
 joined to someone else's keeps nothing of this here: that world remembers it, by their own id.
 
+**The war's turn is kept just after its frame** (main.js `saveSoon`): each minute's saves (the
+world's snapshot taken, encoded and written, the legends, and where and how the player is: five
+things written to the browser's storage, 1 to 2.5 ms up to three hours into a world and 2.6 to 8.6
+after, measured in Node) are done in a task of their own after the frame the turn came in, which
+has the turn's own work in it, not inside it; at once when the game stops, the page is hidden or
+closed (`keepPlace` does whatever's waiting first), so nothing's lost for the wait. **A save the
+browser refuses** (its storage full, or taken away as the game's played) is said once, plainly:
+"This browser has stopped keeping your game: its storage may be full. What happens from here may
+not be saved." (save.js `hearRefusal`). Every save after a character's first went unlooked at
+before, and a game could stop being kept with nothing said.
+
 **How they were** is kept with where they were, at the same moments, in `<id>.vitals` (host.js
 `vitalsOf`, save.js `saveVitals`): their hit points and stamina; what lingers on them after blows
 (poison, a burn, a bleed...: each's kind, how hard it hurts, how it shows); the spells lasting on

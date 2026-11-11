@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -630,6 +630,45 @@ describe("saving (save.js)", () => {
         assert.equal(loadWorld({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(loadWorld({ ...save, seed: 13 }), null);
         assert.equal(saveWorld({ seed: 1 }, war), false);
+    });
+
+    it("says so, once, the first time the browser refuses to keep something as the game's played: its storage full, or taken away", () => {
+        const items = useStorage();
+        const keep = globalThis.localStorage.setItem;
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const war = { version: 1, seed: 12, turn: 40, towns: [] };
+        const told = [];
+
+        hearRefusal((key) => told.push(key));
+        assert.equal(saveWorld(save, war), true);
+        assert.equal(savePlace(save, { x: 1, y: 2, facing: 0 }), true);
+        assert.deepEqual(told, [], "nothing while it's kept");
+
+        // (Full from here: every save refused, the first said, the rest not)
+        globalThis.localStorage.setItem = () => {
+            throw new Error("QuotaExceededError");
+        };
+        assert.equal(saveWorld(save, { ...war, turn: 41 }), false);
+        assert.equal(savePlace(save, { x: 3, y: 4, facing: 0 }), false);
+        assert.equal(saveVitals(save, { hp: 1 }), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world"]);
+        assert.equal(loadWorld(save).turn, 40, "what was kept before is still there");
+
+        // (A game that isn't saved keeps nothing, and that's no refusal; nor is whoever's told
+        // failing the game's fault; and the next game hears of it afresh)
+        hearRefusal(() => {
+            told.push("again");
+
+            throw new Error("the HUD's gone");
+        });
+        assert.equal(saveWorld({ seed: 1 }, war), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world"]);
+        assert.equal(savePlace(save, { x: 5, y: 6, facing: 0 }), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world", "again"]);
+
+        globalThis.localStorage.setItem = keep;
+        hearRefusal(null);
+        assert.equal(items.size > 0, true);
     });
 
     it("keeps a saved game's world's legends with its war (core/rare.js Legends), as they were; none till they're kept, and not for another", () => {
