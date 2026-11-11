@@ -60,35 +60,49 @@ export function* shared(kit, name, making) {
     let work = kit.making.get(name);
 
     if (!work) {
-        work = { steps: making(), done: false, failed: null };
+        work = { steps: making(), done: false, failed: null, takers: 0 };
         kit.making.set(name, work);
     }
 
     let told;
 
-    while (!work.done) {
-        // (Its making failed in another's turn: failed for everyone waiting on it)
-        if (work.failed) {
-            throw work.failed;
+    work.takers++;
+
+    try {
+        while (!work.done) {
+            // (Its making failed in another's turn: failed for everyone waiting on it)
+            if (work.failed) {
+                throw work.failed;
+            }
+
+            let step;
+
+            try {
+                step = work.steps.next(told);
+            } catch (error) {
+                // (Not left half made, for the next to want it to trip over: begun again, then)
+                work.failed = error;
+                kit.making.delete(name);
+
+                throw error;
+            }
+
+            if (step.done) {
+                work.done = true;
+                kit.making.delete(name);
+            } else {
+                told = yield step.value;
+            }
         }
-
-        let step;
-
-        try {
-            step = work.steps.next(told);
-        } catch (error) {
-            // (Not left half made, for the next to want it to trip over: begun again, then)
-            work.failed = error;
+    } finally {
+        // (Given up on by whoever was taking its steps, their own steps closed (a generator's
+        // `return`: character.js merging, a player's outfit changed again while it was put
+        // together), and no one else taking them: not kept half made for an outfit that may
+        // never be worn, and whatever it was making in its turn given up the same way. One
+        // only left off, its steps not closed, is kept for the next to carry on)
+        if (--work.takers === 0 && !work.done && !work.failed && kit.making.get(name) === work) {
             kit.making.delete(name);
-
-            throw error;
-        }
-
-        if (step.done) {
-            work.done = true;
-            kit.making.delete(name);
-        } else {
-            told = yield step.value;
+            work.steps.return();
         }
     }
 }
@@ -330,13 +344,22 @@ export function drawingGarment(character, id) {
     return material;
 }
 
-/** A character no longer drawing with the garments' materials it drew with (drawingGarment). */
-export function leaveGarments(character) {
+/**
+ * A character no longer drawing with the garments' materials it drew with (drawingGarment): any
+ * of them, or only those of `ids` (the rest still drawn one by one: character.js merging).
+ */
+export function leaveGarments(character, ids = null) {
+    const still = [];
+
     for (const id of character.drawn ?? []) {
-        used(character.kit, id).users--;
+        if (ids && !ids.includes(id)) {
+            still.push(id);
+        } else {
+            used(character.kit, id).users--;
+        }
     }
 
-    character.drawn = [];
+    character.drawn = still;
 }
 
 // The garments' own pictures no one's drawing with and no one's used since `before` (ms, by the
@@ -392,10 +415,8 @@ export function* wearingOutfit(character, ids) {
     const kit = character.kit;
     const key = ids.join(" ");
 
-    kit.composites ??= new Map();
-
-    while (!kit.composites.has(key)) {
-        yield* shared(kit, `outfit ${key}`, () => picturing(kit, key, ids));
+    while (!outfitReady(kit, ids)) {
+        yield* readyingOutfit(kit, ids);
     }
 
     const outfit = kit.composites.get(key);
@@ -430,6 +451,27 @@ export function* wearingOutfit(character, ids) {
     }
 
     return outfit.sized;
+}
+
+/** Whether an outfit's pictures (ids, outermost last) are made, and the kit has them still. */
+export function outfitReady(kit, ids) {
+    return Boolean(kit.composites?.has(ids.join(" ")));
+}
+
+/**
+ * An outfit's pictures (ids, outermost last) made for the kit, a step at a time, no one counted
+ * wearing it yet: for one who'll wear it once it's made, drawn some other way meanwhile
+ * (character.js merging), which wearingOutfit then finds made (outfitReady: asked again if not,
+ * the kit having let go of it in between).
+ */
+export function* readyingOutfit(kit, ids) {
+    const key = ids.join(" ");
+
+    kit.composites ??= new Map();
+
+    if (!kit.composites.has(key)) {
+        yield* shared(kit, `outfit ${key}`, () => picturing(kit, key, ids));
+    }
 }
 
 // An outfit's two pictures put together from its garments' own (ids, outermost last), a step at

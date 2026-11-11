@@ -798,7 +798,7 @@ slots, sockets and hidden skin.
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
    Layers go 0 underwear, 1 clothing, 2 a mid layer, 3 armour, 4 what's over the armour (a
    surcoat, a mantle), 5 belts and sashes, 6 straps, chains and collars.
-7. **Drawn all at once** (`merge`: everyone but a player). A soldier in uniform wears nine or
+7. **Drawn all at once** (`merge`: everyone but the player's own hero). A soldier in uniform wears nine or
    ten garments, each a draw call. As every garment is painted on the whole body in the body's
    texture layout, one picture can show them all (`compositeGarments`): at each texel, the
    outermost garment whose region takes it in (each texel knows which body triangle it's in and
@@ -822,6 +822,27 @@ slots, sockets and hidden skin.
    two in one uniform built turn and turn about make it once between them and are both counted
    wearing it (each used to make its own; the kit kept one, counted one wearer for the two, and
    never let go of the other).
+
+   **One by one first, all at once after** (`setEquipment(ids, { merge })`, `merging()`). One
+   whose dress changes as it's watched, another player, is dressed one by one at once
+   (`merge: false`: each garment's own picture is painted or found, nothing put together, so
+   the change shows in that frame), and its garments are put together after, a step at a time
+   (`merging()`, a generator as `building` is): the outfit's picture is made in steps for the
+   kit, no one counted wearing it yet (wardrobe.js `readyingOutfit`: found made, where someone
+   else wears it), the garments drawn one by one meanwhile as they were; then, in one step, the
+   meshes it wore are made one mesh drawn with that picture, and their own materials are let go
+   of (`leaveGarments`: the kit keeps a garment's picture half a minute after no one draws with
+   it). Nothing's fitted again, so it's the same garments in the same places: the one mesh is
+   the same, corner for corner, as one dressed all at once from the first has, and the material
+   the very same (`test/outfit-merging.test.js`). Of each garment only its own triangles are
+   taken: one drawn a while has its lower levels' after them. Dressed again meanwhile, what was
+   begun stops, changing nothing and leaving nothing counted (it's for what was worn before,
+   `dressed`); given up on outright (its steps closed), the outfit's picture half made is let
+   go of with it, unless someone else is making the same one (`shared` counts who's taking a
+   making's steps, and lets go of one its last taker closes; one only left off is kept for the
+   next to carry on, as before). Lace and what
+   hangs are drawn as they were. The game does this for the other players (docs/GAME.md,
+   *Characters in the world*).
 
 **Built a step at a time.** Building someone takes a few hundred milliseconds on a desktop (their
 skin painted, hair grown, each garment fitted, their outfit's picture painted the first time it's
@@ -2417,7 +2438,7 @@ similar.
 
 **One character with a full outfit:**
 
-- 22–38 draw calls (plus shadows), drawn one by one; drawn all at once, as everyone but a player
+- 22–38 draw calls (plus shadows), drawn one by one; drawn all at once, as everyone but the player's own hero
   is, its garments are one (a soldier in uniform 12 to 17 in all, about 21 to 26 before)
 - about 80–100 thousand triangles
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
@@ -2588,7 +2609,7 @@ picture of its bones' places, and everyone of the kind drawn at once, posed on t
 Posed so, a crowd's corners are where the character's own are, to two millimetres, as it's merged
 and mid-swing (`test/crowd.test.js`). For the few drawn in full, the next steps are:
 
-- merging the rest of a character's parts into one mesh (its garments already are, but a player's)
+- merging the rest of a character's parts into one mesh (its garments already are, but the player's own hero's)
 - a lower-detail body: MakeHuman's proxy meshes use the same rig
 
 ## Research

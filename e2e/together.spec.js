@@ -757,6 +757,172 @@ test("two players side by side trade face to face: one asks, the other says yes,
     await guestContext.close();
 });
 
+// Another player's garments are drawn all at once, one mesh with one picture of the whole outfit,
+// as everyone's are but the player's own hero's (app/game.js #outfitting, characters/character.js
+// merging): come into the world as it's played, they're dressed one by one in the frame they
+// come and put together from the next; what they change is shown at once, one by one, and put
+// together again once it's been as it is five seconds, a second change meanwhile starting that
+// over; and any one of them can be put back to one by one for good (drawApart)
+test("another player's outfit is one mesh with one picture; what they put on shows at once, piece by piece, and is put together again five seconds on, a second change starting over; one put back to piece by piece stays so", async ({ ownBrowser: browser }) => {
+    test.setTimeout(480000);
+
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    // (Bryn, with a mail hauberk and a helm of the humans' in her pack)
+    await guest.addInitScript((save) => {
+        const pack = [{ id: "hauberk", people: "human", quality: "common" }, { id: "helm", people: "human", quality: "common" }];
+
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+        localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, skills: {}, gold: 20, pack }));
+    }, BRYN);
+
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // (What the host's game does with her outfit, as it does it: each time a body's dressed one
+    // by one to be put together, `dressed`, and each time one's done with, `put`; from before
+    // Bryn comes)
+    await host.evaluate(() => {
+        const { game } = window.pellagos;
+        const set = game.outfits.set.bind(game.outfits);
+        const done = game.outfits.delete.bind(game.outfits);
+        const said = (id, character) => ({ id, clock: game.clock, apart: character.garments.filter((mesh) => mesh.userData.joins).length, merged: character.garments.some((mesh) => mesh.userData.merged), worn: [...character.equipment.values()] });
+
+        window.dressed = [];
+        window.put = [];
+        game.outfits.set = (id, outfit) => {
+            window.dressed.push({ ...said(id, outfit.character), since: outfit.since });
+
+            return set(id, outfit);
+        };
+        game.outfits.delete = (id) => {
+            if (game.outfits.has(id)) {
+                window.put.push(said(id, game.outfits.get(id).character));
+            }
+
+            return done(id);
+        };
+    });
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+    await undrawn(host);
+    await undrawn(guest);
+
+    // How Bryn's drawn in the host's game: her garments' meshes, and what's counted drawn with
+    // and worn
+    const bryn = () =>
+        host.evaluate(() => {
+            const { game } = window.pellagos;
+            const id = [...game.host.players.keys()].find((each) => each !== "player");
+            const character = game.avatars.get(id)?.character;
+            const outfit = character?.garments.find((mesh) => mesh.userData.merged) ?? null;
+
+            return {
+                id,
+                clock: game.clock,
+                waiting: game.outfits.has(id),
+                worn: character ? [...character.equipment.values()] : [],
+                apart: character?.garments.filter((mesh) => mesh.userData.joins).map(({ name }) => name) ?? [],
+                merged: outfit?.userData.merged ?? null,
+                wearers: character?.composite ? game.kit.composites.get(character.composite).users : 0,
+                // (The garments' own materials she's still counted drawing with)
+                drawing: character?.drawn ?? [],
+                mine: game.avatars.get("player").character.garments.some((mesh) => mesh.userData.merged),
+            };
+        });
+    const said = () => host.evaluate(() => ({ dressed: window.dressed, put: window.put }));
+
+    // Come into the world as it's played: dressed one by one in that frame, to be put together
+    // from the next; and put together, one mesh of her garments, none of them drawn by itself
+    // any more. The host's own hero is one by one, as ever
+    await expect.poll(async () => (await said()).put.length, { timeout: 120000 }).toBe(1);
+
+    const first = await bryn();
+    const came = (await said()).dressed[0];
+
+    expect(came).toMatchObject({ id: first.id, merged: false, since: -Infinity });
+    expect(came.apart).toBeGreaterThanOrEqual(2);
+    expect((await said()).put[0]).toMatchObject({ id: first.id, merged: true, apart: 0 });
+    expect(first).toMatchObject({ waiting: false, apart: [], wearers: 1, drawing: [], mine: false });
+    expect(first.merged).toHaveLength(came.apart);
+
+    // Bryn puts on her hauberk: mail and a surcoat. Seen at once in the host's game, each
+    // garment a mesh of its own again; and then her helm, the five seconds starting over
+    await guest.evaluate(() => window.pellagos.game.pack.onCommand({ type: "equip", index: 0 }));
+    await expect.poll(async () => (await said()).dressed.length, { timeout: 60000 }).toBe(2);
+    await guest.evaluate(() => window.pellagos.game.pack.onCommand({ type: "equip", index: window.pellagos.game.progress.pack.findIndex((stack) => stack?.id === "helm") }));
+    await expect.poll(async () => (await said()).dressed.length, { timeout: 60000 }).toBe(3);
+
+    const [, changed, again] = (await said()).dressed;
+
+    expect(changed.worn).toEqual(expect.arrayContaining(["mail.human", "surcoat.human"]));
+    expect(changed).toMatchObject({ merged: false, since: changed.clock });
+    expect(changed.apart).toBe(came.apart + 2);
+    expect(again.worn).toEqual(expect.arrayContaining(["mail.human", "surcoat.human", "helm.human"]));
+    expect(again).toMatchObject({ merged: false, since: again.clock, apart: changed.apart });
+
+    // Put together again, one mesh, and not before it had been as it is five seconds of the
+    // game's time: whenever it was put together, the last change before was five seconds gone
+    await expect.poll(async () => (await bryn()).merged, { timeout: 180000 }).toEqual(expect.arrayContaining(["mail.human", "surcoat.human"]));
+
+    const together = await bryn();
+    const all = await said();
+
+    expect(all.put.length).toBeGreaterThanOrEqual(2);
+    expect(all.put.at(-1)).toMatchObject({ merged: true, apart: 0 });
+    expect(all.put.at(-1).clock).toBeGreaterThanOrEqual(again.clock + 5);
+
+    for (const done of all.put.slice(1)) {
+        expect(done.clock - all.dressed.filter((each) => each.clock <= done.clock).at(-1).clock, JSON.stringify(all)).toBeGreaterThanOrEqual(5);
+    }
+
+    expect(together).toMatchObject({ waiting: false, apart: [], wearers: 1, drawing: [], mine: false });
+    expect(together.merged).toHaveLength(again.apart);
+    // (Her outfit worn by her alone, and the one she wore before worn by no one)
+    expect(await host.evaluate(([now, before]) => [now, before].map((key) => window.pellagos.game.kit.composites.get(key)?.users ?? 0), [together.merged.join(" "), first.merged.join(" ")])).toEqual([1, 0]);
+
+    // The way back for one: put to piece by piece, she's so at once and stays so; and back again
+    await host.evaluate((id) => window.pellagos.game.drawApart(id), together.id);
+
+    const apart = await bryn();
+
+    expect(apart).toMatchObject({ waiting: false, merged: null, wearers: 0 });
+    expect(apart.apart).toHaveLength(together.merged.length);
+    expect(apart.drawing).toHaveLength(together.merged.length);
+    await expect.poll(async () => (await bryn()).clock, { timeout: 60000 }).toBeGreaterThan(apart.clock + 6);
+    expect(await bryn()).toMatchObject({ waiting: false, merged: null });
+    await host.evaluate((id) => window.pellagos.game.drawApart(id, false), together.id);
+    await expect.poll(async () => (await bryn()).merged?.length ?? 0, { timeout: 120000 }).toBe(together.merged.length);
+    expect(await sentAgain(guest)).toBe(0);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 // Two players make a party (core/host.js PARTY, the "party" command): asked from the party menu,
 // said no to, asked again and said yes to; each has the other's icon at the top of their party,
 // the leader crowned; allied in both worlds; they talk in its chat (core/netplay.js: sent to

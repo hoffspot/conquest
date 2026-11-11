@@ -770,6 +770,15 @@ const DETAIL = Object.freeze({ reach: 45, slack: 10 });
 // of detail (lod.js) with only their contact shadows, and posed seldom out of view
 const MANY = Object.freeze({ shadow: 40, again: 48, full: 4 });
 
+// Another player's garments drawn all at once (one mesh, one picture of the whole outfit, as
+// everyone's but the player's own hero are: characters/character.js `merge`), but one by one
+// from the moment they change what they wear, so the change shows without a wait, till it's been
+// as it is `after` seconds (the game's clock); then the outfit's picture is put together with
+// `budget` ms of each frame, one body's at a time, and its garments drawn with it from the frame
+// it's made (#outfitting, Character.merging). `others`: whether they are at all (not, every
+// player's are drawn one by one, as they were; any one of them is by Game.drawApart)
+const OUTFITTING = Object.freeze({ others: true, after: 5, budget: 2 });
+
 // Who can be drawn in their kind's crowd (#thronging): past DETAIL.reach from the camera, or when a
 // crowded fight comes too slowly (app/throng.js): the players' hired adventurers and the wild's
 // people-shaped creatures (bandits, goblins, trolls...), their bodies kept but not drawn nor posed
@@ -1900,6 +1909,19 @@ export class Game {
         // the player's inside, till the player comes to them (#walledOff, #shutIn): their ids
         this.aside = new Set();
 
+        // The other players whose garments are drawn one by one for now, dressed at once (they've
+        // changed what they wear, or come into the world), to be drawn all at once after
+        // (#outfitting): id -> { character, since (the game's clock when they were dressed so),
+        // steps (the outfit being put together, once it's begun) }
+        this.outfits = new Map();
+
+        /**
+         * The players whose garments are drawn one by one whatever else (their ids; drawApart):
+         * the way back for any one of them, should their outfit not look right drawn all at
+         * once (generated/multiplayer_scaling_plan.md, slice 5-5: "a per-avatar flag").
+         */
+        this.piecewise = new Set();
+
         // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
         // while playing on at once, advance)
         this.waits = true;
@@ -2746,12 +2768,13 @@ export class Game {
     // Someone in the battle, drawn (once): a player as they made themselves, the orc, one of the
     // folk. Returns their avatar
     #dress(actor) {
-        return allAtOnce(this.#dressing(actor));
+        return allAtOnce(this.#dressing(actor, { atOnce: true }));
     }
 
     // The same, a step at a time (each a yield: Character.building's), so that drawing someone new
-    // is spread over frames. Returns their avatar (none if they've gone meanwhile)
-    *#dressing(actor) {
+    // is spread over frames. Returns their avatar (none if they've gone meanwhile). `atOnce`: every
+    // step's being taken in one frame (#dress)
+    *#dressing(actor, { atOnce = false } = {}) {
         // (Drawn already: but one of a crowd's built in full, to take its place)
         if (this.#drawnInFull(actor.id)) {
             return this.avatars.get(actor.id);
@@ -2803,10 +2826,21 @@ export class Game {
 
         if (actor.kind === "player") {
             const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
-            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail });
+            // (Another player's garments drawn all at once, as everyone's are but the player's own
+            // hero's, who's seen closest and changes what they wear: 8 meshes for 15, measured
+            // on seven of them in mixed gear. But one dressed here in one frame, come into the
+            // world as it's played: one by one, as they were, their outfit's picture not put
+            // together in that frame too, but a step at a time from the next: #outfitting)
+            const apart = actor.id === this.me || !OUTFITTING.others || this.piecewise.has(actor.id);
+            const merge = !apart && !atOnce;
+            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail, merge });
 
             if (!character) {
                 return this.avatars.get(actor.id) ?? null;
+            }
+
+            if (!apart && !merge) {
+                this.outfits.set(actor.id, { character, since: -Infinity, steps: null });
             }
 
             // (Weapons put away to start with: drawn for a fight)
@@ -4256,6 +4290,7 @@ export class Game {
         this.#inTurn("shutClock", PACED.shut, dt, this.jobs.shutIn);
         this.#inTurn("folkClock", PACED.folk, dt, this.jobs.folkRoom);
         this.#inTurn("throngClock", PACED.throng, dt, this.jobs.thronging);
+        this.#outfitting();
         this.#crowding();
         this.#forgetting(dt);
         this.#memoryGuarding(dt);
@@ -11125,9 +11160,111 @@ export class Game {
             return;
         }
 
-        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? [], held));
+        // (One by one, shown at once: another player's put together again once it's been as it is
+        // a while, #outfitting; what was being put together for what they wore before stopped)
+        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? [], held), { merge: false });
         avatar.character.sheathe(!this.battle.actor(id)?.armed);
         avatar.actions.setWeapon(guardOf(weapon));
+
+        this.#giveUpOutfit(id);
+
+        if (id !== this.me && OUTFITTING.others && !this.piecewise.has(id)) {
+            this.outfits.set(id, { character: avatar.character, since: this.clock, steps: null });
+        } else {
+            this.outfits.delete(id);
+        }
+
+        // (Unseen, by Invisibility: what they've just put on no plainer than the rest of them)
+        if (avatar.unseen) {
+            this.#unseen(avatar, true);
+        }
+    }
+
+    /**
+     * One player's garments drawn one by one from now on (`on`), as they all were and the
+     * player's own hero's are, or all at once again (not `on`: put together a step at a time,
+     * from the next frame): the way back for any one of them (`piecewise`), kept for as long as
+     * they're in the world, however often they're dressed again. Nothing changes for the
+     * player's own hero, always one by one.
+     */
+    drawApart(id, on = true) {
+        if (on === this.piecewise.has(id)) {
+            return;
+        }
+
+        if (on) {
+            this.piecewise.add(id);
+        } else {
+            this.piecewise.delete(id);
+        }
+
+        const avatar = this.avatars.get(id);
+
+        if (id === this.me || !(avatar instanceof Avatar) || this.battle.actor(id)?.kind !== "player") {
+            return;
+        }
+
+        this.#giveUpOutfit(id);
+        this.outfits.delete(id);
+
+        if (!on) {
+            if (OUTFITTING.others) {
+                this.outfits.set(id, { character: avatar.character, since: -Infinity, steps: null });
+            }
+        } else if (avatar.character.merge) {
+            avatar.character.setEquipment([...avatar.character.equipment.values()], { merge: false });
+
+            if (avatar.unseen) {
+                this.#unseen(avatar, true);
+            }
+        }
+    }
+
+    // What's being put together for someone given up on, if it's begun: its steps closed, so
+    // that an outfit's picture half made for them alone isn't kept by the kit for an outfit that
+    // may never be worn (characters/wardrobe.js `shared`); what someone else is making too goes on
+    #giveUpOutfit(id) {
+        this.outfits.get(id)?.steps?.steps.return();
+    }
+
+    // The other players dressed one by one for now (they've changed what they wear, #regear, or
+    // come into the world as it's played, #dressing) drawn all at once again (OUTFITTING): once
+    // one's been as it is `after` seconds, its outfit's picture is put together a step at a time
+    // (Character.merging: `budget` ms a frame, a step at least, one body's at a time, the first
+    // dressed first), its garments drawn one by one meanwhile and with the one picture from the
+    // frame it's made. Changed again meanwhile, it starts over (#regear); gone, or made again
+    // (polymorphed, #undress), it's forgotten
+    #outfitting() {
+        for (const [id, outfit] of this.outfits) {
+            const avatar = this.avatars.get(id);
+
+            if (avatar?.character !== outfit.character) {
+                this.#giveUpOutfit(id);
+                this.outfits.delete(id);
+
+                continue;
+            }
+
+            if (this.clock - outfit.since < OUTFITTING.after) {
+                continue;
+            }
+
+            outfit.steps ??= new Steps(outfit.character.merging(), `an outfit put together for ${id}`);
+
+            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: false })) {
+                this.outfits.delete(id);
+
+                // (Unseen, by Invisibility: its one mesh as the meshes it's made from were; and
+                // its wounds on it from this frame, not the next: world/wounds.js)
+                if (avatar.unseen) {
+                    this.#unseen(avatar, true);
+                }
+
+                this.wounds.get(id)?.update(0);
+            }
+
+            break;
+        }
     }
 
     // --- Standing in their people (core/standing.js) ---
@@ -16783,6 +16920,8 @@ export class Game {
     // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their
     // own the first time, copies of any shared with anyone else's, and made see-through while it lasts)
     #unseen(avatar, on) {
+        // (Kept: what's put on them meanwhile, or their garments put together, made the same)
+        avatar.unseen = on;
         avatar.object.traverse((part) => {
             if (part.material && !part.userData.ownMaterial) {
                 part.material = Array.isArray(part.material) ? part.material.map((each) => each.clone()) : part.material.clone();

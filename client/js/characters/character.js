@@ -22,7 +22,7 @@ import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { PICTURES, pictureSize, sizingSkin } from "./pictures.js";
-import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitWhole, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
+import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitReady, outfitWhole, readyingOutfit, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
 import { releaseTexture } from "../world/release.js";
@@ -92,8 +92,12 @@ const TORCH_TURN = 0.25;
 // (Given to the constructor by Character.building: built a step at a time there, not at once)
 const LATER = Symbol("later");
 
-/** Several skinned geometries as one (their vertices one after another). */
-function mergeGeometries(geometries) {
+/**
+ * Several skinned geometries as one (their vertices one after another); of each one's triangles,
+ * only its first `counts[k]` indices (all of them, with none given: one drawn a while has its
+ * lower levels' after its own, #lowerGarment).
+ */
+function mergeGeometries(geometries, counts = null) {
     const names = ["position", "normal", "uv", "skinIndex", "skinWeight"];
     const count = geometries.reduce((sum, geometry) => sum + geometry.attributes.position.count, 0);
     const indices = [];
@@ -113,13 +117,16 @@ function mergeGeometries(geometries) {
         merged.setAttribute(name, new THREE.BufferAttribute(array, first.itemSize, first.normalized));
     }
 
-    for (const geometry of geometries) {
-        for (const index of geometry.index.array) {
-            indices.push(index + offset);
+    geometries.forEach((geometry, k) => {
+        const index = geometry.index.array;
+        const length = counts?.[k] ?? index.length;
+
+        for (let i = 0; i < length; i++) {
+            indices.push(index[i] + offset);
         }
 
         offset += geometry.attributes.position.count;
-    }
+    });
 
     merged.setIndex(count > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
 
@@ -227,7 +234,9 @@ export class Character {
      * @param {number} [options.hairDetail] - How much of its hair to grow, 0 to 1 (less for
      *   characters seen from afar: hair.js).
      * @param {boolean} [options.merge] - Draw its garments all at once (one mesh, one picture of
-     *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
+     *   them all: for the many folk and soldiers about, and the other players; not the player's
+     *   own, who changes what they wear, nor another's just as they change it: setEquipment,
+     *   merging).
      * @param {boolean} [options.far] - Whether it'll be drawn with fewer triangles from afar or
      *   into shadows (lowerDetail): its hair's grown far thinner too (by default, if it's merged).
      * @param {boolean} [options.release] - Let go of the page's copy of its skin's pictures once
@@ -261,6 +270,10 @@ export class Character {
 
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
+
+        // (How many times it's been dressed: what's put together for it a step at a time is for
+        // what it wore when that began, merging)
+        this.dressed = 0;
 
         // (The look of eye whose picture its eyes are drawn with: shared)
         this.eyePicture = null;
@@ -459,10 +472,92 @@ export class Character {
         this.#dress();
     }
 
-    /** Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out). */
-    setEquipment(ids) {
+    /**
+     * Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out), its garments
+     * drawn all at once or one by one from now on (`merge`: as they were, if it isn't said). All
+     * at once, their one picture's put together here and now, if no one else wears the outfit:
+     * one by one is shown without that wait, and put together after, a step at a time (merging).
+     */
+    setEquipment(ids, { merge = this.merge } = {}) {
+        this.merge = merge;
         this.#wear(ids);
         this.#dress();
+    }
+
+    /**
+     * Its garments, drawn one by one, drawn all at once from now on (`merge`), as it's dressed: a
+     * step at a time (each a yield), the outfit's one picture made first (wardrobe.js: or found
+     * made, someone else wearing it), the garments drawn one by one meanwhile, as they were;
+     * then, in one step, their meshes made one mesh drawn with it, and their own materials let
+     * go of (the kit keeps a garment's picture a while after no one draws with it). Nothing's
+     * fitted again: the meshes are the ones it wore, so it's the same garments in the same
+     * places. Returns whether they're drawn all at once now: not if it was dressed again
+     * meanwhile (what's begun here is for what it wore before, and stops, changing nothing), nor
+     * with fewer than two garments to put together (lace and drapes are drawn as they are).
+     * Given up on before it's done (the steps closed, a generator's `return`), the outfit's
+     * picture half made is let go of too, unless someone else is making it as well (wardrobe.js
+     * `shared`): only left off, it's kept by the kit for whoever next wants it.
+     */
+    *merging() {
+        const dressed = this.dressed;
+        const apart = this.garments.filter((mesh) => mesh.userData.joins);
+
+        this.merge = true;
+
+        if (apart.length < 2) {
+            return this.garments.some((mesh) => mesh.userData.merged);
+        }
+
+        // (Outermost last, as they're worn)
+        apart.sort((a, b) => stackOrder(a.name, b.name));
+
+        const ids = apart.map(({ name }) => name);
+
+        while (!outfitReady(this.kit, ids)) {
+            yield* readyingOutfit(this.kit, ids);
+
+            if (this.dressed !== dressed || this.disposed) {
+                return false;
+            }
+        }
+
+        // (Its picture's made: worn from here, in this one step)
+        const material = allAtOnce(this.#compositing(ids));
+        // (Each one's own triangles in full: one drawn a while has its lower levels' after them)
+        const counts = apart.map(({ geometry, userData }) => userData.detail?.[0].count ?? geometry.index.count);
+        const mesh = this.#joined(ids, mergeGeometries(apart.map(({ geometry }) => geometry), counts), material);
+
+        for (const each of apart) {
+            each.geometry.dispose();
+            each.removeFromParent();
+        }
+
+        // (Before the lace and the drapes, as one dressed all at once has it)
+        this.garments = [mesh, ...this.garments.filter((each) => !apart.includes(each))];
+        leaveGarments(this, ids);
+
+        if (this.lods) {
+            this.#lowerGarment(mesh);
+        }
+
+        return true;
+    }
+
+    // Garments' meshes as one (`geometry`: mergeGeometries'), drawn with their outfit's picture
+    // (`material`: #compositing's, for `ids`, outermost last), on its body
+    #joined(ids, geometry, material) {
+        const mesh = new THREE.SkinnedMesh(geometry, material);
+
+        mesh.name = "garments";
+        mesh.userData.merged = ids;
+        // (Fitted over the body: its shadow the body's, #updateIndex)
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+        mesh.boundingSphere = this.mesh.boundingSphere;
+        this.object.add(mesh);
+
+        return mesh;
     }
 
     // What it's to wear and carry (EQUIPMENT ids), not yet dressed in
@@ -518,6 +613,7 @@ export class Character {
         this.garments = [];
         this.items = [];
         this.holds = {};
+        this.dressed++;
         this.#release();
 
         const garmentIds = [];
@@ -597,20 +693,12 @@ export class Character {
 
             yield;
 
-            const mesh = new THREE.SkinnedMesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material);
+            const mesh = this.#joined(merged.map(({ id }) => id), mergeGeometries(merged.map(({ geometry }) => geometry)), material);
 
             for (const { geometry } of merged) {
                 geometry.dispose();
             }
 
-            mesh.name = "garments";
-            mesh.userData.merged = merged.map(({ id }) => id);
-            // (Fitted over the body: its shadow the body's, #updateIndex)
-            mesh.castShadow = false;
-            mesh.receiveShadow = true;
-            mesh.bind(this.rig.skeleton, new THREE.Matrix4());
-            mesh.boundingSphere = this.mesh.boundingSphere;
-            this.object.add(mesh);
             this.garments.push(mesh);
 
             // (Dressed again: its new outfit's lower detail too)
@@ -619,10 +707,12 @@ export class Character {
             }
         }
 
-        for (const { id, geometry } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
+        for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;
+            // (One that can be drawn with the rest all at once: not lace, see-through; merging)
+            mesh.userData.joins = !garment.design;
             // (Fitted over the body: its shadow the body's, #updateIndex)
             mesh.castShadow = false;
             mesh.receiveShadow = true;

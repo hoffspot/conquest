@@ -4392,10 +4392,85 @@ Each emote shows its face (smiling for a wave, a cheer, a fist pump and a beckon
 the rest). They're for the eyes only: nothing in the battle waits on them but the player's own
 stopping.
 
-**Everyone but a player** has their garments drawn all at once, one mesh with one picture of
-the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12
-to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what
-they wear.
+**Everyone but the player's own hero** has their garments drawn all at once, one mesh with one
+picture of the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's
+uniform is 12 to 17 draw calls rather than 21 to 26. The player's own are drawn one by one: they
+change what they wear, and are seen closest.
+
+**The other players** are drawn all at once too (app/game.js `OUTFITTING`, `#outfitting`; the
+scaling plan's slice `5-5`, [generated/crowd_rendering_plan.md](../generated/crowd_rendering_plan.md)),
+but never while it would keep a change from showing:
+
+- **What they put on shows at once**, drawn one by one in the frame the host says so (`#regear`:
+  `setEquipment(ids, { merge: false })`), as it always was. Once it's been as it is 5 seconds of
+  the game's time (`after`), their outfit's picture is put together a step at a time, 2 ms of a
+  frame (`budget`: a step at least, one player's at a time, the first changed first), the
+  garments drawn one by one meanwhile; then, in one frame, their meshes are one mesh drawn with
+  it (`Character.merging`), and each garment's own material is let go of. A second change while
+  it waits or while it's put together starts the 5 seconds over, and nothing's kept of what was
+  begun: the picture half made for the outfit they wore is let go of (`#giveUpOutfit`), unless
+  someone else is making the same one.
+- **Come into the world as it's played**, a player's dressed at once (`#mirror`), so one by one,
+  their outfit put together from the next frame; one built a step at a time (as the game loads,
+  or made again after a polymorph) is built all at once from the first.
+- **The way back** (`drawApart(id)`, `piecewise`): any one of them put back to one by one, at
+  once and for as long as they're in the world, and all at once again (`drawApart(id, false)`).
+  `OUTFITTING.others` off, they're all one by one, as they were.
+- Whatever's on them is as it was: what they carry, a shield on the back and a helm are things
+  of their own, not garments; wounds are on the one mesh from the frame it's made
+  (world/wounds.js patches whatever a body's drawn with); one unseen by Invisibility stays so,
+  its one mesh made as faint as the meshes it's made from, and so does what they put on
+  meanwhile (it showed plain till the spell ended). A likeness for a party icon is drawn from
+  whichever they are then.
+
+Measured in headless Chromium (software, 1000 × 600, the start town of seed 1), the player and
+seven others before them, each in gear of their own (the starting gear; the humans', the elves'
+and the orcs' uniforms; a jerkin and travel cloak; plate; a gambeson and cloak):
+
+| The seven others | One by one | All at once |
+|---|---|---|
+| Meshes (skinned) | 105 (79) | 56 (30) |
+| The frame's own draws of them | 105 | 56 |
+| The frame's own draws of all eight heroes | 119 | 70 (41% fewer) |
+| ...and with the sun's shadow maps' draws of them (47 near the camera, 88 far, the same either way) | 166 near, 207 far | 117 near (30% fewer), 158 far (24% fewer) |
+| Pictures their garments are drawn with, on the graphics card, 131 to 184 pixels tall | 33.3 MB (20 garments' pictures at 512, each shared by all who wear it) | 18.7 MB (seven outfits' at 512) |
+| ...43 to 60 pixels tall | 33.3 MB | 4.7 MB (at 256) |
+| Held on the page by the seven | 45.8 MB | 34.8 MB near, 23.9 MB far |
+
+A garment's picture is shared by everyone who wears it and an outfit's is its wearers' alone, so
+what's saved in pictures depends on who wears what: six of those twenty garments are the
+player's own hero's too, kept whatever the others wear, and with the seven near the camera the
+whole card held as much either way (282.1 MB all at once, 281.9 MB one by one, the kit's idle
+pictures let go of). Seen small, an outfit's pictures are a quarter the size and it's all
+saving. Putting the seven's outfits together took 4.0 seconds of the game's time between them.
+
+**How it looks.** In full, the same: the same garments in the same places (the one mesh is the
+meshes it wore), with the outfit's one picture where each garment had its own, which differs
+only along the garments' edges, a texel wide, where the picture says which of two is on top.
+Each of the seven was pictured alone, lit as on a fair day, one by one and then all at once in
+the same pose (put together in place, the game stopped), and the two pictures compared by the
+measure the levels of detail are held to (CHARACTERS.md *Performance*, about 2%: the share of
+the figure's own pixels that change by more than 48 levels of 255):
+
+| Wearing | In full, 835 to 887 px tall | At the quarter level, 277 to 294 px tall | Full against the quarter, one by one (all at once) |
+|---|---|---|---|
+| The starting gear | 0.00% | 0.2% | 0.3% (0.1%) |
+| A jerkin, gloves and travel cloak | 0.01% | 0.6% | 0.9% (0.2%) |
+| A gambeson, bracers and cloak | 0.01% | 0.4% | 2.6% (2.2%) |
+| The orcs' uniform (a breastplate) | 0.02% | 1.0% | 1.3% (0.8%) |
+| The humans' uniform (mail under a surcoat) | 0.09% | 2.0% | 3.1% (2.0%) |
+| The elves' uniform | 0.21% | 2.4% | 3.4% (2.6%) |
+| Plate (mail, a breastplate, gauntlets, greaves, sabatons) | 0.06% | 3.2% | 5.9% (4.2%) |
+
+Under 360 pixels tall a body's drawn with a quarter of its garments' triangles (*Fewer triangles
+as they're smaller*, above), and there the two differ more, not by their pictures but by their
+triangles: an outfit's lowered as one mesh, the same for all who wear it, as every soldier's is,
+where one by one each garment's lowered by itself. The last column is what the level itself
+changes, seen as close as the first: the one mesh is nearer its own full detail than the
+garments one by one are to theirs, in every outfit. (The same picture taken twice differed in no
+pixel. Pictured without waiting for the lower levels to come from their worker, one just put
+together is in full beside one at the quarter, and plate differed by 6%: what's compared has to
+be at one level.)
 
 ### Soldiers in their crowds (world/crowd.js)
 
@@ -7797,6 +7872,16 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   as it was. `test/herd.test.js` (WILDS.md *In a crowd*): beasts in their crowds. E2E: a crowded
   fight told it's too slow, those least seen of its bandits, wolves and spiders standing in, kept
   but unseen, and drawn in full again told there's time to spare.
+- `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
+  (`Character.merging`): the same mesh and the very same material as one dressed all at once;
+  one by one till the one step that puts them together; in a step where someone else wears the
+  outfit; dressed again meanwhile, what was begun stops and nothing's left counted for it;
+  given up on, nothing's left half made in the kit, but what someone else is making too; lace
+  and what hangs left as they were; only each garment's triangles in full put together. E2E
+  (`e2e/together.spec.js`): another player come into the world is dressed one by one in that
+  frame and put together from the next; what they put on shows at once, one by one, and is put
+  together again five seconds on, a second change starting over; one put back to one by one
+  (`drawApart`) stays so.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.
