@@ -2686,6 +2686,31 @@ what's downloaded before the game starts.
   joints. Each frame, `poseOf` turns what the game asks of its body into a weight and a time for
   each clip (`test/model.test.js`), and a mixer poses its bones from them. Its fall plays at its
   own pace (3.6 seconds) and is held at its end.
+- **A copy that's light to make and to pose** (`copyOf`, since 2026-11-11). The pipeline gives each
+  mesh of a model a skin of its own over the same bones (each mesh's positions packed small, its
+  skin's inverses making them full size again), and three.js's copy gave each mesh a skeleton of
+  its own: a knight of the Bell's nearest level worked out its 149 bones' places 8 or 9 times a
+  frame and sent as many bone textures (98 to 110 KB), a rider's 443 bones' 16 times (484 KB), a
+  werewolf's 67 four times.
+  - **One skeleton between its meshes** (`posedBy`): a mesh whose skin has the same bones in the
+    same order, and puts it where the first's would but for one matrix (`skinnedAs`, the test its
+    parts are joined by), is bound to the first's skeleton with that matrix times the first's as
+    its bind matrix, and drawn just as it was: measured in Node against the model's own skins,
+    posed alike standing, walking, running, striking and fallen, no corner of a knight, a rider
+    or a werewolf is more than 0.0002 mm from where it was. One that can't be keeps a skeleton of
+    its own. So one skeleton's worked out and one bone texture sent a frame: 12 KB a knight, 30 a
+    rider, 6 a werewolf, and the skeletons' work a frame 65 to 6 µs for a knight, 300 to 20 for a
+    rider.
+  - **What it doesn't wear isn't copied**: of the Order's 78 meshes a brother wears 21, and the
+    rest were copied, each with a skeleton made for it, then taken out.
+  - **A clip made its mixer's when it's first played** (`actionOf`; its idle as it's made, so
+    every bone it moves is put back as it was read when no clip moves it, as ever): a knight's
+    34 clips' actions were 1.16 MB a copy, most never played.
+  - **Its sphere kept with the model**, worked out once for everyone drawn from it so (every
+    corner of its least detailed level put through its bones), each with a copy of it.
+  - Measured in Node, a copy on the page and the processor's time to make one: a brother 2.04 MB
+    and 38 ms before, 0.72 MB and 22 ms after; a Choir knight 2.39 MB and 41 ms, 0.95 and 30; a
+    rider 5.17 MB and 66 ms, 2.12 and 53; a werewolf 0.70 MB and 21 ms, 0.42 and 15.
 - **Its levels of detail** are the model's own: one mesh each, the one for how big it is on the
   screen shown (`showLevel`, at the same sizes as a body built in code). Its shadow is always cast by
   the least detailed one. When that one isn't shown, it's drawn writing nothing to the screen,
