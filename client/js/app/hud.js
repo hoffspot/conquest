@@ -179,6 +179,111 @@ export function plateScale(distance, sight = 1) {
 }
 
 /**
+ * How big a bar over someone's head is taken to be at full size (CSS pixels: styles.css
+ * `.floater`'s least width, an elite's or a commander's (`elite`) and a fortification's (`fort`),
+ * and what its name and its bar come to in height), for telling which bars cover which
+ * (Covering). Taken, not measured: reading a bar's size back from the page would lay the page
+ * out again for every bar, every frame.
+ */
+export const PLATE_BOX = Object.freeze({ width: 110, elite: 140, fort: 170, height: 38 });
+
+/**
+ * Bars over heads that cover one another (Covering): one is hidden once more than `covered` of
+ * it lies under those placed before it; hidden, it's shown again only once less than `clear` of
+ * it does (so one at the edge doesn't come and go); and either way no sooner than `hold` seconds
+ * after it last changed (so two that keep changing places don't flicker: they change over once
+ * in that long at most).
+ */
+export const PLATE_COVER = Object.freeze({ covered: 0.5, clear: 0.3, hold: 0.5 });
+
+/**
+ * Which of a frame's bars over heads are hidden under the others. They're placed in the order of
+ * precedence (app/precedence.js: whoever comes first has their bar), each a box on the screen;
+ * one that lies under those shown before it by more than PLATE_COVER allows is hidden this
+ * frame, and those hidden cover no one. How much of it lies under them is the shares of it under
+ * each added up (all of it at most): a little more than what's truly covered where those over
+ * it overlap each other, which, shown, they do by less than half. Knows nothing of the page:
+ * boxes and numbers (test/plate-cover.test.js).
+ */
+export class Covering {
+    // (The boxes shown so far this frame, four numbers each: left, top, right, bottom)
+    #boxes = new Float32Array(4 * 64);
+    #count = 0;
+
+    /** A frame begun: nothing placed yet. */
+    begin() {
+        this.#count = 0;
+    }
+
+    /** How many bars are shown so far this frame. */
+    get shown() {
+        return this.#count;
+    }
+
+    /** How much of a box lies under those shown so far (0 to 1). */
+    under(left, top, right, bottom) {
+        const area = (right - left) * (bottom - top);
+        const boxes = this.#boxes;
+        let covered = 0;
+
+        if (!(area > 0)) {
+            return 0;
+        }
+
+        for (let k = 0; k < this.#count * 4; k += 4) {
+            const across = Math.min(right, boxes[k + 2]) - Math.max(left, boxes[k]);
+            const down = Math.min(bottom, boxes[k + 3]) - Math.max(top, boxes[k + 1]);
+
+            if (across > 0 && down > 0) {
+                covered += across * down;
+
+                if (covered >= area) {
+                    return 1;
+                }
+            }
+        }
+
+        return covered / area;
+    }
+
+    /**
+     * A bar placed after those placed before it this frame, its box on the screen (pixels):
+     * whether it's hidden under them. `state` is the bar's own, kept by whoever places it from
+     * frame to frame and changed here: { hidden, since (when it last changed: `now`'s seconds;
+     * -Infinity for one never placed) }. `always`: never hidden (the bar of the one the player's
+     * set on, of one of their party, of whoever's attacking them), and shown at once.
+     */
+    place(state, left, top, right, bottom, now, always = false) {
+        const under = always ? 0 : this.under(left, top, right, bottom);
+        const hidden = !always && under > (state.hidden ? PLATE_COVER.clear : PLATE_COVER.covered);
+
+        if (hidden !== state.hidden && (always || now - state.since >= PLATE_COVER.hold)) {
+            state.hidden = hidden;
+            state.since = now;
+        }
+
+        if (!state.hidden) {
+            if ((this.#count + 1) * 4 > this.#boxes.length) {
+                const more = new Float32Array(this.#boxes.length * 2);
+
+                more.set(this.#boxes);
+                this.#boxes = more;
+            }
+
+            const at = this.#count * 4;
+
+            this.#boxes[at] = left;
+            this.#boxes[at + 1] = top;
+            this.#boxes[at + 2] = right;
+            this.#boxes[at + 3] = bottom;
+            this.#count++;
+        }
+
+        return state.hidden;
+    }
+}
+
+/**
  * Where a message goes to keep clear of those fighting (`rects`: { left, top, right, bottom }
  * each, pixels), as big as it is (`size`: { width, height }): of the places it can go (`places`:
  * { x, top } each, pixels, `x` its middle across; the first where it goes as a rule), the one
@@ -823,21 +928,51 @@ export class Hud {
     }
 
     /**
+     * A frame's bars about to be placed, in the order of precedence (app/precedence.js: `place`
+     * told each one's place in it, `over`), at `now` seconds of the game's clock: none placed yet
+     * (Covering).
+     */
+    placing(now) {
+        this.covering ??= new Covering();
+        this.covering.begin();
+        this.placingAt = now;
+    }
+
+    /**
      * Move a character's bar to a point on the screen (client pixels), or hide it (null): drawn at
      * `scale` of its size and as faint (plateScale; hidden at none), standing on the point; the
-     * nearer (`depth`: metres from the camera) over the farther, the one the player's set to fight
-     * over them all.
+     * one the player's set to fight over them all. Placed in the order of precedence (`over`: its
+     * place in it this frame, 0 the first, after `placing`), it's over those placed after it, and
+     * hidden where it would lie under those placed before it (Covering, PLATE_COVER), unless it's
+     * never to be (`always`: one of the party's, an attacker's; the target's never is). Placed
+     * with no order said, the nearer (`depth`: metres from the camera) is over the farther, and
+     * none is hidden under another.
      */
-    place(id, point, { scale = 1, depth = 0, dim = false } = {}) {
+    place(id, point, { scale = 1, depth = 0, dim = false, over = null, always = false } = {}) {
         const plate = this.tracked.get(id);
 
         if (!plate) {
             return;
         }
 
-        plate.hidden = !point || scale <= 0;
+        let hidden = !point || scale <= 0;
 
-        if (!plate.hidden) {
+        if (!hidden && over !== null && this.covering) {
+            // (Its box: as big as its kind is taken to be, standing on the point)
+            plate.box ??= plate.classList.contains("fort") ? PLATE_BOX.fort : plate.classList.contains("elite") ? PLATE_BOX.elite : PLATE_BOX.width;
+            plate.cover ??= { hidden: false, since: -Infinity };
+
+            const half = (plate.box * scale) / 2;
+
+            hidden = this.covering.place(plate.cover, point.x - half, point.y - PLATE_BOX.height * scale, point.x + half, point.y, this.placingAt, always || id === this.targeted);
+        }
+
+        // (Only when it changes: showing or hiding one lays the page out again)
+        if (plate.hidden !== hidden) {
+            plate.hidden = hidden;
+        }
+
+        if (!hidden) {
             const faint = scale.toFixed(2);
 
             // (A foe in reach the player can't act on yet, too dark or something in the way: greyed)
@@ -853,7 +988,7 @@ export class Hud {
                 plate.style.opacity = faint;
             }
 
-            const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - Math.round(depth));
+            const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - (over ?? Math.round(depth)));
 
             if (plate.layer !== layer) {
                 plate.layer = layer;

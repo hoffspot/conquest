@@ -468,7 +468,9 @@ whoever holds the town, and whom they fight is as their peoples stand.
   they're at war with.
 
 **On the screen:**
-- A bar over each soldier who's an enemy (or who's hurt); none over the rest.
+- A bar over each soldier who's an enemy (or who's hurt) within 60 m of the player; none over
+  the rest. Where their bars would lie over one another, those behind aren't shown (GAME.md,
+  *Who comes first* and the bars over heads).
 - Soldiers drawn a few at a time as they come out (within the budget buildings are built in).
 
 ### Growing stronger (M3)

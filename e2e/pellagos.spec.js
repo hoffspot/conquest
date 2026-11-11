@@ -18304,6 +18304,209 @@ test("soldiers about the player past the bodies the quality's memory can hold in
     expect(seen.crowded).toBeGreaterThanOrEqual(12 - room - 3);
 });
 
+test("bars over a file of soldiers seen end-on: placed in the order of precedence, the first over the rest, one that would lie under those before it not shown, the one the player's set on always; and no bar kept for a soldier past where one's seen", async ({ page }) => {
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=2");
+
+    // (Two armies of twelve: the player's people's, who are no one's to fight here, and their foes)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.fieldBattle(12);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.filter(({ id }) => id.startsWith("field-")).length >= 24, { seconds: 5 })).toBe(true);
+
+    // The player's people's twelve stood in a file going straight away from the camera, 0.8 m
+    // apart, each hurt (so each has a bar); their foes 200 m off. Kept there as the game plays on
+    const file = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor(game.me);
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const friends = fielded.filter((actor) => !game.battle.hostile(actor, player)).slice(0, 12);
+        const foes = fielded.filter((actor) => game.battle.hostile(actor, player));
+        const camera = game.view.camera.position;
+        const mine = game.avatars.get(game.me).object.position;
+        const length = Math.hypot(mine.x - camera.x, mine.z - camera.z);
+        const ahead = [(mine.x - camera.x) / length, (mine.z - camera.z) / length];
+
+        for (const id of Object.keys(game.battle.formations)) {
+            game.battle.formation(id, { to: null, advance: false });
+        }
+
+        window.pinned = new Map([
+            ...friends.map((actor, k) => [actor.id, [player.x + ahead[0] * (6 + k * 0.8), player.y + ahead[1] * (6 + k * 0.8)]]),
+            ...foes.map((actor, k) => [actor.id, [player.x - ahead[0] * 200 + k * 2, player.y - ahead[1] * 200]]),
+        ]);
+        window.pinnedFile = friends.map(({ id }) => id);
+        window.locked = null;
+        window.playPinned = async (seconds) => {
+            for (let time = 0; time < seconds; time += 1 / 30) {
+                for (const [id, [x, y]] of window.pinned) {
+                    const actor = game.battle.actor(id);
+
+                    // (Hurt, and too hale for their healers to make whole between two frames)
+                    Object.assign(actor, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], dead: false, maxHp: 1e6, hp: 5e5 });
+                }
+
+                Object.assign(player, { hp: player.maxHp, lock: window.locked });
+                game.advance(1 / 30, { render: false, wait: true });
+                // (Which of the file's bars are shown, frame by frame)
+                window.barFrames?.push({ clock: game.clock, shown: friends.map(({ id }) => Boolean(game.hud.tracked.get(id)) && !game.hud.tracked.get(id).hidden) });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+
+            game.advance(0, { render: true });
+        };
+
+        return { friends: friends.map(({ id }) => id), foes: foes.map(({ id }) => id) };
+    });
+
+    expect(file.friends).toHaveLength(12);
+    expect(file.foes.length).toBeGreaterThanOrEqual(12);
+
+    // (Till every one of the file is drawn, in full or in its crowd, and stands where it's put)
+    const stood = () =>
+        page.evaluate(async (ids) => {
+            const { game } = window.pellagos;
+
+            await window.playPinned(1);
+
+            return ids.every((id) => {
+                const avatar = game.avatars.get(id);
+                const [x, y] = window.pinned.get(id);
+                const [ox, oz] = game.originOf("town");
+
+                return avatar && Math.hypot(avatar.object.position.x - ox - x, avatar.object.position.z - oz - y) < 0.3;
+            });
+        }, file.friends);
+
+    await expect.poll(stood, { timeout: 240000, intervals: [100] }).toBe(true);
+
+    // What's over their heads now: each one's bar, whether it's shown, and how it's layered
+    const bars = () =>
+        page.evaluate(({ friends, foes }) => {
+            const { game } = window.pellagos;
+            const plate = (id) => game.hud.tracked.get(id) ?? null;
+            const row = (id) => ({ id, tracked: Boolean(plate(id)), shown: Boolean(plate(id)) && !plate(id).hidden, covered: plate(id)?.cover?.hidden ?? null, layer: Number(plate(id)?.style.zIndex ?? 0), targeted: plate(id)?.classList.contains("targeted") ?? false });
+
+            const ranked = game.orders.plates.ranked.filter(({ actor }) => friends.includes(actor.id)).map(({ actor, standing, tall, away }) => ({ id: actor.id, standing, tall, away }));
+
+            return { friends: friends.map(row), foes: foes.map(row), ranked, order: ranked.map(({ id }) => id) };
+        }, file);
+
+    await page.evaluate(() => window.playPinned(1.5));
+
+    const seen = await bars();
+    const shown = seen.friends.filter((each) => each.shown);
+
+    // Every one of the file has a bar, but fewer are shown than there are soldiers: those that
+    // would lie under one before them aren't. They're in the order of precedence, as they stand
+    // with the player and then the biggest on the screen; the first of them is shown, and each
+    // shown is over those shown after it
+    expect(seen.friends.every((each) => each.tracked), JSON.stringify(seen.friends)).toBe(true);
+    expect(shown.length, JSON.stringify(seen.friends)).toBeLessThan(12);
+    expect(shown.length).toBeGreaterThanOrEqual(2);
+    expect(seen.friends.filter((each) => !each.shown).every((each) => each.covered === true)).toBe(true);
+    expect(seen.order).toHaveLength(12);
+
+    for (let k = 1; k < seen.ranked.length; k++) {
+        const [before, after] = [seen.ranked[k - 1], seen.ranked[k]];
+
+        expect(before.standing < after.standing || (before.standing === after.standing && (before.tall > after.tall || (before.tall === after.tall && before.away <= after.away))), JSON.stringify(seen.ranked)).toBe(true);
+    }
+
+    const first = seen.order[0];
+
+    expect(seen.friends.find((each) => each.id === first).shown, JSON.stringify(seen)).toBe(true);
+
+    const layers = seen.order.map((id) => seen.friends.find((each) => each.id === id)).filter((each) => each.shown).map((each) => each.layer);
+
+    expect(layers).toEqual([...layers].sort((a, b) => b - a));
+    expect(new Set(layers).size).toBe(layers.length);
+
+    // None of them flickers: over three seconds of frames, as the soldiers sway where they
+    // stand, no bar's shown or hidden again within half a second of the last time (hud.js
+    // PLATE_COVER.hold), and the first is shown throughout
+    const frames = await page.evaluate(async () => {
+        window.barFrames = [];
+        await window.playPinned(3);
+
+        const frames = window.barFrames;
+
+        window.barFrames = null;
+
+        return frames;
+    });
+
+    expect(frames.length).toBeGreaterThanOrEqual(90);
+
+    for (let k = 0; k < 12; k++) {
+        const changed = frames.filter((frame, at) => at > 0 && frame.shown[k] !== frames[at - 1].shown[k]).map(({ clock }) => clock);
+
+        for (let at = 1; at < changed.length; at++) {
+            expect(changed[at] - changed[at - 1], `${file.friends[k]}: ${JSON.stringify(changed)}`).toBeGreaterThanOrEqual(0.5 - 1e-6);
+        }
+    }
+
+    expect(frames.every((frame) => frame.shown[file.friends.indexOf(first)])).toBe(true);
+    expect(frames.every((frame) => frame.shown.filter(Boolean).length < 12)).toBe(true);
+
+    // Their foes, 200 m off, have none: past where a bar's seen at all (60 m), none is kept
+    expect(seen.foes.some((each) => each.tracked), JSON.stringify(seen.foes)).toBe(false);
+
+    // Two of their foes brought into the file, one a hand's breadth behind the other, and the
+    // player set on the first: both have bars again, within sight of one; the first's is shown,
+    // lit and over them all, and the second's, all but wholly under it, isn't shown
+    const [one, other] = file.foes;
+
+    await page.evaluate(
+        ({ one, other, friend }) => {
+            const [x, y] = window.pinned.get(friend);
+            const [fx, fy] = window.pinned.get(window.pinnedFile[5]);
+
+            // (Level with the sixth of the file, two metres to its side)
+            window.pinned.set(one, [fx + (fy - y) * 0.5, fy - (fx - x) * 0.5]);
+            window.pinned.set(other, [fx + (fy - y) * 0.5 + (fx - x) * 0.05, fy - (fx - x) * 0.5 + (fy - y) * 0.05]);
+            window.locked = one;
+        },
+        { one, other, friend: file.friends[0] },
+    );
+
+    const foes = async () => {
+        await page.evaluate(() => window.playPinned(0.5));
+
+        return (await bars()).foes.slice(0, 2).map(({ tracked, shown, targeted, covered }) => ({ tracked, shown, targeted, covered }));
+    };
+
+    // (Once they're drawn there, in full or in their crowds)
+    await expect.poll(foes, { timeout: 240000, intervals: [100] }).toEqual([
+        { tracked: true, shown: true, targeted: true, covered: false },
+        { tracked: true, shown: false, targeted: false, covered: true },
+    ]);
+
+    const set = await bars();
+
+    expect(set.foes[0].layer).toBeGreaterThan(Math.max(...[...set.friends, ...set.foes.slice(1)].filter((each) => each.shown).map((each) => each.layer)));
+    expect(set.foes.slice(2).some((each) => each.tracked)).toBe(false);
+
+    // Set on the second: its bar's shown, lit and over them all from the next frame, though it
+    // lies under the first's; and the first's, under it now, isn't shown
+    await page.evaluate((id) => {
+        window.locked = id;
+
+        return window.playPinned(0.1);
+    }, other);
+
+    const turned = await bars();
+
+    expect(turned.foes[1]).toMatchObject({ tracked: true, shown: true, targeted: true, covered: false });
+    expect(turned.foes[1].layer).toBeGreaterThan(Math.max(...[...turned.friends, turned.foes[0]].filter((each) => each.shown).map((each) => each.layer)));
+    await expect.poll(async () => (await foes())[0], { timeout: 60000, intervals: [100] }).toEqual({ tracked: true, shown: false, targeted: false, covered: true });
+    expect((await bars()).foes[1]).toMatchObject({ shown: true, targeted: true });
+});
+
 test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {
     test.setTimeout(360000);
     // (Of a guard's crowd figure, pixels of it read: drawn in full, from where the camera starts)

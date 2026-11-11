@@ -213,8 +213,8 @@ describe("the order (Order.rank)", () => {
 describe("the game ranks by the one order", () => {
     const game = readFileSync(new URL("../client/js/app/game.js", import.meta.url), "utf8");
 
-    it("in each place that ranks: the soldiers, the wild's creatures, the folk, and those who stand in", () => {
-        for (const place of ["soldiers", "creatures", "folk", "throng"]) {
+    it("in each place that ranks: the soldiers, the wild's creatures, the folk, those who stand in, and the bars over heads", () => {
+        for (const place of ["soldiers", "creatures", "folk", "throng", "plates"]) {
             assert.ok(game.includes(`this.orders.${place}.rank(`), place);
         }
     });

@@ -7049,8 +7049,19 @@ the Bindings page till one's chosen.
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
    player sees there (light.js `sightAt` and `playerSight`, as the battle has it: 36 to 48 m at
    night;
-   `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
-   the nearer the camera are drawn over the farther, and all of them under the buttons. Each bar
+   `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is.
+   They're placed in the order of precedence (*Who comes first*, above; game.js
+   `#barsOverHeads`), the first over the rest and all of them under the buttons, and **one that
+   would lie under those before it isn't shown** (hud.js `Covering`): once more than half of it
+   is under them (`PLATE_COVER.covered`; each bar's taken to be as big as its kind's drawn,
+   `PLATE_BOX`, not measured on the page), so a file of soldiers seen end-on has a few bars, not
+   a stack of them. Never hidden: the bar of the one the player's set on, those of their party
+   and their own, and an attacker's. One hidden comes back only once less than three tenths of
+   it is covered (`clear`), and nothing changes twice within half a second (`hold`), so none
+   flickers as two change places. The party's icons are as they were. A soldier has a bar only
+   within 60 m of the player (and 6 m further once it has one; the one the player's set on
+   wherever it is): a hundred in an invasion each had one in the page, most of them past where
+   a bar's drawn at all. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's
    placed (view.js `#place`, and again as the greater spells shake it), not only as it's drawn, so
    a bar no longer trails its character by a frame as the camera turns (it shook, the more the
@@ -7650,7 +7661,10 @@ hidden till they're gone into: 1,300 of a town's 2,200 nodes, 0.52 ms a frame do
 headless Chromium. The bars over the others' heads are placed only for those who have one, from
 where the canvas is on the page, kept till it's resized (`View.toScreen`): reading it after a
 bar's been moved made the browser lay the page out again, once for everyone in sight, every frame
-(5–6% of a steady frame's JavaScript; now under 1%). Characters are posed only as often as
+(5–6% of a steady frame's JavaScript; now under 1%). How big a bar is where its character stands
+is worked out first, and one with none there (past sight, dead, on another map) has its head
+neither found nor put on the screen, where every one was, every frame; a bar's shown or hidden
+on the page only when that changes. Characters are posed only as often as
 they're seen, each pose cheaper (see *Characters in the world*): a frame's JavaScript in headless
 Chromium at 1280 × 720, the median and the 90th percentile, went from 2.3 and 4.1 ms to 1.3 and
 2.1 in the town, 2.6 and 4.7 to 1.9 and 3.0 in the taproom (nearly everyone there's big on the
@@ -7942,6 +7956,17 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   then the biggest on the screen, the nearer of two as big, other maps last); what a place keeps
   of its own, after everyone the order names; ranking making nothing new once it's ranked as
   many; and the game ranking by it in each place, with no order of its own left.
+  `test/plate-cover.test.js`: bars over heads that cover one another (hud.js `Covering`): how
+  much of one lies under those shown before it, one more than half under them hidden and
+  covering no one, a file seen end-on showing a few, the ones always shown never hidden, one
+  hidden back only once it's clear by a margin, nothing changing twice within the hold, and a
+  bar taken to be as wide as the page draws it. E2E: a file of twelve soldiers seen end-on has
+  fewer bars than soldiers, in the order (the biggest on the screen first), the first shown and
+  each over those shown after it, none shown or hidden again within half a second over three
+  seconds of frames; none kept for soldiers 200 m off; two foes brought within sight, one a
+  hand's breadth behind the other, have bars again, the one the player's set on shown, lit and
+  over them all and the other's under it not shown, and the other way about from the next frame
+  once they're set on the other.
 - `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
   (`Character.merging`): the same mesh and the very same material as one dressed all at once;
   one by one till the one step that puts them together; in a step where someone else wears the

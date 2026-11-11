@@ -185,7 +185,7 @@ import { Doors } from "./doors.js";
 import { VaultDoors } from "../world/vault3d.js";
 import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
-import { plateScale } from "./hud.js";
+import { PLATE_SIZE, plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
@@ -762,6 +762,11 @@ const CULT_KNOWN = 2;
 // forth on the edge. Whoever's fighting the player, or the player's fighting, is drawn in full
 // wherever they are
 const DETAIL = Object.freeze({ reach: 45, slack: 10 });
+
+// How far past where a bar over a head is gone (hud.js PLATE_SIZE.far, metres from the player) a
+// soldier that has one keeps it, hidden: taken up again only once it's back within sight of one
+// (#barsOverHeads)
+const PLATE_KEPT = 6;
 
 // How tall a person is taken to be where it isn't known yet (metres: one not drawn, ranked with
 // those who are, #stature)
@@ -1595,6 +1600,10 @@ export class Game {
         this.viewerAt = -Infinity;
         this.viewerTrading = null;
         this.orders = { soldiers: new Order(), creatures: new Order(), folk: new Order(), throng: new Order(), plates: new Order() };
+
+        // (What the frame's bars over heads are placed by, said once a frame for them all:
+        // #barsOverHeads, #plated)
+        this.plating = { mine: null, own: null, lit: null, reach: 0, pixels: 0 };
 
         /**
          * How big an invasion this device can draw, measured from its frames while there's none
@@ -4672,48 +4681,8 @@ export class Game {
         this.#inside(dt);
         telemetry.mark(PHASE.inside);
 
-        // Bars over the soldiers who are enemies (or hurt), none over the rest
-        const player = battle.actor(this.me);
-
-        for (const actor of battle.actors) {
-            if (actor.kind !== "soldier" || !this.avatars.has(actor.id) || !player) {
-                continue;
-            }
-
-            const shown = hud.tracked.has(actor.id);
-            const wanted = !actor.dead && (battle.hostile(actor, player) || actor.hp < actor.maxHp);
-
-            if (wanted && !shown) {
-                hud.track(actor.id, { ...actor, hostile: battle.hostile(actor, player) });
-            } else if (!wanted && shown) {
-                hud.untrack(actor.id);
-            }
-        }
-
-        // Bars over the heads of the others on the player's map (those that have one), smaller
-        // and fainter the farther they are from the player's character, gone where the player
-        // can't see them (less far in the dark, if not as less far as others see: hud.js
-        // PLATE_SIZE, light.js playerSight); the nearer the camera over the farther. A foe within
-        // the player's reach they can't act on (too dark to see that far, or something in the way:
-        // battle.js whyUnseen) dimmed, so it reads as not yet reachable, not as refused for nothing
-        const eye = view.camera.position;
-        const own = this.avatars.get(this.me)?.object.position;
-        const lit = this.mapId === battle.lightMap ? battle.light : null;
-        const reach = mine && !mine.dead ? this.#reachOf(mine) : 0;
-
-        for (const actor of battle.actors) {
-            const avatar = this.avatars.get(actor.id);
-
-            if (actor.id !== this.me && avatar && hud.tracked.has(actor.id)) {
-                const head = avatar.point(1.08, _head);
-                const depth = eye.distanceTo(head);
-                const at = avatar.object.position;
-                const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
-                const dim = reach > 0 && !actor.dead && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && battle.hostile(actor, mine) && !battle.canSee(mine, actor, reach);
-
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId || actor.hidden ? null : view.toScreen(head), { scale, depth, dim });
-            }
-        }
+        // (The bars over heads: the soldiers' taken up and let go of, and everyone's placed)
+        this.#barsOverHeads(mine);
 
         this.#wildWays();
 
@@ -4722,7 +4691,7 @@ export class Game {
             const avatar = this.avatars.get(id);
             const head = avatar && battle.actor(id)?.map === this.mapId ? avatar.point(1.18, _head) : null;
 
-            hud.placeSaid(id, head ? view.toScreen(head) : null, { depth: head ? eye.distanceTo(head) : 0 });
+            hud.placeSaid(id, head ? view.toScreen(head) : null, { depth: head ? view.camera.position.distanceTo(head) : 0 });
         }
 
         // Skin flushing red where hit, and tinged by what lingers on them (green with venom, a
@@ -5248,6 +5217,98 @@ export class Game {
 
         entry.away = this.#awayFromCamera(actor);
         entry.tall = height / Math.max(entry.away, 0.1);
+    };
+
+    // The bars over heads, every frame. First the soldiers': a bar over each who's an enemy (or
+    // hurt) and within sight of a bar (PLATE_SIZE.far metres of the player, PLATE_KEPT further
+    // for one that has its bar, so none comes and goes at the edge; the one the player's set on
+    // wherever it is), none over the rest: a hundred in an invasion each had one in the page,
+    // most of them past where a bar's drawn at all. Then everyone's on the player's map placed
+    // (those that have one), smaller and fainter the farther they are from the player's
+    // character, gone where the player can't see them (less far in the dark, if not as less far
+    // as others see: hud.js PLATE_SIZE, light.js playerSight), in the order of precedence
+    // (app/precedence.js: the first over the rest), and one that would lie under those before it
+    // not shown (hud.js Covering), but the one the player's set on, their party's and their
+    // own, and whoever's attacking them, always. A foe within the player's reach they can't act
+    // on (too dark to see that far, or something in the way: battle.js whyUnseen) dimmed, so it
+    // reads as not yet reachable, not as refused for nothing
+    #barsOverHeads(mine) {
+        const { battle, hud } = this;
+
+        for (const actor of battle.actors) {
+            if (actor.kind !== "soldier" || !this.avatars.has(actor.id) || !mine) {
+                continue;
+            }
+
+            const shown = hud.tracked.has(actor.id);
+            const near = actor.id === mine.target || (actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= PLATE_SIZE.far + (shown ? PLATE_KEPT : 0));
+            const wanted = !actor.dead && near && (battle.hostile(actor, mine) || actor.hp < actor.maxHp);
+
+            if (wanted && !shown) {
+                hud.track(actor.id, { ...actor, hostile: battle.hostile(actor, mine) });
+
+                // (Lit, if it's the one they're set on already: the hud lights the bar there is
+                // when it's told who)
+                if (hud.targeted === actor.id) {
+                    hud.setTarget(null);
+                    hud.setTarget(actor.id);
+                }
+            } else if (!wanted && shown) {
+                hud.untrack(actor.id);
+            }
+        }
+
+        const plating = this.plating;
+
+        plating.mine = mine ?? null;
+        plating.own = this.avatars.get(this.me)?.object.position ?? null;
+        plating.lit = this.mapId === battle.lightMap ? battle.light : null;
+        plating.reach = mine && !mine.dead ? this.#reachOf(mine) : 0;
+        plating.pixels = this.view.pixelsPerMetre();
+
+        const ranked = this.orders.plates.rank(mine ? this.#viewer(mine) : this.viewer, battle.actors, this.#plated);
+
+        hud.placing(this.clock);
+
+        for (let place = 0; place < ranked.length; place++) {
+            const { actor, point, scale, dim, standing } = ranked[place];
+
+            hud.place(actor.id, point, { scale, dim, over: place, always: standing <= STANDING.attacker || Boolean(this.allied?.has(actor.id)) });
+        }
+    }
+
+    // One whose bar's placed this frame, as it's ranked (Order.rank's `measure`, #barsOverHeads):
+    // none for the player's own, or one with no bar; how big its bar is where it stands worked
+    // out first, and one with none there (dead, on another map, hidden, past sight) or behind
+    // the camera has its bar hidden here and now, its head neither found nor put on the screen
+    // (every soldier's was, every frame, wherever it stood); the rest ranked by how tall on the
+    // screen they are, the nearer the camera first of two as tall
+    #plated = (entry) => {
+        const { actor } = entry;
+        const avatar = this.avatars.get(actor.id);
+
+        if (actor.id === this.me || !avatar || !this.hud.tracked.has(actor.id)) {
+            return false;
+        }
+
+        const { mine, own, lit, reach, pixels } = this.plating;
+        const at = avatar.object.position;
+        const scale = actor.dead || actor.map !== this.mapId || actor.hidden ? 0 : own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
+        const point = scale > 0 ? this.view.toScreen(avatar.point(1.08, _head)) : null;
+
+        if (!point) {
+            this.hud.place(actor.id, null);
+
+            return false;
+        }
+
+        entry.point = point;
+        entry.scale = scale;
+        entry.dim = reach > 0 && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && this.battle.hostile(actor, mine) && !this.battle.canSee(mine, actor, reach);
+        entry.tall = this.view.heightOnScreen(at, avatar.character?.height ?? PERSON, pixels);
+        entry.away = this.view.camera.position.distanceTo(at);
+
+        return true;
     };
 
     // The soldiers about the player (`me`) the marshal draws, in full or in their crowds: alive, on
