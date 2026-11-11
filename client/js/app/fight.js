@@ -39,3 +39,58 @@ export function inFight(me, actors, hostile, sinceSwing = Infinity) {
 
     return false;
 }
+
+/**
+ * How often whether an enemy's close by someone (so they stand on guard) is worked out again, in
+ * the battle's time (ms): everyone was asked of everyone every frame, which in an invasion on a
+ * phone took 0.5 to 1.2 ms of each (and 3.6 to 5.7 ms with 360 about), though the answer can only
+ * change as the battle steps. A guard taken up to a quarter second late: it eases in anyway.
+ */
+export const GUARD_EVERY = 250;
+
+// (Each one's first answer is due a different fifth of that later, so they aren't all worked out
+// again in the same frame from then on)
+const GUARD_SPREAD = 5;
+
+/**
+ * Whether anyone alive among `actors`, on `actor`'s map and within `reach` metres of them, is
+ * their enemy and seen by them (`hostile(a, b)` and `canSee(a, b)`: battle.js). The map and how
+ * far off first (squared, no root), their peoples' standing and what's in the way only for one near.
+ */
+export function foeNear(actor, actors, reach, hostile, canSee) {
+    const { x, y, map } = actor;
+    const within = reach * reach;
+
+    for (let k = 0; k < actors.length; k++) {
+        const other = actors[k];
+
+        if (other.dead || other.map !== map) {
+            continue;
+        }
+
+        const dx = other.x - x;
+        const dy = other.y - y;
+
+        if (dx * dx + dy * dy <= within && hostile(other, actor) && canSee(actor, other)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Whether someone's answer kept (`kept`: { on, due }, their own, begun as {}; `on` the answer, the
+ * caller's to set) is to be worked out again at the battle's `time` (ms): GUARD_EVERY after the
+ * last time (the first a share of that later, by `turn`, a count of those begun so far), or when
+ * the battle's time has gone back (a world sent again). When it is, when it's next due is kept.
+ */
+export function guardDue(kept, time, turn = 0) {
+    if (time < kept.due && time >= kept.due - GUARD_EVERY * 2) {
+        return false;
+    }
+
+    kept.due = time + (kept.due === undefined ? (GUARD_EVERY * ((turn % GUARD_SPREAD) + 1)) / GUARD_SPREAD : GUARD_EVERY);
+
+    return true;
+}

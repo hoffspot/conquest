@@ -198,7 +198,7 @@ import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
-import { FIGHT_LINGERS, inFight } from "./fight.js";
+import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
@@ -1505,6 +1505,12 @@ export class Game {
         this.worked = 0;
         this.built = 0;
         this.budgetAbout = { beat: 0, step: 0 };
+
+        // (The battle's two questions of a pair, as functions to hand on, made once; and how many
+        // have been asked whether an enemy's close by, to spread when each is asked again: #fighting)
+        this.hostileTo = (a, b) => this.battle.hostile(a, b);
+        this.seenBy = (a, b) => this.battle.canSee(a, b);
+        this.waryTurn = 0;
 
         /**
          * Keeping up (Game options: Adaptive, app/governor.js): from the quality chosen down, as a
@@ -4181,7 +4187,7 @@ export class Game {
                 continue;
             }
 
-            avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
+            avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor, avatar));
 
             // (One of the folk who sits: up and away in a fright, and back to its seat after)
             if (actor.routine?.seated) {
@@ -4555,21 +4561,35 @@ export class Game {
         }
     }
 
-    // Is a character fighting (so standing on guard)? Attacking lately, or an enemy close by
-    #fighting(actor) {
+    // Is a character fighting (so standing on guard)? Attacking lately, or an enemy close by:
+    // which is asked of everyone about, so each one's answer is kept with their avatar and worked
+    // out again a few times a second, not every frame, not all in the same one (app/fight.js
+    // foeNear, guardDue). Asked with no avatar (now and then, of one: going to its crowd, the
+    // crier near), it's worked out there and then
+    #fighting(actor, avatar = null) {
         // (The folk never fight)
         if (actor.neutral) {
             return false;
         }
 
-        if (actor.attack || this.battle.time - (this.lastAttack.get(actor.id) ?? -Infinity) < 2500) {
+        const battle = this.battle;
+
+        if (actor.attack || battle.time - (this.lastAttack.get(actor.id) ?? -Infinity) < 2500) {
             return true;
         }
 
-        const reach = longestReach(actor.weapon) + 2;
+        if (!avatar) {
+            return foeNear(actor, battle.actors, longestReach(actor.weapon) + 2, this.hostileTo, this.seenBy);
+        }
 
-        // (The cheap checks first: how their peoples stand, and what's in the way, only for one near)
-        return this.battle.actors.some((other) => !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.hostile(other, actor) && this.battle.canSee(actor, other));
+        const kept = (avatar.wary ??= {});
+
+        if (guardDue(kept, battle.time, this.waryTurn)) {
+            this.waryTurn++;
+            kept.on = foeNear(actor, battle.actors, longestReach(actor.weapon) + 2, this.hostileTo, this.seenBy);
+        }
+
+        return kept.on;
     }
 
     // How high the ground is where someone stands on a map (metres): a bridge's deck (over its

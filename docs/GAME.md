@@ -4324,7 +4324,12 @@ timed so its blow lands when the battle's does (a kick with a weapon in hand lea
 guard); a `draw` event draws the weapon from where it's put away with its flourish, or puts it back,
 with its sound as the hand takes it or lets it go (a blade's ring leaving its scabbard and the click
 of its hilt going home, something slung off the back or taken from the belt, knuckles cracking);
-a character only stands on guard with its weapon out; a
+a character only stands on guard with its weapon out, while it's fighting: striking, having struck
+in the last 2.5 seconds, or with an enemy it can see within its weapon's reach and 2 metres
+(`#fighting`; each one's answer to that last kept, and worked out again every quarter second of the
+battle's time, each at its own: app/fight.js `foeNear`, `guardDue`. Asked of everyone for everyone
+every frame, it took 0.4 to 0.8 ms of each in an invasion of 173, measured in Node, and 0.03 to
+0.06 kept); a
 `hit` makes the target flinch in the way the attack's `reaction` says, from the side the blow came
 from, flushes their skin red for a moment and shows the damage; a `death` makes them fall as a
 body does (back from a blow in front, or down onto the knees and over; forward from one behind:
