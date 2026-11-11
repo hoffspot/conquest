@@ -2684,6 +2684,15 @@ export class Battle {
         return (step + (wait || steps)) * STEP_MS;
     }
 
+    // When a character's own step of every `every` ms's last came round (ms): this one, or the
+    // last before it
+    #lastStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+        const step = Math.floor(this.time / STEP_MS);
+
+        return (step - (((step % steps) - turnOf(actor.id, steps) + steps) % steps)) * STEP_MS;
+    }
+
     // Start drawing its weapon (`on`), or putting it away (it can't be used meanwhile)
     #draw(actor, on) {
         actor.armed = false;
@@ -4627,6 +4636,11 @@ export class Battle {
 
         if ((idle && moved) || ((idle || moved) && due)) {
             this.#pathTo(actor, goal, target.footprint ? [goal[0] + 0.5, goal[1] + 0.5] : [target.x, target.y]);
+            // (Counted as found in its own step of the REPATH_MS's, this one or the last before
+            // it: so its next way after them is found in its own step, turnOf. All who set out
+            // after someone in the same step found their way again in the same step, every
+            // tenth: a melee's worst steps, 88 ways in one of a hundred's)
+            actor.lastPathAt = this.#lastStep(actor, REPATH_MS);
         }
     }
 

@@ -235,6 +235,41 @@ describe("those set on no one look round four times a second, each in a step of 
     });
 });
 
+describe("ways after someone found in a step of one's own (battle.js #pursue, REPATH_MS)", () => {
+    it("spreads a pack's ways over the steps, where all who set out together found theirs again together", () => {
+        const battle = new Battle(open(120, 60), { seed: 5 });
+        const ids = Array.from({ length: 40 }, (_, k) => `g${k}`);
+        const ways = [];
+        let found = 0;
+
+        ids.forEach((id, k) => guard(battle, id, [10 + (k % 20) * 2, 40 + Math.floor(k / 20) * 2], { leash: 200, sight: 60 }));
+        battle.add({ id: "runner", kind: "soldier", team: "b", weapon: "sword", square: [12, 20], hp: 9000, speed: 7 });
+        run(battle, 1000);
+
+        // (All set on the runner in the same step, as a pack struck is; the runner off along the
+        // field, so each has a new way to find after it every REPATH_MS)
+        battle.command("runner", { type: "move", to: [110, 20] });
+        ids.forEach((id) => Object.assign(battle.actor(id), { target: "runner", lastSeen: battle.time }));
+        battle.onPath = (id) => (found += id === "runner" ? 0 : 1);
+
+        run(battle, 4000, () => {
+            ways.push(found);
+            found = 0;
+        });
+
+        // (Each still finds its way about twice a second)
+        const all = ways.reduce((sum, each) => sum + each, 0);
+        const out = ways.indexOf(40);
+
+        assert.ok(all >= 40 * 6 && all <= 40 * 10, `${all} ways in 4 s`);
+        // (All of them in the step they set out; from then on each in its own step of the ten,
+        // four of the forty a step, where every tenth step had them all)
+        assert.ok(out >= 0 && out < 10, "all set out in one step");
+        assert.ok(Math.max(...ways.slice(out + 1)) <= 12, `the most in a step after they set out: ${Math.max(...ways.slice(out + 1))}`);
+        assert.ok(ways.slice(out + 10).every((each) => each >= 1 && each <= 6), `${ways.slice(out + 10)}`);
+    });
+});
+
 describe("every character of one shape (battle.js OPTIONAL)", () => {
     const shapes = (battle) => [...new Set(battle.actors.map((actor) => Object.keys(actor).join()))];
 

@@ -1070,6 +1070,16 @@ look in their own step too (they all looked in the same one, every fifth step tw
 others'), and the folk look about them for danger in their own step of the eight. A healer still
 looks for whom to mend every step its spell's ready.
 
+**Ways after someone, each in its own step** (`#pursue`, `REPATH_MS`). One chasing another finds
+its way again at most every half second as they move. Everyone who set out after someone in the
+same step (a pack struck, two lines meeting) then found their way again in the same step, every
+tenth: of a hundred fighting on an open field, 88 ways in one step, then 62, 62 and 60, and those
+were the battle's slowest steps. Now each way found after someone counts as found in the chaser's
+own step of the ten (this one or the last before it, by its id as above), so its next is found
+in its own step: the same hundred find 19 at most in a step after the first, two hundred 38
+where it was 186. The first way of a chase is found at once, as before, and the next up to half
+a second sooner than it was.
+
 **Casters and healers** (`add`'s `casts` and `heals`: spell ids). A caster casts at whoever it's
 set on the first of its spells that's ready, if they're within its reach and in sight
 (`#castAt`), before going after them; a soldier's are its people's school's first two, the
