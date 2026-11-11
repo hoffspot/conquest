@@ -7156,6 +7156,21 @@ overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB l
 JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
 same.
 
+**Sent as it's built, not when it's first looked at** (world/sending.js). three.js sends a mesh's
+corners and pictures the first time it draws it, and draws only what the camera sees. So what
+was built behind and beside the camera waited: a quarter of a minute into the start town, 9.1 MB
+of undergrowth, 1.7 MB of hedges and eleven chunks' ground pictures (2.9 MB) were still to send,
+all of them in the frame the camera first turned round, and what the page lets go of once it's
+sent it kept till then. Now what's newly built is drawn once wherever the camera looks
+(`sendSoon`: each chunk's meshes as it's shown, each tile of its undergrowth, its buildings as
+they're merged, its rocks and its ground drawn again, a sign painted again; the start town's
+blocks, trees' shells and smoke, banners and lights): not culled for a frame, the graphics card
+throwing away what's out of view for the cost of its corners, once, then culled again as it was.
+No more than 2 MB of corners are let through a frame (`SEND_SOON`, a mesh with fewer counted a
+quarter of a megabyte for its pictures; `sendSome`, each frame before the view draws), so the
+land round the start, all built before the first frame, goes over the first second or so of
+play; what the camera does see meanwhile is sent as it always was.
+
 **The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
 reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
 four tiles a chunk, a third of them were built out past the 56 metres where any of it shows, for
@@ -7428,6 +7443,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
   has let go, and given back: the page loaded again, the title carrying on with the same
   character.
+- `test/sending.test.js`: what's newly built let through to the graphics card 2 MB a frame, in
+  the order it was built, each drawn once wherever the camera looks and culled again as it was; a
+  mesh with few corners, or none left on the page, counted a quarter of a megabyte; no turn for
+  one the camera saw meanwhile, one told what it was told before, one that's hidden waited for;
+  what's never culled, or seen by no ordinary camera, left alone. `test/chunks.test.js` also: all
+  of a chunk it's drawn sent over the frames after, and its ground again, drawn coarser.
 - `test/corners.test.js`: which way a corner faces in three bytes (a wall's, a floor's and a 45
   degree roof's exact, any other within a third of a degree and a thirtieth on average, never
   further than each side rounded on its own, a vector that isn't a unit long too); corners alike

@@ -32,6 +32,7 @@ import { FAR_FIELDS } from "./ground.js";
 import { hollowed } from "./landmarkdress.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
+import { sendSome } from "./sending.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
 import { fadeShadowEdges, shadowMapOf, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
@@ -2213,6 +2214,9 @@ export class View {
             this.#cutAway(dt);
             this.sky.update(camera, now / 1000);
             WINDOW_LIGHT.value.z = (now / 1000) % 1000;
+            // (The next of what's newly built let through to the graphics card, wherever the
+            // camera looks: sending.js)
+            sendSome();
             this.#updateShown();
             lampShadowsDrawn(this);
         }

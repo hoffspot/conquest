@@ -45,6 +45,7 @@ import { Terrains } from "./terrains.js";
 import { MARGIN, primingWater, shoreDistances, UNDER_BANKS, waterSheet } from "./water.js";
 import { fallsOf, lipsIn } from "./falls.js";
 import { builderOf, cutAway, drawFar, grounded, joined, partsOf, PIXEL, placed, standOn } from "./town3d.js";
+import { sendSoon } from "./sending.js";
 import { kitBuilt } from "./art/kits/kithouse.js";
 import { kitShopBuilt } from "./art/kits/kitshop.js";
 import { houseKitRead, readyHouseKit } from "./kithouses3d.js";
@@ -425,7 +426,7 @@ export class Chunks {
         }
 
         if (stones) {
-            drawn.object.add(stones);
+            drawn.object.add(sendSoon(stones));
         }
 
         drawn.stones = stones;
@@ -461,6 +462,7 @@ export class Chunks {
             const ground = drawn.object.children.find(({ name }) => name === "ground");
 
             if (ground && respaceGround(this.overworld, this.overworld.chunk(drawn.cx, drawn.cy), ground, this.#spacingOf(drawn.cx, drawn.cy))) {
+                sendSoon(ground);
                 this.groundVersion++;
             }
         }
@@ -613,6 +615,9 @@ export class Chunks {
         sign.mesh.material.map = picture;
         releaseSign(sign.texture);
         sign.texture = picture;
+        // (And sent in the next frame or so, not all those painted again in the frame the camera
+        // next turns to them)
+        sendSoon(sign.mesh);
     }
 
     // Grow what undergrowth can be grown before `until` (performance.now()'s), a step at a time;
@@ -654,7 +659,7 @@ export class Chunks {
             if (mesh) {
                 mesh.visible = this.#seen(mesh);
                 drawn.undergrowth.push(mesh);
-                drawn.object.add(mesh);
+                drawn.object.add(sendSoon(mesh));
                 this.version++;
             }
         }
@@ -875,7 +880,7 @@ export class Chunks {
             }
         }
 
-        drawn.object.add(merged);
+        drawn.object.add(sendSoon(merged));
 
         // (Smoke rising from their chimneys: smoke.js; their banners and flags in the breeze:
         // cloth.js; their torches and lanterns, lit at night: lights.js)
@@ -889,7 +894,7 @@ export class Chunks {
 
         for (const made of [lit, pools, cloth, smoke]) {
             if (made) {
-                drawn.object.add(made);
+                drawn.object.add(sendSoon(made));
                 drawn.made.push(made);
             }
         }
@@ -901,7 +906,7 @@ export class Chunks {
                 job.trees.map((tree) => ({ ...tree, tint: this.#tintOf(tree.variant, tree.x, tree.z) })),
                 this.groundAt,
             );
-            drawn.object.add(drawn.grown.object);
+            drawn.object.add(sendSoon(drawn.grown.object));
 
             for (const box of drawn.grown.boxes) {
                 for (let y = Math.max(map.z0, Math.floor(box.min.z)); y < Math.min(map.z0 + CHUNK, Math.ceil(box.max.z)); y++) {
@@ -1235,6 +1240,9 @@ export class Chunks {
         this.#queue(drawn);
         drawn.drawing = false;
         object.visible = true;
+        // (All of it given to the graphics card over the next frames, wherever the camera looks:
+        // not in the frame it first turns this way, sending.js)
+        sendSoon(object);
         this.version++;
         this.groundVersion++;
     }

@@ -26,6 +26,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const { buildWorld, CHUNK, CHUNKS } = await import("../client/js/core/overworld.js");
 const { Chunks, DETAIL_NEAR, REACH, SIGNS_KEPT, UNDERGROWTH } = await import("../client/js/world/chunks3d.js");
 const { SIGN_SCREEN, signDetail } = await import("../client/js/world/art/kits/signs.js");
+const { sendSome } = await import("../client/js/world/sending.js");
 const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
@@ -370,6 +371,60 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         assert.equal(again.reduce((sum, { attributes }) => sum + attributes.position.count, 0), buildings.reduce((sum, { attributes }) => sum + attributes.position.count, 0));
         chunks.dispose();
         wilds.dispose();
+    });
+
+    it("has all of a chunk it's drawn given to the graphics card over the frames after, wherever the camera looks (sending.js): each mesh drawn once though it's out of view, then culled again; and its ground again, drawn coarser", () => {
+        // (None of another test's left waiting)
+        while (sendSome(Infinity)) {
+            // (All through)
+        }
+
+        const overworld = world.maps.town;
+        const [sx, sy] = world.spawns.player.map((v) => Math.floor(v / CHUNK));
+        const wild = [-2, -1, 0, 1, 2].flatMap((dy) => [-2, -1, 0, 1, 2].map((dx) => overworld.chunk(sx + dx, sy + dy))).find(({ trees, features }) => trees.length > 2 && features.some(({ kind }) => kind !== "arch" && kind !== "aqueduct"));
+        const chunks = new Chunks(world, { undergrowth: 0 });
+
+        chunks.fill(wild.x0 + CHUNK / 2, wild.y0 + CHUNK / 2, 0);
+
+        const [drawn] = chunks.drawn.values();
+        const meshes = [];
+
+        drawn.object.traverse((node) => node.isMesh && meshes.push(node));
+
+        const names = new Set(meshes.map(({ name }) => name));
+        const waiting = () => meshes.filter((mesh) => Object.hasOwn(mesh, "onAfterRender") && mesh.frustumCulled).length;
+        // (A frame drawn with none of it in the camera's view: what's not culled away drawn)
+        const draw = () => meshes.filter((mesh) => !mesh.frustumCulled).map((mesh) => mesh.onAfterRender(null, null, null, mesh.geometry, mesh.material, null)).length;
+
+        assert.ok(["ground", "wilds", "crown shadows", "litter"].every((name) => names.has(name)), [...names].join());
+        assert.equal(waiting(), meshes.length, "every mesh of it waiting its turn");
+        assert.equal(draw(), 0);
+
+        let [frames, sent] = [0, 0];
+
+        while (sent < meshes.length && frames < 100) {
+            sendSome();
+
+            const now = draw();
+
+            assert.ok(now >= 1 && now <= 8, `${now} in a frame`);
+            sent += now;
+            frames++;
+        }
+
+        assert.equal(sent, meshes.length);
+        assert.ok(meshes.every((mesh) => mesh.frustumCulled), "culled again, each as it was");
+        assert.equal(draw(), 0);
+
+        // (Its ground drawn with its corners further apart: made again, and sent again)
+        const ground = meshes.find(({ name }) => name === "ground");
+
+        chunks.setSpacing([2]);
+        assert.equal(waiting(), 1);
+        sendSome();
+        assert.equal(ground.frustumCulled, false);
+        assert.equal(draw(), 1);
+        chunks.dispose();
     });
 
     it("paints each sign only as finely as it's seen: a quarter each way while it's far from the player, from the start, as the quality has them once it's near, kept so till it's well off again; one painted again a frame", async () => {

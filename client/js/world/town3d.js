@@ -43,6 +43,7 @@ import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolsMesh } from "./windowpools.js";
 import { releaseGeometry } from "./release.js";
+import { sendSoon } from "./sending.js";
 import { castByRuns, runsOf } from "./shadowpasses.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
@@ -283,7 +284,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         cutAway(mesh.material);
     }
 
-    object.add(trees.object);
+    object.add(sendSoon(trees.object));
 
     const town = { object, heights, buildings, props, lights: [], extras: [] };
 
@@ -302,7 +303,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         town.extras = [smokeMesh(all("smoke")), clothMesh(all("cloth")), lightsMesh(town.lights), poolsMesh(all("panes"), groundAt)].filter(Boolean);
 
         for (const made of town.extras) {
-            object.add(made);
+            object.add(sendSoon(made));
         }
     };
 
@@ -420,10 +421,12 @@ function mergeBlock(block, group, key, object) {
     block.panes = parts.flatMap((part) => part.panes);
     block.meshes = [...merged.children];
 
+    // (Each given to the graphics card over the next frames it's shown in, wherever the camera
+    // looks: sending.js)
     for (const mesh of block.meshes) {
         mesh.name = `${mesh.name} ${key}`;
         cutAway(mesh.material);
-        object.add(mesh);
+        object.add(sendSoon(mesh));
     }
 }
 
