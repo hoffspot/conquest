@@ -206,6 +206,10 @@ const MADE_WAITING = 8;
 export const MADE_KEPT = 300;
 export const MADE_QUICK = 0.1;
 
+// How long a made sound made as it was wanted is kept, not played, while the sound's squeezed (a
+// phone short of memory: squeeze), rather than MADE_KEPT (s)
+export const SQUEEZED_KEPT = 60;
+
 // How often the made sounds not played lately are looked over, to let them go (s: MADE_KEPT)
 const MADE_LOOKED = 15;
 
@@ -907,6 +911,9 @@ export class Sound {
          */
         this.mp3s = new Map();
         this.budget = budget;
+        // (What it's to keep to when it's not squeezed: squeeze)
+        this.fullBudget = budget;
+        this.squeezed = false;
         this.decoding = new Set();
         this.heard = new Map();
 
@@ -1136,7 +1143,7 @@ export class Sound {
         const kept = new Set([...this.kept].filter((name) => !this.recorded.get(name)?.length).map((name) => (SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead)));
 
         for (const [name, took] of this.took) {
-            if (this.ahead(name) || kept.has(name) || took > MADE_QUICK || this.late.has(name) || now - (this.madePlayed.get(name) ?? now) < MADE_KEPT * 1000) {
+            if (this.ahead(name) || kept.has(name) || took > MADE_QUICK || this.late.has(name) || now - (this.madePlayed.get(name) ?? now) < (this.squeezed ? SQUEEZED_KEPT : MADE_KEPT) * 1000) {
                 continue;
             }
 
@@ -1998,6 +2005,24 @@ export class Sound {
         }
 
         return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: gait.far ?? FOOTSTEPS.far, rate, variant, made });
+    }
+
+    /**
+     * Hold less (app/memoryguard.js: a phone short of memory): no more than `budget` bytes of the
+     * recorded sounds kept decoded (never more than it was made to keep: DECODED_BUDGET), those
+     * played least lately past it let go of at once (#trim: none sounding), and the made sounds
+     * made as they were wanted let go of once they've not played for SQUEEZED_KEPT, not
+     * MADE_KEPT; or, `budget` null, as before.
+     */
+    squeeze(budget = null) {
+        this.squeezed = budget !== null;
+        this.budget = budget === null ? this.fullBudget : Math.min(this.fullBudget, budget);
+        this.#trim();
+
+        // (Looked over at the next tick, not in MADE_LOOKED)
+        if (this.squeezed) {
+            this.madeLooked = 0;
+        }
     }
 
     /**

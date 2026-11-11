@@ -32,6 +32,7 @@ import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/
 import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
+import { guardLevel, MEMORY_GUARD } from "./memoryguard.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
@@ -1731,6 +1732,13 @@ export class Game {
         this.shieldTold = 0;
 
         /**
+         * The memory guard (app/memoryguard.js, #memoryGuarding): only on a touch screen (a phone or
+         * a tablet: `touch`), its level now (0: holding as much as ever), since when (the game's
+         * clock, s), and how long till what's held is looked at again (s).
+         */
+        this.memoryGuard = { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), level: 0, since: 0, clock: MEMORY_GUARD.every };
+
+        /**
          * Their party's ready check (core/host.js READY, #readyEvent): what each in it has said
          * ("ready", "not", "waiting" or "none": no answer), by id, marked on their icons till
          * `readyMarksUntil` (the game's clock, s); its leader's panel (hud.js readyCheck) and
@@ -1920,6 +1928,8 @@ export class Game {
             bodiesMB: megabytes(bodies),
             interiorsMB: megabytes(interiors),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
+            // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
+            guard: this.memoryGuard?.level ?? 0,
         };
     }
 
@@ -3993,6 +4003,7 @@ export class Game {
         this.#thronging(dt);
         this.#crowding();
         this.#forgetting(dt);
+        this.#memoryGuarding(dt);
         this.#modelling(dt);
 
         const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
@@ -4715,7 +4726,7 @@ export class Game {
         const ids = new Set(soldiers.map(({ id }) => id));
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
-        const room = soldiers.length > MARSHAL.from ? full : Math.max(full, (this.view.quality.bodies ?? Infinity) - this.#heldInFull((id) => !ids.has(id)));
+        const room = soldiers.length > MARSHAL.from ? full : Math.max(full, this.#bodiesBudget() - this.#heldInFull((id) => !ids.has(id)));
         const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
         const inFull = (actor) => this.#drawnInFull(actor.id);
         // (Past the reach from the camera: in their crowd, whatever room there is; the rest ranked
@@ -5034,7 +5045,7 @@ export class Game {
         this.rationClock = MARSHAL.every;
 
         const me = this.battle.actor(this.me);
-        const budget = this.view.quality.bodies ?? Infinity;
+        const budget = this.#bodiesBudget();
 
         if (!me || budget === Infinity) {
             return;
@@ -5208,7 +5219,7 @@ export class Game {
         this.folkClock = MARSHAL.every;
 
         const me = this.battle.actor(this.me);
-        const budget = this.view.quality.bodies ?? Infinity;
+        const budget = this.#bodiesBudget();
 
         if (!me || budget === Infinity) {
             return;
@@ -5447,17 +5458,56 @@ export class Game {
     // for from, so one isn't let go and read again going to and fro at the edge), those that may be
     // met where they are (#modelsHere), and those of the place they're in or at the door of
     // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER)
-    #forgetting(dt) {
-        if ((this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
+    #forgetting(dt, { now = false } = {}) {
+        if (!now && (this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
         }
 
         this.forgetClock = FORGET_EVERY;
-        forgetBodies();
+
+        // (Short of memory: those none's drawn from let go of at once, not after a while)
+        forgetBodies(performance.now(), now ? 0 : undefined);
 
         const me = this.avatars.get(this.me)?.object.position;
 
-        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout()] : [], this.#modelsInside());
+        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout()] : [], this.#modelsInside());
+    }
+
+    // How many bodies can be held in full at once: the quality's (QUALITY bodies), and, the memory
+    // guard holding less, no more than its level allows (app/memoryguard.js MEMORY_GUARD)
+    #bodiesBudget() {
+        return Math.min(this.view.quality.bodies ?? Infinity, MEMORY_GUARD.bodies[this.memoryGuard.level] ?? Infinity);
+    }
+
+    // The memory guard (app/memoryguard.js): on a touch screen, what's held looked at every so
+    // often (MEMORY_GUARD.every: memoryNow), and its level (guardLevel) put into effect as it
+    // changes: the bodies' budget (#bodiesBudget: those past it in their crowds, by the rationing),
+    // the sound squeezed or not (audio/sound.js squeeze), and, coming to a higher level, the beasts'
+    // bodies and models none's drawn from let go of at once (#forgetting); told in the debug log
+    // (memoryNow `guard`)
+    #memoryGuarding(dt) {
+        const guard = this.memoryGuard;
+
+        if (!guard.touch || (guard.clock -= dt) > 0) {
+            return;
+        }
+
+        guard.clock = MEMORY_GUARD.every;
+
+        const was = guard.level;
+        const { level, since } = guardLevel(this.memoryNow().totalMB, { level: guard.level, since: guard.since, now: this.clock });
+
+        Object.assign(guard, { level, since });
+
+        if (level === was) {
+            return;
+        }
+
+        this.sound?.squeeze?.(MEMORY_GUARD.sound[level] ?? null);
+
+        if (level > was) {
+            this.#forgetting(0, { now: true });
+        }
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
