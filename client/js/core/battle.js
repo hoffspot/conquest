@@ -25,7 +25,9 @@
 //    round), or one of its own it can see is fighting one, it chases them and attacks whenever
 //    they're within reach, giving up and going back to its patrol if it loses sight of them for
 //    GIVE_UP_MS. Struck, it (and a creature's whole pack) goes after whoever did it, beyond its
-//    leash and unseen, till DEFEND_MS after the last blow (#provoke).
+//    leash and unseen, till DEFEND_MS after the last blow (#provoke). Set on no one, it looks
+//    round for an enemy four times a second, in a step of its own (RETHINK_MS, turnOf), not
+//    every step; a player it notices in the step they come into sight all the same.
 //
 // Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
 // speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
@@ -58,7 +60,8 @@
 // enemy comes into sight, or anyone's after them, or the player is told to fight someone. Drawing
 // takes a moment (DRAW_MS) before the weapon can be used; once no enemy has been in sight or
 // after them for SHEATHE_AFTER_MS, they put it away again, which takes a while too (SHEATHE_MS).
-// (A "draw" event: { id, on }.)
+// (A "draw" event: { id, on }.) Set on no one and with no one after them, they ask whether an
+// enemy's in sight four times a second (#arm, RETHINK_MS).
 //
 // The folk (roles.js) rest now and then while the player can see them: every several seconds
 // (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
@@ -377,8 +380,27 @@ const BRAKING = 7;
 const GIVE_UP_MS = 3000;
 
 // One in a formation looks again for whom to fight only this often (ms), meanwhile set on whoever
-// it's set on: a field battle's hundreds each looking every step was most of what it cost
+// it's set on: a field battle's hundreds each looking every step was most of what it cost. And
+// anyone set on no one looks round for an enemy only as often (#patrol, #wild), and asks whether
+// it's in a fight (#arm): a camp at peace, each asking every step with no one to find, cost three
+// times what the same hundred cost fighting. A player's noticed in the step they come into sight
+// all the same (#playerSeen), and whoever a blow or a chase is already on is in its fight at once
 const RETHINK_MS = 250;
+
+// Which step of so many is a character's own, for what each does only every so often (looking
+// round, RETHINK_MS; the folk looking about them, FLEE.look; a new way after someone, REPATH_MS):
+// by its id, so it's the same in every copy of the world with nothing kept of it, and those who'd
+// all do it in the same step (a camp, a line of battle, a pack setting out together) each do it
+// in a step of their own
+const turnOf = (id, steps) => {
+    let sum = 0;
+
+    for (let k = 0; k < id.length; k++) {
+        sum += id.charCodeAt(k);
+    }
+
+    return sum % steps;
+};
 
 // How often the colossal (#colossus) looks again for whom it'd fight (ms), how many of their
 // fellows within how far (metres) of one make them worth its breath, and how near it comes to
@@ -2628,6 +2650,13 @@ export class Battle {
             actor.drawing = null;
         }
 
+        // (Set on no one, no one after it as the step began, and in no fight when it last asked:
+        // asked again only in its own step, four times a second, RETHINK_MS; between, its weapon
+        // neither drawn nor put away)
+        if (actor.target === null && !actor.attack && actor.order?.type !== "engage" && actor.foughtAt < this.time - STEP_MS && !this.#chasers.has(actor.id) && !this.#ownStep(actor)) {
+            return;
+        }
+
         if (this.#inFight(actor)) {
             actor.foughtAt = this.time;
 
@@ -2637,6 +2666,22 @@ export class Battle {
         } else if (actor.armed && !actor.drawing && !actor.attack && this.time - actor.foughtAt >= SHEATHE_AFTER_MS) {
             this.#draw(actor, false);
         }
+    }
+
+    // Whether this step is a character's own of every `every` ms's (turnOf)
+    #ownStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+
+        return Math.floor(this.time / STEP_MS) % steps === turnOf(actor.id, steps);
+    }
+
+    // When a character's own step of every `every` ms's next comes round (ms): after this one
+    #nextStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+        const step = Math.floor(this.time / STEP_MS);
+        const wait = (turnOf(actor.id, steps) - (step % steps) + steps) % steps;
+
+        return (step + (wait || steps)) * STEP_MS;
     }
 
     // Start drawing its weapon (`on`), or putting it away (it can't be used meanwhile)
@@ -2948,7 +2993,8 @@ export class Battle {
      */
     #afraid(actor) {
         if (this.time >= (actor.lookAt ?? 0)) {
-            actor.lookAt = this.time + FLEE.look;
+            // (Again in its own step of the next FLEE.look: not all the folk in the same one)
+            actor.lookAt = this.#nextStep(actor, FLEE.look);
 
             const danger = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
 
@@ -3292,9 +3338,11 @@ export class Battle {
         }
 
         // (One in a formation: set on whoever it's set on, or no one, a while before looking again,
-        // unless whoever it's set on is gone; anyone: a player near before anyone else, as many as
-        // can be on them)
-        const thinking = !actor.formation || this.time >= actor.rethinkAt;
+        // unless whoever it's set on is gone; one in none: looking every step while it's set on
+        // someone, and set on no one only as often, RETHINK_MS, in its own step (and at once when
+        // whoever it was on is lost: `rethinkAt` is only put off by a look that found no one);
+        // anyone: a player near before anyone else, as many as can be on them)
+        const thinking = this.time >= actor.rethinkAt || (!actor.formation && actor.target !== null);
         let seen = null;
 
         // (Sent to hack down a section of a palisade, its `siege`: at it, unless an enemy's on it up
@@ -3331,9 +3379,14 @@ export class Battle {
                 this.#chosen(actor, (enemy) => this.#leashed(actor, enemy) && (enemy.id === actor.target || this.#roomOn(actor, enemy)) && sought(enemy), { hold: Boolean(actor.formation) }) ??
                 this.#seeded(actor, (seek ? null : this.#drawnTo(actor)) ?? this.#nearestSeen(actor, room) ?? (seek ? null : (this.#alarmed(actor) ?? (lap > 0 ? this.#nearestSeen(actor, helps) : null))));
 
-            if (actor.formation) {
-                actor.rethinkAt = this.time + RETHINK_MS;
+            // (Again in its own step of the next RETHINK_MS: #nextStep)
+            if (actor.formation || (!seen && actor.target === null)) {
+                actor.rethinkAt = this.#nextStep(actor);
             }
+        } else if (!broken && !seen && !actor.formation) {
+            // (Between its looks round: a player come into sight all the same, in the step they
+            // do, as far off as it sees)
+            seen = this.#seeded(actor, this.#drawnTo(actor) ?? (this.#sightOf(actor) > SIGHT ? this.#playerSeen(actor, (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy)) : null));
         }
 
         const chased = actor.target === null ? null : this.actor(actor.target);
@@ -3455,9 +3508,16 @@ export class Battle {
         const rouses = wild.reacts
             ? (enemy) => provoked(enemy) || (actor.mood?.kind === "attack" && actor.mood.by === enemy.id)
             : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard) || Boolean(this.sworn?.(actor, enemy));
-        // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY)
+        // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY. Set on no one, it
+        // looks round for them only every RETHINK_MS, in its own step, and at once when whoever
+        // it was on is lost; between its looks, for a player come into sight all the same)
         const rousing = (enemy) => leashed(enemy) && rouses(enemy);
-        const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, this.#nearestSeen(actor, rousing));
+        const looking = actor.target !== null || this.time >= actor.rethinkAt;
+        const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, looking ? this.#nearestSeen(actor, rousing) : this.#playerSeen(actor, rousing));
+
+        if (looking && !seen && actor.target === null) {
+            actor.rethinkAt = this.#nextStep(actor);
+        }
 
         if (seen) {
             // (Holding a place gone into, set on no one: a moment's pause on first seeing them,
@@ -5338,10 +5398,39 @@ export class Battle {
     // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES;
     // or for one that looks further, its own `sight`: an invasion's close fighters, charging)
     #nearestSeen(actor, test = () => true) {
-        // (A siege engine as far as it reaches: its crew watch for it)
-        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sight = this.#sightOf(actor);
 
         return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy, sight) && test(enemy), sight);
+    }
+
+    // How far a character looks for enemies (squares: #nearestSeen). A siege engine as far as it
+    // reaches: its crew watch for it
+    #sightOf(actor) {
+        return actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+    }
+
+    // The nearest player it can see that passes `test`, as #nearestSeen finds them, looked for
+    // among the players only: what one set on no one asks between its looks round (RETHINK_MS), so
+    // a player's noticed in the step they come into sight. Of two as near, the first
+    #playerSeen(actor, test) {
+        const sight = this.#sightOf(actor);
+        let best = null;
+        let bestDistance = Infinity;
+
+        for (const player of this.#players) {
+            if (player.dead || player.map !== actor.map || !this.#near(actor, player, sight)) {
+                continue;
+            }
+
+            const distance = distanceBetween(actor.square, player.square);
+
+            if (distance < bestDistance && this.hostile(player, actor) && this.#noticed(actor, player) && this.canSee(actor, player, sight) && test(player)) {
+                best = player;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
     }
 
     // The enemy the nearest of its own it can see (on its rounds or at its post, too) is fighting,
@@ -7824,7 +7913,7 @@ export class Battle {
             }
         }
 
-        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sight = this.#sightOf(actor);
         const sees = (other) => this.canSee(actor, other, sight);
 
         if (held && top !== held && sees(top) && most > holding * (distanceBetween(actor.square, top.square) <= ENMITY.hand ? ENMITY.near : ENMITY.far)) {
