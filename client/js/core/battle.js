@@ -726,6 +726,29 @@ const cellOf = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
 const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const TALK_SEARCH = 800;
 
+/**
+ * What only some characters come to have, given them by the battle as they fight or by the host
+ * (a player's gear, a follower's orders, a boss's fight, a wary beast's mood...): every character
+ * is made with every one of them, undefined till it's given, after what add's own literal gives
+ * it and in this order (#made). So every character in a battle is of one shape, which is what
+ * lets the engine read `actor.x` the same quick way wherever it's asked: with eight or nine
+ * shapes among a field battle's hundred, as there were, every read was a slower one. Undefined
+ * is left out of what a snapshot's text holds (core/wire.js), as these were when they weren't
+ * there. Never `delete` one off a character (that alone made every read of it a lookup for good):
+ * make it undefined. A new one of the kind goes here too (test/battle-rules.test.js checks the
+ * field battle's are all one shape).
+ */
+const OPTIONAL = Object.freeze([
+    "abilityReadyAt", "abilityTimes", "backOffAt", "backing", "bleed", "bombAt", "burntAt", "callAt",
+    "charge", "coverUntil", "cries", "cryReadyAt", "darkSight", "distracted", "eating", "endurance",
+    "enmityWeight", "enrageAt", "enraged", "facingTo", "fallBackUntil", "fallsAt", "faster",
+    "fightSince", "fought", "guardAt", "guarding", "guise", "haste", "hatchAt", "hidden", "holdFire",
+    "holds", "leech", "legendary", "lingering", "lying", "mastered", "mood", "moveAt", "movesAt", "oil",
+    "onGuard", "phase", "rallied", "rank", "recovery", "regrowAt", "ruler", "siege", "slipReadyAt",
+    "slips", "snaredUntil", "steeled", "steeledAt", "still", "stoneUntil", "tauntProofUntil",
+    "tauntReadyAt", "tauntsTaken", "thrownAt", "treadAt", "unmasked", "ward", "warnedAt",
+]);
+
 export class Battle {
     /**
      * Whether the nearest enemy, who's in the way and who's on a square are looked for among those
@@ -867,7 +890,21 @@ export class Battle {
      * `rises` (a share of DOWNED ms: a hired adventurer's) is only knocked down when it falls,
      * up again where it fell (#rise), dodging `dodge` of blows.
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null, rises = null, dodge = 0 }) {
+    add(given) {
+        const actor = this.#made(given);
+
+        this.actors.push(actor);
+        this.#roster++;
+        this.#version++;
+
+        return actor;
+    }
+
+    // A character as add makes one, in no battle yet. Every one's made here, add's and those
+    // carried on from a snapshot (restore): by the one literal, every property of it there
+    // whatever was given, and then every property only some come to have (OPTIONAL), so that all
+    // are one shape
+    #made({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null, rises = null, dodge = 0 }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -909,7 +946,7 @@ export class Battle {
             armor,
             // (How little some kinds of harm hurt it: a player's charms, set by the host; a
             // creature's own, creatures.js `wards`. `charmed`)
-            ...(wards ? { wards: { ...wards } } : {}),
+            wards: wards ? { ...wards } : undefined,
             empowered: null,
             // The shield it carries, if any: how often it catches a blow or a shot from in front
             // on it (`chance`), how much of it the shield takes (`share`), and whether it turns
@@ -1063,15 +1100,15 @@ export class Battle {
             heals: heals ? [...heals] : null,
             // (A follower's way of fighting, by its calling (core/followers.js wayOf): whom it goes
             // for first, and how near it lets a foe come before backing off, metres)
-            ...(tactic ? { tactic } : {}),
-            ...(keep ? { keep } : {}),
-            ...(lone ? { lone: true } : {}),
-            ...(sight ? { sight } : {}),
+            tactic: tactic || undefined,
+            keep: keep || undefined,
+            lone: lone ? true : undefined,
+            sight: sight || undefined,
         };
 
-        this.actors.push(actor);
-        this.#roster++;
-        this.#version++;
+        for (const key of OPTIONAL) {
+            actor[key] = undefined;
+        }
 
         return actor;
     }
@@ -1601,11 +1638,8 @@ export class Battle {
         }
 
         if (wards !== undefined) {
-            if (wards) {
-                actor.wards = { ...wards };
-            } else {
-                delete actor.wards;
-            }
+            // (None: undefined, not deleted, which would make every read of it a lookup: OPTIONAL)
+            actor.wards = wards ? { ...wards } : undefined;
         }
 
         this.#emit("reshaped", { id, name, weapon, hp: actor.hp, maxHp: actor.maxHp });
@@ -1753,7 +1787,9 @@ export class Battle {
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, falls: structuredClone(snapshot.falls ?? []), nextFall: snapshot.nextFall ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
-            const actor = structuredClone(kept);
+            // (Made as add makes one, then all that was kept of it put on it: so it's of the one
+            // shape every character is, whatever of it the snapshot's text left out, OPTIONAL)
+            const actor = Object.assign(battle.#made({ id: kept.id, kind: KINDS[kept.kind] ? kept.kind : "folk", team: kept.team, square: kept.square ?? [0, 0] }), structuredClone(kept));
             const chance = createRandom(0);
 
             chance.state = state;

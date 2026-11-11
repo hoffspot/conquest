@@ -17,6 +17,8 @@ let ROLE_ARMS;
 let SNAPSHOT_STEPS;
 let buildWorld;
 let squaresOf;
+let decode;
+let encode;
 let world;
 
 before(async () => {
@@ -24,6 +26,7 @@ before(async () => {
     ({ Host, HOST_PLAYER, FIELD_BATTLE, ROLE_ARMS, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
     ({ buildWorld } = await import("../client/js/core/overworld.js"));
     ({ squaresOf } = await import("../client/js/core/grid.js"));
+    ({ decode, encode } = await import("../client/js/core/wire.js"));
     world = buildWorld({ seed: 2 });
 });
 
@@ -260,6 +263,15 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
         // (A minute on, they've met and fought)
         run(host, 60000);
         assert.ok(fielded.some(({ dead }) => dead));
+
+        // (And every character in it, the player among them, is still of one shape: the same
+        // properties in the same order, whatever each has been given since it was made, battle.js
+        // OPTIONAL; carried on from a snapshot's text, they still are)
+        const shapes = (battle) => [...new Set(battle.actors.map((actor) => Object.keys(actor).join()))];
+        const kept = Host.restore(world, decode(encode(host.snapshot())));
+
+        assert.equal(shapes(host.battle).length, 1, "one shape");
+        assert.deepEqual(shapes(kept.battle), shapes(host.battle));
     });
 
     it("is refused out of the world, too big or too small, or to anyone but the world's own player", () => {

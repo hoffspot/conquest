@@ -999,11 +999,25 @@ either way too. This is the multiplayer scaling plan's rule for its grids, slice
 (`generated/multiplayer_scaling_plan.md`): the cells only cull, the test asked of each is the one
 it always was, in the order it always was.
 
+**One shape** (`OPTIONAL`, `#made`). Every character in a battle has the same properties in the
+same order, whatever it is and whatever it's been given since: `add` makes each with all its own,
+and then with every property only some come to have (a player's gear's, a follower's orders', a
+boss's fight's, a wary beast's mood: some sixty), undefined until it's given. A browser's engine
+reads `actor.x` quickly where every object it meets there is laid out alike; a field battle's
+hundred had eight or nine layouts among them, and one a property had been deleted from was a
+slow lookup at every read for good. So none is ever deleted off a character (Polymorph takes a
+creature's wards away by making them undefined), and one carried on from a snapshot is made the
+same way before what was kept of it is put on it. Undefined is left out of a snapshot's text, so
+it holds what it held. A new property of the kind goes in `OPTIONAL`;
+`test/field-battle.test.js` fails if the field battle's characters aren't all one shape. The
+host's own `delete actor.sight` and `delete actor.keep` once two armies' clash is over
+(`#clashOver`) are still to become undefined too.
+
 A search among those near makes no list of its own: it fills one the battle keeps (`#found`) and
 says how many, read before anything else may search (those that nest, the colossal's, ask for
-lists of their own). Points are read by index (`a[0]`, `a[1]`), not taken apart. Measured on the
-host's field battle of 50 a side, that halved what a step leaves to be collected (about 1 MB to
-about 0.4) and took a sixth off the step.
+lists of their own). Points are read by index (`a[0]`, `a[1]`), not taken apart. Measured in
+Node on the host's field battle of 50 a side, a step left 1.1 MB to be collected before and under
+half a megabyte after; a hundred fighting on an open field, 265 KB and 137.
 
 **Lines of battle** (`formation`; core/formation.js; the research behind them in
 [WAR.md](WAR.md#lines-of-battle-m17)). A formation is an army's line: where the middle of its
