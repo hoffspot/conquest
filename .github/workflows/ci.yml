@@ -25,16 +25,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The browser tests' split (scripts/e2e-shard.js, .github/actions/e2e-share), the same in every
-# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (the
-# last share but one: about 13 minutes of its own first) and the unit tests' (the last: 20, where
-# they and lint took 22 when last measured), so that every job is given about the same work, 41
-# minutes of it, rather than two of them standing idle for half the run.
+# job: fourteen shares, the twelve e2e jobs' and, once their own work's done, the motion check's
+# (the last share but one: about 13 minutes of its own first) and the unit tests' (the last: 20,
+# where they and lint took 22 when last measured), so that every job is given about the same
+# work, 19 minutes of it, rather than two of them standing idle for half the run. (The unit
+# tests' own 20 are more than that, so as the tests are now timed its share is none of them.)
 # E2E_SHARES is the e2e jobs (the matrix's shards, below) and those two: for more or fewer e2e
 # jobs, change the matrix and E2E_SHARES together and nothing else (test/contribution.test.js
-# checks every share is one job's), but only once "ci" is the ruleset's one required check
-# (contribution.md, "The repository's settings"): until then each e2e job is required by name
+# checks every share is one job's). No setting changes with them: "ci" is the ruleset's one
+# required check (contribution.md, "The repository's settings")
 env:
-  E2E_SHARES: 10
+  E2E_SHARES: 14
   E2E_AHEAD: "last-1:13,last:20"
 
 jobs:
@@ -125,12 +126,13 @@ jobs:
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
   # others' (scripts/e2e-shard.js: by how long each test took on CI, e2e/durations.json; the
   # unit tests' and the motion check's jobs take shares too, after their own work: env above).
-  # Eight jobs take a median 41 minutes each, 23 to 57½ (and another 20 s or so getting ready):
-  # GitHub's runners come at three speeds, 1.7 times apart, and a run ends with its slowest, a
-  # median 52½ minutes in. More jobs would be quicker, down to the longest test's 5 minutes (18
-  # of them would end a run in about 27), but a run is 10 jobs (with the unit tests and the
-  # motion check), so that two runs at once (two pull requests') stay within GitHub's 20 at a
-  # time; and each is required by name until "ci" is the one required check (env, above)
+  # Twelve jobs are given about 19 minutes each as the tests were timed on 2026-11-11 (234
+  # minutes of them in all, drawn cheaply; 379 before, when eight jobs took a median 41 each and
+  # a run ended a median 52½ minutes in). GitHub's runners come at three speeds, 1.7 times apart,
+  # and a run ends with its slowest job. More jobs wouldn't end it sooner: the unit tests take
+  # about 22 minutes whatever the others do, so past twelve the run waits for them; and a run is
+  # 14 jobs (with the unit tests and the motion check) of the 20 GitHub runs at a time, where 18
+  # e2e jobs would take all 20 and leave a second pull request's run waiting
   e2e:
     runs-on: ubuntu-latest
     # (Eighty minutes is about twice the 41 a job is given, where the longest one's taken is
@@ -141,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     name: e2e (${{ matrix.shard }} of ${{ strategy.job-total }})
     steps:
       - uses: actions/checkout@v5

@@ -17,9 +17,9 @@ you in every session).
 > file isn't ready to merge.
 >
 > **Only the owner (hoffspot) can change the repository's settings.** When a change needs one
-> changed (a new rule for `main`, a secret; and, until `ci` is the one required check there
-> (section 6, *One required check*), a CI job added, renamed or removed, or a different number
-> of browser test jobs), say so to the owner, with the exact steps, in the pull request and in
+> changed (a new rule for `main`, a secret; not a CI job added, renamed or removed, nor a
+> different number of browser test jobs: `ci` is the one required check, section 6, *One
+> required check*), say so to the owner, with the exact steps, in the pull request and in
 > your session. Update the settings table in section 6 in the same pull request, and check that
 > the owner has made the change before it's merged. Whenever a setting is changed or added, the
 > table is updated to match.
@@ -109,8 +109,13 @@ a fault. This rests on two of the ruleset's rules, *Require status checks to pas
 branches to be up to date before merging*: if either is ever turned off, `push: branches: [main]`
 goes back into `ci.yml` first.
 
-**How long it takes.** Every job is given about the same work, 41 minutes of it as the tests
-were last timed. Measured over 43 green runs, 9 to 11 November 2026:
+**How long it takes.** Every job is given about the same work: 19 minutes of it as the tests
+were last timed (2026-11-11: 234 minutes of browser tests between 12 `e2e` jobs and the
+`motion` job; the unit tests' own 22 minutes are more than a share, so the `test` job runs none
+of them). The first run with the browser tests drawn cheaply, still on 8 `e2e` jobs, ended 36
+minutes in. The table below is from before both changes, 8 `e2e` jobs each given 41 minutes,
+over 43 green runs, 9 to 11 November 2026: time the jobs again once a few dozen runs have
+passed as they are now, and put the new figures here:
 
 | | Median | From, to | Of which |
 | --- | --- | --- | --- |
@@ -153,11 +158,11 @@ that file.
 | CI job | What it runs | Locally |
 | --- | --- | --- |
 | `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, three files at a time); then its share of the browser tests (the last share, below) | `npm run check`, which runs both |
-| `e2e` (8 jobs side by side) | the licensed models fetched, then each job's share of the Playwright browser tests (`e2e/*.spec.js`: shares 1 to 8, below) | `npm run test:e2e`, or only the tests you touched (below) |
+| `e2e` (12 jobs side by side) | the licensed models fetched, then each job's share of the Playwright browser tests (`e2e/*.spec.js`: shares 1 to 12, below) | `npm run test:e2e`, or only the tests you touched (below) |
 | `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report`. Then its share of the browser tests (the last share but one, with the licensed models) | `npm run check:motion` |
 | `ci` | Nothing of its own. It waits for every job above, whatever becomes of them, and passes only if each one passed (not failed, cancelled or skipped); its log says how each ended. It's there to be the one check `main`'s ruleset requires (section 6, *One required check*) | All of the above |
 
-**The browser tests' shares.** They're split ten ways, by how long each took on CI
+**The browser tests' shares.** They're split fourteen ways, by how long each took on CI
 (`scripts/e2e-shard.js`, `e2e/durations.json`): a share for each `e2e` job, and one each for the
 `motion` and `test` jobs once their own work's done, given that much less (`ci.yml`'s
 `E2E_SHARES` and `E2E_AHEAD`: `last-1:13,last:20`, the minutes each does first), so that every job
@@ -644,7 +649,7 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about 50 minutes (section 2,
+3. CI runs: the `test` job, the `motion` job and the 12 `e2e` jobs, about 25 minutes (section 2,
    *How long it takes*), then `ci`, which says in a few seconds whether they all passed. A
    first-time contributor's CI may wait for a maintainer to approve the run.
 4. If CI fails, read the failing job's log (for a browser test, look too at what it left: the
@@ -693,7 +698,7 @@ the models with it; the deploy key read back by the owner.
 | | Restrict deletions | On |
 | | Block force pushes | On |
 | | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |
-| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`. To become `ci` alone: asked of the owner on 2026-11-11, and not done yet (below, *One required check*) |
+| | Require status checks to pass | On. Required checks, from GitHub Actions: `ci`. It alone since 2026-11-11 (below, *One required check*); read back that day, `strict_required_status_checks_policy` true |
 | | Require branches to be up to date before merging | On. With the required checks, it's why CI needn't run on `main` again after a merge (section 2): neither is turned off without `push: branches: [main]` put back into `ci.yml` first |
 | *Settings → General → Pull Requests* | Allow auto-merge | On |
 | | Always suggest updating pull request branches | On (the *Update branch* button) |
@@ -702,30 +707,16 @@ the models with it; the deploy key read back by the owner.
 | `hoffspot/conquest-models` (private) → *Settings → Deploy keys* | `conquest builds (read only)` | Read-only, fingerprint `SHA256:IQCk0zNoVFZVfSDSwMVncAy0QPQEcYYLmMecRgDtCh8`. To change it: docs/LICENSED_MODELS.md, *Changing the key* |
 
 **One required check.** CI's `ci` job passes only if every other job did (section 2), so
-requiring it alone requires them all, whatever they're called and however many there are. That's
-how the ruleset is meant to be, and it isn't yet:
+requiring it alone requires them all, whatever they're called and however many there are. The
+ruleset has required `ci` alone since 2026-11-11 (before, each job was required by name, `test`,
+`motion` and `e2e (1 of 8)` to `e2e (8 of 8)`, so a job added, renamed or removed, or a
+different number of `e2e` jobs, needed the ruleset changed with it, or every pull request
+waited for a check that never came). To read it back: `gh api
+repos/hoffspot/conquest/rulesets/24459327`, whose `required_status_checks` holds `ci` alone,
+with `strict_required_status_checks_policy` true. A pull request opened before `ci` was added
+gets the job when it's brought up to date with `main`, as it must be to merge anyway.
 
-- **As it is**, the ten jobs before `ci` are each required by name, and `ci` isn't. So a job
-  that's added, renamed or removed needs the ruleset changed with it, and so does the number of
-  `e2e` jobs (each is required as `e2e (N of 8)`), or every pull request waits for a check that
-  never comes.
-- **As it's to be**, `ci` is the only required check, and none of that needs a setting changed.
-
-Only the owner can change it. The steps, to take once the pull request that added `ci` is merged
-(any time after: until then nothing breaks, as the ten are still run and still required):
-
-1. *Settings → Rules → Rulesets → main → Require status checks to pass → Add checks*.
-2. Type `ci`, and choose the one from GitHub Actions.
-3. Remove the other ten: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`.
-4. Leave *Require branches to be up to date before merging* ticked.
-5. *Save changes*.
-
-Then whoever asked reads it back (`gh api repos/hoffspot/conquest/rulesets/24459327`: its
-`required_status_checks` holds `ci` alone, and `strict_required_status_checks_policy` is true),
-and changes the table above to say so. A pull request opened before `ci` was added gets the job
-when it's brought up to date with `main`, as it must be to merge anyway.
-
-From then on:
+So:
 
 - A job added to `ci.yml` goes in the `ci` job's `needs`, and that's all
   (`test/contribution.test.js` fails until it's there). A job in another workflow (`soak.yml`,
@@ -733,12 +724,14 @@ From then on:
 - The number of `e2e` jobs is two numbers in `ci.yml`, changed together: the `e2e` job's matrix
   (`shard: [1, 2, ...]`) and `E2E_SHARES`, which is always two more than the matrix is long (the
   `motion` and `test` jobs take the last two shares). The test fails if a share is left to no
-  job or given to two, and until this file gives the new number of jobs. The review of
-  2026-11-11 worked out, from how fast 430 of CI's runners had been, that with 18 of them
-  (`shard` 1 to 18, `E2E_SHARES: 20`) a run would end in a median 27 minutes, not 52. A run is
-  then 20 jobs at once, which is all GitHub gives the account, so two pull requests' runs at
-  once wait on each other. **Not before the ruleset is changed:** every pull request would wait
-  for `e2e (1 of 8)` and the rest, which would never come.
+  job or given to two, and until this file gives the new number of jobs. No setting changes
+  with it. There are 12 (`shard` 1 to 12, `E2E_SHARES: 14`) since 2026-11-11, when the browser
+  tests, drawn cheaply, came to 234 minutes of work from 379: `node scripts/e2e-shard.js 1 14
+  --ahead 13:13,14:20` says what each job's given, about 19 minutes. More wouldn't end a run
+  sooner, as the unit tests take about 22 minutes whatever the others do (the review of
+  2026-11-11 had worked out 18 jobs and a run of 27 minutes from the 379); and a run of 14 jobs
+  leaves 6 of the 20 GitHub runs at a time for the account, where 20 would leave a second pull
+  request's run waiting. Work it out again with that command when the tests' times change much.
 
 **The routine for a pull request** is: *Update branch* on it (it merges `main` in), then *Enable
 auto-merge*. GitHub merges the pull request once it's green on that up-to-date head. If `main`

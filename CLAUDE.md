@@ -28,8 +28,9 @@ checks, auto-merge, branch updates). This session can read them but not change t
 `gh api repos/hoffspot/conquest/rulesets` and `gh api repos/hoffspot/conquest`.
 
 - When a change needs a setting changed, tell the owner in the session and in the pull request,
-  with the exact steps. Examples: a CI job added, renamed or removed (every job is a required
-  check); a different number of `e2e` jobs; a new rule for `main`.
+  with the exact steps. Examples: a new rule for `main`; a secret; a required check other than
+  `ci`. (Not a CI job added, renamed or removed, nor a different number of `e2e` jobs: `ci` is
+  the one required check, and it waits for every other job.)
 - Update the settings table in contribution.md in the same pull request. Read the settings back
   before merging, to check the owner has made the change.
 - Whenever a setting is changed or added, update the table to match.
