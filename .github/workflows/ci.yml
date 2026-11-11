@@ -38,7 +38,7 @@ env:
   E2E_AHEAD: "last-1:13,last:20"
 
 jobs:
-  # Lint and the unit tests (about 22 minutes, 13½ to 23½ as the runner comes, four test files
+  # Lint and the unit tests (about 22 minutes, 13½ to 23½ as the runner comes, three test files
   # at a time on its four threads), then its share of the browser tests (the last share: about
   # 24 minutes). Measured over 43 green runs, 9 to 11 November 2026, as every time here is: the
   # job a median 46½ minutes, 28 to 51½
@@ -66,9 +66,9 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      # (Four test files at a time, one a thread: Node's own choice is a thread fewer, and four
-      # took a little less time when the two were tried, 19 minutes against 19½ to 20)
-      - run: npm test -- --test-concurrency=4
+      # (Three test files at a time, Node's own choice on four threads. `-- --test-concurrency=4`
+      # used to follow here and did nothing: Node takes no option after the test files' names)
+      - run: npm test
 
       # (Whether or not the unit tests passed: the browser tests' run is whole either way)
       - name: Its share of the browser tests
