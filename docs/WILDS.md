@@ -2443,7 +2443,10 @@ face to face (`core/host.js`: `trade`, `offer`, `agree`, `cancel`; `TRADE`):
   `heldAlike`, `removeAlike`; before levels, a trade passed on only a thing's kind and make).
 - **Agreeing.** Once both have agreed, everything offered changes hands at once: all of it, or
   (if either hasn't all they offered any more, or hasn't room in their pack for what they're
-  given) none of it, and neither's agreed any more, with why said.
+  given) none of it, and neither's agreed any more, with why said. An agreeing says which offers
+  its player was looking at (the trade's `rev`, one on with every offer made): if the other's
+  changed theirs while it was on its way, it isn't taken for an offer never seen ("The offer
+  changed as you agreed: look again."). Before `NET_VERSION` 224 it was, whichever came first.
 - **Off.** Closing the pack calls it off; so does either walking more than 7 m from the other,
   falling, or leaving the world.
 

@@ -157,8 +157,9 @@ export const MOST_PLAYERS = 8;
  * doesn't make the frame so long it falls further behind). And how far behind is too far to
  * catch up step by step (5 s of the host's): the world as it now is asked for instead, and none
  * of those steps played. (A step with a fight in it takes some 2 ms on a desktop and 10 on a
- * phone, playing one more a frame at most; the world again, some 120 KB and 20 ms to take in on a
- * desktop, 100 on a phone. So a phone 5 s behind would be fast-forwarding for 2 or 3 s more.)
+ * phone, playing one more a frame at most; the world again, 80 to 300 KB of text and 20 to 40 ms
+ * to take in on a desktop, five times that on a phone. So a phone 5 s behind would be
+ * fast-forwarding for 2 or 3 s more.)
  */
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
 

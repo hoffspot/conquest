@@ -231,6 +231,9 @@ rooms that no one hosts ([§8.3](#83-players-running-the-game)).
 
 - **The step loop.** Fixed 50 ms steps from a monotonic clock, with no 0.1 s clamp per frame. When
   the clock falls behind it catches up by at most 1 s a tick, then lets the rest go and logs it.
+  (Built, 2026-11-11, as generated/multiplayer_scaling_plan.md 1-1 has it: two steps a look, each
+  sent as it's done, and what it's behind by beyond 250 ms let go of and told in the world's
+  journal and on Health; `RUNNER` `catchUp`, `behind`.)
 - **Flushing.** `hosting.flush()` every 50 ms: each step as it's done (`RUNNER.flushEvery`).
 - **The first join.** `populate()`.
 - **Baking ahead.** Navigation tiles and settlement layouts are made ahead in a ring around each
@@ -1527,7 +1530,7 @@ questions go here as they come up.
 | Steps | mean ≤ 5 ms, p99 ≤ 50 ms with 8 players | The runner's telemetry |
 | Saving | ≤ 100 ms in the world worker; the write is off the step | The runner's telemetry |
 | A stored or empty world | 0 CPU | Activity Monitor; S2's test (no steps while empty) |
-| Bandwidth per player | As today: about 1.2 KB/s motion and 0.5 KB/s ops | Health page |
+| Bandwidth per player | Measured 2026-11-11 (docs/WAR.md, *What's sent, measured*): 1.2 KB/s standing, 3.0 walking, 4.5 in a field battle of 15 a side (what's done, and each player's own hero; the motion stream, 2.4 to 5.0 KB/s more, is no longer sent) | Health page |
 | Welcome on the Wi-Fi | ≤ 2 s for a 350 KB snapshot | e2e, timed |
 
 **Measured** by S9's soak (8 players, two hours, a 4-core Linux machine shared with the players'

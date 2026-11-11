@@ -40,8 +40,8 @@ import zlib from "node:zlib";
 export const RELAY_PATH = "/relay";
 
 /**
- * How much the relay carries: the longest message (bytes: a world's state is the biggest, about
- * 100 KB after a good while's play, so this is plenty), how much can wait to go to one who's slow
+ * How much the relay carries: the longest message (bytes: a world's state is the biggest, 80 to
+ * 300 KB as it's read, a tenth to a fifth of that compressed, so this is plenty), how much can wait to go to one who's slow
  * to take it before they're let go (bytes), how many rooms at once, how many in each besides its
  * host; how often it checks each is still there, how long before one that doesn't answer is let
  * go, and how long the place of one whose link has dropped is kept for them (ms).
