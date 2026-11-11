@@ -51,7 +51,7 @@ import { createHash } from "node:crypto";
 import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { Counts, LIMITS, Rate } from "./access/limits.js";
 import { hashOf, newToken, sameHash } from "./access/tokens.js";
-import { roomCode, Socket } from "./relay.js";
+import { DEFLATE_ACCEPTED, deflateOffered, roomCode, Socket } from "./relay.js";
 
 /** Where on the server the broker is, and the subprotocol it speaks. */
 export const BROKER_PATH = "/broker";
@@ -624,9 +624,13 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             .update(key + MAGIC)
             .digest("base64");
 
-        raw.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, `Sec-WebSocket-Protocol: ${BROKER_PROTOCOL}`, "", ""].join("\r\n"));
+        // (Compressed, for a browser that offers it, unless the server's set not to: a world it
+        // relays to one joining is a tenth the size: server/relay.js DEFLATE)
+        const deflate = server.settings?.get("compress") !== false && deflateOffered(request.headers);
 
-        const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog });
+        raw.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, `Sec-WebSocket-Protocol: ${BROKER_PROTOCOL}`, ...(deflate ? [DEFLATE_ACCEPTED] : []), "", ""].join("\r\n"));
+
+        const socket = new Socket(raw, head, { limit: limits.message, backlog: limits.backlog, deflate });
 
         Object.assign(socket, { address, from, tunnel });
         sockets.add(socket);
