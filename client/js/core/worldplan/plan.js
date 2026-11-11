@@ -9,7 +9,7 @@
 import { BIOMES, RACE, RACES } from "./races.js";
 import { campTier, ROAD, SETTLEMENTS, settleLand, startTown } from "./settle.js";
 import { CELL, CELLS, cellIndex, shapeLand, WATER, WORLD_SIZE } from "./terrain.js";
-import { watersOf } from "../terrain/waters.js";
+import { Waters, watersOf } from "../terrain/waters.js";
 import { hypot } from "../exact.js";
 
 export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES, WORKS } from "./races.js";
@@ -32,12 +32,12 @@ let kept = null;
 /**
  * Keep the plans laid out somewhere that outlasts this copy of the game's code, for planWorld to
  * ask before it lays one out: `store` is { get(seed) (what was put for it, or null), put(seed,
- * laid) }, or null for nowhere. What's put is { plan, land }: the plan as layOutWorld made it,
- * and the land its waters were worked out on (the land as it was settled, with nothing standing
- * on it yet: settle.js), so that one taken back is given the same waters. Both are plain data
- * sharing their arrays: kept together, they still do when they're given back. Whoever keeps them
- * answers for giving back only what layOutWorld would make now (the unit tests keep them on disk
- * between their processes, by the planner's code: test/plan-cache.js). Returns the one before.
+ * made) }, or null for nowhere. What's put is { plan, land }: the plan as layOutWorld made it,
+ * and the land its waters are worked out from (landOf), which one taken back is adopted with
+ * (adoptPlan). Both are plain data sharing their arrays: kept in one piece, they still do when
+ * they're given back. Whoever keeps them answers for giving back only what layOutWorld would make
+ * now (the unit tests keep them on disk between their processes, by the planner's code:
+ * test/plan-cache.js). Returns the one before.
  */
 export function keepPlans(store) {
     const before = kept;
@@ -82,17 +82,14 @@ export function planWorld(seed) {
     if (!plan) {
         const had = kept?.get(seed) ?? null;
 
+        // (One kept elsewhere is taken as this one's own, with the land it came with; one laid
+        // out here is given to wherever they're kept, with its land)
         if (had) {
-            // (Its waters the land's as it was settled, as layOutWorld gives them: made from the
-            // plan itself they'd be worked out on the land with Bellhaven's crag set into it)
-            plan = had.plan;
-            watersOf(plan, watersOf(had.land));
-        } else {
-            plan = layOutWorld(seed);
-            kept?.put(seed, { plan, land: watersOf(plan).plan });
+            return adoptPlan(had.plan, had.land);
         }
 
-        freeze(plan);
+        plan = freeze(layOutWorld(seed));
+        kept?.put(seed, { plan, land: landOf(plan) });
     }
 
     // (The most recently asked for kept last, the longest unasked for let go)
@@ -104,6 +101,38 @@ export function planWorld(seed) {
     }
 
     return plan;
+}
+
+/**
+ * The land a plan's waters are worked out from: the land alone, as it was while the world was
+ * settled (settle.js's view of it: the plan's own arrays, without what stands on it), not the
+ * plan. A river's surface keeps under the land's own height, and what's set into the land after
+ * (a scene, its ground with it) raises or lowers that: from the plan itself, some rivers come out
+ * elsewhere. So it goes with a plan that's handed on (adoptPlan).
+ */
+export function landOf(plan) {
+    return watersOf(plan).plan;
+}
+
+/**
+ * A world's plan laid out elsewhere by this same code (by another of the unit tests' processes:
+ * keepPlans), with the land its waters are worked out from (landOf, handed over with it in one
+ * piece, so that it's still the plan's own arrays): kept as planWorld keeps one it lays out
+ * itself, frozen, its waters to be worked out from that land, and given to whoever asks for its
+ * seed's next. Gives back the plan kept for its seed: this one, or the one that was there already.
+ * It must be layOutWorld's for that seed: nothing here can tell.
+ */
+export function adoptPlan(plan, land) {
+    if (!PLANNED.has(plan.seed)) {
+        if (!land || land.height !== plan.height || land.water !== plan.water) {
+            throw new TypeError("A plan's handed on with the land its waters are worked out from (landOf), the plan's own");
+        }
+
+        watersOf(plan, new Waters(land));
+        PLANNED.set(plan.seed, freeze(plan));
+    }
+
+    return planWorld(plan.seed);
 }
 
 /** A world laid out afresh from a seed, not kept (planWorld keeps and shares what it lays out). */

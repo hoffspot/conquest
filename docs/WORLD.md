@@ -13,9 +13,10 @@ nothing can change one for everyone else (`layOutWorld` lays one out afresh). Go
 world, or a test building it again, it's there at once. The unit tests, each file in a process of
 its own, keep them on disk between processes as well (`keepPlans`; `test/plan-cache.js`, each
 plan by its seed and a hash of the planner's code, so none outlives a change to it). What's kept
-is the plan and the land its waters were worked out on: its rivers' surfaces are those of the
-land as it was settled, before Bellhaven's crag was set into it, and a plan taken back is given
-the same.
+is the plan and the land its waters are worked out from (`landOf`): its rivers' surfaces are
+those of the land as it was settled, before Bellhaven's crag was set into it, and a plan handed
+on is taken with that land (`adoptPlan`), or it would make another world (seed 7's rivers stand
+elsewhere in 32 cells, by up to 16 m, worked out from the plan alone).
 
 See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` and open
 <http://localhost:8080/world-map.html>). Try `?seed=12&race=orc` to choose the world and the start.

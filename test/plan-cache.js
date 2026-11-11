@@ -5,7 +5,8 @@
 // seeds': 15% of all the unit tests' work, measured. So a plan laid out by one process is written
 // under node_modules/.cache/, and the next process to ask for that seed's reads it back, in a few
 // hundredths of a second, through worldplan/plan.js keepPlans (which says what of a plan is kept:
-// the plan, and the land its waters are worked out on).
+// the plan, and the land its waters are worked out from, landOf), and taken as that process's own
+// (adoptPlan).
 //
 // A plan read back must be the one layOutWorld would make now. Each is kept by its seed and by a
 // hash of the planner's code: plan.js and every module it imports, and those they import, found
@@ -172,8 +173,11 @@ export function plansIn(folder, key) {
                 const file = fileOf(seed, by);
                 const kept = file ? deserialize(readFileSync(file)) : null;
 
-                // (Its own word for what it is, besides its name's)
-                return kept && kept.format === FORMAT && kept.key === by && kept.seed === seed && kept.laid?.plan?.seed === seed && kept.laid.land ? owned(kept.laid) : null;
+                // (Its own word for what it is, besides its name's; and the land the plan's own
+                // arrays still, as plan.js adoptPlan takes it)
+                const laid = kept && kept.format === FORMAT && kept.key === by && kept.seed === seed && kept.laid?.plan?.seed === seed && kept.laid.land ? owned(kept.laid) : null;
+
+                return laid && laid.land.height === laid.plan.height && laid.land.water === laid.plan.water ? laid : null;
             } catch {
                 return null;
             }
