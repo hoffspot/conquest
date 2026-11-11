@@ -936,11 +936,13 @@ export class Sound {
         /**
          * What's been asked for while the sound's off, begun once it's turned on (#begin): whether
          * the sounds were to be made and the first recordings downloaded (prepare), the recorded
-         * sounds wanted (want) and the made ones to be made ahead (makeAhead), by name. Off,
+         * sounds wanted (want) and the made ones to be made ahead (makeAhead), by name, and the
+         * ambience's where the player is now (setAmbience: the last asked for, not every place's
+         * they've been through meanwhile, whose beds are the biggest sounds there are). Off,
          * nothing's made or downloaded: for a player who never turns it on that's some 8 MB of
          * made sounds and a 2.3 MB download kept for nothing.
          */
-        this.held = { prepare: false, wants: new Set(), ahead: new Set() };
+        this.held = { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] };
 
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
@@ -1108,11 +1110,12 @@ export class Sound {
 
     // The sound turned on: what was asked for while it was off, begun now (`held`): the made
     // sounds to be made ahead (asked of the worker with the rest, as it's started), the sounds
-    // made and the first recordings downloaded, and the recorded sounds wanted since downloaded
+    // made and the first recordings downloaded, and the recorded sounds wanted since downloaded,
+    // the ambience's where the player is first
     #begin() {
-        const { prepare, wants, ahead } = this.held;
+        const { prepare, wants, ahead, ambience } = this.held;
 
-        this.held = { prepare: false, wants: new Set(), ahead: new Set() };
+        this.held = { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] };
         this.makeAhead([...ahead]);
 
         // (Prepared before it was turned off: the music wanted where the player is now, which may
@@ -1123,6 +1126,7 @@ export class Sound {
             this.#wantScore(this.#wanted().score);
         }
 
+        this.want(ambience);
         this.want([...wants]);
     }
 
@@ -1636,9 +1640,15 @@ export class Sound {
      * MURMUR, or null) }. Each downloaded now if it isn't yet (a made bed made once it's heard).
      */
     setAmbience({ beds = {}, rates = {}, calls = {}, wants = [], murmur = null } = {}) {
-        // (The beds first, on their own: not to wait behind the calls' many short recordings)
-        this.want(Object.keys(beds));
-        this.want([...Object.keys(calls), ...wants]);
+        // (The beds first, on their own: not to wait behind the calls' many short recordings. With
+        // the sound off, only noted, in place of the last ambience noted: turned on, it's where the
+        // player then is that's wanted)
+        if (this.enabled) {
+            this.want(Object.keys(beds));
+            this.want([...Object.keys(calls), ...wants]);
+        } else {
+            this.held.ambience = [...Object.keys(beds), ...Object.keys(calls), ...wants];
+        }
 
         for (const [name, bed] of this.beds) {
             if (!(name in beds)) {

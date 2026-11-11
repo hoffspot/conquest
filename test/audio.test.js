@@ -1095,6 +1095,9 @@ describe("playing sounds (sound.js)", () => {
 
         await sound.prepare();
         sound.setLand("elf");
+        // (Through a taproom and a cave on the way to where they are now, out in the open)
+        sound.setAmbience({ beds: { tavernLoop: 1, hearthLoop: 0.5 }, calls: {}, wants: ["clink"] });
+        sound.setAmbience({ beds: { caveDrips: 1 } });
         sound.setAmbience({ beds: { windOpen: 1 }, calls: {}, wants: ["crackle"] });
         sound.want(["fireball"]);
         sound.makeAhead(["fireball", "warHorn"], { keep: true });
@@ -1114,21 +1117,30 @@ describe("playing sounds (sound.js)", () => {
         assert.deepEqual([...sound.buffers.keys()].toSorted(), ["slash", "warHorn", "wind", SOUNDS.fireball ? "fireball" : RECORDED_ONLY.fireball.instead].toSorted());
 
         // (Downloaded: the recorded sounds and the music the game starts with, the elves' music,
-        // heard where the player is, and what was wanted while it was off; once each)
+        // heard where the player is, the ambience there, and what was wanted while it was off;
+        // once each. Not the ambience of where they'd been on the way: a taproom's, a cave's)
         const wanted = urls([...recordedFiles(), ...musicFiles(), ...musicFiles(["elves"]), ...recordedFiles(["windOpen", "crackle", "fireball", "wolfHurt"])]);
 
         assert.deepEqual(fetched.toSorted(), [...new Set(wanted)].toSorted());
-        assert.deepEqual(sound.held, { prepare: false, wants: new Set(), ahead: new Set() });
+        assert.ok(urls(recordedFiles(["tavernLoop", "hearthLoop", "clink", "caveDrips"])).every((url) => !fetched.includes(url)));
+        assert.deepEqual(sound.held, { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] });
 
         // (Off again, and more asked of it: held off once more, and begun when it's next on)
         sound.setEnabled(false);
         fetched.length = 0;
         sound.setLand("orc");
+        sound.setAmbience({ beds: { caveDrips: 1 } });
         await sound.want(["wolfCall"]);
         assert.deepEqual(fetched, []);
         sound.setEnabled(true);
         await Promise.all([...sound.wanted.values(), ...sound.scoresWanted.values()]);
-        assert.deepEqual(fetched.toSorted(), [...new Set(urls([...musicFiles(["orcs"]), ...recordedFiles(["wolfCall"])]))].filter((url) => !wanted.includes(url)).toSorted());
+        assert.deepEqual(fetched.toSorted(), [...new Set(urls([...musicFiles(["orcs"]), ...recordedFiles(["wolfCall", "caveDrips"])]))].filter((url) => !wanted.includes(url)).toSorted());
+
+        // (And on, the ambience is asked for as the player comes to it, as ever)
+        fetched.length = 0;
+        sound.setAmbience({ beds: { tavernLoop: 1 } });
+        await Promise.all([...sound.wanted.values()]);
+        assert.deepEqual(fetched.toSorted(), urls(recordedFiles(["tavernLoop"])).toSorted());
         sound.close();
     });
 
