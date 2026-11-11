@@ -2722,7 +2722,7 @@ export class Game {
     // A character for someone, built a step at a time (Character.building); null (and thrown away)
     // if they've gone from the battle meanwhile, or been drawn some other way
     *#built(actor, options) {
-        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), release: true, ...options });
+        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), release: true, tall: this.#tallWhereBuilt(actor), ...options });
 
         if (this.#drawnInFull(actor.id) || !this.battle.actor(actor.id)) {
             character.dispose();
@@ -2737,6 +2737,37 @@ export class Game {
         }
 
         return character;
+    }
+
+    // How tall someone about to be built will be on the screen where they stand (drawing buffer
+    // pixels, a body as tall as most): their pictures are made the size that's seen at
+    // (characters/pictures.js), most of them a quarter of what they're painted. Null where it
+    // can't be told, and their pictures are made whole, then held as they're seen (#posing): the
+    // player's own (whole always: the pack's paperdoll draws them big at once), anyone on another
+    // map (a building's folk, got ready before the player goes in, seen close there), and, before
+    // the camera's been put behind the player (the game loading), anyone it could come near
+    #tallWhereBuilt(actor) {
+        const me = this.battle.actor(this.me);
+
+        if (!me || actor.id === this.me || actor.map !== me.map) {
+            return null;
+        }
+
+        const pixels = this.view.pixelsPerMetre();
+        // (As tall as most: metres)
+        const height = 1.75;
+
+        if (!this.cameraFollow) {
+            const back = startDistance(this.view.heldUpright);
+            const away = Math.hypot(actor.x - me.x, actor.y - me.y) - back;
+
+            return away > back ? (height * pixels) / away : null;
+        }
+
+        const [ox, oz] = this.originOf(actor.map);
+        const [x, z] = [ox + actor.x, oz + actor.y];
+
+        return this.view.heightOnScreen(new THREE.Vector3(x, this.#groundOn(actor.map, x, z), z), height, pixels, { anywhere: true });
     }
 
     // Everyone in the battle drawn, and no one who isn't: a player come or gone, the folk of a
@@ -4504,6 +4535,11 @@ export class Game {
 
         const { position } = avatar.object;
         const { height, mesh } = avatar.character;
+
+        // (Its pictures held at the size it's seen at where it stands, in view or not, so that
+        // they're there as the camera turns to it: Character.fitPictures. The player's own are
+        // whole always)
+        avatar.character.fitPictures(this.view.heightOnScreen(position, height, pixels, { anywhere: true }), dt);
         // (One of the players' allies not among the nearest: casting no shadow, at the middle
         // level at most: MANY)
         const distant = this.allies.has(actor.id) && !this.alliesNear.has(actor.id);
@@ -11717,6 +11753,12 @@ export class Game {
             this.view.upload([avatar.object], { hidden: true });
             avatar.sent = true;
             this.likenessSince.set(id, this.clock);
+        }
+
+        // (Its pictures whole first, however small it's seen: drawn close for its likeness, and
+        // kept whole a while after: Character.whole)
+        if (avatar.character.whole?.() === false) {
+            return;
         }
 
         if (!this.likenessSince.has(id)) {

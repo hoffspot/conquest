@@ -7041,7 +7041,9 @@ roads' fingerboards (kits/signs.js `textureOf`: each its canvas, left a pixel sq
 more of them on the graphics card at full size than at Low's half, a player's iPhone let go of in a
 cat folk's capital, 2026-11-10); and each of the game's characters' own skin, 4 MB of
 colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
-again, as a disguise or a change of look does, it's sent and let go of again). Not the pictures of
+again, as a disguise or a change of look does, it's sent and let go of again; and held a quarter
+the size while the body's small on the screen, as its outfit's pictures are: CHARACTERS.md,
+*Pictures at the size they're seen*). Not the pictures of
 what characters wear (composited from each garment's, and painted into a crowd's figure:
 characters/character.js, world/crowd.js; a crowd's figure is made from a character of its own,
 before it's ever sent, and one whose skin's been let go of is coloured by its material there),

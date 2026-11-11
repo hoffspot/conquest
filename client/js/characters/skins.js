@@ -6,6 +6,7 @@
 // or where the steps can't wait (all at once), it's painted here, as ever.
 
 import { NOW, WAITING } from "../core/steps.js";
+import { sizingSkin } from "./pictures.js";
 import { paintingSkin, SkinAtlas } from "./skin.js";
 
 export class Skins {
@@ -116,9 +117,12 @@ export class Skins {
 
     /**
      * Start painting a skin (paintSkin's settings) elsewhere, if it can be: a job for `painting`
-     * to take, or null.
+     * to take (its `skin` set once it's painted), or null. `size`: how big it's wanted (texels a
+     * side: as it's painted, or smaller, made from that as the graphics card would), and with it
+     * (`small`) how big a second, smaller one of it is wanted beside it, if one is
+     * (pictures.js sizingSkin: the skin's `small`).
      */
-    ask(settings) {
+    ask(settings, { size = 0, small = 0 } = {}) {
         if (!this.worker || settings.image) {
             return null;
         }
@@ -130,18 +134,25 @@ export class Skins {
             this.#send();
         }
 
-        const job = { id: this.next++, settings, skin: null };
+        const job = { id: this.next++, settings, size, small, skin: null };
 
         this.jobs.set(job.id, job);
-        this.worker.postMessage({ id: job.id, settings });
+        this.worker.postMessage({ id: job.id, settings, size, small });
 
         return job;
+    }
+
+    /** A skin asked for (`ask`'s job) no longer wanted: not painted, if it's not been begun. */
+    forget(job) {
+        if (this.jobs.delete(job.id)) {
+            this.worker?.postMessage({ cancel: job.id });
+        }
     }
 
     /**
      * A skin asked for (`ask`'s job; or, if null, `settings`'), a step at a time: WAITING till
      * it's painted elsewhere, or painted here if the steps can't wait (or it can't be painted
-     * elsewhere). Returns it: { width, height, data, bump }.
+     * elsewhere). Returns it: { width, height, data, bump, small }, the size it was asked for.
      */
     *painting(job, settings = job?.settings) {
         while (job && !job.skin && this.worker) {
@@ -160,7 +171,7 @@ export class Skins {
             this.worker?.postMessage({ cancel: job.id });
         }
 
-        return yield* paintingSkin(this.atlas, settings);
+        return yield* sizingSkin(yield* paintingSkin(this.atlas, settings), job?.size, job?.small);
     }
 
     /** Stop painting elsewhere (an atlas being worked out there is worked out here instead). */

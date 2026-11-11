@@ -46,6 +46,8 @@ to them.
 | `pack.js` | The data file's compact encoding (shared by the build and the browser) |
 | `rig.js` | The skeleton: 52 bones with Mixamo names, posed by anatomical joint angles within real ranges of motion, and two-bone IK |
 | `character.js` | A character: the skinned meshes, its look and its equipment |
+| `wardrobe.js` | What a kit keeps of what its characters wear, made once and shared: each garment's picture, each outfit's |
+| `pictures.js` | The size a body's pictures are held at for how big it's seen, and a picture made smaller as the graphics card would |
 | `skin.js`, `face.js`, `noise.js` | Painting the skin and eyes; where the hairline and beard are |
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
@@ -873,6 +875,48 @@ each, no reading a garment's picture back off its canvas to draw an outfit (`#co
 the bytes), and the heights one byte a texel (a red texture: a bump map reads its red), not grey
 RGBA, a quarter of the size to keep and send to the GPU. The character lab's *Save skin* puts the
 picture on a canvas when it's asked for (`skinCanvas`).
+
+**Pictures at the size they're seen** (`pictures.js`, `Character.fitPictures`). A body's skin is
+painted 512 texels a side (1024 on High) and its outfit's two pictures 512, and each was held that
+size however small the body was drawn: 4.33 MB on the graphics card for a body in an outfit of
+its own, 9.33 MB on High. A body 120 pixels tall on the screen shows about 72 pixels of each metre
+of it, and its skin's picture at 512 has 205 texels a metre or more over 95% of the skin (the
+sparser way across each of the body's triangles), so drawing it the graphics card reads the
+picture's second level, 256 a side, and smaller ones, never its first. Under 2 texels a pixel,
+where some of the first level is mixed in, is 0.5% of the skin at 120 pixels tall, 1.6% at 150
+and 17% at 190. So the game's bodies (`release`) hold them at 256 (`PICTURES.least`) while they're
+small: each texel the mean of the four it's made from, a colour's in linear light, as the
+graphics card makes a picture's next level (`halved`), so the picture drawn is the same, with a
+quarter of it held: 1.08 MB a body.
+
+- **Bigger at once, smaller after a while.** The game tells each body how tall it is on the
+  screen where it stands every frame, in view or not (`#posing`), and builds it with how tall
+  it'll be there (`tall`: `#tallWhereBuilt`), so most are made small from the first. Seen 120
+  pixels tall (`up`), bigger pictures are asked for at once; they're swapped back once it's
+  been under 100 (`down`) for 3 seconds on end (`after`), so one at the edge of it isn't swapped
+  back and forth. On High there are three sizes, each for twice the height: 256 under 120, 512
+  under 240, 1024 over (`pictureSize`).
+- **The skin** is asked of the skins' worker at the size wanted (`Skins.ask`'s `size`: it paints it
+  whole and makes it smaller there), which sends the least size back with a bigger one
+  (`small`): that's kept on the page while the bigger one's drawn (0.31 MB), to go back to
+  without painting anything. Where there's no worker it's painted here, a step each frame.
+- **An outfit's** go by its tallest wearer (`wardrobe.js` `fitOutfit`), and to the least size as
+  its last wearer leaves it. **A wounded body's damage** is the size its body's are
+  (`world/wounds.js`): each wound keeps the texels it paints (a couple of kilobytes), and the
+  smaller picture is made from them all, each texel the mean of the four painted, at every
+  blow and heal.
+- **In place.** A picture's swapped inside the texture it was in (`setPicture`: the one on the
+  graphics card let go of, the new one sent when it's next drawn), so the wounds' own copy of
+  an outfit's material, which shares its pictures, has the new one too.
+- **Whole when it's wanted.** The player's own hero is never made smaller (the pack's paperdoll
+  draws them big the moment it's opened). A likeness for an icon is drawn close, so its body's
+  pictures are asked for whole first (`Character.whole`, kept so 5 seconds), and it's drawn once
+  they are. Anyone not the game's own (the labs', the character maker's, a crowd's figure being
+  made, a bestiary's portrait) has them as they're painted, as before, a material of their own
+  for the outfit.
+
+`test/pictures.test.js` has the size chosen at each height, the smaller picture against the
+bigger, and the swaps; `test/wounds.test.js` the damage's.
 
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of
@@ -2335,7 +2379,8 @@ similar.
   is, its garments are one (a soldier in uniform 12 to 17 in all, about 21 to 26 before)
 - about 80–100 thousand triangles
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
-  everyone wearing it), or two for each outfit drawn all at once
+  everyone wearing it), or two for each outfit drawn all at once; in the game, each 256 × 256
+  while the body's under 120 pixels tall on the screen (*Pictures at the size they're seen*)
 
 **Smaller on the screen** (`lod.js`, `Character.fitDetail`): everyone in the game but the player
 is drawn at one of three levels by how tall they are on the screen (drawing buffer pixels),

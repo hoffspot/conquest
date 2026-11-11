@@ -731,11 +731,12 @@ describe("characters built a step at a time (Character.building)", () => {
 
             const [one, two] = [first.value, second.value];
 
+            // (Never assert.equal on a material: said to differ, all its pictures are written out)
             if (!merge) {
                 // (Garments drawn one by one: each one's material the kit's own, for both)
                 for (const mesh of one.garments) {
-                    assert.equal(mesh.material, kit.garmentMaterials.get(mesh.name), mesh.name);
-                    assert.equal(two.garments.find(({ name }) => name === mesh.name).material, mesh.material, mesh.name);
+                    assert.ok(mesh.material === kit.garmentMaterials.get(mesh.name), mesh.name);
+                    assert.ok(two.garments.find(({ name }) => name === mesh.name).material === mesh.material, mesh.name);
                 }
 
                 continue;
@@ -745,14 +746,14 @@ describe("characters built a step at a time (Character.building)", () => {
 
             const entry = kit.composites.get(one.composite);
 
-            assert.equal(outfitOf(one), entry.value, "the first wears the kit's");
-            assert.equal(outfitOf(two), entry.value, "and so does the second");
+            assert.ok(outfitOf(one) === entry.painted, "the first wears the kit's");
+            assert.ok(outfitOf(two) === entry.painted, "and so does the second");
             assert.equal(entry.users, 2, "both counted");
             assert.equal(kit.making.size, 0, "nothing left being made");
 
             let disposed = 0;
 
-            entry.value.map.addEventListener("dispose", () => disposed++);
+            entry.painted.map.addEventListener("dispose", () => disposed++);
             one.dispose();
             assert.equal(entry.users, 1, "still worn by the second");
             two.dispose();

@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn, TORCH_HOLD } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES, skirtUnder } from "./drapes.js";
-import { COMPOSITE_BUMP, compositingGarments, fittingOutfit, GARMENTS, measureBody, paintGarment, paintingGarment, stackOrder, texelMap } from "./garments.js";
+import { fittingOutfit, measureBody, stackOrder } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
@@ -21,6 +21,8 @@ import { expressionData, Expressions, expressive } from "./expressions.js";
 import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
+import { PICTURES, pictureSize, sizingSkin } from "./pictures.js";
+import { dataTexture, fitOutfit, garmentMaterial, leaveOutfit, letGo, OUTFIT_SIZE, outfitWhole, referenceMeasures, setPicture, take, wearingOutfit } from "./wardrobe.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
 import { releaseTexture } from "../world/release.js";
@@ -38,10 +40,6 @@ const DRAWN = ["body", "eyes", "lashes", "mouth"];
 // A skirt or robe hanging this far down (drapes.js `length`: 1 to the ankles) or further all the
 // way round has its wearer running with their heels kept low (Character.robed)
 const ROBED = 0.9;
-
-// How many pictures of outfits (or of eyes) no one is wearing just now are kept, for the next to
-// wear one
-const IDLE_COMPOSITES = 8;
 
 // Each body's bones and weights at each of its drawn vertices (its human's: the same for everyone
 // of it, whatever their shape), worked out once and shared, as its eyelashes' layout is
@@ -62,6 +60,8 @@ function skinningOf(human) {
 
     return skinnings.get(human);
 }
+
+// How many looks of eye's pictures no one has just now are kept, for the next with one
 const IDLE_EYES = 8;
 
 // How a carried torch's shaft lies across the palm (radians from straight across, towards the
@@ -70,110 +70,6 @@ const TORCH_TURN = 0.25;
 
 // (Given to the constructor by Character.building: built a step at a time there, not at once)
 const LATER = Symbol("later");
-
-// What's being made for a kit a step at a time (`making`: its steps, a generator's, which keep
-// what they make in the kit's cache as they end) and isn't done yet, by `name`: whoever wants it
-// meanwhile takes steps of the same making, each in its turn, till it's done. So two bodies in
-// one outfit built turn and turn about (app/game.js #nextEnlistee puts one by for a nearer one)
-// make its picture once between them: each used to look for it, find none, and make its own
-// over many steps, and the kit kept the second's, counting one wearer of it for the two (the
-// first's never let go of). Anything a kit keeps that's made across a yield is made through this
-function* shared(kit, name, making) {
-    kit.making ??= new Map();
-
-    let work = kit.making.get(name);
-
-    if (!work) {
-        work = { steps: making(), done: false, failed: null };
-        kit.making.set(name, work);
-    }
-
-    let told;
-
-    while (!work.done) {
-        // (Its making failed in another's turn: failed for everyone waiting on it)
-        if (work.failed) {
-            throw work.failed;
-        }
-
-        let step;
-
-        try {
-            step = work.steps.next(told);
-        } catch (error) {
-            // (Not left half made, for the next to want it to trip over: begun again, then)
-            work.failed = error;
-            kit.making.delete(name);
-
-            throw error;
-        }
-
-        if (step.done) {
-            work.done = true;
-            kit.making.delete(name);
-        } else {
-            told = yield step.value;
-        }
-    }
-}
-
-// Something made once for a kit and shared by the characters with it, by key (a cache of them:
-// { value, users }): made by `make` the first time it's wanted, if it isn't there already
-function take(cache, key, make) {
-    if (!cache.has(key)) {
-        cache.set(key, { value: make(), users: 0 });
-    }
-
-    const entry = cache.get(key);
-
-    entry.users++;
-
-    return entry.value;
-}
-
-// A character no longer using one: once no one is, it's kept for a while, then let go (the
-// longest unused first, beyond `idle` of them unused)
-function letGo(cache, key, idle, dispose) {
-    const entry = key !== null && cache?.get(key);
-
-    if (!entry || --entry.users > 0) {
-        return;
-    }
-
-    cache.delete(key);
-    cache.set(key, entry);
-
-    const unused = [...cache].filter(([, other]) => other.users === 0);
-
-    for (const [gone, { value }] of unused.slice(0, Math.max(0, unused.length - idle))) {
-        dispose(value);
-        cache.delete(gone);
-    }
-}
-
-/**
- * A body of the usual shape's measurements (garments.js measureBody), made once per kit: what
- * garments are cut to, and painted on, so each fits the same picture on everyone.
- */
-function referenceMeasures(kit) {
-    if (!kit.referenceMeasures) {
-        const human = kit.human;
-        const { positions, joints } = human.shape({});
-        const rig = new Rig(human.bones, human.landmarks?.rest);
-        let height = 0;
-
-        for (let v = 0; v < human.vertexCount; v++) {
-            if (human.partOf[v] === 0) {
-                height = Math.max(height, positions[v * 3 + 1]);
-            }
-        }
-
-        rig.fit(joints);
-        kit.referenceMeasures = measureBody({ human, rig, positions, height });
-    }
-
-    return kit.referenceMeasures;
-}
 
 /** Several skinned geometries as one (their vertices one after another). */
 function mergeGeometries(geometries) {
@@ -207,29 +103,6 @@ function mergeGeometries(geometries) {
     merged.setIndex(count > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
 
     return merged;
-}
-
-/**
- * A texture from a painted picture (rows from the top: RGBA, or a byte a texel for heights, which
- * a bump map reads from its red), mipmapped. Its picture stays in `image.data`.
- */
-function dataTexture(data, size, colour) {
-    const texture = new THREE.DataTexture(bytesOf(data), size, size, data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat);
-
-    texture.flipY = true;
-    texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 4;
-    texture.needsUpdate = true;
-
-    return texture;
-}
-
-// A picture's bytes as a texture takes them
-function bytesOf(data) {
-    return new Uint8Array(data.buffer, data.byteOffset, data.length);
 }
 
 // A look (Character setLook's) with everything it doesn't say as LOOK_DEFAULTS have it, and its
@@ -338,17 +211,32 @@ export class Character {
      *   into shadows (lowerDetail): its hair's grown far thinner too (by default, if it's merged).
      * @param {boolean} [options.release] - Let go of the page's copy of its skin's pictures once
      *   they're on the graphics card (world/release.js): for the game's many, whose skins nothing
-     *   on the page reads again (not the lab's, saved as a template: skinCanvas).
+     *   on the page reads again (not the lab's, saved as a template: skinCanvas). Its pictures
+     *   are then held at the size it's seen at (fitPictures).
+     * @param {number} [options.tall] - How tall it'll be on the screen where it's first seen
+     *   (drawing buffer pixels), if that's known: its pictures are made the size that's seen at
+     *   (one that's `release`: pictures.js), as they're painted else, till it's told (fitPictures).
      */
     constructor(kit, options = {}, later = null) {
-        const { materials = {}, hairDetail = 1, merge = false, far = merge, release = false } = options;
+        const { materials = {}, hairDetail = 1, merge = false, far = merge, release = false, tall = null } = options;
         const human = kit.human;
+        // (The biggest any of its pictures is painted: its skin's, or its outfit's)
+        const full = Math.max(OUTFIT_SIZE, kit.atlas?.size ?? 0);
 
         this.kit = kit;
         this.hairDetail = hairDetail;
         this.merge = merge;
         this.far = far;
         this.release = release;
+
+        /**
+         * How big its pictures are held (pictures.js): `wanted` texels a side, for how tall it's
+         * seen (null: as they're painted, not told yet), of `full` at most; `under` seconds seen
+         * small enough for smaller ones; `held` seconds still to be kept whole (whole); its
+         * skin's `skin` a side now (null: none painted), the smallest it's held at kept by
+         * (`small`) while it's bigger, and what's asked for of another size (`job`).
+         */
+        this.pictures = { full, wanted: release && tall !== null ? pictureSize(tall, PICTURES.least, full) : null, under: 0, held: 0, skin: null, small: null, job: null };
 
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
@@ -471,7 +359,7 @@ export class Character {
     // `skins`: skins.js): asked for first, so it's painted while the rest of it's built, and put on
     // last
     *#building({ shape = {}, look = {}, equipment = [] }, { elsewhere = false } = {}) {
-        const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look))) ?? null : null;
+        const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look)), this.#skinSizes()) ?? null : null;
 
         this.setShape(shape);
         yield;
@@ -1341,178 +1229,26 @@ export class Character {
 
     /**
      * A garment's material, its texture painted once per kit; a people's make of one that only
-     * differs in colour (`base`: liveries.js), its picture tinted to its colour.
+     * differs in colour (`base`: liveries.js), its picture tinted to its colour (wardrobe.js).
      */
     #garmentMaterial(id) {
-        return allAtOnce(this.#readying(id));
-    }
-
-    // The same, a step at a time (each a yield: its picture painted a few rows at a time, the
-    // first time), returning it. Painted once, whoever else wants it meanwhile (shared)
-    *#readying(id) {
-        const kit = this.kit;
-
-        kit.garmentMaterials ??= new Map();
-
-        while (!kit.garmentMaterials.has(id)) {
-            yield* shared(kit, `garment ${id}`, () => this.#materialOf(id));
-        }
-
-        return kit.garmentMaterials.get(id);
-    }
-
-    // A garment's material made, a step at a time, and kept by the kit (#readying)
-    *#materialOf(id) {
-        const kit = this.kit;
-        const garment = GARMENTS[id];
-
-        if (garment.base) {
-            const material = (yield* this.#readying(garment.base)).clone();
-            const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
-
-            material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
-            kit.garmentMaterials.set(id, material);
-
-            return;
-        }
-
-        if (garment.design) {
-            kit.garmentMaterials.set(id, this.#designMaterial(garment));
-
-            return;
-        }
-
-        if (!kit.texelMap) {
-            kit.texelMap = texelMap(this.human, 512);
-            yield;
-        }
-
-        // (Painted on the body of the usual shape, as it's cut)
-        const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
-        const material = new THREE.MeshStandardMaterial({
-            map: dataTexture(painted.data, painted.size, true),
-            bumpMap: dataTexture(painted.bump, painted.size, false),
-            bumpScale: garment.metalness ? 0.6 : 1.5,
-            roughness: garment.roughness ?? 0.8,
-            metalness: garment.metalness ?? 0,
-            side: THREE.DoubleSide,
-        });
-
-        kit.garmentMaterials.set(id, material);
+        return garmentMaterial(this.kit, id);
     }
 
     /**
      * The material of an outfit's garments drawn all at once (ids, outermost last): one picture of
      * them all (garments.js compositeGarments), its heights, roughness and metalness in another.
-     * Made once per kit for each outfit, whoever else comes to wear it while it's made (shared),
-     * and let go when no one's worn it for a while.
+     * Made once per kit for each outfit, and let go when no one's worn it for a while; its
+     * pictures as big as its wearers are seen (wardrobe.js).
      */
     *#compositing(ids) {
-        const kit = this.kit;
-        const key = ids.join(" ");
-
-        kit.composites ??= new Map();
-
-        while (!kit.composites.has(key)) {
-            yield* shared(kit, `outfit ${key}`, () => this.#picturing(key, ids));
-        }
-
-        this.composite = key;
-
-        return take(kit.composites, key);
-    }
-
-    // An outfit's material made, a step at a time, and kept by the kit (#compositing)
-    *#picturing(key, ids) {
-        const kit = this.kit;
-
-        kit.texelMap ??= texelMap(this.human, 512);
-
-        // (Each garment's own picture painted, in steps the first time: then them all)
-        for (const id of ids) {
-            yield* this.#readying(id);
-            yield;
-        }
-
-        const layers = ids.map((id) => {
-            const garment = GARMENTS[id];
-            const material = this.#garmentMaterial(id);
-
-            return {
-                data: material.map.image.data,
-                bump: material.bumpMap.image.data,
-                tint: garment.base ? material.color.toArray() : null,
-                bumpScale: material.bumpScale,
-                roughness: material.roughness,
-                metalness: material.metalness,
-                garment,
-            };
-        });
-        const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
-        const surfaceMap = dataTexture(surface, size, false);
-        const material = new THREE.MeshStandardMaterial({
-            map: dataTexture(data, size, true),
-            bumpMap: surfaceMap,
-            bumpScale: COMPOSITE_BUMP,
-            roughnessMap: surfaceMap,
-            roughness: 1,
-            metalnessMap: surfaceMap,
-            metalness: 1,
-            side: THREE.DoubleSide,
-        });
-
-        // (Metal and cloth both: wounds.js tells which is where)
-        material.userData.mixed = true;
-        kit.composites.set(key, { value: material, users: 0 });
-        yield;
+        return yield* wearingOutfit(this, ids);
     }
 
     // No longer wearing the outfit whose picture it was drawn with: kept a while, for the next
     // to wear it
     #release() {
-        letGo(this.kit.composites, this.composite, IDLE_COMPOSITES, (material) => {
-            material.map.dispose();
-            material.bumpMap.dispose();
-            material.dispose();
-        });
-        this.composite = null;
-    }
-
-    /**
-     * Lingerie's material: its design's texture (painted once per kit, white, shared by every
-     * colour) tinted, and see-through where the texture is. The texture keeps its colour where
-     * it's clear, so the edges of what's there don't darken as it's minified.
-     */
-    #designMaterial(garment) {
-        const kit = this.kit;
-
-        kit.designTextures ??= new Map();
-
-        if (!kit.designTextures.has(garment.design)) {
-            kit.texelMap ??= texelMap(this.human, 512);
-
-            const { data, size } = paintGarment(kit.texelMap, garment);
-            const texture = new THREE.DataTexture(new Uint8Array(data.buffer), size, size);
-
-            // (painted rows from the top, as a canvas would be)
-            texture.flipY = true;
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.magFilter = THREE.LinearFilter;
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            texture.generateMipmaps = true;
-            texture.anisotropy = 4;
-            texture.needsUpdate = true;
-            kit.designTextures.set(garment.design, texture);
-        }
-
-        return new THREE.MeshStandardMaterial({
-            color: garment.colour,
-            map: kit.designTextures.get(garment.design),
-            roughness: garment.roughness ?? 0.6,
-            transparent: true,
-            alphaTest: 0.03,
-            side: THREE.DoubleSide,
-        });
+        leaveOutfit(this);
     }
 
     /** Change how the character looks: { skin, eyes, hair } (see LOOK_DEFAULTS). */
@@ -1554,11 +1290,32 @@ export class Character {
             return;
         }
 
-        const { data, bump, width } = job ? yield* this.kit.skins.painting(job) : yield* paintingSkin(this.kit.atlas, settings);
+        const sizes = this.#skinSizes();
 
+        // (Asked for anew meanwhile, at another size: this one's the skin it has now)
+        this.#forget();
+        this.#wearSkin(job ? yield* this.kit.skins.painting(job) : yield* sizingSkin(yield* paintingSkin(this.kit.atlas, settings), sizes.size, sizes.small));
+    }
+
+    // The size its skin's wanted at now (texels a side: as it's painted, or smaller for one of
+    // the game's seen small, fitPictures), and the size it's also kept at on the page while it's
+    // bigger than that, to go back to (0: not kept): { size, small }
+    #skinSizes() {
+        const full = this.kit.atlas?.size ?? 0;
+        const size = Math.min(full, this.pictures.wanted ?? full);
+        const least = Math.min(full, PICTURES.least);
+
+        return { size, small: this.release && least < size ? least : 0 };
+    }
+
+    // A painted skin put on (paintingSkin's, at whatever size: sizingSkin's): its colour and its
+    // bumps, each in the picture it had if it had one
+    #wearSkin({ data, bump, width, small = null }) {
         this.#setTexture(this.materials.body, "map", data, width, true);
         this.#setTexture(this.materials.body, "bumpMap", bump, width, false);
         this.materials.body.bumpScale = 1.2;
+        this.pictures.skin = width;
+        this.pictures.small = small;
 
         // (Its 4 MB of colour and 1 MB of bumps let go of once they're sent, if it's one of the
         // game's: painted again, they're sent and let go of again)
@@ -1568,6 +1325,136 @@ export class Character {
                 releaseTexture(texture);
             }
         }
+    }
+
+    /**
+     * Its pictures held at the size it's seen at: `tall` pixels tall on the screen (drawing buffer
+     * pixels; where it stands, in view or not), `dt` seconds on. Seen bigger than its pictures are
+     * for (pictures.js PICTURES), bigger ones are asked for at once: its skin painted again
+     * elsewhere (skins.js: or here, a step each time this is called, where it can't be), its
+     * outfit's by its tallest wearer (wardrobe.js), its wounds' (world/wounds.js). Seen smaller a
+     * while, they're swapped back. Only one of the game's (`release`): anyone else's are as
+     * they're painted. Called every frame it may be drawn.
+     */
+    fitPictures(tall, dt = 0) {
+        const pictures = this.pictures;
+
+        if (!this.release) {
+            return;
+        }
+
+        pictures.held = Math.max(0, pictures.held - dt);
+
+        const has = pictures.wanted ?? pictures.full;
+        let size = pictures.held > 0 ? pictures.full : pictureSize(tall, has, pictures.full);
+
+        // (Smaller only once it's been seen that small a while)
+        pictures.under = size < has ? pictures.under + dt : 0;
+
+        if (size < has && pictures.under < PICTURES.after) {
+            size = has;
+        }
+
+        if (size !== pictures.wanted) {
+            pictures.wanted = size;
+            pictures.under = 0;
+            fitOutfit(this);
+        }
+
+        this.#fitSkin();
+    }
+
+    /**
+     * Its pictures as big as they're painted, however small it's seen, for a while from now
+     * (PICTURES.held seconds: drawn close for a likeness of it; asked again, a while longer):
+     * whether they are yet (those of the game's: anyone else's always are).
+     */
+    whole() {
+        if (!this.release) {
+            return true;
+        }
+
+        this.pictures.held = PICTURES.held;
+        this.fitPictures(Infinity);
+
+        return outfitWhole(this) && (this.pictures.skin === null || this.pictures.skin >= this.kit.atlas.size);
+    }
+
+    // Its skin the size wanted now, if it isn't: the smaller one kept put back on, or one asked
+    // for (painted elsewhere, or here a step a call), and put on when it's painted
+    #fitSkin() {
+        const pictures = this.pictures;
+
+        // (No skin of its own painted, or not yet: its building puts it on at the size wanted)
+        if (pictures.skin === null || !this.kit.atlas) {
+            return;
+        }
+
+        // (As it is, most frames: nothing made to find that out)
+        if (!pictures.job && pictures.skin === Math.min(this.kit.atlas.size, pictures.wanted ?? this.kit.atlas.size)) {
+            return;
+        }
+
+        const { size, small } = this.#skinSizes();
+
+        if (pictures.job && pictures.job.size !== size) {
+            this.#forget();
+        }
+
+        if (size === pictures.skin) {
+            return;
+        }
+
+        if (pictures.small?.width === size) {
+            this.#wearSkin(pictures.small);
+
+            return;
+        }
+
+        if (!pictures.job) {
+            const settings = paintedSkin(this.look);
+            const asked = this.kit.skins?.ask(settings, { size, small }) ?? null;
+
+            pictures.job = { size, asked, steps: asked ? null : this.#resizing(settings, size, small) };
+        }
+
+        const { asked } = pictures.job;
+
+        // (Painted elsewhere, and back; or the worker's gone, and it's painted here after all)
+        if (asked?.skin) {
+            pictures.job = null;
+            this.#wearSkin(asked.skin);
+
+            return;
+        }
+
+        if (asked && !this.kit.skins.worker) {
+            pictures.job.asked = null;
+            pictures.job.steps = this.#resizing(paintedSkin(this.look), size, small);
+        }
+
+        const step = pictures.job.steps?.next();
+
+        if (step?.done) {
+            pictures.job = null;
+            this.#wearSkin(step.value);
+        }
+    }
+
+    // Its skin painted here at another size, a step at a time, returning it
+    *#resizing(settings, size, small) {
+        return yield* sizingSkin(yield* paintingSkin(this.kit.atlas, settings), size, small);
+    }
+
+    // A skin of another size asked for and not yet come no longer wanted
+    #forget() {
+        const job = this.pictures.job;
+
+        if (job?.asked) {
+            this.kit.skins?.forget(job.asked);
+        }
+
+        this.pictures.job = null;
     }
 
     // Its eyes' picture: painted once for each look of eye, and shared by everyone with it
@@ -1671,16 +1558,16 @@ export class Character {
 
     /**
      * Put a painted picture (rows from the top: RGBA, or a byte a texel for heights) into a
-     * material's texture, reusing it if it's the same size (and kind: its pixels may have been
-     * let go of, once sent).
+     * material's texture, reusing it if it's the same kind (its pixels may have been let go of,
+     * once sent), whatever its size.
      */
     #setTexture(material, slot, data, size, colour) {
         const texture = material[slot];
 
-        // (Not one given it on a canvas: materials, the constructor's option)
-        if (texture?.isDataTexture && texture.image.width === size && texture.format === (data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat)) {
-            texture.image.data = bytesOf(data);
-            texture.needsUpdate = true;
+        // (Not one given it on a canvas: materials, the constructor's option. Another size, in
+        // the same picture all the same: whatever it's been told to do once it's sent, it still does)
+        if (texture?.isDataTexture && texture.format === (data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat)) {
+            setPicture(texture, data, size);
 
             return;
         }
@@ -2067,6 +1954,8 @@ export class Character {
 
     dispose() {
         this.disposed = true;
+        this.#forget();
+        this.pictures.small = null;
         this.geometry.dispose();
 
         // (The skeleton's bone texture, made when it was first drawn)
