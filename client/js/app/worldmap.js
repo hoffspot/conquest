@@ -30,6 +30,7 @@ import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/w
 import { MARKER_NAMES } from "../core/markers.js";
 import { drawBuildingIcon, drawMarker, drawMissionMark, drawPartyPin, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
+import { HOLD_MS } from "./press.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
 const PIXELS = 4;
@@ -101,11 +102,11 @@ const SHROUD = "rgba(8, 6, 4, 0.5)";
 const ROAD = { colour: "rgb(186, 160, 112)", width: 5 };
 
 /**
- * Holding a finger down this long (ms) without moving it more than TAP_MOVE pixels drops a pin;
- * tapping twice this soon (ms) within DOUBLE_REACH pixels is a double tap; and a hold this near the
- * pin (pixels) takes it away.
+ * A long press (HOLD_MS, as everywhere: app/press.js) without moving more than TAP_MOVE pixels
+ * drops a pin; tapping twice this soon (ms) within DOUBLE_REACH pixels is a double tap; and a hold
+ * this near the pin (pixels) takes it away.
  */
-export const HOLD_MS = 550;
+export { HOLD_MS };
 const TAP_MOVE = 8;
 const DOUBLE_MS = 350;
 const DOUBLE_REACH = 18;

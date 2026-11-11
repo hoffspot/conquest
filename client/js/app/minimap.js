@@ -20,6 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { drawBattleArrow, drawBuildingIcon, drawCommander, drawMarker, drawMissionMark, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
@@ -190,14 +191,11 @@ const BRIDGE = [150, 112, 70];
 // At most this many redraws a second
 const FRAME_RATE = 30;
 
-// A tap that moves less than this (pixels) is a tap, not a drag
-const TAP_SLOP = 10;
+// (A tap that moves less than TAP_SLOP pixels is a tap, not a drag; held HOLD_MS without moving,
+// it's held, not tapped: as a tap and a long press are everywhere, app/press.js)
 
 // How far from an enemy's dot (pixels) a tap picks it
 const PICK = 12;
-
-// Held this long (ms) without moving, it's held, not tapped
-const HOLD_MS = 550;
 
 // How big the icons over the buildings gone into are (pixels)
 const ICON_SIZE = 22;

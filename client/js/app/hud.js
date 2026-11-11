@@ -17,6 +17,7 @@
 // help glowing; tapped or held, the game's told.
 
 import { ICONS, useDefs } from "./icons.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { unreadLabel } from "./partypanel.js";
 
 // How a fight can look on a plate (core/might.js fightLook)
@@ -46,9 +47,8 @@ const LOCK_SIGHTS = `<svg viewBox="0 0 60 60">
  */
 export const PLATE_SIZE = Object.freeze({ near: 12, far: 60 });
 
-/** How long the player's card is held (ms), not moving more than HOLD_MOVE pixels, to show all that's on them. */
-export const HOLD_MS = 500;
-const HOLD_MOVE = 10;
+// (The player's card, an icon: held a long press, HOLD_MS, not moving more than TAP_SLOP pixels,
+// as a long press is everywhere: app/press.js)
 
 /**
  * The party's icons down the left side (pixels): as big as `most` while they fit between the
@@ -85,7 +85,7 @@ export function partyFit(count, room) {
 // or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels (held, where it
 // went down: a wheel opened by the hold goes right under it, or, at the screen's edge, beside it),
 // pointerId, pointerType (a mouse's wheel, slid onto the screen, is clicked: game.js) }):
-// held HOLD_MS, not moving off it (HOLD_MOVE), a hold; let go before then, a tap; pressed from the
+// held HOLD_MS, not moving off it (TAP_SLOP), a hold; let go before then, a tap; pressed from the
 // keyboard, a tap
 function pressable(root, onPress) {
     let held = null;
@@ -107,7 +107,7 @@ function pressable(root, onPress) {
     });
     root.addEventListener("pointermove", (event) => {
         if (held && !held.done) {
-            if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+            if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > TAP_SLOP) {
                 letGo();
             }
         }
@@ -295,7 +295,7 @@ export class Hud {
             }
         });
         this.plate.addEventListener("pointermove", (event) => {
-            if (held && Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+            if (held && Math.hypot(event.clientX - held.x, event.clientY - held.y) > TAP_SLOP) {
                 letGo();
             }
         });

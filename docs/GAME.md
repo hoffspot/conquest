@@ -4888,7 +4888,7 @@ shows, smaller, at its edge the way it is, as the wild's elites are), the player
 view (*The world map*), the other players in their party (*Each in their own colour*, below), and
 the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
-(0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
+(a long press: half a second, without moving, app/press.js `HOLD_MS`) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
 the doorway; only those on the same floor as the player are shown.
 
@@ -5268,7 +5268,7 @@ same button holds the war's key.
   it, and whether it was tracked home; a marker by its kind and words; a request's star by the
   request (game.js `worldMapView`'s icons' `about`, else mapicons.js `ICON_NAMES`, the key's
   names too).
-- **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
+- **The pin** (the terrain plan's M7g): held still somewhere (a long press, half a second, moving less than 8 pixels),
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
   won't take one there, `setPin`), shown with the
@@ -5957,7 +5957,7 @@ never says have ended can't use them up.
 
 ### The action wheel (app/wheel.js)
 
-Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
+Press and hold (half a second, without moving: a long press is the same everywhere, on the world, an icon, the maps, the pack and the Action Bar, app/press.js `HOLD_MS`; a tap may move 12 pixels, `TAP_SLOP`) on the player or an enemy, and a see-through wheel
 (SVG, 264 pixels across) opens with its middle right under where the finger went down, cut into
 eight slices like a compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and
 flick: as soon as the finger is 30 pixels from where it went down, the slice it's in is tried,

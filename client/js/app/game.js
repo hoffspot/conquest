@@ -202,6 +202,7 @@ import { clockTurn, DUE, nextSlot, PUT_OFF } from "./clocks.js";
 import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { Sigil } from "./sigil.js";
 import { Charge } from "./charge.js";
@@ -366,9 +367,6 @@ const FOCUS_LAG = 0.2;
 // How long the shadow under someone takes to fade once they've hit the ground (s): they lie flat
 const CONTACT_FADES = 0.6;
 
-// A tap that moves less than this (pixels) is a tap, not a drag
-const TAP_SLOP = 12;
-
 // A second tap this soon after one (ms), and this close to it (pixels; on the minimap, less),
 // makes a double tap: run
 const DOUBLE_TAP_MS = 350;
@@ -380,10 +378,6 @@ const PICK_RADIUS = 46;
 // How often what's under the mouse is looked at again for the pointer to show (ms): what's under a
 // still mouse moves too (#aim)
 const AIM_MS = 100;
-
-// Holding this long (ms) on the player or an enemy opens the action wheel; a finger this far
-// (pixels) from where it opened is in one of its slices
-const HOLD_MS = 400;
 
 // What the player does themselves that lets Buff all's buffs still to come go (#command): walking,
 // stopping, casting or using anything else, setting on a foe, making camp
