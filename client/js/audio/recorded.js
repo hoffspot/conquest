@@ -9,6 +9,13 @@
 export const RECORDED_LEVEL = 0.1;
 
 /**
+ * The rate each recorded sound's decoded at (Hz: sound.js #decodeData), a bed's (one that loops)
+ * and any other's: lower than its MP3's own, whose top the encoder cut off, so nothing heard is
+ * lost and a quarter less is held (scripts/build-sounds.js DECODED, each checked as it's made).
+ */
+export const RECORDED_RATES = Object.freeze({ bed: 24000, sound: 36000 });
+
+/**
  * Each recorded sound's variants (a name → [{ file in client/sounds, from: [SOURCES keys], peak:
  * when it's loudest, s, for a swing or a cast to be timed by; loop: [length, crossfade], s, for
  * a bed played round and round, its file the crossfade longer (sound.js) }]).

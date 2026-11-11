@@ -36,6 +36,11 @@
 // for what's in it, so browsers and the service worker can keep them for good. Named, only those
 // sounds are made again, from only their recordings: the rest are kept as recorded.js has them
 // (each must be there already), so a few can be added or changed without downloading the rest.
+//
+// The game decodes each at a lower rate than its MP3's, as much as its sound needs (DECODED,
+// written into recorded.js as RECORDED_RATES). Every sound, made now or kept, is checked against
+// its rate before the list's written: it stops at one with more above half that rate than goes
+// unheard (UNHEARD).
 
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -71,6 +76,124 @@ const PEAK = 0.89;
 const HIGHPASS = 40;
 const FADE_IN = 0.002;
 const FADE_OUT = 0.015;
+
+/**
+ * The rate the game decodes each recorded sound at (Hz), written into recorded.js for it
+ * (RECORDED_RATES; sound.js #decodeData): a bed (one that loops) and any other. Lower than the
+ * MP3s' own, because the encoder cuts the top off what it's given: a bed's, at 48 kb/s, comes out
+ * a 32 kHz MP3 with nothing above 12 kHz (−104 dB of it, in every one), and the rest, at 64 kb/s,
+ * 48 kHz MP3s with nothing above 18 kHz (−71 dB at most; mail hits and snakes' hisses have real
+ * sound between 16 and 17 kHz, so 32 kHz would lose some). Decoded at 24 and 36 kHz they hold
+ * a quarter less (32-bit samples: all of them decoded 236 MB, then 177) and sound the same. Every
+ * sound made here is checked against its rate (unheard).
+ */
+export const DECODED = Object.freeze({ bed: 24000, sound: 36000 });
+
+/**
+ * What counts as nothing: the most of a sound's energy there may be above half the rate it's
+ * decoded at (dB, of all of it) for none of it to be missed.
+ */
+export const UNHEARD = -60;
+
+// The Fourier transform of `re` and `im` (as long as a power of two), in place
+function fft(re, im) {
+    const n = re.length;
+
+    for (let i = 1, j = 0; i < n; i++) {
+        let bit = n >> 1;
+
+        for (; j & bit; bit >>= 1) {
+            j ^= bit;
+        }
+
+        j ^= bit;
+
+        if (i < j) {
+            [re[i], re[j]] = [re[j], re[i]];
+            [im[i], im[j]] = [im[j], im[i]];
+        }
+    }
+
+    for (let size = 2; size <= n; size <<= 1) {
+        const angle = (-2 * Math.PI) / size;
+        const [wr, wi] = [Math.cos(angle), Math.sin(angle)];
+
+        for (let i = 0; i < n; i += size) {
+            let [cr, ci] = [1, 0];
+
+            for (let k = 0; k < size / 2; k++) {
+                const [a, b] = [i + k, i + k + size / 2];
+                const [xr, xi] = [re[b] * cr - im[b] * ci, re[b] * ci + im[b] * cr];
+
+                re[b] = re[a] - xr;
+                im[b] = im[a] - xi;
+                re[a] += xr;
+                im[a] += xi;
+                [cr, ci] = [cr * wr - ci * wi, cr * wi + ci * wr];
+            }
+        }
+    }
+}
+
+/**
+ * How much of a sound is above `hz`: its energy above there as a share of all its energy, in dB
+ * (0: all of it; −100 and under: nothing). Its spectrum is summed over windows of 4096 samples,
+ * each half over the last (Welch's way, Hann windows).
+ *
+ * @param {Float32Array|Float64Array} samples - The sound, mono.
+ * @param {number} rate - Its sample rate (Hz).
+ * @param {number} hz - Above where.
+ */
+export function above(samples, rate, hz) {
+    const size = 4096;
+    const power = new Float64Array(size / 2);
+
+    for (let at = 0; at === 0 || at + size / 2 < samples.length; at += size / 2) {
+        const re = new Float64Array(size);
+        const im = new Float64Array(size);
+
+        for (let n = 0; n < size && at + n < samples.length; n++) {
+            re[n] = samples[at + n] * (0.5 - 0.5 * Math.cos((2 * Math.PI * n) / size));
+        }
+
+        fft(re, im);
+
+        for (let k = 0; k < size / 2; k++) {
+            power[k] += re[k] * re[k] + im[k] * im[k];
+        }
+    }
+
+    const all = power.reduce((sum, each) => sum + each, 0) || 1e-30;
+    const over = power.subarray(Math.ceil(hz / (rate / size))).reduce((sum, each) => sum + each, 0);
+
+    return 10 * Math.log10(over / all + 1e-30);
+}
+
+/**
+ * An MP3 the game's to decode at `decoded` Hz, checked: how much of it is above half that rate
+ * (dB: above). Throws, naming it, if that's more than UNHEARD: decoded so, some of it would go.
+ * (`decoder`: an MPEGDecoder to decode it with, if there's one to hand: one's made if not.)
+ */
+export async function unheard(mp3, decoded, name, decoder = null) {
+    const mine = decoder ?? new MPEGDecoder();
+
+    await mine.ready;
+    await mine.reset();
+
+    const { channelData, sampleRate } = mine.decode(new Uint8Array(mp3));
+
+    if (!decoder) {
+        mine.free();
+    }
+
+    const over = sampleRate > decoded ? above(channelData[0], sampleRate, decoded / 2) : -Infinity;
+
+    if (over > UNHEARD) {
+        throw new Error(`${name}: ${over.toFixed(1)} dB of it is above ${decoded / 2000} kHz, more than goes unheard (${UNHEARD} dB): decoded at ${decoded / 1000} kHz (DECODED) it would be lost. Give it less up there, or raise the rate for all of its kind`);
+    }
+
+    return over;
+}
 
 // The recorded sounds made from recipes (scripts/sounds), by what they are; and those the game
 // downloads only once they're wanted (sound.js want), not at the start: the spells', the
@@ -353,6 +476,18 @@ async function main(only = []) {
         }
     }
 
+    // Every sound, made now or kept, checked against the rate the game decodes it at (DECODED:
+    // a bed's, or any other's): nothing of it above half that, or the list isn't written
+    const decoder = new MPEGDecoder();
+
+    for (const [name, files] of Object.entries(list)) {
+        for (const { file, loop } of files) {
+            await unheard(await readFile(new URL(file, OUT)), loop ? DECODED.bed : DECODED.sound, `${name} (${file})`, decoder);
+        }
+    }
+
+    decoder.free();
+
     const lines = Object.entries(list).map(([name, files]) => `    ${name}: [\n${files.map(({ file, from, peak, loop }) => `        { file: ${JSON.stringify(file)}, from: ${JSON.stringify(from)}${peak === undefined ? "" : `, peak: ${peak}`}${loop ? `, loop: ${JSON.stringify(loop)}` : ""} },\n`).join("")}    ],`);
     const credits = Object.entries(sources)
         .sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
@@ -367,6 +502,13 @@ async function main(only = []) {
 
 /** How loud each recording's made (its loudest 30 ms, as RMS: dsp.js loudness). */
 export const RECORDED_LEVEL = ${LEVEL};
+
+/**
+ * The rate each recorded sound's decoded at (Hz: sound.js #decodeData), a bed's (one that loops)
+ * and any other's: lower than its MP3's own, whose top the encoder cut off, so nothing heard is
+ * lost and a quarter less is held (scripts/build-sounds.js DECODED, each checked as it's made).
+ */
+export const RECORDED_RATES = Object.freeze({ bed: ${DECODED.bed}, sound: ${DECODED.sound} });
 
 /**
  * Each recorded sound's variants (a name → [{ file in client/sounds, from: [SOURCES keys], peak:

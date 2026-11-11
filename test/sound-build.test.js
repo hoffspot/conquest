@@ -3,7 +3,10 @@
 // made into a sound (render.js), and the recipes themselves (weapons.js, spells.js, creatures.js,
 // ambience.js, items.js)
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { MPEGDecoder } from "mpg123-decoder";
+import { above, DECODED, unheard, UNHEARD } from "../scripts/build-sounds.js";
 import { butter, limitDenominator, peak, RATE, resamplePoly, rms30, sosfiltfilt, withoutRumble } from "../scripts/sounds/dsp.js";
 import { LEVEL, prepare, render } from "../scripts/sounds/render.js";
 import * as ambience from "../scripts/sounds/ambience.js";
@@ -11,7 +14,7 @@ import * as creatures from "../scripts/sounds/creatures.js";
 import * as items from "../scripts/sounds/items.js";
 import * as spells from "../scripts/sounds/spells.js";
 import * as weapons from "../scripts/sounds/weapons.js";
-import { ON_DEMAND, RECORDED } from "../client/js/audio/recorded.js";
+import { ON_DEMAND, RECORDED, RECORDED_RATES } from "../client/js/audio/recorded.js";
 import { CATALOG } from "../client/js/audio/catalog.js";
 import { ITEM_SOUNDS } from "../client/js/audio/sound.js";
 
@@ -174,5 +177,47 @@ describe("the recipes (scripts/sounds)", () => {
 
         // (Levelled as each was auditioned: each layer at its own gain, none brought to LEVEL)
         assert.equal(ambience.RECIPE.level, null);
+    });
+});
+
+describe("the rate each recorded sound's decoded at in the game, checked as it's made (scripts/build-sounds.js DECODED, above, unheard)", () => {
+    const mp3 = (name, variant = 0) => readFile(new URL(`../client/sounds/${RECORDED[name][variant].file}`, import.meta.url));
+
+    it("writes the rates the game decodes at into recorded.js: a bed's 24 kHz, any other's 36", () => {
+        assert.deepEqual({ ...RECORDED_RATES }, { ...DECODED });
+        assert.deepEqual({ ...DECODED }, { bed: 24000, sound: 36000 });
+        assert.ok(UNHEARD <= -60);
+    });
+
+    it("measures how much of a sound is above a pitch: all of a tone under it, none of one over it", () => {
+        // (Each a whole number of the windows it's measured in long, so none's cut off mid-window:
+        // a sound's own ends are faded)
+        const low = tone(1000, (12 * 2048) / RATE);
+        const high = tone(15000, (12 * 2048) / RATE);
+        const both = Float64Array.from(low, (value, n) => value + high[n] / 1000);
+
+        assert.ok(above(low, RATE, 5000) < -80, `${above(low, RATE, 5000)} dB of a 1 kHz tone above 5 kHz`);
+        assert.ok(above(high, RATE, 12000) > -0.1, `${above(high, RATE, 12000)} dB of a 15 kHz tone above 12 kHz`);
+        assert.ok(above(high, RATE, 18000) < -80);
+        // (One a thousandth as loud, 60 dB down)
+        assert.ok(Math.abs(above(both, RATE, 12000) + 60) < 0.5, `${above(both, RATE, 12000)} dB`);
+        assert.ok(above(new Float64Array(100), RATE, 1000) <= -100, "silence: nothing");
+    });
+
+    it("finds nothing above 12 kHz in a bed, nor above 18 kHz in the brightest of the rest, a mail hit, which has plenty between 16 and 18: so 36 kHz for those, not 32", async () => {
+        const decoder = new MPEGDecoder();
+
+        try {
+            assert.ok((await unheard(await mp3("windOpen"), DECODED.bed, "windOpen", decoder)) < -90);
+            assert.ok((await unheard(await mp3("caveDrips"), DECODED.bed, "caveDrips", decoder)) < -90);
+            assert.ok((await unheard(await mp3("hitMail"), DECODED.sound, "hitMail", decoder)) < UNHEARD - 10);
+            assert.ok((await unheard(await mp3("stepGrass"), DECODED.sound, "stepGrass")) < UNHEARD - 10, "with a decoder of its own");
+
+            // (What the build stops at: a sound with more up there than goes unheard)
+            await assert.rejects(unheard(await mp3("hitMail"), 32000, "hitMail", decoder), /hitMail: -\d+\.\d dB of it is above 16 kHz, more than goes unheard \(-60 dB\): decoded at 32 kHz/);
+            await assert.rejects(unheard(await mp3("windOpen"), 16000, "windOpen", decoder), /above 8 kHz/);
+        } finally {
+            decoder.free();
+        }
     });
 });

@@ -5700,19 +5700,31 @@ keeps none of it: some 8 MB of made sounds and 4 MB of recordings as the game st
 download, before this.
 
 **Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
-browser's decoded copy, 32-bit samples, 20 to 30 times its MP3: all the recorded sounds decoded
-come to about 236 MB (their MP3s to about 10), a bed's 3 to 5 MB, and an iPhone's debug log saw
-them climb from 63 to 120 MB before Safari closed the page. Each is decoded at the rate it was
-recorded at where that's below the browser's own (`#decodeData`, `mp3Rate`; through an
-`OfflineAudioContext` at that rate): the music's and the beds' at 32 kHz, the rest at the
-browser's (48 kHz on an iPhone). Decoded at 48 kHz, as they were till 2026-10-25, the 32 kHz ones
-held half as much again for nothing heard (everything's played at a rate of its own anyway: a
-note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where the browser's is
-44.1): all the recorded sounds 276 MB, a bed 4.5 to 7.3, the music started with 27 MB rather
-than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1 kHz) the
-sound held at the start came from 100 MB to 90. Where it can't be (no `OfflineAudioContext`, or
-one that won't make or decode at that rate), it's decoded at the browser's rate, as before.
-So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else (less, a
+browser's decoded copy, 32-bit samples, 15 to 25 times its MP3: all the recorded sounds decoded
+come to about 177 MB (their MP3s to about 10), a bed's 2 to 4 MB, and an iPhone's debug log saw
+them climb from 63 to 120 MB before Safari closed the page. Each is decoded at the rate its
+sound needs, where that's below the browser's own (`#decodeData`, `mp3Rate`; through an
+`OfflineAudioContext` at that rate): the music's at the 32 kHz they were recorded at, a bed
+at 24 kHz and any other recorded sound at 36 (`recorded.js` `RECORDED_RATES`), the browser's
+being 48 kHz on an iPhone. A recorded sound's rate is lower than its MP3's own because the MP3
+encoder cuts the top off what it's given: the beds' MP3s (48 kb/s, which the encoder makes 32
+kHz) have nothing above 12 kHz, −104 dB of them in every one, and the rest (64 kb/s, 48 kHz)
+nothing above 18 kHz, −71 dB at most. (32 kHz would do for most of those, but mail hits and
+snakes' hisses have real sound between 16 and 17 kHz.) So each holds a quarter less decoded and
+sounds the same; `npm run build:sounds` checks every sound it makes, or keeps, against its rate
+and stops at one with more up there than goes unheard (`DECODED`, `UNHEARD`: −60 dB). The
+music's notes are left at their own rate: some are bright to the top of it, and only two of the
+152 have nothing at all above 8 kHz. Before 2026-11, each was decoded at its MP3's own rate (all
+of them 236 MB, a bed 3 to 5); before 2026-10-25, at the browser's, 48 kHz on an iPhone, where
+the 32 kHz ones held half as much again for nothing heard (everything's played at a rate of its
+own anyway: a note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where the
+browser's is 44.1): all the recorded sounds 276 MB, a bed 4.5 to 7.3, the music started with 27
+MB rather than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1
+kHz) the sound held at the start came from 100 MB to 90. Where it can't be (no
+`OfflineAudioContext`, or one that won't make or decode at that rate), it's decoded at the
+browser's rate, as before.
+So no more than 36 MB of them is kept decoded on a touch screen (48 MB while each held a third
+more: the same sounds stay decoded), 96 MB anywhere else (less, a
 phone short of memory: the memory guard's `squeeze`, *The memory guard* above). Past it,
 as each sound's decoded, those played least lately (or decoded, not played since) are let go of
 first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
@@ -5720,7 +5732,7 @@ out; a sound played and not done), one being decoded, or the one just decoded. T
 kept (and counted in what the sounds hold), so one let go of is decoded again from it the next
 time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
 its made sound, what stands in for it, or nothing. What's sounding at once can come to more
-than the budget (a busy place's beds are 14 to 20 MB, the sounds downloaded at the start 22):
+than the budget (a busy place's beds are 11 to 15 MB, the sounds downloaded at the start 16):
 the rest are let go of once they're done. The music's recordings for the town's, the tavern's
 and a fight's (about 18 MB decoded) are kept as they are; another score's own are let go of once
 it's not been heard for a minute (`MUSIC_KEPT`), their MP3s kept, decoded again (never

@@ -38,8 +38,9 @@
 // each other score's (about a megabyte and a half in all) the first time it's wanted, what's
 // heard playing on till they're in, then fading over; and once a score's not been heard for
 // MUSIC_KEPT, the recordings only it plays are let go of, their MP3s kept to decode again.
-// Decoded, a recording's big (32-bit samples, 20 to 30 times its MP3: a bed's 3 to 5 MB, decoded
-// at its own 32 kHz rather than the browser's 48: #decodeData, as the music's are), so no more
+// Decoded, a recording's big (32-bit samples, 15 to 25 times its MP3: a bed's 2 to 4 MB, decoded
+// at 24 kHz, as much as its sound needs, rather than its MP3's 32 or the browser's 48:
+// #decodeData; the music's at their own 32), so no more
 // than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
 // played least lately are let go of (never one sounding), their MP3s kept, each decoded again the
 // next time it's wanted, what's made playing in its place meanwhile, as before it was in.
@@ -61,7 +62,7 @@
 import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles, scoreFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
-import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
+import { ON_DEMAND, RECORDED, RECORDED_LEVEL, RECORDED_RATES } from "./recorded.js";
 import { SCORES } from "./scores.js";
 import { BEDS, LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 
@@ -179,15 +180,17 @@ const BED_KEPT = 60;
 /**
  * How much of the recorded sounds is kept decoded at most (bytes): on a touch screen (a phone or a
  * tablet, with least to spare: Safari on an iPhone closes a page holding too much, and the sound's
- * counted against it), and anywhere else. All of them decoded are about 236 MB (276 if the beds
- * were decoded at an iPhone's 48 kHz, not their own 32: #decodeData), their MP3s about 10; the
- * ones downloaded at the start about 22 MB, and the beds heard at once in a busy place 14 to 20.
- * Past it, the sounds played least lately are let go of
+ * counted against it), and anywhere else. All of them decoded are about 177 MB, each at the rate
+ * its sound needs (recorded.js RECORDED_RATES, #decodeData: 236 MB at their MP3s' own rates, as
+ * they were till November 2026, and 276 at an iPhone's 48 kHz, as before that), their MP3s about
+ * 10; the ones downloaded at the start about 16 MB, and the beds heard at once in a busy place 11
+ * to 15. Past it, the sounds played least lately are let go of
  * (never one sounding, a bed heard or a sound not done), their MP3s kept to decode them again.
  * (Travelling through sixteen places in a few minutes, what was decoded climbed past 150 MB; kept
- * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.)
+ * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.) A
+ * phone's was 48 MB while each sound held a third more: 36 MB keeps the same sounds decoded.
  */
-export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96 * 1024 * 1024 });
+export const DECODED_BUDGET = Object.freeze({ touch: 36 * 1024 * 1024, other: 96 * 1024 * 1024 });
 
 /**
  * The made sounds (synth.js SOUNDS) made as the game starts: those heard all the time, the
@@ -227,7 +230,7 @@ const MP3_RATES = [44100, 48000, 32000];
 /**
  * The sample rate an MP3 (its bytes) was recorded at, from its first frame's header (after any
  * ID3 tag), or null if there's no telling: the music's and the ambience's beds' are 32 kHz, the
- * rest 48 kHz (#decode).
+ * rest 48 kHz (#decodeData).
  */
 export function mp3Rate(mp3) {
     const bytes = new Uint8Array(mp3);
@@ -2182,7 +2185,7 @@ export class Sound {
             mp3s[variant] = recording;
             this.mp3s.set(name, mp3s);
             this.decoding.add(id);
-            this.#decodeData(recording).then(
+            this.#decodeData(recording, RECORDED_RATES[RECORDED[name][variant]?.loop ? "bed" : "sound"]).then(
                 (buffer) => {
                     const variants = this.decoded.get(name) ?? [];
 
@@ -2227,10 +2230,15 @@ export class Sound {
     // the browser's sound's: the music's and the beds' are 32 kHz, and decoded at the browser's 48
     // (an iPhone's) they'd hold half as much again for nothing that's heard (each played at a rate
     // of its own anyway, a note's pitch or a sound's lilt, as the made sounds' 48 kHz are where
-    // the browser's 44.1). Where it can't be (no OfflineAudioContext, or one that won't), at the
-    // browser's sound's, as before
-    #decodeData(recording) {
-        const rate = mp3Rate(recording);
+    // the browser's 44.1). Or lower, at `most` (Hz), the rate its sound needs: a recorded sound's
+    // MP3 has nothing in the top of what its rate could carry (the encoder cut it off), so a bed
+    // is decoded at 24 kHz and any other at 36 (recorded.js RECORDED_RATES, measured as they're
+    // made), a quarter less held for the same sound. The music's notes are decoded at their own
+    // rate: some are bright right up to the top of it. Where it can't be (no OfflineAudioContext,
+    // or one that won't make or decode at that rate), at the browser's sound's, as before
+    #decodeData(recording, most = Infinity) {
+        const own = mp3Rate(recording);
+        const rate = own && Math.min(own, most);
         const decode = () => this.context.decodeAudioData(recording.slice(0));
 
         if (!rate || rate >= this.context.sampleRate || !globalThis.OfflineAudioContext) {
