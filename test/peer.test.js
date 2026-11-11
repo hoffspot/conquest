@@ -241,6 +241,7 @@ describe("pieces", () => {
         assert.equal(sent.filter((piece) => piece[0] === PACKED.last).length, 1, "the world's last piece marked compressed");
         assert.ok(sent.every((piece) => piece.length <= PIECE + 1));
         assert.ok(onWire < WORLD.length / 5, `${onWire} characters on the wire for ${WORLD.length}`);
+        assert.deepEqual(one.sent, { text: WORLD.length + ops(1).length * 3, wire: onWire }, "(as it counts them)");
 
         // (By itself: there and back, shorter; what won't read, and what reads longer than may be, nothing)
         const out = await packed(WORLD);

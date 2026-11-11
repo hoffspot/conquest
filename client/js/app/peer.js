@@ -385,6 +385,9 @@ export class Channel {
         /** Whether whoever's at the other end has said they read compressed messages. */
         this.packs = false;
 
+        /** What's been said on it (characters of text), and what was put on the channel for it (pieces, compressed or not). */
+        this.sent = { text: 0, wire: 0 };
+
         /** Told each message heard (text), in the order they were said. */
         this.onText = () => {};
 
@@ -419,6 +422,7 @@ export class Channel {
         const entry = { pieces: null };
 
         this.outbox.push(entry);
+        this.sent.text += text.length;
 
         if (this.packs && text.length > PACKED.over && packs()) {
             packed(text).then((out) => {
@@ -453,6 +457,7 @@ export class Channel {
             const piece = this.waiting.shift();
 
             this.queued -= piece.length - 1;
+            this.sent.wire += piece.length;
             this.channel.send(piece);
         }
     }
