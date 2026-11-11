@@ -653,6 +653,18 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // from as far past what it shows as `past` (metres: more than they go meanwhile)
 const MARKS_KEPT = 1;
 
+// A people's name mixed into a number of who holds what (#marksKept): another people, another number
+function realmMixed(mix, realm) {
+    const name = String(realm);
+    let mixed = (Math.imul(mix, 31) + name.length) | 0;
+
+    for (let k = 0; k < name.length; k++) {
+        mixed = (Math.imul(mixed, 31) + name.charCodeAt(k)) | 0;
+    }
+
+    return mixed;
+}
+
 // What follows the battle (who's after the player, the enemies list, the party's icons, the
 // Action Bar's state) is looked at again this often (seconds) at least, though no step's come
 // (a joined game waiting on its host) nor anything been told it: #update's `fresh`
@@ -6645,7 +6657,9 @@ export class Game {
     #iconsNear(x, z, reach) {
         const kept = (this.iconsNear ??= { x: Infinity, z: Infinity, reach: 0, at: -Infinity, icons: [] });
 
-        if (kept.reach === reach && Math.abs(x - kept.x) < ICONS_NEAR.moved && Math.abs(z - kept.z) < ICONS_NEAR.moved && this.clock >= kept.at && this.clock - kept.at < ICONS_NEAR.every) {
+        // (Gathered every time while the game's played on by hand, advance: what a browser test
+        // puts on the map is on the minimap the next time it's drawn)
+        if (this.waits && kept.reach === reach && Math.abs(x - kept.x) < ICONS_NEAR.moved && Math.abs(z - kept.z) < ICONS_NEAR.moved && this.clock >= kept.at && this.clock - kept.at < ICONS_NEAR.every) {
             return kept.icons;
         }
 
@@ -7188,8 +7202,15 @@ export class Game {
         const kept = (this.worksMarks ??= { icons: [] });
 
         // (Kept till what they're made from changes, as the places' and the dens' are: the
-        // minimap asks thirty times a second, and each was made afresh, sentence and all: #marksKept)
-        if (!this.#marksKept(kept, war.turn, war.works.length, sites?.set.size ?? 0, mine)) {
+        // minimap asks thirty times a second, and each was made afresh, sentence and all:
+        // #marksKept. Who holds each, as one number, cheap to work out each time)
+        let held = 0;
+
+        for (const works of war.works) {
+            held = realmMixed(held + (works.held ? 1 : 0), works.owner);
+        }
+
+        if (!this.#marksKept(kept, war.turn, war.works.length, sites?.set.size ?? 0, mine, held)) {
             kept.icons = war.works.map((works) => {
                 const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
                 const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
@@ -7203,15 +7224,17 @@ export class Game {
 
     // Whether a list of the maps' icons kept (`kept`: its own record) still stands: made on this
     // turn of the war, from as many (`count`) with as many of the world's sites set down
-    // (`placed`), for the same people (`mine`), and no more than MARKS_KEPT seconds ago, in case
-    // something it's made from changed with none of those (a works taken or a place cleared
-    // says so itself: #marksStale). If not, it's marked as made now, for the caller to make again.
-    #marksKept(kept, turn, count, placed, mine) {
-        if (kept.turn === turn && kept.count === count && kept.placed === placed && kept.mine === mine && this.clock >= kept.at && this.clock - kept.at < MARKS_KEPT) {
+    // (`placed`), for the same people (`mine`), each held by whom it was (`held`: a number of
+    // them all, realmMixed), and no more than MARKS_KEPT seconds ago, in case something it's made
+    // from changed with none of those (two peoples' standing with each other, between turns; a
+    // works taken or a place cleared says so itself: #marksStale). If not, it's marked as made
+    // now, for the caller to make again.
+    #marksKept(kept, turn, count, placed, mine, held) {
+        if (kept.turn === turn && kept.count === count && kept.placed === placed && kept.mine === mine && kept.held === held && this.clock >= kept.at && this.clock - kept.at < MARKS_KEPT) {
             return true;
         }
 
-        Object.assign(kept, { turn, count, placed, mine, at: this.clock });
+        Object.assign(kept, { turn, count, placed, mine, held, at: this.clock });
 
         return false;
     }
@@ -7242,8 +7265,13 @@ export class Game {
 
         const mine = this.self?.realm;
         const kept = (this.fortMarks ??= { icons: [] });
+        let held = 0;
 
-        if (!this.#marksKept(kept, war.turn, war.forts.length, 0, mine)) {
+        for (const fort of war.forts) {
+            held = realmMixed(held, fort.realm);
+        }
+
+        if (!this.#marksKept(kept, war.turn, war.forts.length, 0, mine, held)) {
             kept.icons = war.forts.map((fort) => {
                 const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
 
@@ -7547,8 +7575,17 @@ export class Game {
         const known = (this.placeMarks ??= { key: null, icons: [], sites: new Map(plan.sites.map((site) => [site.id, site])), camps: new Map(plan.camps.map((camp) => [camp.id, camp])) });
 
         // (Who holds each place looked at again, all of them written out to compare, only on
-        // another turn of the war, with more of the world set down, or every so often: #marksKept)
-        if (this.#marksKept(known, war.turn, overworld?.campSpots?.size ?? 0, sites?.set.size ?? 0, null)) {
+        // another turn of the war, with more of the world set down, one of them cleared (each
+        // time one is, it's counted: war.js clearPlace), or every so often: #marksKept)
+        let cleared = 0;
+
+        for (const id in war.places) {
+            const place = war.places[id];
+
+            cleared += 1 + (place.times ?? 0) * 1009 + (place.cleared ?? 0) * 7;
+        }
+
+        if (this.#marksKept(known, war.turn, overworld?.campSpots?.size ?? 0, sites?.set.size ?? 0, null, cleared)) {
             return known.icons;
         }
 

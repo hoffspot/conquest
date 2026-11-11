@@ -4907,9 +4907,11 @@ drew the same picture each time the player stood still. Now:
   lists kept from one drawing to the next, and out in the world only those within what it shows
   (and 12 m past it): three passes made a list and an object for each of them every time.
 - **Its icons are those near the player** (`#iconsNear`), gathered four times a second or once
-  they've gone 4 metres, from lists that are kept: the works', the fortifications' and who holds
-  each place till the war's turn, how many there are or how much of the world's set down changes,
-  one's taken or cleared (`#marksStale`), or a second's gone by (`MARKS_KEPT`); a dungeon's words
+  they've gone 4 metres (every drawing, played on by hand), from lists that are kept: the works',
+  the fortifications' and who holds each place till the war's turn, how many there are, how much
+  of the world's set down or who holds any of them changes (`#marksKept`: looked at each time it's
+  asked, as one number of them all), one's taken or cleared (`#marksStale`), or a second's gone by
+  (`MARKS_KEPT`: two peoples' standing with each other changed between turns); a dungeon's words
   written only when it's cleared. Each of a world's two hundred and more was listed, sentence and
   all, for every drawing: 56 to 70 µs of each before, 3 to 5 now (Node; a world three hours into
   its war, 36 works, 60 forts, 237 places, 53 dungeons).
