@@ -359,8 +359,8 @@ connect directly, the server relays them, about 2 KB/s for each player who's joi
 **broker** and **relaying** settings turn either off.
 
 What the server sends a game is compressed when it's long (the world, as a player comes in or is
-sent it again: 80 to 300 KB of text, a tenth to a fifth of that on the wire, for a millisecond or
-two of the server's time), for every browser that offers it, which all do. The **compress**
+sent it again: 80 to 300 KB of text, a sixth of that on the wire, for a millisecond or two of
+the server's time), for every browser that offers it, which all do. The **compress**
 setting turns it off, for those who connect after it's changed.
 
 A world stays listed while its host's link is open. It's taken down at once when its host closes

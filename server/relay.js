@@ -41,7 +41,7 @@ export const RELAY_PATH = "/relay";
 
 /**
  * How much the relay carries: the longest message (bytes: a world's state is the biggest, 80 to
- * 300 KB as it's read, a tenth to a fifth of that compressed, so this is plenty), how much can wait to go to one who's slow
+ * 300 KB as it's read, a sixth of that compressed, so this is plenty), how much can wait to go to one who's slow
  * to take it before they're let go (bytes), how many rooms at once, how many in each besides its
  * host; how often it checks each is still there, how long before one that doesn't answer is let
  * go, and how long the place of one whose link has dropped is kept for them (ms).
@@ -64,7 +64,7 @@ const MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
  * Messages compressed (permessage-deflate, RFC 7692), for a browser that offers it, which every
  * one does of itself: the game's code says and hears the same text either way. What's sent is
  * compressed only if it's longer than `over` bytes (a world, as a player comes in or is sent it
- * again: 80 to 600 KB of JSON, about a tenth of that compressed, in a millisecond or two at
+ * again: 80 to 300 KB of JSON, a sixth of that compressed, in a millisecond or two at
  * `level` 1; a step's worth of what's been done is 50 to 120 bytes and gains nothing), the last
  * long one kept (`keep` bytes and over) for the next socket sent the very same. What's heard is
  * whatever the browser chose, which is everything, 13 microseconds a message to read. Neither end

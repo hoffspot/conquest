@@ -3475,8 +3475,8 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     by step. It plays none of them, asks for the world as it now is, as a copy gone astray does,
     and carries on from that (`Joining.farBehind`; the HUD says "Catching up with the world…"
     meanwhile, and the debug overlay counts them). A step with a fight costs some 2 ms on a desktop
-    and 10 on a phone; the world sent again, 80 to 300 KB of text (a tenth of that from a world
-    server, compressed) and 20 to 40 ms to take in (five times that on a phone). So
+    and 10 on a phone; the world sent again, 80 to 300 KB of text (a sixth of that on its
+    way, compressed) and 20 to 40 ms to take in (five times that on a phone). So
     a phone hidden 30 s was back to the present 9.5 s after it was shown, fast-forwarding through
     what it missed, and now is in half a second (a modelled run; a desktop, 2.4 s against 0.2).
   - **Drawn after the world's sent again** (`game.rehost`): whoever's moved is drawn going there
@@ -3523,7 +3523,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   times a second; their own hero 0.1; the link's timing); walking, one of them on the stick,
   3.0 KB; in a field battle of 15 a side, 4.5 KB (what's done 2.4, their own hero 2.0). The
   world as one comes in is 80 KB of text there, and 120 to 300 KB with a battle or with eight
-  players over six towns: a tenth of that from a world server (below).
+  players over six towns: a sixth to a fifth of that on its way, compressed (below).
 - **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
   made point to point passes no server that would hold them to anything):
   - **The world again:** the first asking is answered at once, another no sooner than 10 seconds
@@ -3636,12 +3636,18 @@ the pieces it comes in and joined once it's all there; and one who's too slow to
 them (8 MB waiting) is let go rather than piling it up. A browser that offers to have its
 messages compressed is taken up on it (permessage-deflate, RFC 7692, written out with Node's
 zlib; every browser offers it of itself, so the game's code is the same either way): what the
-relay sends over 1 KB goes compressed, which is the world as one comes in or is sent it again,
-a tenth to a fifth of its size for a millisecond or two; a step's worth, 50 to 120 bytes, goes as
-it is. What it hears is read back to no more than the longest message it takes, whatever a few
+relay sends over 1 KB goes compressed, which is the world as one comes in or is sent it again:
+a start town's 75 KB as 14, 195 KB with a field battle as 34, in a millisecond or so each
+(measured); a step's worth, 50 to 120 bytes, goes as it is. What it hears is read back to no more than the longest message it takes, whatever a few
 bytes claim to hold. The world server's sockets are the same (`server/play.js`,
-`server/broker.js`; its `compress` setting turns it off). A world sent point to point (WebRTC)
-isn't compressed.
+`server/broker.js`; its `compress` setting turns it off). A link made point to point (WebRTC)
+compresses a long message itself (`app/peer.js` `PACKED`, with the browser's
+`CompressionStream`, sent as base64 in the channel's pieces: the same worlds as 15 and 36 KB),
+for a game that's said it can read one: each says so as its channel opens, in a word that isn't
+JSON, which a game from before this lets go of unread, so it's sent everything plain and hears
+plainly that it's to update. Compressing and reading back take the browser a moment each, and
+whatever's said or heard meanwhile waits its turn, so everything's heard in the order it was
+said.
 - **Places kept.** The host and each who joins are given a token with their place. A link that
   drops without a word keeps its place 30 seconds (`grace`): the host isn't told a joiner's gone,
   and those in a room whose host's link dropped are told it's `away` (and `back`); no one new joins

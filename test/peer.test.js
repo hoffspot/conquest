@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
-import { BrokerHost, BrokerJoin, brokerOf, Channel, HIGH, MOST, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf } from "../client/js/app/peer.js";
+import { BrokerHost, BrokerJoin, brokerOf, Channel, HIGH, MOST, PACKED, packed, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf, unpacked } from "../client/js/app/peer.js";
 import { joinWorld, openWorld } from "../client/js/app/together.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -139,8 +139,10 @@ describe("pieces", () => {
         const data = { readyState: "open", bufferedAmount: 0, addEventListener: () => {}, send: (piece) => sent.push(piece), close: () => closed.push(true) };
         const channel = new Channel(data);
 
+        // (Open: it says it reads compressed messages, before anything else)
+        assert.deepEqual(sent, [`=${PACKED.can}`]);
         channel.send("hello");
-        assert.deepEqual(sent, ["=hello"]);
+        assert.deepEqual(sent.slice(1), ["=hello"]);
         assert.equal(channel.queued, 0);
 
         // Its other end slow: what's sent waits, a world and its steps and more, till it's too much
@@ -152,12 +154,132 @@ describe("pieces", () => {
             channel.send(world);
         }
 
-        assert.equal(sent.length, 1);
+        assert.equal(sent.length, 2);
         assert.equal(channel.queued, Math.floor(MOST.waiting / world.length) * world.length);
         assert.deepEqual(closed, []);
         channel.send(world);
         assert.deepEqual(closed, [true], "closed: whoever runs the link lets them go");
         assert.deepEqual([channel.waiting.length, channel.queued], [0, 0]);
+    });
+
+    // Two ends of a data channel, each with a Channel on it: what one sends the other hears a
+    // moment later; `sent`, the pieces each put on the wire; `old`, an end from before messages
+    // were compressed (it reads every message as it comes, and says nothing of its own)
+    const linked = ({ old = false } = {}) => {
+        const end = () => {
+            const data = { readyState: "open", bufferedAmount: 0, sent: [], other: null, addEventListener: () => {}, close: () => {} };
+
+            data.send = (piece) => {
+                data.sent.push(piece);
+                setTimeout(() => data.other.heard(piece), 0);
+            };
+
+            return data;
+        };
+        const [a, b] = [end(), end()];
+        const heard = { a: [], b: [] };
+        const pieces = new Pieces();
+
+        // (Each made with the other to hear it: the first words go as they're made)
+        b.other = { heard: (piece) => one.heard(piece) };
+
+        const two = old
+            ? {
+                  send: (text) => piecesOf(text).forEach((piece) => b.send(piece)),
+                  heard: (piece) => {
+                      const whole = pieces.add(piece);
+
+                      if (whole !== null) {
+                          heard.b.push(whole);
+                      }
+                  },
+              }
+            : null;
+
+        a.other = { heard: (piece) => (two ?? theirs).heard(piece) };
+
+        const one = new Channel(a);
+        const theirs = old ? null : new Channel(b);
+
+        one.onText = (text) => heard.a.push(text);
+
+        if (theirs) {
+            theirs.onText = (text) => heard.b.push(text);
+        }
+
+        return { one, two: two ?? theirs, wire: { a: a.sent, b: b.sent }, heard };
+    };
+    const settled = () => new Promise((resolve) => setTimeout(resolve, 50));
+    // (A world as it's sent: JSON, the same few words over and over)
+    const WORLD = JSON.stringify({ kind: "welcome", snapshot: { actors: Array.from({ length: 2500 }, (_, k) => ({ id: `townsfolk:human-town-4/${k}`, x: k * 1.37, y: k * 2.11, hp: 100, team: "human", kind: "folk" })) } });
+
+    it("compress a long message on its way to a game that's said it reads them, a world a fifth of its size and less on the wire and whole as it's heard; a short one goes as it is; and all of it's heard in the order it was said", async () => {
+        const { one, two, wire, heard } = linked();
+
+        await settled();
+        assert.deepEqual([one.packs, two.packs], [true, true], "each has heard the other reads them");
+        assert.deepEqual(heard, { a: [], b: [] }, "(that word told to no one)");
+
+        // A step's worth, the world, and what's done after it, said at once: heard in that order,
+        // though the world takes a moment to compress and another to read back
+        const ops = (step) => `{"kind":"ops","step":${step},"ops":[["a",50]]}`;
+
+        one.send(ops(1));
+        one.send(WORLD);
+        one.send(ops(2));
+        one.send(ops(3));
+        two.send('{"kind":"ready"}');
+        await settled();
+        assert.deepEqual(heard.b, [ops(1), WORLD, ops(2), ops(3)]);
+        assert.deepEqual(heard.a, ['{"kind":"ready"}']);
+
+        const sent = wire.a.slice(1);
+        const onWire = sent.reduce((sum, piece) => sum + piece.length, 0);
+
+        assert.equal(sent[0], `=${ops(1)}`);
+        assert.equal(sent.at(-1), `=${ops(3)}`);
+        assert.equal(sent.filter((piece) => piece[0] === PACKED.last).length, 1, "the world's last piece marked compressed");
+        assert.ok(sent.every((piece) => piece.length <= PIECE + 1));
+        assert.ok(onWire < WORLD.length / 5, `${onWire} characters on the wire for ${WORLD.length}`);
+
+        // (By itself: there and back, shorter; what won't read, and what reads longer than may be, nothing)
+        const out = await packed(WORLD);
+
+        assert.ok(out.length < WORLD.length / 5);
+        assert.equal(await unpacked(out), WORLD);
+        assert.equal(await unpacked("not base64 of anything deflated"), null);
+        assert.equal(await unpacked(await packed("0".repeat(2 * 1024 * 1024)), 64 * 1024), null, "two megabytes of noughts, in a few bytes: not read past the most a message may be");
+        assert.equal(await packed("xy"), null, "(no shorter compressed: sent as it is)");
+    });
+
+    it("send everything plain to a game from before messages were compressed, which never hears that they can be: its messages are read as ever, and it's told what it's told", async () => {
+        const { one, two, wire, heard } = linked({ old: true });
+
+        await settled();
+        assert.equal(one.packs, false);
+        // (What it heard of that: one message that isn't JSON, which such a game lets go of unread)
+        assert.deepEqual(heard.b, [PACKED.can]);
+        assert.throws(() => JSON.parse(heard.b[0]), SyntaxError);
+
+        one.send(WORLD);
+        one.send('{"kind":"refused","reason":"version","net":224}');
+        two.send('{"kind":"hello","version":223}');
+        await settled();
+        assert.deepEqual(heard.b.slice(1), [WORLD, '{"kind":"refused","reason":"version","net":224}']);
+        assert.deepEqual(heard.a, ['{"kind":"hello","version":223}']);
+        assert.ok(wire.a.every((piece) => piece[0] === "=" || piece[0] === "+"), "nothing marked compressed");
+    });
+
+    it("leave out a compressed message that won't read, and carry on with the next", async () => {
+        const { one, two, heard } = linked();
+
+        await settled();
+        // (As a game might send one: its last piece marked compressed, and nothing of the kind in it)
+        two.channel.send(`${PACKED.last}bm90IGRlZmxhdGVk`);
+        two.send('{"kind":"ping","t":1}');
+        await settled();
+        assert.deepEqual(heard.a, ['{"kind":"ping","t":1}']);
+        assert.equal(one.inbox.length, 0);
     });
 });
 

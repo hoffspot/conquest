@@ -625,7 +625,7 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             .digest("base64");
 
         // (Compressed, for a browser that offers it, unless the server's set not to: a world it
-        // relays to one joining is a tenth the size: server/relay.js DEFLATE)
+        // relays to one joining is a sixth the size: server/relay.js DEFLATE)
         const deflate = server.settings?.get("compress") !== false && deflateOffered(request.headers);
 
         raw.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, `Sec-WebSocket-Protocol: ${BROKER_PROTOCOL}`, ...(deflate ? [DEFLATE_ACCEPTED] : []), "", ""].join("\r\n"));
