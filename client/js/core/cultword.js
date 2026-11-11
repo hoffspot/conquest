@@ -78,13 +78,22 @@ export function cultNear(plan, at) {
     const settled = (plan.places ?? []).map((place) => hypot(place.at[0] - site.at[0], place.at[1] - site.at[1])).sort((a, b) => a - b);
     const reach = Math.max(CULT_WORD.near, settled[Math.min(CULT_WORD.closest, settled.length) - 1] ?? 0);
     const band = metres <= reach ? "near" : metres <= Math.max(CULT_WORD.middle, reach) ? "middle" : "far";
-    // (What stands nearest it, within reach of it, that has a name or a kind worth saying)
+    const landmark = band === "near" ? landmarkBy(plan, site) : null;
+
+    return { site, far: metres, band, dir: compass(at, site.at), landmark };
+}
+
+/**
+ * What stands nearest a hell's camp (`site`, one of the plan's), within CULT_WORD.landmark of it,
+ * that has a name or a kind worth saying, said ("by the old ruins", "by the Hollow Deeps"); or
+ * null if nothing does.
+ */
+export function landmarkBy(plan, site) {
     const by = plan.sites
         .filter((one) => one !== site && one.theme !== "hell" && (LANDMARKS[one.kind] || one.kind === "dungeon") && hypot(one.at[0] - site.at[0], one.at[1] - site.at[1]) <= CULT_WORD.landmark)
         .sort((a, b) => hypot(a.at[0] - site.at[0], a.at[1] - site.at[1]) - hypot(b.at[0] - site.at[0], b.at[1] - site.at[1]) || (a.id < b.id ? -1 : 1))[0];
-    const landmark = band === "near" && by ? (LANDMARKS[by.kind] ?? (by.name ? `by ${by.name}` : null)) : null;
 
-    return { site, far: metres, band, dir: compass(at, site.at), landmark };
+    return by ? (LANDMARKS[by.kind] ?? (by.name ? `by ${by.name}` : null)) : null;
 }
 
 /**

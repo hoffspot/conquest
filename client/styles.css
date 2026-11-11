@@ -3659,6 +3659,16 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     animation-duration: 1.8s;
 }
 
+/* Brimstone a hell rift's demon left the player (game.js #brimstoneTold): rising over them as what's
+   picked up does, a smouldering orange */
+.damage.brimstone {
+    font-size: 15px;
+    color: #ff9a3c;
+    text-shadow: 0 0 6px rgba(255, 70, 20, 0.8);
+    white-space: nowrap;
+    animation-duration: 1.6s;
+}
+
 /* A foe slain, rising off its body as what's picked up rises over the player (game.js #slain):
    in red, and a little bigger, so it isn't taken for something picked up */
 .damage.slain {
@@ -6829,6 +6839,91 @@ the top under the buttons, clear of the minimap */
 
 #bossbar .bar .fill {
     background: linear-gradient(180deg, #ff8a64, #a8201a);
+}
+
+/* A hell rift open in the wilds (hud.js rift): a red chip under the buttons, its time left, the
+last five minutes throbbing; the brimstone its demons have left the player, while they're in its
+land. Below the boss's bar when that's shown */
+#riftchip {
+    position: absolute;
+    z-index: 6;
+    top: calc(var(--safe-top) + 66px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 96, 48, 0.55);
+    background: linear-gradient(180deg, rgba(70, 8, 4, 0.82), rgba(34, 4, 2, 0.82));
+    box-shadow: 0 0 12px rgba(255, 60, 20, 0.35);
+    color: #ffd9c4;
+    font-size: 13px;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: appear 0.4s ease-out;
+}
+
+#riftchip.low {
+    top: calc(var(--safe-top) + 108px);
+}
+
+#riftchip .tear {
+    width: 8px;
+    height: 16px;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 55%, #fff1c8 0%, #ff8a2a 35%, #c41808 70%, transparent 100%);
+    box-shadow: 0 0 8px rgba(255, 80, 20, 0.8);
+    animation: rift-throb 1.8s ease-in-out infinite;
+}
+
+#riftchip .words {
+    font-family: var(--font-display);
+    color: #ffb08a;
+}
+
+#riftchip .time {
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+}
+
+#riftchip .brimstone {
+    color: #ffb347;
+}
+
+#riftchip.urgent {
+    animation: rift-urgent 1.2s ease-in-out infinite;
+}
+
+@keyframes rift-throb {
+    0%,
+    100% {
+        transform: scale(1);
+        filter: brightness(1);
+    }
+
+    12% {
+        transform: scale(1.25);
+        filter: brightness(1.6);
+    }
+
+    26% {
+        transform: scale(1.1);
+        filter: brightness(1.3);
+    }
+}
+
+@keyframes rift-urgent {
+    0%,
+    100% {
+        box-shadow: 0 0 12px rgba(255, 60, 20, 0.35);
+    }
+
+    50% {
+        box-shadow: 0 0 22px rgba(255, 60, 20, 0.85);
+    }
 }
 
 #banner {

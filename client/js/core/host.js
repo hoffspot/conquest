@@ -45,6 +45,7 @@ import { briefingOf, chanceOf, checkMission, gearChoices, MESSENGER_EVERY, MISSI
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
+import { BRIMSTONE, HELL_RIFT, inRift, RIFT_GUARDS, riftDemon, riftDue, riftSite, riftTier, tearsOf } from "./hellrift.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { burntCount, burntIn, housesToBurn, wholeAt } from "./burnt.js";
 import { waysOut, wayToward } from "./settlements.js";
@@ -539,7 +540,7 @@ export function ownOf(given) {
 
 // What a player does that gets them up from resting (waiting on the rest to rest too: RULES rest
 // "everyone"): going somewhere, fighting, casting, trading
-const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade", "rift"]);
+const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade", "rift", "hellrift"]);
 
 /**
  * How long a camp's slept by, as the player chooses (host.js `#camp`'s `until`): so many of the
@@ -732,7 +733,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 51;
+export const SNAPSHOT_VERSION = 52;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -907,6 +908,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // they came to (as it would have been: when they last set out or came up to them), and
     // whether they had
     50: (snapshot) => ({ ...snapshot, version: 51, ...(snapshot.messengers ? { messengers: snapshot.messengers.map(([id, one]) => [id, { ...one, found: one.found ?? one.since, arrived: one.arrived ?? one.state !== "coming" }]) } : {}) }),
+    // 52: the hell rifts (core/hellrift.js, Host #hellRifts): none yet
+    51: (snapshot) => ({ ...snapshot, version: 52, hellRifts: { last: -1, open: null, next: 1 } }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1452,6 +1455,9 @@ export class Host {
         // The full moon's trial out (core/rings.js TRIAL; #moonTrials), by its id: { ids, night,
         // ring (its site's id), chest (the square its moonsilver lies on) }
         this.trials = new Map();
+        // (The hell rifts (core/hellrift.js, #hellRifts): the last day one opened (or was given up),
+        // the one open, if one is, and the next one's number)
+        this.hellRifts = { last: -1, open: null, next: 1 };
         this.lairs = new Map();
         this.slain = {};
 
@@ -2309,6 +2315,9 @@ export class Host {
             case "rift":
                 // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
                 return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
+            case "hellrift":
+                // (A hell rift torn open ahead of them, its heart 120 m off: the debug overlay's)
+                return this.debugs(playerId) ? this.#hellRiftBefore(actor) : refuse("command");
             case "rare":
                 // (Debug mode's sample rare encounter dealt ahead of them: core/rare.js SAMPLE; or a
                 // card in play by its id, `card`, its thread brought to it: the Stone Golem's)
@@ -2535,9 +2544,18 @@ export class Host {
             }
 
             // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
-            // has a share of it once it's opened, wherever they are by then: #cacheFell)
+            // has a share of it once it's opened, wherever they are by then: #cacheFell; and one of
+            // a hell rift's guards, its tears or its altar, a share of its chest: #riftFought)
             if ((event.type === "hit" || event.type === "death") && event.by) {
                 this.#foughtFor(this.wild.get(event.id)?.cache, event.by);
+                this.#riftFought(event.id, event.by);
+            }
+
+            // (A hell rift's tear sealed, or its altar smashed: #tearSealed, #altarSmashed)
+            if (event.type === "death" && this.battle.actor(event.id)?.kind === "tear") {
+                this.#tearSealed(event.id, event.by);
+            } else if (event.type === "death" && this.battle.actor(event.id)?.kind === "altar") {
+                this.#altarSmashed(event.by);
             }
 
             if (event.type === "death" && event.id === "orc" && !this.players.has(event.by) && !this.followers.has(event.by) && !this.companions.has(event.by)) {
@@ -2615,6 +2633,12 @@ export class Host {
 
                 if (beast.vault !== undefined) {
                     this.#vaultFell(beast.vault);
+                }
+
+                // (One of a hell rift's: brimstone for the heroes about it; one of its guards, the
+                // altar the nearer bare, #riftFell)
+                if (beast.hellRift) {
+                    this.#riftFell(beast, fell, event.by);
                 }
             }
 
@@ -3113,6 +3137,7 @@ export class Host {
             wildCamps: [...this.wildCamps.entries()],
             dens: [...this.dens.entries()],
             trials: structuredClone([...this.trials.entries()]),
+            hellRifts: structuredClone(this.hellRifts),
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
@@ -3300,6 +3325,7 @@ export class Host {
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
         host.dens = new Map(structuredClone(snapshot.dens ?? []));
         host.trials = new Map(structuredClone(snapshot.trials ?? []));
+        host.hellRifts = structuredClone(snapshot.hellRifts ?? { last: -1, open: null, next: 1 });
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
@@ -3853,6 +3879,388 @@ export class Host {
         this.#opened(id, "hoard", { at: this.#ringHeart(ring), maps: [], map: "town", square: held.chest, people: "human", maker: this.#landMakerAt(this.#ringHeart(ring)), tier: 1, relic: "moonsilver" });
         this.trials.delete(id);
         this.#event("trial", { change: "fallen", trial: id, ring: held.ring });
+    }
+
+    // --- The hell rifts (core/hellrift.js: docs/WILDS.md *Hell rifts*) ---
+
+    // A hell rift: once a day of the world, as its time comes (riftDue), torn open out in the wilds
+    // within reach of a player (riftSite), till it's closed or its half hour's up (#riftEnds); while
+    // it's open, its tears and its altar stood out in the world while anyone's near them, its tears
+    // pouring out their packs, and its guards woken as a player comes near its heart (#riftTears,
+    // #riftGuards)
+    #hellRifts(homes) {
+        const plan = this.world.plan;
+        const open = this.hellRifts.open;
+
+        if (open) {
+            if (this.battle.time >= open.until) {
+                this.#riftEnds("faded");
+            } else {
+                this.#riftTears(open, homes);
+                this.#riftGuards(open, homes);
+            }
+
+            return;
+        }
+
+        const due = riftDue(this.battle.seed, elapsedOf(this.war), this.hellRifts.last);
+        const at = due ? riftSite(plan, homes.map((home) => home.at), this.random, (spot) => this.#riftGround(spot)) : null;
+
+        // (Nowhere found for it yet: looked for again, till it's too late that day)
+        if (at) {
+            this.hellRifts.last = due.day;
+            this.#riftOpens(at);
+        }
+    }
+
+    // Whether a rift's heart, or one of its tears, can be out at a place: off the roads, out of a
+    // shrine's sanctuary
+    #riftGround(at) {
+        return !this.world.maps.town.nearRoad?.(...at, WILDS.road) && !sanctuaryAt(this.world.plan, at);
+    }
+
+    // A hell rift torn open, its heart at `at`: its tears scattered about it (tearsOf), each as
+    // whole as the strongest hero in the world would find it; its half hour begun; told everyone
+    #riftOpens(at) {
+        const id = `hellrift-${this.hellRifts.next++}`;
+        const tier = riftTier([...this.players.keys()].map((each) => this.mightFor(each)));
+        const tears = tearsOf(this.world.plan, at, this.random, (spot) => this.#riftGround(spot)).map((spot) => ({ at: spot, hp: Math.round(HELL_RIFT.tear * tierPower(tier)), most: Math.round(HELL_RIFT.tear * tierPower(tier)), sealed: false, id: null, next: 0, packs: [] }));
+
+        this.hellRifts.open = { id, at, opened: this.battle.time, until: this.battle.time + HELL_RIFT.lasts, tier, tears, guards: { left: [RIFT_GUARDS.warden, RIFT_GUARDS.priest, ...Array.from({ length: HELL_RIFT.fiends }, () => RIFT_GUARDS.fiend)], ids: [], fell: false }, altar: null, brimstone: {}, fought: [] };
+        this.#event("hellRift", { change: "opened", id, at: [...at], until: this.hellRifts.open.until, tears: tears.map((tear) => [...tear.at]) });
+    }
+
+    // A hell rift called up before a player (the debug overlay's): its heart 120 m off the way
+    // they face (a rift already open ended first)
+    #hellRiftBefore(actor) {
+        if (actor.map !== "town" || !this.world.plan) {
+            return refuse("command");
+        }
+
+        if (this.hellRifts.open) {
+            this.#riftEnds("faded");
+        }
+
+        this.#riftOpens([actor.x + sin(actor.facing) * 120, actor.y + cos(actor.facing) * 120]);
+
+        return OK;
+    }
+
+    // How strong a rift's demons are as they come (riftTier): a tier over the mightiest hero about
+    // it (in its land, or within HELL_RIFT.far of it)
+    #riftTier(open) {
+        const about = [...this.players.values()].filter((player) => {
+            const at = this.#whereIs(player);
+
+            return at && hypot(at[0] - open.at[0], at[1] - open.at[1]) <= HELL_RIFT.radius + HELL_RIFT.far;
+        });
+
+        return riftTier(about.map((player) => this.mightFor(player.id)));
+    }
+
+    // In an open rift's land (a pack put out about a player there, #putOut): one of its demon
+    // packs, or now and then the cult's (HELL_RIFT.ambient), as strong as the rift's demons are;
+    // else null
+    #riftAbout(at) {
+        const open = this.hellRifts.open;
+
+        if (!open || !inRift(open, at)) {
+            return null;
+        }
+
+        const { creature } = this.random.next() < HELL_RIFT.ambient ? { creature: "cultist" } : riftDemon(this.random);
+        const tier = this.#riftTier(open);
+
+        return { creature, tier, count: packOf(creature, tier), hellRift: open.id };
+    }
+
+    // The nearest player to a point ([x, y] metres) out in the world: how far (Infinity with none)
+    #nearestTo([x, y], homes) {
+        return Math.min(Infinity, ...homes.map(({ at }) => hypot(at[0] - x, at[1] - y)));
+    }
+
+    // A rift's tears: each stood out in the world (as hurt as it was) while a player's within
+    // HELL_RIFT.guards × 2 of it, put away again (kept as it is) once every one's beyond
+    // HELL_RIFT.far; while one's within HELL_RIFT.wakes, a pack out of it every HELL_RIFT.every,
+    // no more than HELL_RIFT.most of its packs out at once
+    #riftTears(open, homes) {
+        open.tears.forEach((tear, k) => {
+            if (tear.sealed) {
+                return;
+            }
+
+            const near = this.#nearestTo(tear.at, homes);
+            const actor = tear.id ? this.battle.actor(tear.id) : null;
+
+            if (!actor && near <= HELL_RIFT.guards * 2) {
+                tear.id = this.#riftThing("tear", `${open.id}/tear-${k}`, tear.at, tear, "Hell tear");
+            } else if (actor && !actor.dead && near > HELL_RIFT.far) {
+                tear.hp = actor.hp;
+                this.battle.remove(tear.id);
+                this.#event("gone", { id: tear.id });
+                tear.id = null;
+            }
+
+            tear.packs = tear.packs.filter((pack) => [...this.wild].some(([id, one]) => one.pack === pack && !this.battle.actor(id)?.dead));
+
+            // (Held to the body budget as every pack is (BODIES): none poured while it's full about
+            // the tear, and what more of a pack there'd have been in the hit points of those there are)
+            const room = tear.id && near <= HELL_RIFT.wakes && this.battle.time >= tear.next && tear.packs.length < HELL_RIFT.most ? BODIES.most - this.#bodiesNear(tear.at) : 0;
+
+            if (room > 0) {
+                const tier = this.#riftTier(open);
+                const { creature } = riftDemon(this.random);
+                const { count, health } = withinBudget(packOf(creature, tier), 1, room);
+                const ids = this.#pack({ creature, tier, count }, tear.at, { hellRift: open.id, temper: "aggressive", health });
+
+                tear.next = this.battle.time + HELL_RIFT.every;
+
+                if (ids.length) {
+                    tear.packs.push(this.wild.get(ids[0]).pack);
+                    this.#event("hellRift", { change: "poured", id: open.id, tear: k, ids, creature });
+                }
+            }
+        });
+    }
+
+    // A rift's tear or altar stood out in the world (`kind`), at a point ([x, y] metres): on the
+    // wild's side (none of its own set on it), as whole as `most` hit points and `hp` of them left;
+    // its id, or null if its ground isn't made yet (tried again)
+    #riftThing(kind, id, at, { hp, most }, name) {
+        try {
+            const square = this.#spots("town")(at);
+
+            this.battle.add({ id, kind, name, team: WILD, square, map: "town", armed: false, hp: most });
+            this.battle.actor(id).hp = hp;
+
+            return id;
+        } catch {
+            return null;
+        }
+    }
+
+    // A rift's guards: woken once a player's within HELL_RIFT.guards of its heart (those of them
+    // left: the Rift Warden, a boss's strength; the cult's high priest; its fiends), as strong as
+    // its demons are; let go (to come again as they were) once every player's beyond HELL_RIFT.far;
+    // all of them fallen, its altar stood out bare while anyone's near (#riftAltar)
+    #riftGuards(open, homes) {
+        const near = this.#nearestTo(open.at, homes);
+        const { guards } = open;
+
+        if (guards.fell) {
+            this.#riftAltar(open, near);
+
+            return;
+        }
+
+        const standing = guards.ids.filter((id) => this.battle.actor(id) && !this.battle.actor(id).dead);
+
+        if (standing.length && near > HELL_RIFT.far) {
+            standing.forEach((id) => this.#release(id));
+            guards.ids = [];
+
+            return;
+        }
+
+        if (standing.length || near > HELL_RIFT.guards || !guards.left.length) {
+            return;
+        }
+
+        const tier = this.#riftTier(open);
+        const [x, y] = open.at;
+        const keep = { hellRift: open.id, roam: 4, temper: "territorial" };
+        const put = (role, at, more) => this.#pack({ creature: role, tier, count: guards.left.filter((one) => one === role).length }, at, { ...keep, riftGuard: role, ...more });
+
+        guards.ids = [
+            ...(guards.left.includes(RIFT_GUARDS.warden) ? put(RIFT_GUARDS.warden, [x, y + 3], { master: true, champion: "boss", title: RIFT_GUARDS.title }) : []),
+            ...(guards.left.includes(RIFT_GUARDS.priest) ? put(RIFT_GUARDS.priest, [x - 3, y - 2], { champion: "mini" }) : []),
+            ...(guards.left.includes(RIFT_GUARDS.fiend) ? put(RIFT_GUARDS.fiend, [x + 4, y - 3], {}) : []),
+        ];
+
+        if (guards.ids.length) {
+            this.#event("hellRift", { change: "guards", id: open.id, ids: [...guards.ids] });
+        }
+    }
+
+    // A rift's altar, bare once its guards have fallen: stood out (as cracked as it was) while a
+    // player's within HELL_RIFT.guards × 2 of its heart, put away (kept as it is) once every one's
+    // beyond HELL_RIFT.far
+    #riftAltar(open, near) {
+        open.altar ??= { id: null, hp: Math.round(HELL_RIFT.altar * tierPower(open.tier)), most: Math.round(HELL_RIFT.altar * tierPower(open.tier)) };
+
+        const actor = open.altar.id ? this.battle.actor(open.altar.id) : null;
+
+        if (!actor && near <= HELL_RIFT.guards * 2) {
+            open.altar.id = this.#riftThing("altar", `${open.id}/altar`, open.at, open.altar, "Rift altar");
+        } else if (actor && !actor.dead && near > HELL_RIFT.far) {
+            open.altar.hp = actor.hp;
+            this.battle.remove(open.altar.id);
+            this.#event("gone", { id: open.altar.id });
+            open.altar.id = null;
+        }
+    }
+
+    // One of a rift's fallen (beast, the wild's entry; `fell`, where it lies; `by`, who felled it):
+    // brimstone for each hero within BRIMSTONE.reach of it, and whoever felled it (or whose they
+    // are), as much as its rank has it (BRIMSTONE); one of its guards, one fewer of them left, and
+    // the last of them fallen, its altar bare
+    #riftFell(beast, fell, by) {
+        const open = this.hellRifts.open;
+
+        if (!open || beast.hellRift !== open.id || !fell) {
+            return;
+        }
+
+        const much = beast.riftGuard === RIFT_GUARDS.warden ? BRIMSTONE.warden : beast.riftGuard ? BRIMSTONE.guard : BRIMSTONE.each;
+        const owner = this.#ownerOf(this.battle.actor(by) ?? {});
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (actor && !actor.dead && actor.map === fell.map && (player.id === owner || hypot(actor.x - fell.x, actor.y - fell.y) <= BRIMSTONE.reach)) {
+                open.brimstone[player.id] = (open.brimstone[player.id] ?? 0) + much;
+
+                if (!open.fought.includes(player.id)) {
+                    open.fought.push(player.id);
+                }
+
+                this.#event("brimstone", { id: player.id, rift: open.id, gained: much, brimstone: open.brimstone[player.id] });
+            }
+        }
+
+        if (!beast.riftGuard) {
+            return;
+        }
+
+        const left = open.guards.left.indexOf(beast.riftGuard);
+
+        if (left >= 0) {
+            open.guards.left.splice(left, 1);
+        }
+
+        if (!open.guards.left.length) {
+            open.guards = { left: [], ids: [], fell: true };
+            this.#event("hellRift", { change: "bare", id: open.id, at: [...open.at] });
+        }
+    }
+
+    // Someone (`by`) striking or felling one of an open rift's guards, tears or its altar: the
+    // player they are (or whose they are) one of those who fought there, a share of its chest
+    #riftFought(id, by) {
+        const open = this.hellRifts.open;
+        const struck = open ? this.battle.actor(id) : null;
+        const its = struck && (this.wild.get(id)?.hellRift === open.id || id.startsWith(`${open.id}/`));
+        const owner = its ? this.#ownerOf(this.battle.actor(by) ?? {}) : null;
+
+        if (owner && this.players.has(owner) && !open.fought.includes(owner)) {
+            open.fought.push(owner);
+        }
+    }
+
+    // One of a rift's tears sealed (`by` struck it the last time): gone, and a small cache for each
+    // hero there, or who struck it (#opened), as strong as the rift's demons are
+    #tearSealed(id, by) {
+        const open = this.hellRifts.open;
+        const k = open ? open.tears.findIndex((tear) => tear.id === id) : -1;
+
+        if (k < 0) {
+            return;
+        }
+
+        const tear = open.tears[k];
+        const { square } = this.battle.actor(id);
+        const fought = [this.#ownerOf(this.battle.actor(by) ?? {})].filter((owner) => owner && this.players.has(owner));
+        const tier = this.#riftTier(open);
+
+        Object.assign(tear, { sealed: true, id: null, hp: 0 });
+        this.battle.remove(id);
+        this.#event("hellRift", { change: "sealed", id: open.id, tear: k, at: [...tear.at], by: fought[0] ?? null });
+        this.#opened(id, "cache", { at: tear.at, maps: [], map: "town", square, people: "human", maker: this.#landMakerAt(tear.at), tier, fought });
+    }
+
+    // A rift's altar smashed (`by` struck it the last time): the rift closed, and for each hero who
+    // fought there and is in its land, or stands at its heart, a chest of their own (#riftChests);
+    // its creatures gone back through it; told everyone, those who closed it with the letter on it
+    // (app/game.js: hellrift.js letterOf)
+    #altarSmashed(by) {
+        const open = this.hellRifts.open;
+        const altar = open?.altar?.id ? this.battle.actor(open.altar.id) : null;
+
+        if (!altar) {
+            return;
+        }
+
+        const square = [...altar.square];
+        const owner = this.#ownerOf(this.battle.actor(by) ?? {});
+
+        if (owner && this.players.has(owner) && !open.fought.includes(owner)) {
+            open.fought.push(owner);
+        }
+
+        const heroes = [...this.players.values()].filter((player) => {
+            const actor = this.battle.actor(player.id);
+
+            return actor && !actor.dead && actor.map === "town" && (hypot(actor.x - open.at[0], actor.y - open.at[1]) <= BRIMSTONE.reach || (open.fought.includes(player.id) && inRift(open, [actor.x, actor.y])));
+        });
+
+        this.#riftChests(open, heroes, square);
+        this.#event("hellRift", { change: "closed", id: open.id, at: [...open.at], by: owner ?? null, heroes: heroes.map(({ id }) => id) });
+        this.#riftEnds(null);
+    }
+
+    // A closed rift's chests (`heroes`, those who've a share): each a great hoard, and one more hoard
+    // for each BRIMSTONE.per brimstone they had of it (no more than BRIMSTONE.most more), made for
+    // the might of the rift's demons, at its altar
+    #riftChests(open, heroes, square) {
+        const tier = this.#riftTier(open);
+
+        for (const player of heroes) {
+            const made = this.#making(player, tierPowerOf(tier));
+            const extra = Math.min(BRIMSTONE.most, Math.floor((open.brimstone[player.id] ?? 0) / BRIMSTONE.per));
+            const maker = this.#landMakerAt(open.at);
+
+            for (let k = 0; k <= extra; k++) {
+                const bundle = rollLoot(k === 0 ? "greatHoard" : "hoard", this.random, { people: "human", maker, ...made });
+
+                bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
+                withMap(bundle, "greatHoard", tier, this.random, {});
+
+                const ground = `ground-${this.nextGround++}`;
+
+                this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: "town", square: [...square], until: this.battle.time + GROUND_MS });
+                this.#event("spoils", { id: player.id, ground, from: open.id, creature: "chest", ...(k > 0 ? { brimstone: true } : {}) });
+            }
+        }
+    }
+
+    // An open rift ended: closed (`why` null: its altar smashed, #altarSmashed), or "faded" (its
+    // half hour up): its tears and altar gone, and every creature of it gone back through it, those
+    // fallen left lying; told everyone, faded
+    #riftEnds(why) {
+        const open = this.hellRifts.open;
+
+        if (!open) {
+            return;
+        }
+
+        for (const id of [...open.tears.map((tear) => tear.id), open.altar?.id].filter(Boolean)) {
+            if (this.battle.actor(id)) {
+                this.battle.remove(id);
+                this.#event("gone", { id });
+            }
+        }
+
+        for (const [id, one] of [...this.wild]) {
+            if (one.hellRift === open.id && !this.battle.actor(id)?.dead) {
+                this.#release(id);
+            }
+        }
+
+        this.hellRifts.open = null;
+
+        if (why) {
+            this.#event("hellRift", { change: why, id: open.id, at: [...open.at] });
+        }
     }
 
     // Under a full moon, a player in a ring's middle choosing where the stones carry them (a
@@ -9726,7 +10134,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && !one.thread && !one.court && !one.patrol && one.vault === undefined && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && !one.rare && !one.thread && !one.court && !one.patrol && !one.riftGuard && one.vault === undefined && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -9742,6 +10150,7 @@ export class Host {
         this.#wildCamps(homes);
         this.#dens(homes);
         this.#moonTrials(homes);
+        this.#hellRifts(homes);
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
@@ -10145,13 +10554,16 @@ export class Host {
                 continue;
             }
 
-            const encounter = encounterAt(plan, at, [home], this.random, dark);
+            // (In a hell rift's land, its demons, or the cult's: #riftAbout)
+            const rift = this.#riftAbout(at);
+            const encounter = rift ?? encounterAt(plan, at, [home], this.random, dark);
 
             if (encounter) {
                 const least = Math.max(1, Math.min(room, encounter.count));
                 const { count, health } = this.#scaled(least, scale, at, Math.max(least, room));
+                const keeps = rift ? { hellRift: rift.hellRift } : {};
 
-                this.#keepPack(this.#pack({ ...encounter, count }, at, { health, least }), { strength, least, creature: encounter.creature, tier: encounter.tier });
+                this.#keepPack(this.#pack({ ...encounter, count }, at, { health, least, ...keeps }), { strength, least, creature: encounter.creature, tier: encounter.tier, keeps });
 
                 return;
             }
@@ -10202,7 +10614,7 @@ export class Host {
     // anything, an elite, called, nor sent after someone), minded on first seeing a player, one
     // of a pack of `packSize`; one of a den's, standing its ground there, its nerve never gone
     // (`stands`)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null, thread = null, team = WILD, facing = null, court = null, patrol = null, hatch = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null, thread = null, team = WILD, facing = null, court = null, patrol = null, hatch = null, hellRift = null, riftGuard = null }) {
         const spec = CREATURES[creature];
         const reacting = reacts && wary(creature) && map === "town" && !elite && !camp && !lair && !cache && !stranger && !trial && !place && !works && !dungeon && !called && !champion && !ambush;
         const lead = elite === "lead";
@@ -10213,7 +10625,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}), ...(thread ? { thread } : {}), ...(court ? { court } : {}), ...(patrol ? { patrol } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}), ...(thread ? { thread } : {}), ...(court ? { court } : {}), ...(patrol ? { patrol } : {}), ...(hellRift ? { hellRift } : {}), ...(riftGuard ? { riftGuard } : {}) });
         this.battle.add({
             id,
             kind: "beast",

@@ -1660,6 +1660,71 @@ Then debug mode deals it by its id (*Card and its thread*), and the unit tests (
 *the Golem of Harrowstone*, *the Iron Crown*, *the Exile's Road*, *the Hound Unchained*) show how
 to follow one through.
 
+## Hell rifts
+
+Once a day of the world, a hells' cult tears a rift open out in the wilds, and for half an hour
+the land about it is thick with demons (`core/hellrift.js`, `core/host.js` `#hellRifts`; drawn by
+`world/hellrift3d.js`). It's the world's: one at a time, the same for everyone in it.
+
+- **When.** Each day of the world it's due at a time that day has (`dueOf`: between 4 and 26
+  minutes past midnight, the world's own clock), none in a world's first 40 minutes
+  (`HELL_RIFT.first`). If it can't open then (no one out in the world), it can a little later
+  (`late`: 6 minutes); past that, none that day.
+- **Where.** Its heart is torn open 0.8 to 2 km from one of the players (`riftSite`), on dry land
+  250 m clear of every settlement, off the roads, out of shrines' sanctuary, its land inside the
+  world. Its land is 400 m about its heart (`radius`).
+- **How strong.** A tier over the mightiest hero about it (`riftTier`: might.js `calledTier`, +1),
+  worked out again for each pack as it comes, so anyone can take part and it's a fight for
+  everyone.
+- **Its tears.** Six to eight lesser rifts (`tearsOf`) scattered through its land, well apart. Each
+  stands out in the world as a hero comes within 120 m of it, a thing to strike (battle.js `tear`,
+  `STANDS`: it only stands), and while one's within 70 m pours out a pack of the Breach's demons
+  (`RIFT_DEMONS`: fiends, brimstone walkers, flaylings, cinder husks, slag gorgers, pyre acolytes)
+  every 40 seconds, no more than two of its packs out at once. Its packs are held to the body
+  budget as every pack is (*A ceiling*): none poured while it's full about the tear, and what more
+  of a pack there'd have been goes into the hit points of those there are. Struck down, it's
+  sealed: a small cache for whoever sealed it and any hero by it.
+- **Its land.** The packs put out about the players in it (`#putOut`) are its demons, or now and
+  then the cult's cultists (a quarter of them), as strong as its demons are.
+- **Its guards.** Once a hero's within 60 m of its heart, its guards wake there: the Rift Warden (a
+  Demon of the Breach, at a boss's strength), the cult's high priest (a mini-boss's), and three
+  fiends. Its altar can't be struck while any of them stands. Let go if every hero goes 200 m off,
+  they come again, those slain staying slain.
+- **Its altar.** With its guards fallen, its altar stands bare (battle.js `altar`): struck down, the
+  rift's closed. Each hero who fought there (struck one of its guards, tears or its altar, or had
+  brimstone of it) and is in its land, and any hero at its heart, has a chest of their own: a great
+  hoard, and one more hoard for each ten brimstone they had of it (five more at most), made for its
+  demons' might. Every creature of it still standing goes back through it.
+- **Brimstone.** Each of its demons that falls leaves the heroes within 40 m of it, and whoever
+  felled it, brimstone (`BRIMSTONE`): one a demon, three a guard, fifteen the Warden.
+- **The letter.** On its altar lies a cultist's letter (`letterOf`), kept in the journal of each hero
+  who closed it, under *Writings*: which way the nearest hell is from there that they haven't
+  found yet (`hellFor`), how far a walk, and what stands by its camp.
+- **Time up.** Half an hour on, it seals itself, its creatures gone back through it, nothing gained.
+
+What everyone sees and hears (app/game.js `#hellRiftTold`, `#riftSky`):
+
+- Torn open, it's told everyone wherever they are, as the criers cry it: which way it is from them
+  and how far, with a ripping sting (`riftTorn`) and the crier's bell. The criers in the towns cry
+  it too, before any other news, which way it is from them (`riftCry`).
+- A red chip across the top, under the buttons (hud.js `rift`), its time left, the last five
+  minutes throbbing, and, in its land, the brimstone they have of it. Brimstone rises over them as
+  it's had (`brimstone`, a dry crackle).
+- On the world map, its land red with a burning tear at its heart where they've uncovered it; where
+  they haven't, a red dashed ring with a "?" in it. Its time left on a tap. On the minimap, its land
+  ringed in red and its tear throbbing at its heart, or at the edge the way it is.
+- In its land the sky reddens as a great fire spell reddens it (view.js `setOmen` "fire"), eased in
+  and out.
+- Its tears are rips in the world, hanging over the ground: a seething dark in each, a red fire
+  swirling deep within it, its torn rim burning red to gold to white-hot at its very edge; the whole
+  throbbing like a heart in anger, swelling as it throbs and flickering, a glow licking out round
+  its rim, embers streaming up off it and the ground under it glowing. The great tear at its heart
+  stands over its altar, a column of red light going up from it, seen across the land; its altar
+  is black stone, horned, a burning sigil on it, under a dome of red light while its guards stand.
+  A tear sealed folds in on itself (`tearSealed`); its altar smashed, all of it does
+  (`altarSmashed`).
+- The debug overlay's `hellrift` command tears one open before the player, its heart 120 m off.
+
 ## Adventurers' caches
 
 Here and there out in the wilds lies a chest some adventurer stowed and never came back for, and a

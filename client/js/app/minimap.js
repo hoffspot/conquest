@@ -506,7 +506,7 @@ export class Minimap {
      * app/game.js partyView), each a dot in their own colour, or further than shown, a badge with
      * their initial at the edge, its arrow pointing the way they are.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] }, missions = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], rift = null, pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] }, missions = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -741,6 +741,41 @@ export class Minimap {
 
             star(context, x, y, ELITE_MARK.size * (k < 1 ? 0.85 : 1) * (1 + 0.08 * Math.sin(now / 220)));
             this.elites.push({ x, y, edge: k < 1 });
+        }
+
+        // A hell rift open in the wilds (app/game.js riftView): its land's red ring, where it's in
+        // sight; and its tear at its heart, throbbing, or further than shown, at the edge the way it
+        // is, as the elites are (what's drawn kept for tests: `rift`)
+        this.rift = null;
+
+        if (rift) {
+            const [hx, hy] = at(rift.x, rift.z);
+            const r = rift.radius * scale;
+            const [x, y, k] = marked(rift);
+            const throb = 1 + 0.15 * Math.max(0, Math.sin(now / 160));
+
+            if (hx > -r && hy > -r && hx < width + r && hy < height + r) {
+                context.beginPath();
+                context.arc(hx, hy, r, 0, 2 * Math.PI);
+                context.fillStyle = "rgba(232, 52, 28, 0.14)";
+                context.fill();
+                context.lineWidth = 1.5;
+                context.strokeStyle = "rgba(232, 52, 28, 0.85)";
+                context.stroke();
+            }
+
+            context.beginPath();
+            context.ellipse(x, y, 2.6 * throb, 7 * throb, 0, 0, 2 * Math.PI);
+            context.fillStyle = "#e8341c";
+            context.fill();
+            context.lineWidth = 1;
+            context.strokeStyle = "rgba(20, 6, 4, 0.9)";
+            context.stroke();
+            context.beginPath();
+            context.ellipse(x, y, 1, 4.4 * throb, 0, 0, 2 * Math.PI);
+            context.fillStyle = "#ffe2aa";
+            context.fill();
+            this.rift = { x, y, edge: k < 1 };
         }
 
         // Where the player's war missions take them (core/missions.js): further than shown, at the

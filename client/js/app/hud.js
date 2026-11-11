@@ -311,6 +311,51 @@ export class Hud {
     }
 
     /**
+     * A hell rift open in the wilds (core/hellrift.js; app/game.js #riftChip): a red chip across the
+     * top, under the buttons, its time left ("Hell rift 23:41", the last minutes urgent) and, while
+     * the player's in its land, the brimstone its demons have left them; null, none. (Changing the
+     * page only when what it shows changes)
+     */
+    rift(state) {
+        if (!state) {
+            if (this.riftChip) {
+                this.riftChip.hidden = true;
+            }
+
+            this.riftShown = null;
+
+            return;
+        }
+
+        if (!this.riftChip) {
+            this.riftChip = element("div", "riftchip");
+            this.riftChip.id = "riftchip";
+            this.riftChip.setAttribute("role", "status");
+            this.riftChip.append(element("span", "tear"), element("span", "words", "Hell rift"), element("span", "time"), element("span", "brimstone"));
+            this.root.append(this.riftChip);
+        }
+
+        const seconds = Math.max(0, Math.ceil(state.left / 1000));
+        const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+        const shown = `${time}:${state.brimstone ?? ""}:${Boolean(this.bossBar && !this.bossBar.hidden)}`;
+
+        if (shown === this.riftShown) {
+            return;
+        }
+
+        this.riftShown = shown;
+        this.riftChip.hidden = false;
+        this.riftChip.classList.toggle("urgent", seconds <= 300);
+        this.riftChip.classList.toggle("low", Boolean(this.bossBar && !this.bossBar.hidden));
+        this.riftChip.querySelector(".time").textContent = time;
+
+        const brimstone = this.riftChip.querySelector(".brimstone");
+
+        brimstone.hidden = state.brimstone === null || state.brimstone === undefined;
+        brimstone.textContent = `${state.brimstone ?? 0} brimstone`;
+    }
+
+    /**
      * The bar for the great foe near the player (`foe`: { name, hp, maxHp }; the Behemoth of the
      * Rift, app/game.js #bossBar): its name over its health, across the top under the buttons;
      * null, none. (Changing the page only when what it shows changes)

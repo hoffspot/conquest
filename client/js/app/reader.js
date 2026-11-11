@@ -62,15 +62,18 @@ export class ReaderPanel {
         return !this.panel.hidden;
     }
 
-    /** Open a writing (WRITINGS' id) at one of its pages (the first, if not said). */
-    show(id, index = 0) {
-        const writing = WRITINGS[id];
-
+    /**
+     * Open a writing (WRITINGS' id) at one of its pages (the first, if not said); or one written
+     * as WRITINGS' are and given (`writing`: a cultist's letter off a hell rift's altar, core/
+     * hellrift.js letterOf), by its own id.
+     */
+    show(id, index = 0, writing = WRITINGS[id]) {
         if (!writing) {
             return;
         }
 
         this.id = id;
+        this.writing = writing;
         this.title.textContent = writing.title;
         this.panel.hidden = false;
         this.#page(index);
@@ -78,7 +81,7 @@ export class ReaderPanel {
 
     /** Turn on (1) or back (-1) a page, if there's one that way. Whether it turned. */
     turn(by) {
-        const entries = WRITINGS[this.id]?.entries ?? [];
+        const entries = this.writing?.entries ?? [];
         const index = this.index + by;
 
         if (!this.open || index < 0 || index >= entries.length) {
@@ -97,7 +100,7 @@ export class ReaderPanel {
 
     // Show one of the open writing's pages
     #page(index) {
-        const { entries } = WRITINGS[this.id];
+        const { entries } = this.writing;
         const entry = entries[Math.max(0, Math.min(entries.length - 1, index))];
 
         this.index = entries.indexOf(entry);

@@ -932,6 +932,45 @@ export const SOUNDS = {
         volume: 0.5,
         make: () => add(shape(tone(1.9, 147, { harmonics: [[1, 1], [2.01, 0.5], [3.02, 0.25], [4.1, 0.12]] }), hit(0.004, 0.6)), notes([[294, 0.06], [370, 0.16], [440, 0.26], [587, 0.38], [740, 0.52]], { decay: 0.65, harmonics: GLASS, length: 1.9 }), 0.6),
     },
+    // A hell rift (core/hellrift.js): torn open, a ripping sweep falling away over a buzzing drone
+    // on A with the tritone over it swelling; a tear sealed, a sucking rush rising into a glassy
+    // snap, two notes falling an octave; its altar smashed, a crack, a boom falling away, rubble
+    // and a hot sigh dying; brimstone, a dry crackle
+    riftTorn: {
+        variants: 1,
+        volume: 0.6,
+        make: (random) => {
+            const length = 1.9;
+            const drone = shape(tone(length, (t) => 55 * (1 + 0.012 * Math.sin(t * 7)), { harmonics: [[1, 1], [2, 0.6], [3, 0.35], [4.24, 0.25]] }), swell(length, 0.35));
+            const tritone = shape(tone(length, 77.8, { harmonics: [[1, 1], [2, 0.4]] }), swell(length, 0.6));
+            const tear = shape(filter(noise(random, length), "bandpass", (t) => 2600 * Math.exp(-t * 2.2) + 220, 1.2), hit(0.01, 0.9));
+
+            return add(add(drone, tritone, 0.5), tear, 0.6);
+        },
+    },
+    tearSealed: {
+        variants: 1,
+        volume: 0.45,
+        make: (random) => {
+            const rush = shape(filter(noise(random, 0.7), "bandpass", (t) => 300 + 2600 * (t / 0.7) ** 2, 1.4), swell(0.7, 0.9));
+            const snap = add(burst(random, 0.12, "highpass", 2500, 0.8, 0.001, 0.04), notes([[220, 0], [110, 0.05]], { decay: 0.5, harmonics: GLASS, length: 0.9 }), 0.4);
+
+            return add(rush, snap, 0.8, 0.62);
+        },
+    },
+    altarSmashed: {
+        variants: 1,
+        volume: 0.65,
+        make: (random) => {
+            const crack = burst(random, 0.25, "bandpass", 900, 0.8, 0.001, 0.08);
+            const boom = shape(tone(1.6, (t) => 70 - (25 * t) / 1.6, { harmonics: [[1, 1], [2, 0.5], [3, 0.2]] }), hit(0.005, 1));
+            const rubble = add(add(burst(random, 0.3, "bandpass", 1600, 0.9, 0.002, 0.12), burst(random, 0.3, "bandpass", 1200, 0.9, 0.002, 0.15), 0.8, 0.18), burst(random, 0.4, "bandpass", 700, 0.9, 0.002, 0.2), 0.7, 0.4);
+            const sigh = shape(filter(noise(random, 1.5), "lowpass", (t) => 1800 * Math.exp(-t * 1.5) + 120, 0.8), swell(1.5, 0.15));
+
+            return add(add(add(crack, boom, 0.9), rubble, 0.6, 0.12), sigh, 0.4, 0.2);
+        },
+    },
+    brimstone: { variants: 2, volume: 0.3, make: (random) => add(burst(random, 0.08, "bandpass", 3200, 1.2, 0.001, 0.03), burst(random, 0.08, "bandpass", 2400, 1.2, 0.001, 0.03), 0.7, 0.05) },
     chainBroken: { variants: 1, volume: 0.35, make: (random) => add(notes([[1175, 0], [880, 0.08], [622, 0.16]], { decay: 0.3, harmonics: GLASS, length: 0.9 }), burst(random, 0.15, "highpass", 3000, 0.7, 0.002, 0.05), 0.3) },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {

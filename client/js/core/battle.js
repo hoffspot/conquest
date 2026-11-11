@@ -138,7 +138,18 @@ export const KINDS = Object.freeze({
     // `footprint` of wall, doing nothing; no one's set on it but those sent to hack it down (a
     // `siege`, or a player told to), and felled it's broken open)
     stakes: { hp: 300, speed: 0, chase: 0, respawn: Infinity },
+    // (A hell rift's tear, one of the lesser rifts about it, and the altar at its heart (core/
+    // hellrift.js, host.js #hellRifts): standing where they're torn open and raised, doing nothing;
+    // sealed or smashed, they're gone)
+    tear: { hp: 150, speed: 0, chase: 0, respawn: Infinity },
+    altar: { hp: 500, speed: 0, chase: 0, respawn: Infinity },
 });
+
+/**
+ * The kinds that only stand (KINDS: a camp's stakes, a hell rift's tears and altar): never moving
+ * nor striking, and no one set on one of their own accord, only those sent or told to.
+ */
+export const STANDS = Object.freeze(new Set(["stakes", "tear", "altar"]));
 
 /**
  * One that's only knocked down when it falls (`rises`: a hired adventurer, docs/WAR.md
@@ -2692,8 +2703,8 @@ export class Battle {
             return;
         }
 
-        // (A section of a palisade: it only stands)
-        if (actor.kind === "stakes") {
+        // (A section of a palisade, or a hell rift's tear or altar: it only stands)
+        if (STANDS.has(actor.kind)) {
             return;
         }
 
@@ -5180,8 +5191,9 @@ export class Battle {
             for (const k of ring) {
                 const other = this.actors[k];
 
-                // (Nor a section of a palisade: none set on one of their own accord)
-                if (other.dead || other.map !== actor.map || other.kind === "stakes" || !this.#near(actor, other, within)) {
+                // (Nor a section of a palisade, nor a rift's tear or altar: none set on one of their
+                // own accord)
+                if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || !this.#near(actor, other, within)) {
                     continue;
                 }
 
@@ -5233,7 +5245,7 @@ export class Battle {
             const distance = distanceBetween(actor.square, other.square);
 
             // (Not those hacking at a palisade: no help wanted there but their own: core/host.js #hack)
-            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && foe && !foe.dead && foe.kind !== "stakes" && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.#roomOn(actor, foe) && this.canSee(actor, other)) {
+            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && foe && !foe.dead && !STANDS.has(foe.kind) && foe.map === actor.map && this.hostile(foe, actor) && this.#noticed(actor, foe) && this.#leashed(actor, foe) && this.#roomOn(actor, foe) && this.canSee(actor, other)) {
                 best = foe;
                 bestDistance = distance;
                 bestK = k;
@@ -7191,7 +7203,7 @@ export class Battle {
     // thrown lately
     #throwable(actor) {
         // (Nor one on horseback: the horse is struck, and throws them only as it falls, #horseStruck)
-        return !carries(actor.mount) && !actor.footprint && !this.#stone(actor) && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        return !carries(actor.mount) && !actor.footprint && !this.#stone(actor) && actor.kind !== "fort" && !STANDS.has(actor.kind) && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
