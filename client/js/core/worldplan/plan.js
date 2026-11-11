@@ -115,9 +115,10 @@ export function landOf(plan) {
 }
 
 /**
- * A world's plan laid out elsewhere by this same code (by another of the unit tests' processes:
- * keepPlans), with the land its waters are worked out from (landOf, handed over with it in one
- * piece, so that it's still the plan's own arrays): kept as planWorld keeps one it lays out
+ * A world's plan laid out elsewhere by this same code (off the page's thread, or on an earlier
+ * visit: app/plans.js; by another of the unit tests' processes: keepPlans), with the land its
+ * waters are worked out from (landOf, handed over with it in one piece, so that it's still the
+ * plan's own arrays): kept as planWorld keeps one it lays out
  * itself, frozen, its waters to be worked out from that land, and given to whoever asks for its
  * seed's next. Gives back the plan kept for its seed: this one, or the one that was there already.
  * It must be layOutWorld's for that seed: nothing here can tell.

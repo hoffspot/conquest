@@ -1210,7 +1210,7 @@ async function playing(save, { world, place, war }) {
 
     // (The world planned while the skin atlas may still be being worked out elsewhere: it's
     // needed only once the game's building its characters)
-    const game = createGame({
+    const game = await createGame({
         view,
         kit,
         sound,
@@ -3049,7 +3049,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     await painted();
 
     // (As playing's: the skin atlas waited for once it's needed)
-    const game = createJoinedGame({
+    const game = await createJoinedGame({
         view,
         kit,
         sound,

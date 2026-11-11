@@ -6557,7 +6557,16 @@ the Bindings page till one's chosen.
    go of the one got ready; back at the title, another's got ready.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the
+   the game. First its plan (docs/WORLD.md), which isn't laid out on the page: laying one out is
+   a second and a half or more of the page standing still, 60% of building the world, the same
+   every time for a seed. A worker lays it out (`app/plans.js`, `plan-worker.js`) and hands it
+   over, its typed arrays moved, with the land its waters are worked out from; the page takes it
+   as its own (`adoptPlan`), and builds the rest. It's kept between visits (IndexedDB), by the
+   commit the code was built from (`version.js`) and the seed, so a load after the first reads
+   it back in milliseconds and a new release never gets an old one's plan (theirs are let go of);
+   a copy run from the repository, with no version of its own, keeps none. A joined game's the
+   same, what the host says meanwhile waiting as it does while the world's built. With no worker
+   to be had, the page lays it out, as it used to. Its count ("120 of 202") is of steps known before it starts: each chunk round the
    player (counted as it's drawn, however many goes it takes), each piece of the town and its
    trees, each floor of the tavern, everyone dressed before the first frame (the orc, anyone else
    playing), each kind of soldier's figure made (below) and five more; it never passes its total, and ends on it. The soldiers, wagons and the
