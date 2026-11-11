@@ -27,7 +27,8 @@ const watched = new WeakMap();
 // A mesh drawn (three.js calls onAfterRender once it has: its corners and pictures are sent by
 // then): culled again, and told what it was told before, as it was
 function drawn(...given) {
-    const { after } = watched.get(this);
+    // (Told so with nothing known of it, were it ever: as three.js made it, and no more)
+    const { after = null } = watched.get(this) ?? {};
 
     watched.delete(this);
     this.frustumCulled = true;

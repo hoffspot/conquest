@@ -772,8 +772,9 @@ export function joined(parts, { kept = false } = {}) {
         const geometries = far.map(({ geometry }) => geometry);
         const whole = mergeGeometries(merged.map(({ geometry }) => geometry));
 
-        // (A capital's buildings are 40 MB of corners in its chunks, held twice over: on the page
-        // and on the graphics card, which on a phone are the same memory)
+        // (A capital's buildings are 20 MB of corners over its chunks, and were 40: held twice
+        // over till they're let go of, on the page and on the graphics card, which on a phone are
+        // the same memory)
         if (!kept) {
             whole.computeBoundingBox();
             releaseGeometry(whole);
