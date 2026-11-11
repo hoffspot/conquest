@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, afterEach, describe, it } from "node:test";
-import { BrokerHost, BrokerJoin, brokerOf, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf } from "../client/js/app/peer.js";
+import { BrokerHost, BrokerJoin, brokerOf, Channel, HIGH, MOST, PEER_TIMING, PIECE, Pieces, piecesOf, reachability, reachabilityOf } from "../client/js/app/peer.js";
 import { joinWorld, openWorld } from "../client/js/app/together.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -109,6 +109,55 @@ describe("pieces", () => {
         );
         assert.deepEqual(piecesOf("hello"), ["=hello"]);
         assert.equal(joined.add("=hello"), "hello");
+    });
+
+    it("keep no more of a message than the longest a game says: one whose pieces run on past it is let go of, the next joined as ever", () => {
+        const joined = new Pieces();
+        const piece = `+${"x".repeat(PIECE)}`;
+
+        assert.equal(MOST.message, 4 * 1024 * 1024);
+
+        // (Pieces with no end to them: none kept once they're past the most)
+        for (let k = 0; k < MOST.message / PIECE + 10; k++) {
+            assert.equal(joined.add(piece), null);
+        }
+
+        assert.equal(joined.parts.length, 0);
+        assert.equal(joined.add("=the end"), null, "its last piece too: not a message");
+        assert.equal(joined.add("+hel"), null);
+        assert.equal(joined.add("=lo"), "hello");
+
+        // (A world as long as one's allowed comes whole)
+        const world = "w".repeat(MOST.message);
+
+        assert.equal(piecesOf(world).map((each) => joined.add(each)).at(-1), world);
+    });
+
+    it("wait to go on a channel that's full, and close one whose other end has left more than MOST.waiting waiting", () => {
+        const sent = [];
+        const closed = [];
+        const data = { readyState: "open", bufferedAmount: 0, addEventListener: () => {}, send: (piece) => sent.push(piece), close: () => closed.push(true) };
+        const channel = new Channel(data);
+
+        channel.send("hello");
+        assert.deepEqual(sent, ["=hello"]);
+        assert.equal(channel.queued, 0);
+
+        // Its other end slow: what's sent waits, a world and its steps and more, till it's too much
+        data.bufferedAmount = HIGH + 1;
+
+        const world = "w".repeat(600 * 1024);
+
+        for (let k = 0; k < Math.floor(MOST.waiting / world.length); k++) {
+            channel.send(world);
+        }
+
+        assert.equal(sent.length, 1);
+        assert.equal(channel.queued, Math.floor(MOST.waiting / world.length) * world.length);
+        assert.deepEqual(closed, []);
+        channel.send(world);
+        assert.deepEqual(closed, [true], "closed: whoever runs the link lets them go");
+        assert.deepEqual([channel.waiting.length, channel.queued], [0, 0]);
     });
 });
 

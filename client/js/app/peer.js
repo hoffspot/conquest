@@ -34,6 +34,16 @@ export const PIECE = 16384;
 export const HIGH = 1024 * 1024;
 export const LOW = 256 * 1024;
 
+/**
+ * What a link made point to point takes and keeps at most (characters), as the servers' sockets
+ * hold those they carry (server/relay.js): a message no longer than `message` (the longest a
+ * game says is the world, some 100 to 600 KB: one whose pieces run past this is let go of
+ * unread, so a game can't be made to keep pieces for ever), and no more than `waiting` waiting
+ * to go to one too slow to take it (its channel's closed: the host lets them go, their place
+ * kept; a joined game falls back to the broker's relay).
+ */
+export const MOST = Object.freeze({ message: 4 * 1024 * 1024, waiting: 8 * 1024 * 1024 });
+
 /** Why the broker turned a game away: shown to its player. */
 export const BROKER_ERRORS = Object.freeze({
     "no-room": "There's no world open with that code.",
@@ -67,24 +77,41 @@ export function piecesOf(text, size = PIECE) {
     return pieces;
 }
 
-/** Pieces joined again: add(piece) returns the whole message once its last piece has come, else null. */
+/**
+ * Pieces joined again: add(piece) returns the whole message once its last piece has come, else
+ * null. A message longer than `most` characters is let go of, its pieces not kept (null at its
+ * last too); the next is joined as ever.
+ */
 export class Pieces {
-    constructor() {
+    constructor(most = MOST.message) {
+        this.most = most;
         this.parts = [];
+        this.length = 0;
+        this.over = false;
     }
 
     add(piece) {
         const text = String(piece);
+        const last = text[0] === "=";
 
-        this.parts.push(text.slice(1));
+        this.length += text.length - 1;
 
-        if (text[0] !== "=") {
+        if (this.length > this.most) {
+            this.over = true;
+            this.parts = [];
+        } else {
+            this.parts.push(text.slice(1));
+        }
+
+        if (!last) {
             return null;
         }
 
-        const whole = this.parts.join("");
+        const whole = this.over ? null : this.parts.join("");
 
         this.parts = [];
+        this.length = 0;
+        this.over = false;
 
         return whole;
     }
@@ -243,11 +270,15 @@ function split(text) {
     return at < 0 ? [text, ""] : [text.slice(0, at), text.slice(at + 1)];
 }
 
-// A data channel, sending in pieces and waiting when too much is waiting to go
-class Channel {
+/**
+ * A data channel, sending in pieces and waiting when too much is waiting to go; closed, if more
+ * than MOST.waiting is (whoever's at its other end isn't taking it).
+ */
+export class Channel {
     constructor(channel) {
         this.channel = channel;
         this.waiting = [];
+        this.queued = 0;
         this.pieces = new Pieces();
         channel.bufferedAmountLowThreshold = LOW;
         channel.addEventListener("bufferedamountlow", () => this.#flush());
@@ -259,12 +290,20 @@ class Channel {
 
     send(text) {
         this.waiting.push(...piecesOf(text));
+        this.queued += text.length;
         this.#flush();
+
+        if (this.queued > MOST.waiting) {
+            this.close();
+        }
     }
 
     #flush() {
         while (this.waiting.length && this.open && this.channel.bufferedAmount <= HIGH) {
-            this.channel.send(this.waiting.shift());
+            const piece = this.waiting.shift();
+
+            this.queued -= piece.length - 1;
+            this.channel.send(piece);
         }
     }
 
@@ -275,6 +314,7 @@ class Channel {
 
     close() {
         this.waiting = [];
+        this.queued = 0;
 
         try {
             this.channel.close();
