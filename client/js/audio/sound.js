@@ -47,6 +47,10 @@
 // it starts on the first one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
 //
+// While the Sound switch is off, nothing's made, downloaded or decoded: what's asked for meanwhile
+// (prepare, want, makeAhead) is only noted, and begun when it's turned on (setEnabled, `held`).
+// A player who never turns it on downloads none of it.
+//
 // The browser's sound can stop on its own: suspended or interrupted (a call, an alarm, another
 // app's sound, the screen locking), stuck (Safari on iPhones can say it's playing with its clock
 // standing still), or closed. However it stops, it's started again: straight away where the
@@ -926,6 +930,15 @@ export class Sound {
          */
         this.wanted = new Map();
 
+        /**
+         * What's been asked for while the sound's off, begun once it's turned on (#begin): whether
+         * the sounds were to be made and the first recordings downloaded (prepare), the recorded
+         * sounds wanted (want) and the made ones to be made ahead (makeAhead), by name. Off,
+         * nothing's made or downloaded: for a player who never turns it on that's some 8 MB of
+         * made sounds and a 2.3 MB download kept for nothing.
+         */
+        this.held = { prepare: false, wants: new Set(), ahead: new Set() };
+
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
 
@@ -988,9 +1001,16 @@ export class Sound {
     /**
      * Start making the sounds (once), in a worker: those made ahead (MADE_AHEAD), the rest as each
      * is first wanted (#make); and downloading the music's recordings. Resolves when those made
-     * ahead are made (`downloading` when the recordings are downloaded).
+     * ahead are made (`downloading` when the recordings are downloaded). While the sound's off,
+     * nothing's begun (resolved at once): it is when the sound's turned on (setEnabled).
      */
     prepare() {
+        if (!this.enabled) {
+            this.held.prepare = true;
+
+            return Promise.resolve();
+        }
+
         const first = this.#musicFiles(FIRST);
 
         this.downloading ??= this.#download([...first, ...recordedFiles()]);
@@ -1061,7 +1081,7 @@ export class Sound {
      * recordings are in, unless they are) before they're wanted, so the first time each is played
      * it's played on time: the player's spells' as they come to know them, kept (`keep`) as long
      * as the game goes on, while they've no recordings in to play instead; an invasion's horns as
-     * it's told of. Nothing while the sound's off: each is made the first time it's wanted then.
+     * it's told of. Nothing while the sound's off: they're made once it's turned on.
      */
     makeAhead(names, { keep = false } = {}) {
         for (const name of [names].flat()) {
@@ -1075,10 +1095,32 @@ export class Sound {
                 this.kept.add(name);
             }
 
-            if (this.enabled && !this.#made(stand) && !this.recorded.get(name)?.length) {
+            if (!this.enabled) {
+                this.held.ahead.add(name);
+            } else if (!this.#made(stand) && !this.recorded.get(name)?.length) {
                 this.#make(stand);
             }
         }
+    }
+
+    // The sound turned on: what was asked for while it was off, begun now (`held`): the made
+    // sounds to be made ahead (asked of the worker with the rest, as it's started), the sounds
+    // made and the first recordings downloaded, and the recorded sounds wanted since downloaded
+    #begin() {
+        const { prepare, wants, ahead } = this.held;
+
+        this.held = { prepare: false, wants: new Set(), ahead: new Set() };
+        this.makeAhead([...ahead]);
+
+        // (Prepared before it was turned off: the music wanted where the player is now, which may
+        // not be where they were)
+        if (prepare) {
+            this.prepare();
+        } else if (this.ready) {
+            this.#wantScore(this.#wanted().score);
+        }
+
+        this.want([...wants]);
     }
 
     // A made sound made on the page, a variant at a time; then played, if it was wanted just now
@@ -1359,9 +1401,13 @@ export class Sound {
         this.#revive();
     }
 
-    /** Turn it all on or off. */
+    /** Turn it all on or off. Turned on, what was asked for while it was off is begun (#begin). */
     setEnabled(on) {
         this.enabled = on;
+
+        if (on) {
+            this.#begin();
+        }
 
         // (Not started yet: turned on after a tap (the switch's), started now)
         if (!this.context) {
@@ -1707,8 +1753,9 @@ export class Sound {
             this.want(name);
         }
 
-        // (Let go of past the budget: decoded again, for next time, what's made playing meanwhile)
-        if (!made && !recorded && this.mp3s.has(name)) {
+        // (Let go of past the budget: decoded again, for next time, what's made playing meanwhile.
+        // Not while the sound's off: nothing's heard, and it's decoded when next wanted, on)
+        if (!made && !recorded && this.enabled && this.mp3s.has(name)) {
             this.#recall(name);
         }
 
@@ -1835,9 +1882,22 @@ export class Sound {
      * (a name, or a list), so they're in for when they're played (what's made playing in their
      * place till then, or nothing); any already asked for, or downloaded at the start, aren't
      * again. Resolves once they're all downloaded (each decoded once the browser's sound starts).
+     * While the sound's off none's downloaded (resolved at once): those wanted are once it's
+     * turned on.
      */
     want(names) {
         const asked = [names].flat().filter((name) => LATER.has(name));
+
+        if (!this.enabled) {
+            for (const name of asked) {
+                if (!this.wanted.has(name)) {
+                    this.held.wants.add(name);
+                }
+            }
+
+            return Promise.resolve();
+        }
+
         const fresh = asked.filter((name) => !this.wanted.has(name));
 
         if (fresh.length) {
@@ -2204,8 +2264,13 @@ export class Sound {
     }
 
     // A score wanted: its recordings downloaded, if they aren't yet (a few at a time, not to hold
-    // up the rest), and any let go of decoded again from their MP3s
+    // up the rest), and any let go of decoded again from their MP3s. Not while the sound's off:
+    // the one wanted then is asked for as it's turned on (prepare, setEnabled)
     #wantScore(name) {
+        if (!this.enabled) {
+            return;
+        }
+
         const files = this.#musicFiles([name]);
 
         if (files.length && this.fetch && !this.scoresWanted.has(name)) {

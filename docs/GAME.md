@@ -5692,7 +5692,12 @@ Web Audio (which this is) while the ring switch is on silent. While the game
 is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
 while the page is hidden, and off (suspended) when turned off in Game options; turned off from
 the start, the browser's sound isn't started at all (taps don't start it), so it isn't kept
-working on silence, until it's turned on.
+working on silence, until it's turned on. Nor is anything made, downloaded or decoded while it's
+off: what the game asks for meanwhile (the sounds made and the first recordings downloaded as it
+loads, `prepare`; a spell's or a creature's recordings, `want`; a sound made ahead, `makeAhead`)
+is only noted (`held`), and begun when the switch is turned on. A player who never turns it on
+keeps none of it: some 8 MB of made sounds and 4 MB of recordings as the game starts, a 2.3 MB
+download, before this.
 
 **Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
 browser's decoded copy, 32-bit samples, 20 to 30 times its MP3: all the recorded sounds decoded

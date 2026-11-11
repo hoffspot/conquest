@@ -41,7 +41,8 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 
     const audio = new Sound({ enabled: sound, volumes });
 
-    // The music and sounds are made while the game loads (and after: nothing waits for them)
+    // The music and sounds are made while the game loads (and after: nothing waits for them).
+    // With Sound off, nothing's made or downloaded till it's turned on (Sound.prepare)
     audio.prepare();
 
     return { view, kit, sound: audio };

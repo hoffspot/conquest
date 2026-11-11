@@ -1060,6 +1060,78 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
+    it("makes and downloads nothing while it's turned off: neither the made sounds, the first recordings and the music's, nor anything wanted meanwhile", async () => {
+        fakeAudio();
+
+        const fetched = [];
+        const sound = new Sound({ fetch: noting(fetched), enabled: false, ahead: (name) => name === "slash" });
+
+        // (All the game asks of it as it loads and is played: prepared, where the player is, the
+        // ambience there, a spell's sounds wanted and made ahead, a creature's played, and a tap)
+        await sound.prepare();
+        sound.setLand("elf");
+        sound.setAmbience({ beds: { windOpen: 1 }, calls: {}, wants: ["crackle"] });
+        await sound.want(["fireball", "wolfCall"]);
+        sound.makeAhead(["fireball", "warHorn"], { keep: true });
+        assert.equal(sound.play("wolfHurt"), null);
+        sound.unlock();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.deepEqual(fetched, [], "nothing downloaded");
+        assert.equal(sound.context, null, "the browser's sound not started");
+        assert.equal(sound.maker, null);
+        assert.equal(sound.ready, null, "no sound made");
+        assert.deepEqual([sound.samples.size, sound.recordings.size, sound.madeAsked.size, sound.wanted.size, sound.scoresWanted.size], [0, 0, 0, 0, 0]);
+        assert.equal(sound.memory(), 0);
+        sound.close();
+    });
+
+    it("turned on, begins all that was asked of it while it was off: the sounds made, the first recordings and the music heard where the player now is downloaded, and what was wanted meanwhile", async () => {
+        fakeAudio();
+
+        const fetched = [];
+        const sound = new Sound({ fetch: noting(fetched), enabled: false, ahead: (name) => name === "slash" });
+        const urls = (files) => files.map(([, url]) => String(url));
+
+        await sound.prepare();
+        sound.setLand("elf");
+        sound.setAmbience({ beds: { windOpen: 1 }, calls: {}, wants: ["crackle"] });
+        sound.want(["fireball"]);
+        sound.makeAhead(["fireball", "warHorn"], { keep: true });
+        sound.play("wolfHurt");
+        sound.unlock();
+
+        // (The switch: a tap, so the browser's sound starts with it)
+        sound.setEnabled(true);
+        clearInterval(sound.timer);
+        assert.ok(sound.context, "started");
+        await sound.ready;
+        await sound.downloading;
+        await Promise.all([...sound.wanted.values(), ...sound.scoresWanted.values()]);
+
+        // (Made: what's made ahead, the wind, and what was asked to be made ahead meanwhile, a
+        // spell's stand-in and a horn)
+        assert.deepEqual([...sound.buffers.keys()].toSorted(), ["slash", "warHorn", "wind", SOUNDS.fireball ? "fireball" : RECORDED_ONLY.fireball.instead].toSorted());
+
+        // (Downloaded: the recorded sounds and the music the game starts with, the elves' music,
+        // heard where the player is, and what was wanted while it was off; once each)
+        const wanted = urls([...recordedFiles(), ...musicFiles(), ...musicFiles(["elves"]), ...recordedFiles(["windOpen", "crackle", "fireball", "wolfHurt"])]);
+
+        assert.deepEqual(fetched.toSorted(), [...new Set(wanted)].toSorted());
+        assert.deepEqual(sound.held, { prepare: false, wants: new Set(), ahead: new Set() });
+
+        // (Off again, and more asked of it: held off once more, and begun when it's next on)
+        sound.setEnabled(false);
+        fetched.length = 0;
+        sound.setLand("orc");
+        await sound.want(["wolfCall"]);
+        assert.deepEqual(fetched, []);
+        sound.setEnabled(true);
+        await Promise.all([...sound.wanted.values(), ...sound.scoresWanted.values()]);
+        assert.deepEqual(fetched.toSorted(), [...new Set(urls([...musicFiles(["orcs"]), ...recordedFiles(["wolfCall"])]))].filter((url) => !wanted.includes(url)).toSorted());
+        sound.close();
+    });
+
     it("plays the score a little ahead of time, on the music bus, round again without a gap", async () => {
         const { sound, played } = await started();
         const context = sound.context;
