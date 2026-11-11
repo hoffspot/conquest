@@ -243,7 +243,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 
 | Script | When to run it |
 | --- | --- |
-| `npm start` | Serves the game and the multiplayer relay (kept for one release: a world server's broker takes its place) on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`; `&flyin` for the opening fly-in, which it leaves out) |
+| `npm start` | Serves the game and the multiplayer relay (kept for one release: a world server's broker takes its place) on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&hero=1` for another body of the same seed, `&quality=low`, `medium` or `high` for this load alone; `&flyin` for the opening fly-in, which it leaves out) |
 | `npm run dev` | The same, restarting the server when its code changes |
 | `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi, and from the internet over TLS alone once it has a certificate and **Answer the internet** is on (its `internet` setting; a certificate of the owner's own is put in on the management page, or as `certificates/server.key` and `server.crt` in its data folder; or the server gets free ones from Let's Encrypt itself, set up on the management page: a DuckDNS name, a domain on Cloudflare or deSEC, or the home's IP address, with the DNS host's token kept in the Keychain on macOS, elsewhere in `certificates/tokens.json`. Its tests use a certificate authority of their own, `test/fake-acme.js`, and never reach Let's Encrypt or a DNS host; while it answers the internet it asks the home's router to forward its port (PCP, NAT-PMP or UPnP; **Ask the router** in Settings), and its tests ask a router of their own, `test/fake-router.js`, never the machine's real one; or, for a home whose provider shares its address, it lets the internet in through Tailscale Funnel (**Tailscale Funnel** on the management page, its `funnel` setting: Tailscale installed and signed in on the computer, Funnel allowed on the tailnet), which brings it to a tunnel listener on `127.0.0.1:8482`; its tests use a Tailscale of their own, `test/fake-tailscale.js`, never the machine's). `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once. Its management page is at `http://localhost:8481` on the same computer, needing no key (`-- --admin 9001` for another port), and at `/admin` on the play port from the Wi-Fi, with the admin key: its worlds (made, started, set aside, backed up, restored, exported, deleted), their keys, codes and players, its settings, what's happened, and its health. It shows itself to other servers on the Wi-Fi with Bonjour (macOS's `dns-sd`, or `avahi-utils` with avahi-daemon on Linux; its `bonjour` setting), and lists those it finds, which players add from **Worlds on servers** with a tap; macOS may ask for Local Network permission, and play carries on if it's refused. Worlds can also be made from the game it serves (the title's **Worlds on servers**: add the server, then Make a world), and the game's **Test this server** there tries its internet addresses from wherever the device is and tells the server's page how that went (from a phone on its cellular data, the page's code opens the game and tests it at once). A world a player opens to others from the game's menu (**Invite others**) goes through the server's broker (`/broker`): listed there if they like, and joined point to point (WebRTC), or relayed by the server when that can't be made (its `broker` and `relaying` settings); the tests use a WebRTC of their own, `test/fake-rtc.js`. `-- --app` runs it as the Mac app does (`mac/`, docs/MAC_APP.md): how it stands said on `@pellagos` lines, and stopped, every world saved, when its input closes. `server/world.js` is its launcher (`server/launch.js`): it runs the server itself (`server/serve.js`) as this version or a newer one an update installed in the data folder, starts it again after an update, and goes back to the version before if the new one fails. Updates are the management page's (Settings, Updates: a new version found once a day among the releases the Mac app workflow publishes, checked against GitHub's SHA-256 for its archive, or signed with the project's key where the server has its public half, installed when its owner clicks, or by itself overnight when nobody's in, its `autoUpdate` and `updateHour` settings; a copy of the repository is shown `git pull` instead); `-- --releases <url> --release-key <file>` looks for them elsewhere, as the tests do. A world exported from a server is brought in on the page's New world. The whole server is one archive (Settings, Archive; `server/storage/archive.js`): made, and restored in place of everything on a server with no worlds, or its worlds brought in as new ones (one too old to carry on started afresh from its seed). `-- --archive <file>` makes one from the data folder (the server stopped), and `-- --restore <file>` stages one to be put in place when it next starts (`--replace` where there are worlds). The owner's guide is docs/SERVER.md |
 | `npm test` | Every change. The unit tests take about 20 minutes on four cores, an hour of one core's work (22 minutes on CI, 13½ to 23½ as its runner comes). Each test file runs in a process of its own; a world's plan one of them has laid out is kept under `node_modules/.cache/pellagos-plans/` for the next to read back (`test/plan-cache.js`: kept by its seed and a hash of the planner's code, so a change to the planner starts again; CI never restores the folder, so it always lays plans out afresh; `PLAN_CACHE=off` lays every one out afresh here too). A test file still running after 15 minutes is ended and named |
@@ -293,12 +293,31 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - `E2E_PORT` picks the port for the test server, so it doesn't clash with a game you're running
   (the default is 8095).
 - `rm -rf test-results` first, if an earlier run left its pictures and traces there.
+- Every spec opens the game with `playing` (`e2e/fixtures.js`), and the game's drawn cheaply
+  unless the test says otherwise: at Low without shadows (kept as the game's settings before the
+  page loads, where the test keeps none of its own), looking down on the player once it's
+  playing. In software that's five times as many frames a second as High from where the camera
+  starts, out across the land (measured: 2.1 a second against 0.4). A test of what's drawn at a
+  higher quality, of shadows, grass, water or the far land, of how many bodies are held at High,
+  or of the camera and where things are on the screen, asks for exactly what it needs and says
+  why in a comment: `playing`'s `quality`, `shadows` and `view: "start"`, `FULL` for all three, or
+  `test.use({ drawing: "full" })` for a whole spec. Never change what a test asserts to make it
+  pass at Low: a test that fails there for any other reason than being about High has found
+  something.
 - A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
-  `e2e/pellagos.spec.js`). Do the same in new tests, and never wait on the clock.
+  `e2e/fixtures.js`). Do the same in new tests, and never wait on the clock.
 - A test whose games must run on (two players, say) but that looks at nothing drawn (menus, chat,
-  what's said) stops their drawing once they're playing (`undrawn` in `e2e/together.spec.js`).
-  Without a GPU, drawing is most of every frame, and every click waits on a frame or two: undrawn,
-  the direct message test there went from about 290 seconds to 100.
+  what's said, who's let into which world) stops their drawing once they're playing (`undrawn`
+  in `e2e/fixtures.js`, or `playing`'s `drawn: false`). Without a GPU, drawing is most of every
+  frame, and every click waits on a frame or two: undrawn, the direct message test went from
+  about 290 seconds to 100.
+- An `expect` waits 20 seconds before it fails, not Playwright's 5 (`playwright.config.js`): on a
+  slow runner 5 was too few, and two tests failed for it now and then. A test that fails leaves
+  what it saw in its output folder (`e2e/fixtures.js`): a picture of each page, the game's
+  messages and where everyone was (`game-N.json`), and its debug log; CI keeps the folder with
+  the run (`e2e-failures-<share>`).
+- `/?play`'s hero is made from the world's seed (`client/js/app/heroes.js` `quickStartHero`), the
+  same every time for a seed and people: `&hero=1`, `2`... for another body of the same seed.
 - They never reach the game's default world server (`pellagos.duckdns.org`, which every game
   knows from the first: `client/js/app/servers.js` `DEFAULT_SERVERS`). `playwright.config.js`
   launches Chromium with `--host-resolver-rules` making its name resolve to nothing, so the game
