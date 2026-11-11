@@ -284,6 +284,90 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.dispose();
     });
 
+    it("lets go of the page's copy of what's merged of a chunk once the graphics card has it (release.js): its buildings, its land's features, its crowns' shells and its ground; drawn again from its pieces and its heights, never from those", async () => {
+        const chunks = new Chunks(world, { undergrowth: 0 });
+        const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
+        const [x, z] = place.at;
+        const built = async (drawn) => {
+            for (let frames = 0; drawn.job && frames < 5000; frames++) {
+                chunks.update(x, z, { budget: 1 });
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+        };
+        const buffers = ({ attributes, index }) => [...Object.values(attributes), index].filter(Boolean);
+        // (As three.js's renderer does once each buffer's on the graphics card)
+        const sent = (geometry) => buffers(geometry).forEach((buffer) => buffer.onUploadCallback());
+        const held = (geometry) => buffers(geometry).filter(({ array }) => array).length;
+
+        chunks.fill(x, z, 0);
+
+        const drawn = [...chunks.drawn.values()][0];
+
+        await built(drawn);
+
+        // (And a chunk of the wilds, with trees and the land's own features in it)
+        const overworld = world.maps.town;
+        const [sx, sy] = world.spawns.player.map((v) => Math.floor(v / CHUNK));
+        const wild = [-2, -1, 0, 1, 2].flatMap((dy) => [-2, -1, 0, 1, 2].map((dx) => overworld.chunk(sx + dx, sy + dy))).find(({ trees, features }) => trees.length > 2 && features.some(({ kind }) => kind !== "arch" && kind !== "aqueduct"));
+        const wilds = new Chunks(world, { undergrowth: 0 });
+
+        wilds.fill(wild.x0 + CHUNK / 2, wild.y0 + CHUNK / 2, 0);
+
+        const [land] = wilds.drawn.values();
+        const buildings = drawn.buildings.children.map(({ geometry }) => geometry);
+        const features = land.object.children.find(({ name }) => name === "wilds").geometry;
+        const shells = land.lot.object.children.find(({ name }) => name === "crown shadows").geometry;
+
+        assert.ok(buildings.length > 1 && buildings.some(({ attributes }) => attributes.position.count > 10000));
+
+        for (const geometry of [...buildings, features, shells]) {
+            const corners = geometry.attributes.position.count;
+
+            assert.equal(held(geometry), buffers(geometry).length, "held till it's sent");
+            sent(geometry);
+            assert.equal(held(geometry), 0);
+            assert.ok(geometry.boundingSphere.radius > 0, "its bounds, worked out first: culling's done by them");
+            assert.equal(geometry.attributes.position.count, corners);
+        }
+
+        // (A merged mesh's box too, for whatever asks how high it stands)
+        assert.ok(buildings.every(({ boundingBox }) => boundingBox.max.y > boundingBox.min.y));
+
+        // (Its ground's corners; not its triangles, drawn a metre apart: every such chunk's, the
+        // page's copy given to the graphics card again whenever one of them is thrown away)
+        const ground = drawn.object.children.find(({ name }) => name === "ground");
+        const fine = ground.geometry;
+
+        assert.equal(ground.userData.step, 1);
+        sent(fine);
+        assert.deepEqual([fine.attributes.position.array, fine.attributes.normal.array], [null, null]);
+        assert.ok(fine.index.array.length > CHUNK * CHUNK * 6, "the triangles all share, kept");
+
+        // (Drawn with its corners further apart, made again from the chunk's heights: its triangles
+        // its own then, and let go of with the rest)
+        chunks.setSpacing([2]);
+
+        const coarse = ground.geometry;
+
+        assert.ok(coarse !== fine && ground.userData.step === 2);
+        assert.equal(held(coarse), 3);
+        sent(coarse);
+        assert.equal(held(coarse), 0);
+        assert.equal(coarse.index.count, ((CHUNK / 2) ** 2 + 4 * (CHUNK / 2)) * 6);
+
+        // (Its buildings built again, a house burnt: from its pieces, whole)
+        chunks.rebuild(place.id);
+        assert.ok(drawn.job, "being built again");
+        await built(drawn);
+
+        const again = drawn.buildings.children.map(({ geometry }) => geometry);
+
+        assert.ok(again.every((geometry) => !buildings.includes(geometry) && held(geometry) === buffers(geometry).length));
+        assert.equal(again.reduce((sum, { attributes }) => sum + attributes.position.count, 0), buildings.reduce((sum, { attributes }) => sum + attributes.position.count, 0));
+        chunks.dispose();
+        wilds.dispose();
+    });
+
     it("draws the yards behind a settlement's houses that are there (core/settlements.js) on the ground as it lies, what's grown in their beds sown with the undergrowth", () => {
         const overworld = world.maps.town;
         const villages = overworld.settlements.places.filter(({ kind, id }) => kind === "village" && id !== world.start.id);

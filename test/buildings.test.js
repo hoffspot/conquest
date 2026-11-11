@@ -1204,6 +1204,33 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.equal(textured.attributes.layer.array[0], LAYERS.indexOf("planks"));
     });
 
+    it("lets go of the page's copy of what's merged once the graphics card has it, its box and sphere worked out first; or keeps it, asked to", () => {
+        const house = () => {
+            const group = new THREE.Group();
+
+            group.add(buildHouse(planHouse({ w: 2, h: 2.5, style: "timber", storeys: 2, x: 5, y: 5 })).toObject());
+            group.updateMatrixWorld(true);
+
+            return group;
+        };
+        const buffers = ({ geometry }) => [...Object.values(geometry.attributes), geometry.index].filter(Boolean);
+        // (As three.js's renderer does once each buffer's on the graphics card)
+        const sent = (mesh) => buffers(mesh).forEach((buffer) => buffer.onUploadCallback());
+        const [mesh] = merge(house(), { atlas: true }).children;
+        const corners = mesh.geometry.attributes.position.count;
+
+        assert.ok(buffers(mesh).every(({ array }) => array.length > 0), "held till it's sent");
+        sent(mesh);
+        assert.ok(buffers(mesh).every(({ array }) => array === null));
+        assert.ok(mesh.geometry.boundingSphere.radius > 0 && mesh.geometry.boundingBox.max.y > mesh.geometry.boundingBox.min.y);
+        assert.equal(mesh.geometry.attributes.position.count, corners, "how many corners it draws, still known");
+
+        const [kept] = merge(house(), { atlas: true, kept: true }).children;
+
+        sent(kept);
+        assert.ok(buffers(kept).every(({ array }) => array.length > 0));
+    });
+
     it("draws a tinted material from the layer it's tinted from, in its tint, and every light with the one glowing material", () => {
         const geometry = new THREE.BufferGeometry();
 

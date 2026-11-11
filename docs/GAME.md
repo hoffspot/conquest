@@ -7033,8 +7033,19 @@ the browser tells nothing of the heap, it and the bodies' copies are most of wha
 its copy, and the page's copy would only be read to give it the same again. For what nothing on
 the page reads once it's made, the page's copy is let go of once it's there (world/release.js, on
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
-(kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
-pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
+(kits/hedges.js), with their bounds worked out first (culling's done by them); everything merged
+into the art's one material (town3d.js `joined`: the start town's blocks, each chunk's
+settlement's buildings, a stone bridge, an aqueduct, each building's inside once it's shown; a
+capital's buildings were 40 MB of corners over its chunks, and the start town's blocks and kit
+houses 13 MB, held twice over), each merged mesh's box worked out first too, for whatever asks
+how high it stands, and `kept` asked of `joined` for anything that would read one after it's
+drawn (nothing does: what's built again, a house burnt or the house kit read, is built from its
+pieces); a chunk's land's own features (kits/wilds.js `featureMesh`), its trees' crowns' shells
+(kits/trees.js `Woodland.plant`) and its ground's corners (ground.js `chunkGeometry`: made again
+from the chunk's heights when it's drawn coarser or finer), with the ground's triangles where
+they're the chunk's own, but not those every chunk drawn a metre apart shares, which three.js
+takes off the graphics card with any chunk thrown away that drew with them and gives it again
+from the page's copy; the ground's splat pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
 copy kept to hand it to the next atlas made (`prepareAtlas` resolves with nothing: a promise
 keeps what it resolved with, and the game's build kept its promise of the layers in a closure
 for the whole game, 15 MB the graphics card had long had); the buildings' name boards and hanging signs and the
@@ -7235,7 +7246,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   as they come nearer; the splat and the undergrowth's places the same a step at a time; a
   settlement's buildings built a piece at a time, each made ready to merge in a step of its own,
   merged the same as all at once, drawn whole while the player's near and without the timbers'
-  sides from further off); and the
+  sides from further off; the page's copy of what's merged of a chunk let go of once it's sent,
+  its buildings, its land's features, its crowns' shells and its ground's corners, with its
+  ground's triangles where they're its own, not those every chunk drawn a metre apart shares,
+  and its buildings built again from their pieces, whole); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -7513,7 +7527,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
   built; a textured material's picture painted only when it's wanted, once for it and its copies
   (none for a house merged into the atlas); the atlas's layers (the same every time, with relief) and a house drawn from it as one
-  mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are;
+  mesh, the page's copy of it let go of once it's sent, its box and sphere worked out first (or
+  kept, asked to); a solid's faces kept as the 32-bit floats they're drawn with, however many there are;
   upright faces cut where their tone turns (not narrow ones, level ones, or those it doesn't
   turn across), and houses' walls drawn within a few percent of their weathering (they were a
   tenth darker); round things shaded round (a drum's corners straight out from its axis, a

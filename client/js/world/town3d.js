@@ -39,6 +39,7 @@ import { plantTrees, VARIANTS } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolsMesh } from "./windowpools.js";
+import { releaseGeometry } from "./release.js";
 import { castByRuns, runsOf } from "./shadowpasses.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
@@ -640,10 +641,10 @@ function materialKey(material) {
 
 /**
  * Merge every mesh under `root` (baked to its place) into one mesh per material; with `atlas`,
- * everything the art's one material can draw into one mesh of it (atlas.js).
+ * everything the art's one material can draw into one mesh of it (atlas.js); `kept` as joined's.
  */
-export function merge(root, { atlas = false } = {}) {
-    return joined(partsOf(root, { atlas }));
+export function merge(root, { atlas = false, kept = false } = {}) {
+    return joined(partsOf(root, { atlas }), { kept });
 }
 
 /**
@@ -728,9 +729,12 @@ export function partsOf(root, { atlas = false } = {}) {
  * Parts (partsOf's, in order) merged: one mesh per material (merge's second half). What's only
  * worth drawing near comes last in each, after as many corners as its userData.far says: draw
  * only that many from further off (drawFar). Each building's corners in it kept, so a shadow map
- * draws only those in its view (shadowpasses.js runsOf).
+ * draws only those in its view (shadowpasses.js runsOf). The page lets go of each mesh's corners
+ * once the graphics card has them (release.js: nothing reads them again, and what's built again
+ * is built from its pieces), its box and sphere worked out first; unless they're `kept`, for
+ * whatever reads a merged mesh after it's drawn.
  */
-export function joined(parts) {
+export function joined(parts, { kept = false } = {}) {
     const groups = new Map();
 
     for (const { key, material, geometry, near, building = null } of parts) {
@@ -746,7 +750,16 @@ export function joined(parts) {
     for (const { material, geometries: far, near } of groups.values()) {
         const merged = [...far, ...near];
         const geometries = far.map(({ geometry }) => geometry);
-        const mesh = castByRuns(new THREE.Mesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material), runsOf(merged));
+        const whole = mergeGeometries(merged.map(({ geometry }) => geometry));
+
+        // (A capital's buildings are 40 MB of corners in its chunks, held twice over: on the page
+        // and on the graphics card, which on a phone are the same memory)
+        if (!kept) {
+            whole.computeBoundingBox();
+            releaseGeometry(whole);
+        }
+
+        const mesh = castByRuns(new THREE.Mesh(whole, material), runsOf(merged));
 
         mesh.name = material.name || "part";
         // (All but what says it casts none: cards of leaves cut out of their pictures, whose

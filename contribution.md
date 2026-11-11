@@ -476,7 +476,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      the page's memory, so the copy costs twice. Don't for anything read again, unless it can
      be made again when it's wanted: a garment's own picture, which outfits are put together
      from, is kept till it's been unused half a minute and painted again after
-     (`client/js/characters/wardrobe.js`). (A game character's skin is let go of once it's
+     (`client/js/characters/wardrobe.js`). Whatever's merged into the art's one material
+     (`joined` and `merge`, `client/js/world/town3d.js`: buildings, bridges, insides) is let go
+     of so already, its box and sphere worked out first: once it's been drawn, read those, not
+     its corners, or ask for it `kept`. Nor an attribute or index several meshes share (the
+     ground's triangles): three.js takes it off the graphics card with any of them thrown away,
+     and sends it again from the page's copy. (A game character's skin is let go of once it's
      sent, as it's painted again whole whenever it changes, and so are its outfit's pictures,
      but the small copy a crowd's figure is made from. A drawing lost and given back then loads
      the page again, where the player was: `docs/GAME.md`.)

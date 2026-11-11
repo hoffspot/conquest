@@ -4479,9 +4479,10 @@ test("the land round the first start town (seed 1), drawn and walked: cliffs up 
             let top = -Infinity;
 
             drawn?.buildings?.updateMatrixWorld(true);
+            // (Each merged mesh's box as it was worked out when it was merged: the page lets go of
+            // its corners once it's drawn, world/release.js)
             drawn?.buildings?.traverse((node) => {
                 if (node.isMesh) {
-                    node.geometry.computeBoundingBox();
                     top = Math.max(top, node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld).max.y);
                 }
             });

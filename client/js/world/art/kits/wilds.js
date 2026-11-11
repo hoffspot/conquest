@@ -3395,7 +3395,9 @@ export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0, { sp
         ball(mesher, at, radius, colour);
     }
 
-    const mesh = new THREE.Mesh(mesher.geometry(), atlasMaterial());
+    // (Its corners let go of once they're on the graphics card: its rocks are drawn again from the
+    // features, never from this)
+    const mesh = new THREE.Mesh(releaseGeometry(mesher.geometry()), atlasMaterial());
 
     mesh.name = "wilds";
     mesh.position.set(x0, 0, y0);

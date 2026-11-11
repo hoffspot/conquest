@@ -28,6 +28,7 @@ import { fireLit } from "../../firelight.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
 import { TREE_KINDS } from "../../../core/setpieces/pieces.js";
+import { releaseGeometry } from "../../release.js";
 import { WIND_GLSL } from "../../wind.js";
 
 /**
@@ -1684,7 +1685,8 @@ export class Woodland {
         object.name = "woodland lot";
 
         if (shells.length) {
-            const cast = new THREE.Mesh(mergeGeometries(shells), shadows);
+            // (The lot's shells let go of by the page once the graphics card has them: release.js)
+            const cast = new THREE.Mesh(releaseGeometry(mergeGeometries(shells)), shadows);
 
             cast.name = shadows.name;
             cast.matrixAutoUpdate = false;
