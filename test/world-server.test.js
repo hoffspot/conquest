@@ -195,7 +195,9 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(game.message("welcome").id, `${entered.json.player}.1`);
         assert.ok(Date.now() - started < ENTERING, "entered, the world made and restored, within a while");
         await until(() => server.registry.lifeOf(world.world).state?.running, "the clock to run");
-        await wait(2000);
+        // (In till a second of the world's own time has run, as its thread tells it each second:
+        // not 2 seconds by the clock, in which a world on a busy machine ran 850 ms of its own)
+        await until(() => server.registry.lifeOf(world.world).state?.worldTime >= 1000, "a second of the world's time to run");
 
         // Out: the clock stops, and the world's set aside (setAsideMinutes 0)
         game.close();
