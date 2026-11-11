@@ -41,7 +41,7 @@ import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
-import { WorldRunner } from "../client/js/core/runner.js";
+import { RUNNER, StepTimes, WorldRunner } from "../client/js/core/runner.js";
 import { decode } from "../client/js/core/wire.js";
 import { Ahead } from "./ahead.js";
 import { Keeper } from "./keeper.js";
@@ -50,8 +50,13 @@ import { MOST_HEROES } from "./storage/heroes.js";
 import { StoredWorld } from "./storage/worlds.js";
 import { installWorkers } from "./workers.js";
 
-/** How often the world's looked at (ms), how often it says how it is, and how long a player may take loading before they're taken to be present anyway. */
-export const WORKER = Object.freeze({ tick: 25, report: 1000, loading: 60000 });
+/**
+ * How long the world's left between looks at most (ms: a look is timed for when its next step is
+ * due, or this soon, to make ahead meanwhile: #tick), how often it says how it is, how long a
+ * player may take loading before they're taken to be present anyway, and how often at most the
+ * world's journal is told it fell behind its clock.
+ */
+export const WORKER = Object.freeze({ tick: 25, report: 1000, loading: 60000, behindEvery: 60000 });
 
 const post = (message) => parentPort.postMessage(message);
 const clock = () => performance.now();
@@ -293,6 +298,13 @@ let present = 0;
 let last = clock();
 let reported = 0;
 
+// How long each look at the world took, all of it (ms: its steps, what's sent of them, a save
+// begun on a turn of the war, what's made ahead): what a player waits on is the whole of it, not
+// the step alone. And the time the world was given and let go of, as it was at the last report
+// and at the last word of it in the journal
+const ticks = new StepTimes();
+const behind = { reported: { time: 0, dropped: 0 }, told: -Infinity, untold: 0 };
+
 // Who's present (in, linked, loaded, or loading too long to wait on), whether the world's clock
 // runs, and if it doesn't, why: no one's ready yet; one of its owners has paused it for everyone;
 // or alone in it, its one player's menu is open or their page hidden
@@ -346,6 +358,11 @@ function report() {
         saved: keeper.saved,
         failed: keeper.failed ? { why: keeper.failed.why, message: keeper.failed.error.message } : null,
         steps: runner.times?.toJSON() ?? null,
+        // (The whole of each look at the world, its steps among it; and how much of the time it
+        // was given since it last said it played: 1, unless it fell behind its clock and let go)
+        ticks: ticks.toJSON(),
+        pace: runner.time > behind.reported.time ? 1 - (runner.dropped - behind.reported.dropped) / (runner.time - behind.reported.time) : 1,
+        dropped: runner.dropped,
         memory: { heap: memory.heapUsed, external: memory.external },
         // (The CPU time this thread has had, µs, user and system: how busy it is, apart from the
         // rest of the machine)
@@ -354,22 +371,52 @@ function report() {
         // (What's been made ahead between steps: chunks, and tiles of buildings' insides)
         made: { chunks: ahead.made, rooms: ahead.rooms },
     });
+    behind.reported = { time: runner.time, dropped: runner.dropped };
 }
 
-setInterval(() => {
+// A look at the world: the steps due played (RUNNER.catchUp at most: then what's been said to it
+// is heard before the next), what it's behind by beyond RUNNER.behind let go of and the journal
+// told; what's to be made ahead pumped; and the next look timed for when the next step is due, no
+// later than WORKER.tick. (It was every 25 ms whatever was due: a timer comes a little late, so now
+// and then a step came a whole look early and the rest counted late against it, 15 to 22 ms of
+// unevenness that every joined game covered with another step kept in hand.)
+function tick() {
     const now = clock();
 
     if (running) {
-        runner.advance(now - last);
+        runner.advance(now - last, { most: RUNNER.catchUp });
+        fellBehind(runner.letGo(), now);
     }
 
     last = now;
     runner.bakeAhead(ahead);
 
+    if (running) {
+        ticks.add(clock() - now, host.battle.time);
+    }
+
     if (now - reported > WORKER.report) {
         look();
     }
-}, WORKER.tick);
+
+    setTimeout(tick, running ? Math.max(0, Math.min(WORKER.tick, Math.ceil(STEP_MS - runner.lag - (clock() - now)))) : WORKER.tick);
+}
+
+// The world fell further behind its clock than it may be, and let `ms` of it go: the journal told,
+// no oftener than WORKER.behindEvery, how much since it was last told
+function fellBehind(ms, now) {
+    behind.untold += ms;
+
+    if (behind.untold > 0 && now - behind.told >= WORKER.behindEvery) {
+        const seconds = (behind.untold / 1000).toFixed(1);
+
+        behind.told = now;
+        behind.untold = 0;
+        stored.journal(`Fell behind its clock, and let ${seconds} s go: its time ran that much slow (its steps, saves or what it makes ahead taking longer than a step).`).catch(() => {});
+    }
+}
+
+setTimeout(tick, WORKER.tick);
 
 // ---- What the supervisor says
 
