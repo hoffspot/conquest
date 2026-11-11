@@ -36,6 +36,7 @@ import { burntOf } from "./art/kits/burnt.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { lieOf, yard } from "./art/kits/yards.js";
+import { signsNearIn } from "./art/kits/signs.js";
 import { plantTrees, VARIANTS } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
@@ -384,6 +385,10 @@ async function townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf, se
 
         return null;
     }
+
+    // (Its signs as finely painted as those near are, whatever a chunk far off's are being
+    // painted at meanwhile: the town's are walked up to)
+    signsNearIn(built);
 
     const object = new THREE.Group();
     const y = grounded(built, piece, groundAt, [ox, oz]);

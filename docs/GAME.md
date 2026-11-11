@@ -2321,13 +2321,36 @@ to High (suggested for the device until it's moved: older phones low, phones med
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 (Signs are the buildings' name boards and hanging signs and the roads' fingerboards, painted half
 size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
-`signDetail`.)
+`signDetail`. At every level a sign's painted so only while it's within 40 metres of the player
+(chunks3d.js `DETAIL_NEAR`, where a chunk's buildings change detail), and a quarter of its full
+size each way further off, from when it's built: *Signs painted as they're seen*, below.)
 
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
 | Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it | full size |
 | High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel | full size |
+
+**Signs painted as they're seen** (world/chunks3d.js `#signs`, kits/signs.js `signAt`). A name
+board's picture is 2048 by 330 at full size, 3.4 MB on the graphics card with its mipmaps, and
+every sign of every chunk drawn held its own however far off: a capital's 30, 62 MB on Medium and
+15.6 MB on Low. Now each is painted as the level has them only while it's within 40 metres of
+the player (`DETAIL_NEAR`), and a quarter of its full size each way further off, a sixteenth of
+the pixels, from when it's built (`signsAhead`): never painted big first. Coming within 40
+metres it's painted again as the level has them, and going off again it's kept so till it's 16
+metres further (`SIGNS_KEPT`), so walking to and fro there paints nothing; no more than one's
+painted again a frame. What's drawn is the same: the camera's with the player, and whatever it
+sees that's 40 metres from them is further from it still, where the graphics card draws from a
+smaller copy of the picture than the quarter-size one anyway. That holds while the widest board
+there is (the guild's, 7 metres) has a pixel of its picture or more to each of the screen's
+there, at the screen's corners, where it's drawn biggest for how far off it is
+(`signsFar`, from view.js `pixelsAcross`, set as the view's sized): on a phone, or a screen 1080
+pixels tall, a quarter; on one 1440 or 2160 tall, a half; wider or taller than that, as near.
+Walking into the human capital (seed 1, in Node, a 1080 screen), its signs' pictures held, with
+mipmaps: 120 metres out 30.0 MB on Medium before and 1.9 MB now (7.5 and 1.9 on Low); 60 metres
+out 55.2 and 6.7 (13.8 and 4.1); in the middle of its market, half of them within 40 metres, 62.4
+and 38.5 (15.6 and 10.8). A lab's are all painted as near ones are (`farSigns: false`: its
+camera goes where it likes), and the start town's too (town3d.js).
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -7270,7 +7293,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   sides from further off; the page's copy of what's merged of a chunk let go of once it's sent,
   its buildings, its land's features, its crowns' shells and its ground's corners, with its
   ground's triangles where they're its own, not those every chunk drawn a metre apart shares,
-  and its buildings built again from their pieces, whole); and the
+  and its buildings built again from their pieces, whole; each sign painted a quarter each way
+  while it's far from the player, from when it's built, as the quality has them once it's
+  within 40 metres, kept so till it's well off again, one painted again a frame and what it
+  showed let go of, a half on a taller screen, none finer near on Low, and a lab's all as near
+  ones are); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -7551,7 +7578,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   only on timber houses, built within their lots in a few hundred to a few thousand triangles,
   weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every
   landmark of six towns and cities built within its lot, each tavern with its own name board and
-  sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
+  sign, the guild's, each temple's patron's (a sign painted again another size for how far off
+  it's seen from, a quarter each way or as much more as the screen needs: `signsFar`, on a
+  phone, a 1080, 1440 and 2160 screen and wider); every emblem painted, one or several; every prop
   built; a textured material's picture painted only when it's wanted, once for it and its copies
   (none for a house merged into the atlas); the atlas's layers (the same every time, with relief) and a house drawn from it as one
   mesh, the page's copy of it let go of once it's sent, its box and sphere worked out first (or

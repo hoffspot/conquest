@@ -22,6 +22,7 @@ import { daylight } from "../core/daytime.js";
 import { Steps } from "../core/steps.js";
 import { SKY_GLOW, skyAt } from "./daytime.js";
 import { WINDOW_LIGHT } from "./art/engine/atlas.js";
+import { SIGN_SCREEN } from "./art/kits/signs.js";
 import { bakeEnvironments, SkyLight } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
@@ -53,7 +54,8 @@ import { WATER_DETAIL } from "./water.js";
  * chunk the player's in and round it; "high": finely everywhere, their lichen painted pixel by
  * pixel); `signs`: how finely the buildings' signs and boards and the roads' fingerboards are
  * painted (of their full size, each way: kits/signs.js signDetail; a capital's boards and signs
- * at full size were 78 MB on the graphics card); `crowd`: how many of those in view, the biggest on the
+ * at full size were 78 MB on the graphics card), those within 40 m of the player, the rest as
+ * little as a quarter (chunks3d.js SIGNS_KEPT); `crowd`: how many of those in view, the biggest on the
  * screen, can be drawn in full at once, the rest with fewer triangles: app/game.js,
  * characters/lod.js; `soldiers`: with a battle's soldiers about the player, its `full` nearest
  * are drawn in full and the rest in their crowds, each kind's figure with pictures `picture`
@@ -73,6 +75,18 @@ export const QUALITY = Object.freeze({
     medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28, distant: 44 }, motes: 150, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, rocks: "medium", signs: 1, crowd: 4, soldiers: { full: 6, picture: 256 }, bodies: 32, models: 40, frameRate: 60 },
     high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40, distant: 62 }, motes: 300, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, rocks: "high", signs: 1, crowd: 6, soldiers: { full: 10, picture: 512 }, bodies: 24, models: 40, frameRate: 60 },
 });
+
+/**
+ * How many pixels a metre's drawn across at most, a metre from the camera, anywhere on a screen
+ * `pixels` tall that sees `fov` degrees from top to bottom and is `aspect` times as wide: at its
+ * corners, where what faces the camera is drawn biggest for how far off it is (a metre `d` metres
+ * away is this many pixels over `d`, or fewer).
+ */
+export function pixelsAcross(pixels, fov, aspect) {
+    const tan = Math.tan((fov * Math.PI) / 360);
+
+    return (pixels / (2 * tan)) * (1 + tan * tan * (1 + aspect * aspect));
+}
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
 export function detectQuality() {
@@ -1133,6 +1147,12 @@ export class View {
         const height = this.canvas.clientHeight || 1;
         const ratio = this.renderer.getPixelRatio();
         const size = `${width}x${height}@${ratio}`;
+
+        // (How many pixels a metre's drawn across at most, a metre from the camera, anywhere on a
+        // screen this size, with all the pixels the quality chosen draws, whatever share of them
+        // it's keeping up with now: signs far off are painted no finer than they're seen by it,
+        // kits/signs.js signsFar)
+        SIGN_SCREEN.value = pixelsAcross(height * Math.min(window.devicePixelRatio || 1, (QUALITY[this.chosenQuality] ?? this.quality).pixelRatio) * (this.renderScale ?? 1), width < height ? PORTRAIT.fov : LANDSCAPE_FOV, width / height);
 
         // Setting a canvas's size, even to the same, makes WebGL start its drawing afresh
         if (size === this.size) {

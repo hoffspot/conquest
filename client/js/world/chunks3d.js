@@ -25,7 +25,7 @@ import { SLOPE_CLASS } from "../core/terrain/height.js";
 import { allAtOnce } from "../core/steps.js";
 import { material, paintPicture } from "./art/engine/materials.js";
 import { WILDS } from "./art/engine/atlas.js";
-import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
+import { holdSign, isSign, letGoSign, releaseSign, signAt, signsAhead, signsFar, signsNear } from "./art/kits/signs.js";
 import { VARIANTS, Woodland } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { featureLooks, featureMesh, Growth, Mesher, rockPrimer, ROCK_TIERS, sowing, stoneMesh, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
@@ -96,6 +96,21 @@ const HEARTH = 0.66;
 export const DETAIL_NEAR = 40;
 
 /**
+ * A chunk's signs (its buildings' name boards and hanging signs, the roads' fingerboards) are each
+ * painted as finely as the quality has them (kits/signs.js signDetail) while they're within
+ * DETAIL_NEAR of the player, and as little as a quarter of their full size each way further off
+ * (signsFar: never fewer of a picture's pixels across a sign than the screen has there, so it's
+ * drawn just the same: the camera's with the player, and what it sees of what's that far from
+ * them is further from it still); one that's been near is kept as it is till it's this much
+ * further off again (metres), so walking to and fro at that distance paints nothing again. No
+ * more than one's painted again a frame.
+ */
+export const SIGNS_KEPT = 16;
+
+// How far past its lot a piece's signs can hang (metres: a sign on its bracket)
+const SIGN_HANGS = 3;
+
+/**
  * How far apart the ground's corners are drawn (metres), by how many chunks from the player's a
  * chunk is: in the player's own, then the ring round it, and so on, the last for all further off
  * (the quality level's: view.js).
@@ -123,8 +138,14 @@ export class Chunks {
      * @param {object} world - From buildWorld (core/overworld.js): its `maps.town` the world
      *     outside, and its plan.
      */
-    constructor(world, { undergrowth = 1, cliffs = 1, rocks = "medium" } = {}) {
+    constructor(world, { undergrowth = 1, cliffs = 1, rocks = "medium", farSigns = true } = {}) {
         this.world = world;
+
+        /**
+         * Whether the signs of chunks far from the player are painted smaller (SIGNS_KEPT): as the
+         * game has it, its camera with the player; not a lab, whose camera goes where it likes.
+         */
+        this.farSigns = farSigns;
 
         /** How thick the undergrowth grows (1 as the lands have it; less on slower devices, 0 none). */
         this.undergrowth = undergrowth;
@@ -265,6 +286,7 @@ export class Chunks {
         const refined = this.#refine(until);
 
         this.#detail(x, z);
+        this.#signs(x, z);
         this.#rocksNear();
 
         return built || grown || refined || drew || changed;
@@ -546,6 +568,53 @@ export class Chunks {
         }
     }
 
+    // How finely a sign `off` metres from the player is to be painted: as those near are, within
+    // DETAIL_NEAR; as those far off need be, past SIGNS_KEPT more; between, no less finely than
+    // those far off, and otherwise as it is ([least, most] of its full size each way)
+    #signsAt(off) {
+        const [near, far] = [signsNear(), this.farSigns ? signsFar(DETAIL_NEAR) : signsNear()];
+
+        return off <= DETAIL_NEAR ? [near, Infinity] : off <= DETAIL_NEAR + SIGNS_KEPT ? [far, Infinity] : [far, far];
+    }
+
+    // Each chunk's signs painted as finely as they're seen from where the player is (#signsAt):
+    // one that isn't, painted again, its picture changed for the new one. One a frame at most, a
+    // sign painted too coarsely (come near) before any painted finer than it need be (gone far)
+    #signs(x, z) {
+        let spare = null;
+
+        for (const drawn of this.drawn.values()) {
+            for (const sign of drawn.signs ?? []) {
+                const [least, most] = this.#signsAt(Math.hypot(sign.at.x - x, sign.at.z - z) - sign.at.radius);
+                const painted = sign.texture.userData.detail;
+
+                if (painted < least) {
+                    this.#repaint(sign, least);
+
+                    return;
+                }
+
+                if (painted > most) {
+                    spare ??= [sign, most];
+                }
+            }
+        }
+
+        if (spare) {
+            this.#repaint(...spare);
+        }
+    }
+
+    // A sign's picture painted `scale` of its full size each way, in place of the one it has
+    #repaint(sign, scale) {
+        const picture = signAt(sign.texture, scale);
+
+        holdSign(picture);
+        sign.mesh.material.map = picture;
+        releaseSign(sign.texture);
+        sign.texture = picture;
+    }
+
     // Grow what undergrowth can be grown before `until` (performance.now()'s), a step at a time;
     // whether a tile of it was finished
     #grow(until) {
@@ -709,6 +778,7 @@ export class Chunks {
             }
 
             const add = (object) => {
+                signsAhead(null);
                 job.built = placed(object, piece, [0, 0], grounded(object, piece, this.groundAt));
                 job.group.add(job.built);
                 job.built.updateMatrixWorld(true);
@@ -721,10 +791,16 @@ export class Chunks {
             // (A piece that fails to build is left out, and the rest of its chunk built without
             // it, rather than tried again every frame)
             const skip = (error) => {
+                signsAhead(null);
                 console.warn(`Left out ${piece.key ?? piece.kind}: it failed to build.`, error);
                 job.index++;
             };
             let built;
+
+            // (Its signs painted, as it's built, only as finely as they'll be seen from where the
+            // player is: till it's built, which for one with a sign is a moment after, its
+            // lettering's font waited for. No other piece is begun meanwhile)
+            signsAhead(this.#signsAt(Math.hypot(piece.x - WILDS.focus.value.x, piece.y - WILDS.focus.value.y) - Math.hypot(piece.w ?? 1, piece.h ?? 1) * 10 * PIXEL - SIGN_HANGS)[0]);
 
             try {
                 built = build(piece);
@@ -789,10 +865,13 @@ export class Chunks {
         for (const mesh of merged.children) {
             cutAway(mesh.material);
 
-            // (Its signs' pictures kept while it's drawn: signs.js)
+            // (Its signs' pictures kept while it's drawn: signs.js; each with what's drawn with it
+            // and where that is, to be painted again as the player comes near or goes: #signs)
             if (isSign(mesh.material.map)) {
+                const { center, radius } = mesh.geometry.boundingSphere;
+
                 holdSign(mesh.material.map);
-                drawn.signs.push(mesh.material.map);
+                drawn.signs.push({ mesh, texture: mesh.material.map, at: { x: center.x, z: center.z, radius } });
             }
         }
 
@@ -1221,7 +1300,7 @@ export class Chunks {
             mesh.traverse((node) => node.geometry?.dispose());
         }
 
-        for (const texture of drawn.signs ?? []) {
+        for (const { texture } of drawn.signs ?? []) {
             releaseSign(texture);
         }
 
@@ -1260,7 +1339,7 @@ export class Chunks {
             });
         }
 
-        for (const texture of drawn.signs ?? []) {
+        for (const { texture } of drawn.signs ?? []) {
             releaseSign(texture);
         }
 

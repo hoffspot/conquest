@@ -431,6 +431,55 @@ describe("landmarks (kits/landmarks.js)", () => {
         released.any = was || released.any;
     });
 
+    it("paints a sign again another size for how far off it's seen from, a chunk far off's small from the start; a quarter each way, or as much more as it takes for the widest board to have a pixel of its picture or more to each of the screen's", async () => {
+        const { nameBoardTexture, SIGN_SCREEN, signAt, signDetail, signsAhead, signsFar, signsNear } = await import("../client/js/world/art/kits/signs.js");
+        const { LANDSCAPE_FOV, pixelsAcross, PORTRAIT } = await import("../client/js/world/view.js");
+        const size = (texture) => [texture.image.width, texture.image.height];
+        const full = nameBoardTexture({ name: "The Far Sign" });
+        const quarter = signAt(full, 0.25);
+
+        // (The same sign, by what it shows and how finely; each kept while it's wanted)
+        assert.deepEqual([size(full), size(quarter)], [[2048, 330], [512, 83]]);
+        assert.deepEqual([full.userData.sign, quarter.userData.sign], ["board|The Far Sign|#5c1a16", "board|The Far Sign|#5c1a16|0.25"]);
+        assert.deepEqual([full.userData.detail, quarter.userData.detail], [1, 0.25]);
+        assert.deepEqual([signAt(full, 0.25), signAt(quarter, 1), signAt(full, 1), signAt(quarter, 0.25)], [quarter, full, full, quarter]);
+        assert.deepEqual(size(signAt(quarter, 0.5)), [1024, 165]);
+
+        // (Those painted next painted small, as a chunk far off's are built; then as the quality
+        // has them again)
+        signsAhead(0.25);
+        assert.equal(nameBoardTexture({ name: "The Far Sign" }), quarter);
+        assert.deepEqual(size(nameBoardTexture({ name: "The Farther Sign" })), [512, 83]);
+        signsAhead(null);
+        assert.equal(nameBoardTexture({ name: "The Far Sign" }), full);
+        assert.deepEqual(size(nameBoardTexture({ name: "The Farther Sign" })), [2048, 330]);
+
+        // How finely those 40 m off or more need be painted, by the screen: the widest board, 7 m
+        // and 2048 pixels of picture across, with a pixel of it or more to each of the screen's
+        // at its corners, where it's drawn biggest
+        const screens = { phone: [393, LANDSCAPE_FOV, 852 / 393], "phone, pixels ×1.5": [590, LANDSCAPE_FOV, 852 / 393], "phone upright": [852, PORTRAIT.fov, 393 / 852], 1080: [1080, LANDSCAPE_FOV, 16 / 9], 1440: [1440, LANDSCAPE_FOV, 16 / 9], 2160: [2160, LANDSCAPE_FOV, 16 / 9], "2160 wide": [2160, LANDSCAPE_FOV, 32 / 9], 4320: [4320, LANDSCAPE_FOV, 16 / 9] };
+        const far = () => Object.fromEntries(Object.entries(screens).map(([name, screen]) => [name, ((SIGN_SCREEN.value = pixelsAcross(...screen)), signsFar(40))]));
+
+        try {
+            assert.equal(Math.round(pixelsAcross(1080, 36, 16 / 9)), 2392, "(the screen taken, none told)");
+            assert.deepEqual(far(), { phone: 0.25, "phone, pixels ×1.5": 0.25, "phone upright": 0.25, 1080: 0.25, 1440: 0.5, 2160: 0.5, "2160 wide": 1, 4320: 1 });
+
+            for (const screen of Object.values(screens)) {
+                SIGN_SCREEN.value = pixelsAcross(...screen);
+                assert.ok(signsFar(40) === signsNear() || (2048 * signsFar(40)) / 7 >= SIGN_SCREEN.value / 40, `${screen}: no coarser than it's seen`);
+            }
+
+            // (Never finer than those near: on Low, a half at most)
+            signDetail(0.5);
+            assert.deepEqual(far(), { phone: 0.25, "phone, pixels ×1.5": 0.25, "phone upright": 0.25, 1080: 0.25, 1440: 0.5, 2160: 0.5, "2160 wide": 0.5, 4320: 0.5 });
+        } finally {
+            signDetail(1);
+            SIGN_SCREEN.value = 0;
+        }
+
+        assert.equal(signsFar(40), 0.25);
+    });
+
     it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
         for (const piece of landmarks.filter(({ name }) => name === "tavern" || name === "guild" || name === "church")) {
             const names = materialsOf(await landmark(piece));
