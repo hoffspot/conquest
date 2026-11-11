@@ -28,6 +28,7 @@ import { isInstalledApp, isIOS, isTouchScreen, keepDownloads, keepLoaded, lockLa
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
+import { edgesNote, powerNote } from "./app/graphicsnotes.js";
 import { putOff, suggestHomeScreen } from "./app/homescreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
@@ -291,6 +292,9 @@ async function load() {
         onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
     state.hud = new hud.Hud($("#hud"));
+    // (Whether the picture's edges are smoothed: as the quality it was made at has them, till the
+    // game's loaded again, whatever's chosen since. Game options says so: showQuality)
+    state.edgesMade = Boolean(state.modules.QUALITY[state.session.view.qualityName].antialias);
 
     // (The drawing lost, as phones do when short of memory: the game paused, where the player is
     // kept, and the player told, until it's given back and the shaders made again. What the page
@@ -1454,6 +1458,9 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
         showMortal();
     } else if (page === "chat" || page === "blocked") {
         showBlocked();
+    } else if (page === "graphics") {
+        // (What it's drawing, and how the device is asking for it, as they are now)
+        showQuality();
     }
 }
 
@@ -6492,6 +6499,19 @@ function showQuality() {
     $("#qualityname").textContent = `${state.modules.QUALITY[chosen].label}${settings.quality === "auto" ? " (suggested)" : ""}`;
     $("#adaptiveswitch").checked = settings.adaptive;
     showAdapted();
+
+    // (And, under it: that the device is saving its power, so 30 frames a second is all there is
+    // to draw; and that the quality chosen smooths edges, or doesn't, only once the game's next
+    // loaded, the picture's drawing surface being made one way or the other for good: app/graphicsnotes.js)
+    const notes = {
+        "#savingpower": powerNote({ beat: state.game?.pacing.beat.value ?? 0, touch: isTouchScreen() }),
+        "#edgesnote": edgesNote({ wanted: state.modules.QUALITY[chosen].antialias, made: state.edgesMade }),
+    };
+
+    for (const [selector, words] of Object.entries(notes)) {
+        $(selector).hidden = !words;
+        $(selector).textContent = words ?? "";
+    }
 }
 
 function showAdapted() {
