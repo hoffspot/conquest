@@ -6163,7 +6163,13 @@ the Bindings page till one's chosen.
    the files it changed, and a reload downloads nothing (generated/game_delivery_plan.md). The page
    names its own release's code by those addresses (the import map in `index.html`, written by
    `npm run build:manifest`, and `main.js`'s own script), so a page is only ever its own release's
-   files. What's asked for by name (a worker's modules, which an import map doesn't reach; the
+   files. The 68 modules `main.js` imports itself, nine levels of imports deep, are preloaded by
+   the page (`<link rel="modulepreload">`, written after the import map by `npm run
+   build:manifest`: before it, Safari 16 and 17 ignore the map), so a first visit asks for them
+   all at once, not a level at a time, a round trip each, before the loading bar moves. The style
+   sheet is asked for by its hash too (and named in the import map, so the page's release lists
+   it): it holds up the first paint, and from what's kept it comes with no word to the server.
+   What's asked for by name (a worker's modules, which an import map doesn't reach; the
    font; the WebAssembly Recast's glue fetches) the service worker gives from the same copies, by
    the release of the page asking (or the newest: a worker, the game's page before it's said).
    Never to the site's other pages (the model viewer, the labs, the admin's page), which never say
@@ -6174,10 +6180,12 @@ the Bindings page till one's chosen.
    the network first, as everything else is. It keeps a copy only once its bytes match the
    hash, fetches a file the loader's fetching once (the page importing it straight after waits for
    it), and lets go of what no release in use lists: the newest's, and that of each page still
-   open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
-   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded,
-   and the page then asks it to keep `main.js` and what it imports, which came before it took
-   over, from the browser's own copies.
+   open on an older one (generated/asset_streaming_plan.md, section 5). The service worker is
+   registered by the page's own script as the page is read, so on a first visit it installs while
+   `main.js` and what it imports download. The loader waits for it to take over (3 s at most), so
+   it keeps what's downloaded, and the page
+   asks it to keep the style sheet, `main.js` and what it imports, which came before it took over,
+   from the browser's own copies.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are
    checked with the server on each load, by the service worker's own copy's tag (`If-None-Match`),
    so "not modified" doesn't hang on the browser's HTTP cache, which it may have let go. The

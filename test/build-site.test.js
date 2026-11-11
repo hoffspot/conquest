@@ -23,6 +23,7 @@ const SITE = {
         "<!doctype html>",
         "<html>",
         "    <head>",
+        '        <link rel="stylesheet" href="styles.css">',
         '        <script type="importmap">',
         '            { "imports": {} }',
         "        </script>",
@@ -57,6 +58,7 @@ const SITE = {
     ].join("\n"),
     "js/app/worker.js": '// The worker\'s own module, and what it imports\nimport { greeting } from "./words.js";\n\nexport const heard = greeting.length;\n',
     "js/lab/tool.js": "// A page of its own, not the game's: stripped as the rest, in no manifest\nexport const tool = 1;\n",
+    "styles.css": "/* The page's style sheet: as it's written */\nbody {\n    margin: 0;\n}\n",
     "models/assets.json": '{ "models": {} }\n',
     [`characters/${GAME_BODY}.json`]: '{ "masks": [] }\n',
     [`characters/${GAME_BODY}.bin`]: "body",
@@ -160,6 +162,12 @@ describe("the site's copy of the game, its code stripped (scripts/build-site.js)
             assert.equal(hash, sha(await readFile(path.join(site, file))), file);
             assert.equal(bytes, (await stat(path.join(site, file))).size, file);
         }
+
+        // (The modules main.js imports preloaded at the stripped files' addresses; the style
+        // sheet, left as it's written, at its own)
+        assert.deepEqual([...html.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)].map(([, href]) => href), [`js/app/words.js?h=${sha(await readFile(path.join(site, "js/app/words.js")))}`, "js/app/version.js"]);
+        assert.equal(await read("styles.css"), SITE["styles.css"]);
+        assert.match(html, new RegExp(`<link rel="stylesheet" href="styles\\.css\\?h=${sha(SITE["styles.css"])}">`));
     });
 
     it("leaves version.js as it's written, by name, for the deploy to stamp the commit into afterwards", async () => {

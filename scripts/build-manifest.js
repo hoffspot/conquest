@@ -21,7 +21,9 @@
 // asset_streaming_plan.md, sections 2 and 5). The page names its own release's code by those
 // addresses: the import map in client/index.html, written here too, points every module (those
 // main.js imports itself as well) at path?h=hash, and main.js's own script at its own
-// (generated/game_delivery_plan.md, 3.1).
+// (generated/game_delivery_plan.md, 3.1). The modules main.js imports itself are preloaded by the
+// page, a link for each written after the import map, and the page's style sheet is asked for by
+// its hash too (3.3a).
 
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -85,6 +87,14 @@ const WORKER = /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*["']([^"']+)["']/g;
 // The import map in index.html: where it's written, and what it says
 const IMPORT_MAP = /(<script type="importmap">)([\s\S]*?)(<\/script>)/;
 const MAIN_SCRIPT = /<script type="module" src="js\/main\.js(?:\?h=[0-9a-f]{10})?"><\/script>/;
+
+// The import map with the modules preloaded after it (pageSource), each a line of its own. Never
+// before it: Safari 16 and 17 ignore an import map that comes after a module's preloaded
+const PRELOADED = /(<script type="importmap">)([\s\S]*?)(<\/script>)((?:\n[ \t]*<link rel="modulepreload" href="[^"]*">)*)/;
+
+// The page's style sheet: its path, and where the page asks for it
+const STYLES = "styles.css";
+const STYLE_SHEET = /<link rel="stylesheet" href="styles\.css(?:\?h=[0-9a-f]{10})?">/;
 
 // What the page's import map names by name ("three", "three/addons/"), as written by hand: the
 // rest of it (each module at its hashed address) is made here
@@ -188,16 +198,34 @@ export async function manifestGroups() {
 }
 
 /**
- * The modules main.js loads itself, before the loader starts (main.js, and what it imports), each
- * with its hash: [[path, hash]]. Not the manifest and the catalog, which are made from everything
- * else (their hashes are put in the import map once they're written), nor what's UNHASHED.
+ * What the page loads itself, before the loader starts: the modules (main.js, and what it
+ * imports) and the page's style sheet, each with its hash: [[path, hash]]. Not the manifest and
+ * the catalog, which are made from everything else (their hashes are put in the import map once
+ * they're written), nor what's UNHASHED.
  */
 export async function startFiles() {
     const loaded = await closure(["js/main.js"], await importMap(), { dynamic: false });
     const made = new Set([path.relative(client, output), path.relative(client, catalogOutput)].map((file) => file.split(path.sep).join("/")));
     const files = [...loaded].filter((file) => !made.has(file) && !UNHASHED.has(file)).sort();
 
-    return Promise.all(files.map(async (file) => [file, await hashOf(file)]));
+    return Promise.all([...files, STYLES].map(async (file) => [file, await hashOf(file)]));
+}
+
+/**
+ * The modules the page preloads: those main.js imports itself (not main.js, the page's own
+ * script), in the order they're come to (main.js's own imports, then theirs), each at the address
+ * the import map gives it: with its hash, or by name for what has none (version.js). Without
+ * them the browser learns of each level of imports only once the one before has come: nine round
+ * trips, one after another, before the loading bar moves.
+ *
+ * @param {Array} started - What the page loads itself (startFiles).
+ * @param {Array} made - The manifest and the catalog, each with its hash: [[path, hash]].
+ */
+export async function preloadsOf(started, made) {
+    const loaded = await closure(["js/main.js"], await importMap(), { dynamic: false });
+    const hashes = new Map([...started, ...made]);
+
+    return [...loaded].filter((file) => file !== "js/main.js").map((file) => (hashes.has(file) ? `${file}?h=${hashes.get(file)}` : file));
 }
 
 /** The manifest module's source text. */
@@ -328,15 +356,19 @@ export const ASSETS = Object.freeze({
  * The page's import map: what it names by name ("three" at its hashed address, "three/addons/" as
  * written, and each of the addons the game imports by name at its hashed address), and every
  * module, by its address from the page ("./js/app/game.js"), at its hashed address. As the
- * manifest's and the catalog's own hashes are in it, it's made once those are written.
+ * manifest's and the catalog's own hashes are in it, it's made once those are written. The
+ * page's style sheet is named in it too, though it's no module: what the map names by hash is
+ * what the page tells the service worker its release keeps (client/js/app/catalog.js mappedOf),
+ * and what an update downloads before it's ready (updater.js), so the style sheet is kept, and
+ * updated, with the code it goes with.
  *
  * @param {Array} groups - The manifest's groups (manifestGroups).
- * @param {Array} started - What main.js loads itself (startFiles).
+ * @param {Array} started - What the page loads itself (startFiles).
  * @param {Array} made - The manifest and the catalog, each with its hash: [[path, hash]].
  */
 export async function importMapOf(groups, started, made) {
     const named = await importMap();
-    const modules = [...groups.flatMap(({ files }) => files.map(([file, , hash]) => [file, hash])), ...started, ...made].filter(([file]) => /\.m?js$/.test(file) && !UNHASHED.has(file));
+    const modules = [...groups.flatMap(({ files }) => files.map(([file, , hash]) => [file, hash])), ...started, ...made].filter(([file]) => (/\.m?js$/.test(file) || file === STYLES) && !UNHASHED.has(file));
     const hashOfFile = new Map(modules);
     const imports = {};
 
@@ -362,8 +394,11 @@ export async function importMapOf(groups, started, made) {
 }
 
 /**
- * The page (index.html) with its import map (importMapOf) and main.js's script at its hashed
- * address, from the page as it is (`html`).
+ * The page (index.html) with its import map (importMapOf), the modules main.js imports itself
+ * preloaded after it (preloadsOf), and main.js's script and the style sheet each at its hashed
+ * address, from the page as it is (`html`). The style sheet holds up the first paint: by its
+ * hash, the service worker gives it from what's kept without asking the server, on every visit
+ * after the first.
  */
 export async function pageSource(html, groups, started, made) {
     html ??= await readFile(page, "utf8");
@@ -378,8 +413,13 @@ export async function pageSource(html, groups, started, made) {
     const indent = html.match(/\n( *)<script type="importmap">/)[1];
     const map = JSON.stringify(await importMapOf(groups, started, made), null, 4).replaceAll("\n", `\n${indent}    `);
     const main = started.find(([file]) => file === "js/main.js");
+    const sheet = started.find(([file]) => file === STYLES);
+    const preloads = (await preloadsOf(started, made)).map((address) => `\n${indent}<link rel="modulepreload" href="${address}">`).join("");
 
-    return html.replace(IMPORT_MAP, (_, open, __, close) => `${open}\n${indent}    ${map}\n${indent}${close}`).replace(MAIN_SCRIPT, `<script type="module" src="js/main.js?h=${main[1]}"></script>`);
+    return html
+        .replace(PRELOADED, (_, open, __, close) => `${open}\n${indent}    ${map}\n${indent}${close}${preloads}`)
+        .replace(MAIN_SCRIPT, `<script type="module" src="js/main.js?h=${main[1]}"></script>`)
+        .replace(STYLE_SHEET, `<link rel="stylesheet" href="${STYLES}?h=${sheet[1]}">`);
 }
 
 /**

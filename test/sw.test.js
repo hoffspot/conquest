@@ -790,3 +790,97 @@ describe("the service worker's letting go (toLetGo)", () => {
         assert.deepEqual(urls(toLetGo({ entries, releases: [...releases, { boot: ["unlisted"], assets: [] }], now })), []);
     });
 });
+
+describe("the page's own script (client/index.html), which registers the service worker as the page is read", () => {
+    const html = readFileSync(new URL("../client/index.html", import.meta.url), "utf8");
+    const [, script] = html.match(/<script>\n([\s\S]*?)<\/script>/);
+
+    // Run the page's script as a browser would: `controller` the worker looking after the page as
+    // it's read (none on a first visit), `secure` whether it's on https or localhost, `links`
+    // what the page asks for itself (each { href } or { src }). Returns what it registered, what
+    // the worker was told, a way to have a worker take over, and whether the page was loaded again
+    function read({ controller = null, secure = true, workers = true, links = [], register = async () => ({}) } = {}) {
+        const listeners = [];
+        const told = [];
+        const page = { registered: [], told, reloaded: 0 };
+        const serviceWorker = {
+            controller,
+            register: (url) => {
+                page.registered.push(url);
+
+                return register();
+            },
+            addEventListener: (type, listener, options) => listeners.push({ type, listener, options }),
+        };
+
+        page.takeOver = () => {
+            // (What it's told, as it'd be sent: a copy, and this side's own kind of object)
+            serviceWorker.controller = { postMessage: (message) => told.push(JSON.parse(JSON.stringify(message))) };
+
+            for (const each of listeners.splice(0)) {
+                each.listener();
+            }
+        };
+        page.selector = null;
+
+        vm.runInNewContext(script, {
+            navigator: workers ? { serviceWorker } : {},
+            window: { isSecureContext: secure, location: { reload: () => page.reloaded++ } },
+            document: {
+                body: { dataset: { screen: "title" } },
+                querySelectorAll: (selector) => {
+                    page.selector = selector;
+
+                    return links;
+                },
+            },
+        });
+
+        return page;
+    }
+
+    it("comes after the import map and before main.js's script, so the worker's being installed while main.js and what it imports download", () => {
+        const at = html.indexOf(script);
+
+        assert.ok(at > html.indexOf('<script type="importmap">'));
+        assert.ok(at < html.indexOf('<script type="module" src="js/main.js'));
+        assert.match(script, /navigator\.serviceWorker\.register\("sw\.js"\)/);
+    });
+
+    it("registers the worker at once, on every visit; not where there can be none (a page not on https or localhost, a browser without them)", () => {
+        assert.deepEqual(read().registered, ["sw.js"]);
+        assert.deepEqual(read({ controller: {} }).registered, ["sw.js"]);
+        assert.deepEqual(read({ secure: false }).registered, []);
+        assert.doesNotThrow(() => read({ workers: false }));
+    });
+
+    it("on a first visit, asks the worker to keep what the page asked for by hash before it took over: its style sheet, main.js and the modules preloaded", () => {
+        const base = "https://example.github.io/conquest/";
+        const page = read({ links: [{ href: `${base}styles.css?h=0123456789` }, { href: `${base}js/app/device.js?h=aaaaaaaaaa` }, { href: `${base}js/app/version.js` }, { src: `${base}js/main.js?h=bbbbbbbbbb` }] });
+
+        assert.deepEqual(page.told, [], "nothing till it's looking after the page");
+        page.takeOver();
+        assert.deepEqual(page.told, [{ kind: "keep", urls: [`${base}styles.css?h=0123456789`, `${base}js/app/device.js?h=aaaaaaaaaa`, `${base}js/main.js?h=bbbbbbbbbb`] }]);
+        assert.equal(page.selector, 'link[rel="stylesheet"], link[rel="modulepreload"], script[type="module"][src]');
+        assert.equal(page.reloaded, 0, "nor is a page on its first visit loaded again");
+
+        // (Once: an update's worker taking over later isn't a first visit's)
+        page.takeOver();
+        assert.equal(page.told.length, 1);
+    });
+
+    it("on a later visit asks for nothing kept (the worker gave the page its files), and is loaded again when an update's worker takes over, as before", () => {
+        const page = read({ controller: { postMessage: () => assert.fail("nothing to keep") } });
+
+        page.takeOver();
+        assert.deepEqual(page.told, []);
+        assert.equal(page.reloaded, 1);
+    });
+
+    it("carries on when the worker can't be registered", async () => {
+        const page = read({ register: () => Promise.reject(new Error("The operation is insecure.")) });
+
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.deepEqual(page.registered, ["sw.js"]);
+    });
+});

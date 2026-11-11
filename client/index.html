@@ -16,7 +16,7 @@
         <link rel="icon" href="images/icons/icon-192.png" type="image/png">
         <link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png">
         <link rel="stylesheet" href="styles.css">
-        <!-- The import map must come before any module script. Three.js draws the world (vendored: see scripts/vendor-three.js): "three" and "three/addons/" are written here by hand; the rest (every module at its address with the hash of its bytes, so the page asks only for its own release's files: generated/game_delivery_plan.md) is written by npm run build:manifest, as is main.js's address below. -->
+        <!-- The import map must come before any module script, and before any module's preloaded (Safari 16 and 17 ignore a map that comes after one). Three.js draws the world (vendored: see scripts/vendor-three.js): "three" and "three/addons/" are written here by hand; the rest (every module at its address with the hash of its bytes, so the page asks only for its own release's files: generated/game_delivery_plan.md) is written by npm run build:manifest, as are the style sheet's address above (by its hash too, and named in the map so the page's release lists it), the modules preloaded after the map (those main.js imports itself, so they're all asked for at once, not a level of imports at a time) and main.js's address below. -->
         <script type="importmap">
             {
                 "imports": {
@@ -513,6 +513,27 @@
                         window.location.reload();
                     }
                 }, { once: true });
+            }
+
+            // The service worker is registered here, as the page is read, not once main.js and
+            // the modules it imports have loaded (js/app/device.js registerServiceWorker, which
+            // tells it this page's release then): so on a first visit it installs while those
+            // download, and is looking after the page by the time the loader starts, to keep what
+            // the loader downloads. What the page asked for by hash before it took over (its style
+            // sheet, main.js and the modules preloaded above) it's asked to keep as it does, from
+            // the browser's own copies (sw.js keepLoaded).
+            if (navigator.serviceWorker && window.isSecureContext) {
+                const first = !navigator.serviceWorker.controller;
+
+                navigator.serviceWorker.register("sw.js").catch(() => {});
+
+                if (first) {
+                    navigator.serviceWorker.addEventListener("controllerchange", () => {
+                        const asked = [...document.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"], script[type="module"][src]')];
+
+                        navigator.serviceWorker.controller?.postMessage({ kind: "keep", urls: asked.map((each) => each.href || each.src).filter((url) => /\?h=[0-9a-f]{10}$/.test(url)) });
+                    }, { once: true });
+                }
             }
         </script>
         <script type="module" src="js/main.js?h=7756d79bdc"></script>

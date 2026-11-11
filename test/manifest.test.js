@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { describe, test } from "node:test";
-import { catalog, catalogSource, manifestGroups, manifestSource, pageSource, releaseOf, startFiles } from "../scripts/build-manifest.js";
+import { catalog, catalogSource, manifestGroups, manifestSource, pageSource, preloadsOf, releaseOf, startFiles } from "../scripts/build-manifest.js";
 import { ASSETS } from "../client/js/app/assets.js";
 import { filesOf, mappedOf, releaseOf as releaseTold } from "../client/js/app/catalog.js";
 import { MANIFEST } from "../client/js/app/manifest.js";
@@ -102,6 +102,57 @@ describe("the page's import map (client/index.html)", () => {
     test("leaves version.js by name, as it's stamped with the commit after it's made (scripts/stamp-version.js)", async () => {
         assert.equal((await mapOf())["./js/app/version.js"], undefined);
         assert.ok((await startFiles()).every(([path]) => path !== "js/app/version.js"));
+    });
+
+    test("preloads every module main.js imports itself, each at the address the map gives it, so they're all asked for at once and not a level of imports at a time", async () => {
+        const html = await page;
+        const imports = await mapOf();
+        const preloads = [...html.matchAll(/<link rel="modulepreload" href="([^"]*)">/g)].map(([, href]) => href);
+        const started = (await startFiles()).map(([path]) => path).filter((path) => path.endsWith(".js") && path !== "js/main.js");
+
+        // (main.js's own imports first, as it names them, then theirs: none twice, nor main.js,
+        // which the page's own script asks for)
+        assert.deepEqual(preloads.map((href) => href.replace(/\?h=[0-9a-f]{10}$/, "")).toSorted(), [...started, "js/app/assets.js", "js/app/manifest.js", "js/app/version.js"].toSorted());
+        assert.equal(new Set(preloads).size, preloads.length);
+        assert.equal(preloads.indexOf("js/app/version.js") >= 0, true, "version.js by name, as it's imported");
+
+        for (const href of preloads.filter((each) => each !== "js/app/version.js")) {
+            assert.equal(`./${href}`, imports[`./${href.replace(/\?h=[0-9a-f]{10}$/, "")}`], href);
+        }
+
+        // (What main.js imports itself comes before what those import)
+        const [, first] = (await readFile(new URL("../client/js/main.js", import.meta.url), "utf8")).match(/from "\.\/([^"]+)"/);
+
+        assert.ok(preloads[0].startsWith(`js/${first}?h=`), `${preloads[0]} is main.js's first import`);
+        assert.deepEqual(await preloadsOf(await startFiles(), [["js/app/manifest.js", await hashOf("js/app/manifest.js")], ["js/app/assets.js", await hashOf("js/app/assets.js")]]), preloads);
+    });
+
+    test("puts the preloads after the import map and before main.js's script: before the map, Safari 16 and 17 ignore the map", async () => {
+        const html = await page;
+        const map = html.indexOf("</script>", html.indexOf('<script type="importmap">'));
+        const links = [...html.matchAll(/<link rel="modulepreload"/g)].map(({ index }) => index);
+        const main = html.indexOf('<script type="module" src="js/main.js');
+
+        assert.ok(links.length > 60);
+        assert.ok(links.every((at) => at > map && at < main));
+        assert.ok(!/<script type="module"/.test(html.slice(0, map)), "nor any module script before it");
+
+        // (Made again, they're written once: none left behind from the time before)
+        assert.equal((await pageSource(await pageSource(html))).match(/<link rel="modulepreload"/g).length, links.length);
+    });
+
+    test("asks for the style sheet by the hash of its bytes, and names it in the import map: so the page's release lists it and the service worker keeps it", async () => {
+        const html = await page;
+        const hash = await hashOf("styles.css");
+        const base = "https://example.github.io/conquest/";
+
+        assert.match(html, new RegExp(`<link rel="stylesheet" href="styles\\.css\\?h=${hash}">`));
+        assert.equal((await mapOf())["./styles.css"], `./styles.css?h=${hash}`);
+        assert.ok((await startFiles()).some(([path, each]) => path === "styles.css" && each === hash), "one of the release's files: a change to it is another release");
+        assert.ok(mappedOf(html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1], base).includes(`${base}styles.css?h=${hash}`));
+        // (Written over one with a hash, or none)
+        assert.equal(await pageSource(html.replace(`styles.css?h=${hash}`, "styles.css")), html);
+        assert.equal(await pageSource(html.replace(`styles.css?h=${hash}`, "styles.css?h=0123456789")), html);
     });
 
     test("is read by the page for what it keeps: every address with a hash, in full, once each; none from one it can't read", async () => {
