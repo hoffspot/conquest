@@ -38,3 +38,16 @@ export function nextSlot(now, every, offset = 0) {
 
     return left < every / 2 ? left + every : left;
 }
+
+/**
+ * Whether what follows the battle, not the frame (who's after the player, the enemies list, the
+ * party's icons, the Action Bar's state), is looked at again in this frame: it can only change as
+ * the battle steps, twenty times a second, and was worked out sixty. So: on the frame after one
+ * that stepped, or after the player told the battle something (`due`); when `every` seconds have
+ * gone by since it last was (`last`, by the game's `clock`, seconds: no step's come, a joined game
+ * waiting on its host), or the clock's gone back; and every frame while the game's played on by
+ * hand (`byHand`: Game.advance, as the browser tests do).
+ */
+export function followsNow(byHand, due, clock, last, every) {
+    return byHand || due || clock - last >= every || clock < last;
+}

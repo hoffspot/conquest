@@ -80,6 +80,15 @@ const empty = '<circle r="15" fill="none" stroke="currentColor" stroke-width="2"
  * thing to use). (Also drawn by the Action Bar options: app/quicksetup.js.)
  */
 export function fillSlot(slot, key, count = 0) {
+    // (Filled with the same, as many, the last time, and still holding it: nothing to look up in
+    // the page, no label to write out to compare. The bar fills every slot each time it's shown.)
+    if (slot.filledWith === key && slot.filledCount === count && slot.dataset.action === (key ?? "")) {
+        return;
+    }
+
+    slot.filledWith = key;
+    slot.filledCount = count;
+
     const action = actionOf(key);
     const label = action?.label ?? "Empty";
 

@@ -3,7 +3,7 @@
 // begun on a frame that stepped the battle unless it's been asked for now
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { clockTurn, DUE, nextSlot, PUT_OFF, WAIT } from "../client/js/app/clocks.js";
+import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF, WAIT } from "../client/js/app/clocks.js";
 
 // The game's ten jobs' shares of each half second (app/game.js PACED), and one every two seconds
 const OFFSETS = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45];
@@ -117,5 +117,56 @@ describe("the frame's jobs done every so often (app/clocks.js)", () => {
         assert.ok(together < uneven.length / 50, `${together} frames of ${uneven.length} with more than one`);
         // (A hitch of an eighth of a second spans three of their shares: those three, no more)
         assert.ok(Math.max(...uneven.slice(-600).map(({ done }) => done.length)) <= 4, "and never all in one again");
+    });
+
+    it("looks again at what follows the battle on the frame after one that stepped it, or the player told it something; every tenth of a second without; every frame played on by hand", () => {
+        // (Sixty frames a second, a step every third: as app/game.js #update asks it)
+        const every = 0.1;
+        let clock = 0;
+        let last = -Infinity;
+        let due = true;
+        let looks = 0;
+        const frame = (stepped, told = false) => {
+            clock += 1 / 60;
+
+            const fresh = followsNow(false, due || told, clock, last, every);
+
+            due = stepped;
+            last = fresh ? clock : last;
+            looks += fresh ? 1 : 0;
+
+            return fresh;
+        };
+
+        assert.equal(frame(false), true, "the first frame");
+
+        const seen = [];
+
+        for (let k = 0; k < 60; k++) {
+            seen.push(frame(k % 3 === 0));
+        }
+
+        assert.equal(looks, 21, "twenty times a second, not sixty");
+        assert.ok(seen.every((fresh, k) => fresh === (k % 3 === 1)), "on the frame after each that stepped");
+
+        // (Told something between steps: looked at in the very next frame)
+        frame(true);
+        assert.equal(frame(false), true);
+        assert.equal(frame(false, true), true, "a tap answers at once");
+        assert.equal(frame(false), false);
+
+        // (No step coming, a joined game waiting on its host: every tenth of a second all the same)
+        looks = 0;
+
+        for (let k = 0; k < 60; k++) {
+            frame(false);
+        }
+
+        assert.ok(looks >= 8 && looks <= 10, `${looks} looks in a second with no step`);
+
+        // (Played on by hand, every frame; and the clock gone back, at once)
+        assert.equal(followsNow(true, false, 5, 5, every), true);
+        assert.equal(followsNow(false, false, 5, 5, every), false);
+        assert.equal(followsNow(false, false, 1, 5, every), true);
     });
 });

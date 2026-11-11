@@ -198,7 +198,7 @@ import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
-import { clockTurn, DUE, nextSlot, PUT_OFF } from "./clocks.js";
+import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF } from "./clocks.js";
 import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
@@ -652,6 +652,11 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // near the player gathered for the minimap again this often, or once they've gone `moved` metres,
 // from as far past what it shows as `past` (metres: more than they go meanwhile)
 const MARKS_KEPT = 1;
+
+// What follows the battle (who's after the player, the enemies list, the party's icons, the
+// Action Bar's state) is looked at again this often (seconds) at least, though no step's come
+// (a joined game waiting on its host) nor anything been told it: #update's `fresh`
+const FOLLOWED = 0.1;
 const ICONS_NEAR = Object.freeze({ every: 0.25, moved: 4, past: 12 });
 
 const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
@@ -1518,6 +1523,17 @@ export class Game {
         this.hostileTo = (a, b) => this.battle.hostile(a, b);
         this.seenBy = (a, b) => this.battle.canSee(a, b);
         this.waryTurn = 0;
+
+        // (What follows the battle looked at again as it steps, not every frame, #update's
+        // `fresh`: whether it's due, when it was last (the game's clock, s), a count of the times,
+        // and what's kept by that count: those after the player, #afterMe, and who the camera
+        // frames, #foe)
+        this.followDue = true;
+        this.followedAt = -Infinity;
+        this.followStamp = 0;
+        this.fresh = true;
+        this.afterMe = { stamp: -1, list: [] };
+        this.foeFound = { stamp: -1, id: null };
 
         // (Whether the frame stepped the battle, and the jobs done a couple of times a second
         // that count their own clocks down, as functions to give their turn to: #inTurn)
@@ -4159,6 +4175,22 @@ export class Game {
         const pixels = view.pixelsPerMetre();
 
         this.clock += dt;
+
+        // (What follows the battle, not the frame (who's after the player, the enemies list,
+        // the party's icons, the Action Bar's state, the allies near), is looked at again on the
+        // frame after one that stepped it, when the player's told it something (#command), every
+        // FOLLOWED seconds whatever, and every frame while the game's played on by hand
+        // (advance): not sixty times a second for what changes twenty. `fresh` says which this is.)
+        const fresh = followsNow(!this.waits, this.followDue, this.clock, this.followedAt, FOLLOWED);
+
+        this.followDue = this.stepped;
+        this.fresh = fresh;
+
+        if (fresh) {
+            this.followedAt = this.clock;
+            this.followStamp++;
+        }
+
         TREE_WIND.time.value = this.clock;
 
         // (On another map than the one shown, with no crossing seen taking them there: shown the one
@@ -4202,7 +4234,9 @@ export class Game {
         // stepped the battle: #inTurn)
         this.#inTurn("marshalClock", PACED.marshal, dt, this.jobs.marshal);
         this.#bossBar(dt);
-        this.#allying();
+        if (fresh) {
+            this.#allying();
+        }
         this.#inTurn("rationClock", PACED.ration, dt, this.jobs.rationing);
         this.#inTurn("shutClock", PACED.shut, dt, this.jobs.shutIn);
         this.#inTurn("folkClock", PACED.folk, dt, this.jobs.folkRoom);
@@ -4412,7 +4446,7 @@ export class Game {
 
         // (In a fight, or lately: a fight's music; FIGHT_LINGERS after its last moment, what's
         // heard here again: fight.js)
-        if (inFight(battle.actor(this.me), battle.actors, (a, b) => battle.hostile(a, b), battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
+        if (fresh && inFight(battle.actor(this.me), battle.actors, this.hostileTo, battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
             this.foughtAt = battle.time;
         }
 
@@ -4442,15 +4476,26 @@ export class Game {
         const helped = ally ? this.avatars.get(ally.id) : null;
 
         this.effects.setAlly(helped?.object ?? null, helped ? Math.max(0.5, helped.character.height * 0.33) : 0.6);
-        this.#partyIcons();
-        this.#quickActions(target);
+
+        // (The party's icons and the Action Bar's state follow the battle: `fresh`, above)
+        if (fresh) {
+            this.#partyIcons();
+            this.#quickActions(target);
+        }
+
         this.#buffOn();
         this.sigil.show(this.#prism(), this.battle.time);
         this.charge.show(this.#charging(), this.battle.time);
         this.#sizeUp(dt);
         this.#wielding(dt);
         this.#bleed(dt);
-        this.#ailing();
+
+        // (What lingers on anyone: every frame while anything does, for what rises off them;
+        // looked for, with none, as the battle steps)
+        if (fresh || this.ailed.size) {
+            this.#ailing();
+        }
+
         this.#radiant();
         this.#grounds();
         this.ailments?.update(dt);
@@ -6420,7 +6465,12 @@ export class Game {
 
         this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0, viewed?.wild?.colossus ? BIG_FOE.colossal : undefined);
         this.#threats();
-        this.#attackers();
+
+        // (The enemies list follows the battle: `fresh`, #update)
+        if (this.fresh) {
+            this.#attackers();
+        }
+
         this.#clearOfFight(fighting);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
@@ -8317,18 +8367,27 @@ export class Game {
     // (`ranged`), flashing while a blow or shot at them is drawn back, not yet let go (`winding`)
     #threats() {
         const player = this.battle.actor(this.me);
+        const after = this.#afterMe();
+
+        // (No one after them: no arrows, and nothing to work out)
+        if (!after.length) {
+            this.hud.threats(after);
+
+            return;
+        }
+
         const arrows = [];
 
         if (player && !player.dead) {
             const view = this.view;
             const rect = view.rect ?? view.canvas.getBoundingClientRect();
             const near = (actor) => Math.hypot(actor.x - player.x, actor.y - player.y);
-            const after = this.battle.actors
-                .filter((actor) => !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player) && this.avatars.has(actor.id))
+            const nearest = after
+                .filter((actor) => !actor.dead && this.avatars.has(actor.id))
                 .sort((a, b) => near(a) - near(b))
                 .slice(0, THREATS.most);
 
-            for (const actor of after) {
+            for (const actor of nearest) {
                 const at = this.avatars.get(actor.id).point(0.5);
                 const spot = view.toScreen(at);
 
@@ -8363,8 +8422,13 @@ export class Game {
     #attackers() {
         const player = this.battle.actor(this.me);
         const target = this.#target();
-        const after = player && !player.dead ? this.battle.actors.filter((actor) => actor === target || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const after = player && !player.dead ? this.#afterMe().filter((actor) => !actor.dead && actor !== target) : [];
         const since = this.attackerSince;
+
+        if (target && player && !player.dead) {
+            after.push(target);
+        }
+
 
         for (const id of since.keys()) {
             if (!after.some((actor) => actor.id === id)) {
@@ -8589,8 +8653,13 @@ export class Game {
         }
 
         const player = this.battle.actor(this.me);
-        const fighting = player && !player.dead ? this.battle.actors.filter((actor) => actor === foe || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const fighting = player && !player.dead ? this.#afterMe().filter((actor) => !actor.dead && actor !== foe) : [];
         const rects = [];
+
+        if (foe && player && !player.dead) {
+            fighting.push(foe);
+        }
+
 
         for (const actor of fighting.length ? [player, ...fighting] : []) {
             const avatar = this.avatars.get(actor.id);
@@ -8936,9 +9005,60 @@ export class Game {
             return ordered;
         }
 
-        const after = battle.actors.filter((actor) => this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
+        // (Else the nearest of those after them, or the one they're striking at: found again as
+        // the battle steps, #afterMe, and kept meanwhile, the camera asking every frame)
+        const found = this.foeFound;
 
-        return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
+        if (found.stamp !== this.followStamp) {
+            const struck = player.attack ? battle.actor(player.attack.target) : null;
+            let nearest = struck && !struck.dead && struck.map === player.map && battle.hostile(struck, player) ? struck : null;
+            let least = nearest ? Math.hypot(nearest.x - player.x, nearest.y - player.y) : Infinity;
+
+            for (const actor of this.#afterMe()) {
+                const far = Math.hypot(actor.x - player.x, actor.y - player.y);
+
+                if (far < least) {
+                    nearest = actor;
+                    least = far;
+                }
+            }
+
+            found.stamp = this.followStamp;
+            found.id = nearest?.id ?? null;
+        }
+
+        const foe = found.id === null ? null : battle.actor(found.id);
+
+        return foe && !foe.dead && foe.map === player.map ? foe : null;
+    }
+
+    // Those after the player: alive, on their map, set on them or striking at them, and their
+    // enemies (who they're set on first: their standing's asked only of those). Found again as the
+    // battle steps (`followStamp`: #update's `fresh`), and kept meanwhile for all who ask, every
+    // frame: the arrows at the screen's edge, the enemies list, the message kept clear of the
+    // fight, who the camera frames, the Action Bar. Each of them used to look through everyone for
+    // them. One of them may have died since: whoever asks looks.
+    #afterMe() {
+        const kept = this.afterMe;
+
+        if (kept.stamp !== this.followStamp) {
+            const battle = this.battle;
+            const player = battle.actor(this.me);
+            const list = kept.list;
+
+            kept.stamp = this.followStamp;
+            list.length = 0;
+
+            if (player && !player.dead) {
+                for (const actor of battle.actors) {
+                    if ((actor.target === player.id || actor.attack?.target === player.id) && !actor.dead && actor.map === player.map && battle.hostile(actor, player)) {
+                        list.push(actor);
+                    }
+                }
+            }
+        }
+
+        return kept.list;
     }
 
     // --- Talking ---
@@ -19270,7 +19390,7 @@ export class Game {
 
     // Is anyone after the player: an enemy on their map set to fight them, or striking at them?
     #underAttack(player) {
-        return this.battle.actors.some((other) => (other.target === player.id || other.attack?.target === player.id) && !other.dead && other.map === player.map && this.battle.hostile(other, player));
+        return !player.dead && this.#afterMe().some((other) => !other.dead);
     }
 
     // The Action Bar up in a fight (an enemy the player's set to fight, `target`, or anyone
@@ -20061,6 +20181,10 @@ export class Game {
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
+        // (What follows the battle looked at again in the next frame, whether it steps or not:
+        // a tap answers at once, #update's `fresh`)
+        this.followDue = true;
+
         // (Anything else the player does themselves lets Buff all's buffs still to come go)
         if (!this.buffCasting && BUFF_STOPS.includes(command.type)) {
             this.buffing = null;

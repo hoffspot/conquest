@@ -7520,6 +7520,28 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   out again every quarter second (*Characters in the world*, above), not asked of everyone for
   everyone every frame.
 - **What's held is read once every 2 seconds, after the frame** (*The memory guard*, above).
+- **What follows the battle is looked at as the battle steps**, not every frame (`fresh`,
+  app/clocks.js `followsNow`): the allies near, whether the player's in a fight (for its music),
+  the party's icons, the Action Bar's state, the enemies list, and what lingers on anyone while
+  nothing does. They change twenty times a second and were worked out sixty. Looked at on the
+  frame after one that stepped (so a step's own frame is the lighter), at once after anything the
+  player tells the battle (`#command`: a tap answers in the next frame), every tenth of a second
+  whatever (a joined game waiting on its host), and every frame while the game's played on by
+  hand (`advance`, as the browser tests play it). **Those after the player** (alive, on their map,
+  set on them or striking at them, their enemies) are found once then and kept (`#afterMe`) for
+  all who ask every frame: the arrows at the screen's edge, the message kept clear of the fight,
+  who the camera frames, the Action Bar, the enemies list; each used to look through everyone for
+  them, and who the camera frames asked everyone's standing before anything cheaper. Measured in
+  headless Chromium, a field battle and an invasion with the player in the fight, played as
+  frames play it: 161 looks in 480 frames, the list kept the same as one looked for afresh.
+- **The HUD keeps what it last showed.** A character's stamina, told for everyone in sight every
+  frame, is compared as numbers with what was last told before anything's looked up in the page,
+  its bar found once and kept with its plate (`#setStamina`); an Action Bar slot filled with the
+  same as last time is left (quickbar.js `fillSlot`). And what a message is kept clear of that
+  doesn't move with the fight (the screen, the message's size, the buttons, the minimap, the
+  Action Bar, the enemies list: six boxes read from the page) is measured again only when what
+  decides it changes, and for a moment after (hud.js `#messageRoom`): read every frame straight
+  after the enemies list was written, it made the browser lay the page out again each time.
 
 ## Testing
 

@@ -944,6 +944,8 @@ export class Hud {
         clearTimeout(this.bannerTimer);
         this.banner.textContent = text;
         this.banner.hidden = !text;
+        // (Another message: as big as it is, for keepClear to measure again)
+        this.bannerSaid = (this.bannerSaid ?? 0) + 1;
 
         if (text) {
             this.banner.append(this.bannerClose);
@@ -974,15 +976,7 @@ export class Hud {
             return;
         }
 
-        const screen = this.root.getBoundingClientRect();
-        const { offsetWidth: width, offsetHeight: height } = this.banner;
-        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
-        const map = !this.map.hidden && this.map.getBoundingClientRect();
-        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
-        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
-        const quick = this.quick?.classList.contains("up") ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
-        // (Clear of the attackers' icons down the right side, too)
-        const icons = this.attackerColumn && !this.attackerColumn.hidden ? this.attackerColumn.getBoundingClientRect() : null;
+        const { screen, width, height, under, quick, icons } = this.#messageRoom();
         const [middle, usual, aside, low] = [screen.width / 2, screen.height * 0.28, MESSAGE_GAP + width / 2, screen.height * 0.45 - height / 2];
         const places = [
             { x: middle, top: usual },
@@ -1003,6 +997,41 @@ export class Hud {
             // (Moved from where it goes as a rule, as wide as it is there)
             this.banner.style.translate = `${(places[at].x - middle).toFixed(0)}px ${(places[at].top - usual).toFixed(0)}px`;
         }
+    }
+
+    // What a message is kept clear of that doesn't move with the fight (keepClear): the screen,
+    // how big the message is, how far down the buttons along the top (and the minimap, where it
+    // reaches under the message) come, where the Action Bar's top is (or the bottom), and the
+    // attackers' icons down the right. Six boxes read from the page, straight after the frame's
+    // written to it (the enemies list, the arrows), which made the browser lay the page out again
+    // every frame a message was up in a fight: measured again only when what decides them changes
+    // (the screen, the message, the minimap, the Action Bar up or down, how many icons), and for
+    // a moment after, while things slide into place; as #partyFit is.
+    #messageRoom() {
+        const quickUp = Boolean(this.quick?.classList.contains("up"));
+        const key = `${innerWidth}x${innerHeight} ${this.bannerSaid ?? 0} ${this.map.hidden} ${document.body.dataset.minimap} ${quickUp} ${this.attackerCount ?? 0}`;
+        const now = performance.now();
+
+        if (key !== this.roomKey) {
+            this.roomKey = key;
+            this.roomSettle = now + 400;
+        } else if (now > this.roomSettle && this.room) {
+            return this.room;
+        }
+
+        const screen = this.root.getBoundingClientRect();
+        const { offsetWidth: width, offsetHeight: height } = this.banner;
+        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
+        const map = !this.map.hidden && this.map.getBoundingClientRect();
+        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
+        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
+        const quick = quickUp ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
+        // (Clear of the attackers' icons down the right side, too)
+        const icons = this.attackerColumn && !this.attackerColumn.hidden ? this.attackerColumn.getBoundingClientRect() : null;
+
+        this.room = { screen, width, height, under, quick, icons };
+
+        return this.room;
     }
 
     /**
@@ -1086,6 +1115,8 @@ export class Hud {
         });
 
         this.attackerColumn.hidden = list.length === 0;
+        // (How many: what a message is kept clear of is measured again as that changes, #messageRoom)
+        this.attackerCount = list.length;
     }
 
     // An attacker's icon (attackers): a button with their likeness and a line of their health, the
@@ -1336,6 +1367,7 @@ export class Hud {
             onAction();
         });
         this.banner.append(" ", act);
+        this.bannerSaid = (this.bannerSaid ?? 0) + 1;
     }
 
     /**
@@ -1673,7 +1705,20 @@ export class Hud {
 
     // (Every frame, so it changes the page only when what it shows changes)
     #setStamina(plate, stamina, maxStamina) {
-        const bar = plate.querySelector(".bar.stamina");
+        // (As it was last told, most of them full: nothing looked up in the page, nothing written.
+        // It's told for everyone in sight every frame; the bar's found once and kept with its plate.)
+        if (plate.staminaTold === stamina && plate.staminaMost === maxStamina) {
+            return;
+        }
+
+        plate.staminaTold = stamina;
+        plate.staminaMost = maxStamina;
+
+        if (plate.staminaBar === undefined) {
+            plate.staminaBar = plate.querySelector(".bar.stamina");
+        }
+
+        const bar = plate.staminaBar;
         const shown = stamina >= maxStamina ? "full" : `${stamina.toFixed(2)} / ${maxStamina}`;
 
         if (!bar || bar.dataset.shown === shown) {
