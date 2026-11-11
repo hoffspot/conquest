@@ -19125,6 +19125,72 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
     expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
 });
 
+test("the wild's people-shaped creatures drawn from a bought model are held in full in a room of their own beside the bodies' budget: forty fiends, every one drawn from its model, none in a crowd", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(480000);
+    await playing(page, "/?play&seed=1");
+
+    // Forty fiends (drawn from a bought model: beasts/model.js MODELS) in rings 6 to 39 metres round
+    // the player west of the start town, leaving everyone be, their model read first (as an open
+    // hell rift has its demons' read as the player comes near it): more than the bodies' budget
+    // (QUALITY bodies), no more than the models' own room (QUALITY models)
+    const quality = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host, battle } = game;
+        const { CREATURES } = await import("/js/core/creatures.js");
+        const { wantModel } = await import("/js/beasts/model.js");
+        const { CrowdAvatar } = await import("/js/world/crowd.js");
+        const [mx, my] = world.stamp.middle;
+        const { name, hp, weapon, speed, chase } = CREATURES.fiend;
+
+        game.stop();
+        session.view.adaptive = false;
+        await wantModel("fiend", "now");
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+
+        const me = battle.actor(game.me);
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+
+        for (let k = 0; k < 40; k++) {
+            const id = `modelled-${k}`;
+            const [angle, reach] = [k * 2.4, 6 + (k % 12) * 3];
+
+            host.wild.set(id, { creature: "fiend", tier: 9, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name, weapon, team: "beasts", square: [Math.floor(me.x + Math.cos(angle) * reach), Math.floor(me.y + Math.sin(angle) * reach)], ai: "wild", hp: hp * 100, speed, chase, wild: { creature: "fiend", tier: 9, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: id, leader: null, menace: false } });
+            game.enlisting.push(id);
+        }
+
+        window.modelled = () => {
+            const avatars = Array.from({ length: 40 }, (each, k) => game.avatars.get(`modelled-${k}`));
+
+            // (`figure`: whether a crowd's figure of fiends has been asked for, to draw those past
+            // the budget in: world/crowd.js Crowd template)
+            const figure = [...(game.crowds?.kinds.keys() ?? [])].some((key) => key.startsWith("wild:fiend:"));
+
+            return { model: avatars.filter((avatar) => avatar?.model === true).length, crowded: avatars.filter((avatar) => avatar instanceof CrowdAvatar).length, figure, rationed: game.rationed ?? null };
+        };
+
+        return { bodies: game.view.quality.bodies, models: game.view.quality.models };
+    });
+
+    expect(quality.bodies).toBeLessThan(40);
+    expect(quality.models).toBeGreaterThanOrEqual(40);
+
+    // Every one drawn in full from its model; and none to go in its kind's crowd after (a figure
+    // made from its stand-in, asked for as soon as any's past the budget, they put in it once it's
+    // made): its figure never asked for, in half a minute's play. The bodies' budget left to
+    // everyone else
+    expect(await playUntil(page, () => window.modelled().model === 40, { seconds: 240 })).toBe(true);
+    expect(await playUntil(page, () => window.modelled().figure || window.modelled().crowded > 0, { seconds: 30 })).toBe(false);
+
+    const seen = await page.evaluate(() => window.modelled());
+
+    expect(seen.model).toBe(40);
+    expect(seen.rationed.models).toBe(40);
+});
+
 test("the Stone Golem dealt before the player: drawn from its model at once, its bar across the top; a boulder torn up and heaved at them, its shadow on the ground where it'll land, and them thrown off their feet", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(360000);

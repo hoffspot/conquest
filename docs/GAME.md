@@ -3376,7 +3376,9 @@ way-finding's, and the bodies' and the floors' copies on the page; not the page'
 Chromium's tell of: with it, a city on an emulated phone in headless Chromium came to 443 MB with
 nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
 no more than 20 bodies in full, then 12 (the rest drawn in their crowds, the furthest first, by the
-bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers), the recorded sounds
+bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers; the room those drawn
+from a bought model have of their own, `QUALITY.models`, isn't cut, a copy sharing its model's
+shapes and pictures with every other of its kind), the recorded sounds
 kept decoded to 24 MB, then 12 (audio/sound.js `squeeze`: past it, those played least lately let go
 of at once, and the made sounds let go of after a minute unplayed, not five), and, coming to a
 higher level, the beasts' bodies and models none's drawn from let go of at once, not after a while
@@ -4501,7 +4503,22 @@ when the throng changes:
     player in headless Chromium on "high" (a budget of 24, 12 of it held by everyone else drawn in
     full) settle with 12 in full and 36 in their crowd.
   - One that's died never drawn isn't built just to lie there (`#mirror`).
-  - The debug log says how many there were and how many had room (`creatures`).
+  - **Those drawn from a bought model have a room of their own** (`QUALITY.models`, 40 at every
+    level). Once its kind's model is read, such a creature (a hell rift's demons) is held in full
+    beside the budget, the nearest first, and counted in the budget only past that room. A copy of
+    a model shares its shapes and its pictures with every other of its kind, its skeleton and
+    colours its own; a body in full as a character has its own skins painted. One drawn still as
+    its stand-in (a character built before its model was read) is in the budget till it's drawn
+    again from the model (`#modelling`).
+  - Measured in headless Chromium on Low, forty of a hell rift's demons about the player, queued
+    as the host's events queue them: before, 20 were drawn from their models, 15 as their
+    stand-ins and 5 in their kinds' crowds, the pictures on the graphics card 82 MB more than the
+    player alone (53 MB of it the stand-ins' and crowds' painted skins), 86 more draw calls. With
+    their own room and their models read first, all 40 from their models within 6 seconds: 50 MB
+    more pictures (31 MB of it the models', shared by every copy), 66 more draw calls, the page's
+    own memory 6 MB more than before.
+  - The debug log says how many there were, how many had room, and how many were held in the
+    models' own room (`creatures`).
 
 In headless Chromium on "medium", 30 bandits, goblins, cultists and trolls and 8 hired adventurers
 about the player, each walking a little circle: all drawn in full, a frame's update took 12.6 ms
