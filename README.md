@@ -769,7 +769,7 @@ client/                 The game (static files served to the browser)
                         only once a model has one: the catalog's basis-transcoder)
   vendor/recast-navigation-0.44.0/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js); its memory starting with 16 MB
-                        (scripts/wasm-memory.js)
+                        (scripts/wasm-memory.js); recast.mjs the one module the game imports
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
     loader.js           Downloads everything, counting every byte; manifest.js lists it

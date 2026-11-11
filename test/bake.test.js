@@ -1,4 +1,5 @@
-// The navigation tiles' bytes (core/navigation/bake.js) and the ways found over them, as recorded:
+// The vendored Recast: that it's the one version package.json names; and the navigation tiles'
+// bytes (core/navigation/bake.js) and the ways found over them, as recorded:
 // every device bakes its own tiles, so a change to Recast (a new version vendored: scripts/
 // vendor-recast.js) or to the bake's settings that changes a byte of a tile or a corner of a way
 // parts the copies of a world, and fails here first. The tiles are made up here, of whole numbers
@@ -6,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
 import { before, describe, it } from "node:test";
 import { Navigation } from "../client/js/core/navigation.js";
 import { bakeTile } from "../client/js/core/navigation/bake.js";
@@ -251,5 +253,51 @@ describe("the navigation tiles' bytes (navigation/bake.js)", () => {
         } finally {
             navigation.dispose();
         }
+    });
+});
+
+describe("the vendored Recast (scripts/vendor-recast.js)", () => {
+    const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
+
+    it("is the one version package.json names, exactly: the only folder of it, the one recast.js imports, once, and the one the docs name", async () => {
+        const { devDependencies } = JSON.parse(await read("package.json"));
+        const version = devDependencies["@recast-navigation/core"];
+
+        // (An exact version, not a range: every device bakes its own tiles, so every device, and
+        // every checkout, must have the same Recast; and its WebAssembly's package with it)
+        assert.match(version, /^\d+\.\d+\.\d+$/);
+        assert.equal(devDependencies["@recast-navigation/wasm"], version);
+        // (Nothing imports the generators: the bake is the game's own)
+        assert.equal(devDependencies["@recast-navigation/generators"], undefined);
+
+        const { packages } = JSON.parse(await read("package-lock.json"));
+
+        assert.equal(packages["node_modules/@recast-navigation/core"].version, version);
+        assert.equal(packages["node_modules/@recast-navigation/wasm"].version, version);
+
+        // The one folder, made from that version (a half-done upgrade leaves two, or the old one)
+        const folders = (await readdir(new URL("../client/vendor/", import.meta.url))).filter((name) => name.startsWith("recast-navigation-"));
+
+        assert.deepEqual(folders, [`recast-navigation-${version}`]);
+        assert.ok((await read(`client/vendor/recast-navigation-${version}/core.min.mjs`)).startsWith(`// @recast-navigation/core ${version},`));
+        assert.equal((await import(`../client/vendor/recast-navigation-${version}/recast.mjs`)).VERSION, version);
+
+        // The game spells the folder once, where it imports it; the docs, and the tests that
+        // read its files, name no other
+        const named = (text) => text.match(/recast-navigation-\d+\.\d+\.\d+/g) ?? [];
+
+        assert.deepEqual(named(await read("client/js/core/navigation/recast.js")), [`recast-navigation-${version}`]);
+
+        for (const doc of ["README.md", "docs/WORLD.md", "test/manifest.test.js", "test/release.test.js"]) {
+            const names = named(await read(doc));
+
+            assert.ok(names.length > 0, doc);
+            assert.deepEqual([...new Set(names)], [`recast-navigation-${version}`], doc);
+        }
+
+        // (And it's that module the game's loaded with)
+        const recast = await loadRecast();
+
+        assert.equal(recast, (await import(`../client/vendor/recast-navigation-${version}/recast.mjs`)).core);
     });
 });

@@ -1168,7 +1168,8 @@ The world is played on the land's height with what's built levelled into it (`Gr
 
 Where the world can be walked, as polygons rather than squares: Recast and Detour (built to
 WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.44.0/` by
-`npm run vendor:recast`; about 200 KB gzipped, loaded with the rules). Everyone walks them
+`npm run vendor:recast`, which writes the folder's name into the one place the game spells it,
+`navigation/recast.js`; about 200 KB gzipped, loaded with the rules). Everyone walks them
 (core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*). Every device
 bakes its own tiles, so a new version of Recast must bake the same bytes: `test/bake.test.js`
 holds three made-up tiles' bytes and the ways over them as recorded (0.44.0 baked 1,095 tiles of
@@ -1337,6 +1338,9 @@ the bake that changes one fails it, before copies of a world part over it. And t
 nothing behind: after a dozen rounds of each kind of tile, and of one with nothing to walk, the
 binder keeps no more wrappers of any class than before; nor after a tile's added and let go of a
 dozen times with ways found between, the way the same each time, or a mesh made and let go of.
+And that the vendored Recast is the one version `package.json` names, exactly: the lockfile's,
+the only folder of it in `client/vendor`, the one `recast.js` imports, once, and the one the docs
+and the tests that read its files name.
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
