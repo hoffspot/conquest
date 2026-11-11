@@ -14469,6 +14469,9 @@ export class Game {
             const at = new THREE.Vector3(x, this.#groundOn("town", x, z) + 0.6, z);
 
             this.#mirror();
+            // (Its stakes drawn down now, as what stood in for them goes: not at the stockades'
+            // next turn, up to half a second on, the wall standing whole meanwhile)
+            this.fortsClock = 0;
             this.sound?.play("treantDeath", { at });
 
             for (let k = 0; k < 3; k++) {
