@@ -26,7 +26,7 @@ import { SERVER_VERSION } from "../server/storage/versions.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** The Node inside: its version (an LTS: 24 now, 26 from 28 October 2026) and its darwin-arm64 .tar.gz's SHA-256, from its SHASUMS256.txt. */
+/** The Node inside: its version (an LTS: 24; not 26 until test/registry.test.js passes on it, contribution.md, "Which Node") and its darwin-arm64 .tar.gz's SHA-256, from its SHASUMS256.txt. */
 export const NODE = Object.freeze({ version: "24.21.0", sha256: "bed7eea5325e1108f32ce5228ddd6a5f0f08a499ee42aa7442aea583702f6057" });
 
 /** The app's executable (mac/Package.swift's product). */

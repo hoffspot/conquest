@@ -1,41 +1,59 @@
 name: CI
 
-# Pull requests, and main when they're merged (a branch's pushes are tested once, in its pull
-# request, not twice). A pull request's run tests it merged into main as main is then; with
-# others merging too, main may move on after, so a pull request is merged only once it's green
-# brought up to date with main (contribution.md, "Merging cleanly")
+# Pull requests, and by hand (Actions, CI, Run workflow, on any branch). A pull request's run
+# tests it merged into main as main is then; with others merging too, main may move on after, so
+# a pull request is merged only once it's green brought up to date with main (contribution.md,
+# "Merging cleanly").
+#
+# Not main when one's merged: main's ruleset lets a pull request in only with every required
+# check green on a head that's up to date with main (contribution.md, "The repository's
+# settings"), so what a merge makes of main is, file for file, what that run tested. For each of
+# the 60 merges before this was written the merge commit's tree was its branch head's. Tested
+# again on main, those runs were a third of all CI's, held half of GitHub's 20 jobs at a time for
+# most of an hour after every merge while the next pull request waited, and one in four failed,
+# always on a test that fails now and then, never on a fault. If either of those two rules is
+# ever turned off, put "push: branches: [main]" back here first
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
 # A pull request's run is let go of when it's pushed to again (only its newest head matters, and
-# GitHub runs 20 jobs at a time across everyone's); main's each run alone to the end (a group of
-# their own, run_id)
+# GitHub runs 20 jobs at a time across everyone's); one run by hand runs alone to the end (a
+# group of its own, run_id)
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The browser tests' split (scripts/e2e-shard.js, .github/actions/e2e-share), the same in every
-# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (share
-# 9: about 13 minutes of its own first) and the unit tests' (share 10: about 20), so that every
-# job ends about together rather than two of them standing idle for half the run
+# job: ten shares, the eight e2e jobs' and, once their own work's done, the motion check's (the
+# last share but one: about 13 minutes of its own first) and the unit tests' (the last: 20, where
+# they and lint took 22 when last measured), so that every job is given about the same work, 41
+# minutes of it, rather than two of them standing idle for half the run.
+# E2E_SHARES is the e2e jobs (the matrix's shards, below) and those two: for more or fewer e2e
+# jobs, change the matrix and E2E_SHARES together and nothing else (test/contribution.test.js
+# checks every share is one job's), but only once "ci" is the ruleset's one required check
+# (contribution.md, "The repository's settings"): until then each e2e job is required by name
 env:
   E2E_SHARES: 10
-  E2E_AHEAD: "9:13,10:20"
+  E2E_AHEAD: "last-1:13,last:20"
 
 jobs:
-  # Lint and the unit tests (about 19½ minutes, four test files at a time on the runner's four
-  # threads), then its share of the browser tests (share 10: about 8 minutes)
+  # Lint and the unit tests (about 22 minutes, 13½ to 23½ as the runner comes, three test files
+  # at a time on its four threads), then its share of the browser tests (the last share: about
+  # 24 minutes). Measured over 43 green runs, 9 to 11 November 2026, as every time here is: the
+  # job a median 46½ minutes, 28 to 51½
   test:
     runs-on: ubuntu-latest
-    # (Sixty minutes is twice the longest it should take, and a little more; a job hung longer is
-    # ended rather than held to GitHub's six hours, as the e2e jobs are below)
-    timeout-minutes: 60
+    # (Eighty minutes, as every job that runs a share: about twice the 41 minutes of work each is
+    # given, where the longest any has taken is 57½, on a slow runner. A job hung longer is ended
+    # rather than held to GitHub's six hours. At sixty, this one had come within 8½ minutes)
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v5
 
+      # (Node 22 in every job here, and not yet 26, the long-term-support release since October
+      # 2026: on 24 and 26 test/registry.test.js fails, a set-aside world's memory not back with
+      # the system a second after its thread ends. contribution.md, "Which Node")
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -48,28 +66,29 @@ jobs:
 
       - run: npm ci
       - run: npm run lint
-      # (Four test files at a time, one a thread: Node's own choice is a thread fewer, and four
-      # took a little less time, 19 minutes against 19½ to 20)
-      - run: npm test -- --test-concurrency=4
+      # (Three test files at a time, Node's own choice on four threads. `-- --test-concurrency=4`
+      # used to follow here and did nothing: Node takes no option after the test files' names)
+      - run: npm test
 
       # (Whether or not the unit tests passed: the browser tests' run is whole either way)
       - name: Its share of the browser tests
         if: ${{ !cancelled() }}
         uses: ./.github/actions/e2e-share
         with:
-          share: 10
+          share: last
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
 
   # The motion check (scripts/motion-check.js): every motion on each people's bodies at the ends
   # of their builds, failing on anything worse than the baseline kept with it
-  # (test/motion-baseline.json). About 8 to 13 minutes on a runner's 4 threads; its report is kept
-  # with the run, for the contact sheet (motion-sheet.html, "Report"). Then its share of the
-  # browser tests (share 9: about 15 minutes)
+  # (test/motion-baseline.json). About 13 minutes on a runner's 4 threads, 7½ to 14½ as the runner
+  # comes; its report is kept with the run, for the contact sheet (motion-sheet.html, "Report").
+  # Then its share of the browser tests (the last share but one: about 30 minutes). The job a
+  # median 43 minutes, 25 to 49
   motion:
     runs-on: ubuntu-latest
-    # (Twice the longest it should take, and a little more)
-    timeout-minutes: 60
+    # (As the unit tests' job above)
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v5
 
@@ -99,22 +118,25 @@ jobs:
         if: ${{ !cancelled() }}
         uses: ./.github/actions/e2e-share
         with:
-          share: 9
+          share: last-1
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
 
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
   # others' (scripts/e2e-shard.js: by how long each test took on CI, e2e/durations.json; the
   # unit tests' and the motion check's jobs take shares too, after their own work: env above).
-  # Eight jobs take about 28 minutes each (and another 30 s or so getting ready): more would be
-  # quicker, down to the longest test's 4¾ minutes, but a run is 10 jobs (with the unit tests
-  # and the motion check), and two runs at once (a merge's and the next pull request's) stay
-  # within GitHub's 20 at a time
+  # Eight jobs take a median 41 minutes each, 23 to 57½ (and another 20 s or so getting ready):
+  # GitHub's runners come at three speeds, 1.7 times apart, and a run ends with its slowest, a
+  # median 52½ minutes in. More jobs would be quicker, down to the longest test's 5 minutes (18
+  # of them would end a run in about 27), but a run is 10 jobs (with the unit tests and the
+  # motion check), so that two runs at once (two pull requests') stay within GitHub's 20 at a
+  # time; and each is required by name until "ci" is the one required check (env, above)
   e2e:
     runs-on: ubuntu-latest
-    # (Eighty minutes is twice the longest a job's taken, 40; a job hung longer is ended rather
-    # than held to GitHub's six hours. At twenty, then at forty, a job was ended still running
-    # as the tests grew: at forty, #600's merge, every test passed)
+    # (Eighty minutes is about twice the 41 a job is given, where the longest one's taken is
+    # 57½; a job hung longer is ended rather than held to GitHub's six hours. At twenty, then at
+    # forty, a job was ended still running as the tests grew: at forty, #600's merge, every test
+    # passed)
     timeout-minutes: 80
     strategy:
       fail-fast: false
@@ -141,3 +163,24 @@ jobs:
           share: ${{ matrix.shard }}
           shares: ${{ env.E2E_SHARES }}
           ahead: ${{ env.E2E_AHEAD }}
+
+  # Whether every job above passed, as one check: the one main's ruleset is to require
+  # (contribution.md, "The repository's settings"), in place of each job by its name, so that
+  # jobs here are added, renamed or made more of without a setting changed. A job added above
+  # goes in its needs (test/contribution.test.js checks every one is there). It runs whatever
+  # became of them (always()): left to itself it would be skipped when one of them failed, and
+  # GitHub takes a required check that was skipped as passed
+  ci:
+    needs: [test, motion, e2e]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # (Each job's result said, the e2e jobs' as one; then failed unless every one is "success":
+      # not failure, cancelled or skipped)
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null

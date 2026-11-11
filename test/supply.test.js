@@ -75,14 +75,15 @@ describe("the armies' supply (war.js, supply.js)", () => {
         const seat = war.town(war.realm("human").seat);
         const army = field(war, "human", [seat.at[0] + 1000, seat.at[1]]);
         const reserve = war.reserveOf("human");
-        let sent = null;
 
         // (Not before it's due)
         play(war, SUPPLY.every - 1);
         assert.equal(wagonsTo(war, army.id).length, 0);
 
         war.advance(TURN_MS);
-        [sent] = wagonsTo(war, army.id);
+
+        const [sent] = wagonsTo(war, army.id);
+
         assert.ok(sent, "sent when it's due");
         assert.deepEqual([sent.home, sent.mission, sent.size], [seat.id, "army", SUPPLY.guards]);
 

@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.js";
+import { expect, playing, test } from "./fixtures.js";
 import { licensedModelsHere } from "../scripts/licensed-models.js";
 
 // Riding (core/mounts.js, world/mounts3d.js, characters/riding.js; docs/GAME.md *Riding*), played
@@ -12,13 +12,6 @@ test.beforeEach(async ({ page }) => {
         throw error;
     });
 });
-
-// Open the game and wait for it to be playing, then stop it: it's played on a frame at a time
-async function playing(page, address) {
-    await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
-    await page.evaluate(() => window.pellagos.game.stop());
-}
 
 // Play on (the game stopped) for `seconds` of its time, a frame at a time, the page's events let
 // in between, drawn now and then
@@ -97,6 +90,8 @@ const ridden = (page) =>
 test("buys a horse from the stablemaster, calls it up with its whistle, rides it at a trot, gets down, and has it brought back once it's fallen", async ({ page }) => {
     test.setTimeout(360000);
     await playing(page, "/?play&seed=2");
+    // (Stopped: it's played on a frame at a time)
+    await page.evaluate(() => window.pellagos.game.stop());
 
     // (The home town's stablemaster, out before its stable)
     const out = await page.evaluate(async () => {

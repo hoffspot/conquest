@@ -1,6 +1,11 @@
 name: Deploy to GitHub Pages
 
 # Publishes the game (the client folder) to https://<owner>.github.io/<repo>/ whenever main changes.
+#
+# Nothing is tested here. What's merged to main is, file for file, what its pull request's CI just
+# passed (ci.yml, at its top: main's ruleset sees to it), so lint and the unit tests run again here
+# only kept the site waiting: 17½ of the build's 18 minutes, and not one failure of theirs in a
+# hundred of CI's runs.
 
 on:
   push:
@@ -12,12 +17,12 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-# (Each job is ended at about twice the longest it's taken, the build 13½ minutes and the deploy
-# under 3, rather than held to GitHub's six hours if it hangs)
+# (Each job is ended rather than held to GitHub's six hours if it hangs: the build, under a minute
+# of work, at 10; the deploy, under 2 minutes, at 15, as actions/deploy-pages gives up at 10 itself)
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -34,9 +39,10 @@ jobs:
         with:
           key: ${{ secrets.MODELS_DEPLOY_KEY }}
 
+      # (Nothing below needs what this installs, a few seconds' work: it's here because this is
+      # the one run on main with npm's cache (setup-node's, above), and a cache kept on main is
+      # one every pull request's CI can take, where one kept in a pull request is its own alone)
       - run: npm ci
-      - run: npm run lint
-      - run: npm test
 
       # (Which code this is written into the site's copy for the debug log: the commit and when,
       # in place of client/js/app/version.js's noughts: scripts/stamp-version.js)

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { WorldServer } from "../server/world-server.js";
-import { expect, test } from "./fixtures.js";
+import { expect, playing, test } from "./fixtures.js";
 
 // Players' own worlds through a world server's broker (generated/world_server_plan.md §8.3, §9.6,
 // §15 S7), in two browsers at once on the server's own page: a world opened from the game's menu
@@ -84,14 +84,15 @@ async function ready(page, { character = null, blocked = false } = {}) {
     });
 }
 
-async function playing(page) {
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 180000, polling: 250 });
-}
+// (Two games got ready side by side, one through the server: each given longer than one alone to
+// be playing; and neither world drawn once it is: what's looked at here is who's listed, linked
+// and let in, in the menus and on the server)
+const LONGER = { timeout: 180000, drawn: false };
 
 // The host plays, and opens their world from the menu: through the server, a code
 async function opened(host) {
     await host.goto(`${base}/?play&seed=2`);
-    await playing(host);
+    await playing(host, null, LONGER);
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();
 
@@ -139,7 +140,7 @@ test("a player's own world through the server's broker: listed on it, joined fro
     await expect(join.locator("#joinat option:checked")).toContainText("where it's listed");
     // (Its own Join, not the listed world's card, which says Join it too)
     await join.getByRole("button", { name: "Join", exact: true }).click();
-    await playing(guest);
+    await playing(guest, null, LONGER);
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("direct");
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
 
@@ -188,7 +189,7 @@ test("a host whose game's reloaded opens their world to friends again under its 
     // Bram plays, and opens his world through the server: kept to open again
     await host.goto(`${base}/`);
     await host.locator("#continuebutton").click({ timeout: 60000 });
-    await playing(host);
+    await playing(host, null, LONGER);
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();
 
@@ -204,7 +205,7 @@ test("a host whose game's reloaded opens their world to friends again under its 
     // Syl joins by its code
     await guest.goto(`${base}/?join=${code}`);
     await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
-    await playing(guest);
+    await playing(guest, null, LONGER);
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
 
     // Bram's game reloaded: his world loaded and opened to friends again, the dialog naming it and
@@ -216,7 +217,7 @@ test("a host whose game's reloaded opens their world to friends again under its 
     await expect(rejoin).toBeVisible({ timeout: 60000 });
     await expect(rejoin.locator("#rejointitle")).toHaveText("Back into your world");
     await expect(rejoin.locator("#rejoinabout")).toHaveText(`Opening it to your friends again, under its code, ${code}, as Bram.`);
-    await playing(host);
+    await playing(host, null, LONGER);
     await expect(rejoin).toBeHidden({ timeout: 60000 });
     expect(await host.evaluate(() => window.stagesSeen)).toEqual(["load:now", "load:done", "reopen:now"]);
     expect(await host.evaluate(() => window.pellagos.together.code)).toBe(code);
@@ -226,7 +227,7 @@ test("a host whose game's reloaded opens their world to friends again under its 
 
     // Syl's game, told the world was opened again, goes straight back in by its code
     await expect(guest.locator("#rejoin #rejointitle")).toHaveText("Back into Bram's world", { timeout: 60000 });
-    await playing(guest);
+    await playing(guest, null, LONGER);
     await expect(guest.locator("#rejoin")).toBeHidden();
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 60000 }).toBe(1);
     expect(await guest.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Syl");
@@ -249,7 +250,7 @@ test("a host no direct link gets through to is joined relayed by the server; and
     await guest.goto(`${base}/?join=${code}`);
     await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
     await guest.locator("#join").getByRole("button", { name: "Join", exact: true }).click();
-    await playing(guest);
+    await playing(guest, null, LONGER);
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("relayed");
 
     // (Listed through the server while it relays; hidden once it doesn't)

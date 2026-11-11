@@ -449,7 +449,7 @@ export class Management {
         }
 
         const kept = (await stored.heroes.list(player)).filter((hero) => slot === null || hero.slot === slot);
-        let war = null;
+        let war;
 
         try {
             war = decode(await readGzip(path.join(stored.folder, STATE, NOW))).war ?? null;
@@ -1094,7 +1094,7 @@ export class Management {
             try {
                 done.push({ id, name: stored.meta.name, ...(await bringForward(stored)) });
             } catch (error) {
-                throw new Error(`world ${id} ("${stored.meta.name}"): ${error.message}`);
+                throw new Error(`world ${id} ("${stored.meta.name}"): ${error.message}`, { cause: error });
             }
         }
 

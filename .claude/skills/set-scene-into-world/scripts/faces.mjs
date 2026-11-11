@@ -16,14 +16,15 @@ const planes = new Map();
 for (let t = 0; t < tri.length; t += 9) {
     const [ax, ay, az, bx, by, bz, cx, cy, cz] = tri.subarray(t, t + 9);
     const [ux, uy, uz, vx, vy, vz] = [bx - ax, by - ay, bz - az, cx - ax, cy - ay, cz - az];
-    let [nx, ny, nz] = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
-    const area = Math.hypot(nx, ny, nz) / 2;
+    const cross = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
+    const area = Math.hypot(...cross) / 2;
 
     if (area < 1) {
         continue;
     }
 
-    [nx, ny, nz] = [nx / (2 * area), ny / (2 * area), nz / (2 * area)];
+    // (Its normal's parts along x and z: the walls looked for face one of those ways, none up)
+    const [nx, nz] = [cross[0] / (2 * area), cross[2] / (2 * area)];
 
     for (const [axis, dir, n] of [["z", -1, nz], ["x", -1, nx], ["x", 1, nx]]) {
         if (n * dir < 0.95) {

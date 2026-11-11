@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.js";
+import { expect, playing, test } from "./fixtures.js";
 import { BUTTONS } from "../client/js/app/gamepad.js";
 
 // The keys, mouse buttons and controller buttons for the game's actions, set on the Bindings page
@@ -10,11 +10,6 @@ test.beforeEach(async ({ page }) => {
         throw error;
     });
 });
-
-async function playing(page, address) {
-    await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
-}
 
 // The menu opened by its button, and Game options, Controls, Bindings
 async function bindings(page) {

@@ -8,7 +8,7 @@ import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
 import { createRandom } from "../client/js/core/random.js";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 const SEEDS = [1, 2, 3];
 const plans = new Map();
@@ -30,13 +30,10 @@ describe("the world plan (worldplan/plan.js)", () => {
 
         quickEnough(
             8000,
-            () => {
-                const start = performance.now();
-
-                again = layOutWorld(1);
-
-                return performance.now() - start;
-            },
+            () =>
+                cpuMs(() => {
+                    again = layOutWorld(1);
+                }),
             (ms) => `${ms.toFixed(0)} ms`,
         );
 

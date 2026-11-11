@@ -685,7 +685,7 @@ export class Walker {
 
         // Planted: move the foot back by however far its pivot has slid. Swinging: ease that off,
         // and keep the foot clear of the ground
-        let lift = 0;
+        let lift;
 
         if (foot.planted) {
             foot.correction.copy(foot.lock).sub(now);

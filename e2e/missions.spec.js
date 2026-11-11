@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.js";
+import { expect, playing, playUntil, test } from "./fixtures.js";
 
 // The war's messengers and the missions they bring (core/missions.js, core/host.js, app/game.js),
 // in a real browser: one sent to a player near an enemy camp walks up, drawn with a scroll
@@ -11,32 +11,6 @@ test.beforeEach(async ({ page }) => {
         throw error;
     });
 });
-
-async function playing(page, address) {
-    await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
-}
-
-// Play on (the game stopped) till `done` (run in the page) says so, or `seconds` of the game's
-// time go by: whether it did. Half a second at a time, the page's events let in between frames
-async function playUntil(page, done, seconds = 30) {
-    for (let time = 0; time < seconds; time += 0.5) {
-        if (await page.evaluate(done)) {
-            return true;
-        }
-
-        await page.evaluate(async () => {
-            const { game } = window.pellagos;
-
-            for (let k = 0; k < 15; k++) {
-                game.advance(1 / 30, { render: false, wait: true });
-                await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-        });
-    }
-
-    return page.evaluate(done);
-}
 
 // An orcish camp 400 m out from the start town, at war with the humans, the player 250 m beyond
 // it (the game stopped): a messenger's sent to them to break it. Where it is: { at }
@@ -74,14 +48,18 @@ async function tapMessenger(page) {
 
         game.advance(1 / 30);
 
-        const spot = session.view.toScreen(game.avatars.get(one.folk).point(0.6));
+        // (Tapped at their middle, one of the three heights a tap's measured against each
+        // character at (game.js #whoIsAt: 0.2, 0.5 and 0.8 of their height): no one else can be
+        // nearer it. Anywhere between, the player's own middle or head, in line with them on the
+        // screen, can be the nearer, and the tap walks the player there instead of talking)
+        const spot = session.view.toScreen(game.avatars.get(one.folk).point(0.5));
 
         game.tap(spot.x, spot.y, { time: performance.now() + 9000 });
 
         return one.folk;
     });
 
-    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 10)).toBe(true);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), { seconds: 10 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.talking.id)).toBe(folk);
 }
 
@@ -110,7 +88,7 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
     // The messenger comes, drawn, and hails the player as they get there (the talk not opened
     // over whatever they're doing); tapped, they talk: from the King, what's asked, what it pays
     // at the player's rank and that it pays more the higher it is
-    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ arrived }) => arrived), 90)).toBe(true);
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ arrived }) => arrived), { seconds: 90 })).toBe(true);
     await expect(page.locator("#banner")).toContainText(/, a messenger from (King|Queen) .+, has found you\. Tap them to hear what they bring\./);
     expect(await page.evaluate(() => Boolean(window.pellagos.game.talking))).toBe(false);
 
@@ -128,7 +106,8 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
 
         const drawn = game.avatars.has(one.folk);
         const avatar = game.avatars.get(one.folk);
-        const spot = session.view.toScreen(avatar.point(0.6));
+        // (At their middle, as tapMessenger's)
+        const spot = session.view.toScreen(avatar.point(0.5));
         // (Their scroll over their head, bobbing: world/scroll3d.js)
         const height = avatar.character.height;
         const first = avatar.scroll?.position.y ?? null;
@@ -146,7 +125,7 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
 
     expect(messenger.drawn).toBe(true);
     expect(messenger.scroll).toEqual({ over: true, bobbing: true, shown: true });
-    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), 10)).toBe(true);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.talking), { seconds: 10 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.talking.id)).toBe(messenger.folk);
 
     const talk = page.locator("#talkline");
@@ -181,7 +160,7 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
 
         game.host.battle.place(game.me, "town", [Math.floor(x - 30), Math.floor(y)]);
     }, camp.at);
-    expect(await playUntil(page, () => window.pellagos.game.standing.missions[0]?.there, 10)).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.standing.missions[0]?.there, { seconds: 10 })).toBe(true);
 
     const gold = await page.evaluate(() => window.pellagos.game.progress.gold);
 
@@ -193,7 +172,7 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
             1,
         );
     });
-    expect(await playUntil(page, () => Boolean(document.querySelector(".choice")), 10)).toBe(true);
+    expect(await playUntil(page, () => Boolean(document.querySelector(".choice")), { seconds: 10 })).toBe(true);
     await expect(page.locator(".choice")).toContainText("Break the camp: your pick from the armoury");
     await expect(page.locator(".choice-option")).toHaveCount(3);
     await expect(page.locator(".choice")).toContainText("Later");
@@ -202,7 +181,7 @@ test("a messenger from the ruler finds the player near an enemy camp: the missio
     const piece = await page.locator(".choice-option").nth(1).textContent();
 
     await page.locator(".choice-option").nth(1).click();
-    expect(await playUntil(page, () => window.pellagos.game.standing.missionsDone[0]?.state === "done", 5)).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.standing.missionsDone[0]?.state === "done", { seconds: 5 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.standing.missions.length)).toBe(0);
     expect(piece.length).toBeGreaterThan(0);
 });
@@ -216,7 +195,7 @@ test("a messenger who stopped to wait before they'd found the player tells them 
 
     // A messenger sets out; a minute goes by before they've found the player (who'd kept on the
     // move, say): they stay where they've got to
-    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "coming"), 90)).toBe(true);
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "coming"), { seconds: 90 })).toBe(true);
     await page.evaluate(async () => {
         const { game } = window.pellagos;
         const { MESSENGER } = await import("/js/core/host.js");
@@ -224,7 +203,7 @@ test("a messenger who stopped to wait before they'd found the player tells them 
 
         one.found = game.host.battle.time - MESSENGER.follow - 1;
     });
-    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "staying"), 10)).toBe(true);
+    expect(await playUntil(page, () => [...window.pellagos.game.host.messengers.values()].some(({ state }) => state === "staying"), { seconds: 10 })).toBe(true);
     await expect(page.locator("#banner")).toContainText("will wait for you there a little while.");
     expect(await page.evaluate(() => Boolean([...window.pellagos.game.host.messengers.values()][0].arrived))).toBe(false);
 
@@ -237,7 +216,7 @@ test("a messenger who stopped to wait before they'd found the player tells them 
         game.host.battle.place(game.me, "town", [Math.floor(them.x) + 2, Math.floor(them.y)]);
     });
     // (Their figure made as the game plays: app/game.js #marshal)
-    expect(await playUntil(page, () => window.pellagos.game.avatars.has([...window.pellagos.game.host.messengers.values()][0].folk), 30)).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has([...window.pellagos.game.host.messengers.values()][0].folk), { seconds: 30 })).toBe(true);
     await tapMessenger(page);
 
     const talk = page.locator("#talkline");

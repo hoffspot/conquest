@@ -4,7 +4,7 @@ import globals from "globals";
 export default [
     {
         // client/vendor holds third-party code (Three.js); a utility's .venv holds Python's (Blender's)
-        ignores: ["node_modules/", "test-results/", "playwright-report/", "client/vendor/", "utilities/*/.venv/", "utilities/*/test-results/", "utilities/*/playwright-report/"],
+        ignores: ["node_modules/", "test-results/", "playwright-report/", "client/vendor/", "utilities/*/.venv/", "utilities/*/test-results/", "utilities/*/playwright-report/", ".claude/worktrees/"],
     },
     js.configs.recommended,
     {

@@ -2033,8 +2033,9 @@ export function* paintingGarment(map, garment, measures = null) {
             edge = least > inward || most < -EDGE_PAINTED.outside ? w0 * inside[a] + w1 * inside[b] + w2 * inside[k] : insideAt(garment, landmarks, pointBetween(vertices, a, b, k, w0, w1, w2, point), true);
         }
 
-        let shade = 1;
-        let height = 0.5;
+        // (How light and how raised it is there: each pattern's own, plain cloth's for any other)
+        let shade;
+        let height;
         let c = colour;
 
         switch (pattern) {

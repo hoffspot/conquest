@@ -17,19 +17,22 @@ you in every session).
 > file isn't ready to merge.
 >
 > **Only the owner (hoffspot) can change the repository's settings.** When a change needs one
-> changed (a CI job added, renamed or removed; a different number of browser test jobs; a new
-> rule for `main`), say so to the owner, with the exact steps, in the pull request and in your
-> session. Update the settings table in section 6 in the same pull request, and check that the
-> owner has made the change before it's merged. Whenever a setting is changed or added, the table
-> is updated to match.
+> changed (a new rule for `main`, a secret; and, until `ci` is the one required check there
+> (section 6, *One required check*), a CI job added, renamed or removed, or a different number
+> of browser test jobs), say so to the owner, with the exact steps, in the pull request and in
+> your session. Update the settings table in section 6 in the same pull request, and check that
+> the owner has made the change before it's merged. Whenever a setting is changed or added, the
+> table is updated to match.
 
 The rule is written down three times, so no one can miss it:
 
 - here;
 - in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
-- in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job or the Node
-  version changes and this file hasn't been updated to match, and when a CI job isn't among the
-  required checks in the settings table. That test is the part of the rule a machine can check;
+- in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job, when CI
+  runs, the time a job is ended at or the Node version changes and this file hasn't been updated
+  to match; when CI's `ci` job doesn't wait for every other job, or a share of the browser tests
+  isn't exactly one job's; and when the required checks in the settings table are neither `ci`
+  alone nor every other job by its name. That test is the part of the rule a machine can check;
   everything else is up to you and your reviewer.
 
 ## What you need
@@ -37,7 +40,8 @@ The rule is written down three times, so no one can miss it:
 - A GitHub account.
 - Claude Code: the command line, the desktop app, or Claude Code on the web
   (<https://claude.ai/code>). It runs on your own Claude plan, so its usage is yours.
-- Node.js 22 or newer (`package.json`'s `engines`; CI uses 22).
+- Node.js 22 or newer (`package.json`'s `engines`; CI uses 22, and not yet 26: section 2, *Which
+  Node*).
 - Chromium for the browser tests. Playwright downloads it, or you point it at one you already
   have with `CHROMIUM_PATH`.
 - Only for the licensed models (the Dreadthorn's, the werewolf's, the centipede's, the Ant
@@ -90,28 +94,87 @@ files. Read what it wants to do, above all a `git push`.
 
 ## 2. The checks: what CI runs, and how to run them yourself
 
-CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged. A
-pull request's run is cancelled when you push to it again; only its newest commit's run counts.
-`main`'s runs always run to the end. A job that hangs is ended at about twice the longest it
-should take, rather than held to GitHub's 6 hours: `test` at 60 minutes (its own work about 19½,
-then its share of the browser tests about 8), `motion` at 60 (about 13, then about 15), each
-`e2e` job at 80 (about 28; its Chromium download is tried three times, 5 minutes a try). Every
-job ends about together, about half an hour in.
+CI (`.github/workflows/ci.yml`) runs on every pull request, and by hand (the Actions tab, CI,
+*Run workflow*, on any branch). A pull request's run is cancelled when you push to it again; only
+its newest commit's run counts. A run by hand always runs to the end.
+
+**CI doesn't run on `main` when a pull request is merged.** `main`'s ruleset (section 6, *The
+repository's settings*) lets a pull request in only with its required checks green on a head
+that's up to date with `main`, so what the merge makes of `main` is, file for file, what that run
+tested. For each of the 60 merges before this was decided (2026-11-11), the merge commit's tree
+was its branch head's. Tested again on `main`, those runs were a third of all CI's runs. They
+held half of GitHub's 20 jobs at a time for most of an hour after every merge, while the next
+pull request waited, and one in four failed, always on a test that fails now and then, never on
+a fault. This rests on two of the ruleset's rules, *Require status checks to pass* and *Require
+branches to be up to date before merging*: if either is ever turned off, `push: branches: [main]`
+goes back into `ci.yml` first.
+
+**How long it takes.** Every job is given about the same work, 41 minutes of it as the tests
+were last timed. Measured over 43 green runs, 9 to 11 November 2026:
+
+| | Median | From, to | Of which |
+| --- | --- | --- | --- |
+| `test` | 46½ minutes | 28 to 51½ | lint 20 seconds, the unit tests 22 minutes (13½ to 23½), its share of the browser tests 24 |
+| `motion` | 43 | 25 to 49 | the motion check 13 (7½ to 14½), its share of the browser tests 30 |
+| an `e2e` job | 41 | 23 to 57½ | getting ready 20 seconds, the rest its share of the browser tests |
+| A run, start to end | 52½ | 41 to 70 | its slowest job, and any wait for a runner |
+
+The jobs are given the same work and still end far apart, because GitHub's runners come at three
+speeds, 1.7 times apart, and about half are the slowest: a run ends with its slowest job, a
+median 23 minutes after its fastest. GitHub also runs no more than 20 jobs at a time for the
+whole account, so two runs fill it and a third waits its turn.
+
+A job that hangs is ended rather than held to GitHub's 6 hours: `test`, `motion` and each `e2e`
+job at 80 minutes, about twice the work each is given (the longest any has taken is 57½; the
+Chromium download in each is tried three times, 5 minutes a try), and `ci` at 5.
+
+**Which Node.** CI, Pages and the soak use Node 22; the Mac app's workflow and the Mac app itself,
+24 (`NODE` in `scripts/build-mac-app.js`). Node 26 has been the long-term-support release since
+28 October 2026, Node 22's support ends in April 2027, and on the game's own code 26 took 15%
+less of a processor's time making and stepping a world, so the move is wanted. It was tried on
+2026-11-11 and isn't made yet, for one test:
+
+- The whole unit suite on Node 26.13.0 passed but for `test/registry.test.js`, *giving back its
+  memory*: a world set aside ends its thread, and the test looks for most of what two worlds took
+  to be back with the system a second later. It fails every time on Node 26.13.0 and on Node
+  24.21.0, and passes every time on Node 22.23.4, each run alone on the same machine.
+- Measured there, on Linux: two worlds take about 260 MB on Node 22, 340 MB on Node 24 and
+  360 MB on Node 26. Once their threads end, Node 22 gives back 82% at once. Node 24 gives back
+  83%, 3 to 10 seconds later. Node 26 had given back 14% after 45 seconds: it keeps the rest for
+  the next worlds (run and ended four times over, the process held about as much each time) and
+  lets go of it only now and then.
+
+So a world server's memory behaves differently on the newer Nodes, most likely the Mac app's
+among them (its Node is the same release, for a Mac), and whether that's the server's to change
+or the test's is the owner's call. Before moving any workflow or `NODE` to another Node, run the
+whole suite on it (`<that node> --test --test-concurrency=3 test/*.test.js`), or at the least
+that file.
 
 | CI job | What it runs | Locally |
 | --- | --- | --- |
-| `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, four files at a time); then its share of the browser tests (share 10, below) | `npm run check`, which runs both |
+| `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, three files at a time); then its share of the browser tests (the last share, below) | `npm run check`, which runs both |
 | `e2e` (8 jobs side by side) | the licensed models fetched, then each job's share of the Playwright browser tests (`e2e/*.spec.js`: shares 1 to 8, below) | `npm run test:e2e`, or only the tests you touched (below) |
-| `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report`. Then its share of the browser tests (share 9, with the licensed models) | `npm run check:motion` |
+| `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report`. Then its share of the browser tests (the last share but one, with the licensed models) | `npm run check:motion` |
+| `ci` | Nothing of its own. It waits for every job above, whatever becomes of them, and passes only if each one passed (not failed, cancelled or skipped); its log says how each ended. It's there to be the one check `main`'s ruleset requires (section 6, *One required check*) | All of the above |
 
 **The browser tests' shares.** They're split ten ways, by how long each took on CI
 (`scripts/e2e-shard.js`, `e2e/durations.json`): a share for each `e2e` job, and one each for the
 `motion` and `test` jobs once their own work's done, given that much less (`ci.yml`'s
-`E2E_SHARES` and `E2E_AHEAD`: `9:13,10:20`, the minutes each does first), so that every job ends
-about together. Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
+`E2E_SHARES` and `E2E_AHEAD`: `last-1:13,last:20`, the minutes each does first), so that every job
+is given about the same work. Those two take the last two shares however many there are (`last-1` and
+`last`, which the action makes numbers), so `E2E_SHARES` is always the `e2e` jobs and two more.
+Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
 share chosen and run), and its JSON report is kept with the run as `e2e-report-<share>`, failed
 or not: how long each test took there, to time them by (below). If the unit tests or the motion
 check take much longer or shorter, change their minutes in `E2E_AHEAD`.
+
+**What a failed browser test leaves.** When a job's browser tests fail, Playwright's
+`test-results/` folder is kept with the run for 14 days as `e2e-failures-<share>` (the run's
+page, Artifacts, or `gh run download <run> -p 'e2e-failures-*'`). It has a folder for each test
+that failed, with Playwright's own note of it (`error-context.md`: the error, and an outline of
+what was on the page as it ended) and whatever else `playwright.config.js` has it keep of a
+failure, such as a picture of the page. `<share>` is the job's: an `e2e` job's own number, and
+the two after the last of those for `motion` and `test`.
 
 **The licensed models** (`docs/LICENSED_MODELS.md`) are kept in the private repository
 `hoffspot/conquest-models`. Every job that needs them starts with `.github/actions/licensed-models`:
@@ -123,14 +186,18 @@ fork's pull request is given no secrets, so its run leaves them out, with a noti
 no key fails the job. A maintainer brings a fork's pull request into a branch here before it's
 merged.
 
-`.github/workflows/pages.yml` runs when `main` changes: the licensed models fetched, lint and the
-unit tests again, then `npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
+`.github/workflows/pages.yml` runs when `main` changes: the licensed models fetched, then
+`npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
 debug log: the commit and the time, in place of `client/js/app/version.js`'s noughts
 (`scripts/stamp-version.js`; as kept in the repository, the game says it's "dev"). Then it
 publishes the copy to GitHub Pages
-(<https://hoffspot.github.io/conquest/>); its build is ended at 30 minutes (it takes about 13½)
-and its deploy at 15.
-Whatever is merged to `main` goes live, so `main` must always be green.
+(<https://hoffspot.github.io/conquest/>); its build is ended at 10 minutes (it takes under one)
+and its deploy at 15 (under two).
+It tests nothing: lint and the unit tests have just passed on the pull request, on the very files
+merged (above), and run again here they kept the site waiting 17 minutes. So whatever is merged
+to `main` goes live a minute or two later, and the pull request's checks are all that stand
+between a change and the players. Its `npm ci` installs nothing the build needs: it keeps npm's
+cache on `main`, where every pull request's run can take it from.
 
 `.github/workflows/soak.yml` is the cross-engine soak (`npm run soak`, below). It's run by hand
 from the Actions tab (Soak, Run workflow: how many minutes, the seed, which browsers), and for
@@ -176,14 +243,15 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 
 | Script | When to run it |
 | --- | --- |
-| `npm start` | Serves the game and the multiplayer relay (kept for one release: a world server's broker takes its place) on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&quality=low`; `&flyin` for the opening fly-in, which it leaves out) |
+| `npm start` | Serves the game and the multiplayer relay (kept for one release: a world server's broker takes its place) on port 8080. Open `/?play` to go straight into a game (`&seed=12`, `&people=elf`, `&hero=1` for another body of the same seed, `&quality=low`, `medium` or `high` for this load alone; `&flyin` for the opening fly-in, which it leaves out) |
 | `npm run dev` | The same, restarting the server when its code changes |
 | `npm run world-server` | The world server (`generated/world_server_plan.md`), on port 8480: worlds kept on the server, run in threads of their own, reached from the Wi-Fi, and from the internet over TLS alone once it has a certificate and **Answer the internet** is on (its `internet` setting; a certificate of the owner's own is put in on the management page, or as `certificates/server.key` and `server.crt` in its data folder; or the server gets free ones from Let's Encrypt itself, set up on the management page: a DuckDNS name, a domain on Cloudflare or deSEC, or the home's IP address, with the DNS host's token kept in the Keychain on macOS, elsewhere in `certificates/tokens.json`. Its tests use a certificate authority of their own, `test/fake-acme.js`, and never reach Let's Encrypt or a DNS host; while it answers the internet it asks the home's router to forward its port (PCP, NAT-PMP or UPnP; **Ask the router** in Settings), and its tests ask a router of their own, `test/fake-router.js`, never the machine's real one; or, for a home whose provider shares its address, it lets the internet in through Tailscale Funnel (**Tailscale Funnel** on the management page, its `funnel` setting: Tailscale installed and signed in on the computer, Funnel allowed on the tailnet), which brings it to a tunnel listener on `127.0.0.1:8482`; its tests use a Tailscale of their own, `test/fake-tailscale.js`, never the machine's). `-- --port 9000 --data /tmp/worlds` for another port and data folder. The first start prints its admin key, once. Its management page is at `http://localhost:8481` on the same computer, needing no key (`-- --admin 9001` for another port), and at `/admin` on the play port from the Wi-Fi, with the admin key: its worlds (made, started, set aside, backed up, restored, exported, deleted), their keys, codes and players, its settings, what's happened, and its health. It shows itself to other servers on the Wi-Fi with Bonjour (macOS's `dns-sd`, or `avahi-utils` with avahi-daemon on Linux; its `bonjour` setting), and lists those it finds, which players add from **Worlds on servers** with a tap; macOS may ask for Local Network permission, and play carries on if it's refused. Worlds can also be made from the game it serves (the title's **Worlds on servers**: add the server, then Make a world), and the game's **Test this server** there tries its internet addresses from wherever the device is and tells the server's page how that went (from a phone on its cellular data, the page's code opens the game and tests it at once). A world a player opens to others from the game's menu (**Invite others**) goes through the server's broker (`/broker`): listed there if they like, and joined point to point (WebRTC), or relayed by the server when that can't be made (its `broker` and `relaying` settings); the tests use a WebRTC of their own, `test/fake-rtc.js`. `-- --app` runs it as the Mac app does (`mac/`, docs/MAC_APP.md): how it stands said on `@pellagos` lines, and stopped, every world saved, when its input closes. `server/world.js` is its launcher (`server/launch.js`): it runs the server itself (`server/serve.js`) as this version or a newer one an update installed in the data folder, starts it again after an update, and goes back to the version before if the new one fails. Updates are the management page's (Settings, Updates: a new version found once a day among the releases the Mac app workflow publishes, checked against GitHub's SHA-256 for its archive, or signed with the project's key where the server has its public half, installed when its owner clicks, or by itself overnight when nobody's in, its `autoUpdate` and `updateHour` settings; a copy of the repository is shown `git pull` instead); `-- --releases <url> --release-key <file>` looks for them elsewhere, as the tests do. A world exported from a server is brought in on the page's New world. The whole server is one archive (Settings, Archive; `server/storage/archive.js`): made, and restored in place of everything on a server with no worlds, or its worlds brought in as new ones (one too old to carry on started afresh from its seed). `-- --archive <file>` makes one from the data folder (the server stopped), and `-- --restore <file>` stages one to be put in place when it next starts (`--replace` where there are worlds). The owner's guide is docs/SERVER.md |
-| `npm test` | Every change. The unit tests take a few minutes |
-| `npm run lint` | Every change. ESLint must be clean |
+| `npm test` | Every change. The unit tests take about 20 minutes on four cores, an hour of one core's work (22 minutes on CI, 13½ to 23½ as its runner comes). Each test file runs in a process of its own; a world's plan one of them has laid out is kept under `node_modules/.cache/pellagos-plans/` for the next to read back (`test/plan-cache.js`: kept by its seed and a hash of the planner's code, so a change to the planner starts again; CI never restores the folder, so it always lays plans out afresh; `PLAN_CACHE=off` lays every one out afresh here too). A test file still running after 20 minutes is ended and named |
+| `npm run test:affected` | While working on a change: every unit test, as `npm test` runs them, but those the change can reach by imports first, then those that read files or start processes, then the rest (`scripts/test-affected.js`; `-- --list` only says the order). A failure shows in minutes; a pass is as much of one as `npm test`'s |
+| `npm run lint` | Every change. ESLint must be clean. It keeps a cache (`.eslintcache`, not committed): a file is linted again only when its bytes have changed, so a second run takes a second |
 | `npm run check` | Lint and the unit tests together: run it before every push |
 | `npm run test:e2e` | Changes to the game in the browser: the screens, controls, HUD, drawing, multiplayer |
-| `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 5 minutes |
+| `npm run check:motion` | Changes to how characters move or what they're built from: the body, bones, joints, walking, attacks, rests, items, clothes (below). About 13 minutes on four threads (7½ to 14½ on CI's runners) |
 | `npm run balance` | Changes to how the wild answers the players' side, to whom it goes for (its enmity: docs/WILDS.md *Whom they go for*), or to how strong players, hirelings or creatures are: the balance runner (docs/WILDS.md, *Tuning it*), each side's fights at tiers 2, 5 and 8 (camped first, a player who falls out of that fight), with each side's share of what one alone loses beside its aim, and what its allies bore of the wild's blows (`borne`, `drawn`). A few minutes; `-- --tiers 5 --sides solo,four` for less. A fight goes one way or another by what's about, so a retune takes many: `-- --seeds 2,3,4,5,6,7,8,9 --fights 8` is 64 a side (each world's dice the same every run, so two settings are told apart on the very same fights) |
 | `npm run snapshot-fixture` | After bumping `SNAPSHOT_VERSION` (section 4): a snapshot of a world as the new version keeps it, `test/fixtures/snapshots/<version>.json.gz`, for `test/snapshots.test.js` to bring forward and play on. A few seconds |
 | `npm run step-budget` | Changes to the rules' steps, the navigation, or what's made ahead on the world server (`server/ahead.js`): a world stepped on Node as the world server will step it, four players walking about in four peoples' towns, every step timed. It fails if any step takes longer than a step (50 ms). About half a minute; `-- --seconds 600` for longer, `-- --no-ahead` to compare without making anything ahead |
@@ -200,7 +268,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 | `npm run build:props` | Only when remaking the dungeons' and the shops' furniture, dressing and wares (`client/models/dungeons`, its `LICENSE.md` and their entries in `client/models/assets.json`), or one of them (`npm run build:props -- skull bones`). It downloads each model once, into `.cache` (Poly Haven's, OpenGameArt's, and museums' and makers' scans and models on Zenodo and Objaverse: about 230 MB in all), makes each simpler and its pictures smaller and KTX2 (ETC1S, which the graphics card keeps compressed: `scripts/lib/ktx2.js`, with the `ktx2-encoder` package), and takes about ten minutes for all of them, most of it making the KTX2 pictures. The maces a hero's mace looks like come as Blender files and an FBX: Blender reads those (`scripts/lib/blender.js`, `scripts/blender/to-obj.py`, each made an OBJ once, kept in `.cache/blender`) with Blender's Python module, utilities/blenderpipeline's (`npm run setup` there) or another named by `BLENDER_PYTHON`; the rest need none. The keep's kit and any other `dungeon-prop-` entry not made here (not in `client/models/dungeons`) are left as they are. A new model must be CC0 or CC BY (its maker named in `PROPS`' `by`, which the `LICENSE.md` it writes lists, and credited in `README.md`), downloadable without an account, and within `test/furnishings.test.js`'s budget (650 KB a file, 22 MB in all, its pictures KTX2). Node's own `fetch` ignores `HTTPS_PROXY`: behind a proxy, run it with `NODE_USE_ENV_PROXY=1` (Node 22.21 or later). Then `npm run build:manifest` |
 | `npm run build:textures` | Only when remaking the dungeons' photographs (`client/textures/dungeons`, `client/js/world/dungeonpictures.js` and their entries in `client/models/assets.json`). It downloads their CC0 scans once, into `.cache` (about 45 MB from ambientCG and Poly Haven), makes each a KTX2 (`scripts/lib/ktx2.js`: the colour ETC1S, the normal map UASTC), and takes about a minute. Then `npm run build:manifest` |
 | `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests, guards' sway, flinches and dodges (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list, baked on MakeHuman's body whichever the game plays on: `BAKE_BODY`; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
-| `npm run build:mac` | Changes to the Mac app (`mac/`) or what its bundle holds: on a Mac, after `swift build -c release --arch arm64 --package-path mac`, `-- --executable <its PellagosServer>` makes `dist/Pellagos Server.app` (Node arm64 from nodejs.org, checked against its `SHASUMS256.txt` and the hash kept in `NODE`, its own signature kept; the server and the game), signs it ad hoc and zips it; with the server's archive and Homebrew formula beside it. Elsewhere `-- --no-executable` makes the rest of the bundle, unsigned. Node's archive is kept in `.cache/node`. To move to a newer Node, change `NODE` (its version and its archive's SHA-256 from that release's `SHASUMS256.txt`). `test/mac-app.test.js` checks the bundle without a Mac; the macOS workflow builds it on one (above) |
+| `npm run build:mac` | Changes to the Mac app (`mac/`) or what its bundle holds: on a Mac, after `swift build -c release --arch arm64 --package-path mac`, `-- --executable <its PellagosServer>` makes `dist/Pellagos Server.app` (Node arm64 from nodejs.org, checked against its `SHASUMS256.txt` and the hash kept in `NODE`, its own signature kept; the server and the game), signs it ad hoc and zips it; with the server's archive and Homebrew formula beside it. Elsewhere `-- --no-executable` makes the rest of the bundle, unsigned. Node's archive is kept in `.cache/node`. To move to a newer Node, change `NODE` (its version and its archive's SHA-256 from that release's `SHASUMS256.txt`), having run the unit tests on that Node first (not Node 26 yet: section 2, *Which Node*). `test/mac-app.test.js` checks the bundle without a Mac; the macOS workflow builds it on one (above) |
 | `npm run release-key` | For the project's owner, if they want releases signed as well as checked against GitHub's SHA-256 (docs/SERVER.md, "Releasing"): `-- --new <file outside the repository>` makes the release key pair once (the public half into `server/update/release-key.pem`, to commit; the private half kept by the owner alone, never committed), `-- --sign <archive> --key <file>` signs a release's archive (or with `PELLAGOS_RELEASE_KEY`, as the Mac app workflow does), `-- --verify <archive>` checks it |
 | `npm run build:pointers` | Only when redrawing the mouse pointers (`client/images/pointer/`: the sword, its looks over things and shaken, each size at 1x and 2x, drawn in `scripts/build-pointers.js` from what `client/js/app/pointer.js` asks for). It rasterizes them with Playwright's Chromium (or `CHROMIUM_PATH`'s), in a second or two. `test/pointer.test.js` fails while one is missing or the wrong size. Then `npm run build:manifest` |
 | `npm run build:backdrops` | Only when adding or changing the paintings behind the loading screen and the title (`client/images/backdrops/`, the scenes in `client/js/app/backdrop.js` `BACKDROPS`). Put each scene's master in `scripts/backdrops/` as `<scene>-tall` and `<scene>-wide` (as it's painted: a scene may be only one), a JPEG or a PNG, the owner's own (they're the repository's, under its licence) or CC0, and add it to `BACKDROPS`. It makes each an AVIF and a WebP at its master's size, or no more than 2560 pixels its longest side (`BACKDROP.most`: a 2K master, 2752 by 1536, is made 2560 by 1428), with ffmpeg (which needs libaom-av1 and libwebp), in a few seconds. `test/backdrop.test.js` fails while one is missing, the wrong way round, or over its budget (100 KB an AVIF, 150 KB a WebP). Then `npm run build:manifest` |
@@ -214,7 +282,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 
 ### The browser tests
 
-They play the game in Chromium, in software without a GPU, so they're slow (each has 2 minutes).
+They play the game in Chromium, in software without a GPU, so they're slow (each has 3 minutes, and a median one takes 55 seconds on CI).
 Run the ones your change touches, one at a time:
 
 ```sh
@@ -225,12 +293,31 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
 - `E2E_PORT` picks the port for the test server, so it doesn't clash with a game you're running
   (the default is 8095).
 - `rm -rf test-results` first, if an earlier run left its pictures and traces there.
+- Every spec opens the game with `playing` (`e2e/fixtures.js`), and the game's drawn cheaply
+  unless the test says otherwise: at Low without shadows (kept as the game's settings before the
+  page loads, where the test keeps none of its own), looking down on the player once it's
+  playing. In software that's five times as many frames a second as High from where the camera
+  starts, out across the land (measured: 2.1 a second against 0.4). A test of what's drawn at a
+  higher quality, of shadows, grass, water or the far land, of how many bodies are held at High,
+  or of the camera and where things are on the screen, asks for exactly what it needs and says
+  why in a comment: `playing`'s `quality`, `shadows` and `view: "start"`, `FULL` for all three, or
+  `test.use({ drawing: "full" })` for a whole spec. Never change what a test asserts to make it
+  pass at Low: a test that fails there for any other reason than being about High has found
+  something.
 - A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
-  `e2e/pellagos.spec.js`). Do the same in new tests, and never wait on the clock.
+  `e2e/fixtures.js`). Do the same in new tests, and never wait on the clock.
 - A test whose games must run on (two players, say) but that looks at nothing drawn (menus, chat,
-  what's said) stops their drawing once they're playing (`undrawn` in `e2e/together.spec.js`).
-  Without a GPU, drawing is most of every frame, and every click waits on a frame or two: undrawn,
-  the direct message test there went from about 290 seconds to 100.
+  what's said, who's let into which world) stops their drawing once they're playing (`undrawn`
+  in `e2e/fixtures.js`, or `playing`'s `drawn: false`). Without a GPU, drawing is most of every
+  frame, and every click waits on a frame or two: undrawn, the direct message test went from
+  about 290 seconds to 100.
+- An `expect` waits 20 seconds before it fails, not Playwright's 5 (`playwright.config.js`): on a
+  slow runner 5 was too few, and two tests failed for it now and then. A test that fails leaves
+  what it saw in its output folder (`e2e/fixtures.js`): a picture of each page, the game's
+  messages and where everyone was (`game-N.json`), and its debug log; CI keeps the folder with
+  the run (`e2e-failures-<share>`).
+- `/?play`'s hero is made from the world's seed (`client/js/app/heroes.js` `quickStartHero`), the
+  same every time for a seed and people: `&hero=1`, `2`... for another body of the same seed.
 - They never reach the game's default world server (`pellagos.duckdns.org`, which every game
   knows from the first: `client/js/app/servers.js` `DEFAULT_SERVERS`). `playwright.config.js`
   launches Chromium with `--host-resolver-rules` making its name resolve to nothing, so the game
@@ -248,11 +335,17 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   the land, which is slow to draw in software. One that times out on CI only for being slow is
   given longer, said why in the pull request; one that hangs (waiting on what never comes) is
   fixed.
-- Time the tests by how long they took on CI, so its split stays even: once a run's done, its
-  ten reports (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page,
-  Artifacts), then `npm run e2e:durations -- reports/*/e2e-report.json`. Commit
+- Time the tests by how long they took on CI, so its split stays even. CI runs for pull requests
+  alone, so the run is your pull request's: `gh run list --workflow ci.yml --branch <your branch>`
+  gives its number, as does its page's address. Once it's done, download its reports, one from
+  each job (`gh run download <run> -p 'e2e-report-*' -D reports`, or the run's page, Artifacts),
+  then `npm run e2e:durations -- reports/*/e2e-report.json` on the branch the run was of. Commit
   `e2e/durations.json`, not the reports. Do it after adding browser tests, making them much
   slower or quicker, or whenever CI's `e2e` jobs end far apart.
+- The run needn't be green. A test is timed only where it passed: one that failed or ran out of
+  time keeps the time it had (out of time, it took its time limit, which says nothing of how long
+  it takes), and the script names them. A time kept for a test that's since been taken out or
+  renamed is dropped: the script lists the tests there are now (`playwright test --list`).
 - To time some locally instead (for a new test before it's been on CI; a machine of your own
   can be quicker or slower than CI's, so a CI run's times are better): `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1
   --reporter=json`, then `npm run e2e:durations -- report.json`.
@@ -271,7 +364,7 @@ What's wrong already is kept in `test/motion-baseline.json`. The check fails onl
 worse than that, so CI catches a change that makes any motion worse on any body.
 
 ```sh
-npm run check:motion                      # everything (about 5 minutes, all your threads)
+npm run check:motion                      # everything (about 13 minutes on four threads; it uses all yours)
 npm run check:motion -- --only attack/    # only the motions whose ids start so
 npm run check:motion -- --body orc-       # only those bodies
 npm run check:motion -- --update          # keep this run's failures as the new baseline
@@ -531,16 +624,20 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about half an hour. A first-time contributor's
-   CI may wait for a maintainer to approve the run.
-4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
+3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about 50 minutes (section 2,
+   *How long it takes*), then `ci`, which says in a few seconds whether they all passed. A
+   first-time contributor's CI may wait for a maintainer to approve the run.
+4. If CI fails, read the failing job's log (for a browser test, look too at what it left: the
+   run's `e2e-failures-<share>` artifact, section 2), reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
    failed. Don't push empty commits, or close and reopen the pull request, to set CI going again.
 5. If `main` moves on, bring your branch up to date (section 6).
 6. Answer every review comment: change the code, or say why not.
 7. A maintainer merges it, with a merge commit, once CI is green on a head that's up to date with
    `main` and it's been reviewed. Don't merge your own pull request unless the owner has said you
-   may. Once it's merged, GitHub Pages publishes the game from `main`.
+   may. Once it's merged, GitHub Pages publishes the game from `main` a minute or two later.
+   Nothing is tested again on `main` (section 2): the pull request's green run was of those very
+   files.
 
 ## 6. Merging cleanly when others are working too
 
@@ -563,10 +660,11 @@ tick may no longer be true: the two changes can conflict, or each pass alone and
 
 GitHub enforces all of that. There's no merge queue, because that's only for repositories owned by
 an organisation and this one belongs to a person. These are the settings as they stand; keep this
-table current (the standing rule). They were last checked on 2026-10-16, when the private
-repository for the licensed models was set up: the ruleset and pull requests' settings read back
-as below; the secret shown by CI fetching the models with it; the deploy key read back by the
-owner.
+table current (the standing rule). The ruleset and pull requests' settings were last read back on
+2026-11-11, as below (`gh api repos/hoffspot/conquest/rulesets/24459327` and
+`gh api repos/hoffspot/conquest`). The secret and the deploy key were last checked on 2026-10-16,
+when the private repository for the licensed models was set up: the secret shown by CI fetching
+the models with it; the deploy key read back by the owner.
 
 | Where | Setting | As it is |
 | --- | --- | --- |
@@ -575,26 +673,54 @@ owner.
 | | Restrict deletions | On |
 | | Block force pushes | On |
 | | Require a pull request before merging | On, with 0 approvals required. A maintainer reviews, but can't approve a pull request they opened themselves |
-| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)` |
-| | Require branches to be up to date before merging | On |
+| | Require status checks to pass | On. Required checks, from GitHub Actions: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`. To become `ci` alone: asked of the owner on 2026-11-11, and not done yet (below, *One required check*) |
+| | Require branches to be up to date before merging | On. With the required checks, it's why CI needn't run on `main` again after a merge (section 2): neither is turned off without `push: branches: [main]` put back into `ci.yml` first |
 | *Settings → General → Pull Requests* | Allow auto-merge | On |
 | | Always suggest updating pull request branches | On (the *Update branch* button) |
 | | Merge methods | Merge commits, squash and rebase are all allowed; this repository's convention is a merge commit |
 | *Settings → Secrets and variables → Actions*, Repository secrets | `MODELS_DEPLOY_KEY` | The private half of the read-only deploy key on `hoffspot/conquest-models`, for the builds to fetch the licensed models (docs/LICENSED_MODELS.md). Set on 2026-10-16. `PELLAGOS_RELEASE_KEY`, for signing the world server's releases (`npm run release-key`), is the owner's to add when they make the release key |
 | `hoffspot/conquest-models` (private) → *Settings → Deploy keys* | `conquest builds (read only)` | Read-only, fingerprint `SHA256:IQCk0zNoVFZVfSDSwMVncAy0QPQEcYYLmMecRgDtCh8`. To change it: docs/LICENSED_MODELS.md, *Changing the key* |
 
-**Every CI job is a required check.** A job that's added must be added to the ruleset once it has
-run on a pull request (GitHub only offers checks it has seen). A job that's renamed or removed must
-be changed in or taken out of the ruleset, or every pull request waits for a check that never
-comes. The same goes for the number of `e2e` jobs: each is required by its name, `e2e (N of 8)`.
-Only the owner can make these changes, so ask them, with the steps:
+**One required check.** CI's `ci` job passes only if every other job did (section 2), so
+requiring it alone requires them all, whatever they're called and however many there are. That's
+how the ruleset is meant to be, and it isn't yet:
+
+- **As it is**, the ten jobs before `ci` are each required by name, and `ci` isn't. So a job
+  that's added, renamed or removed needs the ruleset changed with it, and so does the number of
+  `e2e` jobs (each is required as `e2e (N of 8)`), or every pull request waits for a check that
+  never comes.
+- **As it's to be**, `ci` is the only required check, and none of that needs a setting changed.
+
+Only the owner can change it. The steps, to take once the pull request that added `ci` is merged
+(any time after: until then nothing breaks, as the ten are still run and still required):
 
 1. *Settings → Rules → Rulesets → main → Require status checks to pass → Add checks*.
-2. Type the job's name, and choose the one from GitHub Actions. Remove any check that no longer
-   exists.
-3. *Save changes*.
+2. Type `ci`, and choose the one from GitHub Actions.
+3. Remove the other ten: `test`, `motion` and `e2e (1 of 8)` to `e2e (8 of 8)`.
+4. Leave *Require branches to be up to date before merging* ticked.
+5. *Save changes*.
 
-Then the routine is: *Update branch* on the pull request (it merges `main` in), then *Enable
+Then whoever asked reads it back (`gh api repos/hoffspot/conquest/rulesets/24459327`: its
+`required_status_checks` holds `ci` alone, and `strict_required_status_checks_policy` is true),
+and changes the table above to say so. A pull request opened before `ci` was added gets the job
+when it's brought up to date with `main`, as it must be to merge anyway.
+
+From then on:
+
+- A job added to `ci.yml` goes in the `ci` job's `needs`, and that's all
+  (`test/contribution.test.js` fails until it's there). A job in another workflow (`soak.yml`,
+  `mac.yml`) isn't required, as before.
+- The number of `e2e` jobs is two numbers in `ci.yml`, changed together: the `e2e` job's matrix
+  (`shard: [1, 2, ...]`) and `E2E_SHARES`, which is always two more than the matrix is long (the
+  `motion` and `test` jobs take the last two shares). The test fails if a share is left to no
+  job or given to two, and until this file gives the new number of jobs. The review of
+  2026-11-11 worked out, from how fast 430 of CI's runners had been, that with 18 of them
+  (`shard` 1 to 18, `E2E_SHARES: 20`) a run would end in a median 27 minutes, not 52. A run is
+  then 20 jobs at once, which is all GitHub gives the account, so two pull requests' runs at
+  once wait on each other. **Not before the ruleset is changed:** every pull request would wait
+  for `e2e (1 of 8)` and the rest, which would never come.
+
+**The routine for a pull request** is: *Update branch* on it (it merges `main` in), then *Enable
 auto-merge*. GitHub merges the pull request once it's green on that up-to-date head. If `main`
 moves first, update the branch again.
 
@@ -651,9 +777,11 @@ A good first message in a session:
 | `npm ci` fails in a cloud session | The environment's network access must let the npm registry through, and its setup script be `npm ci` |
 | A conflict in `manifest.js`, `assets.js`, `index.html`'s import map, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
 | The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
-| A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
+| A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI doesn't run there. If it's `ci`, the branch is older than the job: bring it up to date with `main`. If it's another, a job was renamed or removed, or the number of `e2e` jobs changed, while each was still required by name: the owner updates the ruleset (section 6, *One required check*) |
+| The `ci` job failed | It runs nothing of its own: its log says which job didn't pass (failed, cancelled or skipped). Look at that one. *Re-run failed jobs* runs it and `ci` again |
 | A job failed at *Install Chromium for the browser tests* after three 5-minute tries, or an `e2e` job was ended at 80 minutes | Playwright's download hung: not your change. *Re-run failed jobs* on the run. If its log says a library is missing, the runner's image changed: CI installs Chromium without `--with-deps` (apt-get there has hung for good), so add the library to the step |
-| A job was still running its browser tests when it was ended, or the jobs end far apart | Tests added without being timed each count for the median (about 40 s), so a job can get more than its share of slow ones: time them by the run's reports (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If the unit tests or the motion check have grown, change their minutes in `ci.yml`'s `E2E_AHEAD`. If every job has grown, raise `timeout-minutes` in `ci.yml` to twice the longest, and say why in the pull request |
-| Another CI job "has exceeded the maximum execution time" | It ran twice as long as it ever has. A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
+| A job was still running its browser tests when it was ended, or the same job ends long after the others run after run | Tests added without being timed each count for the median (about 55 s), so a job can get more than its share of slow ones: time them by the run's reports (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If the unit tests or the motion check have grown, change their minutes in `ci.yml`'s `E2E_AHEAD`. If every job has grown, raise `timeout-minutes` in `ci.yml` to about twice the work a job is given, and say why in the pull request. (One run's jobs ending 20 or 30 minutes apart, a different job last each time, is the runners' speeds: section 2, *How long it takes*) |
+| Another CI job "has exceeded the maximum execution time" | It ran far longer than it ever has (section 2, *How long it takes*). A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
 | A CI job cancelled after about 15 minutes, with no steps and no logs | It was never given a runner: GitHub's doing, not your change. *Re-run failed jobs* on the run |
 | CI was green, but red after merging `main` in | Someone else's change and yours don't fit together. Fix it on your branch before merging (section 6) |
+| There's no CI run on `main` after a merge | As it's meant to be (section 2): the pull request's last run tested those very files. To run it on `main` all the same: the Actions tab, CI, *Run workflow* |

@@ -1078,7 +1078,7 @@ export const PAINTERS = {
             const [cu, cv] = [u * 2 - 1, v * 2 - 1];
             const kind = (index + row * 3) % 4;
             const r = Math.hypot(cu, cv);
-            let cut = false;
+            let cut;
 
             if (Math.max(Math.abs(cu), Math.abs(cv)) > 0.78 && Math.max(Math.abs(cu), Math.abs(cv)) < 0.88) {
                 cut = true;

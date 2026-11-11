@@ -1,5 +1,5 @@
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
-import { expect, test } from "./fixtures.js";
+import { expect, playing, test } from "./fixtures.js";
 
 // Bellhaven (core/scenery.js, core/terrain/scenes.js, world/landmark3d.js, world/scenery3d.js,
 // docs/WORLD.md): set into the world, its castle seen from its road's end; a fixed scene's own map,
@@ -12,21 +12,10 @@ import { expect, test } from "./fixtures.js";
 // test without them, models.spec.js's way)
 test.use({ serviceWorkers: "block" });
 
-// Open the game and wait for it to be playing (as pellagos.spec.js's)
-async function playing(page, address) {
-    const errors = [];
-
-    page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(address);
-
-    try {
-        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
-    } catch (error) {
-        throw new Error(`Not playing; errors: ${JSON.stringify(errors.slice(0, 5))}`, { cause: error });
-    }
-
-    return errors;
-}
+// (Drawn in full, as the game draws on a computer, and seen from where the camera starts: these
+// are of what's drawn of Bellhaven, its far model seen from its road's end and its draw calls and
+// triangles inside counted at High)
+test.use({ drawing: "full" });
 
 // The player brought to its road's end, before its way in, the world made round them till its
 // castle's far model's drawn there (or its stand-in, without the licensed models); then stepped
@@ -168,7 +157,11 @@ for (const licensed of [true, false]) {
                 await page.route("**/models/scenery/**", (route) => (route.request().url().includes(".bin") ? route.abort() : route.continue()));
             }
 
-            const errors = await playing(page, "/?play&seed=1");
+            // (Anything the page fails at, from first to last)
+            const errors = [];
+
+            page.on("pageerror", (error) => errors.push(error.message));
+            await playing(page, "/?play&seed=1", { view: "start" });
             const tapped = await stepIn(page);
 
             // (Seen from its road's end: its far model, its own terrain drawn as the world's ground,

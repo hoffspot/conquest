@@ -65,8 +65,8 @@ checks the private repository out into `.models` with the key, and puts its file
 `client/` (`node scripts/licensed-models.js place .models`), each checked against the hash and
 size the catalog keeps. That's before it tests or builds:
 
-- `ci.yml`: the `test` job and the `e2e` jobs;
-- `pages.yml`: before the tests and *Put the site together*, so the site has them;
+- `ci.yml`: the `test`, `motion` and `e2e` jobs;
+- `pages.yml`: before *Put the site together*, so the site has them;
 - `mac.yml`: before the app's built, so the app has them.
 
 The private repository is laid out as `client/` is: its `models/beasts/dreadthorn.bin` is put at

@@ -5,6 +5,11 @@ e2e-share.txt
 .DS_Store
 *.log
 .cache/
+# Claude Code's worktrees: other checkouts of this repository, each its own branch's (never linted
+# or committed from here)
+.claude/worktrees/
+# ESLint's cache (npm run lint: only files whose bytes have changed are linted again)
+.eslintcache
 client/motion-report.json
 dist/
 # (But not the Blender pipeline's: what it builds from the examples is committed, and its tests

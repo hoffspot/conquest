@@ -167,8 +167,15 @@ describe("the alchemist's brews (goods.js BREWS)", () => {
         assert.equal(left("invisibility"), 60000);
         assert.equal(host.players.get(HOST_PLAYER).progress.pack.filter(Boolean).length, 0, "each drunk");
 
-        run(host, 30 * 60000);
+        // (Half an hour on, worn off. The clock's put on to the ward's last second, and that's
+        // played: not the half hour, 36,000 steps of the whole world to see one ward end)
+        host.battle.time += 30 * 60000 - 1000;
+        assert.equal(left("resistFire"), 1000, "on to the last");
+
+        const events = run(host, 1000);
+
         assert.equal(host.battle.buffOf(player, "resistFire"), null, "worn off");
+        assert.ok(events.some(({ type, id, kind, over }) => type === "unbuffed" && id === HOST_PLAYER && kind === "resistFire" && over), "and its end told");
     });
 
     it("leaves what an oil's for on a quarter of the blows (fire oil: burning), one oil on a weapon at a time", () => {

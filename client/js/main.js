@@ -14,9 +14,11 @@
 // Nothing here imports Three.js: it and the rest of the game are downloaded by the loader first,
 // and only then imported.
 //
-// ?play goes straight into a game with a random character (with ?weapon=, ?seed=, ?people= and
-// ?quality=). ?join=CODE opens Join a World on another Device with the code in it (&at= the
-// server it's looked for on).
+// ?play goes straight into a game with a random character, the same one every time for a seed
+// (with &weapon=, &seed=, &people=, &hero= for another character of the same seed, and
+// &quality=low, medium or high, drawn so this once whatever's chosen in Game options): the
+// tests' and developers' way in, not a player's. ?join=CODE opens Join a World on another Device
+// with the code in it (&at= the server it's looked for on).
 
 import { ASSETS } from "./app/assets.js";
 import { Backdrop } from "./app/backdrop.js";
@@ -51,6 +53,13 @@ const canvas = document.querySelector("#view");
 const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
+
+// (The quick start asked to draw at a level, `?play&quality=low`, `medium` or `high`: drawn so
+// this once, whatever's chosen in Game options, and not kept unless it's chosen there)
+if (params.has("play") && ["low", "medium", "high"].includes(params.get("quality"))) {
+    settings.quality = params.get("quality");
+}
+
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 
 // The paintings behind the loading screen and the title, each in turn (app/backdrop.js); let go of
@@ -6608,14 +6617,16 @@ async function start() {
         return;
     }
 
+    // (The quick start: its hero made from the world's seed, the same every time, so a test's
+    // doesn't change from run to run; `&hero=1`, `2`... for another body of the same seed)
     if (params.has("play")) {
-        const { heroOfPeople, randomHero, suggestName } = await import("./app/heroes.js");
-        const hero = params.get("people") ? heroOfPeople(randomHero(), params.get("people")) : randomHero();
+        const { quickStartHero } = await import("./app/heroes.js");
+        const seed = Number(params.get("seed")) || 1;
+        const hero = quickStartHero(seed, { which: params.get("hero"), people: params.get("people") });
 
-        hero.name = suggestName(hero);
         hero.weapon = WEAPONS[params.get("weapon")] ? params.get("weapon") : "sword";
         hero.boots = params.has("boots") && hero.weapon !== "boots";
-        play({ hero, seed: Number(params.get("seed")) || 1 });
+        play({ hero, seed });
 
         return;
     }

@@ -647,7 +647,7 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         assert.equal(one.armed, true);
 
         for (let t = 0; t < 2.5; t += 0.05) {
-            frame = step();
+            step();
         }
 
         frame = step(0.3);
@@ -834,7 +834,6 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
             [2.3, "run"],
         ]) {
             let z = 0;
-            let stride = null;
 
             for (let k = 0; k < 60; k++) {
                 z += speed * 0.05;
@@ -844,7 +843,7 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
             assert.equal(moveOf(one.frameIn(table)), gait);
 
             // (Another stride's worth on, it's where it was in it)
-            stride = one.stride;
+            const stride = one.stride;
 
             for (let gone = 0; gone < table[gait].stride; gone += speed * 0.05) {
                 z += speed * 0.05;

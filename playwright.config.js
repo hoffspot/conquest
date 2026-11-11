@@ -14,6 +14,11 @@ export default defineConfig({
     // e2e/durations.json: CI's machines can be 1.7 times as slow from one run to the next, and the
     // start view looks out across the land, which is slow to draw in software)
     timeout: 180000,
+    // What's waited for (`expect(locator)`, `expect.poll`) is given 20 seconds, not Playwright's 5:
+    // the page's frames are drawn in software, a second or more each on a slow machine, and a
+    // click waits on one or two; 5 seconds failed tests that were only slow. One that's really
+    // wrong takes 20 seconds to say so.
+    expect: { timeout: 20000 },
     workers: process.env.CI ? 1 : undefined,
     fullyParallel: true,
     reporter: process.env.CI ? "github" : "list",
@@ -24,6 +29,9 @@ export default defineConfig({
         // (Drawn at half the screen's pixels each way: in software, a frame's a fifth quicker or
         // more, and the page laid out the same; a test of the pixels themselves sets its own)
         deviceScaleFactor: 0.5,
+        // A failed test's pages as they were, kept with its results (test-results/), beside how
+        // its games say they stood (e2e/fixtures.js: `game-<page>.json`, `debug-log-<page>.json`)
+        screenshot: "only-on-failure",
         launchOptions: {
             // WebGL through software rendering on machines without a GPU, such as CI; and the game's
             // default world server (app/servers.js DEFAULT_SERVERS) never reached from a test: its

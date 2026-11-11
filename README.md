@@ -1,6 +1,6 @@
 # conquest
 
-[![CI](https://github.com/hoffspot/conquest/actions/workflows/ci.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/ci.yml)
+[![Deploy to GitHub Pages](https://github.com/hoffspot/conquest/actions/workflows/pages.yml/badge.svg)](https://github.com/hoffspot/conquest/actions/workflows/pages.yml)
 
 **Pellagos**: make a character, choose a weapon, and defend a market town from the orc that
 prowls its fields, then walk out of it into the world round it: 8 kilometres of fields, woods,
@@ -609,8 +609,11 @@ npm start
 
 Open <http://localhost:8080>. To go straight into a game with a random character, open
 <http://localhost:8080/?play> (add `&weapon=bow`, `&boots` for spiked boots too, `&seed=12` for another town,
-`&people=elf` for one of another people, `&quality=low`, or `&flyin` for the opening fly-in, which
-the quick start leaves out). `?join=ABCD` opens Join a World on another Device with a
+`&people=elf` for one of another people, `&quality=low`, `medium` or `high` to draw at that level
+this once, whatever Game options has, or `&flyin` for the opening fly-in, which
+the quick start leaves out). The character's made from the seed, so it's the same one every time
+for a seed (the browser tests come in this way, and what's true of one body isn't of the next);
+`&hero=1`, `2` and so on is another of the same seed. `?join=ABCD` opens Join a World on another Device with a
 world's code in it.
 
 The server also carries the relay that games playing together talk through (at `/relay`: a
@@ -634,7 +637,9 @@ also plays offline.
 ### Hosting on GitHub Pages
 
 [.github/workflows/pages.yml](.github/workflows/pages.yml) publishes the `client/` folder to
-GitHub Pages every time `main` changes, once the lint and unit tests pass. To set it up, in the
+GitHub Pages every time `main` changes. It tests nothing again: a pull request is merged only
+once CI has passed on the very files it makes of `main` ([contribution.md](contribution.md),
+section 2). To set it up, in the
 repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow can also be
 run by hand from the **Actions** tab.
 
@@ -646,6 +651,7 @@ the checks CI runs and how to run them, and how to open a pull request that's sa
 ```sh
 npm run lint        # ESLint
 npm test            # unit tests (Node's built-in test runner)
+npm run test:affected   # the same unit tests, those your change can reach first
 npm run test:e2e    # plays the game in Chromium using Playwright
 npm run check       # lint + unit tests
 npm run build:manifest  # after changing what the game downloads: lists it for the loading screen, and the catalog
@@ -670,17 +676,29 @@ browser of its own (`e2e/fixtures.js`: without a GPU, the drawing a test leaves 
 browser's GPU process would slow the next test down by a minute or more), so they run side by
 side (on half the machine's cores; `--workers=N` for more or fewer). They draw at half the
 screen's pixels (`deviceScaleFactor: 0.5`, playwright.config.js: a fifth quicker in software
-rendering; a test of the pixels themselves sets its own). A test that waits on the game's time
-stops it and plays it on by hand (`playUntil` in e2e/pellagos.spec.js): drawn without a GPU, a
+rendering; a test of the pixels themselves sets its own). They draw the game cheaply unless a
+test says otherwise (`e2e/fixtures.js`): at Low without shadows, kept as the game's settings
+before the page loads where the test keeps none of its own, and looking down on the player once
+it's playing (`playing`, which every spec opens the game with), which in software is five times
+as many frames a second as High from where the camera starts, out across the land. A test of
+what's drawn at a higher quality, of shadows, or of the camera, asks for what it needs
+(`playing`'s `quality`, `shadows` and `view`, or `keeping`; `test.use({ drawing: "full" })` for
+a whole spec) and says why; one that looks at nothing drawn (menus, chat, who's let into which
+world) stops the drawing once the game's playing (`undrawn`, or `playing`'s `drawn: false`). A test that waits on the game's time
+stops it and plays it on by hand (`playUntil` in e2e/fixtures.js): drawn without a GPU, a
 frame takes a second or more and the game goes on a tenth of a second a frame at most, so
-waiting on it as it's drawn is waiting on how slow the machine is. CI splits them
+waiting on it as it's drawn is waiting on how slow the machine is. What a test waits for is given
+20 seconds (`expect.timeout`), and one that fails leaves a picture of each page, how each game
+stood (its messages, the player and who's near them, the camera) and its debug log's text in
+`test-results/`. CI splits them
 between eight jobs run at once, each about as long as the others: `scripts/e2e-shard.js` gives
 each job its share by how long each test last took (`e2e/durations.json`; a test not timed yet
 counts as the median), and the job runs it with `--test-list`. After adding tests or making them
 much slower or quicker, time them one at a time as CI runs them and keep the times:
 `PLAYWRIGHT_JSON_OUTPUT_NAME=report.json npx playwright test --workers=1 --reporter=json`, then
-`npm run e2e:durations -- report.json`. CI runs for each pull request, and for main as each is
-merged; lint and the unit tests are a job of their own.
+`npm run e2e:durations -- report.json` (a test is timed only where it passed, and a time kept
+for a test that's gone is dropped). CI runs for each pull request, and not again for main
+once it's merged (contribution.md, section 2); lint and the unit tests are a job of their own.
 
 While the game is running, the browser console reaches it through `pellagos`: for example
 `pellagos.game.battle.actor("orc")`, or `pellagos.game.advance(10)` to play on ten seconds

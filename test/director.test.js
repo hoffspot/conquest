@@ -58,6 +58,12 @@ function hosted(deck) {
     return { host, world, me };
 }
 
+// What's kept of a world (seed 2) no one's come into and nothing's happened in: its host's
+// snapshot, taken once and only ever read (three tests ask what isn't kept yet; the world and
+// the host it was taken from are never used again)
+let untouched = null;
+const keptOfNew = () => (untouched ??= new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot());
+
 // The player walked out of the start town (seed 2's: north-east), `step` metres each half a
 // second, from `from` metres out, till something's dealt before them (or they've gone `metres`):
 // how far they went, where they are, and what was dealt ({ cache }, { find }, { tracks },
@@ -264,7 +270,7 @@ describe("the wilds director in play (host.js #caches, #deal, #putFind)", () => 
         run(host, 6000);
         run(again, 6000);
         assert.equal(again.checksum(), host.checksum());
-        assert.equal("finds" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's dealt)");
+        assert.equal("finds" in keptOfNew(), false, "(none kept till one's dealt)");
     });
 });
 
@@ -700,7 +706,7 @@ describe("the strangers met on the way (director.js STRANGERS; host.js #putStran
             assert.ok(!host.battle.actor(one.id) && !host.folk.has(one.id), `${kind}: gone from the world`);
         }
 
-        assert.equal("strangers" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's met)");
+        assert.equal("strangers" in keptOfNew(), false, "(none kept till one's met)");
     });
 });
 
@@ -928,6 +934,6 @@ describe("something across the way (director.js OBSTACLES; host.js #putObstacle,
         assert.ok(!host.obstacles.has(obstacle.id));
         assert.ok(gone.some(({ type, obstacle: id, change }) => type === "obstacle" && id === obstacle.id && change === "gone"));
         assert.ok(!squaresOf(world.maps.town).blocked(obstacle.box[0], obstacle.box[1]), "(its squares free)");
-        assert.equal("obstacles" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's dealt)");
+        assert.equal("obstacles" in keptOfNew(), false, "(none kept till one's dealt)");
     });
 });

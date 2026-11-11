@@ -2,17 +2,18 @@ name: A share of the browser tests
 description: >-
   One job's share of the Playwright browser tests (scripts/e2e-shard.js, split by how long each
   took on CI: e2e/durations.json): Chromium installed, the share chosen, run, and its JSON report
-  kept with the run as e2e-report-<share>, for npm run e2e:durations to time the tests by.
+  kept with the run as e2e-report-<share>, for npm run e2e:durations to time the tests by. If a
+  test failed, what Playwright kept of it (test-results/) is kept too, as e2e-failures-<share>.
 
 inputs:
   share:
-    description: Which share this job runs (from 1)
+    description: Which share this job runs (from 1), or "last" or "last-1", counted back from the last
     required: true
   shares:
     description: How many shares the tests are split into, between every job that runs one
     required: true
   ahead:
-    description: The work some jobs do first, as scripts/e2e-shard.js --ahead takes it (<share>:<minutes>,...)
+    description: The work some jobs do first, as scripts/e2e-shard.js --ahead takes it (<share>:<minutes>,...), a share a number or counted back from the last as above
     required: false
     default: ""
 
@@ -27,9 +28,21 @@ runs:
       shell: bash
       run: for try in 1 2 3; do timeout 300 npx playwright install chromium && exit 0; done; exit 1
 
+    # ("last" and "last-1" made the numbers they stand for: the two jobs with other work first
+    # (ci.yml's unit tests and motion check) take the last two shares however many there are, so
+    # the number of e2e jobs changes without their shares being numbered again)
     - name: Choose this job's share of the browser tests
+      id: share
       shell: bash
-      run: node scripts/e2e-shard.js ${{ inputs.share }} ${{ inputs.shares }} --ahead "${{ inputs.ahead }}" > e2e-share.txt
+      env:
+        SHARE: ${{ inputs.share }}
+        SHARES: ${{ inputs.shares }}
+        AHEAD: ${{ inputs.ahead }}
+      run: |
+        numbered() { echo "$1" | sed -e "s/last-1/$((SHARES - 1))/g" -e "s/last/$SHARES/g"; }
+        share="$(numbered "$SHARE")"
+        echo "number=$share" >> "$GITHUB_OUTPUT"
+        node scripts/e2e-shard.js "$share" "$SHARES" --ahead "$(numbered "$AHEAD")" > e2e-share.txt
 
     - name: Its share of the browser tests
       shell: bash
@@ -37,7 +50,7 @@ runs:
         PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
       run: |
         if [ ! -s e2e-share.txt ]; then
-          echo "::notice::No browser tests in share ${{ inputs.share }} of ${{ inputs.shares }}"
+          echo "::notice::No browser tests in share ${{ steps.share.outputs.number }} of ${{ inputs.shares }}"
           exit 0
         fi
         npx playwright test --test-list e2e-share.txt --reporter=github,json
@@ -47,7 +60,21 @@ runs:
       if: ${{ !cancelled() }}
       uses: actions/upload-artifact@v4
       with:
-        name: e2e-report-${{ inputs.share }}
+        name: e2e-report-${{ steps.share.outputs.number }}
         path: e2e-report.json
+        retention-days: 14
+        if-no-files-found: ignore
+
+    # (What a failed test left to look at: Playwright's test-results folder, a folder for each
+    # test that failed, holding whatever playwright.config.js has it keep of one, such as a
+    # picture of the page as it ended. Only when a step of this action failed, the tests' most
+    # likely (failure() here is this action's own, not the job's, so not for a unit test that
+    # failed before it): a share that passed leaves nothing worth keeping)
+    - name: Keep what the failed tests left
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-failures-${{ steps.share.outputs.number || inputs.share }}
+        path: test-results/
         retention-days: 14
         if-no-files-found: ignore

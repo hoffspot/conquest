@@ -7,7 +7,7 @@ import { simplex } from "../client/js/core/terrain/simplex.js";
 import { FORDS, REACH, RIVER_HALF, RUNNING, STREAMS, wadeable, watersOf } from "../client/js/core/terrain/waters.js";
 import { BIOMES, CELL, CELLS, CHUNK, planWorld, WATER } from "../client/js/core/worldplan/plan.js";
 import { MOUNTAIN, SEA_LEVEL } from "../client/js/core/worldplan/terrain.js";
-import { quickEnough } from "./helpers.js";
+import { cpuMs, quickEnough } from "./helpers.js";
 
 const plan = planWorld(1);
 
@@ -160,10 +160,7 @@ describe("the ground's height (terrain/height.js)", () => {
                 const times = [];
 
                 for (let k = 0; k < 12; k++) {
-                    const started = performance.now();
-
-                    heightsOf(plan, (20 + k * 7) * CHUNK, (30 + k * 5) * CHUNK, CHUNK + 1, 1);
-                    times.push(performance.now() - started);
+                    times.push(cpuMs(() => heightsOf(plan, (20 + k * 7) * CHUNK, (30 + k * 5) * CHUNK, CHUNK + 1, 1)));
                 }
 
                 return times.sort((a, b) => a - b)[6];
