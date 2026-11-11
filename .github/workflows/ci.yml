@@ -51,6 +51,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # (Node 22 in every job here, and not yet 26, the long-term-support release since October
+      # 2026: on 24 and 26 test/registry.test.js fails, a set-aside world's memory not back with
+      # the system a second after its thread ends. contribution.md, "Which Node")
       - uses: actions/setup-node@v5
         with:
           node-version: 22

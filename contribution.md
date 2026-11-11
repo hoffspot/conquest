@@ -30,18 +30,18 @@ The rule is written down three times, so no one can miss it:
 - in `CLAUDE.md`, which Claude Code reads at the start of every session in this repository;
 - in `test/contribution.test.js`. It fails when an npm script, a workflow, a CI job, when CI
   runs, the time a job is ended at or the Node version changes and this file hasn't been updated
-  to match; when CI's `ci` job
-  doesn't wait for every other job, or a share of the browser tests isn't exactly one job's; and
-  when the required checks in the settings table are neither `ci` alone nor every other job by
-  its name. That test is the part of the rule a machine can check; everything else is up to you
-  and your reviewer.
+  to match; when CI's `ci` job doesn't wait for every other job, or a share of the browser tests
+  isn't exactly one job's; and when the required checks in the settings table are neither `ci`
+  alone nor every other job by its name. That test is the part of the rule a machine can check;
+  everything else is up to you and your reviewer.
 
 ## What you need
 
 - A GitHub account.
 - Claude Code: the command line, the desktop app, or Claude Code on the web
   (<https://claude.ai/code>). It runs on your own Claude plan, so its usage is yours.
-- Node.js 22 or newer (`package.json`'s `engines`; CI uses 22).
+- Node.js 22 or newer (`package.json`'s `engines`; CI uses 22, and not yet 26: section 2, *Which
+  Node*).
 - Chromium for the browser tests. Playwright downloads it, or you point it at one you already
   have with `CHROMIUM_PATH`.
 - Only for the licensed models (the Dreadthorn's, the werewolf's, the centipede's, the Ant
@@ -128,6 +128,28 @@ A job that hangs is ended rather than held to GitHub's 6 hours: `test`, `motion`
 job at 80 minutes, about twice the work each is given (the longest any has taken is 57½; the
 Chromium download in each is tried three times, 5 minutes a try), and `ci` at 5.
 
+**Which Node.** CI, Pages and the soak use Node 22; the Mac app's workflow and the Mac app itself,
+24 (`NODE` in `scripts/build-mac-app.js`). Node 26 has been the long-term-support release since
+28 October 2026, Node 22's support ends in April 2027, and on the game's own code 26 took 15%
+less of a processor's time making and stepping a world, so the move is wanted. It was tried on
+2026-11-11 and isn't made yet, for one test:
+
+- The whole unit suite on Node 26.13.0 passed but for `test/registry.test.js`, *giving back its
+  memory*: a world set aside ends its thread, and the test looks for most of what two worlds took
+  to be back with the system a second later. It fails every time on Node 26.13.0 and on Node
+  24.21.0, and passes every time on Node 22.23.4, each run alone on the same machine.
+- Measured there, on Linux: two worlds take about 260 MB on Node 22, 340 MB on Node 24 and
+  360 MB on Node 26. Once their threads end, Node 22 gives back 82% at once. Node 24 gives back
+  83%, 3 to 10 seconds later. Node 26 had given back 14% after 45 seconds: it keeps the rest for
+  the next worlds (run and ended four times over, the process held about as much each time) and
+  lets go of it only now and then.
+
+So a world server's memory behaves differently on the newer Nodes, most likely the Mac app's
+among them (its Node is the same release, for a Mac), and whether that's the server's to change
+or the test's is the owner's call. Before moving any workflow or `NODE` to another Node, run the
+whole suite on it (`<that node> --test --test-concurrency=3 test/*.test.js`), or at the least
+that file.
+
 | CI job | What it runs | Locally |
 | --- | --- | --- |
 | `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`, four files at a time); then its share of the browser tests (the last share, below) | `npm run check`, which runs both |
@@ -139,7 +161,7 @@ Chromium download in each is tried three times, 5 minutes a try), and `ci` at 5.
 (`scripts/e2e-shard.js`, `e2e/durations.json`): a share for each `e2e` job, and one each for the
 `motion` and `test` jobs once their own work's done, given that much less (`ci.yml`'s
 `E2E_SHARES` and `E2E_AHEAD`: `last-1:13,last:20`, the minutes each does first), so that every job
-ends about together. Those two take the last two shares however many there are (`last-1` and
+is given about the same work. Those two take the last two shares however many there are (`last-1` and
 `last`, which the action makes numbers), so `E2E_SHARES` is always the `e2e` jobs and two more.
 Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
 share chosen and run), and its JSON report is kept with the run as `e2e-report-<share>`, failed
@@ -245,7 +267,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 | `npm run build:props` | Only when remaking the dungeons' and the shops' furniture, dressing and wares (`client/models/dungeons`, its `LICENSE.md` and their entries in `client/models/assets.json`), or one of them (`npm run build:props -- skull bones`). It downloads each model once, into `.cache` (Poly Haven's, OpenGameArt's, and museums' and makers' scans and models on Zenodo and Objaverse: about 230 MB in all), makes each simpler and its pictures smaller and KTX2 (ETC1S, which the graphics card keeps compressed: `scripts/lib/ktx2.js`, with the `ktx2-encoder` package), and takes about ten minutes for all of them, most of it making the KTX2 pictures. The maces a hero's mace looks like come as Blender files and an FBX: Blender reads those (`scripts/lib/blender.js`, `scripts/blender/to-obj.py`, each made an OBJ once, kept in `.cache/blender`) with Blender's Python module, utilities/blenderpipeline's (`npm run setup` there) or another named by `BLENDER_PYTHON`; the rest need none. The keep's kit and any other `dungeon-prop-` entry not made here (not in `client/models/dungeons`) are left as they are. A new model must be CC0 or CC BY (its maker named in `PROPS`' `by`, which the `LICENSE.md` it writes lists, and credited in `README.md`), downloadable without an account, and within `test/furnishings.test.js`'s budget (650 KB a file, 22 MB in all, its pictures KTX2). Node's own `fetch` ignores `HTTPS_PROXY`: behind a proxy, run it with `NODE_USE_ENV_PROXY=1` (Node 22.21 or later). Then `npm run build:manifest` |
 | `npm run build:textures` | Only when remaking the dungeons' photographs (`client/textures/dungeons`, `client/js/world/dungeonpictures.js` and their entries in `client/models/assets.json`). It downloads their CC0 scans once, into `.cache` (about 45 MB from ambientCG and Poly Haven), makes each a KTX2 (`scripts/lib/ktx2.js`: the colour ETC1S, the normal map UASTC), and takes about a minute. Then `npm run build:manifest` |
 | `npm run build:clips` | Only when remaking the character lab's animation clips, or the clips baked into the game's attacks, rests, guards' sway, flinches and dodges (`client/js/characters/clip-keys.js`, from `scripts/bake-clips.js`'s list, baked on MakeHuman's body whichever the game plays on: `BAKE_BODY`; a rest's timing in `client/js/core/roles.js` is its clip's, which the tests check). It needs Mesh2Motion's files: `git clone --depth 1 https://github.com/Mesh2Motion/mesh2motion-app ../mesh2motion-app`, then `-- --from=../mesh2motion-app/static/animations` |
-| `npm run build:mac` | Changes to the Mac app (`mac/`) or what its bundle holds: on a Mac, after `swift build -c release --arch arm64 --package-path mac`, `-- --executable <its PellagosServer>` makes `dist/Pellagos Server.app` (Node arm64 from nodejs.org, checked against its `SHASUMS256.txt` and the hash kept in `NODE`, its own signature kept; the server and the game), signs it ad hoc and zips it; with the server's archive and Homebrew formula beside it. Elsewhere `-- --no-executable` makes the rest of the bundle, unsigned. Node's archive is kept in `.cache/node`. To move to a newer Node, change `NODE` (its version and its archive's SHA-256 from that release's `SHASUMS256.txt`). `test/mac-app.test.js` checks the bundle without a Mac; the macOS workflow builds it on one (above) |
+| `npm run build:mac` | Changes to the Mac app (`mac/`) or what its bundle holds: on a Mac, after `swift build -c release --arch arm64 --package-path mac`, `-- --executable <its PellagosServer>` makes `dist/Pellagos Server.app` (Node arm64 from nodejs.org, checked against its `SHASUMS256.txt` and the hash kept in `NODE`, its own signature kept; the server and the game), signs it ad hoc and zips it; with the server's archive and Homebrew formula beside it. Elsewhere `-- --no-executable` makes the rest of the bundle, unsigned. Node's archive is kept in `.cache/node`. To move to a newer Node, change `NODE` (its version and its archive's SHA-256 from that release's `SHASUMS256.txt`), having run the unit tests on that Node first (not Node 26 yet: section 2, *Which Node*). `test/mac-app.test.js` checks the bundle without a Mac; the macOS workflow builds it on one (above) |
 | `npm run release-key` | For the project's owner, if they want releases signed as well as checked against GitHub's SHA-256 (docs/SERVER.md, "Releasing"): `-- --new <file outside the repository>` makes the release key pair once (the public half into `server/update/release-key.pem`, to commit; the private half kept by the owner alone, never committed), `-- --sign <archive> --key <file>` signs a release's archive (or with `PELLAGOS_RELEASE_KEY`, as the Mac app workflow does), `-- --verify <archive>` checks it |
 | `npm run build:pointers` | Only when redrawing the mouse pointers (`client/images/pointer/`: the sword, its looks over things and shaken, each size at 1x and 2x, drawn in `scripts/build-pointers.js` from what `client/js/app/pointer.js` asks for). It rasterizes them with Playwright's Chromium (or `CHROMIUM_PATH`'s), in a second or two. `test/pointer.test.js` fails while one is missing or the wrong size. Then `npm run build:manifest` |
 | `npm run build:backdrops` | Only when adding or changing the paintings behind the loading screen and the title (`client/images/backdrops/`, the scenes in `client/js/app/backdrop.js` `BACKDROPS`). Put each scene's master in `scripts/backdrops/` as `<scene>-tall` and `<scene>-wide` (as it's painted: a scene may be only one), a JPEG or a PNG, the owner's own (they're the repository's, under its licence) or CC0, and add it to `BACKDROPS`. It makes each an AVIF and a WebP at its master's size, or no more than 2560 pixels its longest side (`BACKDROP.most`: a 2K master, 2752 by 1536, is made 2560 by 1428), with ffmpeg (which needs libaom-av1 and libwebp), in a few seconds. `test/backdrop.test.js` fails while one is missing, the wrong way round, or over its budget (100 KB an AVIF, 150 KB a WebP). Then `npm run build:manifest` |
