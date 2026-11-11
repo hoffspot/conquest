@@ -1033,7 +1033,8 @@ leash (`ROLES`: the shield line 10 m, the two-handers 12, archers 15, casters 16
   the nearest enemy within 60 m of any of it (`ADVANCE.sight`; further than a soldier sees, as a
   captain watches the field) and marches on them, its front stopping 2 m short.
 - **Closing its ranks** (`#closeRanks`). Once a second (`CLOSE_MS`), if any of it have fallen
-  (or joined), its line's laid out again for those left: the front ranks' places filled first,
+  (or joined: also when one's fallen and another's joined in the same second, as many as before,
+  `#regroup`), its line's laid out again for those left: the front ranks' places filled first,
   and each rank's middle before its ends, each by whoever of its role was nearest it. So the
   rank behind steps up into a gap in front, the line narrows as it thins (keeping two ranks
   while it can), its rear guard comes into the line as the line needs it, and with none of its
@@ -1211,14 +1212,19 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
 - **An attack** (weapons.js) lands its blow `hitAt` into it and lasts `duration`, and can't be
   repeated for `interval`. A melee blow hits if the target is still within reach. A ranged attack
   lets go of a projectile (an arrow at 22 m/s, a bolt at 14, a fireball at 9) that homes in on its
-  target and hits when it arrives.
+  target and hits when it arrives. It doesn't follow for ever: once it's flown one and a half
+  times as far as its attack reaches without coming up with them (`SHOT_FLIES`: an arrow 20 m, a
+  grimoire's fireball as far as half again its reach), it gives up, and hits no one (a `fizzle`
+  event, `spent`). Whoever stands, or walks, is hit as before; only one who outruns a shot gets
+  away from it. Before, a fireball let go at a rider who galloped off followed them 344 m, for 38
+  seconds, and landed when they stopped.
 - **Damage** is rolled for each hit: a whole number from the attack's least to its most, each
   equally likely (the battle's seeded random numbers). It comes off the target's hit points and
   staggers them for a moment (they can't move or start an attack): a punch 0.08 s, a hammer 0.45.
 - **Spells** (spells.js: every one, in docs/MAGIC.md), cast with `cast(id, spell, target)`,
   take a moment to cast, then land: healing (on anyone), harming (an enemy, and those round them
   or it leaps to), stunning, lasting on whoever it's cast on, and the wonders the host works.
-  **Stun** (the Hexes') is cast on an enemy within 9 metres that the caster can see (0.4 s): for
+  **Stun** (the Hexes') is cast on an enemy within 18 metres that the caster can see (0.4 s): for
   3 seconds it can't move, attack, cast or think, and whatever it was starting is called off;
   the orc then turns on whoever stunned it. Each spell has its own cooldown, and after any, none
   can be cast for a second. A spell that can't be cast says why (`cooldown`, `busy` while
@@ -1328,7 +1334,7 @@ none: it looks as his own.
 | --- | --- | --- | --- | --- | --- |
 | Vigor | anyone | 16 m | 500 ms | 8–12 hit points back | 4000 ms |
 | Burn | an enemy | 16 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
-| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
+| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms | 5000 ms |
 
 (The rest, each school's tiers and the tomes' spells, are in docs/MAGIC.md.)
 

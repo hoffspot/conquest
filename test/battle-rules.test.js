@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const open = (width, height = width) => ({ blocked: Array.from({ length: height }, () => new Uint8Array(width)) });
@@ -267,6 +268,134 @@ describe("ways after someone found in a step of one's own (battle.js #pursue, RE
         assert.ok(out >= 0 && out < 10, "all set out in one step");
         assert.ok(Math.max(...ways.slice(out + 1)) <= 12, `the most in a step after they set out: ${Math.max(...ways.slice(out + 1))}`);
         assert.ok(ways.slice(out + 10).every((each) => each >= 1 && each <= 6), `${ways.slice(out + 10)}`);
+    });
+});
+
+describe("a shot gives up (battle.js #fly, SHOT_FLIES)", () => {
+    // A mage's fireball let go at someone six squares off, who does `then` as it leaves the hand
+    const shot = (then) => {
+        const battle = new Battle(open(200, 40), { seed: 3 });
+        const events = [];
+        let flown = 0;
+
+        battle.add({ id: "mage", kind: "soldier", team: "b", weapon: "grimoire", square: [20, 20], ai: "patrol", patrol: [[20, 20]], leash: 10, armed: true });
+        battle.add({ id: "mark", kind: "soldier", team: "a", weapon: "sword", square: [26, 20], hp: 9000, speed: 12 });
+
+        for (let t = 0; t < 30000; t += STEP_MS) {
+            const now = battle.advance(STEP_MS);
+
+            if (now.some(({ type, projectile }) => type === "projectile" && projectile === 1)) {
+                then(battle);
+            }
+
+            flown = Math.max(flown, battle.projectiles.find(({ id }) => id === 1)?.flown ?? 0);
+            events.push(...now.filter(({ projectile }) => projectile === 1));
+        }
+
+        return { events, flown };
+    };
+    const reach = WEAPONS.grimoire.attacks.find(({ kind }) => kind === "ranged").reach;
+
+    it("lands on one who stands, as ever", () => {
+        const { events, flown } = shot(() => {});
+
+        assert.deepEqual(events.map(({ type }) => type), ["projectile", "hit"]);
+        assert.ok(flown > 4 && flown < 6);
+    });
+
+    it("fizzles, hitting no one, once it's flown half as far again as its attack reaches after one it can't catch", () => {
+        // (Off faster than the fireball flies, the moment it's let go)
+        const { events, flown } = shot((battle) => battle.command("mark", { type: "move", to: [190, 20] }));
+
+        assert.deepEqual(events.map(({ type }) => type), ["projectile", "fizzle"]);
+        assert.equal(events[1].spent, true);
+        assert.ok(flown > reach * 1.5 - 1 && flown <= reach * 1.5 + 1, `${flown} m flown, its reach ${reach}`);
+        // (Within seconds, not the half minute and third of a kilometre it once followed a rider)
+        assert.ok(events[1].time - events[0].time < 5000);
+    });
+
+    it("counts one kept before shots gave up as having flown no way yet", () => {
+        const battle = new Battle(open(200, 40), { seed: 3 });
+
+        battle.add({ id: "mage", kind: "soldier", team: "b", weapon: "grimoire", square: [20, 20], ai: "patrol", patrol: [[20, 20]], leash: 10, armed: true });
+        battle.add({ id: "mark", kind: "soldier", team: "a", weapon: "sword", square: [26, 20], hp: 9000 });
+
+        while (!battle.projectiles.length) {
+            battle.advance(STEP_MS);
+        }
+
+        const kept = decode(encode(battle.snapshot()));
+
+        delete kept.projectiles[0].flown;
+
+        const again = Battle.restore(battle.world, kept);
+
+        assert.ok(run(again, 2000).some(({ type, projectile }) => type === "hit" && projectile === kept.projectiles[0].id));
+    });
+});
+
+describe("what lies burning on the ground once its caster's fallen (battle.js #ground)", () => {
+    it("is no one's blow: not held against the fallen, nor counted theirs", () => {
+        const battle = new Battle(open(60), { seed: 7 });
+
+        battle.add({ id: "caster", kind: "player", team: "a", weapon: "sword", square: [20, 30], hp: 30 });
+        // (Rooted where it stands: it can't walk out of the fire)
+        guard(battle, "burnt", [26, 30], { team: "b", hp: 9000, speed: 0, chase: 0 });
+        assert.equal(battle.cast("caster", "flamefill", "burnt").ok, true);
+
+        // (The fire laid and burning them, its caster's while they stand)
+        const first = run(battle, 2500).filter(({ type, ground }) => type === "hit" && ground);
+
+        assert.ok(first.length > 0 && first.every(({ by }) => by === "caster"));
+
+        // (Its caster felled: the fire burns on, no one's)
+        guard(battle, "killer", [21, 30], { team: "b", armed: true, power: { melee: 500 } });
+
+        const after = run(battle, 2500);
+        const fell = after.find(({ type, id }) => type === "death" && id === "caster");
+        const burns = after.filter(({ type, ground, time }) => type === "hit" && ground && time > fell.time);
+
+        assert.ok(fell, "the caster falls");
+        assert.ok(burns.length > 0, "the fire burns on");
+        assert.ok(burns.every(({ by }) => by === null), "no one's blows");
+    });
+});
+
+describe("a line's ranks closed over its fallen (battle.js #closeRanks)", () => {
+    it("closes them when one falls and another joins in the same second, as many as before", () => {
+        const battle = new Battle(open(60), { seed: 7 });
+        const member = (id, slot, more = {}) => guard(battle, id, [30 + Math.round(slot[0]), 30 + Math.round(slot[1])], { leash: 2, formation: { id: "line", slot, role: "front" }, ...more });
+        const slots = () => battle.actors.filter(({ dead, formation }) => !dead && formation?.id === "line").map(({ formation }) => formation.slot.join());
+
+        battle.formation("line", { anchor: [30, 30], facing: 0 });
+
+        for (let k = 0; k < 6; k++) {
+            member(`m${k}`, [k - 2.5, 0], k === 0 ? { hp: 1 } : {});
+        }
+
+        run(battle, 1500);
+
+        const closed = slots().sort();
+
+        // (One of them cut down, and one more joining well out of the line, within the second)
+        battle.add({ id: "foe", kind: "soldier", team: "b", weapon: "sword", square: [battle.actor("m0").square[0], battle.actor("m0").square[1] - 1], armed: true, hp: 9000, power: { melee: 500 } });
+
+        let fell = false;
+
+        for (let t = 0; t < 3000 && !fell; t += STEP_MS) {
+            fell = battle.advance(STEP_MS).some(({ type, id }) => type === "death" && id === "m0");
+        }
+
+        assert.ok(fell, "one falls");
+        battle.remove("foe");
+        member("late", [9, 9]);
+        assert.equal(slots().length, 6, "as many as before");
+        run(battle, 1100);
+
+        // (The same six places, the newcomer in one of them: not left where it was put, the
+        // fallen one's place standing empty)
+        assert.deepEqual(slots().sort(), closed);
+        assert.notEqual(battle.actor("late").formation.slot.join(), "9,9");
     });
 });
 

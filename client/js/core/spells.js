@@ -165,7 +165,7 @@ export const SPELLS = Object.freeze({
     hold: { label: "Hold", about: "Holds an enemy fast a good while.", target: "enemy", castTime: 600, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 6000, stun: 6000, like: "stun" },
 
     // --- Learnt from tomes (each once found or given: progress.js TOMES) ---
-    // Wards: on oneself or a friend, five minutes
+    // Wards: on oneself or a friend, an hour (WARDING)
     resistFire: ward("Resist Fire", "Wards against fire, an hour: 30% less from fire spells and flames, and burning ends sooner and hurts less.", { schools: ["fire"], elements: ["fire"], afflictions: ["burn"] }),
     resistWater: ward("Resist Water", "Wards against water and ice, an hour: 30% less from water spells, scalding and frost, and chills end sooner.", { schools: ["water"], elements: ["water"], looks: ["frost", "scald"] }),
     resistAir: ward("Resist Air", "Wards against wind and lightning, an hour: 30% less from air spells, and stuns from them end sooner.", { schools: ["air"], elements: ["air"] }),
