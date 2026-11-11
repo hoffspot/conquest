@@ -1582,6 +1582,21 @@ export function modelsMet(plan, at, home, dark) {
         .map(({ id }) => id);
 }
 
+/**
+ * Which kinds' models to read now (wantModel) and which only to fetch and keep (fetchModel), of
+ * those `predicted` (near one of their lairs, or that may be met where the player is: modelsNear,
+ * modelsMet), those `close` (whose lair the player's all but at, or an open rift pours out) and
+ * those `met` (one of their kind in the battle). `sparing` (a touch screen, short of memory):
+ * what's only predicted is fetched, not read, so its 10 to 20 MB isn't held on the page with none
+ * drawn from it, and only what's close or met is read; else all of them are read, as they were.
+ * Returns { read, fetch }, each kind once. A pure function.
+ */
+export function modelsAhead({ predicted = [], close = [], met = [], sparing = false }) {
+    const read = new Set(sparing ? [...close, ...met] : [...predicted, ...close, ...met]);
+
+    return { read: [...read], fetch: [...new Set(predicted)].filter((kind) => !read.has(kind)) };
+}
+
 const smoothstep = (u) => {
     const v = Math.min(1, Math.max(0, u));
 

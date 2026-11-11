@@ -18897,6 +18897,59 @@ test("a werewolves' den neared: the Moonfang's model and its werewolves' (one fi
     expect(model).toEqual({ same: true, skins: ["ash", "dusk", "moonfang", "russet"], kept: 1, out: false });
 });
 
+test("on a touch screen, a werewolves' den neared: its models fetched and kept a kilometre off, not read; read once the player's within 400 metres of it", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=1");
+
+    // The player put a kilometre from a den at noon, as the test above, on a phone (a touch
+    // screen, as the game has it: the memory guard's)
+    const den = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host } = game;
+        const model = await import("/js/beasts/model.js");
+        const site = world.plan.sites.find((one) => one.kind === "werewolf's den");
+        const angle = Math.atan2(world.start.at[1] - site.at[1], world.start.at[0] - site.at[0]);
+
+        window.pellagosModels = model;
+        window.denOff = (metres) => host.battle.place(game.me, "town", [Math.floor(site.at[0] + Math.cos(angle) * metres), Math.floor(site.at[1] + Math.sin(angle) * metres)]);
+        game.stop();
+        session.view.adaptive = false;
+        game.memoryGuard.touch = true;
+        Object.assign(host.war, { turn: 70, clock: 30000 });
+        window.denOff(1000);
+
+        return { before: [Boolean(model.modelOf("moonfang")), Boolean(model.modelOf("werewolf"))] };
+    });
+
+    expect(den.before).toEqual([false, false]);
+
+    // (Asked to be fetched, both kinds: one file and their skins; then kept by the downloader,
+    // in real time, as it fetches)
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.approached?.has("moonfang") && window.pellagos.game.approached.has("werewolf")), { seconds: 20 })).toBe(true);
+
+    const fetched = await page.evaluate(async () => {
+        const { fetchModel, modelOf, keptModels } = window.pellagosModels;
+        const kept = await Promise.all([fetchModel("moonfang", "soon"), fetchModel("werewolf", "soon")]);
+
+        return { kept, read: [Boolean(modelOf("moonfang")), Boolean(modelOf("werewolf"))], models: keptModels().models };
+    });
+
+    expect(fetched, fetched.kept.every(Boolean) ? undefined : `the downloader: ${await downloading(page)}`).toEqual({ kept: [true, true], read: [false, false], models: 0 });
+
+    // (Played on there a while: still not read)
+    await playUntil(page, () => false, { seconds: 6 });
+    expect(await page.evaluate(() => window.pellagosModels.keptModels().models)).toBe(0);
+
+    // (Within 400 metres of the den, its creatures still not out, which come out within 100: read)
+    await page.evaluate(() => window.denOff(300));
+
+    const read = await playUntil(page, () => Boolean(window.pellagosModels.modelOf("moonfang") && window.pellagosModels.modelOf("werewolf")), { seconds: 60, realTime: true });
+
+    expect(read, read ? undefined : `the downloader: ${await downloading(page)}`).toBe(true);
+    expect(await page.evaluate(() => ({ kept: window.pellagosModels.keptModels().models, same: window.pellagosModels.modelOf("moonfang") === window.pellagosModels.modelOf("werewolf") }))).toEqual({ kept: 1, same: true });
+});
+
 test("out in the woods far from home by night, where werewolves are met: the werewolf's model read before one is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(360000);

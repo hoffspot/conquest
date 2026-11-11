@@ -29,7 +29,7 @@ import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/fol
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsHeld, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
+import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { guardLevel, MEMORY_GUARD } from "./memoryguard.js";
@@ -675,6 +675,16 @@ const FORGET_EVERY = 5;
 // be kept, none drawn from them (beasts/model.js forgetModels): further than they're asked for
 // from (modelsNear's 1500)
 const KEEP_MODELS = 2000;
+
+// On a touch screen (a phone or a tablet, short of memory), a kind only predicted (within
+// modelsNear's 1500 metres of one of its lairs, or one that may be met where the player is) has
+// its model fetched and kept, not read: read, it's 10 to 20 MB on the page with none drawn from
+// it, held for as long as the player stays within KEEP_MODELS of the lair. It's read once the
+// player's within `read` metres of the lair, or one of its kind's put into the battle, and a kind
+// read near its lair is kept, none drawn from it, while they're within `keep` (further, so it
+// isn't let go of and read again to and fro at the edge). Read from what the downloader's kept,
+// the first of a kind met out in the open may be drawn as its stand-in up to a second longer
+const SPARING_MODELS = Object.freeze({ read: 400, keep: 600 });
 
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
@@ -5415,7 +5425,9 @@ export class Game {
 
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
     // near one of its lairs, or where one may be met at that hour (a werewolf: #modelsHere), before
-    // it's met (looked at every MODELLING seconds); and one drawn with its stand-in, its model read
+    // it's met (looked at every MODELLING seconds); on a touch screen, only fetched till the
+    // player's close to the lair or one of its kind's in the battle (SPARING_MODELS, modelsAhead);
+    // and one drawn with its stand-in, its model read
     // since, drawn again from the model once it's out of view (the colossal, at once) and not
     // attacking, falling or coming down out of the sky (let go of, and put back on the list to be
     // drawn)
@@ -5425,7 +5437,15 @@ export class Game {
         if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
             this.modelClock = MODELLING;
 
-            for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere(), ...this.#modelsOfRift()])) {
+            const sparing = this.memoryGuard.touch;
+            const ahead = modelsAhead({
+                predicted: [...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()],
+                close: [...(sparing ? modelsNear([me.x, me.z], this.#modelLairs(), SPARING_MODELS.read) : []), ...this.#modelsOfRift()],
+                met: sparing ? this.#modelsMet() : [],
+                sparing,
+            });
+
+            for (const kind of ahead.read) {
                 wantModel(kind);
             }
 
@@ -5434,11 +5454,12 @@ export class Game {
                 wantModel(kind, "now");
             }
 
-            // (The places near: their creatures' models fetched, not read; and those of the place
-            // the player's in read, if they went in without waiting for them)
+            // (Those only predicted, on a touch screen, and the places near: their creatures'
+            // models fetched, not read; and those of the place the player's in read, if they went
+            // in without waiting for them)
             this.approached ??= new Set();
 
-            for (const kind of this.#modelsApproached()) {
+            for (const kind of [...ahead.fetch, ...this.#modelsApproached()]) {
                 if (!this.approached.has(kind)) {
                     this.approached.add(kind);
                     fetchModel(kind, "soon").then((kept) => kept || setTimeout(() => this.approached.delete(kind), APPROACH_RETRY));
@@ -5477,6 +5498,21 @@ export class Game {
         }
 
         return Boolean(actor.wild?.worldBoss) || this.view.heightOnScreen(avatar.object.position, avatar.character.height, this.view.pixelsPerMetre()) <= 0;
+    }
+
+    // The kinds drawn from a model of the wild's creatures in the battle now, alive (put into it
+    // about the player): on a touch screen, what's only fetched till then is read (#modelling),
+    // and kept while they are (#forgetting)
+    #modelsMet() {
+        const kinds = new Set();
+
+        for (const actor of this.battle.actors) {
+            if (actor.wild?.creature && !actor.dead && MODELS[actor.wild.creature]) {
+                kinds.add(actor.wild.creature);
+            }
+        }
+
+        return [...kinds];
     }
 
     // The kinds drawn from a model in the places with a way in near the player, out in the world
@@ -5540,7 +5576,11 @@ export class Game {
     // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
     // for from, so one isn't let go and read again going to and fro at the edge), those that may be
     // met where they are (#modelsHere), and those of the place they're in or at the door of
-    // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER)
+    // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER). On
+    // a touch screen, where those only predicted aren't read (#modelling), only those whose lairs
+    // the player's close to (SPARING_MODELS.keep) and those with one of their kind in the battle:
+    // one met out in its woods is let go of a while after the last of them's gone, as any is, not
+    // kept all night
     #forgetting(dt, { now = false } = {}) {
         if (!now && (this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
@@ -5552,8 +5592,10 @@ export class Game {
         forgetBodies(performance.now(), now ? 0 : undefined);
 
         const me = this.avatars.get(this.me)?.object.position;
+        const sparing = this.memoryGuard.touch;
+        const predicted = me ? (sparing ? [...modelsNear([me.x, me.z], this.#modelLairs(), SPARING_MODELS.keep), ...this.#modelsMet()] : [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()]) : [];
 
-        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
+        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...predicted, ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
     }
 
     // How many bodies can be held in full at once: the quality's (QUALITY bodies), and, the memory

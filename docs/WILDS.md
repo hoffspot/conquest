@@ -2639,6 +2639,18 @@ what's downloaded before the game starts.
 - **Fetched as it's wanted** (`wantModel`): once the player's within 1.5 km of one of its lairs
   (`modelsNear`, looked at every two seconds: the game's `#modelling`), or one comes into the
   battle. One that couldn't be read is asked for again a minute later.
+- **On a touch screen, only fetched till it's close** (`modelsAhead`, the game's
+  `SPARING_MODELS`): read, a model's 10 to 20 MB on the page with none drawn from it, and a phone
+  within 2 km of a lair it never went to held it all session. So on a phone or a tablet a kind
+  that's only predicted (within 1.5 km of one of its lairs, or one that may be met where the
+  player is at that hour) is fetched and kept by the downloader, not read (`fetchModel`, as a
+  place's creatures are at 150 m), and read once the player's within 400 m of the lair or one of
+  its kind's put into the battle (the game's `#modelsMet`). Read near its lair it's kept, none
+  drawn from it, while they're within 600 m; one met out in the open is let go of three minutes
+  after the last of them's gone, as any is, not kept while it may be met. Read from what's kept
+  already, the first of a kind met out in the open may be drawn as its stand-in up to a second
+  longer. The colossal, a world's boss, an open rift's demons and a place's creatures are read as
+  they were, and everything is on a computer.
 - **Its stand-in meanwhile:** until it's read, its look (`beasts/looks.js`, a greater, darker
   drake) is drawn. Once it's read, a stand-in out of view, and not attacking, falling or coming
   down out of the sky, is let go of and drawn again from the model.
