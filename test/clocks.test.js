@@ -56,11 +56,11 @@ describe("the frame's jobs done every so often (app/clocks.js)", () => {
         assert.equal(clockTurn(0, 0, false), DUE);
     });
 
-    it("has a job next due at its own share of the time, never sooner than half its while", () => {
+    it("has a job next due at its own share of the time, never sooner than a fifth of its while", () => {
         assert.ok(Math.abs(nextSlot(10, 0.5, 0) - 0.5) < 1e-9);
         assert.ok(Math.abs(nextSlot(10.1, 0.5, 0) - 0.4) < 1e-9);
-        assert.ok(Math.abs(nextSlot(10, 0.5, 0.15) - 0.65) < 1e-9, "0.15 s off: its own slot, not the next one 0.15 s on");
-        assert.ok(Math.abs(nextSlot(10.4, 0.5, 0) - 0.6) < 1e-9, "done late: not again a tenth of a second on");
+        assert.ok(Math.abs(nextSlot(10, 0.5, 0.15) - 0.15) < 1e-9, "0.15 s off: its own slot");
+        assert.ok(Math.abs(nextSlot(10.45, 0.5, 0) - 0.55) < 1e-9, "done late: not again a twentieth of a second on");
         assert.ok(Math.abs(nextSlot(0.01, 2, 0.075) - 2.065) < 1e-9);
 
         for (let now = 0; now < 3; now += 0.013) {
@@ -68,7 +68,7 @@ describe("the frame's jobs done every so often (app/clocks.js)", () => {
                 const left = nextSlot(now, 0.5, offset);
                 const at = (now + left - offset) / 0.5;
 
-                assert.ok(left >= 0.25 - 1e-9 && left <= 0.75 + 1e-9, `${left}`);
+                assert.ok(left >= 0.1 - 1e-9 && left <= 0.6 + 1e-9, `${left}`);
                 assert.ok(Math.abs(at - Math.round(at)) < 1e-6, "on its own slot");
             }
         }
@@ -88,7 +88,9 @@ describe("the frame's jobs done every so often (app/clocks.js)", () => {
             const times = after.filter(({ done }) => done.includes(job)).map(({ now }) => now);
             const gaps = times.slice(1).map((time, k) => time - times[k]);
 
-            assert.ok(times.length >= 118 && times.length <= 120, `job ${job}: ${times.length} times in a minute`);
+            // (Each done again within a while and a fifth of the first time, then every half second)
+            assert.ok(times[0] <= 0.5 * 1.2 + 2 / 60, `job ${job}: done again by ${times[0]} s`);
+            assert.ok(times.length >= 118 && times.length <= 121, `job ${job}: ${times.length} times in a minute`);
             assert.ok(Math.min(...gaps) > 0.44 && Math.max(...gaps) < 0.56, `job ${job}: every half second or so (${Math.min(...gaps)} to ${Math.max(...gaps)})`);
         }
     });

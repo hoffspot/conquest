@@ -30,13 +30,15 @@ export function clockTurn(left, dt, stepped) {
 /**
  * How long (seconds) from `now` till a job done every `every` seconds is next due, `offset`
  * seconds into each of them: its own share of the time, so two jobs with different offsets don't
- * come due together, however late either was done. Never sooner than half of `every`.
+ * come due together, however late either was done. Never sooner than a fifth of `every` (so
+ * the first time after they've all been done together, at the start, each is done again within
+ * a while and a fifth, most of them sooner than a while).
  */
 export function nextSlot(now, every, offset = 0) {
     const since = (((now - offset) % every) + every) % every;
     const left = every - since;
 
-    return left < every / 2 ? left + every : left;
+    return left < every / 5 ? left + every : left;
 }
 
 /**
