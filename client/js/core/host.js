@@ -58,7 +58,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
-import { spareBattle, wholeBattle } from "./keptactor.js";
+import { keptOf, spareBattle, wholeBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -3143,8 +3143,7 @@ export class Host {
             messengersAt: this.messengersAt ?? 0,
             rareLooked: this.rareLooked ?? null,
             courtWarned: [...this.courtWarned.entries()],
-            // (Each character without what it has as one just added has it: core/keptactor.js)
-            battle: spareBattle(this.battle.snapshot()),
+            battle: this.#battleKept(),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
@@ -3217,6 +3216,29 @@ export class Host {
             done: structuredClone(this.done),
             legends: this.legends.toJSON(),
         };
+    }
+
+    // The battle as a snapshot keeps it: the battle's own snapshot of itself (battle.js), but each
+    // of its characters without what it has as one just added has it (core/keptactor.js), made
+    // straight from the battle's own. Left to the battle, each would be copied whole, 120 fields,
+    // for two thirds of them to be left out again: so it's asked for the rest of itself with none
+    // of its characters, for that moment, and they're kept here
+    #battleKept() {
+        const { battle } = this;
+        const { actors } = battle;
+        let kept;
+
+        battle.actors = [];
+
+        try {
+            kept = battle.snapshot();
+        } finally {
+            battle.actors = actors;
+        }
+
+        kept.actors = actors.map(keptOf);
+
+        return kept;
     }
 
     /**

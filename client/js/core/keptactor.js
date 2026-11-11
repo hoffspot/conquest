@@ -11,7 +11,7 @@
 // it is, so a field this file has never heard of is kept whole: nothing is lost by its being
 // out of date, only bytes. A snapshot kept whole (an older version's) reads the same way.
 //
-// What must hold, and test/keptactor.test.js checks: every field in ACTOR_DEFAULTS is one every
+// What must hold, and test/snapshot-fields.test.js checks: every field in ACTOR_DEFAULTS is one every
 // character has from the moment it's added (battle.js add). One that only some had would come
 // back on those that never had it.
 //
@@ -328,6 +328,71 @@ export function wholeActor(kept) {
     }
 
     return actor;
+}
+
+// Plain data copied (numbers, strings, lists and tables, however deep); anything else, as the
+// battle's own snapshot copies it
+function copied(value) {
+    if (value === null || typeof value !== "object") {
+        return value;
+    }
+
+    if (Array.isArray(value)) {
+        const out = new Array(value.length);
+
+        for (let k = 0; k < value.length; k++) {
+            out[k] = copied(value[k]);
+        }
+
+        return out;
+    }
+
+    const proto = Object.getPrototypeOf(value);
+
+    if (proto !== Object.prototype && proto !== null) {
+        return structuredClone(value);
+    }
+
+    const out = {};
+
+    for (const key in value) {
+        out[key] = copied(value[key]);
+    }
+
+    return out;
+}
+
+/**
+ * One of the battle's own characters as a snapshot keeps it: what spareActor makes of the battle's
+ * snapshot of it (battle.js snapshot: a copy of it whole, its dice as their state and its rests'
+ * variety as what it remembers), made straight from the character, so only what's kept is copied.
+ * A character has 120 fields and two thirds of them are left out: copied whole first, a snapshot
+ * of the battle took six times as long.
+ */
+export function keptOf(actor) {
+    const kept = {};
+
+    for (const key in actor) {
+        if (key === "chance" || key === "restVariety") {
+            continue;
+        }
+
+        const value = actor[key];
+        const usual = USUAL.get(key);
+
+        if (usual === undefined) {
+            if (key !== "arms" || !alike(value, armsFor(actor))) {
+                kept[key] = copied(value);
+            }
+        } else if (value !== usual && (usual === null || typeof usual !== "object" || !unchanged(value, usual))) {
+            kept[key] = copied(value);
+        }
+    }
+
+    kept.chance = actor.chance.state;
+    kept.restVariety = actor.restVariety.toJSON();
+
+    return kept;
 }
 
 /** A battle's snapshot (battle.js snapshot's) with each of its characters as it's kept (spareActor). */

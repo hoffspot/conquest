@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host, SNAPSHOT_VERSION } from "../client/js/core/host.js";
-import { ACTOR_DEFAULTS, ACTOR_FIELDS, spareActor, wholeActor } from "../client/js/core/keptactor.js";
+import { ACTOR_DEFAULTS, ACTOR_FIELDS, keptOf, spareActor, wholeActor } from "../client/js/core/keptactor.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
@@ -240,8 +240,22 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
             );
             // (One kept whole, as an older version kept it, reads the same)
             assert.deepEqual(wholeActor(decode(encode(actor))), actor, actor.id);
+            // (As the world's snapshot has it, made straight from the battle's own: the same, in
+            // the same order, and none of it the battle's own to be changed with it)
             assert.deepEqual(kept.actors[index], spareActor(actor));
+            assert.deepEqual(Object.keys(kept.actors[index]), Object.keys(spareActor(actor)));
+            assert.deepEqual(keptOf(host.battle.actors[index]), kept.actors[index]);
         }
+
+        // (Nothing of the battle's own in it: a snapshot changed changes no one)
+        const live = host.battle.actors.find(({ path, spawn }) => path.length && spawn);
+        const snapped = keptOf(live);
+
+        snapped.path[0][0] += 100;
+        snapped.spawn[0] += 100;
+        assert.notEqual(live.path[0][0], snapped.path[0][0]);
+        assert.notEqual(live.spawn[0], snapped.spawn[0]);
+        assert.equal(host.battle.actors.length, whole.actors.length, "the battle has its characters still");
 
         // (Half the text and less; and scarcely a number JSON can't carry left in it, so whoever
         // reads it needn't go through it: core/wire.js decode)
