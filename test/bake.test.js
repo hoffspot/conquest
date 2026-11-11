@@ -111,6 +111,21 @@ const RECORDED = {
     rooms: { bytes: 10452, sha: "aa21c05b6856af273d9056f3a6b4a07a0ea064b39d105a722a88d45249f2718d", way: "[[2.5,2.5,0.10000002384185791],[4.400000095367432,6.900000095367432,0.10000002384185791],[4.400000095367432,8.100000381469727,0.10000002384185791],[2.5,10.5,0.10000002384185791]]" },
 };
 
+// How many of each of Recast's classes the binder has a wrapper of on this side (Emscripten keeps
+// one for every address it's handed an object at, till it's destroyed or forgotten)
+const kept = (recast) => {
+    const { Module } = recast.Raw;
+    const counts = {};
+
+    for (const [name, made] of Object.entries(Module)) {
+        if (typeof made === "function" && made.prototype && Object.hasOwn(made, "__cache__")) {
+            counts[name] = Object.keys(Module.getCache(made)).length;
+        }
+    }
+
+    return counts;
+};
+
 describe("the navigation tiles' bytes (navigation/bake.js)", () => {
     let recast;
 
@@ -147,6 +162,36 @@ describe("the navigation tiles' bytes (navigation/bake.js)", () => {
 
         assert.deepEqual(found, RECORDED.scene);
         assert.notEqual(found.sha, RECORDED.overworld.sha);
+    });
+
+    it("leaves nothing behind, bake after bake: no wrapper of a context, a tile's params, a heightfield or a mesh kept (each was, for good)", () => {
+        const tiles = [[OVERWORLD, madeUp(3, 2, OVERWORLD)], [SCENES, madeUp(1, 1, SCENES)], [ROOMS, squaresInput(squaresOf({ blocked: parseGrid(FLOOR) }), 0, 0, ROOMS)]];
+        // (A tile with nothing to walk in it too: every square a pond's)
+        const nothing = madeUp(3, 2, OVERWORLD);
+
+        nothing.areas.fill(0);
+
+        assert.equal(bakeTile(recast, nothing, 3, 2, OVERWORLD), null);
+
+        // (Once round first: the one context is made then, and kept)
+        for (const [measures, input] of tiles) {
+            bakeTile(recast, input, 3, 2, measures);
+        }
+
+        const before = kept(recast);
+
+        assert.ok(Object.keys(before).length > 20, "the binder's classes are counted");
+        assert.equal(before.RecastBuildContextJsImpl, 1);
+
+        for (let k = 0; k < 12; k++) {
+            for (const [measures, input] of tiles) {
+                assert.ok(bakeTile(recast, input, 3 + k, 2, measures));
+            }
+
+            bakeTile(recast, nothing, 3, 2, OVERWORLD);
+        }
+
+        assert.deepEqual(kept(recast), before);
     });
 
     it("bakes a map of squares' kind of tile to the bytes recorded, and finds the way recorded through its doorways", () => {

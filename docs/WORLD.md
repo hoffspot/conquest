@@ -1312,12 +1312,23 @@ found the same 2,012 ways over them to the last bit).
   data about 10 KB (5–8). A way found takes 0.05 ms at the
   median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
   say) searches every tile kept before giving up, up to 0.5 ms.
+- **What a bake leaves behind:** nothing. Recast's WebAssembly is handed to JavaScript by a
+  binder that keeps a wrapper on this side for every object, until it's destroyed. The bake uses
+  one build context for all its tiles (its timers and logs off: nothing in it from one bake to
+  the next), destroys the tile's params, and has the binder forget each heightfield and mesh as
+  Recast frees it. (Before, a context, a tile's params and the result of making its data were
+  left every bake, and a wrapper for every address a heightfield or a mesh had ever been at:
+  2,584 bytes of JavaScript's heap a bake, measured over 400 bakes of the start town's tile, for
+  good; a world server that bakes for weeks paid most. Now the heap is level, 0.02 MB over
+  1,800 bakes, the measurement's own rounding.)
 
 ## Tests
 
 `test/bake.test.js` holds the bytes of three made-up tiles (the overworld's kind, a scene's, a map
 of squares') and the corners of a way over each as recorded: a version of Recast or a setting of
-the bake that changes one fails it, before copies of a world part over it.
+the bake that changes one fails it, before copies of a world part over it. And that bakes leave
+nothing behind: after a dozen rounds of each kind of tile, and of one with nothing to walk, the
+binder keeps no more wrappers of any class than before.
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round
