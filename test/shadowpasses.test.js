@@ -74,7 +74,8 @@ describe("where each building lies in what's merged (runsOf, joined)", () => {
     it("a chunk's merged buildings keep theirs, covering all of it", () => {
         const mesh = twoHouses();
         const { runs } = mesh.userData;
-        const corners = mesh.geometry.attributes.position.count;
+        // (Its triangles' corners, as they're drawn: those alike are kept once, corners.js)
+        const corners = mesh.geometry.index.count;
 
         assert.ok(runs.length >= 2);
         assert.equal(runs[0].start, 0);
@@ -98,7 +99,7 @@ describe("only what's in a shadow map's view drawn into it (shadowpasses.js)", (
 
         const drawn = mesh.geometry.groups.reduce((count, group) => count + group.count, 0);
 
-        assert.ok(drawn > 0 && drawn < mesh.geometry.attributes.position.count / 1.5, `${drawn} of ${mesh.geometry.attributes.position.count}`);
+        assert.ok(drawn > 0 && drawn < mesh.geometry.index.count / 1.5, `${drawn} of ${mesh.geometry.index.count}`);
         assert.ok(mesh.geometry.groups.every(({ start, count }) => mesh.userData.runs.some((run) => start <= run.start && run.start < start + count)));
 
         // (As it was once its last part's drawn)

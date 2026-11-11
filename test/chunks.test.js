@@ -270,9 +270,12 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
 
         // Drawn whole while the player's near, and from further off without what's only worth
         // drawing near (a timber's sides): those corners last, left undrawn (DETAIL_NEAR)
+        // (Its triangles' corners, as they're drawn: those alike are kept once, corners.js)
         const atlas = drawn.object.getObjectByName("buildings").children.find(({ material }) => material.name === "atlas");
-        const corners = atlas.geometry.attributes.position.count;
+        const corners = atlas.geometry.index.count;
         const drawing = () => Math.min(atlas.geometry.drawRange.count, corners);
+
+        assert.ok(atlas.geometry.attributes.position.count < corners * 0.7, "corners shared between its triangles");
 
         assert.equal(drawing(), corners);
         assert.ok(atlas.userData.far > corners * 0.4 && atlas.userData.far < corners * 0.9, `${atlas.userData.far} of ${corners}`);

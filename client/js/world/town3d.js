@@ -18,6 +18,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { atlasMaterial, glowMaterial, LIT_ALL_NIGHT, toAtlas, toGlow } from "./art/engine/atlas.js";
+import { sharedCorners } from "./art/engine/corners.js";
 import { material } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { createRandom } from "../core/random.js";
@@ -665,10 +666,11 @@ export function merge(root, { atlas = false, kept = false } = {}) {
  * ready to be merged: a part for each material group, drawn into the art's one material if it can
  * be, with `atlas` (and every light into the one glowing material); or, `atlas` a function of what
  * a part was made in, into the material it gives, drawn from the atlas as that one is (the
- * insides': interiors3d.js), lights left as they are. [{ key, material, geometry, near (only worth
- * drawing near: Solid's), panes (its upright windows: atlas.js windowSeeds', for windowpools.js),
- * building (which building it's part of, if any: for drawing only those near into the lamps'
- * shadows, shadowpasses.js) }],
+ * insides': interiors3d.js), lights left as they are. [{ key, material, geometry (what the atlas
+ * draws, its corners shared between its triangles and its normals in bytes: corners.js; anything
+ * else as it was), near (only worth drawing near: Solid's), panes (its upright windows: atlas.js
+ * windowSeeds', for windowpools.js), building (which building it's part of, if any: for drawing
+ * only those near into the lamps' shadows, shadowpasses.js) }],
  * for `joined` (merge's first half, so that the parts of what's built a piece at a time can be
  * made a piece at a time: chunks3d.js).
  */
@@ -731,7 +733,9 @@ export function partsOf(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            parts.push({ key, material, geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [], building: building?.id ?? null });
+            // (What the atlas draws, in fewer bytes: its normals in bytes, its corners shared
+            // between its triangles, corners.js; here, a piece at a time, not when they're merged)
+            parts.push({ key, material, geometry: drawn ? sharedCorners(geometry) : geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [], building: building?.id ?? null });
         }
     });
 

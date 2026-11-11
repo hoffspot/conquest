@@ -4105,7 +4105,33 @@ is kept apart as it's built (Solid's near faces) and merged last (town3d.js `joi
 userData.far says where it begins), and a chunk more than 40 metres from the player draws only
 what comes before it (chunks3d.js `DETAIL_NEAR`, `drawFar`): a third fewer triangles in the
 humans' buildings from there, and nothing to see missing, those sides being thinner than a
-pixel at that distance even on a phone. While it's built, `buildTown` also records how tall whatever stands on
+pixel at that distance even on a phone.
+
+What the atlas draws is given to the graphics card in about half the bytes it was
+(engine/corners.js `sharedCorners`, as each piece is made ready to merge: town3d.js `partsOf`).
+A corner was 48 bytes, five 32-bit floats' worth of attributes, and every triangle had three of
+its own. Now corners alike in everything, to the bit, are kept once and the triangles say which
+they're drawn from (an index: the same triangles in the same order, so `userData.far` and the
+shadow passes' runs count the triangles' corners as before), and which way a corner faces is
+three signed bytes, not three floats. At the human capital (seed 1) 871,000 corners drawn are
+480,000 kept, 55%, each mesh's index 16 bits: 39.9 MB before and 20.0 MB now, 24 bytes a
+corner drawn; a quarter of making a piece ready is sharing its corners (71 ms of 248 over 120 of
+the capital's pieces, in Node). Nothing seen changes:
+- **The normal.** The lit shaders make it a unit long again, so only its direction counts, and
+  of the directions three bytes can say a near one's looked for, not only each side rounded on
+  its own (`byteNormal`): over a hundred thousand ways to face, a thirtieth of a degree off on
+  average and never a third (rounded, a sixth on average); a wall's, a floor's and a 45 degree
+  roof's exact. A third of a degree is half a percent of the sun's light on a face at most.
+- **The colour stays in floats.** Some are over 1 (a tint's: 1.02 at the capital), which a byte
+  can't say, and the darkest are 0.003, where a byte's steps are as big as the colour: soot, iron
+  and slate would come out in blotches. (Half floats would do, four to a corner, but that's
+  another shader for the one material, and a sixth of what's saved.)
+- **The layer stays a float.** With its shine and its window's seed it's up to 33,000, so it
+  doesn't fit the normal's fourth byte, and it's four bytes however it's kept.
+A licensed kit's houses, indexed as they come, and what's drawn with a material of its own (a
+sign, ivy, a light) are as they were.
+
+While it's built, `buildTown` also records how tall whatever stands on
 each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
@@ -7402,6 +7428,13 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
   has let go, and given back: the page loaded again, the title carrying on with the same
   character.
+- `test/corners.test.js`: which way a corner faces in three bytes (a wall's, a floor's and a 45
+  degree roof's exact, any other within a third of a degree and a thirtieth on average, never
+  further than each side rounded on its own, a vector that isn't a unit long too); corners alike
+  kept once (a box's 36 drawn from 24, the same triangles corner for corner in the same order,
+  40 bytes each, a dark colour, one over 1 and a layer of thousands as they were; two in one
+  place that differ in a colour or a layer still two; one indexed already left as it is); and a
+  house merged into the atlas the very triangles its pieces are, in under 0.6 of the bytes.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
