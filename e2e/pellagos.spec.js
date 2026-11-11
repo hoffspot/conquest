@@ -14362,8 +14362,11 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
 
         game.approached = new Set(Object.keys(MODELS).filter((kind) => kind !== "dreadthorn"));
         window.fetchedBefore = fetch;
+        // (A file asked for whole, as one waited for is (app/fetcher.js WHOLE), is one request
+        // where its parts were many: held up as long as those together were, longer than the
+        // card's patience, so Go in now is still seen offered)
         fetcher.fetch = async (...args) => {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, args[1]?.headers?.["X-Pellagos-Whole"] ? 7000 : 1000));
 
             return fetch(...args);
         };
