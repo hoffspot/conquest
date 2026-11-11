@@ -1686,6 +1686,10 @@ the land about it is thick with demons (`core/hellrift.js`, `core/host.js` `#hel
   sealed: a small cache for whoever sealed it and any hero by it.
 - **Its land.** The packs put out about the players in it (`#putOut`) are its demons, or now and
   then the cult's cultists (a quarter of them), as strong as its demons are.
+- **Drawn as they are.** Its demons' models and its warden's are read as a player comes within
+  250 m of its land (app/game.js `#modelsOfRift`), so the first of them met is drawn from its
+  model, not its stand-in; and up to forty of them are held in full beside the bodies' budget
+  (`QUALITY.models`: docs/GAME.md, *Past the bodies' budget, let go*), none drawn in a crowd as a stand-in.
 - **Its guards.** Once a hero's within 60 m of its heart, its guards wake there: the Rift Warden (a
   Demon of the Breach, at a boss's strength), the cult's high priest (a mini-boss's), and three
   fiends. Its altar can't be struck while any of them stands. Let go if every hero goes 200 m off,
