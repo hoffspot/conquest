@@ -2017,8 +2017,40 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     stroke-linecap: round;
 }
 
+/* (Full: swelling and glowing. Its glow is two layers of its own round its disc, a close one
+   and a wide one, ::after and ::before, the one faded out as the other's faded in, swelling
+   with it: only opacity and transform move, which the browser does without painting anything
+   again; a drop shadow animated was painted again every frame it was full) */
 .charge.full .charge-ring {
     animation: charge-full 0.9s ease-in-out infinite;
+}
+
+.charge.full {
+    isolation: isolate;
+}
+
+.charge.full::before,
+.charge.full::after {
+    content: "";
+    position: absolute;
+    /* (Behind the ring, as its shadow was: showing through its dark disc as that did) */
+    z-index: -1;
+    /* (As big as the ring's disc: 30 of the 32 its picture is across, from its middle) */
+    inset: 3.125%;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--effect) 72%, transparent);
+    pointer-events: none;
+}
+
+.charge.full::before {
+    box-shadow: 0 0 24px color-mix(in srgb, var(--effect) 72%, transparent);
+    opacity: 0;
+    animation: charge-glow 0.9s ease-in-out infinite;
+}
+
+.charge.full::after {
+    box-shadow: 0 0 8px color-mix(in srgb, var(--effect) 72%, transparent);
+    animation: charge-near 0.9s ease-in-out infinite;
 }
 
 .charge.full .charge-sign {
@@ -2039,12 +2071,36 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
 @keyframes charge-full {
     0%,
     100% {
-        filter: drop-shadow(0 0 4px var(--effect));
         transform: scale(1);
     }
 
     50% {
-        filter: drop-shadow(0 0 12px var(--effect));
+        transform: scale(1.07);
+    }
+}
+
+@keyframes charge-glow {
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.07);
+    }
+}
+
+@keyframes charge-near {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0;
         transform: scale(1.07);
     }
 }
@@ -2065,6 +2121,13 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     .charge.full .charge-ring {
         animation: none;
         filter: drop-shadow(0 0 10px var(--effect));
+    }
+
+    /* (Still: the ring's own glow, above, and neither of the two that pulse) */
+    .charge.full::before,
+    .charge.full::after {
+        animation: none;
+        opacity: 0;
     }
 
     .charge.flare .charge-burst {
@@ -2645,8 +2708,28 @@ lock's sights (app/hud.js attackers) */
     transform-origin: 0 50%;
 }
 
+/* Whoever the player's set on: its glow pulsing, for the whole of every fight. The glow at its
+   faintest is the icon's own shadow, still; at its brightest it's a layer of its own behind the
+   icon (::after), faded in and out. Only opacity moves, which the browser does without painting
+   anything again; a shadow animated was painted again on the page's thread every frame. */
 .attacker.target {
+    isolation: isolate;
     border-color: #ff5a4a;
+    box-shadow:
+        0 0 4px 1px rgba(255, 70, 50, 0.55),
+        0 1px 4px rgba(0, 0, 0, 0.6);
+}
+
+.attacker.target::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    /* (Out to its border's edge) */
+    inset: -2px;
+    border-radius: 8px;
+    box-shadow: 0 0 14px 5px rgba(255, 70, 50, 0.9);
+    opacity: 0;
+    pointer-events: none;
     animation: attacker-pulse 0.9s ease-in-out infinite alternate;
 }
 
@@ -2715,22 +2798,21 @@ three corners and a padlock at its top left */
 
 @keyframes attacker-pulse {
     from {
-        box-shadow:
-            0 0 4px 1px rgba(255, 70, 50, 0.55),
-            0 1px 4px rgba(0, 0, 0, 0.6);
+        opacity: 0;
     }
 
     to {
-        box-shadow:
-            0 0 14px 5px rgba(255, 70, 50, 0.9),
-            0 1px 4px rgba(0, 0, 0, 0.6);
+        opacity: 1;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .attacker.target {
-        animation: none;
         box-shadow: 0 0 10px 3px rgba(255, 70, 50, 0.85);
+    }
+
+    .attacker.target::after {
+        animation: none;
     }
 }
 
@@ -6874,9 +6956,24 @@ land. Below the boss's bar when that's shown */
     width: 8px;
     height: 16px;
     border-radius: 50%;
+    position: relative;
     background: radial-gradient(ellipse at 50% 55%, #fff1c8 0%, #ff8a2a 35%, #c41808 70%, transparent 100%);
     box-shadow: 0 0 8px rgba(255, 80, 20, 0.8);
     animation: rift-throb 1.8s ease-in-out infinite;
+}
+
+/* (Its flare as it throbs: the same tear 1.6 times as bright, over it, faded in and out with
+   it. Only opacity and transform move, which the browser does without painting anything again;
+   its brightness animated as a filter was painted again every frame) */
+#riftchip .tear::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 55%, #fff 0%, #ffdd43 35%, #ff260d 70%, transparent 100%);
+    box-shadow: 0 0 8px rgba(255, 128, 32, 0.8);
+    opacity: 0;
+    animation: rift-flare 1.8s ease-in-out infinite;
 }
 
 #riftchip .words {
@@ -6901,17 +6998,29 @@ land. Below the boss's bar when that's shown */
     0%,
     100% {
         transform: scale(1);
-        filter: brightness(1);
     }
 
     12% {
         transform: scale(1.25);
-        filter: brightness(1.6);
     }
 
     26% {
         transform: scale(1.1);
-        filter: brightness(1.3);
+    }
+}
+
+@keyframes rift-flare {
+    0%,
+    100% {
+        opacity: 0;
+    }
+
+    12% {
+        opacity: 1;
+    }
+
+    26% {
+        opacity: 0.5;
     }
 }
 

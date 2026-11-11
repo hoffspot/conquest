@@ -7534,6 +7534,16 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   them, and who the camera frames asked everyone's standing before anything cheaper. Measured in
   headless Chromium, a field battle and an invasion with the player in the fight, played as
   frames play it: 161 looks in 480 frames, the list kept the same as one looked for afresh.
+- **The HUD's lasting pulses move only opacity and transform** (styles.css): the glow round
+  whoever the player's set on (for the whole of every fight), their legendary weapon's charge
+  full, a hell rift's tear. Each animated a shadow or a filter, which a browser paints again on
+  the page's thread every frame; now the glow at its brightest is a layer of its own behind the
+  icon (a pseudo-element), faded in and out, which the browser does by itself. They look as they
+  did: set still at the start, middle and end of a beat, old beside new in headless Chromium, the
+  pictures are 0.5 to 2 of 255 apart on average (`test/pulses.test.js` holds what moves). The
+  party's icon of whoever's chosen to help and a Prismatic chain's Action Bar slot still animate
+  their shadows: both clip what's inside them, so a glow of their own would need another element
+  round them; they pulse only while one's chosen, or a chain's next spell is on the bar.
 - **The HUD keeps what it last showed.** A character's stamina, told for everyone in sight every
   frame, is compared as numbers with what was last told before anything's looked up in the page,
   its bar found once and kept with its plate (`#setStamina`); an Action Bar slot filled with the
