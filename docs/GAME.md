@@ -6187,8 +6187,9 @@ the Bindings page till one's chosen.
    it), and lets go of what no release in use lists: the newest's, and that of each page still
    open on an older one (generated/asset_streaming_plan.md, section 5). The service worker is
    registered by the page's own script as the page is read, so on a first visit it installs while
-   `main.js` and what it imports download. The loader waits for it to take over (3 s at most), so
-   it keeps what's downloaded, and the page
+   `main.js` and what it imports download. The loader waits for it to take over (3 s at most; not
+   at all once it's known it can't be registered, or that the one registered can never start,
+   where every load used to wait out the 3 s), so it keeps what's downloaded, and the page
    asks it to keep the style sheet, `main.js` and what it imports, which came before it took over,
    from the browser's own copies.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are

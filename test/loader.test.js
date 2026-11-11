@@ -9,7 +9,7 @@ import { keptBy, Loader } from "../client/js/app/loader.js";
 // (device.js asks the page what shape the screen is as it's loaded)
 globalThis.matchMedia ??= () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
 
-const { keepDownloads } = await import("../client/js/app/device.js");
+const { keepDownloads, looked, registerServiceWorker } = await import("../client/js/app/device.js");
 
 const BASE = "https://example.github.io/conquest/";
 
@@ -141,5 +141,114 @@ describe("the game's downloads kept for good (device.js keepDownloads)", () => {
         assert.deepEqual(asked, ["persist"]);
         assert.equal(await keepDownloads(undefined, true), false);
         assert.equal(await keepDownloads({ persist: async () => { throw new Error("refused"); } }, true), false);
+    });
+});
+
+describe("the loader's wait for the service worker on a first visit (device.js looked)", () => {
+    // The page as a browser gives it: `register` what registering the worker comes to, `controller`
+    // the worker looking after the page already (none on a first visit), `secure` whether it's on
+    // https or localhost. Gives back a way to have a worker take over
+    function page({ register, controller = null, secure = true } = {}) {
+        const listeners = [];
+        const serviceWorker = register && { controller, register, addEventListener: (type, listener) => listeners.push(listener) };
+
+        Object.defineProperty(globalThis, "navigator", { value: serviceWorker ? { serviceWorker } : {}, configurable: true });
+        globalThis.window = { isSecureContext: secure };
+
+        return {
+            takeOver: () => listeners.splice(0).forEach((listener) => listener()),
+        };
+    }
+
+    // A worker being installed: `becomes(state)` moves it on
+    function installing() {
+        const listeners = [];
+        const worker = {
+            state: "installing",
+            addEventListener: (type, listener) => listeners.push(listener),
+            removeEventListener: (type, listener) => listeners.splice(listeners.indexOf(listener), 1),
+        };
+
+        return {
+            worker,
+            becomes: (state) => {
+                worker.state = state;
+                [...listeners].forEach((listener) => listener());
+            },
+        };
+    }
+
+    // How long `looked` waited (ms), given a while (`ms`) at most
+    const waited = async (ms, meanwhile = () => {}) => {
+        const started = performance.now();
+        const waiting = looked(ms);
+
+        await meanwhile();
+        await waiting;
+
+        return performance.now() - started;
+    };
+
+    const quiet = (t) => t.mock.method(console, "warn", () => {});
+
+    it("doesn't wait where there can be no service worker, or one's looking after the page already", async () => {
+        page();
+        registerServiceWorker();
+        assert.ok((await waited(2000)) < 500, "a browser without them");
+
+        page({ register: async () => ({}), secure: false });
+        registerServiceWorker();
+        assert.ok((await waited(2000)) < 500, "a page not on https or localhost");
+
+        page({ register: async () => ({ active: {} }), controller: {} });
+        registerServiceWorker();
+        assert.ok((await waited(2000)) < 500, "a later visit");
+    });
+
+    it("stops waiting at once when the worker can't be registered, not after the whole wait, every load", async (t) => {
+        const warned = quiet(t);
+
+        page({ register: () => Promise.reject(new DOMException("The operation is insecure.", "SecurityError")) });
+        registerServiceWorker();
+        assert.ok((await waited(2000)) < 500);
+        assert.equal(warned.mock.callCount(), 1, "and says so in the console, as before");
+    });
+
+    it("stops waiting once the worker being installed is thrown away (its script won't run, its install fails), with none other to take over", async () => {
+        const { worker, becomes } = installing();
+
+        page({ register: async () => ({ installing: worker, waiting: null, active: null }) });
+        registerServiceWorker();
+        assert.ok((await waited(2000, async () => {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            becomes("redundant");
+        })) < 500);
+    });
+
+    it("waits for a worker that's registered to take over, as before, and no longer than it's given", async () => {
+        const { worker, becomes } = installing();
+        const first = page({ register: async () => ({ installing: worker, waiting: null, active: null }) });
+
+        registerServiceWorker();
+
+        const took = await waited(2000, async () => {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            becomes("installed");
+            becomes("activating");
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            first.takeOver();
+        });
+
+        assert.ok(took >= 35 && took < 500, `${took} ms: till it took over`);
+
+        // (One that never takes over: the whole wait, and no more)
+        const second = installing();
+
+        page({ register: async () => ({ installing: second.worker, waiting: null, active: null }) });
+        registerServiceWorker();
+
+        const whole = await waited(150);
+
+        assert.ok(whole >= 140 && whole < 1000, `${whole} ms`);
     });
 });

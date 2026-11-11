@@ -99,10 +99,45 @@ export async function keepDownloads(storage = globalThis.navigator?.storage, ins
     }
 }
 
+// The service worker's registration, once asked for (registerServiceWorker): whether it could be
+// registered (resolves to false if it couldn't, or if the worker registered could never start)
+let registered = null;
+
+// Whether a registration's worker can come to look after the page: false once the one being
+// installed is thrown away (its script wouldn't run, or its install failed) with none other in
+// its place; true as soon as there's one installed or active
+function workable(registration) {
+    const worker = registration?.installing;
+
+    if (!worker || registration.waiting || registration.active) {
+        return Promise.resolve(Boolean(registration));
+    }
+
+    return new Promise((resolve) => {
+        const look = () => {
+            if (worker.state === "redundant") {
+                resolve(Boolean(registration.waiting || registration.active));
+            } else if (worker.state === "installed" || worker.state === "activating" || worker.state === "activated") {
+                resolve(true);
+            } else {
+                return;
+            }
+
+            worker.removeEventListener("statechange", look);
+        };
+
+        worker.addEventListener("statechange", look);
+        look();
+    });
+}
+
 /**
  * Wait (at most `ms`) for the service worker to be looking after the page: at once if it already
  * is, as it is after the first visit. On the first, it's just been registered, and what the loader
- * downloads before it takes over isn't kept, so it's given a moment first.
+ * downloads before it takes over isn't kept, so it's given a moment first. Not where it can't be
+ * registered (a browser that refuses: private browsing in some, storage turned off, a page in
+ * another's frame) or can never start: the wait's over as soon as that's known, where every load
+ * there used to wait out all of `ms` for a worker that would never come.
  */
 export function looked(ms) {
     const workers = globalThis.navigator?.serviceWorker;
@@ -112,8 +147,14 @@ export function looked(ms) {
     }
 
     return new Promise((resolve) => {
-        workers.addEventListener("controllerchange", resolve, { once: true });
-        setTimeout(resolve, ms);
+        const timer = setTimeout(resolve, ms);
+        const done = () => {
+            clearTimeout(timer);
+            resolve();
+        };
+
+        workers.addEventListener("controllerchange", done, { once: true });
+        registered?.then((could) => could || done());
     });
 }
 
@@ -135,7 +176,13 @@ export function registerServiceWorker(release) {
         // (With when the page started, so the worker can tell which release is the newest)
         const tell = () => navigator.serviceWorker.ready.then((registration) => registration.active?.postMessage({ ...release, started: performance.timeOrigin }));
 
-        navigator.serviceWorker.register("sw.js").catch((error) => console.warn("Service worker not registered:", error));
+        // (Registered already as the page was read, by its own script, index.html: this is that
+        // registration, and how it went is what `looked` goes by)
+        registered = navigator.serviceWorker.register("sw.js").then(workable, (error) => {
+            console.warn("Service worker not registered:", error);
+
+            return false;
+        });
 
         if (release) {
             tell();
