@@ -5062,6 +5062,8 @@ export class Game {
         const spare = this.view.quality.models ?? 0;
         const beside = Math.min(spare, rationed.filter(modelled).length);
 
+        this.rationed = { rationed: rationed.length, room, models: beside };
+
         if (rationed.length - beside <= room && !rationed.some(({ id }) => crowded(id)) && !this.rationWaiting.size) {
             return;
         }
@@ -5074,7 +5076,6 @@ export class Game {
         let [models, next] = [0, 0];
         const placed = ranked.map(([, actor]) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
 
-        this.rationed = { rationed: rationed.length, room, models };
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
         placed.forEach(([actor, place]) => {
