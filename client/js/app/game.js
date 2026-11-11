@@ -647,6 +647,13 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // The frame's jobs done a couple of times a second, each at its own share of the time (seconds
 // into each half second: app/clocks.js nextSlot), so no two are due in the same frame at 60 frames
 // a second; the models looked for every couple of seconds too
+// The maps' icons made from the war (the works, the fortifications, who holds each place) are kept
+// this long (seconds) at most before they're made again, whatever's changed or not; and those
+// near the player gathered for the minimap again this often, or once they've gone `moved` metres,
+// from as far past what it shows as `past` (metres: more than they go meanwhile)
+const MARKS_KEPT = 1;
+const ICONS_NEAR = Object.freeze({ every: 0.25, moved: 4, past: 12 });
+
 const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
 
 // Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
@@ -6486,26 +6493,82 @@ export class Game {
         // those on the same floor)
         const party = this.partyView().filter((member) => member.map === this.mapId || this.mapId === "town");
         const partied = new Set(party.map(({ id }) => id));
+        // (Where the player's drawn, and how far from them it shows: all of a map inside; out in
+        // the world, half its span, and a little more for what's gone on since it was last drawn)
+        const [px, pz] = [me.object.position.x - ox, me.object.position.z - oz];
+        const reach = minimap.map.chunk ? minimap.shown()[2] / 2 + ICONS_NEAR.past : Infinity;
+        // (Everyone else on it, the wild's elites and the criers, gathered in one pass over
+        // everyone into lists kept from one drawing to the next: three passes made a list and an
+        // object for each of them every time, 56 KB of it with 173 about)
+        const seen = (this.minimapSeen ??= { others: [], elites: [], criers: [], spare: [] });
+        const { others, elites, criers, spare } = seen;
 
-        minimap.draw({
-            player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && !other.hidden && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
-                const position = this.avatars.get(other.id).object.position;
+        others.length = 0;
+        elites.length = 0;
+        criers.length = 0;
 
-                return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
-            }),
-            // (The wild's elites, marked their own way as soon as they're near enough: core/
-            // creatures.js ELITES `marker`, drawn or not)
-            elites: battle.actors.filter((other) => other.wild?.elite && !other.dead && other.map === this.mapId && Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker).map((other) => ({ x: other.x, z: other.y, targeted: other === target })),
+        for (const other of battle.actors) {
+            if (other.map !== this.mapId) {
+                continue;
+            }
+
             // (The criers out, each marked with his bell, at the edge the way he is if he's
             // further than shown: core/townsfolk.js crierOf)
-            criers: battle.actors.filter((other) => CRIER.test(other.id) && other.map === this.mapId).map((other) => ({ x: other.x, z: other.y })),
+            if (CRIER.test(other.id)) {
+                criers.push({ x: other.x, z: other.y });
+
+                continue;
+            }
+
+            if (other.dead) {
+                continue;
+            }
+
+            // (The wild's elites, marked their own way as soon as they're near enough: core/
+            // creatures.js ELITES `marker`, drawn or not)
+            if (other.wild?.elite) {
+                if (Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker) {
+                    elites.push({ x: other.x, z: other.y, targeted: other === target });
+                }
+
+                continue;
+            }
+
+            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
+            const avatar = other === actor || other.lurking || other.hidden || partied.has(other.id) ? null : this.avatars.get(other.id);
+
+            if (!avatar) {
+                continue;
+            }
+
+            const x = avatar.object.position.x - ox;
+            const z = avatar.object.position.z - oz;
+
+            // (Only those it has room to show)
+            if (Math.abs(x - px) > reach || Math.abs(z - pz) > reach) {
+                continue;
+            }
+
+            const one = (spare[others.length] ??= {});
+
+            one.x = x;
+            one.z = z;
+            one.hostile = battle.hostile(other, actor);
+            one.targeted = other === target;
+            one.ally = Boolean(this.allied?.has(other.id));
+            others.push(one);
+        }
+
+        minimap.draw({
+            player: actor.dead ? null : { x: px, z: pz, facing: me.facing },
+            others,
+            elites,
+            criers,
             // (Not while held input steers them: where its order reaches is just a little way
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()] : [],
+            icons: this.mapId === "town" ? this.#iconsNear(px, pz, reach) : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             rift: this.mapId === "town" ? this.riftView() : null,
@@ -6520,6 +6583,46 @@ export class Game {
             // (The battles near: battleView)
             battles: this.mapId === "town" ? this.battleView() : { arrows: [], commanders: [] },
         });
+    }
+
+    // The maps' icons the minimap has room to show: those within `reach` metres (east or south)
+    // of where the player's drawn (`x`, `z`, metres), of all there are in the world (the buildings
+    // gone into, the places, dungeons and dens, the works and fortifications, the caches, finds
+    // and legends seen), gathered again every so often, or once the player's gone a few metres
+    // (ICONS_NEAR), not every time it's drawn: of some two hundred in a world three hours into
+    // its war, a handful are within its 128 metres, and every one was listed for it thirty times
+    // a second (45 KB a drawing).
+    #iconsNear(x, z, reach) {
+        const kept = (this.iconsNear ??= { x: Infinity, z: Infinity, reach: 0, at: -Infinity, icons: [] });
+
+        if (kept.reach === reach && Math.abs(x - kept.x) < ICONS_NEAR.moved && Math.abs(z - kept.z) < ICONS_NEAR.moved && this.clock >= kept.at && this.clock - kept.at < ICONS_NEAR.every) {
+            return kept.icons;
+        }
+
+        const tracked = this.explored.tracked;
+        const icons = [];
+
+        // (The places, dungeons and dens tracked home by their trails' signs marked so: core/tracks.js)
+        const gather = (all, marking) => {
+            for (const icon of all) {
+                if (Math.abs(icon.x - x) <= reach && Math.abs(icon.z - z) <= reach) {
+                    icons.push(marking && tracked.has(icon.id) ? { ...icon, tracked: true } : icon);
+                }
+            }
+        };
+
+        gather(this.icons(), false);
+        gather(this.placeIcons(), true);
+        gather(this.dungeonIcons(), true);
+        gather(this.denIcons(), true);
+        gather(this.worksIcons(), false);
+        gather(this.fortIcons(), false);
+        gather(this.cacheIcons(), false);
+        gather(this.findIcons(), false);
+        gather(this.rareIcons(), false);
+        Object.assign(kept, { x, z, reach, at: this.clock, icons });
+
+        return icons;
     }
 
     /**
@@ -7032,13 +7135,45 @@ export class Game {
 
         const mine = this.self?.realm;
         const sites = this.world.maps.town?.sites;
+        const kept = (this.worksMarks ??= { icons: [] });
 
-        return war.works.map((works) => {
-            const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
-            const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
+        // (Kept till what they're made from changes, as the places' and the dens' are: the
+        // minimap asks thirty times a second, and each was made afresh, sentence and all: #marksKept)
+        if (!this.#marksKept(kept, war.turn, war.works.length, sites?.set.size ?? 0, mine)) {
+            kept.icons = war.works.map((works) => {
+                const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
+                const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
 
-            return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance], about: `The ${works.name} ${works.kind}: ${stance === "held" ? "held by brigands" : this.#whose(works.owner, stance)}` };
-        });
+                return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance], about: `The ${works.name} ${works.kind}: ${stance === "held" ? "held by brigands" : this.#whose(works.owner, stance)}` };
+            });
+        }
+
+        return kept.icons;
+    }
+
+    // Whether a list of the maps' icons kept (`kept`: its own record) still stands: made on this
+    // turn of the war, from as many (`count`) with as many of the world's sites set down
+    // (`placed`), for the same people (`mine`), and no more than MARKS_KEPT seconds ago, in case
+    // something it's made from changed with none of those (a works taken or a place cleared
+    // says so itself: #marksStale). If not, it's marked as made now, for the caller to make again.
+    #marksKept(kept, turn, count, placed, mine) {
+        if (kept.turn === turn && kept.count === count && kept.placed === placed && kept.mine === mine && this.clock >= kept.at && this.clock - kept.at < MARKS_KEPT) {
+            return true;
+        }
+
+        Object.assign(kept, { turn, count, placed, mine, at: this.clock });
+
+        return false;
+    }
+
+    // The maps' icons kept (#marksKept, and those near the player: #iconsNear) made again the
+    // next time they're asked for: something they show has changed
+    #marksStale() {
+        for (const kept of [this.worksMarks, this.fortMarks, this.placeMarks, this.iconsNear]) {
+            if (kept) {
+                kept.at = -Infinity;
+            }
+        }
     }
 
     /**
@@ -7056,12 +7191,17 @@ export class Game {
         }
 
         const mine = this.self?.realm;
+        const kept = (this.fortMarks ??= { icons: [] });
 
-        return war.forts.map((fort) => {
-            const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
+        if (!this.#marksKept(kept, war.turn, war.forts.length, 0, mine)) {
+            kept.icons = war.forts.map((fort) => {
+                const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
 
-            return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own", about: `${ICON_NAMES[FORT_ICONS[fort.kind]]}: ${this.#whose(fort.realm, stance)}` };
-        });
+                return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own", about: `${ICON_NAMES[FORT_ICONS[fort.kind]]}: ${this.#whose(fort.realm, stance)}` };
+            });
+        }
+
+        return kept.icons;
     }
 
     // Whose a people's works or fortification is, in words, by how they stand with the player's
@@ -7076,6 +7216,9 @@ export class Game {
 
     // A works won near the player, or by their people (host.js #worksFell): said
     #worksWon({ works: id, how, by, owner }) {
+        // (Its icon on the maps as it is now)
+        this.#marksStale();
+
         const works = this.host?.war?.workAt(id);
         const me = this.battle.actor(this.me);
         const ours = by === this.self?.realm;
@@ -7234,6 +7377,9 @@ export class Game {
     // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it or
     // within it (a cave, the crypt under the ruins, an abbey's temple: its floors)
     #cleared({ place: id, holder }) {
+        // (Its icon on the maps as it is now)
+        this.#marksStale();
+
         const place = placesOf(this.world.plan).find((each) => each.id === id);
         const me = this.battle.actor(this.me);
         const within = me && this.world.interiors?.buildings.get(`site:${id}`)?.maps.includes(me.map);
@@ -7324,11 +7470,15 @@ export class Game {
             known.placed = sites?.set.size ?? 0;
         }
 
+        // (Each one's rim and words written again only when it's cleared, or made again: not a
+        // sentence for every dungeon in the world every time the minimap's drawn)
         for (const icon of known.icons) {
             const cleared = Boolean(this.host?.dungeons?.get(icon.id)?.cleared);
 
-            icon.rim = cleared ? PLACE_RIMS.cleared : null;
-            icon.about = `${icon.about.replace(/: cleared.*$/, "")}${cleared ? ": cleared, till something new stirs in it" : ""}`;
+            if (cleared !== (icon.rim !== null)) {
+                icon.rim = cleared ? PLACE_RIMS.cleared : null;
+                icon.about = `${icon.about.replace(/: cleared.*$/, "")}${cleared ? ": cleared, till something new stirs in it" : ""}`;
+            }
         }
 
         return known.icons;
@@ -7344,8 +7494,15 @@ export class Game {
 
         const overworld = this.world.maps.town;
         const sites = overworld?.sites;
-        const key = `${war.turn}:${sites?.set.size ?? 0}:${overworld?.campSpots?.size ?? 0}:${JSON.stringify(war.places)}`;
         const known = (this.placeMarks ??= { key: null, icons: [], sites: new Map(plan.sites.map((site) => [site.id, site])), camps: new Map(plan.camps.map((camp) => [camp.id, camp])) });
+
+        // (Who holds each place looked at again, all of them written out to compare, only on
+        // another turn of the war, with more of the world set down, or every so often: #marksKept)
+        if (this.#marksKept(known, war.turn, overworld?.campSpots?.size ?? 0, sites?.set.size ?? 0, null)) {
+            return known.icons;
+        }
+
+        const key = `${war.turn}:${sites?.set.size ?? 0}:${overworld?.campSpots?.size ?? 0}:${JSON.stringify(war.places)}`;
 
         if (known.key !== key) {
             known.icons = placesOf(plan).map((place) => {
@@ -15663,6 +15820,7 @@ export class Game {
                 this.#mirror();
                 break;
             case "fortDown":
+                this.#marksStale();
                 this.#fortDown(event);
                 break;
             case "parted":

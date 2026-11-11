@@ -4892,6 +4892,28 @@ the player there, or fights an enemy within 12 pixels of the tap; a double tap r
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
 the doorway; only those on the same floor as the player are shown.
 
+**Only what's changed is gathered and drawn.** It asked for everything thirty times a second and
+drew the same picture each time the player stood still. Now:
+
+- **The same picture isn't drawn again.** What it's asked to draw is made one number (`#stamp`:
+  where each thing would be to a pixel of the screen's, which way the player faces and looks, the
+  icons' kinds and rims); the same as the last, it isn't drawn, but four times a second whatever
+  (`STILL_EVERY`). Anything that pulses or fades by the clock keeps it drawn every time: whoever
+  the player's set on (ringed), an elite, a hell rift, a ping, the next patch being painted.
+- **Its size is kept** till the browser says it's changed (a `ResizeObserver`; without one, asked
+  each time): asked every drawing, after the frame's written to the HUD, it made the browser lay
+  the page out again to answer.
+- **Everyone on it is gathered in one pass** over those about (app/game.js `#drawMinimap`), into
+  lists kept from one drawing to the next, and out in the world only those within what it shows
+  (and 12 m past it): three passes made a list and an object for each of them every time.
+- **Its icons are those near the player** (`#iconsNear`), gathered four times a second or once
+  they've gone 4 metres, from lists that are kept: the works', the fortifications' and who holds
+  each place till the war's turn, how many there are or how much of the world's set down changes,
+  one's taken or cleared (`#marksStale`), or a second's gone by (`MARKS_KEPT`); a dungeon's words
+  written only when it's cleared. Each of a world's two hundred and more was listed, sentence and
+  all, for every drawing: 56 to 70 µs of each before, 3 to 5 now (Node; a world three hours into
+  its war, 36 works, 60 forts, 237 places, 53 dungeons).
+
 **Each in their own colour** (app/mapicons.js `PARTY_COLOURS`, `partyColour`; app/game.js
 `partyView`). The other players in a party (not followers, hired adventurers nor creatures called:
 those stay green) each have a colour of their own by their place in it, the order they joined, the

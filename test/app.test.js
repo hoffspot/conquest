@@ -1246,6 +1246,64 @@ describe("the minimap (minimap.js)", () => {
 
             assert.equal(stood.size, 0, `${stood.size} patches begun standing still`);
         });
+
+        it("isn't drawn again while nothing on it has moved by a pixel of the screen's: the same picture; but a few times a second whatever, and every time while anything on it pulses", () => {
+            const canvas = recording();
+            const minimap = new Minimap(canvas, world);
+            const folk = [
+                { x: x + 10, z: z + 4, hostile: false, targeted: false, ally: false },
+                { x: x - 20, z: z + 9, hostile: true, targeted: false, ally: false },
+            ];
+            // (No wedge for the way they look: the canvas stood in for here makes no gradients)
+            const scene = { player: { x, z, facing: 0.4 }, others: folk, icons: [{ kind: "tavern", x: x + 30, z: z - 12, rim: null }], criers: [{ x: x + 300, z }] };
+            // (How many things the canvas was told to do by a drawing, at `now` ms)
+            const drawn = (view, now) => {
+                const before = canvas.calls.length;
+
+                minimap.draw(view, now);
+
+                return canvas.calls.length - before;
+            };
+
+            // (An icon's shape is a path of the browser's: stood in for)
+            globalThis.Path2D = class {};
+            after(() => delete globalThis.Path2D);
+
+            // (160 pixels across 128 m, on a screen of one pixel to a pixel: 1.25 to a metre)
+            assert.ok(drawn(scene, 1000) > 20, "drawn the first time");
+            assert.equal(drawn(scene, 1033), 0, "the same again: not drawn");
+            assert.equal(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 0.2 })) }, 1066), 0, "a quarter of a pixel's move: not drawn");
+            assert.ok(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1100) > 20, "moved a pixel: drawn");
+            assert.equal(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1133), 0);
+            assert.ok(drawn({ ...scene, player: { x, z, facing: 0.45 }, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1166) > 20, "the player turned: drawn");
+            assert.ok(drawn({ ...scene, player: { x: x + 1, z, facing: 0.4 } }, 1200) > 20, "the player a pixel on: drawn");
+            assert.ok(drawn({ ...scene, player: { x: x + 1, z, facing: 0.4 }, icons: [{ ...scene.icons[0], rim: "#888" }] }, 1233) > 20, "an icon's rim changed where it stands: drawn");
+
+            // (Still, it's drawn again a few times a second all the same)
+            const still = { ...scene, player: { x: x + 1, z, facing: 0.4 } };
+            const times = [];
+
+            drawn(still, 2000);
+
+            for (let now = 2033; now < 3000; now += 33) {
+                if (drawn(still, now)) {
+                    times.push(now);
+                }
+            }
+
+            assert.ok(times.length >= 3 && times.length <= 4, `${times.length} times in a second`);
+
+            // (Whoever the player's set on ringed and pulsing, an elite, a ping: every time)
+            for (const lively of [{ others: [{ ...folk[1], targeted: true }] }, { elites: [{ x: x + 5, z, targeted: false }] }, { pings: [{ x: x + 5, z, age: 1 }] }]) {
+                drawn({ ...still, ...lively }, 4000);
+                assert.ok(drawn({ ...still, ...lively }, 4033) > 20, Object.keys(lively)[0]);
+            }
+
+            // (Shown again after being folded away, or another map: drawn whatever was drawn before)
+            drawn(still, 5000);
+            minimap.show(true);
+            assert.ok(drawn(still, 5033) > 20);
+        });
     });
 });
 
