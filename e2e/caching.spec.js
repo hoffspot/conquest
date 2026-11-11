@@ -41,6 +41,21 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
 
     expect(listed.length).toBeGreaterThan(5);
 
+    // (All of it kept by now: the loader downloaded each through the worker, which keeps one once
+    // it's all come and checked)
+    const missing = async (urls) => {
+        const all = await kept(page);
+
+        return urls.filter((url) => !all.includes(url));
+    };
+
+    // (And what the page asked for itself before the worker took over, which it's asked to keep
+    // from the browser's own copies: its style sheet, the modules it preloads and main.js)
+    const own = await page.evaluate(() => [...document.querySelectorAll('link[rel="stylesheet"], link[rel="modulepreload"], script[type="module"][src]')].map((each) => each.href || each.src).filter((url) => /\?h=[0-9a-f]{10}$/.test(url)));
+
+    expect(own.length).toBeGreaterThan(60);
+    await expect.poll(() => missing([...listed, ...own]), { timeout: 30000 }).toEqual([]);
+
     // A copy an older release kept: let go of once a page says its release (and none lists it)
     const older = await page.evaluate(async () => {
         const url = new URL("characters/human.bin?h=0000000000", document.baseURI).href;
@@ -50,8 +65,11 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
         return url;
     });
 
-    // Loaded again, through the worker: each kept as it's downloaded (the manifest's data, and the
-    // code, which the page asks for by hash too: its import map), the older copy let go of
+    // Loaded again, through the worker. The loader asks it which of the manifest's files it keeps,
+    // and asks only for the data it reads itself; the code's first asked for as the page imports it
+    // (by hash too: its import map), so what isn't imported before the title isn't asked for at
+    // all: playing together's, say. (It used to ask for every file, only to count it.) What it does
+    // ask for, the worker answers from what it keeps; the older copy's let go of
     const fetched = [];
     const asked = () => [...new Set(fetched.filter(({ byWorker }) => !byWorker).map(({ url }) => url))].sort();
 
@@ -64,24 +82,42 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
     await title(page, () => page.reload());
 
     const loaded = asked();
+    const data = listed.filter((url) => /\.(json|bin|jpg|png|gltf)\?h=/.test(url));
+    const together = listed.find((url) => /\/js\/app\/together\.js\?h=/.test(url));
 
-    expect(loaded).toEqual(expect.arrayContaining(listed));
+    expect(data.length).toBeGreaterThan(5);
+    expect(loaded).toEqual(expect.arrayContaining(data));
     expect(loaded).toContainEqual(expect.stringMatching(/\/js\/main\.js\?h=[0-9a-f]{10}$/));
-    await expect.poll(() => kept(page), { timeout: 30000 }).toEqual(loaded);
-    expect(loaded).not.toContain(older);
+    expect(loaded).toContainEqual(expect.stringMatching(/\/js\/app\/game\.js\?h=[0-9a-f]{10}$/));
+    expect(loaded).toContainEqual(expect.stringMatching(/\/styles\.css\?h=[0-9a-f]{10}$/));
+    expect(loaded).toEqual(expect.arrayContaining(own));
 
-    // And again: each asked for by the page and answered from what's kept, none downloaded
+    // (Not asked for: what's only downloaded to be kept, and isn't imported before the title)
+    const unasked = listed.filter((url) => !loaded.includes(url));
+
+    expect(together).toBeTruthy();
+    expect(unasked).toContain(together);
+    expect(unasked.length).toBeGreaterThan(10);
+    expect(fetched.filter(({ byWorker }) => byWorker)).toEqual([]);
+    expect(await missing([...listed, ...loaded])).toEqual([]);
+    await expect.poll(async () => (await kept(page)).includes(older), { timeout: 30000 }).toBe(false);
+
+    // And again: the same asked for by the page and answered from what's kept, none downloaded
     fetched.length = 0;
     await title(page, () => page.reload());
     expect(asked()).toEqual(loaded);
     expect(fetched.filter(({ byWorker }) => byWorker)).toEqual([]);
 
-    // The worker knows the page's release, which lists all it keeps
+    // (And the loading screen knew: all of it from this device)
+    expect(await page.evaluate(() => ({ loaded: window.pellagos.loader.loaded === window.pellagos.loader.total, kept: window.pellagos.loader.kept === window.pellagos.loader.total, downloaded: window.pellagos.loader.downloaded }))).toEqual({ loaded: true, kept: true, downloaded: 0 });
+
+    // The worker knows the page's release, which lists all it keeps: those files, and no others
     const state = await page.evaluate(async () => (await (await caches.open("pellagos-state-v2")).match(new URL("sw-state.json", document.baseURI).href))?.json());
     const { ASSETS } = await page.evaluate(() => import("./js/app/assets.js").then(({ ASSETS }) => ({ ASSETS: { release: ASSETS.release } })));
 
     expect(state.newest).toBe(ASSETS.release);
-    expect(state.releases[ASSETS.release].boot).toEqual(expect.arrayContaining(loaded));
+    expect(state.releases[ASSETS.release].boot).toEqual(expect.arrayContaining([...listed, ...loaded]));
+    expect(await kept(page)).toEqual(state.releases[ASSETS.release].boot.toSorted());
 
     // Offline, the game starts all the same
     await context.setOffline(true);
