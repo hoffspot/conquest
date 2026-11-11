@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.js";
+import { expect, keeping, playing, test } from "./fixtures.js";
 import { BUTTONS } from "../client/js/app/gamepad.js";
 
 // Playing with a game controller (app/padplay.js), in a real browser. A test can't pair a real one,
@@ -17,13 +17,12 @@ const SAVE = { version: 1, seed: 4242, created: "2026-10-13T12:00:00.000Z", hero
 
 // The stand-in controller, put in the page before it's loaded: unseen till `connect`ed (a real one
 // is seen once a button's pressed with the page in front)
-async function standIn(page, { settings = { sound: false, quality: "low" }, save = null } = {}) {
+async function standIn(page, { settings = { sound: false }, save = null } = {}) {
+    // (Laid down the first time only, over the tests' cheap drawing: what's set in Game options is
+    // kept from load to load)
+    await keeping(page, settings);
     await page.addInitScript(
-        ([names, settings, save]) => {
-            if (!localStorage.getItem("pellagos.settings")) {
-                localStorage.setItem("pellagos.settings", JSON.stringify(settings));
-            }
-
+        ([names, save]) => {
             if (save && !localStorage.getItem("pellagos.save")) {
                 localStorage.setItem("pellagos.save", JSON.stringify(save));
             }
@@ -84,7 +83,7 @@ async function standIn(page, { settings = { sound: false, quality: "low" }, save
                 return standIn.connected ? [pad] : [];
             };
         },
-        [BUTTONS, settings, save],
+        [BUTTONS, save],
     );
 
     // (Till the controller's been read in `times` more frames)
@@ -112,11 +111,6 @@ async function standIn(page, { settings = { sound: false, quality: "low" }, save
         },
         read,
     };
-}
-
-async function playing(page, address) {
-    await page.goto(address);
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
 }
 
 test("a game controller plays: walks, looks, talks to who's in front, the Action Bar on R2, a wheel, the Pack and the menu", async ({ page }) => {

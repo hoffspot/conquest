@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { WorldServer } from "../server/world-server.js";
-import { expect, test } from "./fixtures.js";
+import { expect, keeping, playing, test } from "./fixtures.js";
 
 // Worlds on a world server, from the game (generated/world_server_plan.md §15 S3), in two browsers
 // at once, both playing the game as the server itself serves it: one player adds the server by its
@@ -72,9 +72,8 @@ async function ready(page, character) {
     });
 }
 
-async function playing(page) {
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 180000, polling: 250 });
-}
+// (A world on a server, made ready there and sent: given longer than one on the device to be playing)
+const LONGER = { timeout: 180000 };
 
 // The world's life on the server, and its clock
 const lifeOf = (world) => server.registry.lifeOf(world);
@@ -114,7 +113,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await expect(ask).toBeVisible();
     await expect(ask.locator("#worldasknote")).toHaveText("Characters in Thornwick are Thornwick's own, made there. This is your first time in.");
     await ask.getByRole("button", { name: /A new character/ }).click();
-    await playing(owner);
+    await playing(owner, null, LONGER);
 
     const world = [...server.worlds.keys()][0];
     const ownerId = await owner.evaluate(() => window.pellagos.game.me);
@@ -163,7 +162,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await expect(guest.locator("#worldask")).toBeVisible();
     expect(guest.url()).not.toContain("key=");
     await guest.locator("#worldask").getByRole("button", { name: /A new character/ }).click();
-    await playing(guest);
+    await playing(guest, null, LONGER);
 
     const guestId = await guest.evaluate(() => window.pellagos.game.me);
 
@@ -225,7 +224,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await expect(choose.locator("#worldasktitle")).toHaveText("Who goes into Thornwick?", { timeout: 60000 });
     await expect(choose).toBeVisible();
     await choose.getByRole("button", { name: /^Syl/ }).click();
-    await playing(guest);
+    await playing(guest, null, LONGER);
     expect(await guest.evaluate(() => window.pellagos.game.me)).toBe(guestId);
 
     // (Their Action Bar, marker and settings as they left them: the settings this device's again)
@@ -293,7 +292,7 @@ test("a world that takes copies: a character on this device copied in once, told
     await expect(ask.locator("#worldasktitle")).toHaveText("Copy Old Bram into Fernhollow?");
     await expect(ask.locator("#worldasknote")).toHaveText("A copy of Old Bram comes into Fernhollow and stays there, Fernhollow's own: it can't be taken out again. Changed to suit this version of the game: 1 thing the game no longer has: old blade.");
     await ask.getByRole("button", { name: "Copy Old Bram in" }).click();
-    await playing(page);
+    await playing(page, null, LONGER);
     expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Old Bram");
 
     const [player] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
@@ -309,7 +308,7 @@ test("a world that takes copies: a character on this device copied in once, told
     await expect(ask.locator("#worldasktitle")).toHaveText("Copy Ada into Fernhollow?");
     await expect(ask.locator("#worldasknote")).toContainText(`Ada on this device carries on as they are: nothing the copy does in Fernhollow comes back to them, and the copy can't be taken out again.`);
     await ask.getByRole("button", { name: "Copy Ada in" }).click();
-    await playing(page);
+    await playing(page, null, LONGER);
     expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Ada");
     await quit();
     await expect.poll(async () => (await server.worlds.get(copies.world).heroes.list(player)).map(({ name, origin }) => [name, origin === ada]), { timeout: 60000 }).toEqual([["Old Bram", false], ["Ada", true]]);
@@ -330,7 +329,7 @@ test("a world that takes copies: a character on this device copied in once, told
     // A world whose characters are its own: a new one, made there, looking as Ada does
     await into(own.world, "Ownby");
     await ask.getByRole("button", { name: /^A new character/ }).click();
-    await playing(page);
+    await playing(page, null, LONGER);
 
     const [ownPlayer] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
 
@@ -408,7 +407,7 @@ test("a world on this device brought to a server (Host on a Server, a world from
     await expect(ask.getByRole("button", { name: /^Wren · Wren's Vale's copy/ })).toBeVisible();
     await expect(ask.getByRole("button", { name: /^Take one home/ })).toHaveCount(0);
     await ask.getByRole("button", { name: /^Wren/ }).click();
-    await playing(page);
+    await playing(page, null, LONGER);
     expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Wren");
 
     const [player, slot] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
@@ -491,7 +490,7 @@ test("a newcomer with no character follows a world's invite link: makes a charac
     await page.getByRole("button", { name: "Begin" }).click();
 
     // (Straight in: never asked who goes in)
-    await playing(page);
+    await playing(page, null, LONGER);
     expect(await page.evaluate(() => window.pellagos.game.hero.name)).toBe("Wren");
     expect(server.access.world(made.world).players().map(({ role }) => role)).toEqual(["player"]);
 });
@@ -522,7 +521,7 @@ test("the server's own address shows its worlds on the title: one open to anyone
     await ask.getByRole("button", { name: /^Ivo/ }).click();
 
     // (In as Ivo, by the world's open door: their ticket kept, to come back by)
-    await playing(page);
+    await playing(page, null, LONGER);
 
     const access = server.access.world(made.world);
 
@@ -551,7 +550,7 @@ test("back into a world on a server after the game's reloaded: straight back in,
     const kept = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.inworld")));
     const where = () => page.evaluate(() => (({ x, y }) => ({ x, y }))(window.pellagos.game.battle.actor(window.pellagos.game.me)));
     const backIn = async () => {
-        await playing(page);
+        await playing(page, null, LONGER);
         await expect(rejoin).toBeHidden();
         expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Tamsin");
 
@@ -564,7 +563,7 @@ test("back into a world on a server after the game's reloaded: straight back in,
     await page.goto(`${base}/`);
     await page.locator(`#titleserver li[data-world="${made.world}"]`).getByRole("button").click({ timeout: 30000 });
     await page.locator("#worldask").getByRole("button", { name: /^Tamsin/ }).click({ timeout: 60000 });
-    await playing(page);
+    await playing(page, null, LONGER);
 
     const stood = await where();
     const record = await kept();
@@ -615,13 +614,10 @@ test("a crash in a world on a server: the debug log sent to the server as the pl
     // (As ready() has it, but the settings laid down only the first time, kept from load to load as
     // a device keeps them; and the next load, once it's asked for, finding the last game's notes
     // never closed, as a page that fell over leaves them)
+    await keeping(page, { renderScale: 0.5 });
     await page.addInitScript(
-        ({ settings, character }) => {
+        ({ character }) => {
             const notes = JSON.parse(localStorage.getItem("pellagos.alive") ?? "null");
-
-            if (!localStorage.getItem("pellagos.settings")) {
-                localStorage.setItem("pellagos.settings", JSON.stringify(settings));
-            }
 
             if (!localStorage.getItem("pellagos.characters")) {
                 localStorage.setItem("pellagos.save", JSON.stringify(character));
@@ -632,7 +628,7 @@ test("a crash in a world on a server: the debug log sent to the server as the pl
                 localStorage.setItem("pellagos.alive", JSON.stringify({ ...notes, closed: false }));
             }
         },
-        { settings: { quality: "low", renderScale: 0.5, shadows: false }, character: save("Bryony", "human", "sword") },
+        { character: save("Bryony", "human", "sword") },
     );
     page.on("pageerror", (error) => {
         throw error;
@@ -652,7 +648,7 @@ test("a crash in a world on a server: the debug log sent to the server as the pl
     await page.goto(`${base}/`);
     await page.locator(`#titleserver li[data-world="${made.world}"]`).getByRole("button").click({ timeout: 30000 });
     await page.locator("#worldask").getByRole("button", { name: /^Bryony/ }).click({ timeout: 60000 });
-    await playing(page);
+    await playing(page, null, LONGER);
     expect(await sent()).toEqual([]);
 
     // Fallen over: straight back in, and the log as it stood sent as she comes in (the crash first),
@@ -660,7 +656,7 @@ test("a crash in a world on a server: the debug log sent to the server as the pl
     await fallOver();
     await expect(rejoin).toBeVisible({ timeout: 60000 });
     expect(await crashes()).toBe(1);
-    await playing(page);
+    await playing(page, null, LONGER);
     await expect.poll(async () => (await sent()).length, { timeout: 30000 }).toBe(1);
 
     const [report] = await sent();

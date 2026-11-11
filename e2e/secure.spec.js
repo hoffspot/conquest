@@ -8,7 +8,7 @@ import { WorldServer } from "../server/world-server.js";
 import { dnsHosts, FakeAcme, lookupOf, TOKENS } from "../test/fake-acme.js";
 import { FakeRouter } from "../test/fake-router.js";
 import { fakeTailscale } from "../test/fake-tailscale.js";
-import { expect, test } from "./fixtures.js";
+import { expect, playing, test } from "./fixtures.js";
 
 // The world server from the internet, over TLS (generated/world_server_plan.md §9.1, §15 S6): a
 // server open to the internet (here no address is home, so the browser on loopback is the
@@ -108,7 +108,8 @@ test("from the internet, over TLS alone: a page asked for plainly sent on to htt
     await page.goto(link);
     await expect(page.locator("#worldask #worldasktitle")).toHaveText("Who goes into Farhold?", { timeout: 60000 });
     await page.locator("#worldask").getByRole("button", { name: /^A new character/ }).click();
-    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 180000, polling: 250 });
+    // (A world on a server, made ready there and sent: given longer than one on the device)
+    await playing(page, null, { timeout: 180000 });
 
     const [place] = server.play.places.values();
 

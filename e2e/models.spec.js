@@ -9,6 +9,10 @@ import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 
 const DRAGON = new URL("../utilities/blenderpipeline/dist/dragon-phone.glb", import.meta.url);
 
+// (Drawn in full, as the game draws on a computer: these are of how the models are drawn, each
+// level of detail of them)
+test.use({ drawing: "full" });
+
 test.beforeEach(async ({ page }) => {
     page.on("pageerror", (error) => {
         throw error;

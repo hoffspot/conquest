@@ -676,10 +676,20 @@ browser of its own (`e2e/fixtures.js`: without a GPU, the drawing a test leaves 
 browser's GPU process would slow the next test down by a minute or more), so they run side by
 side (on half the machine's cores; `--workers=N` for more or fewer). They draw at half the
 screen's pixels (`deviceScaleFactor: 0.5`, playwright.config.js: a fifth quicker in software
-rendering; a test of the pixels themselves sets its own). A test that waits on the game's time
-stops it and plays it on by hand (`playUntil` in e2e/pellagos.spec.js): drawn without a GPU, a
+rendering; a test of the pixels themselves sets its own). They draw the game cheaply unless a
+test says otherwise (`e2e/fixtures.js`): at Low without shadows, kept as the game's settings
+before the page loads where the test keeps none of its own, and looking down on the player once
+it's playing (`playing`, which every spec opens the game with), which in software is five times
+as many frames a second as High from where the camera starts, out across the land. A test of
+what's drawn at a higher quality, of shadows, or of the camera, asks for what it needs
+(`playing`'s `quality`, `shadows` and `view`, or `keeping`; `test.use({ drawing: "full" })` for
+a whole spec) and says why. A test that waits on the game's time
+stops it and plays it on by hand (`playUntil` in e2e/fixtures.js): drawn without a GPU, a
 frame takes a second or more and the game goes on a tenth of a second a frame at most, so
-waiting on it as it's drawn is waiting on how slow the machine is. CI splits them
+waiting on it as it's drawn is waiting on how slow the machine is. What a test waits for is given
+20 seconds (`expect.timeout`), and one that fails leaves a picture of each page, how each game
+stood (its messages, the player and who's near them, the camera) and its debug log's text in
+`test-results/`. CI splits them
 between eight jobs run at once, each about as long as the others: `scripts/e2e-shard.js` gives
 each job its share by how long each test last took (`e2e/durations.json`; a test not timed yet
 counts as the median), and the job runs it with `--test-list`. After adding tests or making them
