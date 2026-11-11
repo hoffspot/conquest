@@ -1,4 +1,4 @@
-// Invasions (core/invasions.js, core/host.js #invade): five minutes into a character's time in a
+// Invasions (core/invasions.js, core/host.js #invade): ten minutes into a character's time in a
 // town, a band of bandits comes down one of its roads, and the town's own people march out to
 // meet them at its edge, the stronger side, two squads of bomb throwers among them. In a
 // character's first the raiders leave them be till they strike one; in those after, they don't.
@@ -10,6 +10,7 @@ import { before, describe, it } from "node:test";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
+let AFK;
 let ALARM;
 let BANDS;
 let BEHEMOTH;
@@ -76,7 +77,7 @@ before(async () => {
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
-    ({ Host, HOST_PLAYER, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
+    ({ AFK, Host, HOST_PLAYER, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
     ({ wayToward } = await import("../client/js/core/settlements.js"));
     ({ createRandom } = await import("../client/js/core/random.js"));
     ({ compass } = await import("../client/js/core/ways.js"));
@@ -138,10 +139,12 @@ function strike(game, id, { fell = false } = {}) {
 }
 
 describe("invasions (core/invasions.js)", () => {
-    it("keeps a character's time in towns safe to read: the first five minutes in, the rest half an hour to an hour apart", () => {
+    it("keeps a character's time in towns safe to read: the first ten minutes in, the rest half an hour to an hour apart", () => {
         assert.deepEqual(clockOf(null), { seen: 0, clock: 0, due: INVASION.first, place: null, here: 0 });
         assert.deepEqual(clockOf({ seen: 2, clock: -5, due: "soon", place: 3, here: 7.5 }), { seen: 2, clock: 0, due: INVASION.every[0], place: null, here: 7 });
-        assert.equal(INVASION.first, 5 * 60000);
+        assert.deepEqual(clockOf({ seen: 2, clock: 9, due: 2400000.5 }), { seen: 2, clock: 9, due: 2400000, place: null, here: 0 }, "one after the first: when it was rolled for, kept");
+        assert.equal(INVASION.first, 10 * 60000, "the owner's: ten minutes, not five");
+        assert.equal(INVASION.size, 120, "and as big as it was");
         assert.deepEqual([...INVASION.kinds], ["town", "city", "capital"]);
 
         const random = createRandom(7);
@@ -161,6 +164,29 @@ describe("invasions (core/invasions.js)", () => {
         assert.ok(!isDue({ ...clock, clock: INVASION.first - 1 }), "not before it's due");
         assert.ok(!isDue({ ...clock, seen: 1, due: INVASION.every[0], clock: INVASION.every[0] }), "never in the first few minutes in a town, after the first");
         assert.ok(isDue({ ...clock, seen: 1, due: INVASION.every[0], clock: INVASION.every[0], here: INVASION.settle }));
+    });
+
+    it("has a character kept while the first came at five minutes wait for ten like anyone, and one already past ten have it as soon as they're settled in a town", () => {
+        // (As the game kept them before: `due` was the five minutes of the time)
+        const six = clockOf({ seen: 0, clock: 6 * 60000, due: 5 * 60000, place: "town-1", here: 6 * 60000 });
+
+        assert.equal(six.due, INVASION.first, "their first: at ten minutes, whatever was kept");
+        assert.equal(six.clock, 6 * 60000, "their time in towns kept");
+        assert.ok(!isDue(six), "six minutes in: not yet, though it was due at five");
+        assert.ok(!isDue({ ...six, clock: INVASION.first - 1000 }));
+        assert.ok(isDue({ ...six, clock: INVASION.first }), "at ten");
+
+        const twelve = clockOf({ seen: 0, clock: 12 * 60000, due: 5 * 60000, place: null, here: 0 });
+
+        assert.ok(!isDue(twelve), "past ten, but out of town");
+        assert.ok(!isDue({ ...twelve, place: "town-1", here: INVASION.settleFirst - 1000 }), "nor in their first half minute in one");
+        assert.ok(isDue({ ...twelve, place: "town-1", here: INVASION.settleFirst }), "then at once");
+
+        // (Read again, the same: every copy of a world reads what it's sent so)
+        assert.deepEqual(clockOf(six), six);
+
+        // (One who's seen their first: what was rolled for their next kept as it was)
+        assert.equal(clockOf({ seen: 1, clock: 0, due: 5 * 60000 }).due, 5 * 60000);
     });
 
     it("gives the town the bigger side, and two squads of bomb throwers at least two strong, each people's with its own bombs", () => {
@@ -264,12 +290,17 @@ describe("invasions (core/invasions.js)", () => {
 });
 
 describe("an invasion in the world (core/host.js #invade)", () => {
-    it("comes five minutes into a character's time in town, down one of its roads, the town's people marching out to meet the raiders", () => {
+    it("comes ten minutes into a character's time in town, down one of its roads, the town's people marching out to meet the raiders", () => {
         const game = inTown();
         const { host, player } = game;
 
-        play(game, INVASION.first - 1000);
-        assert.equal(host.invasions.length, 0, "not before five minutes");
+        play(game, 5 * 60000 + 5000);
+        assert.equal(host.invasions.length, 0, "not at five minutes, as it used to");
+        // (Playing meanwhile: one who gave no command all that time would be marked away as it
+        // came due, AFK.mark, and their time not counted)
+        host.command(HOST_PLAYER, { type: "stop" });
+        play(game, INVASION.first - 1000 - (5 * 60000 + 5000));
+        assert.equal(host.invasions.length, 0, "not before ten minutes");
 
         play(game, 2000);
         assert.equal(host.invasions.length, 1);
@@ -592,6 +623,24 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.ok(player.progress.pack.some((stack) => stack?.id === thanks.piece.id && stack.quality === REWARD.quality), "the lord's piece in their pack");
     });
 
+    it("doesn't come to a character who's given no command since they began: marked away as it came due, and it comes half a minute after they're back", () => {
+        const game = inTown();
+        const { host, player } = game;
+
+        assert.equal(AFK.mark, INVASION.first, "away after as long as the first takes to come");
+        play(game, INVASION.first + 60000);
+        assert.ok(player.away, "marked away");
+        assert.equal(host.invasions.length, 0, "and none comes to them");
+
+        // (Back: their time in the town counted from now, INVASION.settleFirst of it before it comes)
+        host.command(HOST_PLAYER, { type: "stop" });
+        assert.ok(!player.away);
+        play(game, INVASION.settleFirst - 2000);
+        assert.equal(host.invasions.length, 0);
+        play(game, 4000);
+        assert.equal(host.invasions.length, 1);
+    });
+
     it("counts a character's time only in a town, and comes nowhere a world's rules say not", () => {
         const off = inTown({ rules: { invasions: false } });
 
@@ -605,6 +654,40 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         play(out, INVASION.first + 60000);
         assert.equal(out.host.invasions.length, 0);
         assert.deepEqual(out.player.progress.invasion, { ...clockOf(null) }, "none of it in a town");
+    });
+
+    it("carries on a world kept while the first came at five minutes: a character six minutes in who hasn't seen it has it at ten; one already past ten, half a minute into a town", () => {
+        // (A world as it was kept before: its player six minutes into their time in towns, their
+        // first still to come, due at the five minutes of the time)
+        const kept = (clock) => {
+            const { host, player } = inTown({ invasion: { clock: 60000 } });
+
+            Object.assign(player.progress.invasion, { seen: 0, clock, due: 5 * 60000 });
+
+            const snapshot = decode(encode(host.snapshot()));
+
+            assert.equal(snapshot.players[0].progress.invasion.due, 5 * 60000, "as it was kept");
+
+            const again = Host.restore(buildWorld({ seed: 2 }), snapshot);
+
+            return { host: again, me: again.battle.actor(HOST_PLAYER), player: again.players.get(HOST_PLAYER), events: [] };
+        };
+        const six = kept(6 * 60000);
+
+        assert.equal(six.player.progress.invasion.due, INVASION.first, "due at ten now");
+        play(six, 4 * 60000 - 2000);
+        assert.equal(six.host.invasions.length, 0, "not before ten minutes of their time in towns");
+        play(six, 4000);
+        assert.equal(six.host.invasions.length, 1, "then it comes");
+        assert.equal(six.host.invasions[0].band, "bandits", "their first: bandits");
+        assert.deepEqual(six.events[0].spared, [HOST_PLAYER], "who leave them be till they strike one");
+
+        const twelve = kept(12 * 60000);
+
+        play(twelve, INVASION.settleFirst - 2000);
+        assert.equal(twelve.host.invasions.length, 0, "not in their first half minute in the town");
+        play(twelve, 4000);
+        assert.equal(twelve.host.invasions.length, 1, "past ten already: as soon as they're settled");
     });
 
     it("carries an invasion on in a copy of the world, alike; and a world kept before invasions starts with none", () => {

@@ -2529,7 +2529,7 @@ covered, the stakes' 300 hit points, and an army met keeping its mix as it's few
 
 A big band of raiders comes down one of a town's roads to attack it, and a big force of the town's
 own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
-The first comes to a character five minutes after they land in a town, whichever town that is; the
+The first comes to a character ten minutes after they land in a town, whichever town that is; the
 rest come now and then while they're in towns, each as big as the devices in it can draw and keep
 moving. A character's first is bandits'; every one after, any of five bands, or by night, one time
 in three, the Behemoth of the Rift (below).
@@ -2541,8 +2541,14 @@ in three, the Behemoth of the Rift (below).
   saved with what they carry, to every world they play in: how many invasions they've been in
   (`seen`), their time in towns since the last (`clock`), when the next is due (`due`), and the town
   they're in now and how long they've been there (`place`, `here`).
-- **The first** five minutes into it (`first`), 30 seconds at least in the town it comes to
-  (`settleFirst`); **every one after** half an hour to an hour of it later (`every`, at random),
+- **The first** ten minutes into it (`first`: five, till the owner asked for ten, "Back the first
+  raid showing up to 10 minutes"; its size as it was), 30 seconds at least in the town it comes
+  to (`settleFirst`). A character's first is always due at `first`, whatever was kept for them
+  (`clockOf`: it's never rolled): one kept while it was five minutes who hasn't seen it has it at
+  ten like anyone, and one already past ten has it once they've been 30 seconds in a town.
+  Ten minutes is also when a player who's given no command is marked away (`AFK.mark`), and an
+  away player's time isn't counted: one who's stood in their town untouched since they began
+  doesn't meet it, and has it 30 seconds after they're back. **Every one after** half an hour to an hour of it later (`every`, at random),
   never in their first three minutes in a town (`settle`). Villages, hamlets and farmsteads are
   never invaded, nor a town whose people are the character's enemies (they'd fight them beside the
   raiders).

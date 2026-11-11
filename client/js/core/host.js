@@ -6513,7 +6513,7 @@ export class Host {
 
     // Each player's time in the towns and cities counted (INVASION.kinds: #townOf), every
     // INVASION.tick of the battle's time, the time in the town they're in too; not while they're
-    // away, being sent out or resting. An invasion due for any of them (isDue: their first five
+    // away, being sent out or resting. An invasion due for any of them (isDue: their first ten
     // minutes in, the next half an hour to an hour after; never in their first few minutes in a
     // town), and none on, one comes to their town (#invade); and those on are watched
     #invasions(ms) {
