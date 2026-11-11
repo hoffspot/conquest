@@ -4477,12 +4477,13 @@ be at one level.)
 A field battle of a hundred a side couldn't be drawn character by character: each soldier is a
 dozen meshes and a skin of its own, posed every frame, and built a few a second (a hundred took
 about a minute to come). So with a battle's soldiers about the player (more than 24, which a town's
-own guards never are: `MARSHAL.from`), those nearest the camera, and whoever's fighting the player,
+own guards never are: `MARSHAL.from`), the first of them in the order of precedence (*Who comes
+first*, below: whoever's fighting the player or their party, then the biggest on the screen)
 are drawn in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10),
 and the rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the
 crowd only once it's 3 places past the last drawn in full). However few there are, those more than
-45 metres from the camera are drawn in their crowds too (`DETAIL.reach`; but whoever's fighting the
-player), their bodies in full let go, and built in full again as they come within it: that far
+45 metres from the camera are drawn in their crowds too (`DETAIL.reach`; but whoever the order
+puts before those who merely stand about), their bodies in full let go, and built in full again as they come within it: that far
 off, a body's drawn at its lowest detail anyway (a person's under 50 pixels tall on a phone held
 upright). One drawn in full goes to its crowd only once it's 10 metres further than that
 (`DETAIL.slack`), so none goes back and forth at the edge. Fewer soldiers than a battle's are drawn in
@@ -4495,8 +4496,8 @@ room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on 
 their crowds, their bodies in full let go. The debug log says how many soldiers were about and
 how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
 crier in his square, a stranger by the road) are held in full only as far as the budget leaves
-room too (`#folkRoom`, twice a second): whoever the player's talking or trading with first, then
-the nearest the camera, those on another map last. The townsfolk past the room, and those more
+room too (`#folkRoom`, twice a second), in the same order: whoever the player's talking or
+trading with first, then the biggest on the screen, those on another map last. The townsfolk past the room, and those more
 than 45 metres from the camera, are drawn in crowds of their own (*The townsfolk in their
 crowds*, below). The rest past the room (a crier, a stranger, or one of the townsfolk while their
 crowd's figure is made) aren't drawn: undressed, the furthest first (one held only just past it,
@@ -4743,7 +4744,8 @@ reach only; all of them without Adaptive): so a quicker machine, or a phone of a
 draws more of them in full. Looked at a couple of times a second (`MARSHAL.every`), and at once
 when the throng changes:
 
-- **Who stays in full.** Whoever's fighting the player or the player's fighting (however far
+- **Who stays in full.** Whoever the order of precedence puts before those who merely stand
+  about (*Who comes first*, below: whoever's fighting the player or their party, however far
   off), the four of the players' allies nearest them (`MANY.full`), one thrown by a blast, then
   the biggest on the screen (the nearest the camera, as big as they are; those out of view last);
   never a dungeon's boss or mini-boss, nor an elite. One drawn in full goes to its crowd only once
@@ -4769,7 +4771,8 @@ when the throng changes:
   (`QUALITY.bodies`, *Soldiers in their crowds*, above; app/game.js `#rationing`, twice a second).
   - The budget counts everyone else held in full or about to be, but the beasts built in code, whose
     bodies are shared and small.
-  - Whoever's fighting the player first, then the nearest the camera; those on another map last.
+  - In the order of precedence (*Who comes first*, below): whoever's fighting the player or
+    their party first, then the biggest on the screen where it stands; those on another map last.
   - Those past the room are drawn in their kind's crowd as a soldier is (`CrowdAvatar`, not a
     stand-in), their body in full let go; one not built yet isn't built at all. One in full only
     just past the room (`MARSHAL.margin`) is left as it is.
@@ -4820,6 +4823,67 @@ draws do. Memory (Chromium's JS heap, and what the scene's geometry and pictures
 84 MB and 104 MB before any of them; 685, 226 and 318 MB with forty built; 756, 261 and 378 MB with
 eighty. Most of what the first forty add is the first of each kind (its skin, garments, a crowd's
 figure); each one more takes about 4 MB.
+
+### Who comes first (app/precedence.js)
+
+Where not everyone can be had as they'd best be, one order says who's before whom: who's held in
+full where a phone's memory holds only so many bodies (`#marshal`, `#rationing`, `#folkRoom`),
+who's drawn in full in a crowded fight that comes too slowly (`#thronging`), and whose bar is
+shown where bars over heads overlap (*The screens*, below). It's the "full-tier order" of the
+scaling plan's Stage 5 ([generated/multiplayer_scaling_plan.md](../generated/multiplayer_scaling_plan.md);
+the research behind it and what's built of it so far are in
+[generated/crowd_rendering_plan.md](../generated/crowd_rendering_plan.md)):
+
+1. the player themself;
+2. the other players in their party;
+3. whoever they're set on: the battle's target, the one they've chosen to fight (its bar lit),
+   or whoever their blow under way is at;
+4. whoever's attacking them (set on them, or a blow at them under way);
+5. whoever's fighting their party (set on one of them, or one of them set on it);
+6. whoever they're talking to, buying from or trading with;
+7. then the biggest on the screen, the nearer first of two as big;
+8. and those on another map after everyone on the player's, in the same order among themselves.
+
+`standingOf(viewer, actor)` says which of 1 to 6 someone is (`STANDING`), `Order.rank` ranks any
+of the battle's actors by it, and `first(entry)` says whether one comes before those who merely
+stand about. The module knows nothing of the game (plain actors and numbers: it runs under
+Node), and makes nothing new once it's ranked as many: each place keeps its own `Order`, whose
+entries are filled in again every look, a couple of times a second for who's held and every
+frame for the bars. The player as it needs them (`#viewer`) is one object filled in again: who
+they're set on and striking as they are that frame, their party and its foes and whoever
+they're trading with looked up twice a second.
+
+Each place had an order of its own before (three copies of "fighting the player", the folk's
+"kept" for whoever the player talked to, and four sorts). What changed with the one order:
+
+- Whoever's fighting the player was ranked a fixed 160 metres nearer the camera than they were;
+  now they're before everyone who isn't, whatever the distances.
+- Whoever's fighting the player's **party**, and whoever they're talking or trading with, count
+  everywhere: only the folk knew of the talk before, and nothing knew of the party.
+- The soldiers, the creatures and the folk were ranked by how near the camera they were; now by
+  how big on the screen, which is the same thing for bodies of one height, and puts a troll
+  before a goblin as near.
+- Past 45 metres from the camera, whoever the order puts first is kept in full (in a crowd else):
+  that was whoever was fighting the player, and for the folk whoever they talked to.
+
+Who's held in full when there's room for everyone is as it was. What each place keeps of its
+own, and why:
+
+- **Held or let go, by how big they'd be seen, in view or not** (`#stature`: the soldiers, the
+  creatures, the folk). One out of view isn't ranked last, as one who only stands in is: a body
+  let go of as the camera turns from it would be built again as it turns back, seconds of work.
+  One not drawn yet is taken to be as tall as its kind is.
+- **Standing in** (`#crowdable`): the four allies nearest the players and one thrown by a blast
+  come before the rest (`STANDING.kept`, after everyone the order names): the nearest allies
+  cast shadows and are drawn in more detail, which a stand-in can't, and a crowd's figure has no
+  move for being flung. Those out of view are last: only a stand-in is swapped, in a moment.
+- **Which kinds' figures are made first** (`#marshal`, `FIGURES`): by how near the player, not
+  how big on the screen. The figures are first made while the game loads, before the camera's
+  behind the player, and a kind's is made for everyone of it wherever the camera looks.
+
+The scaling plan's slices that let the other players into the bodies' budget and the crowds
+(`5-2`), choose how many of them are in full (`5-4`) and queue a crowd arriving at once (`5-6`)
+are to rank by this order.
 
 ### The paperdoll (app/pack.js, world/view.js)
 
@@ -7872,6 +7936,12 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   as it was. `test/herd.test.js` (WILDS.md *In a crowd*): beasts in their crowds. E2E: a crowded
   fight told it's too slow, those least seen of its bandits, wolves and spiders standing in, kept
   but unseen, and drawn in full again told there's time to spare.
+- `test/precedence.test.js`: the one order of precedence (app/precedence.js): how someone stands
+  with the player, the first that's true of them; the order itself (the player, their party,
+  whoever they're set on, attackers, the party's foes, whoever they're talking or trading with,
+  then the biggest on the screen, the nearer of two as big, other maps last); what a place keeps
+  of its own, after everyone the order names; ranking making nothing new once it's ranked as
+  many; and the game ranking by it in each place, with no order of its own left.
 - `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
   (`Character.merging`): the same mesh and the very same material as one dressed all at once;
   one by one till the one step that puts them together; in a step where someone else wears the

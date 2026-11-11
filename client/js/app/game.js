@@ -197,6 +197,7 @@ import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
 import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
+import { first, Order, STANDING, standingOf, viewerOf } from "./precedence.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
 import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF } from "./clocks.js";
@@ -761,6 +762,10 @@ const CULT_KNOWN = 2;
 // forth on the edge. Whoever's fighting the player, or the player's fighting, is drawn in full
 // wherever they are
 const DETAIL = Object.freeze({ reach: 45, slack: 10 });
+
+// How tall a person is taken to be where it isn't known yet (metres: one not drawn, ranked with
+// those who are, #stature)
+const PERSON = 1.75;
 
 // The many near a fight drawn for less (docs/WILDS.md *A ceiling*): a creature too small on the
 // screen for its shadow to show casts none (under `shadow` drawing buffer pixels tall; again over
@@ -1580,6 +1585,16 @@ export class Game {
          * (#thronging); and those that are: id -> { avatar, standIn, hidden, unecho }.
          */
         this.throng = new Throng();
+
+        /**
+         * Who comes first where not everyone can be held in full, drawn in full, or have their
+         * bar shown (app/precedence.js): the player as the order needs them (#viewer), and each
+         * place's own ranking, its entries kept from one look to the next.
+         */
+        this.viewer = viewerOf();
+        this.viewerAt = -Infinity;
+        this.viewerTrading = null;
+        this.orders = { soldiers: new Order(), creatures: new Order(), folk: new Order(), throng: new Order(), plates: new Order() };
 
         /**
          * How big an invasion this device can draw, measured from its frames while there's none
@@ -5049,16 +5064,19 @@ export class Game {
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
         const room = soldiers.length > MARSHAL.from ? full : Math.max(full, this.#bodiesBudget() - this.#heldInFull((id) => !ids.has(id)));
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const inFull = (actor) => this.#drawnInFull(actor.id);
-        // (Past the reach from the camera: in their crowd, whatever room there is; the rest ranked
-        // by how near the camera they are)
-        const away = new Map(soldiers.map((actor) => [actor, this.#awayFromCamera(actor)]));
-        const far = new Set(soldiers.filter((actor) => !fighting(actor) && away.get(actor) > DETAIL.reach + (inFull(actor) ? DETAIL.slack : 0)));
-        const ranked = soldiers
-            .filter((actor) => !far.has(actor))
-            .map((actor) => [away.get(actor) - (fighting(actor) ? DRAW_REACH : 0), actor])
-            .sort((a, b) => a[0] - b[0]);
+        const viewer = this.#viewer(me);
+        // (Past the reach from the camera: in their crowd, whatever room there is, but whoever
+        // the order puts before those who merely stand about; the rest in the order, #stature)
+        const far = new Set();
+        const ranked = [];
+
+        for (const entry of this.orders.soldiers.rank(viewer, soldiers, this.#stature)) {
+            if (!first(entry) && entry.away > DETAIL.reach + (this.#drawnInFull(entry.actor.id) ? DETAIL.slack : 0)) {
+                far.add(entry.actor);
+            } else {
+                ranked.push(entry.actor);
+            }
+        }
 
         this.marshalled = { soldiers: soldiers.length, room, far: far.size };
 
@@ -5092,7 +5110,7 @@ export class Game {
             this.#toCrowd(actor, key);
         };
 
-        ranked.forEach(([, actor], place) => {
+        ranked.forEach((actor, place) => {
             const avatar = this.avatars.get(actor.id);
             const crowded = avatar instanceof CrowdAvatar;
 
@@ -5129,7 +5147,7 @@ export class Game {
         // fallen meanwhile, forgotten, never seen; those out of reach, still waiting; those with
         // room now, come nearer, built in full. Not the fallen and those out of reach built in
         // full, as they were: 38 of an invasion's dead were, far off, waiting their turn)
-        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.some(([, each], place) => each === actor && place >= room);
+        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.indexOf(actor) >= room;
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
@@ -5145,20 +5163,92 @@ export class Game {
             }
         }
 
-        // (The kinds of those still waiting made the nearest the player first, whoever's fighting
-        // them before anyone: FIGURES)
+        // (The kinds of those still waiting made the nearest the player first, whoever the order
+        // puts before those who merely stand about before anyone: FIGURES. By how near the
+        // player, not how tall on the screen, as the order would have it: the figures are first
+        // made as the game loads, #figuresFirst, before the camera's behind the player, and a
+        // kind's made for everyone of it, wherever the camera looks)
         const nearest = new Map();
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
             const { key } = this.#crowdKind(actor);
-            const away = fighting(actor) ? 0 : actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity;
+            const away = standingOf(viewer, actor) < STANDING.rest ? 0 : actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity;
 
             nearest.set(key, Math.min(nearest.get(key) ?? Infinity, away));
         }
 
         this.crowds.first([...nearest].sort((a, b) => a[1] - b[1]).map(([key]) => key));
     }
+
+    // The player as the order of precedence needs them (app/precedence.js): who they're set on
+    // (and who they've chosen to fight, as #target has it, its bar lit) and striking, and who
+    // they're talking to or buying from, as they are this moment; the
+    // other players in their party, whoever those are set on, and whoever they're trading
+    // with, looked up again a couple of times a second (MARSHAL.every). The same object every
+    // time, filled in again: asked for every frame, for the bars over heads
+    #viewer(me) {
+        const viewer = this.viewer;
+
+        viewer.id = me.id;
+        viewer.map = me.map;
+        viewer.target = me.target ?? null;
+        viewer.locked = (me.order?.type === "engage" ? me.order.target : me.lock) ?? null;
+        viewer.striking = me.attack?.target ?? null;
+
+        if (!(this.clock - this.viewerAt < MARSHAL.every)) {
+            this.viewerAt = this.clock;
+            viewer.party.clear();
+            viewer.partyFoes.clear();
+
+            for (const id of this.host.fellows(me.id)) {
+                const fellow = this.battle.actor(id);
+
+                viewer.party.add(id);
+
+                for (const foe of [fellow?.target, fellow?.attack?.target]) {
+                    if (foe !== null && foe !== undefined) {
+                        viewer.partyFoes.add(foe);
+                    }
+                }
+            }
+
+            const trade = this.#tradeNow();
+
+            this.viewerTrading = trade ? (trade.from === me.id ? trade.to : trade.from) : null;
+        }
+
+        viewer.engaged.clear();
+
+        if (this.talking) {
+            viewer.engaged.add(this.talking.id);
+        }
+
+        if (this.shopping) {
+            viewer.engaged.add(this.shopping.keeper);
+        }
+
+        if (this.viewerTrading !== null) {
+            viewer.engaged.add(this.viewerTrading);
+        }
+
+        return viewer;
+    }
+
+    // How one ranked to be held in full is measured (Order.rank's `measure`: #marshal,
+    // #rationing, #folkRoom): how far from the camera, and how tall it would be on the screen
+    // there, in view or not, as its height over that (the same for everyone but for what a
+    // metre is in pixels, which ranks no one). Not nothing for one out of view, as for those
+    // who only stand in (#crowdable): a body let go of as the camera turns from it would be
+    // built again as it turns back, seconds of work each time. One not drawn yet is taken to be
+    // as tall as its kind is, a person's height else
+    #stature = (entry) => {
+        const { actor } = entry;
+        const height = this.avatars.get(actor.id)?.character?.height ?? PERSON * (actor.kind === "beast" && actor.wild ? sizeOf(actor.wild.creature, this.#seedOf(actor)) : 1);
+
+        entry.away = this.#awayFromCamera(actor);
+        entry.tall = height / Math.max(entry.away, 0.1);
+    };
 
     // The soldiers about the player (`me`) the marshal draws, in full or in their crowds: alive, on
     // their map and within DRAW_REACH of them, not a siege engine's (of `among`, if not everyone)
@@ -5396,13 +5486,11 @@ export class Game {
             return;
         }
 
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const ranked = rationed
-            .map((actor) => [actor.map === me.map ? this.#awayFromCamera(actor) - (fighting(actor) ? DRAW_REACH : 0) : Infinity, actor])
-            .sort((a, b) => a[0] - b[0]);
+        // (In the order: app/precedence.js, #stature)
+        const ranked = this.orders.creatures.rank(this.#viewer(me), rationed, this.#stature);
         // (Each one's place in the budget's room, in order, but those in the models' own, -1)
         let [models, next] = [0, 0];
-        const placed = ranked.map(([, actor]) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
+        const placed = ranked.map(({ actor }) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
 
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
@@ -5574,7 +5662,10 @@ export class Game {
             }
         }
 
-        const kept = (actor) => actor.id === this.talking?.id || actor.id === this.shopping?.keeper;
+        // (Whoever the order puts before those who merely stand about: the one the player's
+        // talking or trading with, as ever, and anyone set on them or their party)
+        const viewer = this.#viewer(me);
+        const kept = (actor) => standingOf(viewer, actor) < STANDING.rest;
         // (Far from the camera, one the player can see: the townsfolk drawn in their crowd there)
         const far = (actor) => !kept(actor) && actor.map === me.map && !this.#walledOff(actor, me) && this.#awayFromCamera(actor) > DETAIL.reach + (this.#drawnInFull(actor.id) ? DETAIL.slack : 0);
 
@@ -5584,10 +5675,10 @@ export class Game {
             return;
         }
 
-        const ranked = folk.map((actor) => [kept(actor) ? -Infinity : actor.map === me.map ? this.#awayFromCamera(actor) : Infinity, actor]).sort((a, b) => a[0] - b[0]);
+        const ranked = this.orders.folk.rank(viewer, folk, this.#stature);
         const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id) || this.aside.has(id);
 
-        ranked.forEach(([, actor], place) => {
+        ranked.forEach(({ actor }, place) => {
             const { id } = actor;
             const kind = this.#folkKind(actor);
 
@@ -5997,25 +6088,34 @@ export class Game {
     // (those out of view last)
     #crowdable(me) {
         const pixels = this.view.pixelsPerMetre();
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const list = [];
 
-        for (const actor of this.battle.actors) {
+        return this.orders.throng.rank(this.#viewer(me), this.battle.actors, (entry) => {
+            const { actor } = entry;
             const avatar = this.avatars.get(actor.id);
             const creature = actor.kind === "beast" && !actor.wild?.champion && !actor.wild?.elite ? actor.wild?.creature : null;
             const people = CREATURE_LOOKS[creature]?.body === "humanoid";
             const crowdable = actor.kind === "follower" || people ? avatar instanceof Avatar : herds(creature) && avatar instanceof BeastAvatar;
 
             if (!crowdable || actor.map !== me.map || Math.hypot(actor.x - me.x, actor.y - me.y) > THRONGING.near) {
-                continue;
+                return false;
             }
 
-            const tall = avatar.object.visible ? this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) : 0;
+            // (Its own, beside the order's: the allies nearest the players cast their shadows
+            // and are drawn in more detail, #allying, which a stand-in can't; and one thrown by
+            // a blast is flung as a body is, which a crowd's figure has no move for)
+            if (entry.standing === STANDING.rest && (this.alliesNear.has(actor.id) || avatar.thrown)) {
+                entry.standing = STANDING.kept;
+            }
 
-            list.push({ actor, avatar, tall, first: fighting(actor) || this.alliesNear.has(actor.id) || avatar.thrown });
-        }
+            // (As it's seen, nothing out of view: one only stands in for it, its body kept, so
+            // it's back in a moment when the camera turns to it; not so one let go of, #stature)
+            entry.avatar = avatar;
+            entry.tall = avatar.object.visible ? this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) : 0;
+            entry.away = this.view.camera.position.distanceTo(avatar.object.position);
+            entry.first = first(entry);
 
-        return list.sort((a, b) => Number(b.first) - Number(a.first) || b.tall - a.tall);
+            return true;
+        });
     }
 
     // The crowd one's drawn in for now (#thronging), and what its kind's figure's made from
