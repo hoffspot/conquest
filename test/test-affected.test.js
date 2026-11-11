@@ -103,7 +103,7 @@ describe("the unit tests ordered by what a change can reach (scripts/test-affect
     });
 
     it("runs them as `npm test` does: Node's options from package.json's own script, which is still written the way it reads", () => {
-        assert.deepEqual(optionsOf("node --import ./test/plan-cache.js --test --test-timeout=900000 test/*.test.js"), ["--import", "./test/plan-cache.js", "--test", "--test-timeout=900000"]);
+        assert.deepEqual(optionsOf("node --import ./test/plan-cache.js --test --test-timeout=1200000 test/*.test.js"), ["--import", "./test/plan-cache.js", "--test", "--test-timeout=1200000"]);
         assert.deepEqual(optionsOf("node --test test/*.test.js"), ["--test"]);
         assert.throws(() => optionsOf("node --test test/"), /isn't "node <options> test\/\*\.test\.js" any more/);
         assert.throws(() => optionsOf("node scripts/run-tests.js"), /any more/);
