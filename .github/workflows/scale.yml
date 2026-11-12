@@ -92,6 +92,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 100 --layout one-town --activity joinstorm --seed "$SEED" --seconds 120 --ceiling 50 --out test-results/load/100-one-town-joinstorm.json
 
+      # (Seven parties at four dungeons' ways in and three taverns' doors, going in a party at a time)
+      - name: Load, 25 players into dungeons and buildings
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 25 --activity dungeons --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-dungeons.json
+
       - name: Load, 50 players, four to a town, sticks held
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 50 --layout towns --activity stick --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/50-towns-stick.json

@@ -6,11 +6,12 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DAY } from "../client/js/core/daytime.js";
+import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
-import { ACTIVITY_SCHEMAS, checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
+import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
 import { AHEAD } from "../server/ahead.js";
 import { KEEPER } from "../server/keeper.js";
 
@@ -294,10 +295,99 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
     });
 });
 
+describe("the load's dungeons and buildings (scripts/load.js doorsOf, load, activity dungeons)", () => {
+    let report;
+
+    before(async () => {
+        report = await load({ seed: 2, players: 8, activity: "dungeons", seconds: 8, eventAt: 1000 });
+    });
+
+    it("puts four to a door, every other party by a dungeon's way in, further off than it's made from, the rest in a town", () => {
+        const world = buildWorld({ seed: 2 });
+        const homes = doorsOf(world, 25);
+        const parties = [...new Set(homes.map(({ party }) => party))].map((party) => homes.filter((home) => home.party === party));
+        const delves = parties.filter(([{ door }]) => door.kind === "dungeon");
+        const towns = parties.filter(([{ door }]) => door.kind === "building");
+
+        assert.deepEqual(parties.map(({ length }) => length), [4, 4, 4, 4, 4, 4, 1]);
+        assert.deepEqual(parties.map(([{ door }]) => door.kind), ["dungeon", "building", "dungeon", "building", "dungeon", "building", "dungeon"]);
+        assert.equal(new Set(delves.map(([{ door }]) => door.site)).size, 4);
+        assert.equal(new Set(towns.map(([{ door }]) => door.town)).size, 3);
+        assert.equal(towns[0][0].door.town, startFor(world.plan, "human").id);
+        assert.ok(towns.every(([{ door, race }]) => world.plan.places.find(({ id }) => id === door.town).race === race));
+
+        for (const [{ door, at }] of delves) {
+            const site = world.plan.sites.find(({ id }) => id === door.site);
+
+            assert.equal(site.kind, "dungeon");
+            assert.notEqual(site.theme, "hell");
+            assert.ok(Math.hypot(at[0] - site.at[0], at[1] - site.at[1]) > DELVES.near + LOAD.clear, `${door.site}'s party waits where it isn't made from`);
+            assert.ok(Math.hypot(at[0] - door.outside[0], at[1] - door.outside[1]) > DELVES.near + LOAD.clear);
+        }
+
+        assert.deepEqual(doorsOf(world, 25), homes, "the same every time");
+        assert.deepEqual(doorsOf(world, 8), homes.slice(0, 8), "more players leave the first where they were");
+        assert.throws(() => doorsOf(world, 2000), /dungeons and \d+ towns to go into, not the 500 doors 2000 players take/);
+    });
+
+    it("stands each party at its door in its turn, and they go in by it by their own commands: the dungeon's levels made in the run", () => {
+        const { dungeons } = report;
+
+        assert.deepEqual(checkReport(report), []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+        assert.deepEqual({ parties: dungeons.parties, doors: dungeons.doors, at: dungeons.at, stagger: dungeons.stagger }, { parties: 2, doors: { dungeons: 1, buildings: 1 }, at: 1000, stagger: LOAD.stagger });
+        assert.equal(dungeons.made.dungeons, 1);
+        assert.ok(dungeons.made.levels >= 1 && dungeons.made.buildings <= 1);
+        assert.ok(!report.problems.some((problem) => /was made before the run|wasn't made in the run|no door off the street|couldn't be stood/.test(problem)), report.problems.join("; "));
+        assert.ok(dungeons.entered >= 4 && dungeons.entered <= 8, `${dungeons.entered} got in`);
+        assert.ok(dungeons.inside.most >= 4 && dungeons.inside.most <= dungeons.entered);
+        assert.ok(dungeons.inside.end <= dungeons.inside.most && dungeons.inside.fallen <= 8);
+        // (The dungeon's foes put out: more in the battle than the towns' and the players')
+        assert.ok(report.actors.most > report.actors.start);
+    });
+
+    it("says what the longest step of each door's coming was and the pass that took most of it, and times the steps with anyone inside", () => {
+        const { dungeons } = report;
+        const steps = (8 * 1000) / STEP_MS;
+
+        assert.equal(dungeons.before.count, 1000 / STEP_MS);
+        assert.ok(dungeons.steps.count > 0 && dungeons.steps.count <= steps - dungeons.before.count);
+        assert.ok(dungeons.steps.over >= 0 && dungeons.steps.over <= dungeons.steps.count);
+        assert.ok(["dungeon", "building"].includes(dungeons.coming.longest.door));
+        assert.ok(dungeons.coming.longest.after >= 0 && dungeons.coming.longest.after < LOAD.stagger);
+        assert.ok(dungeons.coming.longest.at >= 1000 && dungeons.coming.longest.at < 1000 + 2 * LOAD.stagger);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(dungeons.coming.longest.pass), dungeons.coming.longest.pass);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(dungeons.steps.longest.pass), dungeons.steps.longest.pass);
+        assert.equal(dungeons.steps.longest.wall, dungeons.steps.wall.worst);
+        assert.ok(wordsOf(report).some((line) => /^Doors, from 1 s, a party every 2 s: 2 parties at 1 dungeons and 1 buildings; \d got in, /.test(line)));
+        assert.ok(wordsOf(report).some((line) => /^Made in the run: 1 dungeons \(\d+ levels\) and [01] buildings\. The longest step of a dungeon's coming: /.test(line)));
+    });
+
+    it("is held to what such a run reports, and fails if no one got in or a dungeon wasn't made", () => {
+        const { dungeons, ...without } = report;
+
+        assert.deepEqual(Object.keys(dungeons).sort(), Object.keys(ACTIVITY_SCHEMAS.dungeons).sort());
+        assert.deepEqual(checkReport(without), ["report.dungeons: missing"]);
+        assert.deepEqual(checkReport({ ...report, dungeons: { ...dungeons, inside: { most: 8 } } }).sort(), ["report.dungeons.inside.end: missing", "report.dungeons.inside.fallen: missing"]);
+        assert.deepEqual(failuresOf({ ...report, problems: ["no one got in by a door"] }), ["no one got in by a door"]);
+        assert.deepEqual(failuresOf({ ...report, problems: ["dungeon-28 wasn't made in the run", "2 of the 8 never got in by their door"] }), ["dungeon-28 wasn't made in the run"]);
+    });
+});
+
 describe("the load's options", () => {
-    it("names every activity the plan lists: those built, and those that say they aren't yet", async () => {
+    it("names every activity the plan lists, all of them built; one that weren't would say so", async () => {
         assert.deepEqual([...LOAD.activities, ...Object.keys(LOAD.unbuilt)].sort(), ["battle", "dungeons", "fights", "hellrift", "invasion", "joinstorm", "night", "stick", "walk", "warturn"]);
-        assert.deepEqual(Object.keys(LOAD.unbuilt), ["dungeons"]);
+        assert.deepEqual(LOAD.activities, ["walk", "stick", "fights", "battle", "invasion", "hellrift", "night", "warturn", "joinstorm", "dungeons"]);
+        assert.deepEqual(Object.keys(LOAD.unbuilt), []);
+        assert.deepEqual(Object.keys(ACTIVITY_SCHEMAS), ["night", "warturn", "joinstorm", "dungeons"]);
+
+        // (What an unbuilt one's report would hold: nothing judged, nothing failed)
+        const unbuilt = { schema: LOAD.schema, run: { seed: 2, players: 8, layout: "spread", activity: "dancing", seconds: 120, node: process.version, platform: process.platform, arch: process.arch, cpus: 4 }, built: false, reason: "not built yet: no one knows the steps" };
+
+        assert.deepEqual(checkReport(unbuilt), []);
+        assert.deepEqual(checkReport({ ...unbuilt, reason: undefined }, UNBUILT_SCHEMA), ["report.reason: not a string"]);
+        assert.deepEqual(failuresOf(unbuilt, { ceiling: 50 }), []);
+        assert.deepEqual(wordsOf(unbuilt), ["8 players, spread, dancing, seed 2: not built yet: no one knows the steps"]);
         assert.deepEqual(LOAD.players, [8, 25, 50, 100]);
         assert.deepEqual(LOAD.seeds, [2, 7]);
 
