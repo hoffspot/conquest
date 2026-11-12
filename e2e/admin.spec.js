@@ -17,6 +17,7 @@ import { expect, test } from "./fixtures.js";
 // as a table. And its Updates: a newer version found, with its notes, and the commands that update
 // a server run from a copy of the repository. And its
 // Archive: the whole server archived, the archive opened, and its worlds brought in as new ones.
+// And Health's charts: the last day and the last week drawn from what the server keeps of them.
 
 test.describe.configure({ mode: "default" });
 
@@ -410,6 +411,68 @@ test("a world's measured runs: one a player's game sent, read by the admin with 
     await expect(rows).toHaveCount(0);
     expect(await server.worlds.get(made.world).measures.list()).toEqual([]);
     await page.locator("#worldclose").click();
+    expect(errors).toEqual([]);
+});
+
+test("Health's charts: the last day drawn from what the server's kept, the server's and a world's, and the last week when Week's chosen", async ({ page }) => {
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    // (What the server would have kept, had it been up: three days ago, 40 games linked; from
+    // three hours ago to two, 7 of them, and a world's slowest steps 20 ms, then 60: put in its
+    // history as its own sampling puts them, a point every ten seconds' worth, oldest first)
+    const made = await server.createWorld({ name: "Harrowmere", seed: 4, race: "human" });
+    const now = Date.now();
+    const hour = 3600000;
+
+    server.history.record(now - 72 * hour, [{ id: "sockets", value: 40 }]);
+
+    for (let at = now - 3 * hour; at <= now - 2 * hour; at += 60000) {
+        server.history.record(at, [
+            { id: "sockets", value: 7 },
+            { id: "step-p99", world: made.world, value: at < now - 2.5 * hour ? 20 : 60 },
+        ]);
+    }
+
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="health"]').click();
+
+    const health = page.locator("#health");
+    const charts = health.locator(".panel", { has: page.getByRole("button", { name: "Week" }) });
+    const linked = charts.locator("figure.chart", { hasText: "Players' games linked" });
+    const steps = charts.locator(".chart-group", { hasText: "Harrowmere" }).locator("figure.chart", { hasText: "Steps, slowest 1%" });
+
+    // The last day: the hour of 7 drawn as a line of several points, and not the 40 of three days ago
+    await expect(charts.locator("h2")).toHaveText("The last day");
+    await expect(charts.getByRole("button", { name: "Day" })).toHaveAttribute("aria-pressed", "true");
+    await expect(charts.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "false");
+    await expect(charts).toContainText("A point every 2 minutes");
+    await expect(linked).toHaveAttribute("aria-label", /^Players' games linked: now .*, at most 7$/);
+    await expect(linked.locator("path.chart-line")).toHaveAttribute("d", /^M[\d.]+ [\d.]+(L[\d.]+ [\d.]+){5,}/);
+
+    // (The world's, under its name: its slowest steps, with the dashed line at a step's 50 ms)
+    await expect(steps).toHaveAttribute("aria-label", /^Steps, slowest 1%, Harrowmere: now .*, at most 60 ms$/);
+    await expect(steps.locator(".chart-foot")).toContainText("the dashed line is 50 ms");
+    await expect(steps.locator("line.chart-limit")).toHaveCount(1);
+    await expect(linked.locator("line.chart-limit")).toHaveCount(0);
+
+    const day = await linked.locator("path.chart-line").getAttribute("d");
+
+    // The last week: the same things, a point every fifteen minutes, the 40 among them
+    await charts.getByRole("button", { name: "Week" }).click();
+    await expect(charts.locator("h2")).toHaveText("The last week");
+    await expect(charts.getByRole("button", { name: "Week" })).toHaveAttribute("aria-pressed", "true");
+    await expect(charts.getByRole("button", { name: "Day" })).toHaveAttribute("aria-pressed", "false");
+    await expect(charts).toContainText("A point every 15 minutes");
+    await expect(linked).toHaveAttribute("aria-label", /^Players' games linked: now .*, at most 40$/);
+    await expect(steps).toHaveAttribute("aria-label", /at most 60 ms$/);
+    expect(await linked.locator("path.chart-line").getAttribute("d")).not.toBe(day);
+
+    // And back to the day
+    await charts.getByRole("button", { name: "Day" }).click();
+    await expect(charts.locator("h2")).toHaveText("The last day");
+    await expect(linked).toHaveAttribute("aria-label", /at most 7$/);
     expect(errors).toEqual([]);
 });
 
