@@ -421,13 +421,18 @@ export class Hosting {
      * @param {object} host - The world (core/host.js Host).
      * @param {object} options
      * @param {function} options.send - Sends `text` to one who's joined (peer, text).
+     * @param {function} [options.sendAll] - Sends the same `text` to several who've joined at once
+     *   (peers: an array, in the order they joined; text), for whoever can do that in one go (the
+     *   world server's thread, one word to its supervisor in place of one for each); none, each is
+     *   sent it by `send`. Either way each gets the same text, in the same order.
      * @param {function} [options.clock] - The time (ms: performance.now, say), to hold those
      *   who've joined to how much they may ask of the host (AGAIN, HEARD); none, they aren't held
      *   (the tests' worlds, played faster than any clock).
      */
-    constructor(host, { send, clock = null }) {
+    constructor(host, { send, sendAll = null, clock = null }) {
         this.host = host;
         this.send = send;
+        this.sendAll = sendAll;
         this.clock = clock;
 
         /** Those who've joined (by peer): their player's id in the world. */
@@ -584,9 +589,24 @@ export class Hosting {
     }
 
     #sendAll(kind, text) {
-        for (const peer of this.players.keys()) {
-            this.#send(peer, kind, text);
+        this.#sendTo([...this.players.keys()], kind, text);
+    }
+
+    // The same text to several who've joined: in one go, if whoever runs it can (sendAll), counted
+    // as it would be sent one by one
+    #sendTo(peers, kind, text) {
+        if (!this.sendAll || peers.length < 2) {
+            for (const peer of peers) {
+                this.#send(peer, kind, text);
+            }
+
+            return;
         }
+
+        this.sent[kind] = (this.sent[kind] ?? 0) + text.length * peers.length;
+        count("sends", peers.length);
+        count("sent", text.length * peers.length);
+        this.sendAll(peers, text);
     }
 
     /**
@@ -675,9 +695,9 @@ export class Hosting {
             if (this.clock) {
                 this.worlds.set(peer, { left: this.#worldsLeft(peer) - 1, at: this.clock() });
             }
-
-            this.#send(peer, "state", text);
         }
+
+        this.#sendTo(due, "state", text);
     }
 
     // Each who's joined not heard from for QUIET.ms stopped where they stand (once, till they're
@@ -1122,10 +1142,7 @@ export class Hosting {
         // (Whoever had asked for it has it now. Not counted as sent for the asking: it was the
         // host's link that dropped, and theirs may yet)
         this.asked.clear();
-
-        for (const peer of this.players.keys()) {
-            this.#send(peer, "state", text);
-        }
+        this.#sendAll("state", text);
     }
 
     /** Who's still here (the relay's word, the host's link back): anyone else who'd joined, gone. */

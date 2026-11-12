@@ -68,7 +68,11 @@ export class WorldThread {
                 break;
             }
             case "send":
-                this.onSend(message.peer, message.text);
+                // (To one player's game; or the same to several, told of in one word)
+                for (const peer of message.peers ?? [message.peer]) {
+                    this.onSend(peer, message.text);
+                }
+
                 break;
             case "close":
                 this.onClose(message.peer, message.reason);

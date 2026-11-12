@@ -30,6 +30,9 @@
 //                          { type: "backup", why, id }             saved, then backed up
 //   worker -> supervisor   { type: "opened", from, forwarded, ms } / { type: "failed", name, message }
 //                          { type: "send", peer, text }            to a player's game
+//                          { type: "send", peers, text }           the same to several of them (what's
+//                                                                  been done, each step: one word for
+//                                                                  them all, not one each)
 //                          { type: "close", peer, reason }         sent out of the world (afk)
 //                          { type: "state", ... }                  how it is (report), with what it's
 //                                                                  counted of itself since it last said
@@ -109,7 +112,7 @@ await Promise.all(saving);
 const runner = new WorldRunner(host, { clock });
 const keeper = new Keeper(runner, stored);
 const ahead = new Ahead(host.world, { host, clock });
-const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), clock });
+const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), sendAll: (sent, text) => post({ type: "send", peers: sent, text }), clock });
 
 runner.hosting = hosting;
 
