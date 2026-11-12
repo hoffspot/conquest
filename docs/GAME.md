@@ -7769,6 +7769,69 @@ has **Send crash reports**, which turns it off.
 - **Turned off:** nothing more's kept for sending, and any waiting are let go of. The debug log
   itself keeps the crash as ever.
 
+## Measuring a device
+
+The debug log keeps only what went wrong. To know how a device keeps up, every frame of some
+minutes of play is counted: a **measured run** (app/measure.js, app/measuring.js; generated/
+multiplayer_scaling_plan.md, Stage 0). It's asked for by the link the game's opened with, and by
+nothing else: `measure=<name>` beside whatever else the link says, and `minutes=` for how long (12
+unless said, 30 at most, a part of a minute will do):
+
+- `/?play&seed=1&measure=alone&minutes=12` for the quick start;
+- `/?join=CODE&measure=friend` for a friend's world;
+- `/?measure=eight-spread` and then into a world any other way (a world on a server, from **Worlds
+  on servers**): the first game under way from the page is the one measured.
+
+Without `measure` in the link nothing of it runs: its code isn't read (main.js `measure`), no game
+has a meter (`game.measure` is null, one test of it a frame), and nothing's kept or sent.
+
+- **The run** begins once the game's under way and is as long as its frames' own times add up to,
+  so a game stopped (the menu open with nobody else in the world, the page put away) stops the run
+  with it. Another game come to from the same page (another world gone into) carries the same run
+  on. A name is kept to letters, digits, dots and dashes, forty at most.
+- **One quality throughout:** Adaptive is off for the run whatever Game options says (main.js
+  `applyViewSettings`), so the level and the pixels drawn don't change under what's measured and
+  everyone's drawn in full. The level is the one chosen (or suggested, left to the game), or the
+  link's own `&quality=low`, `medium` or `high`. The memory guard still acts, as it does for a
+  player; the report says its level.
+- **What's counted** (measure.js `Meter`), each frame: its interval (ms since the frame before),
+  its work (the game's own, as the debug log times it: telemetry.js `lastInto`), each of the debug
+  log's eight phases (`PHASES`: the world's steps, setting up, the bodies, the effects, the world
+  round the player, the insides, the bars, drawing), and on a frame that played steps of the world
+  the ms one took (`perStep`: the steps phase over the steps played; a joined game's steps caught
+  up after it are counted among the steps, their time in the phase after). Each goes into a
+  histogram whose buckets are 4.4% wide (`MEASURE.per`: 16 to a doubling, from 0.05 ms to 3.3 s),
+  so a percentile read from one is within 2.2% of the time it stands for; the worst is kept as it
+  was. Counting a frame makes no object, array or number (the frame's times are written into the
+  meter's own array), so measuring gives the device no garbage to collect.
+- **What's held** is read every two seconds, as often as the memory guard reads it and no oftener
+  (`MEASURE.every`; game.js `#measured`: just after a frame, and on a phone the guard's own
+  reading, so measuring walks the bodies about no more than playing does), counted as the guard
+  counts it (`#held`: the graphics card's, the sound's, the way-finding's and the page's own
+  copies, not the heap).
+- **The report** (`Meter.report`, JSON; under 48 KB for fifteen minutes however the times fall):
+  the run's name, when it began, which code and assets, the quality, the share of the pixels,
+  `hz` (how many frames a second the browser was asking for: a run on a phone saving its battery,
+  30, isn't one to keep), the map, whether joined or hosting, how many players, actors and bodies,
+  the guard's level and the device (as the debug log says it: the browser, the screen, the
+  drawing's size, the cores); `seconds` measured and whether it was `done`; over the run, `frames`,
+  how many came more than 33, 50, 100 and 200 ms after the one before (`over`), `stepsPlayed` and
+  `stepMs` (the ms a step took on average), the draw calls a frame (`calls`), the most held
+  (`heldMB`), and each series' count, mean, p50, p95, p99 and worst (`total`); a row for each
+  minute (`rows`: the same counts, and each series as `[p50, p95, p99, worst]`), the last a part of
+  a minute if the run ended in one; each series' histogram (`histograms`: its first bucket with
+  anything in it, then each bucket's count; `percentileOf` reads any percentile back); and every
+  reading of what was held (`held.mb`, MB, one every `held.every` seconds).
+- **On the page:** how long's left is counted down at the top of the screen ("Measuring alone:
+  11:32 left", index.html `#measure`, brought up to date once a second, outside the frames); the
+  report as far as it's got is kept on the device every ten seconds (`localStorage`
+  `pellagos.measure`, `MEASURING.keep`: the last run's, one), so a run the browser ends early, the
+  tab closed for what it held, leaves what it had measured, the readings of what was held to the
+  last ten seconds among it; and the screen's kept awake where the browser lets a page ask
+  (`navigator.wakeLock`, asked for again whenever the page comes back into view; where it's
+  refused or there's none, the run goes on, and the screen's the owner's to keep awake). Measured
+  through, the report's kept as it ended, the screen let go, and the words say so.
+
 ## Performance
 
 A frame draws the town (the blocks of it in view: a draw call or two each), the ground (one draw
@@ -8127,6 +8190,23 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   counted, each mesh and picture once however many share it, none let go of. E2E: a crash found from
   the last game's notes; a frame held up (with what the graphics card held) and an error thrown,
   each kept; the Debug log in Game options showing them, copied and cleared.
+- `test/measure.test.js`: a measured run's meter: a time's bucket within 2.2% of it from 0.05 ms to
+  3 s; each minute's and the run's percentiles of the interval, the work, a step and every phase
+  matching a sorted array's to within a bucket, the worst exactly, and any other percentile read
+  back from a histogram; the frames over 33, 50, 100 and 200 ms, the steps played and what one
+  took, and the draw calls counted; a row for each minute and for the part of one under way, with
+  every phase, and nothing counted once the run's done; a minute's row left empty by a frame that
+  took minutes; what's held kept, never more readings than the guard's cadence gives; fifteen
+  minutes' report under 48 KB, as a phone has them and with every bucket of every histogram filled;
+  and, by the engine's own sampling of what's made, `observe()` making nothing on a frame (closing
+  a minute, under 4 KB of numbers). `test/measuring.test.js`: the run a link asks for (none without
+  the parameter; its name and minutes); the first game under way measured, the countdown following
+  the frames, another game carrying the run on, the screen asked to stay awake and again as the
+  page comes back; the report kept every ten seconds and as it ends, the timer stopped, the screen
+  let go and the game's meter taken away; running with no wake lock, storage or place to show it;
+  and the frame the debug log timed written into a meter's array. E2E (`e2e/measure.spec.js`):
+  without the parameter nothing shown, no meter, nothing kept and Adaptive as it's set; with it
+  Adaptive off, twenty seconds counted down, and a report kept of one row with every phase.
 - `test/throng.test.js`: a crowded fight that keeps up, or one with few about however slow, left
   as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
   spare a while, a few back at a time, all in the end; more drawn in full that made it too slow

@@ -57,7 +57,8 @@ const settings = loadSettings();
 
 // (The quick start asked to draw at a level, `?play&quality=low`, `medium` or `high`: drawn so
 // this once, whatever's chosen in Game options, and not kept unless it's chosen there)
-if (params.has("play") && ["low", "medium", "high"].includes(params.get("quality"))) {
+// (A measured run's link may say the level too, whatever else it opens: `?measure=<name>&quality=low`)
+if ((params.has("play") || params.has("measure")) && ["low", "medium", "high"].includes(params.get("quality"))) {
     settings.quality = params.get("quality");
 }
 
@@ -156,6 +157,10 @@ window.pellagos = {
     },
     get inWorld() {
         return state.inWorld;
+    },
+    /** The measured run the page's link asked for (app/measuring.js), once its game's under way; else null. */
+    get measured() {
+        return measured;
     },
     debug,
     backdrop,
@@ -1137,8 +1142,30 @@ function underway(game) {
         if (state.game === game) {
             window.pellagos.playing = true;
             offerHandheld();
+            measure(game);
         }
     });
+}
+
+// A measured run (app/measuring.js; docs/GAME.md *Measuring a device*), only if the page's link
+// asks for one (`?measure=<name>&minutes=12`, beside whatever else it says): the first game under
+// way is measured from then on, every frame counted, how long's left counted down, the report kept
+// on the device as it goes, and the screen kept awake. Its code is read only then; with no
+// `measure` in the link nothing of it is, and no game's given a meter
+let measured = null;
+
+async function measure(game) {
+    if (!params.has("measure")) {
+        return;
+    }
+
+    const { MeasuredRun, measureOf } = await import("./app/measuring.js");
+
+    measured ??= new MeasuredRun(measureOf(params), { element: $("#measure"), storage: localStorage, wakeLock: navigator.wakeLock ?? null, about: { code: telemetry.code, build: telemetry.build, built: telemetry.built } });
+
+    if (state.game === game) {
+        measured.attach(game);
+    }
 }
 
 // Getting a game ready failed: said on the loading screen, with the ways on from there (back to
@@ -6336,6 +6363,9 @@ document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         pause();
         telemetry.closed();
+    } else {
+        // (A measured run's screen asked to stay awake again: the browser lets go of it whenever the page's hidden)
+        measured?.wake();
     }
 });
 
@@ -6494,8 +6524,9 @@ function applyViewSettings() {
     // (Less drawn while the game can't keep up, if that's left to it (Adaptive: app/governor.js),
     // from the quality chosen down; back to it when the quality's chosen again. Not under
     // automation: a test's frames, drawn in software, are always slow, and what it measures
-    // mustn't change)
-    const adaptive = settings.adaptive && !navigator.webdriver;
+    // mustn't change; nor for a measured run, `?measure=`, whose frames must all be drawn alike:
+    // app/measuring.js)
+    const adaptive = settings.adaptive && !navigator.webdriver && !params.has("measure");
     const governor = state.game?.governor;
 
     governor?.setCeiling(chosen);

@@ -178,6 +178,9 @@ export class Meter {
          */
         this.frame = new Float64Array(SERIES.length);
 
+        /** Where each of a frame's times goes in `frame` (FRAME), for whoever writes them. */
+        this.at = FRAME;
+
         /** Has the run been measured through? Nothing more is counted once it has. */
         this.done = false;
     }

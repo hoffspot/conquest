@@ -1660,9 +1660,17 @@ export class Game {
                 // (On a phone, as the memory guard read it within the last couple of seconds: one
                 // walk over every body about, not two: memoryLately)
                 memory: this.memoryGuard.touch ? this.memoryLately(MEMORY_GUARD.every * 1250) : this.memoryNow(),
-                device: { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${view.renderer.domElement.width}x${view.renderer.domElement.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null },
+                device: this.deviceAbout(),
             };
         };
+
+        /**
+         * A measured run's meter (app/measure.js Meter; app/measuring.js, asked for by the page's
+         * link: `?measure=`), or null, as it is for every game not being measured: every frame
+         * counted into it (#measured).
+         */
+        this.measure = null;
+        this.measureClock = 0;
         this.thronged = new Map();
 
         // (Those in a crowd fading from sight as one drawn in full takes their place: #handOver)
@@ -2106,6 +2114,35 @@ export class Game {
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
             // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
             guard: this.memoryGuard?.level ?? 0,
+        };
+    }
+
+    /** The device, as the debug log and a measured run's report say it: its browser, screen and what it tells of itself. */
+    deviceAbout() {
+        const canvas = this.view.renderer.domElement;
+
+        return { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${canvas.width}x${canvas.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null };
+    }
+
+    /**
+     * What a measured run's report says of the game it measured (app/measuring.js MeasuredRun.report):
+     * how it's drawn (the quality, the share of its pixels, how many frames a second the browser's
+     * asking for: a phone saving its battery asks for fewer, and such a run isn't one to keep),
+     * where the player is and with whom, how many are about, the memory guard's level, and the
+     * device. Nothing here walks the bodies about: what's held is the meter's own, read as the
+     * guard reads it (#measured).
+     */
+    measureAbout() {
+        const view = this.view;
+        const one = (value) => Math.round(value * 10) / 10;
+
+        return {
+            quality: view.qualityName,
+            pixels: view.adaptiveScale,
+            hz: one(1000 / this.pacing.beat.value),
+            world: { map: this.mapId, together: this.remote ? "joined" : this.hosting ? "hosting" : null, players: this.host.players.size, actors: this.battle.actors.length, avatars: this.avatars.size },
+            guard: this.memoryGuard?.level ?? 0,
+            device: this.deviceAbout(),
         };
     }
 
@@ -4112,7 +4149,43 @@ export class Game {
         // written down now and then, for a crash to be found by: just after the frame, not in it)
         telemetry.end(elapsed * 1000, this.telemetryState);
         telemetry.aliveSoon(this.telemetryState);
+
+        // (A measured run: this frame counted. Only ever for a game opened to be measured)
+        if (this.measure) {
+            this.#measured(elapsed * 1000, steps);
+        }
+
         this.worked = performance.now() - frameStart;
+    }
+
+    // A measured run (app/measure.js): the frame just ended counted into its meter, `interval` ms
+    // after the one before, its work and its phases as the debug log timed them, the `steps` of
+    // the world it played and the draw calls it made; and what's held, read as often as the memory
+    // guard reads it and no oftener, just after the frame (a reading the guard took in that time
+    // will do: on a phone, the guard's own, so measuring walks the bodies about no more than
+    // playing does). The frame's times are written straight into the meter's own array, so a
+    // frame measured makes nothing new
+    #measured(interval, steps) {
+        const meter = this.measure;
+        const { frame, at } = meter;
+
+        frame[at.interval] = interval;
+        telemetry.lastInto(frame, at.work, at.phases);
+
+        if (!meter.observe(steps, this.view.renderer.info.render.calls)) {
+            return;
+        }
+
+        if ((this.measureClock -= interval) > 0) {
+            return;
+        }
+
+        this.measureClock = MEMORY_GUARD.every * 1000;
+        setTimeout(() => {
+            if (this.running && this.measure === meter) {
+                meter.memory(this.#held(this.memoryLately(MEMORY_GUARD.every * 1000)));
+            }
+        }, 0);
     }
 
     // How big an invasion this device can draw (app/budget.js), from a frame's work (ms: updated
@@ -6254,10 +6327,13 @@ export class Game {
         // sound's, the way-finding's, and the bodies', floors', models' and character kit's copies
         // on the page, not a heap only some browsers tell of, so its marks mean the same
         // everywhere. A reading the notes took within the last second will do)
-        const memory = this.memoryLately(MEMORY_GUARD.every * 500);
-        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB + memory.modelsMB + memory.kitMB;
+        this.memoryGuard.look(this.#held(this.memoryLately(MEMORY_GUARD.every * 500)), this.clock);
+    }
 
-        this.memoryGuard.look(held, this.clock);
+    // What the game holds (MB) as the memory guard counts it, of a reading (memoryNow's): the
+    // graphics card's, the sound's, the way-finding's and the page's own copies, without the heap
+    #held(memory) {
+        return (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB + memory.modelsMB + memory.kitMB;
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past

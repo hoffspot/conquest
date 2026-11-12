@@ -8060,6 +8060,37 @@ dialog#menu.wide {
     background: rgba(236, 200, 130, 0.18);
 }
 
+/* --- A measured run (a link's ?measure=): its countdown, top and centre, then how it ended --- */
+
+#measure {
+    position: fixed;
+    left: 50%;
+    top: calc(var(--safe-top) + 6px);
+    translate: -50% 0;
+    z-index: 5;
+    max-width: calc(100% - var(--safe-left) - var(--safe-right) - 24px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 10px;
+    background: rgba(8, 10, 12, 0.78);
+    border: 1px solid rgba(120, 200, 160, 0.35);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.45;
+    color: #bff0d4;
+
+    /* Taps go through the countdown to the game under it */
+    pointer-events: none;
+}
+
+#measure[hidden] {
+    display: none;
+}
+
 /* --- Debug mode --- */
 
 #debug {
