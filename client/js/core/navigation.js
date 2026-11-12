@@ -286,6 +286,14 @@ export class Navigation {
 
         this.least = this.keep;
         this.most = roomy ? Math.max(MOST_TILES, this.keep) : this.keep;
+
+        /**
+         * Whether, holding more tiles than it's to keep (keepTiles told fewer), it lets go of one
+         * for each added and no more, the rest let go a few at a time by whoever tells it to
+         * (shed: server/ahead.js); or of all it has over that as the next is added, as it does
+         * with no one to tell it.
+         */
+        this.gently = false;
         this.polys = roomy ? OVERWORLD_POLYS : MAX_POLYS;
         this.mesh = new recast.NavMesh();
 
@@ -373,10 +381,28 @@ export class Navigation {
     /**
      * Keep `tiles` tiles at once from now on: never fewer than it kept to begin with, nor more
      * than its mesh was made to take (most). Told fewer than it has, it lets go of the longest
-     * unused as the next is added.
+     * unused as the next is added: all it has over that, there and then; or, `gently`, one for
+     * each added, and the rest as it's told to (shed).
      */
     keepTiles(tiles) {
         this.keep = Math.max(this.least, Math.min(this.most, Math.floor(tiles)));
+    }
+
+    /**
+     * Let go of the tiles longest unused that it has over what it's to keep (keepTiles), `most`
+     * of them at the most: for whoever has it let them go a few at a time between the world's
+     * steps (server/ahead.js), where the next tile added, in a step as likely as not, let go of
+     * them all. Returns how many it let go.
+     */
+    shed(most) {
+        let shed = 0;
+
+        while (shed < most && this.tiles.size > this.keep) {
+            this.drop(...tileXY(this.tiles.keys().next().value));
+            shed++;
+        }
+
+        return shed;
     }
 
     /**
@@ -413,6 +439,11 @@ export class Navigation {
 
         while (this.tiles.size >= this.keep) {
             this.drop(...tileXY(this.tiles.keys().next().value));
+
+            // (No more than the one it takes the place of: the rest are shed)
+            if (this.gently) {
+                break;
+            }
         }
 
         let ref = 0;

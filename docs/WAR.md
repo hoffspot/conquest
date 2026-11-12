@@ -3240,6 +3240,16 @@ settlement and navigation tile the moment someone first walked into it:
   what was waiting round one who's left the world, or gone through a portal to somewhere else,
   is let go (49 chunks and 121 tiles made for no one, before), and a chunk a player still needs
   that was let go waits to be made again.
+- **Let go a little each look** (`AHEAD.ease`, `Ahead.eased`; core/navigation.js `shed`,
+  `gently`; generated/multiplayer_scaling_plan.md 1-27). What's no longer wanted went all at
+  once: the look after 25 players apart had gone let 973 chunks go, and the navigation, told to
+  keep 2,000 tiles fewer, let them all go as the next tile was added, in a step as likely as
+  not. Now the world's told to keep more at once, as ever, but fewer only 16 chunks a pump (with
+  their heights), and the navigation sheds 32 tiles a pump and lets go of one, not all, for each
+  added: some six towns' ground a second at a server's two looks a step, a hundred towns' in
+  seven. Nothing a step works out changes: a chunk or a tile kept a while longer is the one a
+  step would make again (test/letting-go.test.js: six players in six towns, five gone at once and
+  one back, step for step with `Ahead.easing` on and off).
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
