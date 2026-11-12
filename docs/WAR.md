@@ -3235,6 +3235,16 @@ settlement and navigation tile the moment someone first walked into it:
   to back before anything was sent or heard, so a world whose steps took longer than a step
   would have fallen behind for ever. What it lets go is told in the world's journal (once a
   minute at most) and on the Health page (its **pace**: 100%, unless it has).
+- **Measured again, 2026-11-11** (the performance review's scripts, the world thread's own
+  processor time on a busy 4-core machine, seed 2). One player walking up to a city from the
+  wilds, everything made ahead given its time between steps: the step that musters it took 89
+  ms and made 5 chunks, the one that brings out its townsfolk 63 ms; with what the world will
+  soon want made ahead, 8 ms each and no chunk. An orc capital: 200 and 55 ms, now 10 and 19.
+  Eight players walking about in eight towns for five minutes: 1,233 chunks made between steps
+  while they played (and 74 inside steps), 3.3 ms of every step's time spent pumping, 33.6 s of
+  the thread's time in all, never settled; now 96 chunks (5 inside steps), 0.44 ms, 14.5 s, and
+  settled 13 seconds after they came in. A minute of the same once settled: 2,400 pumps, 0.22 ms
+  each, one over 16 ms (a tile of a building's inside baked: 17 ms).
 
 **Away from the game** (core/host.js `AFK`; generated/world_server_plan.md §4). A player who's
 given no command for 10 minutes of the world's time is marked away: "AFK" by their name, over
