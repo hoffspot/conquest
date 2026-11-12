@@ -622,6 +622,41 @@ A world set aside keeps its counters and histograms and lets go of what was only
 a world deleted lets go of all of them. All of them start again from nothing when the server
 does.
 
+### Logs
+
+Beside the journals, which are written for people (Activity shows them), the server prints a
+**structured log** on its output: one line of JSON for each thing that happens, for whatever
+gathers logs to read (`journalctl`, Console, `jq`, a log shipper). Run from a terminal it's among
+what the server says there; the Mac app keeps it in its `server.log`.
+
+```
+{"t":"2026-11-12T19:04:11.512Z","event":"player.entered","world":"mj7dyu057o","player":"K7Q2MXD4RT","role":"player","net":"203.0.113.x","keyId":"k3f9","first":true}
+{"t":"2026-11-12T19:04:12.030Z","event":"world.life","world":"mj7dyu057o","life":"running"}
+{"t":"2026-11-12T19:09:40.870Z","event":"refused","reason":"key","net":"198.51.100.x"}
+```
+
+Every line has `t` (when) and `event`:
+
+| Event | When |
+| --- | --- |
+| `server.listening`, `server.stopped` | The server started answering, or stopped (`port`, `version`, `worlds`) |
+| `player.entered`, `player.left` | A player came into a world, or left it (`world`, `player`, `role`, `first`) |
+| `refused` | Something was refused (`reason`: `key`, `code`, `bad-request`..., and `world` where it was a world's) |
+| `key.issued`, `key.revoked`, `key.replaced`, `code.made`, `code.redeemed`, `codes.burned` | A world's keys and short codes (`keyId`, `codeId`, `by`, `count`) |
+| `player.banned`, `player.unbanned` | A ban, or one lifted (`world`, `player`, `by`) |
+| `listing.announced`, `listing.withdrawn` | A player's own world listed on the broker, or taken off it |
+| `world.life` | A world started loading, is running, went empty, is stopping or is stored (`life`) |
+| `world.save-failed`, `world.fell-behind` | A world's save didn't reach the disk (`count`), or it let time go (`ms`) |
+| `journal` | A line of the server's own journal (`text`): settings, creator keys, certificates, updates, archives |
+
+**No line ever carries a key, a short code, a ticket, a session, a token or a key's label, nor a
+whole address.** A key or code is named by its id (what the management page lists it by). An
+address is given as the network it's on (`net`: `203.0.113.x`, `2001:db8:85a3::x`), enough to see
+the same visitor trying again, not to find them. A line has only the fields in the table, and
+every sentence is scrubbed of anything shaped like a key, a token or an address before it's
+written. A player is named by their player id, as in the journals. A world's own journal (its
+saves and backups, who was sent out) isn't in the log yet: read it in Activity.
+
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
 where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the

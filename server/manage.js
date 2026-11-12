@@ -145,6 +145,8 @@ export class Management {
     async journal(text, when = new Date()) {
         await ensureFolder(this.server.root);
         await appendFile(path.join(this.server.root, SERVER_JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+        // (And in the structured log, scrubbed of anything shaped like a key or a whole address: log.js)
+        this.server.log?.event("journal", { text });
     }
 
     // ---- A world
