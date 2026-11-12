@@ -100,7 +100,8 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * afresh (`battle.indexed`, and over how many: `battle.indexedActors`), or brought up to date in
  * place (`battle.reindexed`, and how many were moved to another cell: `battle.reindexedMoves`);
  * characters taken out of it (`battle.removed`), and how many times everyone still in was gone
- * through to forget them (`battle.forgets`: once for each, core/battle.js remove);
+ * through to forget them (`battle.forgets`: once for each as it was, once for all those let go
+ * together now, core/battle.js forget);
  * who the battle stepped, a step at a time (`battle.actors`, everyone in it; `battle.fallen`, those
  * of them down; and by kind, BATTLE_KINDS: `battle.actors.routine` ...), how many of them walked
  * (`battle.walkers`), in how many strides (`battle.strides`), and how many stood where they were

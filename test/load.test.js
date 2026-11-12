@@ -4,7 +4,7 @@
 // themselves are a machine's (npm run load); what's checked here is the same on any.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DAY } from "../client/js/core/daytime.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
@@ -84,7 +84,7 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.deepEqual(checkReport(report), []);
         assert.deepEqual(checkReport(JSON.parse(JSON.stringify(report))), []);
         assert.equal(report.schema, LOAD.schema);
-        assert.deepEqual(report.run, { seed: 2, players: 8, layout: "one-town", activity: "fights", seconds: 15, whole: false, leave: "none", node: process.version, platform: process.platform, arch: process.arch, cpus: report.run.cpus });
+        assert.deepEqual(report.run, { seed: 2, players: 8, layout: "one-town", activity: "fights", seconds: 15, whole: false, leave: "none", sudden: false, node: process.version, platform: process.platform, arch: process.arch, cpus: report.run.cpus });
         assert.equal(report.built, true);
     });
 
@@ -321,15 +321,15 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
         const { leave } = report;
 
         assert.deepEqual(Object.keys(leave), Object.keys(LEAVE_SCHEMA));
-        assert.deepEqual({ who: leave.who, at: leave.at, left: leave.left, stayed: leave.stayed, going: leave.going }, { who: "all", at: 0, left: 8, stayed: 0, going: 0 });
+        assert.deepEqual({ who: leave.who, at: leave.at, left: leave.left, stayed: leave.stayed, sudden: leave.sudden, going: leave.going }, { who: "all", at: 0, left: 8, stayed: 0, sudden: false, going: 0 });
         // (Its steps are those before the storm; none before it: they went before the run began)
         assert.deepEqual([leave.before.count, leave.steps.count], [0, 1000 / STEP_MS]);
         assert.ok(leave.longest.at >= 0 && leave.longest.at < 1000);
         assert.equal(leave.longest.wall, leave.steps.wall.worst);
         // (The one town's buildings closed, its folk, townsfolk and soldiers out of the battle,
-        // in the step the look round falls in: a going through it for each of them)
+        // in the step the look round falls in: three goings through it for them all)
         assert.ok(leave.let.buildings > 4 && leave.let.characters > 2 * leave.let.buildings, JSON.stringify(leave.let));
-        assert.equal(leave.let.forgets, leave.let.characters);
+        assert.equal(leave.let.forgets, 3);
         assert.ok(wordsOf(report).some((line) => line.startsWith("Everyone gone at 0 s (8 left, 0 stayed): the 20 steps after a mean of ")));
         assert.deepEqual(checkReport({ ...report, leave: undefined }), ["report.leave: not an object"]);
     });
@@ -400,9 +400,11 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
 
 describe("the load's players leaving together (scripts/load.js load, --leave; generated/multiplayer_scaling_plan.md 1-27)", () => {
     let half;
+    let sudden;
 
     before(async () => {
         half = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, eventAt: 1000, leave: "half" });
+        sudden = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, eventAt: 1000, leave: "half", sudden: true });
     });
 
     it("has every other player gone in the one step, the rest playing on, and says what the steps after cost beside those before", () => {
@@ -412,8 +414,8 @@ describe("the load's players leaving together (scripts/load.js load, --leave; ge
         assert.deepEqual(half.problems, []);
         assert.deepEqual(failuresOf(half, { ceiling: 50 }), []);
         assert.deepEqual(Object.keys(leave), Object.keys(LEAVE_SCHEMA));
-        assert.deepEqual({ who: leave.who, at: leave.at, left: leave.left, stayed: leave.stayed }, { who: "half", at: 1000, left: 2, stayed: 2 });
-        assert.equal(half.run.leave, "half");
+        assert.deepEqual({ who: leave.who, at: leave.at, left: leave.left, stayed: leave.stayed, sudden: leave.sudden }, { who: "half", at: 1000, left: 2, stayed: 2, sudden: false });
+        assert.deepEqual([half.run.leave, half.run.sudden], ["half", false]);
         assert.equal(half.census.player.all, 2, "two still in as it ended");
 
         // (The second before, and the three after to the run's end: LOAD.leaving's five at the most)
@@ -430,18 +432,33 @@ describe("the load's players leaving together (scripts/load.js load, --leave; ge
         assert.ok(half.bytes.byKind.ops.messages >= (1000 / STEP_MS) * 4 + (3000 / STEP_MS) * 2 && half.bytes.byKind.ops.messages < (1000 / STEP_MS) * 4 + (3000 / STEP_MS) * 3, `${half.bytes.byKind.ops.messages} sent of what was done`);
     });
 
-    it("says what was let go in those steps: the two towns' folk, townsfolk and soldiers out of the battle and their buildings closed, the battle gone through once for each", () => {
-        const now = half.leave.let;
+    it("says what was let go in those steps: the two towns' folk, townsfolk and soldiers out of the battle and their buildings closed, in a few goings through it where each one was one", () => {
+        const [now, was] = [half.leave.let, sudden.leave.let];
 
+        assert.deepEqual(checkReport(sudden), []);
+        assert.equal(sudden.leave.sudden, true);
+        assert.deepEqual([sudden.run.leave, sudden.run.sudden], ["half", true]);
+
+        // (The same let go either way: the same world)
+        assert.deepEqual({ ...now, forgets: 0, chunks: 0, tiles: 0 }, { ...was, forgets: 0, chunks: 0, tiles: 0 });
         assert.ok(now.buildings > 4, `${now.buildings} buildings closed`);
         assert.ok(now.characters > 2 + now.buildings, `${now.characters} characters out of the battle`);
+        assert.equal(half.actors.end, sudden.actors.end);
         assert.ok(half.actors.end < half.actors.start);
-        assert.equal(now.forgets, now.characters);
+
+        // (As it was, the battle gone through once for each; now once for each who left, once
+        // for all the buildings' folk, once for all the townsfolk, and once for each town's
+        // soldiers: and a few more, for whoever the steps took out one by one)
+        assert.equal(was.forgets, was.characters);
+        assert.ok(now.forgets >= 2 && now.forgets <= 12, `${now.forgets} goings through for ${now.characters}`);
+        assert.equal(Battle.forgetting, true, "the switches put back");
+        assert.equal(Ahead.easing, true);
 
         // (Few enough chunks round four players that none's let go: the world keeps 256 whoever's in)
-        assert.deepEqual([now.chunks, now.tiles], [0, 0]);
+        assert.deepEqual([now.chunks, now.tiles, was.chunks, was.tiles], [0, 0, 0, 0]);
         assert.ok(wordsOf(half).some((line) => line.startsWith("Every other player gone at 1 s (2 left, 2 stayed): the 60 steps after a mean of ")));
         assert.ok(wordsOf(half).some((line) => line.includes(`let go in those steps: ${now.characters} characters out of the battle in ${now.forgets} goings through it, ${now.buildings} buildings closed, 0 chunks of ground, 0 navigation tiles`)));
+        assert.ok(wordsOf(sudden).some((line) => line.startsWith("Every other player gone at 1 s (2 left, 2 stayed), let go as it was (--sudden): ")));
     });
 
     it("is held to what such a run reports, and a run too short for them to go says so", async () => {
@@ -545,7 +562,7 @@ describe("the load's options", () => {
         assert.deepEqual(Object.keys(ACTIVITY_SCHEMAS), ["night", "warturn", "joinstorm", "dungeons"]);
 
         // (What an unbuilt one's report would hold: nothing judged, nothing failed)
-        const unbuilt = { schema: LOAD.schema, run: { seed: 2, players: 8, layout: "spread", activity: "dancing", seconds: 120, whole: false, leave: "none", node: process.version, platform: process.platform, arch: process.arch, cpus: 4 }, built: false, reason: "not built yet: no one knows the steps" };
+        const unbuilt = { schema: LOAD.schema, run: { seed: 2, players: 8, layout: "spread", activity: "dancing", seconds: 120, whole: false, leave: "none", sudden: false, node: process.version, platform: process.platform, arch: process.arch, cpus: 4 }, built: false, reason: "not built yet: no one knows the steps" };
 
         assert.deepEqual(checkReport(unbuilt), []);
         assert.deepEqual(checkReport({ ...unbuilt, reason: undefined }, UNBUILT_SCHEMA), ["report.reason: not a string"]);

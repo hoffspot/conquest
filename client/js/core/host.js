@@ -6042,14 +6042,20 @@ export class Host {
         let measured = 0;
         const near = (middle, edge, within) => about.some(middle[0], middle[1], within + edge, ([x, y]) => (measured++, hypot(x - middle[0], y - middle[1]) - edge < within));
 
-        // (Those out, far from every player now: home)
+        // (Those out, far from every player now: home. Everyone else forgets them all together
+        // once they're all gone, in one going through the battle and not one for each of them,
+        // battle.js remove's `later`: nothing between reads whom anyone's after)
+        const gone = [];
+
         for (const [id, out] of [...this.townsfolk]) {
             const where = this.#peopledAt(id);
 
             if (!where || !near(where.middle, where.edge, TOWNSFOLK_REACH.far)) {
-                this.#homeward(id, out);
+                this.#homeward(id, out, gone);
             }
         }
+
+        this.battle.forget(gone);
 
         // (Those a player's come near: out)
         for (const where of this.#peopledNear(about)) {
@@ -6150,9 +6156,9 @@ export class Host {
     }
 
     // A place's townsfolk home again (none of them anywhere a player is)
-    #homeward(id, ids) {
+    #homeward(id, ids, later = null) {
         for (const one of ids) {
-            this.battle.remove(one);
+            this.battle.remove(one, later);
             this.folk.delete(one);
         }
 
@@ -9970,7 +9976,7 @@ export class Host {
 
     // A town's barracks' garrison let go (its building let go, or about to be made up): those
     // standing gone from the battle (the fallen taken away as ever)
-    #unquarter(id) {
+    #unquarter(id, later = null) {
         const out = this.quartered.get(id);
 
         this.quartered.delete(id);
@@ -9979,7 +9985,7 @@ export class Host {
             const actor = this.battle.actor(each);
 
             if (actor && !actor.dead) {
-                this.battle.remove(each);
+                this.battle.remove(each, later);
                 this.soldiers.delete(each);
             }
         }
@@ -10024,7 +10030,7 @@ export class Host {
 
     // A scene's court let go (its castle let go: #closeBuilding): those standing gone from the
     // battle, the fallen as ever; all of them again at their posts the next time it's held
-    #leaveCourt(key) {
+    #leaveCourt(key, later = null) {
         const court = this.courts.get(key);
 
         if (!court) {
@@ -10037,7 +10043,7 @@ export class Host {
             const actor = this.battle.actor(id);
 
             if (actor && !actor.dead) {
-                this.battle.remove(id);
+                this.battle.remove(id, later);
             }
 
             this.#unwild(id);
@@ -16347,8 +16353,10 @@ export class Host {
 
         this.mustered.delete(townId);
 
+        // (All of them together: everyone else forgets them in one going through the battle)
+        this.battle.removeAll(ids);
+
         for (const id of ids) {
-            this.battle.remove(id);
             this.soldiers.delete(id);
         }
 
@@ -19021,6 +19029,12 @@ export class Host {
         const known = places.filter(Boolean);
         const about = new Near(known, NEAR_CELL, (place) => [place.x, place.y]);
         let measured = 0;
+        // (The folk of the buildings let go, whom everyone else forgets together, in one going
+        // through the battle and not one for each of them, battle.js remove's `later`: before
+        // the next building's opened, and its folk added, and once all are looked at. A hundred
+        // towns' buildings let go in one look, everyone gone from them at once, went through
+        // the battle 2,240 times: most of a second. Nothing between reads whom anyone's after)
+        const gone = [];
 
         for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {
@@ -19031,13 +19045,15 @@ export class Host {
 
             if (!this.open.has(building.key)) {
                 if (wanted.has(building.key) || about.some(x, z, RELEVANCE.near, (place) => (measured++, place.out && hypot(x - place.x, z - place.y) < RELEVANCE.near))) {
+                    this.battle.forget(gone);
                     this.#openBuilding(building.key);
                 }
             } else if (!wanted.has(building.key) && known.length === places.length && !about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
-                this.#closeBuilding(building.key);
+                this.#closeBuilding(building.key, gone);
             }
         }
 
+        this.battle.forget(gone);
         count("lookAround.pairs", measured);
     }
 
@@ -19134,23 +19150,23 @@ export class Host {
 
     // Let a building go: its folk out of the battle (its plans are kept, and anyone can still go
     // in: its folk come back when it's got ready again)
-    #closeBuilding(key) {
+    #closeBuilding(key, later = null) {
         const folk = this.open.get(key);
 
         this.open.delete(key);
 
         for (const id of folk) {
-            this.battle.remove(id);
+            this.battle.remove(id, later);
             this.folk.delete(id);
         }
 
         for (const [town, out] of [...this.quartered]) {
             if (out.key === key) {
-                this.#unquarter(town);
+                this.#unquarter(town, later);
             }
         }
 
-        this.#leaveCourt(key);
+        this.#leaveCourt(key, later);
         this.#event("close", { key, folk });
     }
 

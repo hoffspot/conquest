@@ -826,6 +826,16 @@ export class Battle {
      */
     static sparing = true;
 
+    /**
+     * Whether one taken out (remove) is forgotten at the cost of the one taken out, as it always
+     * is: everyone by id (actor) brought up to date in place as anyone's added or taken out, not
+     * made again of everyone at the next asking, and many taken out together forgotten by
+     * everyone else in one going through them (removeAll, forget), not one for each. Or as it
+     * was: only for the tests and scripts that check the battle's the same either way, and what
+     * it saves (generated/multiplayer_scaling_plan.md 1-27).
+     */
+    static forgetting = true;
+
     // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
     // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
     #ids = null;
@@ -966,12 +976,32 @@ export class Battle {
     add(given) {
         const actor = this.#made(given);
 
+        const ids = this.#known();
+
         this.actors.push(actor);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
 
+        // (Everyone by id, brought up to date: one of an id that's in already is the one found
+        // by it from now on, as the last of them is when it's made of everyone; and then it's
+        // never brought up to date by one taken out, which may leave another of that id in)
+        if (ids) {
+            ids.twice ||= ids.of.has(actor.id);
+            ids.of.set(actor.id, actor);
+            ids.length = this.actors.length;
+            ids.roster = this.#roster;
+        }
+
         return actor;
+    }
+
+    // Everyone by id as it's kept (actor), if it's up to date and may be brought up to date in
+    // place (Battle.forgetting); else null: to be made again of everyone when it's next asked for
+    #known() {
+        const ids = this.#ids;
+
+        return Battle.forgetting && ids && ids.actors === this.actors && ids.length === this.actors.length && ids.roster === this.#roster ? ids : null;
     }
 
     // A character as add makes one, in no battle yet. Every one's made here, add's and those
@@ -1229,7 +1259,9 @@ export class Battle {
         const ids = this.#ids;
 
         if (!ids || ids.actors !== this.actors || ids.length !== this.actors.length || ids.roster !== this.#roster) {
-            this.#ids = { actors: this.actors, length: this.actors.length, roster: this.#roster, of: new Map(this.actors.map((actor) => [actor.id, actor])) };
+            const of = new Map(this.actors.map((actor) => [actor.id, actor]));
+
+            this.#ids = { actors: this.actors, length: this.actors.length, roster: this.#roster, of, twice: of.size !== this.actors.length };
         }
 
         return this.#ids.of.get(id) ?? null;
@@ -1961,15 +1993,87 @@ export class Battle {
      * Take a character out (one of the folk, gone with their building when the player's far
      * away): no one's after them, talking to them or shooting at them any more. Whether they were
      * there.
+     *
+     * Given `later` (an array), its id is put in it and everyone else is left as they are, still
+     * after it or remembering it: whoever asked has them forget all it holds together (forget),
+     * before anyone's added, a step's played, or anything's read of whom anyone's after. Many
+     * taken out one after another are then forgotten in one going through everyone, where each
+     * went through them all: with those the same as they'd be, however many were taken out
+     * between.
      */
-    remove(id) {
+    remove(id, later = null) {
         const actor = this.actor(id);
 
         if (!actor) {
             return false;
         }
 
-        // (Counted, core/probe.js: one taken out, and everyone still in gone through to forget it)
+        if (!Battle.forgetting) {
+            return this.#removed(actor);
+        }
+
+        const ids = this.#known();
+
+        this.actors.splice(this.actors.indexOf(actor), 1);
+        this.#roster++;
+        this.#version++;
+        this.#regroup(actor);
+
+        if (ids && !ids.twice) {
+            ids.of.delete(id);
+            ids.length = this.actors.length;
+            ids.roster = this.#roster;
+        }
+
+        count("battle.removed");
+
+        if (later) {
+            later.push(id);
+        } else {
+            count("battle.forgets");
+            this.#forgotten(id);
+        }
+
+        return true;
+    }
+
+    /**
+     * Take several characters out (`ids`, in that order), as taking each out in turn would
+     * (remove), everyone else forgetting them all in one going through. How many were there.
+     */
+    removeAll(ids) {
+        const later = [];
+        let there = 0;
+
+        for (const id of ids) {
+            there += this.remove(id, later) ? 1 : 0;
+        }
+
+        this.forget(later);
+
+        return there;
+    }
+
+    /**
+     * Those taken out to be forgotten later (remove's `later`) forgotten by everyone still in:
+     * no one's after any of them, talking to them or shooting at them any more.
+     */
+    forget(ids) {
+        count("battle.forgets", ids.length ? 1 : 0);
+
+        if (ids.length === 1) {
+            this.#forgotten(ids[0]);
+        } else if (ids.length) {
+            this.#forgottenAll(ids);
+        }
+
+        ids.length = 0;
+    }
+
+    // One taken out, as it was (Battle.forgetting false)
+    #removed(actor) {
+        const { id } = actor;
+
         count("battle.removed");
         count("battle.forgets");
         this.actors.splice(this.actors.indexOf(actor), 1);
@@ -2005,6 +2109,118 @@ export class Battle {
         }
 
         return true;
+    }
+
+    // One taken out forgotten by everyone still in: what #removed does for it, nothing made for
+    // each of them to do it by
+    #forgotten(id) {
+        const { actors } = this;
+        const has = Object.hasOwn;
+
+        this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
+
+        for (let k = 0; k < actors.length; k++) {
+            const other = actors[k];
+
+            if (other.target === id) {
+                other.target = null;
+            }
+
+            if (other.attack?.target === id) {
+                other.attack = null;
+            }
+
+            if (other.order?.target === id) {
+                other.order = null;
+            }
+
+            if (other.talkingTo === id) {
+                other.talkingTo = null;
+            }
+
+            // (And no one holds a grudge against it, or remembers seeing or sparing it, being
+            // struck by it, or any enmity for it: what each keeps by its id, its own, let go.
+            // Asked of each's own only, which is all that's ever let go: `in` looks through
+            // what every object has besides, and was twice as long over everyone)
+            if (other.foes && has(other.foes, id)) {
+                delete other.foes[id];
+            }
+
+            if (other.seeing && has(other.seeing, id)) {
+                delete other.seeing[id];
+            }
+
+            if (other.spared && has(other.spared, id)) {
+                delete other.spared[id];
+            }
+
+            if (other.struckBy && has(other.struckBy, id)) {
+                delete other.struckBy[id];
+            }
+
+            if (other.enmity && has(other.enmity, id)) {
+                delete other.enmity[id];
+            }
+        }
+    }
+
+    // Several taken out forgotten by everyone still in, in one going through them: as #forgotten
+    // for each in turn leaves them (what's after one of them is after none; a grudge, a sight, a
+    // sparing, a blow or an enmity kept by its id is let go, whichever of them it was)
+    #forgottenAll(ids) {
+        const { actors } = this;
+        const gone = new Set(ids);
+        // (What's kept by id is kept by its key, a string)
+        const keys = new Set(ids.map(String));
+        const unkept = (kept) => {
+            for (const key in kept) {
+                if (keys.has(key)) {
+                    delete kept[key];
+                }
+            }
+        };
+
+        this.projectiles = this.projectiles.filter(({ from, target }) => !gone.has(from) && !gone.has(target));
+
+        for (let k = 0; k < actors.length; k++) {
+            const other = actors[k];
+
+            if (gone.has(other.target)) {
+                other.target = null;
+            }
+
+            if (other.attack && gone.has(other.attack.target)) {
+                other.attack = null;
+            }
+
+            if (other.order && gone.has(other.order.target)) {
+                other.order = null;
+            }
+
+            if (gone.has(other.talkingTo)) {
+                other.talkingTo = null;
+            }
+
+            if (other.foes) {
+                unkept(other.foes);
+            }
+
+            if (other.seeing) {
+                unkept(other.seeing);
+            }
+
+            if (other.spared) {
+                unkept(other.spared);
+            }
+
+            if (other.struckBy) {
+                unkept(other.struckBy);
+            }
+
+            if (other.enmity) {
+                unkept(other.enmity);
+            }
+        }
     }
 
     /**

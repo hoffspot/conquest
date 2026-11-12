@@ -987,7 +987,20 @@ battle plays out the same either way, `test/field-battle.test.js`). Each looks o
 and stops at cells too far off to hold anyone nearer than the nearest yet found; of two as near,
 the first in the battle's list, as looking through everyone found. It makes no difference to what
 happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
-(`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for. Whether
+(`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for: by a
+list of everyone by id, brought up to date in place as anyone comes or goes (it was made again
+of everyone at the next asking, which with towns' worth coming or going in one step was most of
+the step). One taken out (`remove`) is forgotten by everyone still in: whoever was after it,
+talking to it or shooting at it no longer is, and no one keeps a grudge, a sight, a sparing, a
+blow or an enmity by its id. That goes through everyone, so many taken out together are
+forgotten in one going through (`removeAll`; or `remove` given a list and `forget` of it after,
+with nothing read between of whom anyone's after), which leaves everyone exactly as one for each
+did. A town's buildings' folk, its townsfolk and its soldiers are let go so when every player's
+far (core/host.js `#lookAround`, `#townsfolk`, `#dismiss`): with a hundred towns' players gone
+at once, 2,800 were let go in the one step and it took 1.1 s, 2,800 goings through and as many
+lists made (generated/multiplayer_scaling_plan.md 1-27). `Battle.forgetting` off does it as
+before, and the battle and the world are the same step for step either way
+(`test/leaving.test.js`). Whether
 anyone's after one further off than it can see is looked up among who was after whom as the step
 began (`#chasers`), not through everyone, and before it looks round at all.
 

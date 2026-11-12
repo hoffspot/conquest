@@ -61,7 +61,8 @@
 // the steps of the five seconds after cost beside those of the five before, the longest of them
 // with its parts, and what was let go in them: characters out of the battle, buildings closed,
 // chunks of ground and navigation tiles. A join storm reports the same of its own beginning,
-// everyone gone before its first step.
+// everyone gone before its first step. With --sudden, all of it's let go as it was before 1-27,
+// to compare.
 //
 // Before it's timed, what's round the players is made ahead until nothing's waiting (Ahead.settled),
 // however long that takes: a step that makes ground is a loading cost, measured by npm run
@@ -85,7 +86,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs, promisify } from "node:util";
 import { gzip } from "node:zlib";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { DAY, elapsedOf, timeOfDay, untilTime } from "../client/js/core/daytime.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
@@ -435,8 +436,8 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * only says so ({ schema, run, built: false, reason }). `lateOver` (ms) is how long a step is
  * late from (LOAD.tick: only a test, which can't make a step slow, asks for another).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, leave = "none", lateOver = LOAD.tick, log = () => {} } = {}) {
-    const run = { seed, players: count, layout, activity, seconds, whole, leave, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+    const run = { seed, players: count, layout, activity, seconds, whole, leave, sudden, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
 
     if (Object.hasOwn(LOAD.unbuilt, activity)) {
         return { schema: LOAD.schema, run, built: false, reason: LOAD.unbuilt[activity] };
@@ -459,6 +460,14 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     }
 
     installWorkers();
+
+    // (--sudden: what's no longer wanted let go as it was, to compare: the ground and the
+    // navigation's tiles all at once, server/ahead.js, and each one taken out of the battle
+    // forgotten by going through everyone, core/battle.js)
+    const [wasEasing, wasForgetting] = [Ahead.easing, Battle.forgetting];
+
+    Ahead.easing = !sudden;
+    Battle.forgetting = !sudden;
 
     const clock = () => performance.now();
     const began = clock();
@@ -1272,6 +1281,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     }
 
     Ahead.coming = wasComing;
+    Ahead.easing = wasEasing;
+    Battle.forgetting = wasForgetting;
 
     uninstall();
 
@@ -1442,6 +1453,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             at: going.step * STEP_MS,
             left: going.left,
             stayed: count - going.left,
+            sudden,
             going: round(going.going),
             before: span(Math.max(0, from - going.steps), from),
             steps: span(from, to),
@@ -1535,7 +1547,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 // What a report must hold: each key's type ("number", "string", "boolean", "array", an object of
 // the same, or [type] for an object of any keys whose values are all of it)
 const SPREAD = { mean: "number", p50: "number", p99: "number", worst: "number", worstAt: "number" };
-const RUN = { seed: "number", players: "number", layout: "string", activity: "string", seconds: "number", whole: "boolean", leave: "string", node: "string", platform: "string", arch: "string", cpus: "number" };
+const RUN = { seed: "number", players: "number", layout: "string", activity: "string", seconds: "number", whole: "boolean", leave: "string", sudden: "boolean", node: "string", platform: "string", arch: "string", cpus: "number" };
 
 const CENSUS = { all: "number", fallen: "number", walking: "number", set: "number", seated: "number", indoors: "number", alone: "number", m30: "number", m60: "number", m120: "number", m250: "number", beyond: "number" };
 
@@ -1662,7 +1674,8 @@ export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "n
 /**
  * What a report holds of players gone together (`leave`: a join storm's, everyone gone before
  * its first step; or --leave's): who went (`half`, every other player, or `all`), when (ms into
- * the run), how many, and how many stayed; how long the going itself took, all
+ * the run), how many, and how many stayed; whether they were let go as they were before
+ * generated/multiplayer_scaling_plan.md 1-27 (--sudden); how long the going itself took, all
  * their links closed (ms by the clock, in that step's hearing: 0 for a storm's, gone before the
  * run); the steps of LOAD.leaving after (a
  * storm's, till its first hello) beside those of as long before, by the clock and in the thread's
@@ -1679,6 +1692,7 @@ export const LEAVE_SCHEMA = Object.freeze({
     at: "number",
     left: "number",
     stayed: "number",
+    sudden: "boolean",
     going: "number",
     before: SPAN,
     steps: SPAN,
@@ -1811,7 +1825,7 @@ export function wordsOf(report) {
             : []),
         ...(report.leave
             ? [
-                  `${report.leave.who === "all" ? "Everyone" : "Every other player"} gone at ${report.leave.at / 1000} s (${report.leave.left} left, ${report.leave.stayed} stayed): the ${report.leave.steps.count} steps after a mean of ${report.leave.steps.wall.mean.toFixed(2)} ms, p99 ${report.leave.steps.wall.p99.toFixed(2)}, worst ${report.leave.steps.wall.worst.toFixed(1)}, ${report.leave.steps.over} over ${LOAD.tick} ms${report.leave.before.count ? `; the ${report.leave.before.count} before, ${report.leave.before.wall.mean.toFixed(2)}, ${report.leave.before.wall.p99.toFixed(2)} and ${report.leave.before.wall.worst.toFixed(1)}, ${report.leave.before.over} over` : ""}${report.leave.going ? `. The going itself, their links closed in the hearing of the step at ${report.leave.at / 1000} s: ${report.leave.going.toFixed(1)} ms` : ""}`,
+                  `${report.leave.who === "all" ? "Everyone" : "Every other player"} gone at ${report.leave.at / 1000} s (${report.leave.left} left, ${report.leave.stayed} stayed)${report.leave.sudden ? ", let go as it was (--sudden)" : ""}: the ${report.leave.steps.count} steps after a mean of ${report.leave.steps.wall.mean.toFixed(2)} ms, p99 ${report.leave.steps.wall.p99.toFixed(2)}, worst ${report.leave.steps.wall.worst.toFixed(1)}, ${report.leave.steps.over} over ${LOAD.tick} ms${report.leave.before.count ? `; the ${report.leave.before.count} before, ${report.leave.before.wall.mean.toFixed(2)}, ${report.leave.before.wall.p99.toFixed(2)} and ${report.leave.before.wall.worst.toFixed(1)}, ${report.leave.before.over} over` : ""}${report.leave.going ? `. The going itself, their links closed in the hearing of the step at ${report.leave.at / 1000} s: ${report.leave.going.toFixed(1)} ms` : ""}`,
                   `The longest of them at ${(report.leave.longest.at / 1000).toFixed(2)} s, ${report.leave.longest.wall.toFixed(1)} ms (what was heard ${report.leave.longest.hear.toFixed(1)}; ${partsIn(report.leave.longest)}); let go in those steps: ${report.leave.let.characters} characters out of the battle in ${report.leave.let.forgets} goings through it, ${report.leave.let.buildings} buildings closed, ${report.leave.let.chunks} chunks of ground, ${report.leave.let.tiles} navigation tiles; the longest look between them ${report.leave.look.worst.toFixed(1)} ms`,
               ]
             : []),
@@ -1858,12 +1872,13 @@ async function main() {
             whole: { type: "boolean", default: false },
             cold: { type: "boolean", default: false },
             leave: { type: "string", default: "none" },
+            sudden: { type: "boolean", default: false },
         },
     });
     let report;
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, leave: values.leave, turns: Number(values.turns), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);
