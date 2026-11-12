@@ -17,6 +17,7 @@
 
 import { shareOf } from "./afflictions.js";
 import { cos, sin, TAU } from "./exact.js";
+import { count } from "./probe.js";
 
 /**
  * Every how many steps the host sends it; how near a player a character must be to go in it (m,
@@ -54,6 +55,8 @@ export function packMotion(host, { reach = MOTION.reach, most = MOTION.most } = 
     const { actors } = host.battle;
     const players = [...host.players.keys()].map((id) => host.battle.actor(id)).filter(Boolean);
     const near = [];
+
+    count("motion.pairs", Math.min(actors.length, 65536) * players.length);
 
     for (let index = 0; index < actors.length && index < 65536; index++) {
         const actor = actors[index];
