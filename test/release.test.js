@@ -11,7 +11,7 @@ import { atlasMaterial, LAYERS, prepareAtlas } from "../client/js/world/art/engi
 import { heldOnPage, releaseCompressed, released, releaseGeometry, releaseTexture } from "../client/js/world/release.js";
 import { startingMemory, withStartingMemory } from "../scripts/wasm-memory.js";
 
-const RECAST = new URL("../client/vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", import.meta.url);
+const RECAST = new URL("../client/vendor/recast-navigation-0.44.0/recast-navigation.wasm.wasm", import.meta.url);
 
 // A square ETC2 picture's levels as KTX2Loader makes them (half a byte a pixel, eight a block of
 // four by four), down to a pixel

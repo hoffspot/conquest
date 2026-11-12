@@ -4,6 +4,10 @@
 // starts, it's painted while the rest of them is built, and taken when it's wanted. The picture is
 // the same wherever it's painted (skin.js paintSkin). Where there are no workers (or one fails),
 // or where the steps can't wait (all at once), it's painted here, as ever.
+//
+// The wardrobe's pictures are painted there too (each garment's own, and an outfit's two put
+// together from them: wardrobe.js asks, garment-painter.js paints), where the worker has the
+// body: having worked the atlas out itself (`analyse`), as the game's has.
 
 import { NOW, WAITING } from "../core/steps.js";
 import { sizingSkin } from "./pictures.js";
@@ -24,9 +28,12 @@ export class Skins {
         // phone's, the first time someone furry was dressed: a boggart coming out of the wild)
         this.whole = false;
 
-        // The skins asked for and not yet painted, by id; the atlas's fields sent over so far
+        // The skins (and the wardrobe's pictures) asked for and not yet painted, by id; the
+        // atlas's fields sent over so far; whether the measurements garments are painted on have
+        // been
         this.jobs = new Map();
         this.sent = new Set();
+        this.measured = false;
         this.next = 0;
 
         if (typeof Worker === "undefined") {
@@ -39,7 +46,7 @@ export class Skins {
             return;
         }
 
-        this.worker.onmessage = ({ data: { id, skin, analysed } }) => {
+        this.worker.onmessage = ({ data: { id, skin, analysed, picture, failed } }) => {
             if (analysed) {
                 this.analysed?.(analysed);
 
@@ -52,6 +59,8 @@ export class Skins {
 
             if (job) {
                 job.skin = skin;
+                job.picture = picture;
+                job.failed = failed;
             }
         };
         // (Painted here, then)
@@ -142,10 +151,81 @@ export class Skins {
         return job;
     }
 
-    /** A skin asked for (`ask`'s job) no longer wanted: not painted, if it's not been begun. */
+    /**
+     * A skin asked for (`ask`'s job), or one of the wardrobe's pictures (`askPicture`'s), no
+     * longer wanted: not painted, if it's not been begun (an outfit's pictures left off, if they
+     * have).
+     */
     forget(job) {
         if (this.jobs.delete(job.id)) {
             this.worker?.postMessage({ cancel: job.id });
+        }
+    }
+
+    /**
+     * Whether the wardrobe's pictures are painted elsewhere (askPicture): where there's a worker
+     * and it has the body, having worked the atlas out itself.
+     */
+    get paints() {
+        return Boolean(this.worker) && this.whole;
+    }
+
+    /**
+     * Start painting one of the wardrobe's pictures elsewhere, if it can be (where the worker has
+     * the body: `paints`): a garment's own (`what`: { garment (its id), size }) or an outfit's two
+     * ({ outfit (its garments' ids, outermost last), size, least, colour }: garment-pictures.js
+     * picturingOutfit). A job for `taking` to take, or null. `measures()` gives the measurements
+     * they're painted on (wardrobe.js referenceMeasures), sent over with the first.
+     */
+    askPicture(what, measures) {
+        if (!this.paints) {
+            return null;
+        }
+
+        if (!this.measured) {
+            const { vertices, landmarks } = measures();
+
+            // (Its heights and widths: the numbers, which are all garments' regions go by)
+            this.worker.postMessage({ measures: { vertices, landmarks: Object.fromEntries(Object.entries(landmarks).filter(([, value]) => typeof value === "number")) } });
+            this.measured = true;
+        }
+
+        const job = { id: this.next++, ...what, picture: null, failed: null };
+
+        this.jobs.set(job.id, job);
+        this.worker.postMessage({ id: job.id, ...what });
+
+        return job;
+    }
+
+    /**
+     * One of the wardrobe's pictures asked for (`askPicture`'s job), a step at a time: WAITING
+     * till it's painted elsewhere, then returning it (a garment's: { data, bump, size }; an
+     * outfit's: { full, small }). Null if the steps can't wait (it's no longer wanted there), or
+     * it couldn't be painted there: it's for whoever asked to paint it then.
+     */
+    *taking(job) {
+        while (!job.picture && !job.failed && this.worker && this.jobs.has(job.id)) {
+            if ((yield WAITING) === NOW) {
+                break;
+            }
+        }
+
+        if (!job.picture) {
+            this.forget(job);
+        }
+
+        return job.picture ?? null;
+    }
+
+    /**
+     * Every garment's picture kept elsewhere let go of, and what's kept there for painting them
+     * faster: painted again when they're next wanted (wardrobe.js letGoOfWardrobe, the page
+     * short of memory).
+     */
+    letGoOfPictures() {
+        if (this.measured) {
+            this.worker?.postMessage({ letGo: true });
         }
     }
 

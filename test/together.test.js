@@ -10,7 +10,7 @@ import http from "node:http";
 import { after, before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { MOTION } from "../client/js/core/motion.js";
+import { CHECK_EVERY } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { joinWorld, LINK_TIMING, openWorld } from "../client/js/app/together.js";
 import { attachRelay, RELAY_LIMITS, RELAY_PATH } from "../server/relay.js";
@@ -112,17 +112,19 @@ describe("playing together over the relay (together.js)", () => {
         await until(() => joined.joining.rtt !== null);
         assert.ok(joined.joining.rtt >= 0 && joined.joining.rtt < 1000, `${joined.joining.rtt} ms`);
 
+        const checked = joined.joining.checks;
+
         for (let k = 0; k < 5; k++) {
-            await play(MOTION.every);
+            await play(CHECK_EVERY);
         }
 
-        // (The last of the host's motion compared once it's come)
+        // (The last of how the host said its world stood compared once it's come)
         await until(() => {
             while (joined.joining.step()) {
                 // (Played)
             }
 
-            return joined.joining.motionChecks === 5;
+            return joined.joining.checks === checked + 5;
         });
         assert.equal(joined.joining.desyncs, 0);
         assert.equal(joined.joining.hostStep, joined.joining.host.battle.time / STEP_MS);

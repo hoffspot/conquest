@@ -51,6 +51,8 @@ to them.
 | `skin.js`, `face.js`, `noise.js` | Painting the skin and eyes; where the hairline and beard are |
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
+| `garment-pictures.js` | What each garment is (its region of the body, its colours and pattern) and its picture, and an outfit's: with no three.js, so the skins' worker can paint them |
+| `garment-painter.js` | The wardrobe's painter in the skins' worker: each garment's picture painted and kept there, an outfit's two put together from them and sent back |
 | `items.js` | Rigid equipment: weapons, shields, helmets, packs, tusks |
 | `headwear.js` | The head measured all round, the lines head-wear's rims follow, plates grown over it |
 | `equipment.js` | Slots, sockets and the equipment catalogue |
@@ -863,7 +865,11 @@ its new character's built a step at a time while the title's up: GAME.md, *Makin
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
 again for anyone carrying anything). A body's own measurements (`measureBody`: 13 to 34 ms, and
 5 MB of short-lived objects) are taken only when a skirt, a gown or an apron is built for it,
-which alone hang by them: every body was measured as it was dressed, soldiers too. Tests build soldiers, folk and a hero both ways and check
+which alone hang by them: every body was measured as it was dressed, soldiers too. What's measured at each
+vertex is held in columns (`garment-pictures.js` `measuredVertices`: its region, its side, eight
+numbers), not as an object a vertex: the kit's own body's (`referenceMeasures`, kept for good)
+are 1.4 MB where they were 5.6 MB, and are copied for the skins' worker in under a millisecond
+(58 ms as objects). One vertex's as an object: `vertexAt`. Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
 
 **Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
@@ -883,6 +889,49 @@ headless Chromium, with the tavern's folk, who are now built once it's started: 
 fails), or for a whole skin picture loaded in the character lab, it's painted here as ever. In
 headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
 tavern's eight folk from 9 to 3, at 6 ms a frame.
+
+**Garments' pictures painted elsewhere.** A garment's own picture was 56 ms of the page's
+thread to paint (512 a side; 97 on the machine it was first measured on), and an outfit's two,
+put together from its garments', 260 ms for a soldier's eleven: 30% of dressing a town for the
+first time, in steps of a few milliseconds a frame. The skins' worker has the body (it worked
+the skin atlas out from the body's files), so it paints them too (`garment-painter.js`
+`GarmentPainter`; `skins.js` `askPicture`, `taking`):
+
+- **One design.** The wardrobe's makings are what they were (`wardrobe.js`): an outfit's two
+  pictures are made once for the kit, whoever comes to wear it meanwhile (`shared`: one making,
+  its takers counted), held at the size its wearers are seen at, made whole again for one seen
+  bigger (`again`, `tendKit`), let go of with the kit's idle things. Only where the painting's
+  done changed: the making asks the worker for the outfit's two pictures (as they're painted
+  and at the least size they're held at) and waits on them (`elsewhere`: `WAITING`, a frame at
+  a time), and a garment drawn on its own (a player's, one by one) the same for its one. The
+  page then paints none of it and keeps no garment's picture, nor where each texel is on the
+  body (7 MB, and 4 MB more while garments are painted): those are the worker's.
+- **The same pictures.** The page and the worker paint with the same code
+  (`garment-pictures.js`: `paintingGarment`, `picturingOutfit`, which has no three.js: a module
+  worker has no import map, and `"three"` there would stop it; its colours in linear light are
+  three.js's to the last bit, `linearColour`), on the same body and the same measurements (the
+  page's `referenceMeasures`, sent over once, a millisecond's copy). An outfit's two pictures
+  hash the same painted here and there (twelve outfits, four peoples and townsfolk, men and
+  women, in headless Chromium with a real worker; eight in `test/garment-worker.test.js`, which
+  runs the worker's code in the test).
+- **Here, where it can't be there.** With no worker (Node's tests, the labs, a browser without
+  module workers), a worker that hasn't the body, one that's failed, a picture it couldn't
+  paint (it says so, and goes on), or steps that can't wait (all at once: `NOW`), the page
+  paints as it always did, and nothing else changes.
+- **Given up on.** A making closed while it waits (its last taker gone: a player's outfit
+  changed again, a body no longer wanted) tells the worker, which leaves off between rows; one
+  already painted is thrown away when it comes back. A body given up on while it's built is
+  let go of whole (`Character.building`, its steps closed; app/game.js `#giveUpBuilding`): it
+  was only dropped, and one left waiting on its skin stayed counted among its outfit's wearers
+  for good, holding its pictures whole and on the kit.
+- **What the worker keeps.** Each garment's own picture, 30 seconds after it was last used
+  (`PICTURES.garments`, as the page's wardrobe keeps its own), and all of them let go of when
+  the page says it's short of memory (`letGoOfIdle`). They aren't in `heldByKit`, which counts
+  the page.
+
+The page's thread spends 0.6 ms on a new garment where it spent 56, and 1.6 ms on a new outfit
+where it spent 259 (the thread's own time, in headless Chromium; an outfit is back 0.3 s after
+it's asked for, 0.6 s with every garment of it new there too).
 
 **The skin atlas worked out elsewhere.** Where every texel of the body's texture is on the body
 (`SkinAtlas`) takes about a second to work out at 1024 (more on a phone), and the game used to
@@ -969,7 +1018,9 @@ of 18. Now:
   which goes on only while it's tended (a page put by and come back to finds them still there);
   and painted again when it's next wanted (97 ms a garment, in steps). One a player draws with,
   garment by garment, is kept while they do, and with it the one a people's make of it is tinted
-  from, whose pictures it draws with.
+  from, whose pictures it draws with. (Where the skins' worker paints them, *Garments' pictures
+  painted elsewhere*, the page has only those a player draws with: the rest are the worker's,
+  kept there by the same rule.)
 - **Idle outfits and looks of eye** beyond two (`IDLE`) are let go of, the longest unworn first.
 - **All of it at once, when the page is short of memory**: `letGoOfIdle(kit)` (`kit.js`) lets go
   of every outfit and look of eye no one's wearing, every garment's picture no one's drawing
@@ -2584,10 +2635,30 @@ resting and sitting. What went:
   numbers handed between functions are what's left of theirs); a soldier with a sword at the
   hip and a woman in a skirt, walking, make 20 KB a frame for the blade where it was 110, 16 for
   49 for the skirt and 0.2 for 21 for the joints (`test/posing-garbage.test.js` samples
-  everything made and holds them between). What makes most now is the
-  arm's reach and the actions' keys (`Rig.evaluate`, `Actions.sample`). Fitting a blade to its
+  everything made and holds them between). Fitting a blade to its
   hip, once as its body's built, made 10 MB of cells' names and lists; its cells are numbered
   now.
+- **Nothing made reading an action's keys or a stride's curves.** What made most after that
+  was the actions' keys and the arm's reach. Reading one
+  channel of one joint's keys (`sample`) made three lists (pairs taken apart) and a function
+  (the tangents'): 16 KB a frame for one soldier on guard. A stride's curve took each of its
+  pairs apart as a list (`curveAt`: `[a, b]`, which is an iterator made each time), and a held
+  thing's skin, the joints' movements and the limbs were gone through with `for ... of`,
+  another iterator each: 6 KB a frame. The search for an arm's swivel (`reachArm`) kept what
+  each swivel tried cost in its own scope, where every number set is a new one on the heap,
+  and made an object for the forearm's turn each time, some forty swivels a reach. Now the
+  keys' numbers are read one by one, lists are gone through by place, and the search keeps its
+  numbers in two typed arrays of the module's. The same poses to the last bit (the six bodies'
+  run again; and 4,000 arms reached every way `reachArm` is asked to, their bones and what it
+  returns hashed, before and after). Over the six bodies' run what posing made fell from 84 to
+  70 KB a body a frame; the fighting soldier's keys from 15.7 KB a frame to 0.2 and the
+  iterators from 6.2 to 0.3 (`test/posing-garbage.test.js` holds those). The arms' search is
+  not held to anything: it made 20 KB a frame for that soldier and makes 12 to 15 most runs,
+  25 in some. What's left of it is numbers handed to the vectors' own methods and the joints'
+  limits (`limitRotation`): whether those are made on the heap is the engine's choice of what
+  it builds into what, which changes from run to run; and taking the vectors' and the joints'
+  sums into the search itself, in plain numbers (tried: the same arms to the last bit), made
+  it choose worse on the six bodies' run, so they're left as they are.
 
 **How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
 `posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player

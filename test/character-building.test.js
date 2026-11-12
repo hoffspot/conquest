@@ -657,15 +657,20 @@ describe("characters built a step at a time (Character.building)", () => {
                 assert.deepEqual(made.fields[name], worked.fields[name], name);
             }
 
-            // (A skin painted there, from the worker's own atlas, nothing of it sent back over)
+            // (A skin painted there, from the worker's own atlas, nothing of it sent back over;
+            // and, the worker having the body, its outfit's pictures too, on the body's
+            // measurements, sent over once: test/garment-worker.test.js)
             const kit = { human, atlas: made, skins };
             const steps = new Steps(Character.building(kit, options(soldier)));
 
             assert.equal(steps.take(Infinity, { wait: true }), false);
-            await worker.deliver();
-            assert.equal(steps.take(Infinity, { wait: true }), true);
+
+            while (!steps.take(Infinity, { wait: true })) {
+                await worker.deliver();
+            }
+
             assert.equal(hashOf(steps.value), hashOf(new Character(kitOf(), options(soldier))));
-            assert.deepEqual(told, ["analyse", "id"]);
+            assert.deepEqual(told, ["analyse", "id", "measures", "id"]);
 
             // (A furry one, as a boggart: its fur's fields made there, as it's painted, not here
             // first and sent over, half a second of a phone's the first time; painted the same)

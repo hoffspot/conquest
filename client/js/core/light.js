@@ -130,13 +130,20 @@ export function lighting({ elapsed, plan = null, players = [], camps = [], fires
 }
 
 /** How far one can see someone at a square ([x, y] on the overworld), a share of SIGHT: as by day if it's lit, else as the sky has it. */
-export function sightAt(light, [x, y]) {
+export function sightAt(light, square) {
     if (!light || light.sky >= 1) {
         return 1;
     }
 
-    for (const [cx, cy, reach2] of light.lit) {
-        if ((x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) <= reach2) {
+    const x = square[0];
+    const y = square[1];
+    const lit = light.lit;
+
+    for (let k = 0; k < lit.length; k++) {
+        const cx = lit[k][0];
+        const cy = lit[k][1];
+
+        if ((x + 0.5 - cx) * (x + 0.5 - cx) + (y + 0.5 - cy) * (y + 0.5 - cy) <= lit[k][2]) {
             return 1;
         }
     }

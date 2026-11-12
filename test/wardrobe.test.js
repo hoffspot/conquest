@@ -86,10 +86,10 @@ describe("what a kit keeps of what its characters wear (wardrobe.js)", () => {
         assert.ok(same(outfit.small.data, paintedSmall.data));
         assert.equal(outfit.small.surface, null);
         assert.ok(map.image.data && bumpMap.image.data);
-        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap }) - garmentsHeld(kit), 256 * 256 * 8);
+        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap, referenceMeasures: kit.referenceMeasures }) - garmentsHeld(kit), 256 * 256 * 8);
         drawn(far);
         assert.deepEqual([map.image.data, bumpMap.image.data], [null, null], "sent: let go of");
-        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap }) - garmentsHeld(kit), 256 * 256 * 4, "its colour at the least size, and no more");
+        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap, referenceMeasures: kit.referenceMeasures }) - garmentsHeld(kit), 256 * 256 * 4, "its colour at the least size, and no more");
 
         // Seen big: made again from its garments' pictures, swapped in, and let go of once sent,
         // its heights at the least size kept meanwhile to go back to
@@ -102,7 +102,7 @@ describe("what a kit keeps of what its characters wear (wardrobe.js)", () => {
         assert.ok(same(outfit.small.surface, paintedSmall.surface));
         drawn(far);
         assert.deepEqual([map.image.data, bumpMap.image.data], [null, null]);
-        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap }) - garmentsHeld(kit), 256 * 256 * 8);
+        assert.equal(heldInWardrobe(kit) - heldInWardrobe({ texelMap: kit.texelMap, referenceMeasures: kit.referenceMeasures }) - garmentsHeld(kit), 256 * 256 * 8);
 
         // Small again: back at once, from what's kept
         far.fitPictures(60, PICTURES.after + 1, frame());
@@ -319,7 +319,7 @@ describe("what a kit keeps of what its characters wear (wardrobe.js)", () => {
         assert.ok(left > 3 * MB && left < 9 * MB, `${left / MB} MB: where each texel is, its outfit's colour at 256 and its eyes'`);
         worn.dispose();
         letGoOfIdle(kit);
-        assert.equal(heldByKit(kit) - fixed, heldInWardrobe({ texelMap: kit.texelMap }), "where each texel is on the body, and no more");
+        assert.equal(heldByKit(kit) - fixed, heldInWardrobe({ texelMap: kit.texelMap, referenceMeasures: kit.referenceMeasures }), "where each texel is on the body and what's measured of it, and no more");
     });
 });
 

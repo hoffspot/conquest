@@ -82,7 +82,7 @@ import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
-import { WorldRunner } from "../core/runner.js";
+import { RUNNER, WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, handInAt, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { MISSIONS, MORE_BY_RANK, rewardOf as missionReward, rewardWords, senderName } from "../core/missions.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -105,7 +105,7 @@ import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } f
 import { MARKER_NAMES, MARKERS, markersOf, withMarker } from "../core/markers.js";
 import { MARGIN as WAY_MARGIN, navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
-import { RAISED } from "../core/overworld.js";
+import { CHUNKS, RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt, scenesIn } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { buffsDue, cureFor } from "../core/smartcast.js";
@@ -673,7 +673,12 @@ function realmMixed(mix, realm) {
 const FOLLOWED = 0.1;
 const ICONS_NEAR = Object.freeze({ every: 0.25, moved: 4, past: 12 });
 
-const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
+const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, soon: 0.125, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
+
+// The ground the world will soon want, made ahead (#groundAhead): the host asked what it is every
+// `every` seconds (as often as it looks round: core/host.js RELEVANCE); and a chunk left waiting
+// on a worker (its settlement's layout, a trail near it) no longer than `patience` seconds
+const SOON_GROUND = Object.freeze({ every: 0.5, patience: 3 });
 
 // Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
 // they can't see from there (#walledOff, #onlySeenAbout) held in full only for `after` seconds of
@@ -1412,6 +1417,10 @@ export class Game {
             if (remote.self) {
                 this.forecast.heard(remote.self);
             }
+
+            // (The navigation's tiles under each way the host found, baked off the page's thread
+            // as it's heard, some steps before it's played: #bakeUnder)
+            remote.onWay = (id, way) => this.#bakeUnder(id, way);
         }
 
         /**
@@ -2655,6 +2664,15 @@ export class Game {
         const near = this.#bakeNear();
 
         this.#bakeAhead();
+
+        // (And the floors of the buildings got ready already: a world carried on, or joined)
+        for (const key of this.host.open.keys()) {
+            const building = this.world.interiors?.buildings.get(key);
+
+            if (building) {
+                this.#bakeFloors(building);
+            }
+        }
         step("Drawing the map");
 
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap), onHold: () => this.onWorldMap() }));
@@ -3585,6 +3603,10 @@ export class Game {
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
+        if (this.remote) {
+            this.remote.onWay = null;
+        }
+
         // (The navigation meshes of this world's maps, the WebAssembly's memory given back)
         for (const map of Object.values(this.world.maps ?? {})) {
             releaseNavigation(map);
@@ -3776,14 +3798,138 @@ export class Game {
 
     // The navigation tiles round each player in the world outside baked ahead, off the page's
     // thread (a tile sent off a frame), so the ways found near them (core/battle.js) don't wait
-    // on one being baked. (Not in a copy of someone else's world: its battle takes the host's
-    // ways, and finds none of its own.)
+    // on one being baked. A copy of someone else's world takes the host's ways and finds none of
+    // its own, but its battle still asks the mesh where a walker stepping round someone may
+    // stand, and the look ahead at its own hero finds ways over the tiles made already: so round
+    // its own hero they're baked ahead the same way (the others' as their ways are heard:
+    // #bakeUnder). Before, a copy baked none ahead: each was baked in the step that first asked.
     #bakeAhead() {
-        if (this.remote || !this.world.maps?.town?.chunkAt) {
+        if (!this.world.maps?.town?.chunkAt) {
             return;
         }
 
-        this.runner.bakeAhead(this.#navBaker());
+        const baker = this.#navBaker();
+
+        if (!this.remote) {
+            this.runner.bakeAhead(baker);
+
+            return;
+        }
+
+        const hero = this.battle?.actor(this.me);
+        const at = this.bakedRound;
+
+        if (hero && hero.map === "town" && !hero.dead && (!at || Math.abs(hero.x - at[0]) > RUNNER.bakeAgain || Math.abs(hero.y - at[1]) > RUNNER.bakeAgain)) {
+            this.bakedRound = [hero.x, hero.y];
+            baker.around(hero.x, hero.y, RUNNER.bakeReach);
+        }
+
+        baker.pump();
+    }
+
+    // The navigation tiles under a way the host found (a copy's: core/netplay.js Joining onWay,
+    // heard some steps before the way's played), baked off the page's thread meanwhile, those
+    // whose ground this copy has made: what its battle asks the mesh as the way's walked (whether
+    // a walker stepping round someone stays on it) is then asked of tiles in already, not baked
+    // in the step. The answer's the same either way: the same bytes, wherever they're baked.
+    #bakeUnder(id, way) {
+        const actor = this.battle?.actor(id);
+
+        if (actor?.map === "town" && this.world.maps?.town?.chunkAt) {
+            this.#navBaker().along([actor.x, actor.y], way);
+        }
+    }
+
+    // A building's floors' navigation tiles baked off the page's thread as it's got ready (the
+    // host's "open"), before its folk first walk them: kept till each floor's mesh is made, which
+    // takes them, not baking them in a step (core/navigation.js bakedAhead). Let go of with it.
+    #bakeFloors(building, on = true) {
+        if (!this.world.maps?.town?.chunkAt) {
+            return;
+        }
+
+        const baker = this.#navBaker();
+
+        for (const id of [...building.maps, ...(building.vaults ?? [])]) {
+            const map = this.world.maps[id];
+
+            if (map && on) {
+                baker.floor(map);
+            } else if (map) {
+                baker.forget(map);
+            }
+        }
+    }
+
+    // What the world will soon want made (core/host.js soon), made before the step that wants it:
+    // the ground a town's soldiers, its townsfolk, a camp or an army will be stood on in the step
+    // a player comes near enough, further off than the chunks drawn round the player reach. Made
+    // in that step, as it was, a city's was 4 to 8 chunks at once: the game stood still a tenth
+    // of a second or two, coming up to a town, with the town in plain view. So the host's asked
+    // every SOON_GROUND.every seconds, the chunks it names have their land's heights, the
+    // settlements by them and the trails near them asked of the chunks' own workers (world/
+    // terrains.js, world/layouts.js), and one of them is made a piece a frame (core/overworld.js
+    // chunkWithin: a millisecond or so, a phone's two or three), one whose settlement or trail is
+    // still with a worker left till it's back. And the dungeons it names have their levels
+    // worked out on the layouts' worker (core/insides.js give), tens of milliseconds that were
+    // spent in the step a player came within sight of the way in. In a copy of someone else's
+    // world too: its steps want the same ground. Nothing hangs on any of it being done in time:
+    // a step makes what it finds missing, as ever, and the world's the same either way.
+    #groundAhead(dt) {
+        const overworld = this.world.maps?.town;
+
+        if (!overworld?.chunkWithin || !this.host?.soon) {
+            return;
+        }
+
+        const { layouts = null, terrains = null } = this.chunks ?? {};
+        const made = ([cx, cy]) => overworld.made(cx * CHUNK, cy * CHUNK, cx * CHUNK, cy * CHUNK);
+
+        if (this.#due("soonAt", dt, SOON_GROUND.every, PACED.soon)) {
+            const { boxes, dungeons } = this.host.soon();
+            const wanted = new Map();
+
+            for (const [x0, y0, x1, y1] of boxes) {
+                for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
+                    for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
+                        wanted.set(cy * CHUNKS + cx, [cx, cy]);
+                    }
+                }
+            }
+
+            this.soonChunks = [...wanted.values()].filter((chunk) => !made(chunk));
+            terrains?.want(this.soonChunks);
+
+            // (The settlements near them: the layouts look five chunks round each asked about, so
+            // one in every four each way finds them all)
+            for (const [cx, cy] of new Map(this.soonChunks.map(([x, y]) => [Math.floor(y / 4) * CHUNKS + Math.floor(x / 4), [x, y]])).values()) {
+                layouts?.ahead(cx, cy);
+            }
+
+            if (layouts && this.world.interiors) {
+                layouts.interiors = this.world.interiors;
+                layouts.delve(dungeons);
+            }
+        }
+
+        // (The first of them that isn't made, nor waiting on a worker; one that's waited
+        // SOON_GROUND.patience seconds, a worker gone quiet, made whatever)
+        const waiting = this.soonChunks ?? [];
+        const patient = (this.soonWaited ?? 0) < SOON_GROUND.patience;
+        const next = waiting.findIndex((chunk) => !made(chunk) && !(patient && (layouts?.pending(...chunk) || terrains?.finding(...chunk))));
+
+        if (next < 0) {
+            this.soonWaited = waiting.some((chunk) => !made(chunk)) ? (this.soonWaited ?? 0) + dt : 0;
+
+            return;
+        }
+
+        this.soonWaited = 0;
+
+        // (A piece of it: the time allowed already gone by, as this clock has it)
+        if (overworld.chunkWithin(...waiting[next], 0, () => 1)) {
+            waiting.splice(next, 1);
+        }
     }
 
     // The navigation tiles round the player that the ways found near them never wait for
@@ -3793,7 +3939,7 @@ export class Game {
     #bakeNear() {
         const player = this.battle.actor(this.me);
 
-        if (this.remote || !this.world.maps?.town?.chunkAt || player?.map !== "town") {
+        if (!this.world.maps?.town?.chunkAt || player?.map !== "town") {
             return Promise.resolve();
         }
 
@@ -4605,6 +4751,7 @@ export class Game {
         }
 
         this.#bakeAhead();
+        this.#groundAhead(dt);
         telemetry.mark(PHASE.effects);
 
         // The time of day, out in the world and indoors
@@ -11029,8 +11176,23 @@ export class Game {
         this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
 
         for (const id of ids) {
+            this.#giveUpBuilding(id);
             this.enlistees.delete(id);
             this.aside.delete(id);
+        }
+    }
+
+    // Someone being drawn a step at a time given up on, if they're begun: their steps closed, so
+    // that what's half made of them is let go of (Character.building: the body no longer counted
+    // wearing its outfit, nor one of those its pictures' size goes by; its skin and its outfit's
+    // pictures no longer wanted of the worker, unless someone else waits on them too:
+    // characters/wardrobe.js `shared`). Only dropped, a body left waiting on its skin held its
+    // outfit's pictures whole, and on the kit, for good
+    #giveUpBuilding(id) {
+        const steps = this.enlistees.get(id)?.steps;
+
+        if (steps && !steps.done) {
+            steps.steps.return();
         }
     }
 
@@ -11066,6 +11228,7 @@ export class Game {
 
         for (const { actor } of [...this.enlistees.values()]) {
             if (this.#walledOff(actor, me)) {
+                this.#giveUpBuilding(actor.id);
                 this.enlistees.delete(actor.id);
                 this.aside.add(actor.id);
             }
@@ -11471,7 +11634,8 @@ export class Game {
     // come into the world as it's played, #dressing) drawn all at once again (OUTFITTING): once
     // one's been as it is `after` seconds, its outfit's picture is put together a step at a time
     // (Character.merging: `budget` ms a frame, a step at least, one body's at a time, the first
-    // dressed first), its garments drawn one by one meanwhile and with the one picture from the
+    // dressed first; waited for while it's painted off the page's thread, characters/wardrobe.js),
+    // its garments drawn one by one meanwhile and with the one picture from the
     // frame it's made. Changed again meanwhile, it starts over (#regear); gone, or made again
     // (polymorphed, #undress), it's forgotten
     #outfitting() {
@@ -11491,7 +11655,7 @@ export class Game {
 
             outfit.steps ??= new Steps(outfit.character.merging(), `an outfit put together for ${id}`);
 
-            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: false })) {
+            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: this.waits })) {
                 this.outfits.delete(id);
 
                 // (Unseen, by Invisibility: its one mesh as the meshes it's made from were; and
@@ -13526,6 +13690,11 @@ export class Game {
             if (building && !this.visits.has(key)) {
                 this.#prepare(building);
             }
+
+            // (Its floors' navigation, any not made yet: #bakeFloors)
+            if (building) {
+                this.#bakeFloors(building);
+            }
         }
 
         this.#mirror();
@@ -13775,7 +13944,7 @@ export class Game {
             totals: summed,
             pack,
             shop,
-            trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) } },
+            trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) }, rev: trade.rev ?? 0 },
         });
     }
 
@@ -16082,12 +16251,23 @@ export class Game {
                     this.#prepare(building);
                 }
 
+                if (building) {
+                    this.#bakeFloors(building);
+                }
+
                 break;
             }
-            case "close":
+            case "close": {
+                const building = this.world.interiors?.buildings.get(event.key);
+
+                if (building) {
+                    this.#bakeFloors(building, false);
+                }
+
                 this.#release(event.key);
                 this.#mirror();
                 break;
+            }
             case "join":
             case "leave":
                 // (Someone else come into the world, or gone from it: docs/WAR.md M11)

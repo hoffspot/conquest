@@ -37,6 +37,39 @@ export const SETTINGS = Object.freeze(settingsOf(OVERWORLD));
 /** Every polygon's flag (Detour's): walkable. */
 export const WALK = 1;
 
+// Recast's build context, one for each of Recast's modules (the page's, a worker's, a test's two
+// versions side by side), kept for every bake: its timers and logs off, which the bake never
+// reads, so it holds nothing from one bake to the next. (One made each bake was never destroyed
+// whole: its half on this side stayed in the binder's keeping for good.)
+const contexts = new WeakMap();
+
+function contextOf(recast) {
+    let context = contexts.get(recast);
+
+    if (!context) {
+        context = new recast.RecastBuildContext(false);
+        contexts.set(recast, context);
+    }
+
+    return context;
+}
+
+// Free one of Recast's own (a heightfield, a mesh: `free` its way), and have the binder forget
+// this side's half of it: Emscripten keeps a wrapper for every address it's handed one at, and
+// forgets it only when it destroys what it made itself, which these aren't (Recast allocates
+// them). Left, the wrappers of freed ones stayed for good, one for each address ever used.
+function freeing(recast, free, made) {
+    const { Module } = recast.Raw;
+    const raw = made.raw;
+
+    return () => {
+        const at = Module.getPointer(raw);
+
+        free(made);
+        delete Module.getCache(raw.__class__)[at];
+    };
+}
+
 /**
  * Bake a tile (`recast`: loadRecast's module; `input`: tileInput's, or squaresInput's) at tile
  * (tx, ty), for a kind of mesh (`measures`: settings.js): Detour's tile data (a Uint8Array), or
@@ -45,7 +78,7 @@ export const WALK = 1;
 export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
     const { positions, indices, areas, bmin, bmax } = input;
     const {
-        RecastBuildContext, VerticesArray, TrianglesArray, TriangleAreasArray, allocHeightfield, createHeightfield, rasterizeTriangles,
+        VerticesArray, TrianglesArray, TriangleAreasArray, allocHeightfield, createHeightfield, rasterizeTriangles,
         filterLowHangingWalkableObstacles, filterLedgeSpans, filterWalkableLowHeightSpans, allocCompactHeightfield, buildCompactHeightfield,
         freeHeightfield, markConvexPolyArea, erodeWalkableArea, buildDistanceField, buildRegions, allocContourSet, buildContours, allocPolyMesh, buildPolyMesh,
         allocPolyMeshDetail, buildPolyMeshDetail, freeCompactHeightfield, freeContourSet, freePolyMesh, freePolyMeshDetail,
@@ -54,7 +87,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
     const s = measures === OVERWORLD ? SETTINGS : settingsOf(measures);
     const { cell, cellHeight } = measures;
     const width = s.tileSize + 2 * s.border;
-    const context = new RecastBuildContext();
+    const context = contextOf(recast);
     const vertices = new VerticesArray();
     const triangles = new TrianglesArray();
     const kinds = new TriangleAreasArray();
@@ -68,7 +101,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
         // Voxels: the triangles rasterised into columns of spans, each with its area
         const heightfield = allocHeightfield();
 
-        freed.push(() => freeHeightfield(heightfield));
+        freed.push(freeing(recast, freeHeightfield, heightfield));
 
         if (!createHeightfield(context, heightfield, width, width, bmin, bmax, cell, cellHeight)) {
             throw new Error("Recast couldn't make the heightfield");
@@ -92,7 +125,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
 
         const compact = allocCompactHeightfield();
 
-        freed.push(() => freeCompactHeightfield(compact));
+        freed.push(freeing(recast, freeCompactHeightfield, compact));
 
         if (!buildCompactHeightfield(context, s.walkableHeight, s.walkableClimb, heightfield, compact)) {
             throw new Error("Recast couldn't compact the heightfield");
@@ -117,12 +150,12 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
 
         const contours = allocContourSet();
 
-        freed.push(() => freeContourSet(contours));
+        freed.push(freeing(recast, freeContourSet, contours));
         buildContours(context, compact, s.maxSimplificationError, s.maxEdgeLength, contours, Recast.RC_CONTOUR_TESS_WALL_EDGES);
 
         const mesh = allocPolyMesh();
 
-        freed.push(() => freePolyMesh(mesh));
+        freed.push(freeing(recast, freePolyMesh, mesh));
 
         if (!buildPolyMesh(context, contours, s.maxVertsPerPoly, mesh)) {
             throw new Error("Recast couldn't make the polygons");
@@ -134,7 +167,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
 
         const detail = allocPolyMeshDetail();
 
-        freed.push(() => freePolyMeshDetail(detail));
+        freed.push(freeing(recast, freePolyMeshDetail, detail));
 
         if (!buildPolyMeshDetail(context, mesh, compact, s.detailSampleDistance, s.detailSampleMaxError, detail)) {
             throw new Error("Recast couldn't make the detail mesh");
@@ -146,6 +179,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
 
         const params = new NavMeshCreateParams();
 
+        freed.push(() => params.destroy());
         params.setPolyMeshCreateParams(mesh);
         params.setPolyMeshDetailCreateParams(detail);
         params.setWalkableHeight(s.walkableHeight * cellHeight);
@@ -160,6 +194,7 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
         const { success, navMeshData } = createNavMeshData(params);
 
         if (!success) {
+            navMeshData.destroy();
             throw new Error("Detour couldn't make the tile's data");
         }
 
@@ -176,6 +211,5 @@ export function bakeTile(recast, input, tx, ty, measures = OVERWORLD) {
         vertices.destroy();
         triangles.destroy();
         kinds.destroy();
-        recast.Raw.destroy(context.raw);
     }
 }

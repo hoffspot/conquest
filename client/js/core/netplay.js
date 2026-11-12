@@ -7,22 +7,27 @@
 // out the same, the engine being made so (core/random.js). Their own commands go to the host, and
 // come back among the rest: what came of them is what came of them on their copy.
 //
-// Now and then the host says how the world should stand (Host.checksum). A copy that doesn't
-// (a browser whose sums come out a hair different from the host's) asks for the world again, and
-// carries on from it (Host.adopt). So does one whose link to the host dropped a moment and came
-// back (what was sent meanwhile lost): the host's own link back, it sends everyone the world again.
+// Every few steps the host says how the world should stand (Host.checksum, among what it's done:
+// CHECK_EVERY). A copy that doesn't (a browser whose sums come out a hair different from the
+// host's) asks for the world again, and carries on from it (Host.adopt). So does one whose link
+// to the host dropped a moment and came back (what was sent meanwhile lost): the host's own link
+// back, it sends everyone the world again. One who asks is answered at once, a few times over,
+// then no oftener than every AGAIN.every; everyone asking in a step from the one snapshot.
 //
 // When the host can't move its world on (its page hidden: a phone's gone to another app), it says
 // so, and those who've joined are shown why nothing's happening.
 //
-// Every few steps the host also sends where its characters near the players stand (core/motion.js):
-// a copy plays the same steps and compares, and one that's gone astray knows it at once. Each of
-// the host's sendings carries its step: a joined game keeps a few steps in hand behind it (more,
-// the less evenly they come), playing a little slower or faster to keep them, so that it doesn't
-// stop and start (Joining.pace). One that's fallen too far behind to catch up step by step (its
-// page hidden a while, or a slow phone in a long fight) doesn't: it asks for the world as it now
-// is, as one gone astray does, and plays on from that (PACE.tooFar). And it times how long a word
-// takes to go to the host and back (ping, pong), for the debug overlay.
+// (The host used to send where its characters near the players stood as well, five times a second,
+// for the same comparison: the motion stream, core/motion.js. It was half to two thirds of all a
+// joined game was sent, and told it nothing the checksum doesn't. It's sent now only by a host
+// asked to: Hosting `sendsPlaces`.)
+//
+// Each of the host's sendings carries its step: a joined game keeps a few steps in hand behind it
+// (more, the less evenly they come), playing a little slower or faster to keep them, so that it
+// doesn't stop and start (Joining.pace). One that's fallen too far behind to catch up step by
+// step (its page hidden a while, or a slow phone in a long fight) doesn't: it asks for the world
+// as it now is, as one gone astray does, and plays on from that (PACE.tooFar). And it times how
+// long a word takes to go to the host and back (ping, pong), for the debug overlay.
 //
 // The ways its characters find over the navigation meshes (core/battle.js) are recorded too, as
 // the host found them, and taken by a joined copy rather than found again: what each copy has of
@@ -50,13 +55,15 @@
 //                                                    kept heroes, a slot, "new", or "copy":
 //                                                    the character copied in)
 //                    { kind: "ready" }                         (its copy of the world made: playing)
-//                    { kind: "away", hidden }                  (its page hidden, or shown again)
+//                    { kind: "away", hidden }                  (its page hidden, or shown again: Hosting
+//                                                    `hidden`)
 //                    { kind: "hold", held, everyone }          (its player's menu open, or shut: on a
 //                                                    world server the world stopped for its one
 //                                                    player; everyone: Pause for everyone, an
 //                                                    owner's, the world stopped for all)
 //                    { kind: "command", seq, command }
-//                    { kind: "again" }                         (gone astray: the world again)
+//                    { kind: "again" }                         (gone astray: the world again; answered
+//                                                    no oftener than AGAIN allows)
 //                    { kind: "ping", t, rtt }                  (t: the joiner's clock, ms; rtt: how long
 //                                                    a word to the host and back's taken it lately,
 //                                                    ms, once it's timed one: Joining lately; the
@@ -74,8 +81,11 @@
 //                                                    paused: { why, by } if the world's stopped;
 //                                                    snapshot: with their own of their hero,
 //                                                    no one else's: core/host.js OWN)
-//                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
-//                    { kind: "motion", step, units }           (base64: core/motion.js)
+//                    { kind: "ops", step, ops }                (what's been done, in order, up to step;
+//                                                    among it ["k", sum]: how the world should
+//                                                    stand there)
+//                    { kind: "motion", step, units }           (base64: core/motion.js; only from a
+//                                                    host that sendsPlaces)
 //                    { kind: "pong", t, step }
 //                    { kind: "state", snapshot, paused }       (the world again, and whether it's stopped)
 //                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
@@ -90,6 +100,9 @@
 //                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
 //                                                    "elsewhere", their character taken over on
 //                                                    another link: Hosting #takeOver)
+//
+// What one who's joined may make the host do is bounded, whichever way they're linked (a link
+// made point to point passes no server that would bound it): HEARD, AGAIN.
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
@@ -108,10 +121,36 @@ import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 223;
+export const NET_VERSION = 224;
 
-/** How many steps the host plays between telling how the world should stand. */
-export const CHECK_EVERY = 100;
+/**
+ * How many steps the host plays between telling how the world should stand (a fifth of a second:
+ * a copy gone astray knows it within that). It was 100, five seconds, while where the characters
+ * stood was sent every 4 as well (the motion stream); the sum is 17 characters among what's sent
+ * anyway, where that was 500 to 1,000 in a message of its own.
+ */
+export const CHECK_EVERY = 4;
+
+/**
+ * How often one who's joined is sent the world again for the asking, at most (by the host's
+ * clock): once every `every` ms (generated/multiplayer_scaling_plan.md 1-5), with `burst` of
+ * them in hand to begin with and as they're left unused, answered at once; past those, an asking
+ * waits till its time's come. Taking the world and writing it out is 2 to 10 ms of the host's one
+ * thread, and 15 to 60 KB to send, each time: asked for a hundred times over, it was 650 ms and
+ * 12 MB. The few in hand are for a game that needs it twice running through no fault of its own:
+ * one slow to load that's fallen too far behind as it comes in, and again before it's found its
+ * feet (PACE.tooFar: it plays nothing till the world comes, so made to wait it stands still; a
+ * soak's player did, 10 s, with none in hand), or a link that drops twice in a few seconds.
+ */
+export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
+
+/**
+ * What the host takes from one who's joined: nothing longer than `most` characters (a character
+ * coming in is the longest thing said, and the world server's broker holds one it relays to the
+ * same), and commands no faster than `commands` a second, `burst` at once (a stick turning sends
+ * 16 a second; each command done is sent on to everyone). More is let go of unanswered.
+ */
+export const HEARD = Object.freeze({ most: 64 * 1024, commands: 30, burst: 60 });
 
 /** The most players in a world (its host too). */
 export const MOST_PLAYERS = 8;
@@ -123,8 +162,9 @@ export const MOST_PLAYERS = 8;
  * doesn't make the frame so long it falls further behind). And how far behind is too far to
  * catch up step by step (5 s of the host's): the world as it now is asked for instead, and none
  * of those steps played. (A step with a fight in it takes some 2 ms on a desktop and 10 on a
- * phone, playing one more a frame at most; the world again, some 120 KB and 20 ms to take in on a
- * desktop, 100 on a phone. So a phone 5 s behind would be fast-forwarding for 2 or 3 s more.)
+ * phone, playing one more a frame at most; the world again, 80 to 300 KB of text and 20 to 40 ms
+ * to take in on a desktop, five times that on a phone. So a phone 5 s behind would be
+ * fast-forwarding for 2 or 3 s more.)
  */
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
 
@@ -376,9 +416,18 @@ export function spawnFor(world, race) {
  * `send(peer, text)`.
  */
 export class Hosting {
-    constructor(host, { send }) {
+    /**
+     * @param {object} host - The world (core/host.js Host).
+     * @param {object} options
+     * @param {function} options.send - Sends `text` to one who's joined (peer, text).
+     * @param {function} [options.clock] - The time (ms: performance.now, say), to hold those
+     *   who've joined to how much they may ask of the host (AGAIN, HEARD); none, they aren't held
+     *   (the tests' worlds, played faster than any clock).
+     */
+    constructor(host, { send, clock = null }) {
         this.host = host;
         this.send = send;
+        this.clock = clock;
 
         /** Those who've joined (by peer): their player's id in the world. */
         this.players = new Map();
@@ -406,6 +455,30 @@ export class Hosting {
         this.motionDue = false;
         this.seq = null;
         this.nextGuest = 1;
+
+        /**
+         * Whether where the characters near the players stand is sent too, every MOTION.every
+         * steps (the motion stream, core/motion.js: a joined copy compares them, as it did before
+         * the checksum was sent as often). Off: nothing but that comparison reads them. Kept for
+         * whatever comes to draw others from what's sent (generated/multiplayer_scaling_plan.md
+         * 1-3, 3-19): it costs nothing unsent.
+         */
+        this.sendsPlaces = false;
+
+        /**
+         * Those who've asked for the world again and not been sent it yet (by peer), and how many
+         * times each may still be sent it for the asking just now (by peer: { left, at }: AGAIN,
+         * #worlds).
+         */
+        this.asked = new Set();
+        this.worlds = new Map();
+
+        /** How many commands each may still give just now (by peer: { left, at }: HEARD), and how many have been let go of. */
+        this.allowance = new Map();
+        this.dropped = 0;
+
+        /** Those whose page is hidden, as they've said (by peer): away, their hero as they left it. */
+        this.hidden = new Set();
 
         /** What's been sent (characters of text, to everyone together), by kind. */
         this.sent = {};
@@ -493,7 +566,7 @@ export class Hosting {
         if (op[0] === "a") {
             this.steps++;
             this.checkDue ||= this.steps % CHECK_EVERY === 0;
-            this.motionDue ||= this.steps % MOTION.every === 0;
+            this.motionDue ||= this.sendsPlaces && this.steps % MOTION.every === 0;
         }
     }
 
@@ -514,11 +587,21 @@ export class Hosting {
     }
 
     /**
-     * Send what's been done to everyone who's joined; and, now and then, how the world should
-     * stand, and where those near the players are (after what's been done: compared there).
+     * Send what's been done to everyone who's joined, and with it, every CHECK_EVERY steps, how
+     * the world should stand (after what's been done: compared there); where those near the
+     * players are, if that's sent (sendsPlaces); then the world again to whoever's asked for it
+     * and may have it now. With no one joined, nothing's worked out or written.
      */
     flush() {
         this.#quiet();
+
+        if (!this.players.size) {
+            this.ops = [];
+            this.checkDue = false;
+            this.motionDue = false;
+
+            return;
+        }
 
         if (this.checkDue) {
             this.ops.push(["k", this.host.checksum()]);
@@ -536,13 +619,51 @@ export class Hosting {
 
         if (this.motionDue) {
             this.motionDue = false;
-
-            if (this.players.size) {
-                this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
-            }
+            this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
         }
 
         this.#selves(step);
+        this.#worlds();
+    }
+
+    // How many times one who's joined may be sent the world again for the asking just now (AGAIN:
+    // `burst` at most, one more every `every` ms of the clock's; with no clock, always once)
+    #worldsLeft(peer) {
+        if (!this.clock) {
+            return 1;
+        }
+
+        const had = this.worlds.get(peer);
+
+        return had ? Math.min(AGAIN.burst, had.left + (this.clock() - had.at) / AGAIN.every) : AGAIN.burst;
+    }
+
+    // The world again to each who's asked for it and may have it now (AGAIN; after all that's been
+    // done till now: flush's), one snapshot taken for them all: one asking alone has their own of
+    // their hero in it (OWN), several at once no one's, as everyone's sent it when the host's
+    // link comes back (resync)
+    #worlds() {
+        if (!this.asked.size) {
+            return;
+        }
+
+        const due = [...this.asked].filter((peer) => this.#worldsLeft(peer) >= 1);
+
+        if (!due.length) {
+            return;
+        }
+
+        const text = encode({ kind: "state", snapshot: this.#snapshotFor(due.length === 1 ? this.players.get(due[0]) : null), paused: this.paused });
+
+        for (const peer of due) {
+            this.asked.delete(peer);
+
+            if (this.clock) {
+                this.worlds.set(peer, { left: this.#worldsLeft(peer) - 1, at: this.clock() });
+            }
+
+            this.#send(peer, "state", text);
+        }
     }
 
     // Each who's joined not heard from for QUIET.ms stopped where they stand (once, till they're
@@ -595,6 +716,16 @@ export class Hosting {
     hear(peer, text) {
         let message;
 
+        // (Longer than anything a game says, HEARD: not read. One coming in is told they can't,
+        // as one whose character can't be brought in is)
+        if (typeof text !== "string" || text.length > HEARD.most) {
+            if (!this.players.has(peer)) {
+                this.#send(peer, "refused", encode({ kind: "refused", reason: "character" }));
+            }
+
+            return;
+        }
+
         try {
             message = decode(text);
         } catch {
@@ -623,6 +754,7 @@ export class Hosting {
                 break;
             case "away":
                 if (this.players.has(peer)) {
+                    this.hidden[message.hidden === true ? "add" : "delete"](peer);
                     this.onAway(peer, message.hidden === true);
                 }
 
@@ -670,6 +802,13 @@ export class Hosting {
                 break;
             default:
                 break;
+        }
+
+        // (One who asked for the world again a while ago, and may have it now: sent it as they're
+        // next heard from, their game asking how long a word takes every second, even while the
+        // world's stopped and nothing else is sent)
+        if (this.asked.has(peer) && this.#worldsLeft(peer) >= 1) {
+            this.flush();
         }
     }
 
@@ -869,7 +1008,7 @@ export class Hosting {
     #command(peer, { seq, command }) {
         const id = this.players.get(peer);
 
-        if (!id || !Number.isInteger(seq)) {
+        if (!id || !Number.isInteger(seq) || !this.#allowed(peer)) {
             return;
         }
 
@@ -883,14 +1022,40 @@ export class Hosting {
         }
     }
 
-    // One whose world's gone astray: the world again (after all that's been done till now)
+    // Whether one who's joined may give another command just now (HEARD: `commands` a second,
+    // `burst` at once, by the clock; with no clock, always): one more than that is let go of,
+    // counted (dropped), as the world server lets go of what comes too fast (server/play.js)
+    #allowed(peer) {
+        if (!this.clock) {
+            return true;
+        }
+
+        const now = this.clock();
+        const had = this.allowance.get(peer) ?? { left: HEARD.burst, at: now };
+        const left = Math.min(HEARD.burst, had.left + ((now - had.at) * HEARD.commands) / 1000);
+
+        if (left < 1) {
+            this.allowance.set(peer, { left, at: now });
+            this.dropped++;
+
+            return false;
+        }
+
+        this.allowance.set(peer, { left: left - 1, at: now });
+
+        return true;
+    }
+
+    // One whose world's gone astray: the world again (after all that's been done till now), at
+    // once if they may have it (AGAIN: a few times running, then one every so often), else once
+    // their time's come (#worlds: asked twice meanwhile, sent it once)
     #again(peer) {
         if (!this.players.has(peer)) {
             return;
         }
 
+        this.asked.add(peer);
         this.flush();
-        this.#send(peer, "state", encode({ kind: "state", snapshot: this.#snapshotFor(this.players.get(peer)), paused: this.paused }));
     }
 
     // The world as it is, for one who's joined (by their id: their own of their hero in it, what
@@ -939,6 +1104,10 @@ export class Hosting {
         }
 
         const text = encode({ kind: "state", snapshot: this.#snapshotFor(), paused: this.paused });
+
+        // (Whoever had asked for it has it now. Not counted as sent for the asking: it was the
+        // host's link that dropped, and theirs may yet)
+        this.asked.clear();
 
         for (const peer of this.players.keys()) {
             this.#send(peer, "state", text);
@@ -1000,6 +1169,10 @@ export class Hosting {
         this.toldSelf.delete(peer);
         this.heardAt.delete(peer);
         this.quieted.delete(peer);
+        this.asked.delete(peer);
+        this.worlds.delete(peer);
+        this.allowance.delete(peer);
+        this.hidden.delete(peer);
     }
 
     /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */
@@ -1074,6 +1247,13 @@ export class Joining {
         this.self = null;
         this.onSelf = null;
 
+        /**
+         * Who's told each way the host found, (id, way), as it's heard: some steps before it's
+         * played (step), so the game can have the navigation's tiles under it baked meanwhile, off
+         * the page's thread (app/game.js: world/navbaker.js along). Nothing of the copy hangs on it.
+         */
+        this.onWay = null;
+
         /** Whether it's gone astray from the host's, and asked for the world again. */
         this.astray = false;
         this.resyncs = 0;
@@ -1087,9 +1267,10 @@ export class Joining {
         this.skips = 0;
 
         /**
-         * How often it's compared where the host's characters stood with its own (the motion
-         * stream), and the world with how the host said it should stand (the checksum); and how
-         * often it found it had gone astray, either way.
+         * How often it's compared the world with how the host said it should stand (the checksum:
+         * `checks`), and where the host's characters stood with its own, of a host that sends
+         * that (the motion stream: `motionChecks`); and how often it found it had gone astray,
+         * either way.
          */
         this.motionChecks = 0;
         this.checks = 0;
@@ -1097,13 +1278,16 @@ export class Joining {
 
         /**
          * The host's latest step heard; how late its steps come (ms: all but the latest few,
-         * PLAYOUT); how many of them to keep in hand, and how many it's had in hand lately; and
-         * how long a word takes to the host and back (ms: null till it's known).
+         * PLAYOUT); how many of them to keep in hand (`delay`), and how many it's had in hand
+         * lately (`inHand`: smoothed, pace; not `held`, which is whether its player's menu holds
+         * the world: one name for both once made every menu shut slow the world a tenth for two
+         * seconds, and a stopped world start as its one player's link came back); and how long a
+         * word takes to the host and back (ms: null till it's known).
          */
         this.hostStep = null;
         this.jitter = 0;
         this.delay = PLAYOUT.least;
-        this.held = 0;
+        this.inHand = 0;
         this.rtt = null;
 
         /** The latest round trips to the host (ms, at most LATELY of them, as they came: `lately`). */
@@ -1191,6 +1375,10 @@ export class Joining {
                     for (const op of message.ops) {
                         this.queue.push(op);
                         steps += Array.isArray(op) && op[0] === "a" ? (op[2] ?? 1) : 0;
+
+                        if (this.onWay && Array.isArray(op) && op[0] === "v") {
+                            this.onWay(op[2], op[3]);
+                        }
                     }
 
                     this.#waiting += steps;
@@ -1451,9 +1639,9 @@ export class Joining {
      * there are; a little faster while there are more, so that they're played sooner.
      */
     pace(ms) {
-        this.held += (this.behind - this.held) * Math.min(1, ms / PLAYOUT.settle);
+        this.inHand += (this.behind - this.inHand) * Math.min(1, ms / PLAYOUT.settle);
 
-        return 1 + Math.max(-PLAYOUT.slower, Math.min(PLAYOUT.faster, (this.held - this.delay) * PLAYOUT.gain));
+        return 1 + Math.max(-PLAYOUT.slower, Math.min(PLAYOUT.faster, (this.inHand - this.delay) * PLAYOUT.gain));
     }
 
     /**

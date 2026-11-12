@@ -21,6 +21,15 @@ export const RUNNER = Object.freeze({
     // again once they've gone `again` from where it was last asked for (world/navbaker.js around)
     bakeReach: 96,
     bakeAgain: 16,
+    // A world driven by a clock (the world server's) that's fallen behind it: how many steps it
+    // plays at once catching up (`catchUp`: then whoever drives it hears what's been said to it
+    // before the next), and how far behind it may stay (`behind`, ms: more is let go of, letGo, so
+    // its time runs slow for a while and it's never further behind than this. A world whose steps
+    // take longer than a step would else fall further behind for ever, playing them back to back
+    // and answering no one: generated/multiplayer_scaling_plan.md 1-1). A browser's game is given
+    // a tenth of a second a frame at most (app/game.js), and needs neither
+    catchUp: 2,
+    behind: 250,
 });
 
 /**
@@ -102,23 +111,28 @@ export class WorldRunner {
         /** How long the steps have taken, if they're timed (clock). */
         this.times = clock ? new StepTimes() : null;
 
+        /** Time it was given and never played (ms): let go of, fallen too far behind (letGo). */
+        this.dropped = 0;
+
         // Where each player last had the navigation round them asked for (bakeAhead)
         this.bakedAround = new Map();
     }
 
     /**
-     * Time gone by (`ms`): the whole steps it makes played, what's left over kept for the next.
-     * Before each, `before()` (where everyone was, for whoever draws them in between); after it,
-     * `after(events)` (what happened in it). Then, if it's due, what's been done sent to those
-     * who've joined. Returns how many steps were played.
+     * Time gone by (`ms`): the whole steps it makes played (`most` of them at most: the rest wait
+     * for the next call), what's left over kept for the next. Before each, `before()` (where
+     * everyone was, for whoever draws them in between); after it, `after(events)` (what happened in
+     * it), and what's been done sent to those who've joined: each step as it's done, so steps
+     * played together after a hold-up still go out one by one. (And sent, if it's due, with no
+     * step played: a command done between steps.) Returns how many steps were played.
      */
-    advance(ms, { before = null, after = null } = {}) {
+    advance(ms, { before = null, after = null, most = Infinity } = {}) {
         this.lag += ms;
         this.time += ms;
 
         let steps = 0;
 
-        while (this.lag >= STEP_MS) {
+        while (this.lag >= STEP_MS && steps < most) {
             before?.();
 
             const events = this.#step();
@@ -126,6 +140,11 @@ export class WorldRunner {
             after?.(events);
             this.lag -= STEP_MS;
             steps++;
+
+            if (this.hosting) {
+                this.flushedAt = this.time;
+                this.hosting.flush();
+            }
         }
 
         if (this.hosting && this.time - this.flushedAt >= RUNNER.flushEvery) {
@@ -134,6 +153,25 @@ export class WorldRunner {
         }
 
         return steps;
+    }
+
+    /**
+     * Whatever it's behind by beyond `behind` ms let go of, never to be played: its world's time
+     * runs that much slow, rather than it falling further behind. Returns how much was let go of
+     * (ms: 0, mostly), which `dropped` counts.
+     */
+    letGo(behind = RUNNER.behind) {
+        const over = Math.max(0, this.lag - behind);
+
+        this.lag -= over;
+        this.dropped += over;
+
+        return over;
+    }
+
+    /** How much of the time it's been given it's played, or still has to play (1: all of it; under 1, its world's run slow). */
+    get dilation() {
+        return this.time > 0 ? 1 - this.dropped / this.time : 1;
     }
 
     // One step of the world (timed, if they're to be), the war's turns told of, and anyone away
@@ -165,8 +203,16 @@ export class WorldRunner {
      * last asked for; then the next tile waiting sent off.
      */
     bakeAhead(baker) {
+        let players = 0;
+
         for (const actor of this.host.battle.actors) {
-            if (actor.kind !== "player" || actor.map !== "town" || actor.dead) {
+            if (actor.kind !== "player") {
+                continue;
+            }
+
+            players++;
+
+            if (actor.map !== "town" || actor.dead) {
                 continue;
             }
 
@@ -175,6 +221,17 @@ export class WorldRunner {
             if (!at || Math.abs(actor.x - at[0]) > RUNNER.bakeAgain || Math.abs(actor.y - at[1]) > RUNNER.bakeAgain) {
                 this.bakedAround.set(actor.id, [actor.x, actor.y]);
                 baker.around(actor.x, actor.y, RUNNER.bakeReach);
+            }
+        }
+
+        // (Nothing kept of players gone from the world: more remembered than there are players)
+        if (this.bakedAround.size > players) {
+            const here = new Set(this.host.battle.actors.filter(({ kind }) => kind === "player").map(({ id }) => id));
+
+            for (const id of [...this.bakedAround.keys()]) {
+                if (!here.has(id)) {
+                    this.bakedAround.delete(id);
+                }
             }
         }
 

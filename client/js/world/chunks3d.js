@@ -67,6 +67,10 @@ export const REACH = Object.freeze({ drawn: 2, kept: 3 });
  */
 export const BUILD_BUDGET = 6;
 
+// A clock for a chunk's squares made a piece at a time (core/overworld.js chunkWithin, asked
+// with no time allowed): always past it, so each asking makes one piece
+const PAST = () => 1;
+
 /**
  * The same while the game loads, with only the loading screen to draw between (which each time
  * waits at least a few milliseconds for the page: so fewer, longer turns).
@@ -1056,12 +1060,30 @@ export class Chunks {
         }
     }
 
-    // Draw a chunk, a step at a time (each a yield), hidden until it's all drawn
+    // Draw a chunk, a step at a time (each a yield), hidden until it's all drawn. Its squares are
+    // made first, if the world hasn't made them yet, a piece a step (core/overworld.js
+    // chunkWithin, by a clock that says its time's up after each): made whole in the one step,
+    // as they were, a chunk was 12 to 15 ms of a frame here (heights given), twice the frame's
+    // building time
     *#drawing(cx, cy) {
-        const chunk = this.overworld.chunk(cx, cy);
         const object = new THREE.Group();
         const heights = new Float32Array(CHUNK * CHUNK);
         const drawn = { cx, cy, object, lot: null, heights, drawing: true, job: null, growth: null, sown: null, hearths: null, undergrowth: null, cliffs: null, arches: null };
+
+        object.name = `chunk ${cx}, ${cy}`;
+        object.visible = false;
+        this.object.add(object);
+        this.drawn.set(key(cx, cy), drawn);
+
+        // (Being drawn from here on, thrown away if the player's gone: its squares first)
+        const made = () => (this.overworld.chunkWithin ? this.overworld.chunkWithin(cx, cy, 0, PAST) : this.overworld.chunk(cx, cy));
+        let chunk = made();
+
+        while (!chunk) {
+            yield;
+            chunk = made();
+        }
+
         // (How high what stands on it does, over the squares it stands on: [{ min, max ([x, y]), top }])
         const standing = (boxes) => {
             for (const { min, max, top } of boxes) {
@@ -1075,10 +1097,6 @@ export class Chunks {
             }
         };
 
-        object.name = `chunk ${cx}, ${cy}`;
-        object.visible = false;
-        this.object.add(object);
-        this.drawn.set(key(cx, cy), drawn);
         yield;
 
         // (The water first, so the ground under it and up its banks can be wet by its field)

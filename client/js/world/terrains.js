@@ -92,6 +92,46 @@ export class Terrains {
         }
     }
 
+    /**
+     * Work out the heights of these chunks too ([[cx, cy]...]), those that aren't kept or asked
+     * for, and find the trails whose room comes near them: what's wanted further off than `ahead`
+     * looks (the ground the world says it will soon want: core/host.js soon).
+     */
+    want(chunks) {
+        if (!this.worker) {
+            return;
+        }
+
+        for (const [cx, cy] of chunks) {
+            const key = cy * CHUNKS + cx;
+
+            if (cx < 0 || cy < 0 || cx >= CHUNKS || cy >= CHUNKS) {
+                continue;
+            }
+
+            if (!this.asked.has(key) && !this.ground.has(cx, cy)) {
+                this.asked.add(key);
+                this.worker.postMessage({ cx, cy });
+            }
+
+            for (const trail of this.trails?.near(cx, cy, CHUNK) ?? []) {
+                if (trail.points === null && !this.routing.has(trail.id)) {
+                    this.routing.add(trail.id);
+                    this.worker.postMessage({ trail: { id: trail.id, from: trail.from, to: trail.to, box: trail.box, avoid: trail.avoid } });
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether a chunk's better left a moment before it's made: a trail whose room comes near it
+     * is still being found here (found where the chunk's made, it's tens of milliseconds, now and
+     * then a couple of hundred).
+     */
+    finding(cx, cy) {
+        return Boolean(this.worker) && (this.trails?.near(cx, cy, CHUNK) ?? []).some((trail) => trail.points === null && trail.given === null && this.routing.has(trail.id));
+    }
+
     /** Stop working heights out. */
     dispose() {
         this.worker?.terminate();

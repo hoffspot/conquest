@@ -9,6 +9,7 @@ import { Standing } from "../client/js/core/standing.js";
 import { BONUS, briefingOf, chanceOf, checkMission, gearChoices, INTERCEPT_TURNS, MISSION_REACH, missionOf, MISSIONS, missionsNear, MORE_BY_RANK, rewardOf, rewardWords, senderName, senderOf } from "../client/js/core/missions.js";
 import { GRACE, LEAVE, onTheRoad, turnsTo } from "../client/js/core/hurry.js";
 import { REINFORCE } from "../client/js/core/war/armies.js";
+import { ADJECTIVES } from "../client/js/core/war/peoples.js";
 
 // Just enough of a war (core/war/war.js): humans at war with orcs, at peace with elves
 function warOf(parts = {}) {
@@ -150,6 +151,28 @@ describe("a mission offered", () => {
         assert.deepEqual(mission.reward, rewardOf("rout", 0));
         assert.equal(mission.state, "offered");
         assert.match(MORE_BY_RANK, /higher your rank/);
+    });
+});
+
+describe("a convoy to fall on", () => {
+    it("is \"a\" convoy or \"an\" one as its people's name begins: an elven and an orcish convoy, a human one, for every people", () => {
+        const expected = { human: "A human", elf: "An elven", darkElf: "A dark elven", cat: "A cat-folk", lizard: "A lizard-folk", orc: "An orcish" };
+
+        assert.deepEqual(Object.keys(expected).sort(), Object.keys(ADJECTIVES).sort());
+
+        for (const people of Object.keys(ADJECTIVES)) {
+            // (As missionsNear names it: "the <people's> convoy of <its load>")
+            const war = Object.assign(warOf({ forces: [{ id: "convoy-1", realm: people, kind: "convoy", size: 6, at: [900, 300], path: [[900, 300], [9000, 0]], leg: 0, cargo: { iron: 30 }, home: "works-2" }] }), { hostile: (a, b) => a !== b });
+            const realm = people === "human" ? "orc" : "human";
+            const found = missionsNear({ war, realm, at }).find(({ kind }) => kind === "plunder");
+
+            assert.equal(found.target.name, `the ${ADJECTIVES[people]} convoy of iron`);
+
+            const { text } = missionOf({ war, realm, kind: found.kind, key: found.key, target: found.target });
+
+            assert.equal(text.startsWith(`${expected[people]} convoy of iron is on the road near you`), true, text);
+            assert.equal(/^An? [aeiou]/i.test(text), text.startsWith("An "), text);
+        }
     });
 });
 

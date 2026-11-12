@@ -688,7 +688,7 @@ function probe(side, foe, { battle, now, ctx, members, formationOf, line }) {
     sent.forEach((actor, k) => {
         actor.formation.id = probeOf(from);
         actor.formation.slot = [(k - (sent.length - 1) / 2) * FORMATION.apart, 0];
-        delete actor.formation.post;
+        actor.formation.post = undefined;
     });
 
     from.probe = { until: now + FIELD.probe.ms, size: sent.length };
@@ -716,7 +716,7 @@ function charge(engagement, ctx, { members, formationOf, line }) {
             battle.formation(body.formation, { hold: FIELD.charge.lap });
 
             for (const actor of members.get(body) ?? []) {
-                delete actor.formation.post;
+                actor.formation.post = undefined;
 
                 const hold = holdOf(ctx.record(actor.id));
 
@@ -1301,8 +1301,8 @@ function fallBack(side, close, { ctx, members, formationOf }) {
             }
 
             if (!beset && !near(placeAt(formation, actor.formation.slot), FIELD.archers.clear) && !near([actor.x, actor.y], FIELD.archers.clear)) {
-                delete actor.formation.refuge;
-                delete actor.formation.post;
+                actor.formation.refuge = undefined;
+                actor.formation.post = undefined;
                 continue;
             }
 

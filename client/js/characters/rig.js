@@ -187,7 +187,12 @@ function axisFor(axis, side) {
 export function jointRotation(kind, side, angles, target = new THREE.Quaternion(), limit = true) {
     target.identity();
 
-    for (const { name, axis, range } of JOINTS[kind]) {
+    const movements = JOINTS[kind];
+
+    // (By their places, not `for ... of`: this is done for every joint of every body posed, and
+    // an iterator each time is so much made to be thrown away)
+    for (let k = 0; k < movements.length; k++) {
+        const { name, axis, range } = movements[k];
         let angle = angles[name] ?? 0;
 
         if (limit) {
@@ -500,6 +505,17 @@ const _start = new THREE.Quaternion();
 // How far round from last time a reaching arm's elbow is tried first (radians)
 const NUDGES = [0, -0.2, 0.2, -0.45, 0.45];
 
+// What reachArm's search keeps as it goes, here and not in its own scope: the swivel tried last
+// (what it cost, and how far past their ranges it strained the joints: _tried), the best found
+// so far (its cost, strain and swivel: _best), and the forearm's turn it asks jointRotation
+// for. In its scope, every one of them set was a new number (or object) on the heap, some
+// forty swivels tried a reach, for each arm reaching, every frame
+const _tried = new Float64Array(2);
+const _best = new Float64Array(3);
+const [COST, STRAIN, PHI] = [0, 1, 2];
+const _pronated = { pronate: 0 };
+const RELAXED_WRIST = Object.freeze({ flex: -8, deviate: -4 });
+
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 const _angles = {};
@@ -800,18 +816,23 @@ export class Rig {
         _left.set(1, 0, 0).applyQuaternion(_body);
         _back.set(0, 0, -1).applyQuaternion(_body);
 
-        const relaxedFore = jointRotation("ForeArm", s, { pronate }, _relaxedFore);
-        const relaxedHand = jointRotation("Hand", s, wrist ?? { flex: -8, deviate: -4 }, _relaxedHand);
+        _pronated.pronate = pronate;
+
+        const relaxedFore = jointRotation("ForeArm", s, _pronated, _relaxedFore);
+        const relaxedHand = jointRotation("Hand", s, wrist ?? RELAXED_WRIST, _relaxedHand);
         const handLimited = _handLimited;
         const offsetWorld = _offsetWorld;
         const wanted = _wanted;
         const partly = _partly;
         const axis = _aimAxis;
-        const best = { phi: 0, cost: Infinity, strain: 0 };
-        let target = null;
+        const best = _best;
         // (What the last swivel tried cost, and how far past their ranges it strained the joints)
-        let cost = 0;
-        let strained = 0;
+        const tried = _tried;
+        let target = null;
+
+        best[PHI] = 0;
+        best[COST] = Infinity;
+        best[STRAIN] = 0;
 
         // The frames and strain for one swivel; kept in _Farm, _Ffore, _Fhand (and _W: the wrist)
         const evaluate = (phi) => {
@@ -883,7 +904,8 @@ export class Rig {
                 const tau = Math.min(PRONATION, Math.max(-PRONATION, want));
                 const twist = want - tau;
 
-                _Ffore.multiply(jointRotation("ForeArm", s, { pronate: tau }, _qc, false));
+                _pronated.pronate = tau;
+                _Ffore.multiply(jointRotation("ForeArm", s, _pronated, _qc, false));
 
                 // The rest to the wrist, within its range
                 _qa.copy(_Ffore).invert().multiply(goal);
@@ -914,17 +936,17 @@ export class Rig {
             const natural = _prefer.lengthSq() > 1e-6 ? 1 - _bend.dot(_prefer.normalize()) : 0;
             const moved = swivel === null ? 0 : wrap(phi - swivel) / DEG;
 
-            cost = strain + comfort + (bend ? NATURAL + (HINTED - NATURAL) * bent : NATURAL) * natural + STEADY * moved * moved;
-            strained = strain;
+            tried[COST] = strain + comfort + (bend ? NATURAL + (HINTED - NATURAL) * bent : NATURAL) * natural + STEADY * moved * moved;
+            tried[STRAIN] = strain;
         };
 
         const tryPhi = (phi) => {
             evaluate(phi);
 
-            if (cost < best.cost) {
-                best.phi = wrap(phi);
-                best.cost = cost;
-                best.strain = strained;
+            if (tried[COST] < best[COST]) {
+                best[PHI] = wrap(phi);
+                best[COST] = tried[COST];
+                best[STRAIN] = tried[STRAIN];
             }
         };
 
@@ -932,28 +954,28 @@ export class Rig {
         // as last reached)
         const solve = (frame) => {
             target = offsetWorld.copy(offset).multiplyScalar(scale).applyQuaternion(frame).negate().add(grip);
-            best.cost = Infinity;
+            best[COST] = Infinity;
 
             if (swivel !== null) {
-                for (const nudge of NUDGES) {
-                    tryPhi(swivel + nudge);
+                for (let k = 0; k < NUDGES.length; k++) {
+                    tryPhi(swivel + NUDGES[k]);
                 }
             }
 
-            if (best.strain > GOOD_STRAIN || swivel === null) {
+            if (best[STRAIN] > GOOD_STRAIN || swivel === null) {
                 for (let k = 0; k < SWIVEL_STEPS; k++) {
                     tryPhi(-Math.PI + (2 * Math.PI * k) / SWIVEL_STEPS);
                 }
             }
 
             for (let step = Math.PI / SWIVEL_STEPS; step > 0.004; step /= 2) {
-                const around = best.phi;
+                const around = best[PHI];
 
                 tryPhi(around - step);
                 tryPhi(around + step);
             }
 
-            evaluate(best.phi);
+            evaluate(best[PHI]);
         };
 
         // (A relaxed or aimed hand's offset is along the forearm: a first guess, then from where it went)
@@ -977,8 +999,8 @@ export class Rig {
         upper.updateMatrixWorld(true);
 
         return {
-            swivel: best.phi,
-            strain: Math.sqrt(best.strain),
+            swivel: best[PHI],
+            strain: Math.sqrt(best[STRAIN]),
             grip: offsetWorld.copy(offset).multiplyScalar(scale).applyQuaternion(_Fhand).add(_W).clone(),
             frame: _Fhand.clone(),
         };

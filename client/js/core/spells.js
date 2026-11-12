@@ -160,12 +160,13 @@ export const SPELLS = Object.freeze({
     putrify: attack("water", 6, "Putrify", { about: "Foul water that rots: sickens everyone near, and lies there festering a while.", castTime: 1000, cooldown: 12000, damage: [34, 50], area: 2, effect: { kind: "disease", chance: 1 }, hazard: { kind: "rot", ms: 6000, radius: 2 }, reaction: "arcane" }),
     absoluteZero: attack("water", 7, "Absolute Zero", { about: "Cold beyond cold: everyone near's frozen solid, then slowed.", castTime: 1200, cooldown: 16000, damage: [44, 62], area: 3, stun: 1500, stunChance: 1, effect: { kind: "slow", chance: 1, look: "frost" }, reaction: "arcane" }),
 
-    // --- Hexes (the Hexes skill: core/progress.js) ---
-    stun: { label: "Stun", about: "Stuns an enemy a few moments.", target: "enemy", castTime: 400, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 5000, stun: 3000 },
-    hold: { label: "Hold", about: "Holds an enemy fast a good while.", target: "enemy", castTime: 600, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 6000, stun: 6000, like: "stun" },
+    // --- Hexes (the Hexes skill: core/progress.js). On a boss a stun lasts half as long, and each
+    // one within 20 s of the last half as long again (battle.js STUNS) ---
+    stun: { label: "Stun", about: "Stuns an enemy a few moments. A boss only half as long, and less each time.", target: "enemy", castTime: 400, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 5000, stun: 3000 },
+    hold: { label: "Hold", about: "Holds an enemy fast a good while. A boss only half as long, and less each time.", target: "enemy", castTime: 600, reach: SPELL_REACH.reach + SPELL_REACH.hexes, cooldown: 6000, stun: 6000, like: "stun" },
 
     // --- Learnt from tomes (each once found or given: progress.js TOMES) ---
-    // Wards: on oneself or a friend, five minutes
+    // Wards: on oneself or a friend, an hour (WARDING)
     resistFire: ward("Resist Fire", "Wards against fire, an hour: 30% less from fire spells and flames, and burning ends sooner and hurts less.", { schools: ["fire"], elements: ["fire"], afflictions: ["burn"] }),
     resistWater: ward("Resist Water", "Wards against water and ice, an hour: 30% less from water spells, scalding and frost, and chills end sooner.", { schools: ["water"], elements: ["water"], looks: ["frost", "scald"] }),
     resistAir: ward("Resist Air", "Wards against wind and lightning, an hour: 30% less from air spells, and stuns from them end sooner.", { schools: ["air"], elements: ["air"] }),

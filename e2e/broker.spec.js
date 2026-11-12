@@ -144,6 +144,24 @@ test("a player's own world through the server's broker: listed on it, joined fro
     expect(await guest.evaluate(() => window.pellagos.together.link.how)).toBe("direct");
     await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
 
+    // (Point to point, the world came compressed: each end said it reads compressed messages as
+    // its channel opened, and what the host put on the channel, the world and all that's been
+    // done since, is under half its text; the world itself, a fifth)
+    expect(await guest.evaluate(() => window.pellagos.together.link.channel.packs)).toBe(true);
+
+    const sent = await host.evaluate(() => {
+        const { link, hosting } = window.pellagos.together;
+        const [place] = [...link.peers.values()];
+
+        return { packs: place.channel.packs, ...place.channel.sent, welcome: hosting.sent.welcome };
+    });
+
+    test.info().annotations.push({ type: "bandwidth", description: `to one joined point to point: ${sent.text} characters said (the welcome ${sent.welcome}), ${sent.wire} on the channel` });
+    expect(sent.packs).toBe(true);
+    expect(sent.welcome).toBeGreaterThan(50000);
+    expect(sent.wire).toBeLessThan(sent.text / 2);
+    expect(sent.wire - (sent.text - sent.welcome)).toBeLessThan(sent.welcome / 3);
+
     // (Closed to others: taken down on the server)
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();

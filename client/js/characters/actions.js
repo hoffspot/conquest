@@ -2320,15 +2320,27 @@ function sample(times, values, n, time, width = 0) {
         k++;
     }
 
-    const [t0, t1] = [times[k], times[k + 1]];
-    const [p0, p1] = [valueAt(values, width, k, n), valueAt(values, width, k + 1, n)];
-    const tangent = (i) => (i <= 0 || i >= last ? 0 : (valueAt(values, width, i + 1, n) - valueAt(values, width, i - 1, n)) / (times[i + 1] - times[i - 1]));
-    const [m0, m1] = [tangent(k) * (t1 - t0), tangent(k + 1) * (t1 - t0)];
+    // (Each number by itself, and the tangents by a function of the module's: taken apart from
+    // lists made for it, with a function made for it, this made three lists and a function
+    // every time, for every channel of every joint of every action blended in, every frame:
+    // 7 KB a body a frame)
+    const t0 = times[k];
+    const t1 = times[k + 1];
+    const p0 = valueAt(values, width, k, n);
+    const p1 = valueAt(values, width, k + 1, n);
+    const m0 = tangentAt(times, values, n, width, k, last) * (t1 - t0);
+    const m1 = tangentAt(times, values, n, width, k + 1, last) * (t1 - t0);
     const u = (time - t0) / (t1 - t0);
     const u2 = u * u;
     const u3 = u2 * u;
 
     return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * m0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * m1;
+}
+
+// The slope of that curve at its `i`th key (of `last` + 1): from the keys either side, flat at
+// the ends
+function tangentAt(times, values, n, width, i, last) {
+    return i <= 0 || i >= last ? 0 : (valueAt(values, width, i + 1, n) - valueAt(values, width, i - 1, n)) / (times[i + 1] - times[i - 1]);
 }
 
 // Each action's ways (by name: [{ keys, settle, scaled }]), compiled the first time each's done
@@ -3963,12 +3975,18 @@ export class Actions {
         const limbs = this.#limbs();
         let deepest = 0;
 
-        for (const [start, end, along] of LIMBS) {
+        // (Each list gone through by place, here and in #nearby and #heldOut: `for ... of`
+        // makes an iterator each time, thousands a body a frame between them)
+        for (let limb = 0; limb < LIMBS.length; limb++) {
+            const start = LIMBS[limb][0];
+            const end = LIMBS[limb][1];
+            const along = LIMBS[limb][2];
             const from = rig.bone(`${Side}${start}`).getWorldPosition(_limbFrom);
             const to = rig.bone(`${Side}${end}`).getWorldPosition(_limbTo);
             const thick = (limbs[start] + LIMB_CLEAR) * size;
 
-            for (const share of along) {
+            for (let slice = 0; slice < along.length; slice++) {
+                const share = along[slice];
                 const at = _slice.copy(from).lerp(to, share);
 
                 this.#nearby(skin, at, thick + HELD_NEAR, _near);
@@ -3976,7 +3994,8 @@ export class Actions {
                 let nearest = -1;
                 let best = (thick + HELD_NEAR) ** 2;
 
-                for (const k of _near) {
+                for (let near = 0; near < _near.length; near++) {
+                    const k = _near[near];
                     const apart = skin.exact[k].distanceToSquared(at);
 
                     if (apart < best) {
@@ -4154,14 +4173,18 @@ export class Actions {
 
         into.length = 0;
 
-        for (const { bone, reach: out, kept } of skin.bones) {
+        for (let b = 0; b < skin.bones.length; b++) {
+            const { bone, reach: out, kept } = skin.bones[b];
+
             if (_boneAt.setFromMatrixPosition(this.rig.bones[bone].matrixWorld).distanceTo(at) > reach + HELD_ROUGH + out) {
                 continue;
             }
 
             const within = (reach + HELD_ROUGH) ** 2;
 
-            for (const k of kept) {
+            for (let j = 0; j < kept.length; j++) {
+                const k = kept[j];
+
                 if (skin.placed[k] !== this.posed) {
                     skin.rough[k].fromArray(positions, skin.vertices[k] * 3).applyMatrix4(_skinning[bone]);
                     skin.placed[k] = this.posed;
@@ -4183,7 +4206,8 @@ export class Actions {
         if (skin.done[k] !== this.posed) {
             const { human, positions, normals } = this.character;
             const v = skin.vertices[k];
-            const [at, facing] = [skin.exact[k].set(0, 0, 0), skin.facing[k].set(0, 0, 0)];
+            const at = skin.exact[k].set(0, 0, 0);
+            const facing = skin.facing[k].set(0, 0, 0);
 
             for (let j = 0; j < 4; j++) {
                 const weight = human.skinWeights[v * 4 + j] / 255;
@@ -4268,7 +4292,8 @@ export class Actions {
         out.turn.set(0, 0, 0);
         out.move.set(0, 0, 0);
 
-        for (const cluster of clusters) {
+        for (let c = 0; c < clusters.length; c++) {
+            const cluster = clusters[c];
             // (The skin near it at all, roughly; that, exactly)
             const middle = _slice.copy(cluster.at).applyMatrix4(model.matrixWorld);
 
@@ -4279,7 +4304,8 @@ export class Actions {
                 let nearest = -1;
                 let best = HELD_NEAR * HELD_NEAR;
 
-                for (const k of _near) {
+                for (let near = 0; near < _near.length; near++) {
+                    const k = _near[near];
                     const apart = skin.exact[k].distanceToSquared(at);
 
                     if (apart < best) {

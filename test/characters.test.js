@@ -19,7 +19,7 @@ import { aboveHairline, beardAmount, earGapOf, earVertices, faceFrame } from "..
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { HeadMap, measureHead, rimLine } from "../client/js/characters/headwear.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
-import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, fittingOutfit, GARMENTS, insideBetween, insideOf, measureBody, paintGarment, STAND_OFF, stackOrder, texelMap } from "../client/js/characters/garments.js";
+import { buildGarment, COMPOSITE_BUMP, compositeGarments, DESIGNS, designSolid, everyVertex, fittingOutfit, GARMENTS, insideBetween, insideOf, measureBody, paintGarment, STAND_OFF, stackOrder, texelMap, vertexAt } from "../client/js/characters/garments.js";
 import { KNEE, Walker, WALK_STYLES } from "../client/js/characters/locomotion.js";
 import { allBustTargetNames, allMacroTargetNames, bustTargets, components, MACRO_DEFAULTS, macroTargets } from "../client/js/characters/macro.js";
 import { buildDrape, DRAPE_BONES, DRAPES, drapeSkeleton, skirtUnder } from "../client/js/characters/drapes.js";
@@ -1002,13 +1002,15 @@ describe("hair (hair.js)", () => {
 describe("clothing and armour (garments.js)", () => {
     const f = figure({ macro: { gender: 1 } });
     const measures = measureBody(f);
+    // (What it measures at each of the body's vertices, an object each)
+    const measured = everyVertex(measures.vertices);
 
     it("measures how far down the limbs every vertex is", () => {
-        const handVertex = measures.vertices.findIndex((v) => v.region === "hand");
-        const thighVertex = measures.vertices.findIndex((v) => v.region === "leg" && v.leg < 0.3);
+        const handVertex = measured.findIndex((v) => v.region === "hand");
+        const thighVertex = measured.findIndex((v) => v.region === "leg" && v.leg < 0.3);
 
-        assert.ok(measures.vertices[handVertex].arm > 0.95);
-        assert.ok(measures.vertices[thighVertex].leg < 0.5);
+        assert.ok(measured[handVertex].arm > 0.95);
+        assert.ok(measured[thighVertex].leg < 0.5);
         assert.ok(measures.landmarks.neck > measures.landmarks.chest && measures.landmarks.chest > measures.landmarks.waist && measures.landmarks.waist > measures.landmarks.hips);
     });
 
@@ -1230,7 +1232,7 @@ describe("clothing and armour (garments.js)", () => {
             const { neckRadius, neckZ } = shaped.landmarks;
             const shoulder = hero.rig.heads[hero.rig.index.get("LeftArm")];
             const top = (v) => {
-                const { x, y, z } = shaped.vertices[v];
+                const { x, y, z } = vertexAt(shaped.vertices, v);
 
                 return data.partOf[v] === 0 && Math.abs(x) > neckRadius + 0.04 && Math.abs(x) < shoulder.x && y > shoulder.y && Math.abs(z - neckZ) < 0.05;
             };
@@ -1282,7 +1284,7 @@ describe("clothing and armour (garments.js)", () => {
                     const [a, b] = [Math.floor(side / 65536), side % 65536];
 
                     if (inside[a] > 0 !== inside[b] > 0) {
-                        const [pa, pb] = [shaped.vertices[a], shaped.vertices[b]];
+                        const [pa, pb] = [vertexAt(shaped.vertices, a), vertexAt(shaped.vertices, b)];
 
                         steepest = Math.max(steepest, Math.abs(inside[a] - inside[b]) / Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z));
                     }
@@ -1300,7 +1302,7 @@ describe("clothing and armour (garments.js)", () => {
         const corners = Array.from(human.renderIndices("body"), (r) => human.renderSource[r]);
         // (What's measured of the body t of the way from a to b)
         const between = (a, b, t) => {
-            const [pa, pb] = [measures.vertices[a], measures.vertices[b]];
+            const [pa, pb] = [measured[a], measured[b]];
 
             return { ...(t < 0.5 ? pa : pb), ...Object.fromEntries(["armShare", "legShare", "arm", "leg", "foot", "x", "y", "z"].map((key) => [key, pa[key] * (1 - t) + pb[key] * t])) };
         };
@@ -1316,7 +1318,7 @@ describe("clothing and armour (garments.js)", () => {
 
                 const along = insideBetween(garment, measures, a, b, inside[a], inside[b]);
                 const guess = inside[a] / (inside[a] - inside[b]);
-                const [pa, pb] = [measures.vertices[a], measures.vertices[b]];
+                const [pa, pb] = [measured[a], measured[b]];
 
                 crossings++;
                 assert.ok(along >= 0 && along <= 1);
@@ -1482,7 +1484,7 @@ describe("clothing and armour (garments.js)", () => {
         // (At the first such vertex on a texel of the picture: one on a seam of the texture can lie
         // between its texels)
         const at = (region, test) => {
-            for (const [v, vertex] of measures.vertices.entries()) {
+            for (const [v, vertex] of measured.entries()) {
                 const r = human.partOf[v] === 0 && vertex.region === region && test(vertex) ? human.renderSource.indexOf(v) : -1;
                 const layer = r >= 0 ? layerAt(human.uvs[r * 2], human.uvs[r * 2 + 1]) : null;
 
@@ -1553,7 +1555,7 @@ describe("clothing and armour (garments.js)", () => {
         const bare = [];
 
         for (let v = 0; v < human.vertexCount; v++) {
-            if (human.partOf[v] === 0 && measures.vertices[v].region === "foot" && f.positions[v * 3] > 0.02 && f.positions[v * 3 + 1] < ankle - 0.02) {
+            if (human.partOf[v] === 0 && measured[v].region === "foot" && f.positions[v * 3] > 0.02 && f.positions[v * 3 + 1] < ankle - 0.02) {
                 bare.push([f.positions[v * 3], f.positions[v * 3 + 1], f.positions[v * 3 + 2]]);
             }
         }

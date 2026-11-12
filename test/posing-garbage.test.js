@@ -1,9 +1,10 @@
 // What posing a body makes each frame, to be thrown away (client/js/characters): keeping a blade
 // hung at the hip off the leg (Character.hang), swinging a skirt (drapes.js drapeSkeleton) and
 // setting the walk's joints (locomotion.js #setJoints) made a function, a list or an object for
-// every question asked, most of what a town's people made each frame. Everything made while
-// bodies walk is sampled here, by the function that made it, and those three held to well under
-// what they made before
+// every question asked, most of what a town's people made each frame; and reading an action's
+// keys (actions.js sample) and a stride's curves (gait.js curveAt) made lists, functions and
+// iterators of their own. Everything made while bodies walk and fight is sampled here, by the
+// function that made it, and each of those held to well under what it made before
 import assert from "node:assert/strict";
 import { Session } from "node:inspector";
 import { describe, it } from "node:test";
@@ -107,6 +108,54 @@ describe("what posing a body makes each frame (Character.hang, drapeSkeleton, th
             "character.js": [await made(() => walk(frames), inFile("/characters/character.js")), 40],
             "drapes.js": [await made(() => walk(frames), inFile("/characters/drapes.js")), 30],
             "the walk's joints": [await made(() => walk(frames), (name, url) => (url.endsWith("/characters/locomotion.js") && (name === "#setJoints" || name === "" || name === "mixed" || name === "sprinting")) || url.endsWith("/characters/grip.js")), 5],
+        };
+
+        for (const [what, [bytes, most]] of Object.entries(each)) {
+            t.diagnostic(`${what}: ${(bytes / frames / 1024).toFixed(1)} KB a frame (${most} at most)`);
+        }
+
+        for (const [what, [bytes, most]] of Object.entries(each)) {
+            assert.ok(bytes / frames / 1024 < most, `${what}: ${(bytes / frames / 1024).toFixed(1)} KB a frame (${most} at most)`);
+        }
+    });
+
+    it("makes nothing reading an action's keys or a stride's curves: no list, function or iterator for each", async (t) => {
+        const soldier = body(soldierLook({ people: "human", weapon: "sword", seed: 3 }), "sword");
+        const { character, avatar } = soldier;
+        const frames = 600;
+        let z = 0;
+        // (On guard, sword in hand, a blow every second and a half, walking between: its arms
+        // reaching all the while, its guard's and its blows' keys read, its legs' curves)
+        const fight = (count) => {
+            for (let k = 0; k < count; k++) {
+                if (k % 90 === 0) {
+                    avatar.actions.startAttack("sword", { hitAt: 380, duration: 760 });
+                }
+
+                z += k % 180 < 90 ? 0 : 1.3 / 60;
+                avatar.update(1 / 60, 0, z, 0, true);
+                character.object.updateMatrixWorld(true);
+            }
+        };
+
+        avatar.actions.setGuard(true);
+        character.sheathe(false, { settle: 0.3 });
+        fight(360);
+
+        const actions = (names) => (name, url) => url.endsWith("/characters/actions.js") && names.includes(name);
+        const each = {
+            // (Before, a frame, for the one of them: 15.7 KB, three lists and a function for
+            // every channel of every joint; 0.2 now)
+            "an action's keys read (sample)": [await made(() => fight(frames), actions(["sample", "tangent", "tangentAt", "valueAt"])), 2],
+            // (Before: 2.4 KB of its own and most of 6.2 KB of iterators, one for each pair of a
+            // curve's and each list gone through; 0.1 and 0.2 now)
+            "a stride's curves (curveAt)": [await made(() => fight(frames), (name, url) => url.endsWith("/characters/gait.js") && name === "curveAt"), 1],
+            "the iterators a frame makes, all told": [await made(() => fight(frames), (name, url) => name === "next" && url === ""), 2],
+            // (Told, not held to anything: before, 20 KB for the two arms; now 12 to 15 most
+            // runs and 25 in some. What's left is numbers handed to the vectors' own methods
+            // and the joints' limits, made on the heap or not as the engine chooses what to
+            // build into what, which changes from run to run)
+            "an arm's swivel searched for (reachArm)": [await made(() => fight(frames), (name, url) => url.endsWith("/characters/rig.js") && ["evaluate", "tryPhi", "solve", "reachArm", "jointRotation"].includes(name)), Infinity],
         };
 
         for (const [what, [bytes, most]] of Object.entries(each)) {

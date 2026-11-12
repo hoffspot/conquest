@@ -58,6 +58,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
+import { keptOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -104,6 +105,26 @@ export const ORC_ROUTED_MS = 600000;
  * (metres, out in the world); let go once every player's this far.
  */
 export const MUSTER = Object.freeze({ near: 120, far: 250 });
+
+/**
+ * What the world will soon want made (Host soon: generated/multiplayer_scaling_plan.md 1-6), for
+ * whoever makes it ahead of need between its steps (server/ahead.js) or a page's frames
+ * (app/game.js). A town's soldiers, a settlement's townsfolk, a works' guards, a camp, an army,
+ * an envoy, a convoy, a wagon or a fortification comes out in the step a player comes within its
+ * own distance (MUSTER.near and the like), and that step reads the ground it stands them on: so
+ * once a player's within `margin` metres more than that, the ground's said to be wanted, the
+ * squares within so many metres of where it'll stand:
+ *  - `town`: beyond a settlement's edge, for its guards' posts and its patrols' rounds (just
+ *    outside it, each point a free square within 24 m: #stations); `folk`: beyond it, or a
+ *    castle's, for its townsfolk's errands;
+ *  - `works`, `camp` (its scout's round is CAMP_NEAR.scout out), `army` (its line of battle, at
+ *    its camp's parade ground or where it is), `road` (an envoy, a convoy or a wagon, and the way
+ *    a little ahead of it), `fort` (a tower); a forward garrison's squads walk SQUADS_NEAR.rounds
+ *    out from it, and `squads` beyond those.
+ * And a dungeon's levels (core/dungeons/build.js), made when a player's within DELVES.near of its
+ * way in: wanted once one's within `delve`.
+ */
+export const SOON = Object.freeze({ margin: 80, town: 40, folk: 16, works: 64, camp: 72, army: 72, road: 56, fort: 24, squads: 16, delve: 150 });
 
 /** How far from its post (or a patrol from its round) a guard goes after an enemy (metres). */
 export const LEASH = 14;
@@ -282,6 +303,10 @@ export const FORT_NEAR = Object.freeze({ near: 200, far: 350, armor: { tower: 0.
  * fortification stood up within reach.
  */
 export const SQUADS_NEAR = Object.freeze({ rounds: [80, 200], stops: 8, gate: 4 });
+
+// How far from its point a squad's gate or one of its rounds' stops may be put, on the nearest
+// free square (metres: #musterSquads)
+const SQUAD_FREE = Object.freeze({ gate: 12, stop: 16 });
 
 /**
  * A town's barracks near a player (docs/WAR.md M16): its guardsmen (war/muster.js QUARTERED) and
@@ -733,7 +758,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 52;
+export const SNAPSHOT_VERSION = 53;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -910,6 +935,28 @@ export const SNAPSHOT_STEPS = Object.freeze({
     50: (snapshot) => ({ ...snapshot, version: 51, ...(snapshot.messengers ? { messengers: snapshot.messengers.map(([id, one]) => [id, { ...one, found: one.found ?? one.since, arrived: one.arrived ?? one.state !== "coming" }]) } : {}) }),
     // 52: the hell rifts (core/hellrift.js, Host #hellRifts): none yet
     51: (snapshot) => ({ ...snapshot, version: 52, hellRifts: { last: -1, open: null, next: 1 } }),
+    // 53: three clocks a world carried on from a snapshot began afresh, and so does this one: when
+    // the war's messengers are next looked to (Host #sendMessengers: at once), how far the wilds
+    // director had counted the rare encounters' clock (#caches: from now), and when the Order's
+    // court last warned each player off (#courtsAbout: not yet). Nothing left of players gone:
+    // the way they'd walked (`travel`), and word of a messenger too old to hold the next back.
+    // And each character kept without what it has as one just added has it (core/keptactor.js);
+    // and how far each shot in the air has flown (battle.js SHOT_FLIES: no way yet, so one let go
+    // before shots gave up flies on as far again as it may)
+    52: (snapshot) => {
+        const here = new Set(snapshot.players.map(({ id }) => id));
+
+        return {
+            ...snapshot,
+            version: 53,
+            messengersAt: 0,
+            rareLooked: null,
+            courtWarned: [],
+            travel: (snapshot.travel ?? []).filter(([id]) => here.has(id)),
+            ...(snapshot.messengersHeard ? { messengersHeard: snapshot.messengersHeard.filter(([id, at]) => here.has(id) || snapshot.battle.time - at < MESSENGER_EVERY) } : {}),
+            battle: { ...spareBattle(snapshot.battle), projectiles: (snapshot.battle.projectiles ?? []).map((projectile) => ({ flown: 0, ...projectile })) },
+        };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1068,6 +1115,7 @@ export const REFUSALS = Object.freeze({
     trading: "You're trading with someone already.",
     elsewhere: "They're trading with someone else.",
     changed: "Something offered isn't there any more: look again.",
+    reoffered: "The offer changed as you agreed: look again.",
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
     boosted: "One's still working: only one at a time.",
@@ -1963,6 +2011,20 @@ export class Host {
 
         this.battle.remove(id);
         this.players.delete(id);
+
+        // (Nothing of theirs left behind, in the world or in every snapshot of it after: the way
+        // they'd walked across the wilds, when the Order's court last warned them off, and, of
+        // anyone gone, word of a messenger too old to hold their next back. One newer is kept
+        // till it is, or coming back in would bring them a messenger before their half hour's up)
+        this.travel.delete(id);
+        this.courtWarned.delete(id);
+
+        for (const [one, at] of [...this.messengersHeard]) {
+            if (!this.players.has(one) && this.battle.time - at >= MESSENGER_EVERY) {
+                this.messengersHeard.delete(one);
+            }
+        }
+
         this.#event("leave", { id, name: player.hero.name });
 
         // (Everyone left resting, waiting on them: their time passed now)
@@ -2050,8 +2112,9 @@ export class Host {
      *    { type: "share", request }: share one with the others of their party (#shareRequest);
      *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
      *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
-     *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
-     *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
+     *    give (all of it, each time); { type: "agree", rev }: take the other's offer for theirs,
+     *    as it stood when they looked (`rev`: the trade's, one on with each offer; once both
+     *    have, it's done); { type: "cancel", with }: call off the trade (or say no to a
      *    player's asking, or stop asking).
      *  - { type: "outfit", follower, index }: give one of their hired adventurers (by id) near them
      *    a weapon or body armour from their pack (core/followers.js wearable), what they wore
@@ -2301,7 +2364,7 @@ export class Host {
             case "offer":
                 return this.#offer(player, command);
             case "agree":
-                return this.#agree(player);
+                return this.#agree(player, command.rev);
             case "cancel":
                 return this.#cancel(player, command.with ?? null);
             case "travel":
@@ -2993,7 +3056,10 @@ export class Host {
             }
 
             const at = [actor.x, actor.y];
-            const unfound = this.#findables().filter(({ id, at: [x, y] }) => hypot(x - at[0], y - at[1]) <= SIGHTING.reach[1] && !player.explored.knows(id, x, y));
+            // (Those within a square of that reach first: most of the world's aren't, and needn't
+            // be measured)
+            const reach = SIGHTING.reach[1];
+            const unfound = this.#findables().filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
             const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
 
             if (!seen.length) {
@@ -3100,7 +3166,14 @@ export class Host {
             made: [...(this.world.interiors?.order ?? [])],
             open: [...this.open.keys()],
             lookAt: this.lookAt,
-            battle: this.battle.snapshot(),
+            // (Its clocks that aren't the battle's: a copy made from this keeps them, or it would
+            // send its messengers, count the rare encounters' time and warn players off the
+            // Order's court at other steps than this world does, and go astray)
+            messengersAt: this.messengersAt ?? 0,
+            rareLooked: this.rareLooked ?? null,
+            courtWarned: [...this.courtWarned.entries()],
+            // (Each character without what it has as one just made has it: core/keptactor.js)
+            battle: this.battle.snapshot({ keep: keptOf }),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
@@ -3278,6 +3351,11 @@ export class Host {
             }
         }
 
+        // (Its rare encounters as the snapshot has them: a copy set right, adopt, had its own)
+        host.legends = new Legends(snapshot.legends);
+        host.messengersAt = snapshot.messengersAt ?? 0;
+        host.rareLooked = snapshot.rareLooked ?? null;
+        host.courtWarned = new Map(snapshot.courtWarned ?? []);
         host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
@@ -5060,7 +5138,7 @@ export class Host {
                 }
             }
 
-            Object.assign(asked, { open: true, until: null, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
+            Object.assign(asked, { open: true, until: null, rev: 0, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
             this.#tellTrade(asked, "open");
 
             return { ok: true, trade: asked.id, open: true };
@@ -5082,7 +5160,8 @@ export class Host {
     }
 
     // What a player will give, in place of what they offered before: gold, and things from their
-    // pack (as many as they have of each, of each make). Neither's agreed to it yet.
+    // pack (as many as they have of each, of each make). Neither's agreed to it yet: the trade's
+    // another `rev` on, and only an agreeing that names it counts (#agree).
     #offer(player, { gold = 0, items = [] }) {
         const trade = this.#tradeOf(player.id);
 
@@ -5127,18 +5206,25 @@ export class Host {
         }
 
         trade.offers[player.id] = { gold, items: offered };
+        trade.rev = (trade.rev ?? 0) + 1;
         trade.agreed = { [trade.from]: false, [trade.to]: false };
         this.#tellTrade(trade, "offer", { by: player.id });
 
         return OK;
     }
 
-    // A player takes the other's offer for theirs: once both have, what's offered changes hands
-    #agree(player) {
+    // A player takes the other's offer for theirs: once both have, what's offered changes hands.
+    // They say which offers they saw (`rev`: the trade's, as their game had it): if either's
+    // changed since, while their word was on its way, it isn't taken for what they never saw
+    #agree(player, rev) {
         const trade = this.#tradeOf(player.id);
 
         if (!trade) {
             return refuse("trade");
+        }
+
+        if (rev !== (trade.rev ?? 0)) {
+            return refuse("reoffered");
         }
 
         const other = trade.from === player.id ? trade.to : trade.from;
@@ -6173,8 +6259,151 @@ export class Host {
         war.watch([...this.mustered.keys(), ...this.worksOut.keys(), ...this.fortsOut.keys(), ...this.camps.keys(), ...this.armies.keys(), ...[...this.envoys, ...this.convoys, ...this.supplies].filter(([, met]) => !met.over).map(([id]) => id)]);
     }
 
+    /**
+     * What the world will soon want made (SOON), for whoever makes it ahead of need: nothing in
+     * the world changes for the asking, so its steps come out the same whether it's asked or
+     * not, and whether what it says is made in time or not (a step makes what it finds missing,
+     * as ever). The distances are the world's own (#muster, #townsfolk, #dungeons), which is why
+     * it's the host that says, and the server and the game only make. Returns:
+     *  - `around`: where each player is out in the world, or the door of the building they're in
+     *    ([[x, y]...], metres): what's round them is wanted while they're there;
+     *  - `boxes`: the ground each town's soldiers, settlement's townsfolk, works' guards, camp,
+     *    army, envoy, convoy, wagon or fortification not out yet will stand on, a player being
+     *    within SOON.margin of where it comes out ([[x0, y0, x1, y1]...], squares, both ends in);
+     *  - `dungeons`: the dungeons not made yet with a player within SOON.delve of their way in,
+     *    each as it would be made were they to come to it as they are ([{ key, seed, theme, tier,
+     *    generation }]: the building's key and core/dungeons/build.js buildDungeon's own; the
+     *    tier its finders' might would give it, #findersTier).
+     */
+    soon() {
+        const places = this.world.plan && this.world.maps?.town?.chunk ? this.#whereabouts() : [];
+        const boxes = [];
+        const dungeons = [];
+
+        if (!places.length) {
+            return { around: places, boxes, dungeons };
+        }
+
+        const { margin } = SOON;
+        const near = ([ax, ay], within) => places.some(([x, y]) => hypot(x - ax, y - ay) < within + margin);
+        const box = ([x, y], reach) => boxes.push([Math.floor(x - reach), Math.floor(y - reach), Math.ceil(x + reach), Math.ceil(y + reach)]);
+        const war = this.war;
+
+        // Each settlement's townsfolk, and a castle's in its wards (#townsfolk)
+        this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
+
+        for (const place of this.settlementPlaces) {
+            const edge = SETTLEMENT_KINDS[place.kind].radius;
+
+            if (!this.townsfolk.has(place.id) && near(this.#middleOf(place), edge + TOWNSFOLK_REACH.near)) {
+                box(this.#middleOf(place), edge + SOON.folk);
+            }
+        }
+
+        for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
+            if (set && (set.site.kind === "castle" || set.citadel) && !this.townsfolk.has(set.site.id) && near([set.x, set.y], set.radius + TOWNSFOLK_REACH.near)) {
+                box([set.x, set.y], set.radius + SOON.folk);
+            }
+        }
+
+        // The war's: each town's soldiers, the works' guards, the camps and depots, the armies,
+        // what's on the roads and the fortifications (#muster)
+        for (const town of war?.towns ?? []) {
+            const place = this.#placeOf(town.id);
+            const edge = place ? SETTLEMENT_KINDS[place.kind].radius : 0;
+
+            if (place && !this.mustered.has(town.id) && near(this.#middleOf(place), edge + MUSTER.near)) {
+                box(this.#middleOf(place), edge + SOON.town);
+            }
+        }
+
+        for (const works of war?.works ?? []) {
+            if (!this.worksOut.has(works.id) && near(works.at, WORKS_OUT.near)) {
+                box(works.at, SOON.works);
+            }
+        }
+
+        for (const camp of war ? [...war.camps, ...war.depots] : []) {
+            if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp.at, CAMP_NEAR.near)) {
+                box(camp.at, SOON.camp);
+            }
+        }
+
+        // (An army met too where it's near enough one met already to fight it, whoever's it is)
+        const met = [...this.armies.values()].map(({ at }) => at);
+
+        for (const force of war?.forces ?? []) {
+            const road = { envoy: [ENVOY, this.envoys], convoy: [CONVOY_NEAR, this.convoys], supply: [WAGON_NEAR, this.supplies] }[force.kind];
+
+            if (road) {
+                if (!road[1].has(force.id) && near(force.at, road[0].near)) {
+                    box(force.at, SOON.road);
+                }
+            } else if (["army", "reserve", "reinforcement"].includes(force.kind) && force.size > 0 && this.#afield(force) && !this.armies.has(force.id)) {
+                if (near(force.at, ARMY_NEAR.near) || met.some(([x, y]) => hypot(x - force.at[0], y - force.at[1]) <= ARMY_NEAR.fight + margin)) {
+                    box(force.at, SOON.army);
+                }
+            }
+        }
+
+        for (const fort of war?.forts ?? []) {
+            if (this.fortsOut.has(fort.id) || !near(fort.at, FORT_NEAR.near)) {
+                continue;
+            }
+
+            box(fort.at, fortSize(fort) / 2 + SOON.fort);
+
+            // (A forward garrison's squads: the ground at its gate and at each stop of their rounds)
+            if (fort.squads && !this.squadsOut.has(fort.id)) {
+                const points = this.#squadPoints(fort);
+
+                for (const point of points.rounds.flat()) {
+                    box(point, SQUAD_FREE.stop + SOON.squads);
+                }
+            }
+        }
+
+        // The dungeons near, not made yet: each as those within reach of its way in would find it
+        // (only those the world's set down already: asking sets nothing down)
+        const interiors = this.world.interiors;
+
+        for (const site of interiors ? this.#dungeonSites() : []) {
+            const key = `site:${site.id}`;
+            const building = interiors.buildings.get(key);
+
+            if (!building || building.made || building.kind !== "dungeon" || !this.#byWayIn(site, places, SOON.delve)) {
+                continue;
+            }
+
+            const finders = [...this.players.values()].filter((player) => {
+                const actor = this.battle.actor(player.id);
+
+                return actor && !actor.dead && (site.parent ? this.#byKeepDoors(actor, site, SOON.delve) : actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < SOON.delve);
+            });
+            const tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))));
+
+            dungeons.push({ key, seed: building.seed, theme: building.theme ?? "caves", tier, generation: building.generation ?? 0 });
+        }
+
+        return { around: places, boxes, dungeons };
+    }
+
+    // One of the plan's places, by its id (or undefined). Looked up in a table made once: the
+    // plan's places never change, and the look round asks for every town of the war's, twice a
+    // second, where reading down all of them each time was a quarter of #muster
     #placeOf(id) {
-        return this.world.plan.places.find((place) => place.id === id);
+        if (!this.placesById) {
+            this.placesById = new Map();
+
+            // (The first of an id, as reading down them found it)
+            for (const place of this.world.plan.places) {
+                if (!this.placesById.has(place.id)) {
+                    this.placesById.set(place.id, place);
+                }
+            }
+        }
+
+        return this.placesById.get(id);
     }
 
     // Where a place's middle is: the town the player starts in is set in a little off its place
@@ -6454,7 +6683,7 @@ export class Host {
 
     // Each player's time in the towns and cities counted (INVASION.kinds: #townOf), every
     // INVASION.tick of the battle's time, the time in the town they're in too; not while they're
-    // away, being sent out or resting. An invasion due for any of them (isDue: their first five
+    // away, being sent out or resting. An invasion due for any of them (isDue: their first ten
     // minutes in, the next half an hour to an hour after; never in their first few minutes in a
     // town), and none on, one comes to their town (#invade); and those on are watched
     #invasions(ms) {
@@ -7895,8 +8124,8 @@ export class Host {
                     actor.formation = { id: met.formation, slot: places[n], role: actor.formation.role };
                     actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
                     actor.power.melee = this.soldiers.get(actor.id)?.power ?? 1;
-                    delete actor.sight;
-                    delete actor.keep;
+                    actor.sight = undefined;
+                    actor.keep = undefined;
                 });
 
                 this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, hold: false, seek: null, speed: ARMY_NEAR.pace });
@@ -8486,8 +8715,8 @@ export class Host {
             met.household = null;
 
             for (const actor of met.ids.map((one) => this.battle.actor(one)).filter((actor) => actor?.formation)) {
-                delete actor.formation.post;
-                delete actor.formation.facing;
+                actor.formation.post = undefined;
+                actor.formation.facing = undefined;
                 actor.siege = null;
                 actor.holds = null;
                 actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
@@ -9347,9 +9576,6 @@ export class Host {
         }
 
         const squares = squaresOf(this.world.maps.town);
-        const toward = this.war.town(fort.toward)?.at;
-        // (Its gate at its back, away from the enemy it faces: world/forts3d.js)
-        const facing = toward ? atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0;
         const near = ([x, y], within) => {
             try {
                 return nearestFree(squares, [Math.round(x), Math.round(y)], { within });
@@ -9357,15 +9583,9 @@ export class Host {
                 return null;
             }
         };
-        const reach = fortSize(fort) / 2 + SQUADS_NEAR.gate;
-        const gate = near([fort.at[0] + sin(facing) * reach, fort.at[1] + cos(facing) * reach], 12);
-        const rounds = SQUADS_NEAR.rounds.map((radius, k) =>
-            Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
-                const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;
-
-                return near([fort.at[0] + sin(angle) * radius, fort.at[1] + cos(angle) * radius], 16);
-            }).filter(Boolean),
-        );
+        const points = this.#squadPoints(fort);
+        const gate = near(points.gate, SQUAD_FREE.gate);
+        const rounds = points.rounds.map((round) => round.map((point) => near(point, SQUAD_FREE.stop)).filter(Boolean));
 
         if (!gate) {
             return;
@@ -9373,6 +9593,27 @@ export class Host {
 
         this.squadsOut.set(fort.id, { people: fort.realm, gate, rounds, ids: Object.fromEntries(SQUAD_NAMES.map((name) => [name, []])), next: Object.fromEntries(SQUAD_NAMES.map((name) => [name, 0])), target: null, broken: false });
         this.#fillSquads(fort, { first: true });
+    }
+
+    // Where a forward garrison's squads go, before each point's put on a free square near it
+    // (SQUAD_FREE): its gate at its back, away from the enemy it faces (world/forts3d.js), and
+    // its patrols' rounds, a ring of stops each, the second turned half a stop on from the first:
+    // { gate: [x, y], rounds: [[[x, y]...]...] } (metres)
+    #squadPoints(fort) {
+        const toward = this.war.town(fort.toward)?.at;
+        const facing = toward ? atan2(fort.at[0] - toward[0], fort.at[1] - toward[1]) : 0;
+        const reach = fortSize(fort) / 2 + SQUADS_NEAR.gate;
+
+        return {
+            gate: [fort.at[0] + sin(facing) * reach, fort.at[1] + cos(facing) * reach],
+            rounds: SQUADS_NEAR.rounds.map((radius, k) =>
+                Array.from({ length: SQUADS_NEAR.stops }, (_, j) => {
+                    const angle = facing + ((j + k / 2) * 2 * Math.PI) / SQUADS_NEAR.stops;
+
+                    return [fort.at[0] + sin(angle) * radius, fort.at[1] + cos(angle) * radius];
+                }),
+            ),
+        };
     }
 
     // A forward garrison's squads made up to what the war has in each: the first out where they'd
@@ -10935,8 +11176,27 @@ export class Host {
         }
     }
 
+    // One of the plan's sites, or a scene's keep (#keeps), by its id (or undefined): from a table
+    // made once, as #placeOf's (the plan's first, then the keeps')
     #siteOf(id) {
-        return this.world.plan.sites.find((site) => site.id === id) ?? this.#keeps().find((site) => site.id === id);
+        if (!this.sitesById) {
+            this.sitesById = new Map();
+
+            for (const site of [...this.world.plan.sites, ...this.#keeps()]) {
+                if (!this.sitesById.has(site.id)) {
+                    this.sitesById.set(site.id, site);
+                }
+            }
+        }
+
+        return this.sitesById.get(id);
+    }
+
+    // The dungeons' sites (the plan's, and the scenes' keeps), in that order: found once
+    #dungeonSites() {
+        this.dungeonSites ??= [...this.world.plan.sites, ...this.#keeps()].filter(({ kind }) => kind === "dungeon");
+
+        return this.dungeonSites;
     }
 
     // The keeps of the scenes set into the world (core/scenery.js keepSiteOf: Bellhaven's), each
@@ -14093,11 +14353,7 @@ export class Host {
             }
         }
 
-        for (const site of [...this.world.plan.sites, ...this.#keeps()]) {
-            if (site.kind !== "dungeon") {
-                continue;
-            }
-
+        for (const site of this.#dungeonSites()) {
             const within = (reach) => this.#byWayIn(site, places, reach);
             const near = within(DELVES.near);
             const levels = on.get(site.id) ?? new Set();
@@ -18546,7 +18802,14 @@ export class Host {
             }
         }
 
-        for (const building of [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))) {
+        // (In that order as they were when the look began, sorted again only when the world's
+        // buildings have changed, interiors.version: a thousand of them sorted twice a second
+        // was most of a look round a well-travelled world)
+        if (this.buildingsInOrder?.of !== interiors || this.buildingsInOrder.version !== interiors.version) {
+            this.buildingsInOrder = { of: interiors, version: interiors.version, list: [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
+        }
+
+        for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {
                 continue;
             }

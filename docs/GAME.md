@@ -984,7 +984,57 @@ the first in the battle's list, as looking through everyone found. It makes no d
 happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
 (`test/field-battle.test.js`). Everyone's found by id at once (`actor`), not looked for. Whether
 anyone's after one further off than it can see is looked up among who was after whom as the step
-began (`#chasers`), not through everyone.
+began (`#chasers`), not through everyone, and before it looks round at all.
+
+Whatever asks who's round a point asks the same cells (`#standingNear`): a spell that strikes all
+round its target or leaps on, a bomb's or a blast's burst, what lies burning on the ground, what
+falls across a boss's arena, a war cry, a slipping away, a beast that sees through Invisibility.
+It's given them in the battle's list's order, so each blow and each roll of the dice falls as it
+did when everyone was gone through. A guard tower, and a player standing still, look for the
+nearest enemy only as far off as their weapon reaches, and at anything standing over more than
+its own square (a `footprint`: struck at its nearest square) however far off its middle is. A
+courtesan's beckoning and the folk's resting ask only the players whether they're in sight. A
+second battle (a tower, a standing player, casters, bombs, a cry, one unseen) plays out the same
+either way too. This is the multiplayer scaling plan's rule for its grids, slice 1-10's
+(`generated/multiplayer_scaling_plan.md`): the cells only cull, the test asked of each is the one
+it always was, in the order it always was.
+
+**One shape** (`OPTIONAL`, `#made`). Every character in a battle has the same properties in the
+same order, whatever it is and whatever it's been given since: `add` makes each with all its own,
+and then with every property only some come to have (a player's gear's, a follower's orders', a
+boss's fight's, a wary beast's mood: some sixty), undefined until it's given. A browser's engine
+reads `actor.x` quickly where every object it meets there is laid out alike; a field battle's
+hundred had eight or nine layouts among them, and one a property had been deleted from was a
+slow lookup at every read for good. So none is ever deleted off a character (Polymorph takes a
+creature's wards away by making them undefined), and one carried on from a snapshot is made the
+same way before what was kept of it is put on it. A snapshot keeps only what a character's been
+given (`#given`), none of what's still undefined, so it holds what it held, and costs what it
+did to make (copying the sixty for each made it half as slow again); carrying on from one costs
+a quarter more than it did (4.1 ms for a hundred, from 3.2), once, as a world's joined or
+opened. The world's own snapshot keeps less of each still (`snapshot({ keep })`, the host's
+`core/keptactor.js`: nothing a character has as one just made has it, nor its attacks while
+they're its weapon's own), and since every character carried on is made as `add` makes one
+first, what was left out is there again as it was: docs/WAR.md, *Playing together*. A new property of the kind goes in `OPTIONAL`;
+`test/field-battle.test.js` fails if the field battle's characters aren't all one shape. The
+host's own `delete actor.sight` and `delete actor.keep` once two armies' clash is over
+(`#clashOver`) are still to become undefined too.
+
+A search among those near makes no list of its own: it fills one the battle keeps (`#found`) and
+says how many, read before anything else may search (those that nest, the colossal's, ask for
+lists of their own). Points are read by index (`a[0]`, `a[1]`), not taken apart. Measured in
+Node on the host's field battle of 50 a side, a step left 1.1 MB to be collected before and under
+half a megabyte after; a hundred fighting on an open field, 265 KB and 137.
+
+**What it comes to** (the performance review of November 2026; Node 22 on a busy 4-core machine,
+each step's least time over 3 runs of the host's field battle, `core/host.js` `FIELD_BATTLE`).
+With the searches that make no lists, the one shape, looking round four times a second and ways
+found each in its own step (below), the battle's part of a step while 50 a side fight went from
+1.16 ms to 0.50, its 99th percentile from 3.7 ms to 1.4 and its worst from 7.1 to 4.0; 100 a
+side, 2.39 ms to 1.07, 9.2 to 3.1 and 12.7 to 5.7. The host's whole step while the lines march,
+before the first blow: 1.34 ms to 0.71, and 2.84 to 1.00. A phone's about five times these
+(core/netplay.js). Two hundred all fighting within sight of each other on an open field gain
+least, a tenth (1.65 ms to 1.46, three rounds of the review's `bench.mjs` back to back): every
+one of them is set on someone, and looks every step.
 
 **Lines of battle** (`formation`; core/formation.js; the research behind them in
 [WAR.md](WAR.md#lines-of-battle-m17)). A formation is an army's line: where the middle of its
@@ -1000,7 +1050,8 @@ leash (`ROLES`: the shield line 10 m, the two-handers 12, archers 15, casters 16
   the nearest enemy within 60 m of any of it (`ADVANCE.sight`; further than a soldier sees, as a
   captain watches the field) and marches on them, its front stopping 2 m short.
 - **Closing its ranks** (`#closeRanks`). Once a second (`CLOSE_MS`), if any of it have fallen
-  (or joined), its line's laid out again for those left: the front ranks' places filled first,
+  (or joined: also when one's fallen and another's joined in the same second, as many as before,
+  `#regroup`), its line's laid out again for those left: the front ranks' places filled first,
   and each rank's middle before its ends, each by whoever of its role was nearest it. So the
   rank behind steps up into a gap in front, the line narrows as it thins (keeping two ranks
   while it can), its rear guard comes into the line as the line needs it, and with none of its
@@ -1009,6 +1060,43 @@ leash (`ROLES`: the shield line 10 m, the two-handers 12, archers 15, casters 16
 - **Thinking less often.** One in a line looks again for whom to fight only every quarter second
   (`RETHINK_MS`), meanwhile set on whoever it was set on (at once if they fall): hundreds looking
   every step was most of what a field battle cost.
+
+**Looking round four times a second** (`RETHINK_MS`, `turnOf`). Anyone set on no one does the
+same: a guard at its post, a soldier in camp, a beast in the wild looks for an enemy every
+quarter second, not every step, and asks as often whether it's in a fight at all (to draw its
+weapon, or put it away: `#arm`). With no enemy near, nothing ends such a search early, so a crowd
+at peace cost more than one fighting: a hundred soldiers standing in camp took 1.28 ms of every
+step, three times what the same hundred took fighting, and four hundred 9.3 ms. Now 0.23 and 1.5
+(Node, the review's `idle.mjs`). What it changes in play:
+
+- A guard or a beast notices an enemy who isn't a player up to a fifth of a second after they
+  come into sight, and an alarm raised by one of its own as late.
+- **A player's noticed in the step they come into sight**, as before: between its looks, one set
+  on no one still asks whether a player's near with room on them (`#drawnTo`), and one that sees
+  further than most, or one of the wild's, whether a player's anywhere in its sight
+  (`#playerSeen`). Its weapon's drawn the step after.
+- Whoever's set on someone looks every step, as before, and one whose foe falls or is lost looks
+  for the next at once: only a look that finds no one puts the next one off.
+- Anyone someone's already after (set on them, striking at them, told to fight them) is in its
+  fight at once, as before (`#chasers`); so is anyone told to fight.
+- A weapon's put away up to a quarter second later than its ten seconds.
+
+Each looks in a step of its own of the five, by its id (the sum of its letters' codes, the
+remainder by five: `turnOf`), so a camp's looks are spread evenly over the steps, the same in
+every copy of the world, and nothing's kept of it: a snapshot holds no more. Those in a line
+look in their own step too (they all looked in the same one, every fifth step twice the
+others'), and the folk look about them for danger in their own step of the eight. A healer still
+looks for whom to mend every step its spell's ready.
+
+**Ways after someone, each in its own step** (`#pursue`, `REPATH_MS`). One chasing another finds
+its way again at most every half second as they move. Everyone who set out after someone in the
+same step (a pack struck, two lines meeting) then found their way again in the same step, every
+tenth: of a hundred fighting on an open field, 88 ways in one step, then 62, 62 and 60, and those
+were the battle's slowest steps. Now each way found after someone counts as found in the chaser's
+own step of the ten (this one or the last before it, by its id as above), so its next is found
+in its own step: the same hundred find 19 at most in a step after the first, two hundred 38
+where it was 186. The first way of a chase is found at once, as before, and the next up to half
+a second sooner than it was.
 
 **Casters and healers** (`add`'s `casts` and `heals`: spell ids). A caster casts at whoever it's
 set on the first of its spells that's ready, if they're within its reach and in sight
@@ -1022,11 +1110,27 @@ hurt enough, it fights as any other.
 whose leash reaches them, goes for them before anyone else (`#drawnTo`), so long as there's room
 on them: at most 6 of their enemies up close and 4 shooting or casting at once (`#roomOn`, from
 who's on each player as the step begins, `#mustered`, and anyone newly set on them since). The
-same holds for the nearest enemy and an alarm raised, but not for one the player's struck (or
-stunned, or cast at): set on, an enemy always turns on whoever did it (`#turnOn`), however many
-are on them already (the user: "make sure any unit that is attacked attempts to defend itself").
+same holds for the nearest enemy and an alarm raised.
+
+**The cap holds back only those the player hasn't struck** (the owner: "If a player strikes an
+enemy, it can be hostile beyond the cap"; the user before: "make sure any unit that is attacked
+attempts to defend itself"). Anyone a player strikes, stuns, casts at or taunts may come for
+them, however many are on them already:
+
+- set on no one, it turns on them at the blow (`#turnOn`), room or no;
+- on someone else, it leaves them for the player as its enmity has it (the harm the player's
+  done it past what the other has, docs/WILDS.md *Whom they go for*), room or no: for 10
+  seconds after each blow there's always room on a player for one they've struck (`#roomOn`,
+  its `struckBy`, `DEFEND_MS`). Before, such a one was kept on whoever it was fighting while the
+  cap was full;
+- once on the player, it stays on them as anyone does: the cap never takes off one that's on.
+
+So an archer who puts an arrow into each of twenty has twenty on them, and a bomb among those
+standing by brings every one it catches. Those of the struck one's own who only saw it are the
+player's enemies from then, but are held back by the cap like any other. It's the guards' and
+soldiers' cap (`ai` "patrol"): the wild's creatures have none, a pack of ten all come.
 The rest fight whoever else is near: a player in a battle of hundreds has a fight, not a crowd,
-on them. That's whom each goes for first; once set on, it keeps to whoever's top of its enmity,
+on them (`test/battle-rules.test.js`: six of ten up close, four of ten shooting). That's whom each goes for first; once set on, it keeps to whoever's top of its enmity,
 whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they go for*).
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
@@ -1068,11 +1172,20 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   out on its own, a test's rows) has a mesh of its own, baked from its squares a 32-metre tile
   at a time as it's wanted (`navigation/squares.js`): flat, each square that isn't blocked two
   triangles of floor, in voxels a tenth of a metre across, kept 0.3 metres from walls, so a
-  doorway or a passage a square wide is still walked. A tavern's floor takes about 25 ms to bake
-  the first time anyone walks it. The 16 maps of squares last walked keep their meshes. The
-  battle's ways are the only thing it asks of the meshes: what's in the way, and where someone
-  can be put, are still asked of the squares, so a copy of a world someone else hosts needs
-  nothing of the meshes at all (below).
+  doorway or a passage a square wide is still walked. A tavern's floor takes 10 to 30 ms to
+  bake, and it's baked off the page's thread as its building's got ready (the host's "open"),
+  kept till the floor's mesh is made the first time anyone walks it, which takes it then (WORLD.md,
+  *Navigation meshes*: baked in the step that first asked, before, or still if it's asked before
+  it's back). The 16 maps of squares last walked keep their meshes. The battle asks the meshes
+  two things: its ways, and whether someone stepping aside round another, or back towards their
+  way, thrown or leaping somewhere, or getting down from a horse, would still be standing on
+  the mesh there (`#clear`: `walkable`), which keeps them out of what's drawn where the squares
+  don't reach. What's in the way, and where someone can be put, are still asked of the squares.
+  A copy of a world someone else hosts takes the host's ways (below) and finds none, but it
+  asks the second for itself, so it needs the tiles under whoever's walking: its game has those
+  round its own hero baked ahead as the host's does, and those under each way the host sends
+  baked as the way's heard, some steps before it's played (`Joining.onWay`, `NavBaker.along`).
+  The answer's the same wherever a tile was baked, and whenever: the same bytes.
 - **Running and stamina.** Told to run (a move or fight order with `run`), a character sprints
   at `SPRINT` times its walking speed, 6.5 / 1.4 (about 4.6): as much faster as people sprint
   (about 6.5 m/s) than walk (about 1.4 m/s). For the player that's 7.9 m/s. It speeds up at
@@ -1123,7 +1236,10 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   fight, an enemy in sight, or an enemy after it (chasing it, attacking it, or told to fight it).
   It can strike 700 ms later (`DRAW_MS`), and an attack waits for it. With no enemy in sight or
   after it for 10 seconds (`SHEATHE_AFTER_MS`), and not attacking, it puts the weapon away
-  (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away.
+  (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away. One set on no one,
+  with no one after it, asks whether an enemy's in sight four times a second, not every step
+  (*Looking round four times a second*, above): its weapon's drawn up to a fifth of a second
+  after one comes into sight.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (an attack that's begun lands first: neither walking away nor
   the stick calls it off, as an Action Bar blow is committed too; `NET_VERSION` 179).
@@ -1138,16 +1254,29 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
 - **An attack** (weapons.js) lands its blow `hitAt` into it and lasts `duration`, and can't be
   repeated for `interval`. A melee blow hits if the target is still within reach. A ranged attack
   lets go of a projectile (an arrow at 22 m/s, a bolt at 14, a fireball at 9) that homes in on its
-  target and hits when it arrives.
+  target and hits when it arrives. It doesn't follow for ever: once it's flown one and a half
+  times as far as its attack reaches without coming up with them (`SHOT_FLIES`: an arrow 20 m, a
+  grimoire's fireball as far as half again its reach), it gives up, and hits no one (a `fizzle`
+  event, `spent`). Whoever stands, or walks, is hit as before; only one who outruns a shot gets
+  away from it. Before, a fireball let go at a rider who galloped off followed them 344 m, for 38
+  seconds, and landed when they stopped.
 - **Damage** is rolled for each hit: a whole number from the attack's least to its most, each
   equally likely (the battle's seeded random numbers). It comes off the target's hit points and
   staggers them for a moment (they can't move or start an attack): a punch 0.08 s, a hammer 0.45.
 - **Spells** (spells.js: every one, in docs/MAGIC.md), cast with `cast(id, spell, target)`,
   take a moment to cast, then land: healing (on anyone), harming (an enemy, and those round them
   or it leaps to), stunning, lasting on whoever it's cast on, and the wonders the host works.
-  **Stun** (the Hexes') is cast on an enemy within 9 metres that the caster can see (0.4 s): for
+  **Stun** (the Hexes') is cast on an enemy within 18 metres that the caster can see (0.4 s): for
   3 seconds it can't move, attack, cast or think, and whatever it was starting is called off;
-  the orc then turns on whoever stunned it. Each spell has its own cooldown, and after any, none
+  the orc then turns on whoever stunned it. **On a boss a stun wears thin** (`STUNS`; whatever
+  resists taunts: a dungeon's boss, a hell level's own, one of a kind, an elite, the Behemoth):
+  any stun (a spell's, a shield bash's, a legendary weapon's) lasts half as long on one, and each
+  one within 20 seconds of the last half as long again, till it would last less than a step and
+  is shrugged off ("Resisted"; it still counts as one). Hold's 6 seconds are 3, then 1.5, 0.75...
+  on a boss; left alone for 20 seconds, it's 3 again. Before, Hold alone, cast again as it came
+  ready, kept a tier-10 boss stunned 99.5% of two minutes, never beginning a blow; now 6% (10%
+  with the Hexes skill at its last level), and it begins 42. What's kept of it is on the boss
+  (`stunned`: how many in the run, and when the last was), in the snapshot with it. Each spell has its own cooldown, and after any, none
   can be cast for a second. A spell that can't be cast says why (`cooldown`, `busy` while
   staggered, stunned or casting, `healthy` at full health, `range`, `sight`, `lifeless` with no
   one living there, `friendly` on someone who isn't an enemy...) and nothing happens; none of
@@ -1166,7 +1295,8 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   one for 8 seconds, they go on to the next. Their comings and goings use their own random
   numbers, so they don't change how the fighting goes.
 - **The folk in danger** (`#afraid`, `FLEE`). Every 0.4 seconds each of the folk looks about them
-  for whoever frightens them, within 12 squares and in sight:
+  (each in its own step of the eight, not all in the same one: `turnOf`) for whoever frightens
+  them, within 12 squares and in sight:
   - anyone fighting (set on someone still standing);
   - a creature of the wild out for blood (aggressive, or a menace to all), not one following
     someone;
@@ -1254,7 +1384,7 @@ none: it looks as his own.
 | --- | --- | --- | --- | --- | --- |
 | Vigor | anyone | 16 m | 500 ms | 8–12 hit points back | 4000 ms |
 | Burn | an enemy | 16 m, in sight | 450 ms | 9–15, may set them burning | 2500 ms |
-| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms | 3000 ms |
+| Stun | an enemy | 18 m, in sight | 400 ms | can't act for 3000 ms (a boss half as long, and less each time) | 5000 ms |
 
 (The rest, each school's tiers and the tomes' spells, are in docs/MAGIC.md.)
 
@@ -2634,14 +2764,33 @@ The world is drawn a chunk at a time round the player: the 25 chunks within two 
 metres or more each way, into the fog). Loading, those round where they start are built (about
 a second); after, as they go, the nearest chunk not yet drawn is built, and those more than three
 chunks away are thrown away, so however far they go there's only so much of it, and never a
-loading screen. A chunk is drawn a step at a time, hidden till it's whole: its ground's splat a
+loading screen. A chunk is drawn a step at a time, hidden till it's whole: its squares first,
+where the world hasn't made them yet, a piece a step (core/overworld.js `chunkWithin`: fourteen
+pieces of about a millisecond, where the chunk whole was 12 to 15 ms of one frame, twice its
+budget), then its ground's splat a
 few rows at a time, the looks its features want (each made the first time it's wanted) one a
 step, then its features, its trees. Each frame draws what it can in its budget (`BUILD_BUDGET`, 6
 ms, shared with the settlements' buildings and the undergrowth), a step at least, and begins no
 more than one chunk; while the game loads, a turn gets 40 ms (`LOAD_BUDGET`). A chunk is 64
 metres, so it's a few frames from begun to drawn, two chunks off in the fog. The settlements a
 little further off (within five chunks) are laid out ahead in a worker (world/layouts.js: see
-WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk has:
+WORLD.md), so coming near a town doesn't stall a frame laying it out.
+
+**The ground the world will soon want** (app/game.js `#groundAhead`, core/host.js `soon`:
+docs/WAR.md *Made ahead on the world server*). A town's soldiers come out when the player's 120 m
+from its edge and its townsfolk at 100, on ground further off than the 25 chunks drawn: a city's
+far side is 300 m away. The step that brought them out made that ground, 4 to 8 chunks at once,
+and the game stood still for a tenth of a second or two (120 to 480 ms here, by the clock) coming
+up to every town, city and capital, an army or a camp. So the game asks the host twice a second
+what ground it will soon want (once the player's within 80 m more), has the chunks' own workers
+work out those chunks' heights, lay out the settlements by them and find the trails near them,
+and makes one of them a piece a frame (`Overworld.chunkWithin`: fourteen pieces to a chunk, about
+a millisecond each here), one whose settlement or trail is still with a worker left till it's
+back (3 seconds at most). The same answer names the dungeons the player's coming to, whose
+levels are worked out on the layouts' worker before they're within sight of the way in
+(docs/DUNGEONS.md *Its levels*). A copy of someone else's world does the same: its steps want the
+same ground. Nothing hangs on it being done in time: the step makes what it finds missing, as it
+always did, and the world's the same either way. Each chunk has:
 
 - **Its ground** (above).
 - **Water** (world/water.js): a sheet over the lakes, the sea, rivers and mountain streams, its
@@ -4404,7 +4553,9 @@ but never while it would keep a change from showing:
 - **What they put on shows at once**, drawn one by one in the frame the host says so (`#regear`:
   `setEquipment(ids, { merge: false })`), as it always was. Once it's been as it is 5 seconds of
   the game's time (`after`), their outfit's picture is put together a step at a time, 2 ms of a
-  frame (`budget`: a step at least, one player's at a time, the first changed first), the
+  frame (`budget`: a step at least, one player's at a time, the first changed first; in the
+  skins' worker where it can be, waited for a frame at a time: docs/CHARACTERS.md, *Garments'
+  pictures painted elsewhere*), the
   garments drawn one by one meanwhile; then, in one frame, their meshes are one mesh drawn with
   it (`Character.merging`), and each garment's own material is let go of. A second change while
   it waits or while it's put together starts the 5 seconds over, and nothing's kept of what was
@@ -7865,6 +8016,13 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   slime, made molten after); a look shared once made (another of it built at once), and one
   wanted meanwhile taking up the sculpting where the first had got to; a beast dressed in steps
   through its sculpting; any other error let through, and what's wanted made at once after.
+- `test/garment-worker.test.js`: garments' pictures painted in the skins' worker (its code run
+  in the test): nothing a worker can't import; its colours three.js's to the last bit; an
+  outfit's two pictures and a garment's own the page's to the last byte, none of them painted
+  or kept on the page; painted here when the steps can't wait, the worker fails or can't paint
+  one; one making for two wearers built turn and turn about; nothing left behind when a wearer's
+  given up on mid-making, or a body at any step of its building; an outfit made whole again
+  there without a frame waiting on it; and what the worker keeps and lets go of.
 - `test/character-building.test.js`: characters built a step at a time the same as all at once
   (soldiers, folk and a hero); the skin, hair, a boot, a garment's picture and an outfit's the
   same step by step; the hair grown once (none hidden by a tankard; under a helmet only below its
