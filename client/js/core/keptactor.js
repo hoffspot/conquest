@@ -179,8 +179,10 @@ export function spareActor(actor) {
     return kept;
 }
 
-// Plain data copied (numbers, strings, lists and tables, however deep); anything else, as the
-// battle's own snapshot copies it
+// Plain data copied (numbers, strings, lists and tables, however deep), without what a table has
+// as undefined (a place in a line taken back, `formation.post`: made undefined, not deleted, and
+// no more kept than what a character's only made with is); anything else, as the battle's own
+// snapshot copies it
 function copied(value) {
     if (value === null || typeof value !== "object") {
         return value;
@@ -205,7 +207,9 @@ function copied(value) {
     const out = {};
 
     for (const key in value) {
-        out[key] = copied(value[key]);
+        if (value[key] !== undefined) {
+            out[key] = copied(value[key]);
+        }
     }
 
     return out;

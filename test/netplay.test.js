@@ -140,7 +140,7 @@ describe("playing together (netplay.js)", () => {
     });
 
     it("has a joined copy take the ways the host's characters found, finding none of its own", () => {
-        const { host, hosting, join, play, catchUp } = opened();
+        const { host, hosting, join, play, catchUp, deliver } = opened();
         const { joining } = join(guest("Bryn"));
         const ways = [];
         const record = host.recorder;
@@ -177,6 +177,15 @@ describe("playing together (netplay.js)", () => {
 
                 return path.apply(this, args);
             };
+            catchUp(joining);
+
+            // (The guest's own command reached the host only then, after the last of its sendings:
+            // done there, its way found as it was done, and both sent with the next. No step of
+            // the host's meanwhile: only the copy is finding, or not finding, ways here)
+            assert.deepEqual(ways.at(-1).slice(2, 3), ["guest-1"]);
+            assert.equal(heard.length, ways.length - 1, "(the guest's own way not sent yet)");
+            hosting.flush();
+            deliver();
             catchUp(joining);
         } finally {
             Navigation.prototype.path = path;

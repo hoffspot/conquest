@@ -30,6 +30,10 @@ const NOT_KEPT = Object.freeze({
     findables: "made on first use from the world's plan",
     keepSites: "made on first use from the world's plan",
     settlementPlaces: "made on first use from the world's plan",
+    placesById: "the plan's places by their ids, a table made on first use: the plan never changes",
+    sitesById: "the plan's sites by their ids, a table made on first use: the plan never changes",
+    dungeonSites: "the plan's dungeons and the keeps', a list made on first use from the plan",
+    buildingsInOrder: "the world's buildings in the order of their keys, sorted again whenever the world's buildings change (interiors.version)",
     stockaded: "made from the war's forts, as the war changes them",
 });
 
@@ -229,15 +233,26 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
         assert.equal(host.snapshot().version, SNAPSHOT_VERSION);
         assert.equal(kept.actors.length, whole.actors.length);
 
+        // (As text and back: what a snapshot is, to whoever carries on from it. In the battle's
+        // own, whole, a table inside a character may still have what was made undefined in it,
+        // a place in a line taken back, which text never holds)
+        const asText = (value) => decode(encode(value));
+        const somethingUndefined = (value) => value === undefined || (value !== null && typeof value === "object" && Object.values(value).some(somethingUndefined));
+
         for (const [index, actor] of whole.actors.entries()) {
             // (As the world's snapshot has it, made straight from the battle's own: what's left
             // of the battle's own snapshot of it, in the same order)
-            assert.deepEqual(kept.actors[index], spareActor(actor), actor.id);
+            assert.deepEqual(kept.actors[index], asText(spareActor(actor)), actor.id);
             assert.deepEqual(Object.keys(kept.actors[index]), Object.keys(spareActor(actor)), actor.id);
             assert.deepEqual(keptOf(host.battle.actors[index]), kept.actors[index], actor.id);
-            // (Nothing that isn't there kept as if it were: what a character's only made with)
-            assert.ok(Object.values(kept.actors[index]).every((value) => value !== undefined), actor.id);
+            // (Nothing that isn't there kept as if it were, however deep: what a character's only
+            // made with, and what's been made undefined on it or in what it holds since)
+            assert.equal(somethingUndefined(kept.actors[index]), false, actor.id);
         }
+
+        // (And the played world has some who've had a place in a line and given it back, their
+        // `formation.post` made undefined: so the above was about something)
+        assert.ok(host.battle.actors.some(({ formation }) => formation && Object.hasOwn(formation, "post") && formation.post === undefined), "someone's place in a line made undefined");
 
         // Carried on from what's kept, as text and back; from the battle's own snapshot, whole
         // (as an older version kept a world); and from that spared (as SNAPSHOT_STEPS brings one
@@ -248,7 +263,7 @@ describe("what a snapshot holds (core/host.js snapshot, #load; core/keptactor.js
         for (const [how, from] of [["kept", kept], ["whole", whole], ["whole, then spared", spareBattle(whole)]]) {
             const back = Battle.restore(world, decode(encode(from)));
 
-            assert.deepEqual(back.snapshot(), whole, how);
+            assert.deepEqual(asText(back.snapshot()), asText(whole), how);
             assert.deepEqual(back.snapshot({ keep: keptOf }), kept, how);
 
             // (And laid out as it was: one shape, the battle's own, whatever was left out)
