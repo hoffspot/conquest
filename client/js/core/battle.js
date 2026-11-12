@@ -1969,6 +1969,9 @@ export class Battle {
             return false;
         }
 
+        // (Counted, core/probe.js: one taken out, and everyone still in gone through to forget it)
+        count("battle.removed");
+        count("battle.forgets");
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
