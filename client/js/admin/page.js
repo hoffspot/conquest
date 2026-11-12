@@ -7,7 +7,7 @@
 // - Overview: where players reach it (each address with a QR code), the admin key (on the computer
 //   itself), the internet, about, power, how many worlds it may run, stopping it.
 // - Worlds: a card each, most recently played first, its state in words; Play, Start or Set aside,
-//   Keys, Players, Backups, Crash reports, Settings, Export, Delete (its name typed).
+//   Keys, Players, Backups, Crash reports, Measured runs, Settings, Export, Delete (its name typed).
 // - New world: its basics, heroes and rules; then its owner's and players' keys, as links and QR codes.
 // - Settings: the server's, each with what it's for; creator keys.
 // - Activity: the server's journal and every world's. Health: how each world's keeping up, and
@@ -898,6 +898,7 @@ function worldCard(world) {
             button("Players", () => openWorld(world.id, "players")),
             button("Backups", () => openWorld(world.id, "backups")),
             button("Crash reports", () => openWorld(world.id, "crashes")),
+            button("Measured runs", () => openWorld(world.id, "measures")),
             button("Settings", () => openWorld(world.id, "settings")),
             button("Export", () => doing(() => download(`/worlds/${world.id}/export`), { done: `${world.name} exported: it's in your downloads.` })),
             button("Delete", () => deleteWorld(world), "danger"),
@@ -1551,7 +1552,134 @@ async function worldCrashes(world) {
     );
 }
 
-const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPlayers, backups: worldBackups, crashes: worldCrashes };
+// A measured run in a line (its report: client/js/app/measure.js Meter.report): how its frames
+// came, what a step of the world took, how many frames came late, and the most it held
+function measuredWords(report) {
+    const total = report?.total ?? {};
+    const ms = (value) => (Number.isFinite(value) ? `${value} ms` : "—");
+    const late = report?.frames ? `${Math.round(((report.over?.[50] ?? 0) / report.frames) * 1000) / 10}%` : "—";
+
+    return `Frames ${ms(total.interval?.p50)} (95 in 100 within ${ms(total.interval?.p95)}); work ${ms(total.work?.p95)}; a step ${ms(total.perStep?.p95)}; ${late} over 50 ms; held ${report?.heldMB ?? "—"} MB`;
+}
+
+// What a measured run found of the device, where it could: how it warmed (`heat`: its frames' work
+// late in the run over their work early in it) and whether the graphics card held its frames back
+// (`gpuBound`: they came quicker for fewer pixels), each said only if the run could tell
+function measuredFindings(report) {
+    return [Number.isFinite(report?.heat) ? `heat ${report.heat}` : null, report?.gpuBound === true ? "the graphics card the limit (quicker for fewer pixels)" : report?.gpuBound === false ? "the graphics card not the limit" : null].filter(Boolean);
+}
+
+// A measured run's minutes as a table: each minute's frames, how they came (the middle, 95 in 100,
+// the worst), their work, a step, how many came more than 50 ms late, and the most held
+function measuredTable(report) {
+    const cell = (value) => h("td", {}, value === undefined || value === null ? "—" : String(value));
+
+    return h(
+        "div",
+        { class: "table", dataset: { measureRows: "" } },
+        h(
+            "table",
+            {},
+            h("thead", {}, h("tr", {}, ["Minute", "Frames", "Frame ms (middle)", "95 in 100", "Worst", "Work ms (95)", "A step ms (95)", "Over 50 ms", "Held MB"].map((head) => h("th", {}, head)))),
+            h(
+                "tbody",
+                {},
+                (report?.rows ?? []).map((row) => h("tr", {}, cell(row.seconds < 60 ? `${row.minute} (${row.seconds} s)` : row.minute), cell(row.frames), cell(row.interval?.[0]), cell(row.interval?.[1]), cell(row.interval?.[3]), cell(row.work?.[1]), cell(row.perStep?.[1]), cell(row.over?.[1]), cell(row.heldMB))),
+            ),
+        ),
+    );
+}
+
+// The measured runs its players' games sent (server/storage/measures.js: the last twenty, newest
+// first), each the report of a run a link's ?measure= asked for (docs/GAME.md, Measuring a
+// device): its minutes shown as a table, copied all together or one at a time, and cleared
+async function worldMeasures(world) {
+    const { measures } = await call("GET", `/server/worlds/${world.id}/measures`);
+    const status = h("p", { class: "warning", role: "status" });
+    const out = h("div", {});
+    const copy = async (text, done) => {
+        out.replaceChildren();
+
+        try {
+            await navigator.clipboard.writeText(text);
+            status.textContent = done;
+        } catch {
+            const area = h("textarea", { class: "copy-out", readOnly: true, rows: 12 });
+
+            area.value = text;
+            out.replaceChildren(area);
+            area.select();
+            status.textContent = "Copying wasn't allowed here: it's selected below to copy yourself.";
+        }
+    };
+    const of = (run) => ({ world: { id: world.id, name: world.name }, ...run });
+    const length = (run) => `${Math.floor((run.seconds ?? 0) / 60)}:${String(Math.round((run.seconds ?? 0) % 60)).padStart(2, "0")}${run.done ? "" : ` of ${run.minutes ?? "?"} min, ended early`}`;
+
+    return h(
+        "div",
+        {},
+        h("p", { class: "muted small" }, "A game opened with measure=<name> in its link (and minutes=12) counts every frame for that long and sends its report here as it ends. The last twenty are kept with the world."),
+        h(
+            "div",
+            { class: "row" },
+            h("button", { type: "button", class: "primary", disabled: !measures.length, onClick: () => copy(JSON.stringify({ world: { id: world.id, name: world.name }, runs: measures }, null, 2), measures.length === 1 ? "Copied the run." : `Copied all ${measures.length}.`) }, "Copy all"),
+            h(
+                "button",
+                {
+                    type: "button",
+                    class: "danger",
+                    disabled: !measures.length,
+                    onClick: async () => {
+                        if (await confirmIt({ title: `Clear ${world.name}'s measured runs`, note: "They're gone from the server for good: copy them first if they're wanted.", go: "Clear them" })) {
+                            if (await doing(() => call("DELETE", `/server/worlds/${world.id}/measures`), { status, done: "Cleared." })) {
+                                await renderWorld();
+                            }
+                        }
+                    },
+                },
+                "Clear",
+            ),
+        ),
+        measures.length ? null : h("p", { class: "muted" }, "None: no game has been measured in it."),
+        h(
+            "div",
+            { class: "table", hidden: !measures.length },
+            h(
+                "table",
+                {},
+                h("thead", {}, h("tr", {}, ["Began", "Who", "Run", "How it went", "Code", ""].map((head) => h("th", {}, head)))),
+                h(
+                    "tbody",
+                    {},
+                    measures.map((run) =>
+                        h(
+                            "tr",
+                            { dataset: { measure: run.id } },
+                            h("td", {}, when(run.began ?? run.received), h("div", { class: "muted small" }, `sent ${when(run.received)}`)),
+                            h("td", {}, run.name ?? run.player ?? "—", run.from === "internet" ? h("div", { class: "muted small" }, "from the internet") : null),
+                            h("td", {}, run.run ?? "—", h("div", { class: "muted small" }, length(run))),
+                            h("td", {}, measuredWords(run.report), h("div", { class: "muted small" }, [run.report?.quality ? `drawn at ${run.report.quality}` : null, Number.isFinite(run.report?.hz) ? `${run.report.hz} frames a second asked for` : null, run.report?.world?.players ? `${run.report.world.players} in the world` : null, ...measuredFindings(run.report)].filter(Boolean).join("; "))),
+                            h("td", {}, h("code", {}, run.code ?? "—")),
+                            h(
+                                "td",
+                                { class: "actions" },
+                                button("Minutes", () => {
+                                    status.textContent = "";
+                                    out.replaceChildren(measuredTable(run.report));
+                                }),
+                                button("Copy", () => copy(JSON.stringify(of(run), null, 2), "Copied.")),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        out,
+        status,
+    );
+}
+
+const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPlayers, backups: worldBackups, crashes: worldCrashes, measures: worldMeasures };
 
 // ---- A new world
 

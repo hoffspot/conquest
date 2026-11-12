@@ -57,7 +57,8 @@ const settings = loadSettings();
 
 // (The quick start asked to draw at a level, `?play&quality=low`, `medium` or `high`: drawn so
 // this once, whatever's chosen in Game options, and not kept unless it's chosen there)
-if (params.has("play") && ["low", "medium", "high"].includes(params.get("quality"))) {
+// (A measured run's link may say the level too, whatever else it opens: `?measure=<name>&quality=low`)
+if ((params.has("play") || params.has("measure")) && ["low", "medium", "high"].includes(params.get("quality"))) {
     settings.quality = params.get("quality");
 }
 
@@ -156,6 +157,10 @@ window.pellagos = {
     },
     get inWorld() {
         return state.inWorld;
+    },
+    /** The measured run the page's link asked for (app/measuring.js), once its game's under way; else null. */
+    get measured() {
+        return measured;
     },
     debug,
     backdrop,
@@ -1137,9 +1142,117 @@ function underway(game) {
         if (state.game === game) {
             window.pellagos.playing = true;
             offerHandheld();
+            measure(game);
         }
     });
 }
+
+// A measured run (app/measuring.js; docs/GAME.md *Measuring a device*), only if the page's link
+// asks for one (`?measure=<name>&minutes=12`, beside whatever else it says): the first game under
+// way is measured from then on, every frame counted, how long's left counted down, the report kept
+// on the device as it goes, and the screen kept awake. Its code is read only then; with no
+// `measure` in the link nothing of it is, and no game's given a meter
+let measured = null;
+
+async function measure(game) {
+    if (!params.has("measure")) {
+        return;
+    }
+
+    // (Its code not to be had, the device offline with nothing of it kept: the game's played unmeasured)
+    const { MeasuredRun, measureOf } = await import("./app/measuring.js").catch(() => ({}));
+
+    if (!MeasuredRun) {
+        return;
+    }
+
+    if (!measured) {
+        measured = new MeasuredRun(measureOf(params), { element: $("#measure"), storage: localStorage, wakeLock: navigator.wakeLock ?? null, about: { code: telemetry.code, build: telemetry.build, built: telemetry.built } });
+        measured.onDone = measureDone;
+    }
+
+    // (In a world on a world server: noted, for the report to be sent there)
+    if (state.game === game) {
+        measured.attach(game, state.onServer ? { server: state.onServer.client.record.key, world: state.onServer.entered.world } : null);
+    }
+}
+
+// A measured run ended. In a world on a world server, its report's sent to that server, for its
+// admin to read (the world's Measured runs on the management page: docs/SERVER.md); the words where
+// the countdown was say what became of it. Copy results copies it, wherever it went: the only way
+// to have it where there's no server (the quick start, a friend's world), or it couldn't be sent
+let measuredReport = null;
+
+async function measureDone(report) {
+    const on = state.onServer;
+    const sent = on ? await sendMeasure(on.client, on.entered, report) : false;
+    const server = on?.client.record.name ?? on?.entered.card?.server?.name ?? "the server";
+
+    measuredReport = report;
+    measured.say(sent ? `Measured ${report.name}: sent to ${server}, for its admin to read.` : on ? `Measured ${report.name}: it couldn't be sent to ${server}. Copy it; or it's sent when you're next in this world.` : `Measured ${report.name}: kept on this device. Copy it to send it on.`);
+    $("#measurecopy").hidden = false;
+    $("#measureclose").hidden = false;
+}
+
+// A measured run's report sent to the world it was measured in, by the player's session there:
+// whether it was taken. Taken, or refused for good, it waits on the device no longer
+async function sendMeasure(client, entered, report) {
+    const { measureSent } = await import("./app/measuring.js");
+
+    try {
+        await client.reportMeasure({ world: entered.world, session: entered.session, report });
+    } catch (error) {
+        if (REFUSED_FOR_GOOD.includes(error.error)) {
+            measureSent(localStorage, report);
+        }
+
+        return false;
+    }
+
+    measureSent(localStorage, report);
+
+    return true;
+}
+
+// A measured run kept on this device for this world and never sent there (the browser ended it
+// before it was done, as a phone does to a page that holds too much; or its server couldn't be
+// reached as it ended): sent now the player's back in the world, as far as it got. Looked for
+// whatever the link says, and its code read only if there's one waiting
+async function sendMeasures(client, entered) {
+    try {
+        if (!localStorage.getItem("pellagos.measure.waiting")) {
+            return;
+        }
+
+        const { waitingMeasure } = await import("./app/measuring.js");
+        const report = waitingMeasure(localStorage, client.record.key, entered.world);
+
+        if (report) {
+            await sendMeasure(client, entered, report);
+        }
+    } catch {
+        // (Storage refused, or its code not to be had just now: it waits for the next time)
+    }
+}
+
+// (Copied where the browser lets it; else the report's text selected, to copy by hand)
+$("#measurecopy").addEventListener("click", async () => {
+    const text = JSON.stringify(measuredReport);
+
+    $("#measure textarea")?.remove();
+
+    try {
+        await navigator.clipboard.writeText(text);
+        measured?.say(`Measured ${measuredReport?.name ?? ""}: copied. Paste it wherever you're sending it.`);
+    } catch {
+        const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+
+        $("#measure").append(area);
+        area.select();
+        measured?.say("Copying wasn't allowed: it's selected here to copy yourself.");
+    }
+});
+$("#measureclose").addEventListener("click", () => ($("#measure").hidden = true));
 
 // Getting a game ready failed: said on the loading screen, with the ways on from there (back to
 // the title, or loading the page again; what's saved is kept as it goes)
@@ -5085,6 +5198,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
             },
         });
         sendCrashes(client, entered);
+        sendMeasures(client, entered);
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
@@ -6336,6 +6450,9 @@ document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         pause();
         telemetry.closed();
+    } else {
+        // (A measured run's screen asked to stay awake again: the browser lets go of it whenever the page's hidden)
+        measured?.wake();
     }
 });
 
@@ -6494,8 +6611,9 @@ function applyViewSettings() {
     // (Less drawn while the game can't keep up, if that's left to it (Adaptive: app/governor.js),
     // from the quality chosen down; back to it when the quality's chosen again. Not under
     // automation: a test's frames, drawn in software, are always slow, and what it measures
-    // mustn't change)
-    const adaptive = settings.adaptive && !navigator.webdriver;
+    // mustn't change; nor for a measured run, `?measure=`, whose frames must all be drawn alike:
+    // app/measuring.js)
+    const adaptive = settings.adaptive && !navigator.webdriver && !params.has("measure");
     const governor = state.game?.governor;
 
     governor?.setCeiling(chosen);
