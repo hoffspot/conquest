@@ -2589,10 +2589,28 @@ resting and sitting. What went:
   numbers handed between functions are what's left of theirs); a soldier with a sword at the
   hip and a woman in a skirt, walking, make 20 KB a frame for the blade where it was 110, 16 for
   49 for the skirt and 0.2 for 21 for the joints (`test/posing-garbage.test.js` samples
-  everything made and holds them between). What makes most now is the
-  arm's reach and the actions' keys (`Rig.evaluate`, `Actions.sample`). Fitting a blade to its
+  everything made and holds them between). Fitting a blade to its
   hip, once as its body's built, made 10 MB of cells' names and lists; its cells are numbered
   now.
+- **Nothing made reading an action's keys or a stride's curves, less searching for an arm's
+  swivel.** What made most after that was the actions' keys and the arm's reach. Reading one
+  channel of one joint's keys (`sample`) made three lists (pairs taken apart) and a function
+  (the tangents'): 16 KB a frame for one soldier on guard. A stride's curve took each of its
+  pairs apart as a list (`curveAt`: `[a, b]`, which is an iterator made each time), and a held
+  thing's skin, the joints' movements and the limbs were gone through with `for ... of`,
+  another iterator each: 6 KB a frame. The search for an arm's swivel (`reachArm`) kept what
+  each swivel tried cost in its own scope, where every number set is a new one on the heap,
+  and made an object for the forearm's turn each time, some forty swivels a reach. Now the
+  keys' numbers are read one by one, lists are gone through by place, and the search keeps its
+  numbers in two typed arrays of the module's. The same poses to the last bit (the six bodies'
+  run again; and 4,000 arms reached every way `reachArm` is asked to, their bones and what it
+  returns hashed, before and after). Over the six bodies' run what posing made fell from 84 to
+  70 KB a body a frame; the fighting soldier's keys from 15.7 KB a frame to 0.2, the iterators
+  from 6.2 to 0.3, the arms' search from 20 to 14 (`test/posing-garbage.test.js`). What's left
+  of the search's is numbers handed to the vectors' own methods and the joints' limits
+  (`limitRotation`): whether those are made on the heap is the engine's choice of what it
+  builds into what, and taking the vectors' sums into the search itself made it choose worse
+  (the limits built into the search, and all their numbers made), so they're left as they are.
 
 **How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
 `posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player
