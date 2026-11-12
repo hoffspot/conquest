@@ -259,7 +259,8 @@ export function apiHandler(server, { mac = false } = {}) {
             heroes: meta.heroes,
             firstHero: meta.firstHero,
             characters: ruleOf(meta),
-            most: meta.settings.mostPlayers,
+            // (Its own setting, and no more than the server lets a world take)
+            most: server.mostPlayersOf(meta),
             players: state?.players.filter((one) => one.id).length ?? 0,
             life,
             open: meta.settings.open === true,
@@ -286,7 +287,7 @@ export function apiHandler(server, { mac = false } = {}) {
         // (Their own in it now, on another device or a link gone dead, theirs to take over: not counted)
         const others = state?.players.filter((one) => one.id && one.player !== principal.player?.id) ?? [];
 
-        if (others.length >= (server.limits?.mostPlayers ?? meta.settings.mostPlayers)) {
+        if (others.length >= (server.limits?.mostPlayers ?? server.mostPlayersOf(meta))) {
             throw refuse("full", { message: "That world's full." });
         }
 
@@ -371,6 +372,8 @@ export function apiHandler(server, { mac = false } = {}) {
                     publicKey: server.identity.publicKey,
                     version: SERVER_VERSION,
                     net: NET_VERSION,
+                    // (The most players a world here may take at once: what a game offers one making a world)
+                    mostPlayers: server.mostPlayersCeiling,
                     play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL },
                     broker: server.broker && server.settings.get("broker") !== false ? { path: BROKER_PATH, protocol: BROKER_PROTOCOL, relaying: server.settings.get("relaying") !== false } : null,
                     // (Players may make worlds here with no creator key: each this many, and how many more in all)
@@ -707,7 +710,8 @@ export function apiHandler(server, { mac = false } = {}) {
                 overview: { ...manage.overview(), adminKey: request.from === "mac" ? (server.adminKey ?? null) : null, mac: request.from === "mac" },
                 settings: manage.settings(),
                 schema: SETTINGS,
-                worldSchema: WORLD_SETTINGS,
+                // (A world's settings as this server takes them: no more players than its ceiling)
+                worldSchema: { ...WORLD_SETTINGS, mostPlayers: { ...WORLD_SETTINGS.mostPlayers, max: server.mostPlayersCeiling, default: Math.min(WORLD_SETTINGS.mostPlayers.default, server.mostPlayersCeiling) } },
                 peoples: Object.entries(RACE).map(([id, { name }]) => ({ id, name })),
             };
         }],

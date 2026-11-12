@@ -77,9 +77,11 @@ const started = clock();
 const stored = await StoredWorld.open(workerData.folder);
 const kept = stored.meta.heroes === "kept";
 let settings = { ...stored.meta.settings };
-// The most players it takes at once: its world's setting, unless its server was opened with
-// another in its place (world-thread.js: only a soak's is)
-const mostPlayers = () => workerData.mostPlayers ?? settings.mostPlayers;
+// The most players it takes at once: its world's setting, and no more than its server's ceiling
+// (as it stood when this thread was started: the server's own count of who's in holds whoever
+// comes to the ceiling as it stands now, api.js); unless its server was opened with another in
+// place of both (world-thread.js: only a soak's is)
+const mostPlayers = () => workerData.mostPlayers ?? Math.min(settings.mostPlayers, workerData.ceiling ?? Infinity);
 // How many it lets come in at once (its world's setting: a world kept before there was one, the default)
 const welcomes = () => settings.welcomes ?? WORLD_SETTINGS.welcomes.default;
 let opened;

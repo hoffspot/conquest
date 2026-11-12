@@ -975,7 +975,11 @@ describe("playing together (netplay.js)", () => {
         assert.equal(said[0].net, NET_VERSION);
         assert.equal(said[1].net, undefined);
 
-        for (let k = 1; k < MOST_PLAYERS; k++) {
+        // (As many as it takes, `most`: the game's own number, unless whoever runs it sets another,
+        // as a world server does from its world's setting and its own ceiling: test/caps.test.js)
+        assert.equal(hosting.most, MOST_PLAYERS);
+
+        for (let k = 1; k < hosting.most; k++) {
             hosting.hear(`q${k}`, encode({ kind: "hello", version: NET_VERSION, character: guest(`G${k}`) }));
         }
 

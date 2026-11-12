@@ -4540,7 +4540,9 @@ async function hostServerForm(record, kind = "new") {
     const pairs = loadWorlds().flatMap((world) => kept.filter((save) => world.places[save.id]).map((save) => ({ world, save })));
     const key = textField("hostserverkey", { type: "password", value: record.maker ?? "", placeholder: makers ? "Not needed here" : "A creator key, or its admin key" });
     const keyLabel = makers ? "Creator key (if you have one: the world isn't counted against you)" : "Creator key (or the server's admin key, on its own Wi-Fi)";
-    const most = selectField("hostservermost", [8, 7, 6, 5, 4, 3, 2, 1].map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
+    // (As many at once as that server lets a world take, as it says; one that doesn't say, 8)
+    const ceiling = Number.isInteger(now.card?.server?.mostPlayers) ? Math.max(1, Math.min(8, now.card.server.mostPlayers)) : 8;
+    const most = selectField("hostservermost", Array.from({ length: ceiling }, (_, k) => ceiling - k).map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
     const rules = [switchField("hostserverlisted", "Listed on the server", "Anyone who opens the server sees it among its worlds"), switchField("hostserveropen", "Open to anyone", "Whoever opens the server can join it with a tap, no link needed")];
     let fields;
 

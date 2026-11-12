@@ -170,7 +170,8 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
             return;
         }
 
-        if (places.size >= (server.limits?.players ?? LIMITS.players)) {
+        // (As many in all its worlds as its setting says, playersAtOnce: LIMITS.players at the most)
+        if (places.size >= (server.playersAtOnce ?? server.limits?.players ?? LIMITS.players)) {
             perTicket.give(`${world} ${principal.player.id}`);
             shut(socket, "full");
 

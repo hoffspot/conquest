@@ -199,6 +199,19 @@ A world with nobody in it waits 2 minutes, then it's saved and **set aside**: it
 until someone comes in. Two worlds run at once by default (the page says how many the computer can
 take); a third waits its turn. While anyone's in a world, the computer is kept awake.
 
+**How many players.** Two of the server's settings say how many it takes: **The most players in
+all its worlds together at once** (`playersAtOnce`, 64) and **The most players any one world here
+may take at once** (`mostPlayersCeiling`, 8). Each can be lowered and neither can be raised: 64
+and 8 are the most they go to, by the page, by the API or by `server.json` written by hand (a
+server whose file asks for more won't start, and says why). Eight is the game's own number, each
+player's game playing a copy of the whole world. A world's own **Most players** goes no higher
+than the server's ceiling when the world's made or changed; a world whose setting is above it
+already (the ceiling lowered since, or the world brought from elsewhere) keeps its setting and
+takes the ceiling. The game is told the ceiling (the status card's `server.mostPlayers`) and
+offers that many to whoever makes a world from it (**Host on a Server**), as the management
+page's **Make a world** does. The ceiling takes hold at once for whoever asks to come in; a
+world's own thread hears of it when it's next started.
+
 Players add the server in the game's **Multiplayer**, **Known Servers** (by its address, from an
 invite link or QR code, or from the servers found nearby on the Wi-Fi), then come into a world in
 **Join a World Hosted on a Server** with its key or short code, or make one in **Host on a Server**
@@ -702,11 +715,14 @@ loaded with more players than the machine could play whole copies for, while the
 them still play theirs and say whether a copy keeps to the world. `--tunnel` brings every player in
 through the tunnel listener, so as the internet's.
 
-A world takes 8 players at the most by its own setting, a server 64 in all its worlds and 32 play
-sockets from one address (`server/access/limits.js`). A soak with more opens its server with those
-raised, by `limits` among the options of `WorldServer.open` (`mostPlayers`, `players`,
-`socketsPerAddress`). They are options of that call alone: no setting, file or request sets them,
-so a server that's run as one (`npm run world-server`, the Mac app) always has its own limits.
+A world takes 8 players at the most by its own setting and the server's ceiling
+(`mostPlayersCeiling`), a server 64 in all its worlds (`playersAtOnce`) and 32 play sockets from
+one address (`server/access/limits.js`). The two settings only lower those: 8 and 64 are the most
+they can be set to (`CAPS` in `server/storage/settings.js`; `test/caps.test.js`). A soak with more
+opens its server with them raised, by `limits` among the options of `WorldServer.open`
+(`mostPlayers`, `players`, `socketsPerAddress`). They are options of that call alone: no setting,
+file or request raises them, so a server that's run as one (`npm run world-server`, the Mac app)
+never takes more.
 
 ## Crash reports
 

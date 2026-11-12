@@ -1685,6 +1685,12 @@ const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPla
 
 function setUpNewWorld() {
     const form = $("#new");
+    // (As many players as this server lets a world take, and that many unless fewer are asked for)
+    const most = state.server.worldSchema?.mostPlayers;
+
+    if (most) {
+        Object.assign(form.elements.mostPlayers, { min: String(most.min), max: String(most.max), value: String(most.default) });
+    }
 
     $("#newrace").replaceChildren(...state.server.peoples.map(({ id, name }) => h("option", { value: id, selected: id === "human" }, name)));
 

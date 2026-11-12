@@ -105,9 +105,13 @@ describe("the server soak's players", () => {
         assert.deepEqual(limitsFor(LIMITS.players + 36), { mostPlayers: 100, players: 100, socketsPerAddress: 100 });
     });
 
-    it("has no setting that could raise them: a world's own takes 8 at the most, and a server's settings name none of them", () => {
+    it("has no setting that could raise them: a world's own takes 8 at the most, and the server's two settings for them go no higher than what a server takes anyway", () => {
         assert.equal(WORLD_SETTINGS.mostPlayers.max, 8);
-        assert.deepEqual(Object.keys(SETTINGS).filter((key) => /limit|mostPlayers|socketsPer|^players/i.test(key)), []);
+        // (The caps as settings, generated/multiplayer_scaling_plan.md 1-13: each only lowers
+        // what a server takes, its most and its default being what it always took. test/caps.test.js)
+        assert.deepEqual(Object.keys(SETTINGS).filter((key) => /limit|mostPlayers|socketsPer|^players/i.test(key)), ["playersAtOnce", "mostPlayersCeiling"]);
+        assert.deepEqual([SETTINGS.mostPlayersCeiling.max, SETTINGS.mostPlayersCeiling.default], [8, 8]);
+        assert.deepEqual([SETTINGS.playersAtOnce.max, SETTINGS.playersAtOnce.default], [LIMITS.players, LIMITS.players]);
     });
 
     it("plays nine thin players in one world for a quarter of a minute: all in, none sent out, none sent the world again", async () => {
