@@ -20,6 +20,7 @@
 // heap, who's in it) is let go of while it's set aside, and all of it when the world's deleted.
 
 import { performance } from "node:perf_hooks";
+import { COUNTERS, FLUSH_PASSES, HOST_PASSES } from "../client/js/core/probe.js";
 import { Metrics } from "./metrics.js";
 import { LIFE } from "./registry.js";
 import { Collections, LoopDelay } from "./world-metrics.js";
@@ -35,6 +36,10 @@ const SUPERVISOR = Object.freeze({ thread: "supervisor", world: "" });
 
 // A reason as a label carries it: one of the server's own short codes ("full", "bad-request"), or "other"
 const reasonOf = (why) => (typeof why === "string" && /^[a-z][a-z0-9-]{0,39}$/.test(why) ? why : "other");
+
+// The passes of a step and the work counted, by the names a series may be labelled with: no other is taken from a world's thread
+const PASSES = new Set([...HOST_PASSES, ...FLUSH_PASSES]);
+const WORK = new Set(COUNTERS);
 
 // A time as the series have them (seconds), from ms; and from µs
 const seconds = (ms) => ms / 1000;
@@ -59,6 +64,9 @@ export class ServerMetrics {
             dropped: metrics.counter("pellagos_world_dropped_seconds_total", "The time a world was given and let go, fallen too far behind its clock.", ["world"]),
             cpu: metrics.counter("pellagos_world_cpu_seconds_total", "The processor time a world's thread has had, user and system.", ["world", "kind"]),
             made: metrics.counter("pellagos_world_made_ahead_total", "What a world has made ahead between its steps: chunks of ground, and tiles of buildings' insides (rooms).", ["world", "kind"]),
+            pass: metrics.counter("pellagos_world_pass_seconds_total", "The time a world's steps have spent in each of their passes, by its name (kind: light, battle, war, wilds...; and of what's sent after a step, flush.ops, flush.motion...).", ["world", "kind"]),
+            passCalls: metrics.counter("pellagos_world_pass_calls_total", "How often each pass of a world's steps has been begun, by its name.", ["world", "kind"]),
+            work: metrics.counter("pellagos_world_work_total", "The work a world's steps have counted, by its name (kind: steps, wilds.pairs, motion.pairs, checksums, sends...).", ["world", "kind"]),
             actors: metrics.gauge("pellagos_world_actors", "How many are in a world's battle.", ["world"]),
             players: metrics.gauge("pellagos_world_players", "How many players are in a world.", ["world"]),
             present: metrics.gauge("pellagos_world_present", "How many of a world's players are present: linked and loaded.", ["world"]),
@@ -277,6 +285,34 @@ export class ServerMetrics {
             world.cpu.with({ ...labels, kind: "user" }).inc(micro(Math.max(0, counted.cpu.user)));
             world.cpu.with({ ...labels, kind: "system" }).inc(micro(Math.max(0, counted.cpu.system)));
         }
+
+        // (The step's own parts: only by the names the probes have, so the series are as many as those and no more)
+        for (const [kind, [ms, calls]] of Object.entries(counted.passes ?? {})) {
+            if (PASSES.has(kind)) {
+                world.pass.with({ ...labels, kind }).inc(seconds(Math.max(0, ms)));
+                world.passCalls.with({ ...labels, kind }).inc(Math.max(0, calls));
+            }
+        }
+
+        for (const [kind, count] of Object.entries(counted.work ?? {})) {
+            if (WORK.has(kind)) {
+                world.work.with({ ...labels, kind }).inc(Math.max(0, count));
+            }
+        }
+    }
+
+    /**
+     * What a world's steps have spent in each of their passes, as it stands: { name: { seconds,
+     * calls } } for each pass begun, and `work`, { name: how many }. For a report of a run
+     * (scripts/server-soak.js), beside its histograms.
+     */
+    passesOf(id) {
+        const { pass, passCalls, work } = this.world;
+        // (Read from the series there are: asking for one would make it)
+        const ofWorld = (metric) => Object.fromEntries([...metric.all.values()].filter(({ values }) => values[0] === id).map(({ values, series }) => [values[1], series.value]));
+        const calls = ofWorld(passCalls);
+
+        return { passes: Object.fromEntries(Object.entries(ofWorld(pass)).map(([kind, time]) => [kind, { seconds: time, calls: calls[kind] ?? 0 }])), work: ofWorld(work) };
     }
 
     /**

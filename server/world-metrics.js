@@ -8,11 +8,19 @@
 // supervisor adds it up (server-metrics.js), so a world set aside and started again carries on
 // counting from where it was.
 //
-// A step pays for none of it but two readings of the clock and a few additions a look
-// (`npm run step-budget` times it, and fails if it comes to 0.05 ms a step). The event loop's
-// delay and the collections are Node's own to measure (perf_hooks), off the step's path.
+// The step's own parts are counted too: each pass of the host's step and of what's sent after it,
+// by name (client/js/core/probe.js HOST_PASSES, FLUSH_PASSES), its time summed and how often it
+// was begun, with the work the probes count (COUNTERS). The world's thread installs this
+// recorder's probes (`probes`: world-worker.js), which read the clock once a pass and are read
+// by nothing in the rules, so the world steps the same with them (test/probe.test.js).
+//
+// A step pays for none of it but a reading of the clock a pass and a few additions
+// (`npm run step-budget` times it, every pass of every step, and fails if it comes to 0.05 ms a
+// step). The event loop's delay and the collections are Node's own to measure (perf_hooks), off
+// the step's path.
 
-import { constants, monitorEventLoopDelay, PerformanceObserver } from "node:perf_hooks";
+import { constants, monitorEventLoopDelay, performance, PerformanceObserver } from "node:perf_hooks";
+import { Probes } from "../client/js/core/probe.js";
 import { StepTimes, TimeBuckets } from "../client/js/core/runner.js";
 
 /** A garbage collection's kinds, as they're named in what's counted (perf_hooks' `detail.kind`). */
@@ -112,8 +120,9 @@ export class WorldMetrics {
      * @param {object} [options]
      * @param {boolean} [options.node] - Whether the thread's event loop and its garbage collections
      *   are measured too (Node's own: not in a test of the counting alone).
+     * @param {function} [options.clock] - The time the step's passes are timed by (ms).
      */
-    constructor({ node = true } = {}) {
+    constructor({ node = true, clock = () => performance.now() } = {}) {
         /** The whole of each look at the world (ms: world-worker.js tick), as its steps are timed. */
         this.ticks = new StepTimes();
 
@@ -128,6 +137,12 @@ export class WorldMetrics {
         /** What its players' games have said to it, and how many of those were commands. */
         this.messages = 0;
         this.commands = 0;
+
+        /**
+         * The step's own parts (core/probe.js Probes): each pass's time and the work counted,
+         * once whoever runs the world has installed them (world-worker.js).
+         */
+        this.probes = new Probes({ clock });
 
         this.loop = node ? new LoopDelay() : null;
         this.collections = node ? new Collections() : null;
@@ -159,7 +174,9 @@ export class WorldMetrics {
      * What's been counted since it was last asked, for the `state` message: its steps' times
      * (`steps`: the runner's), `dropped` (all the time it's let go, ms), `cpu` (the thread's own,
      * µs: process.threadCpuUsage, or null) and `made` (what's been made ahead: { chunks, rooms })
-     * as they stand now, told as how much more.
+     * as they stand now, told as how much more. `passes` is each pass of the step that was
+     * played since ({ name: [ms, times begun] }) and `work` what was counted of its work
+     * ({ name: how many }): both empty unless the probes are installed.
      */
     take({ steps = null, dropped = 0, cpu = null, made = { chunks: 0, rooms: 0 } } = {}) {
         const { before } = this;
@@ -177,6 +194,7 @@ export class WorldMetrics {
             made: { chunks: made.chunks - before.made.chunks, rooms: made.rooms - before.made.rooms },
             loop: this.loop?.take() ?? null,
             gc: this.collections?.take() ?? {},
+            ...this.#parts(),
         };
 
         this.failures = 0;
@@ -185,6 +203,38 @@ export class WorldMetrics {
         this.before = { dropped, cpu: cpu ? { user: cpu.user, system: cpu.system } : before.cpu, made: { chunks: made.chunks, rooms: made.rooms } };
 
         return taken;
+    }
+
+    // The step's parts since they were last asked for, and the probes begun afresh (a pass being
+    // timed now is timed on: its time so far is told now, the rest the next time)
+    #parts() {
+        const { probes } = this;
+        const passes = {};
+        const work = {};
+
+        if (probes.current !== null) {
+            const now = probes.clock();
+
+            probes.current.ms += now - probes.since;
+            probes.since = now;
+        }
+
+        for (const [name, pass] of probes.passes) {
+            if (pass.calls > 0 || pass.ms > 0) {
+                passes[name] = [pass.ms, pass.calls];
+                pass.ms = 0;
+                pass.calls = 0;
+            }
+        }
+
+        for (const [name, counted] of probes.counts) {
+            if (counted > 0) {
+                work[name] = counted;
+                probes.counts.set(name, 0);
+            }
+        }
+
+        return { passes, work };
     }
 
     /** No longer measuring the thread's event loop or its collections. */

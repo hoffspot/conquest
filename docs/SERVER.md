@@ -576,9 +576,22 @@ Each world's thread also counts what it does, and tells the server a second's wo
 every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and
 what's made ahead) into fixed buckets from half a millisecond to a second, its saves, how late
 its event loop ran, its garbage collections by kind, its heap, how many are in its battle and in
-the world, and what its players' games have said to it. The server adds them up for as long as
-it runs, a world's carrying on when it's set aside and started again. Counting costs a step
-under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+the world, and what its players' games have said to it. It times the step's own parts too: each
+pass of the rules' step by name (the light, the battle, the war, the passes that look round the
+players...) and of what's sent after it, with the work those passes count
+(`client/js/core/probe.js`), so `/metrics` says where a world's step time goes. The server adds
+them up for as long as it runs, a world's carrying on when it's set aside and started again. All
+of it costs a step about two thousandths of a millisecond, the passes' timing most of that: it's
+always on, with no setting (`npm run step-budget` times every pass of every step, 3.6
+thousandths on a 4-core container, and fails if it comes to 0.05 ms). Timing the passes changes
+nothing a world does (`test/probe.test.js`).
+
+What it can't say is how much of a step went on the maps inside (dungeons, buildings). The
+passes are the step's parts by what they do, not by where: the battle's step, the largest of
+them, goes through everyone in the world in one order whatever map they're on, three times over,
+so a map's share of it could only be timed by reading the clock for each of them each time
+(hundreds of readings a step, as much as all the counting may cost with a field battle on and
+more with more players) or by playing them map by map, which would change what a world does.
 
 ### The last day and week
 
@@ -641,6 +654,8 @@ address or a key.
 | `world_cpu_seconds_total` | Its thread's processor time (`kind`: `user`, `system`) |
 | `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
 | `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
+| `world_pass_seconds_total`, `world_pass_calls_total` | The time its steps have spent in each of their passes, and how often each was begun (`kind`: `light`, `battle`, `war`, `wilds`, `end`..., and of what's sent after a step `flush.ops`, `flush.motion`...: `HOST_PASSES` and `FLUSH_PASSES` in `client/js/core/probe.js`). A pass's share of the step is its rate over all of theirs |
+| `world_work_total` | The work its steps have counted (`kind`: `steps`, `wilds.pairs`, `motion.pairs`, `checksums`, `sends`...: `COUNTERS` there) |
 | `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
 | `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
 | `event_loop_delay_mean_seconds`, `_p99_seconds`, `_max_seconds` | How late each thread's event loop ran, lately |
@@ -685,14 +700,18 @@ Every line has `t` (when) and `event`:
 | `world.life` | A world started loading, is running, went empty, is stopping or is stored (`life`) |
 | `world.save-failed`, `world.fell-behind` | A world's save didn't reach the disk (`count`), or it let time go (`ms`) |
 | `journal` | A line of the server's own journal (`text`): settings, creator keys, certificates, updates, archives |
+| `world.journal` | A line a running world's own thread put in its journal (`world`, `text`): a save (not each turn's, one a minute), a backup, a save that failed or couldn't be read, time let go, a hero brought to this version of the game |
 
 **No line ever carries a key, a short code, a ticket, a session, a token or a key's label, nor a
 whole address.** A key or code is named by its id (what the management page lists it by). An
 address is given as the network it's on (`net`: `203.0.113.x`, `2001:db8:85a3::x`), enough to see
 the same visitor trying again, not to find them. A line has only the fields in the table, and
 every sentence is scrubbed of anything shaped like a key, a token or an address before it's
-written. A player is named by their player id, as in the journals. A world's own journal (its
-saves and backups, who was sent out) isn't in the log yet: read it in Activity.
+written. A player is named by their player id, as in the journals. Of a world's journal, the log
+has what the world's own thread wrote while it ran (`world.journal`), scrubbed the same way, and
+who came in, left or was refused as events of their own. What the server wrote there for someone
+(a setting changed, a player sent out or given a part, a restore, a key by its label) is in the
+journal alone: read it in Activity.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above

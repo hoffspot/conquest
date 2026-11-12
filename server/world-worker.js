@@ -37,12 +37,16 @@
 //                          { type: "state", ... }                  how it is (report), with what it's
 //                                                                  counted of itself since it last said
 //                                                                  (`metrics`: world-metrics.js)
+//                          { type: "journal", text }               a line this thread put in the world's
+//                                                                  journal (a save, a backup, time let
+//                                                                  go), for the server's structured log
 //                          { type: "saved", id, ok } / "stopped"
 
 import { performance } from "node:perf_hooks";
 import { parentPort, workerData } from "node:worker_threads";
 import { salvageKept } from "../client/js/app/character-file.js";
 import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
+import { install } from "../client/js/core/probe.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
@@ -75,6 +79,11 @@ installWorkers();
 
 const started = clock();
 const stored = await StoredWorld.open(workerData.folder);
+
+// (Each line this thread puts in the world's journal told to the supervisor too, for the server's
+// structured log, which scrubs it: log.js)
+stored.onJournal = (text) => post({ type: "journal", text });
+
 const kept = stored.meta.heroes === "kept";
 let settings = { ...stored.meta.settings };
 // The most players it takes at once: its world's setting, and no more than its server's ceiling
@@ -121,8 +130,12 @@ const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", p
 runner.hosting = hosting;
 
 // What the thread counts of itself (world-metrics.js): each look at the world and its parts, its
-// saves, what it hears, its event loop's delay and its collections
-const metrics = new WorldMetrics();
+// saves, what it hears, its event loop's delay and its collections; and, by its probes, each pass
+// of its steps and of what's sent after them (core/probe.js: installed for this thread alone, its
+// one world's, and read by nothing in the rules)
+const metrics = new WorldMetrics({ clock });
+
+install(metrics.probes);
 
 keeper.onSave = (ms, ok) => metrics.saved(ms, ok);
 
