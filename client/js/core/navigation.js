@@ -256,6 +256,11 @@ export class Navigation {
         // another, never used and never let go of)
         this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES, defaultQueryFilter: this.filter });
 
+        // What Detour answers the nearest point into (nearestIn), kept for every asking: the
+        // wrapper's own findClosestPoint makes and destroys the three each time, six calls into
+        // Recast an asking, and the battle asks eight times for one step aside
+        this.answer = { ref: new recast.Raw.UnsignedIntRef(), point: new recast.Raw.Vec3(), over: new recast.Raw.BoolRef() };
+
         // The tiles in the mesh, by key: { tx, ty, ref (Detour's, or 0 for one with nothing to
         // walk) }, the most recently used last. (Not their data: the mesh has its own copy, and a
         // second kept here was 10 KB a tile no one read, 10 MB of a full overworld's.)
@@ -647,9 +652,15 @@ export class Navigation {
      * null: for what's only drawn, as wayIn.
      */
     nearestIn(point, across = NEAR.across) {
-        const found = this.query.findClosestPoint(this.#point(point), { filter: this.filter, halfExtents: { x: across, y: NEAR.up, z: across } });
+        const [x, y, z] = point;
+        const { ref, point: at, over } = this.answer;
 
-        return found.success && found.polyRef ? [found.point.x, found.point.z, found.point.y] : null;
+        // (Detour's own call, as the wrapper's findClosestPoint makes it, with the same numbers:
+        // the answer's the same. Where it finds nothing it leaves what it last answered, and
+        // says it failed)
+        const status = this.query.raw.findClosestPoint([x, z ?? this.heightAt(x, y), y], [across, NEAR.up, across], this.filter.raw, ref, at, over);
+
+        return this.recast.statusSucceed(status) && ref.value ? [at.x, at.z, at.y] : null;
     }
 
     /**
@@ -692,6 +703,11 @@ export class Navigation {
         this.query.destroy();
         this.recast.Raw.destroy(this.query.raw);
         this.recast.Raw.destroy(this.filter.raw);
+
+        for (const each of Object.values(this.answer)) {
+            this.recast.Raw.destroy(each);
+        }
+
         this.mesh.destroy();
         this.tiles.clear();
         this.disposed = true;

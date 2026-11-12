@@ -238,6 +238,37 @@ describe("the navigation tiles' bytes (navigation/bake.js)", () => {
         navigation.dispose();
     });
 
+    it("asks for the nearest point on the mesh as the wrapper's own asking answers, to the last bit: on it, off it, and nowhere near", () => {
+        const squares = squaresOf({ blocked: parseGrid(FLOOR) });
+        const kind = { measures: ROOMS, input: (tx, ty) => squaresInput(squares, tx, ty, ROOMS), heightAt: () => 0, size: [squares.width, squares.height] };
+        const navigation = new Navigation(recast, squares, kind);
+
+        navigation.ensure(0, 0);
+
+        let [on, off, none] = [0, 0, 0];
+
+        // (A point every 0.37 m over the floor and a little beyond it, each asked within two
+        // metres and within a quarter; and with a height given)
+        for (let y = -3.1; y < 15; y += 0.37) {
+            for (let x = -3.1; x < 23; x += 0.37) {
+                for (const [point, across] of [[[x, y], 2], [[x, y], 0.25], [[x, y, 0.4], 2]]) {
+                    const theirs = navigation.query.findClosestPoint({ x, y: point[2] ?? 0, z: y }, { filter: navigation.filter, halfExtents: { x: across, y: 4, z: across } });
+                    const want = theirs.success && theirs.polyRef ? [theirs.point.x, theirs.point.z, theirs.point.y] : null;
+
+                    assert.deepEqual(navigation.nearestIn(point, across), want);
+                    none += want ? 0 : 1;
+                    on += want && want[0] === Math.fround(x) && want[1] === Math.fround(y) ? 1 : 0;
+                    off += want && (want[0] !== Math.fround(x) || want[1] !== Math.fround(y)) ? 1 : 0;
+                }
+            }
+        }
+
+        assert.ok(on > 1000 && off > 1000 && none > 1000, `${on} on it, ${off} off it, ${none} nowhere near`);
+        assert.equal(navigation.walkable(2.5, 2.5), true);
+        assert.equal(navigation.walkable(0.5, 0.5), false);
+        navigation.dispose();
+    });
+
     it("bakes a map of squares' kind of tile to the bytes recorded, and finds the way recorded through its doorways", () => {
         const squares = squaresOf({ blocked: parseGrid(FLOOR) });
         const data = bakeTile(recast, squaresInput(squares, 0, 0, ROOMS), 0, 0, ROOMS);

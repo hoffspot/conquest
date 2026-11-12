@@ -1343,7 +1343,11 @@ found the same 2,012 ways over them to the last bit).
   half-metre voxels it was 3 ms; open country a little more, its ground's slopes cut finer), its
   data about 10 KB (5–8). A way found takes 0.05 ms at the
   median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
-  say) searches every tile kept before giving up, up to 0.5 ms.
+  say) searches every tile kept before giving up, up to 0.5 ms. Asking whether a point can be
+  stood on (`walkable`, which the battle asks eight times for one step aside) takes 3.1 µs in a
+  town on a busy desktop: Detour's own call made straight, answered into three objects the mesh
+  keeps (4.8 µs through the wrapper's, which makes and destroys them each asking; the same
+  answer to the last bit, tested).
 - **What a bake leaves behind:** nothing. Recast's WebAssembly is handed to JavaScript by a
   binder that keeps a wrapper on this side for every object, until it's destroyed. The bake uses
   one build context for all its tiles (its timers and logs off: nothing in it from one bake to
@@ -1378,7 +1382,9 @@ of squares') and the corners of a way over each as recorded: a version of Recast
 the bake that changes one fails it, before copies of a world part over it. And that bakes leave
 nothing behind: after a dozen rounds of each kind of tile, and of one with nothing to walk, the
 binder keeps no more wrappers of any class than before; nor after a tile's added and let go of a
-dozen times with ways found between, the way the same each time, or a mesh made and let go of.
+dozen times with ways found between, the way the same each time, or a mesh made and let go of;
+that the nearest point on a mesh is answered as the wrapper's own asking answers it, on the mesh,
+off it and nowhere near.
 And that the vendored Recast is the one version `package.json` names, exactly: the lockfile's,
 the only folder of it in `client/vendor`, the one `recast.js` imports, once, and the one the docs
 and the tests that read its files name.
