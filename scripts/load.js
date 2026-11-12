@@ -20,6 +20,7 @@
 //     npm run load -- --activity fights --seconds 300 --seed 7
 //     npm run load -- --json                               # the report as JSON, and nothing else
 //     npm run load -- --ceiling 50                         # and fail if the mean step's over 50 ms
+//     npm run load -- --players 100 --whole                # the battle's passes timed whole
 //
 // --players: any number (the plan's: 8, 25, 50, 100). --layout: spread (each in a settlement of
 // their own, as far from one another as the world allows), towns (four to a town), one-town (all
@@ -28,6 +29,13 @@
 // seconds in, one for every twenty players), battle (one of 200 a side), invasion (the first
 // player's town invaded), hellrift (a hell rift torn open by them); and night, warturn, joinstorm
 // and dungeons, which aren't built yet and say so.
+//
+// The battle's step is timed by its parts (core/probe.js BATTLE_PASSES): each kind of character's
+// turn and walking, and, apart from those, the searches, the ways found and the mesh asked within
+// them. With --whole those aren't timed apart, so each kind's turn and walking have all that was
+// done for it: what a kind costs, where the other says what kind of work costs. The report's
+// `census` says who was in the battle when the run ended, by kind, and how far each was from the
+// nearest player.
 //
 // Before it's timed, what's round the players is made ahead until nothing's waiting (Ahead.settled),
 // however long that takes: a step that makes ground is a loading cost, measured by npm run
@@ -56,7 +64,7 @@ import { FIELD_BATTLE, Host } from "../client/js/core/host.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { install, Probes, uninstall } from "../client/js/core/probe.js";
+import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { encode } from "../client/js/core/wire.js";
 import { RACE, startFor } from "../client/js/core/worldplan/plan.js";
@@ -221,6 +229,40 @@ export function tilesWanted(places, { tile, keep, spare = 0, reach = AHEAD.reach
     return { tile, keep, wanted: wanted.size, capped: wanted.size + spare > keep };
 }
 
+/**
+ * Who's in a battle, by kind (the players; then as the battle's step is timed, core/probe.js
+ * BATTLE_KINDS: `routine` the folk, `patrol` soldiers and guards, `wild` the wild's creatures,
+ * `follow` followers, `other` the rest), each kind's: `all`; how many are `fallen`, `walking` (a
+ * way to go), `set` on someone, `seated` (the folk who sit); `indoors` (on another map than the
+ * world's), and of those `alone` (no player standing on their map); and, out in the world, how
+ * many are within 30 m of the nearest player standing there (`m30`), 60 (`m60`), 120 (`m120`), 250
+ * (`m250`) or `beyond`.
+ */
+export function censusOf(battle) {
+    const players = battle.actors.filter((actor) => actor.kind === "player" && !actor.dead);
+    const census = Object.fromEntries(["player", ...BATTLE_KINDS].map((kind) => [kind, { all: 0, fallen: 0, walking: 0, set: 0, seated: 0, indoors: 0, alone: 0, m30: 0, m60: 0, m120: 0, m250: 0, beyond: 0 }]));
+
+    for (const actor of battle.actors) {
+        const tally = census[actor.kind === "player" ? "player" : BATTLE_KINDS.includes(actor.ai) ? actor.ai : "other"];
+        const near = players.reduce((least, player) => (player === actor || player.map !== actor.map ? least : Math.min(least, Math.hypot(player.x - actor.x, player.y - actor.y))), Infinity);
+
+        tally.all++;
+        tally.fallen += actor.dead ? 1 : 0;
+        tally.walking += !actor.dead && actor.path.length ? 1 : 0;
+        tally.set += !actor.dead && actor.target !== null ? 1 : 0;
+        tally.seated += actor.routine?.seated ? 1 : 0;
+
+        if (actor.map !== "town") {
+            tally.indoors++;
+            tally.alone += near === Infinity ? 1 : 0;
+        } else {
+            tally[near <= 30 ? "m30" : near <= 60 ? "m60" : near <= 120 ? "m120" : near <= 250 ? "m250" : "beyond"]++;
+        }
+    }
+
+    return census;
+}
+
 // One who's joined over a link that only counts: what they're sent (bytes, messages, their
 // busiest second) and what they send; where they came in, and what they're doing
 class Peer {
@@ -264,8 +306,8 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * how it's going, a line at a time. An activity that isn't built yet resolves to a report that
  * only says so ({ schema, run, built: false, reason }).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, log = () => {} } = {}) {
-    const run = { seed, players: count, layout, activity, seconds, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, whole = false, log = () => {} } = {}) {
+    const run = { seed, players: count, layout, activity, seconds, whole, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
 
     if (Object.hasOwn(LOAD.unbuilt, activity)) {
         return { schema: LOAD.schema, run, built: false, reason: LOAD.unbuilt[activity] };
@@ -560,7 +602,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const memory = { before: process.memoryUsage(), heapMost: 0 };
     const droppedBefore = dropped;
     const commandsBefore = hosting.dropped;
-    const probes = install(new Probes({ clock }));
+    const probes = install(new Probes({ clock, inner: !whole }));
     const started = clock();
     let late = 0;
     let over = 0;
@@ -626,6 +668,9 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const measured = probes.toJSON();
     const passes = Object.fromEntries(Object.entries(measured.passes).map(([name, { ms, calls }]) => [name, { ms: round(ms), mean: round(ms / steps, 4), share: round(ms / total, 4), calls }]));
     const named = Object.entries(measured.passes).reduce((sum, [name, { ms }]) => sum + (name === "end" ? 0 : ms), 0) + parts.hear;
+    // (The battle's step: the host's `battle` pass and all its parts together)
+    const battle = Object.entries(measured.passes).reduce((sum, [name, { ms }]) => sum + (name === "battle" || name.startsWith("battle.") ? ms : 0), 0);
+    const census = censusOf(host.battle);
 
     actors.end = host.battle.actors.length;
 
@@ -677,6 +722,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         },
         parts: { hear: round(parts.hear / steps, 4), step: round(parts.step / steps, 4), ahead: round(parts.ahead / steps, 4) },
         passes,
+        battle: { ms: round(battle), mean: round(battle / steps, 4), share: round(battle / total, 4) },
+        census,
         // (The share of the steps' time that falls to a named pass or to what was heard: all but
         // `end` and whatever the runner does between the step and what's sent)
         named: round(named / total, 4),
@@ -711,7 +758,9 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 // What a report must hold: each key's type ("number", "string", "boolean", "array", an object of
 // the same, or [type] for an object of any keys whose values are all of it)
 const SPREAD = { mean: "number", p50: "number", p99: "number", worst: "number", worstAt: "number" };
-const RUN = { seed: "number", players: "number", layout: "string", activity: "string", seconds: "number", node: "string", platform: "string", arch: "string", cpus: "number" };
+const RUN = { seed: "number", players: "number", layout: "string", activity: "string", seconds: "number", whole: "boolean", node: "string", platform: "string", arch: "string", cpus: "number" };
+
+const CENSUS = { all: "number", fallen: "number", walking: "number", set: "number", seated: "number", indoors: "number", alone: "number", m30: "number", m60: "number", m120: "number", m250: "number", beyond: "number" };
 
 export const REPORT_SCHEMA = Object.freeze({
     schema: "number",
@@ -723,6 +772,8 @@ export const REPORT_SCHEMA = Object.freeze({
     steps: { count: "number", wall: SPREAD, cpu: SPREAD, late: "number", over: "number", speed: "number" },
     parts: { hear: "number", step: "number", ahead: "number" },
     passes: [{ ms: "number", mean: "number", share: "number", calls: "number" }],
+    battle: { ms: "number", mean: "number", share: "number" },
+    census: [CENSUS],
     named: "number",
     counts: ["number"],
     bytes: {
@@ -807,10 +858,14 @@ export function wordsOf(report) {
         return [`${title}: ${report.reason}`];
     }
 
-    const { steps, passes, bytes, snapshot, memory, navigation, warm } = report;
+    const { steps, passes, bytes, snapshot, memory, navigation, warm, counts, census } = report;
     const top = Object.entries(passes)
         .sort(([, a], [, b]) => b.ms - a.ms)
         .slice(0, 8);
+    const parts = Object.entries(passes)
+        .filter(([name]) => name.startsWith("battle."))
+        .sort(([, a], [, b]) => b.ms - a.ms);
+    const each = (name) => ((counts[name] ?? 0) / steps.count).toFixed(1);
     const kb = (n) => `${(n / 1024).toFixed(1)} KB`;
 
     return [
@@ -819,6 +874,9 @@ export function wordsOf(report) {
         `In the thread's own processor time: mean ${steps.cpu.mean.toFixed(2)} ms, p99 ${steps.cpu.p99.toFixed(2)} ms, worst ${steps.cpu.worst.toFixed(1)} ms${steps.over ? `; ${steps.over} over ${STEP_MS} ms` : ""}`,
         `Of a step: what was heard ${report.parts.hear.toFixed(3)} ms, the step and what it sent ${report.parts.step.toFixed(3)} ms; made ahead between steps ${report.parts.ahead.toFixed(3)} ms. Named passes ${(report.named * 100).toFixed(1)}% of it`,
         `The passes that took most (ms a step): ${top.map(([name, { mean, share }]) => `${name} ${mean.toFixed(3)} (${(share * 100).toFixed(0)}%)`).join(", ")}`,
+        `The battle's step: ${report.battle.mean.toFixed(3)} ms (${(report.battle.share * 100).toFixed(0)}%)${run.whole ? ", its passes timed whole" : ""}; by its parts: ${parts.map(([name, { mean }]) => `${name.slice(7)} ${mean.toFixed(3)}`).join(", ")}`,
+        `Its work a step: ${each("battle.actors")} in it (${BATTLE_KINDS.map((kind) => `${kind} ${each(`battle.actors.${kind}`)}`).join(", ")}), ${each("battle.idle")} of them standing with nowhere to go and ${each("battle.fallen")} down; ${each("battle.walkers")} walked, in ${each("battle.strides")} strides; ${each("battle.searches")} searches for the nearest enemy looked at ${each("battle.searchLooks")}, ${each("battle.fightAsks")} asked whether they're in a fight, ${each("battle.playerAsks")} whether a player's near; the index asked who's near ${each("battle.nears")} times, giving ${each("battle.nearFound")}; ${each("battle.sights")} sight lines; ${each("battle.paths")} ways found; the mesh asked ${each("battle.meshAsks")} times`,
+        `Who's in the battle: ${Object.entries(census).map(([kind, { all, indoors, alone, m30, m60, m120, m250, beyond }]) => `${kind} ${all} (within 30 m of a player ${m30}, 60 m ${m60}, 120 m ${m120}, 250 m ${m250}, beyond ${beyond}; indoors ${indoors}, ${alone} with no player there)`).join("; ")}`,
         `Sent each player: ${kb(bytes.perPeer.mean)}/s (the busiest ${kb(bytes.perPeer.most)}/s, a worst second of ${kb(bytes.perPeer.worstSecond)}); by kind: ${Object.entries(bytes.byKind).map(([kind, sum]) => `${kind} ${kb(sum.bytes)} in ${sum.messages}`).join(", ")}`,
         `Heard: ${bytes.up.messages} messages, ${kb(bytes.up.bytes)}; ${bytes.up.refused} commands let go of for coming faster than ${bytes.up.allowed} a second`,
         `A snapshot: ${kb(snapshot.bytes)}, ${snapshot.take.toFixed(2)} ms to take, ${snapshot.encode.toFixed(2)} ms to write out (${snapshot.text.toFixed(2)} ms both together, written straight from the world); a welcome ${kb(report.joined.welcome.bytes.mean)}, ${report.joined.welcome.ms.mean.toFixed(1)} ms`,
@@ -840,12 +898,13 @@ async function main() {
             out: { type: "string", default: REPORT },
             ceiling: { type: "string" },
             json: { type: "boolean", default: false },
+            whole: { type: "boolean", default: false },
         },
     });
     let report;
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

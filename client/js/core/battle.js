@@ -81,7 +81,7 @@ import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { playerSight, sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
-import { count } from "./probe.js";
+import { count, inner, lap as timed, outer, timing } from "./probe.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
@@ -399,6 +399,15 @@ const RETHINK_MS = 250;
 // by its id, so it's the same in every copy of the world with nothing kept of it, and those who'd
 // all do it in the same step (a camp, a line of battle, a pack setting out together) each do it
 // in a step of their own
+// What the step's parts are timed and counted under for a character, by what it is (its `ai`:
+// core/probe.js BATTLE_KINDS; anything else is "other"): its turn to think, its walking, how many
+// there are of it, and the ways found for it
+const kindsOf = (prefix) => Object.freeze(Object.fromEntries(["routine", "patrol", "wild", "follow", "other"].map((kind) => [kind, `${prefix}.${kind}`])));
+const THINKS = kindsOf("battle.think");
+const MOVES = kindsOf("battle.move");
+const ACTORS = kindsOf("battle.actors");
+const PATHS = kindsOf("battle.paths");
+
 const turnOf = (id, steps) => {
     let sum = 0;
 
@@ -832,6 +841,10 @@ export class Battle {
     #found = new Int32Array(64);
     #marks = [];
     #marking = 0;
+
+    // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
+    // #counted): read by nothing else, and begun again from nothing each step
+    #work = { walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0 };
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -2526,6 +2539,8 @@ export class Battle {
     // between (along the line between their middles; over what's low, from a raised deck or up at
     // one: an army's camp's walkway over its stakes, overworld.js RAISED)?
     #sees(mapId, from, to, range = SIGHT) {
+        this.#work.sights++;
+
         const distance = distanceBetween(from, to);
 
         if (distance > range) {
@@ -2669,12 +2684,29 @@ export class Battle {
     }
 
     #step() {
+        // (Timed by its parts, core/probe.js BATTLE_PASSES, where it's stepped within a pass that's
+        // being timed, the host's: `from`, gone on with at its end; each character's turn and
+        // walking under its kind's name, begun again only when the kind changes from the one
+        // before's)
+        const from = timing();
+        const probed = from !== undefined;
+        let part = null;
+
+        for (const name of Object.keys(this.#work)) {
+            this.#work[name] = 0;
+        }
+
         this.time += STEP_MS;
         this.#version++;
+        probed && timed("battle.muster");
         this.#march();
         this.#mustered();
 
         for (const actor of this.actors) {
+            if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
+                timed((part = THINKS[actor.ai] ?? THINKS.other));
+            }
+
             this.#ride(actor);
             this.#arm(actor);
             this.#hover(actor);
@@ -2684,13 +2716,20 @@ export class Battle {
         }
 
         for (const actor of this.actors) {
+            if (probed && part !== (MOVES[actor.ai] ?? MOVES.other)) {
+                timed((part = MOVES[actor.ai] ?? MOVES.other));
+            }
+
             this.#move(actor);
         }
+
+        probed && timed("battle.fight");
 
         for (const actor of this.actors) {
             this.#fight(actor);
         }
 
+        probed && timed("battle.effects");
         this.#fly();
         this.#burst();
         this.#falling();
@@ -2699,6 +2738,46 @@ export class Battle {
         this.#ground();
         this.#ail();
         this.#lapse();
+
+        if (probed) {
+            this.#counted();
+        }
+
+        outer(from);
+    }
+
+    // The step's work counted (core/probe.js COUNTERS): who was in it, by kind, how many of them
+    // down and how many standing with nowhere to go; and what was tallied as it went (#work),
+    // begun again from nothing
+    #counted() {
+        const work = this.#work;
+        const kinds = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0 };
+        let fallen = 0;
+        let idle = 0;
+
+        for (const actor of this.actors) {
+            kinds[Object.hasOwn(kinds, actor.ai) ? actor.ai : "other"]++;
+            fallen += actor.dead ? 1 : 0;
+            idle += !actor.dead && !actor.path.length && actor.target === null ? 1 : 0;
+        }
+
+        for (const kind of Object.keys(kinds)) {
+            count(ACTORS[kind], kinds[kind]);
+        }
+
+        count("battle.actors", this.actors.length);
+        count("battle.fallen", fallen);
+        count("battle.idle", idle);
+        count("battle.walkers", work.walkers);
+        count("battle.strides", work.strides);
+        count("battle.searches", work.searches);
+        count("battle.searchLooks", work.looks);
+        count("battle.fightAsks", work.fightAsks);
+        count("battle.playerAsks", work.playerAsks);
+        count("battle.nears", work.nears);
+        count("battle.nearFound", work.nearFound);
+        count("battle.sights", work.sights);
+        count("battle.meshAsks", work.meshAsks);
     }
 
     // --- Drawing weapons and putting them away ---
@@ -2772,6 +2851,18 @@ export class Battle {
      * see, or that's after it (chasing it, attacking it, or told to fight it)?
      */
     #inFight(actor) {
+        const from = inner("battle.search");
+        const fighting = this.#fighting(actor);
+
+        outer(from);
+
+        return fighting;
+    }
+
+    // (#inFight's answer)
+    #fighting(actor) {
+        this.#work.fightAsks++;
+
         if (actor.attack || actor.order?.type === "engage") {
             return true;
         }
@@ -5406,15 +5497,30 @@ export class Battle {
     // `wide`, those standing over more than their own square too, however far off their middles
     // are (a `footprint`: what's within reach of one is its nearest square, #aimAt)
     #nearestEnemy(actor, test, within = Infinity, enemy = null, wide = false) {
+        const from = inner("battle.search");
+        const nearest = this.#nearestOf(actor, test, within, enemy, wide);
+
+        outer(from);
+
+        return nearest;
+    }
+
+    // (#nearestEnemy's answer)
+    #nearestOf(actor, test, within, enemy, wide) {
         const actors = this.actors;
         const square = actor.square;
+        const work = this.#work;
         let best = null;
         let bestDistance = Infinity;
         let bestK = Infinity;
 
+        work.searches++;
+
         // (One looked at: the cheap checks first, and `test` for none no nearer than the nearest yet)
         const look = (k, far = false) => {
             const other = actors[k];
+
+            work.looks++;
 
             if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || (!far && !this.#near(actor, other, within))) {
                 return;
@@ -5509,6 +5615,8 @@ export class Battle {
     // among the players only: what one set on no one asks between its looks round (RETHINK_MS), so
     // a player's noticed in the step they come into sight. Of two as near, the first
     #playerSeen(actor, test) {
+        this.#work.playerAsks++;
+
         const sight = this.#sightOf(actor);
         let best = null;
         let bestDistance = Infinity;
@@ -5767,6 +5875,8 @@ export class Battle {
     // A player near (AGGRO), its enemy, seen and within its leash, it goes for before anyone else,
     // if there's room on them (#roomOn); or none
     #drawnTo(actor) {
+        this.#work.playerAsks++;
+
         for (const player of this.#players) {
             if (player.dead || player.map !== actor.map || !this.#near(actor, player, AGGRO.reach) || distanceBetween(actor.square, player.square) > AGGRO.reach || !this.hostile(player, actor) || !this.#noticed(actor, player) || !this.#leashed(actor, player)) {
                 continue;
@@ -5856,10 +5966,21 @@ export class Battle {
         const index = this.#index;
 
         if (index && index.actors === this.actors && index.length === this.actors.length) {
-            if (index.version === this.#version || (Battle.reindexing && this.#reindexed(index))) {
+            if (index.version === this.#version) {
+                return index;
+            }
+
+            const from = inner("battle.index");
+            const current = Battle.reindexing && this.#reindexed(index);
+
+            outer(from);
+
+            if (current) {
                 return index;
             }
         }
+
+        const from = inner("battle.index");
 
         count("battle.indexed");
         count("battle.indexedActors", this.actors.length);
@@ -5896,7 +6017,10 @@ export class Battle {
             }
         });
 
-        return (this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell });
+        this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell };
+        outer(from);
+
+        return this.#index;
     }
 
     // An index that might be out of date brought up to date, with the same actors in the same
@@ -5992,6 +6116,9 @@ export class Battle {
             }
         }
 
+        this.#work.nears++;
+        this.#work.nearFound += found.length;
+
         return found;
     }
 
@@ -6056,6 +6183,9 @@ export class Battle {
                 }
             }
         }
+
+        this.#work.nears++;
+        this.#work.nearFound += count;
 
         return count;
     }
@@ -6166,8 +6296,17 @@ export class Battle {
 
         const near = ([x, y]) => this.#players.some((player) => player.map === actor.map && hypot(player.x - x, player.y - y) <= WAIT_BEYOND);
         const wait = actor.kind !== "player" && !(near([actor.x, actor.y]) && near(point));
+        const from = inner("battle.paths");
 
-        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
+        count("battle.paths");
+        count(PATHS[actor.ai] ?? PATHS.other);
+
+        try {
+            actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
+        } finally {
+            outer(from);
+        }
+
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
@@ -6297,6 +6436,8 @@ export class Battle {
         // Standing still, it starts again from a walk
         if (travelled === 0) {
             actor.pace = walk;
+        } else {
+            this.#work.walkers++;
         }
 
         // Running uses stamina, anything else gets it back (in thousandths, so it adds up exactly),
@@ -6344,6 +6485,8 @@ export class Battle {
         const target = actor.backing || actor.wild?.colossus ? null : this.#aim(actor);
 
         while (budget > 1e-9 && actor.path.length) {
+            this.#work.strides++;
+
             const [tx, ty] = actor.path[0];
             const [dx, dy] = [tx - actor.x, ty - actor.y];
             const distance = Math.sqrt(dx * dx + dy * dy);
@@ -6528,7 +6671,24 @@ export class Battle {
         if (from) {
             const navigation = navigatorOf(this.maps[mapId]);
 
-            return !this.#apart(mapId, [from.x, from.y], [x, y]) && (!navigation.walkable(from.x, from.y) || navigation.walkable(x, y));
+            if (this.#apart(mapId, [from.x, from.y], [x, y])) {
+                return false;
+            }
+
+            // (The mesh asked where it stands, and then where it's stepping only if it's on it)
+            const asking = inner("battle.mesh");
+            let on = true;
+
+            this.#work.meshAsks++;
+
+            if (navigation.walkable(from.x, from.y)) {
+                this.#work.meshAsks++;
+                on = navigation.walkable(x, y);
+            }
+
+            outer(asking);
+
+            return on;
         }
 
         return true;
