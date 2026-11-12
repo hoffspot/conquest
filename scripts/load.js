@@ -3,7 +3,10 @@
 // (core/netplay.js Hosting), with as many players as asked for joined over a link that only counts
 // what's sent: they hold no copy of the world, so a hundred of them cost the machine nothing the
 // authority wouldn't spend on a hundred real ones. Everything's in this one process and played in
-// fixed steps, so the same options play the same world every time.
+// fixed steps, so the same options play the same world every time (while the navigation keeps
+// every tile round the players, below: once it can't, which tiles are in when a way's looked for
+// goes by when its workers finished, and the ways found, and so what's sent, differ a little
+// from run to run).
 //
 // It says what a step costs and where: each pass of the step by name (core/probe.js), the step's
 // mean, 99th percentile and worst, by the clock and in the thread's own processor time (the
@@ -16,6 +19,7 @@
 //     npm run load -- --players 100 --layout one-town --activity stick
 //     npm run load -- --activity fights --seconds 300 --seed 7
 //     npm run load -- --json                               # the report as JSON, and nothing else
+//     npm run load -- --ceiling 50                         # and fail if the mean step's over 50 ms
 //
 // --players: any number (the plan's: 8, 25, 50, 100). --layout: spread (each in a settlement of
 // their own, as far from one another as the world allows), towns (four to a town), one-town (all
@@ -33,7 +37,11 @@
 // steps then include the tiles baked again inside them, as a world server's would.
 //
 // Writes the report to test-results/load/report.json (--out for elsewhere). Exits 1 only if the
-// run couldn't be made (an option it doesn't know; one that isn't built yet exits 0, saying so).
+// run couldn't be made (an option it doesn't know; one that isn't built yet exits 0, saying so);
+// or, given --ceiling, if what's the same on any machine went wrong (failuresOf: the report not as
+// its schema says, players sent out, a fight that didn't begin) or the mean step, in the thread's
+// own processor time, was over that many ms: a catastrophe's ceiling, for the nightly run
+// (.github/workflows/scale.yml), not a gate. The gates are timed by hand, on one machine.
 
 import { mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -760,6 +768,27 @@ export function checkReport(report, schema = report?.built === false ? UNBUILT_S
     return wrong;
 }
 
+/**
+ * Why a run failed, a line each, judged only by what's the same on any machine, and by a ceiling
+ * (`ceiling`, ms) on the mean step in the thread's own processor time that only a catastrophe is
+ * over: the report not as its schema says; players sent out of the world; what was asked for at
+ * LOAD.eventAt not begun; the mean step over the ceiling. None, if it didn't (nor for an activity
+ * that isn't built: there was no run). The navigation's cap isn't a failure: it's reported.
+ */
+export function failuresOf(report, { ceiling = Infinity } = {}) {
+    const wrong = checkReport(report);
+
+    if (wrong.length || !report.built) {
+        return wrong;
+    }
+
+    return [
+        ...(report.joined.players < report.run.players ? [`${report.run.players - report.joined.players} of the players never came in`] : []),
+        ...report.problems.filter((problem) => /sent out of the world|didn't begin|couldn't be stood/.test(problem)),
+        ...(report.steps.cpu.mean > ceiling ? [`the mean step took ${report.steps.cpu.mean.toFixed(1)} ms of the thread's time, over the ceiling of ${ceiling} ms`] : []),
+    ];
+}
+
 /** A report as lines to read. */
 export function wordsOf(report) {
     const { run } = report;
@@ -800,6 +829,7 @@ async function main() {
             activity: { type: "string", default: "walk" },
             seconds: { type: "string", default: String(LOAD.seconds) },
             out: { type: "string", default: REPORT },
+            ceiling: { type: "string" },
             json: { type: "boolean", default: false },
         },
     });
@@ -815,6 +845,15 @@ async function main() {
     await mkdir(path.dirname(path.resolve(values.out)), { recursive: true });
     await writeFile(path.resolve(values.out), JSON.stringify(report, null, 2));
     console.log(values.json ? JSON.stringify(report, null, 2) : wordsOf(report).join("\n"));
+
+    if (values.ceiling !== undefined) {
+        const failures = failuresOf(report, { ceiling: Number(values.ceiling) });
+
+        if (failures.length) {
+            console.error(`Failed:\n${failures.map((why) => `  ${why}`).join("\n")}`);
+            process.exitCode = 1;
+        }
+    }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

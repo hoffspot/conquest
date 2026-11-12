@@ -9,7 +9,7 @@ import { KEEP_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
-import { checkReport, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
+import { checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
 
 describe("the load's layouts (scripts/load.js layoutOf)", () => {
     let plan;
@@ -122,6 +122,19 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.ok(report.actors.most >= report.actors.start + report.event.actors);
     });
 
+    it("fails, for the nightly run, only by what's the same on any machine, or a mean step over a ceiling no working world reaches", () => {
+        assert.deepEqual(failuresOf(report), []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+
+        const slow = { ...report, steps: { ...report.steps, cpu: { ...report.steps.cpu, mean: 61.25 } } };
+        const out = { ...report, problems: ["2 of the players were sent out of the world", "the navigation keeps 1024 tiles (core/navigation.js KEEP_TILES) and these 25 players want 3025 baked round them"] };
+
+        assert.deepEqual(failuresOf(slow, { ceiling: 50 }), ["the mean step took 61.3 ms of the thread's time, over the ceiling of 50 ms"]);
+        assert.deepEqual(failuresOf(slow), [], "no ceiling given, no time judged");
+        assert.deepEqual(failuresOf(out, { ceiling: 50 }), ["2 of the players were sent out of the world"], "the navigation's cap is reported, not failed");
+        assert.deepEqual(failuresOf({ ...report, named: undefined }), ["report.named: not a number"]);
+    });
+
     it("can be read as lines", () => {
         const words = wordsOf(report);
 
@@ -142,6 +155,7 @@ describe("the load's options", () => {
             assert.equal(report.built, false);
             assert.match(report.reason, /^not built yet: /);
             assert.deepEqual(checkReport(report), []);
+            assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
             assert.match(wordsOf(report)[0], new RegExp(`^8 players, spread, ${activity}, seed 2: not built yet`));
         }
     });
