@@ -69,3 +69,15 @@ export function reachable(map, [ax, ay], [bx, by]) {
 
     return Boolean(end) && Math.floor(end[0]) === bx && Math.floor(end[1]) === by;
 }
+
+/**
+ * A switch that must not outlive its use (contribution.md, section 3, *Two netcodes side by
+ * side*): fails once `date` ("2027-05-01") has passed, saying what to do about it. `now` but
+ * for the tests of this itself.
+ */
+export function unexpired(name, date, now = new Date()) {
+    const ends = new Date(`${date}T00:00:00Z`);
+
+    assert.ok(!Number.isNaN(ends.getTime()), `${name}: an expiry as 2027-05-01, not ${JSON.stringify(date)}`);
+    assert.ok(now < ends, `The switch "${name}" expired on ${date}: take it out (its name is never used again), or, if it's still needed, say why in the pull request that gives it a later date.`);
+}

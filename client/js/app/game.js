@@ -1399,7 +1399,9 @@ export class Game {
          * Playing together (docs/WAR.md M11): joined to a world someone else hosts, how this game
          * plays its copy of it on and sends its player's commands (core/netplay.js Joining; its
          * player's already in it); or hosting one opened to others, what sends them what's done
-         * (Hosting: set by whoever opens it, kept by the runner: hosting).
+         * (Hosting: set by whoever opens it, kept by the runner: hosting). The link's reached
+         * through the link seam alone (core/remote.js REMOTE): nothing of `remote` that isn't
+         * there is read, called or set here.
          */
         this.remote = remote;
         this.pingedAt = 0;

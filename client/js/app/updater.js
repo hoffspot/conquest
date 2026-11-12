@@ -13,6 +13,16 @@ import { mappedOf, releaseOf } from "./catalog.js";
 /** How often to look for an update while the game's open (ms). */
 export const UPDATES = Object.freeze({ every: 15 * 60000 });
 
+/**
+ * Whether a game turned away by a world server for its version starts the update it has at
+ * once (the page loaded again, into it): when the server's the newer (`theirs`, its NET_VERSION,
+ * over `ours`), the update's all downloaded (`ready`), and no game's being played that the
+ * reload would end. Otherwise the player's told, as ever.
+ */
+export function startsUpdate({ theirs, ours, ready, playing = false }) {
+    return Number.isInteger(theirs) && Number.isInteger(ours) && theirs > ours && Boolean(ready) && !playing;
+}
+
 // What a page names its release by: its import map, and main.js's script
 const MAP = /<script type="importmap">([\s\S]*?)<\/script>/;
 const MAIN = /<script type="module" src="(js\/main\.js\?h=[0-9a-f]{10})"><\/script>/;
