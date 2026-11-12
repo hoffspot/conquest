@@ -685,6 +685,25 @@ raised, by `limits` among the options of `WorldServer.open` (`mostPlayers`, `pla
 `socketsPerAddress`). They are options of that call alone: no setting, file or request sets them,
 so a server that's run as one (`npm run world-server`, the Mac app) always has its own limits.
 
+### How a world's played, and the replication switch
+
+Every world is played in **lockstep**: each player's game holds a copy of the whole world and
+plays the server's steps, which is why a world takes 8 at the most. That's a setting of the
+world's own now (**How it's played**, its `netcode`), with the one choice there is; it changes
+only while nobody's in the world (offline, or set aside), as its characters do. A game says which
+ways it can play when it asks to come in (`speaks`), and one that can't play a world's way is told
+so in words, with what to do (reload for the newest version), where it would otherwise have
+failed to understand what it was sent. A world can also be marked **Experimental**
+(`experimental`): its card says so in the game's lists, and nothing else changes.
+
+**Settings › Replicated views** (`replication`: off, dark or on) is the switch for the netcode
+being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). It's off, and
+today dark and on do nothing more than off does: there are no views yet to build or send. What
+off already means, and will go on meaning: a world set to be played any other way than lockstep
+lets nobody in, its save kept exactly as it is, until the switch is turned on again or the world
+is set back to lockstep. It's changed on the management page and takes effect at once, with no
+update and no restart. Neither setting raises how many a world takes.
+
 ## Crash reports
 
 When a player's game falls over in a world here (a phone running out of memory, say) and they come

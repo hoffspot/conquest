@@ -31,6 +31,7 @@ import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, 
 import { KeptHeroes } from "./heroes.js";
 import { MEASURES_FILE, MeasuredRuns } from "./measures.js";
 import { Visitors } from "./visitors.js";
+import { NETCODES } from "../../client/js/core/netplay.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
 
@@ -102,6 +103,9 @@ export const ruleOf = ({ heroes, firstHero }) => (heroes === "brought" ? "visiti
  */
 export const isOffline = (meta) => meta?.state === "offline";
 
+/** Each netcode (core/netplay.js NETCODES) as the management page names it. */
+export const NETCODE_WORDS = Object.freeze({ lockstep: "Lockstep: each game holds a copy of the whole world (8 players at most)" });
+
 /**
  * How a world's played with those who come into it (core/netplay.js NETCODES): lockstep, for a
  * world that doesn't say (every world, before any said).
@@ -116,7 +120,12 @@ export const WORLD_SETTINGS = Object.freeze({
     pauseWhenHidden: { kind: "boolean", default: true, about: "Stopped while its one player's page is hidden (never while anyone else is in it)" },
     trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
     debugCommands: { kind: "boolean", default: false, about: "Its owners may use the debug commands (a field battle, say)" },
+    netcode: { kind: "choice", of: NETCODES, words: NETCODE_WORDS, default: "lockstep", about: "How it's played with those who come in (changed only while nobody's in it)" },
+    experimental: { kind: "boolean", default: false, about: "Experimental: said so on its card, to whoever sees it. For a world that tries what isn't finished" },
 });
+
+/** A world's settings, each it doesn't keep (one added since it was made) at its default. */
+export const settingsOf = (meta) => ({ ...Object.fromEntries(Object.entries(WORLD_SETTINGS).map(([key, { default: value }]) => [key, value])), ...meta?.settings });
 
 // A world's id: ten letters and digits (made at random); never "server", whose backups are the server's own
 const ID = /^[a-z0-9]{10}$/;

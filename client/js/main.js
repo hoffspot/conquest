@@ -435,7 +435,7 @@ async function frontDoor() {
                 worldCard({
                     name: world?.name ?? held?.name ?? id,
                     about: world ? `${world.description ? `${world.description} · ` : ""}${world.players} of ${world.most} playing` : "Yours to come back to",
-                    badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                    badge: world ? badgeOf(world) : "",
                     when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
                     onClick: async () => {
                         await openWorlds();
@@ -3874,7 +3874,7 @@ async function showWorlds() {
                 rowOf(
                     worldCard({
                         name: world?.name ?? held?.name ?? id,
-                        badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                        badge: world ? badgeOf(world) : "",
                         about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
                         when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Needs a key: ask its owner for an invite link",
                         className: matched ? "" : "unmatched",
@@ -4877,6 +4877,9 @@ const ruleOfCard = (card) => card?.characters ?? (card?.heroes !== "kept" ? "vis
 
 /** Each character rule in a few words, as the worlds' lists badge them. */
 const RULE_BADGES = Object.freeze({ visiting: "Visit as your own", copies: "Copies stay here", own: "Made here" });
+
+// A world's badge in a list: its character rule, and that it's experimental if its owner's marked it so (a world server's WORLD_SETTINGS)
+const badgeOf = (card) => `${RULE_BADGES[ruleOfCard(card)]}${card?.experimental === true ? " · Experimental" : ""}`;
 
 // Each character rule, as a world's maker chooses it
 const RULE_CHOICES = Object.freeze([

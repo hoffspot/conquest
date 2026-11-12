@@ -632,7 +632,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        `netcode`, the server's `replication`), and a world of 8 or fewer can always be opened
        as lockstep again.
      - Every switch has an expiry: a date in a test that fails once it's passed, so the switch
-       is taken out or its date argued for, never forgotten.
+       is taken out or its date argued for, never forgotten (`unexpired` in `test/helpers.js`;
+       `test/netcode.test.js` holds the dates, and fails for a setting that's one of a few,
+       a schema's `choice`, with no date there).
      - A change to what's replicated changes lockstep's op and the view's schema in the same
        pull request, with a test of each.
      - **No pull request for replication bumps `SNAPSHOT_VERSION`.** The save is the same

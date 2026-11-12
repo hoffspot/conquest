@@ -17,7 +17,8 @@ export const CONFIG_VERSION = 1;
 export const SETTINGS_STEPS = Object.freeze({});
 
 /**
- * Every setting: its kind ("text", "boolean", "integer", "number"), its range (a text's most
+ * Every setting: its kind ("text", "boolean", "integer", "number", or "choice": one of its `of`,
+ * each with its words, `words`, as the management page lists them), its range (a text's most
  * characters), its default, and what it's for (as the management page says it).
  */
 export const SETTINGS = Object.freeze({
@@ -40,6 +41,13 @@ export const SETTINGS = Object.freeze({
     madeMost: { kind: "integer", min: 1, max: 500, default: 20, about: "How many worlds players may make here that way in all" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
     autoUpdate: { kind: "boolean", default: true, about: "Install new versions by itself, at night when nobody's in (from the hour below, for two hours)" },
+    replication: {
+        kind: "choice",
+        of: ["off", "dark", "on"],
+        words: { off: "Off: every world's played in lockstep", dark: "Dark: views built and counted, never sent (not built yet: as off)", on: "On: worlds set to views send them (not built yet: as off)" },
+        default: "off",
+        about: "Replicated views, the netcode for worlds of more than 8 (generated/multiplayer_scaling_plan.md): the switch that turns them off for every world at once, with no update. Off, a world set to them lets nobody in, its save kept as it is",
+    },
     updateHour: { kind: "integer", min: 0, max: 23, default: 3, about: "The hour it installs new versions by itself from, this computer's time (3 is 3 in the morning)" },
 });
 
@@ -66,6 +74,8 @@ export function schemaReason(schema, key, value) {
             return textReason(key, value, setting.most);
         case "boolean":
             return typeof value === "boolean" ? null : `${key} must be true or false, not ${JSON.stringify(value)}.`;
+        case "choice":
+            return setting.of.includes(value) ? null : `${key} must be ${setting.of.length > 1 ? "one of " : ""}${setting.of.join(", ")}, not ${JSON.stringify(value)}.`;
         case "integer":
             return Number.isInteger(value) && value >= setting.min && value <= setting.max ? null : `${key} must be a whole number from ${setting.min} to ${setting.max}, not ${JSON.stringify(value)}.`;
         default:

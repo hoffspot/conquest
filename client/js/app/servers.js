@@ -108,6 +108,7 @@ export const SERVER_REFUSALS = Object.freeze({
     unproved: "That server needs your player identity to make a world, and the game couldn't show it: reload the game and try again.",
     "made-each": "You've made as many worlds on that server as each player may. Ask its owner for a creator key to make more.",
     netcode: "That world's played in a way this version of the game can't join. Reload this page for the newest version, or open the game from the server itself (it always matches).",
+    replication: "That world's way of playing is turned off on its server for now. It's saved: try again later, or ask the server's owner.",
     "made-most": "Players have made as many worlds on that server as its owner allows. Ask them for a creator key.",
 });
 
