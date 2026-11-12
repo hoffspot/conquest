@@ -5445,24 +5445,13 @@ export class Game {
     // out first, and one with none there (dead, on another map, hidden, past sight) or behind
     // the camera has its bar hidden here and now, its head neither found nor put on the screen
     // (every soldier's was, every frame, wherever it stood); the rest ranked by how tall on the
-    // screen they are, the nearer the camera first of two as tall. One just put down (#place:
-    // drawn this frame, or come through a door) has no bar this once: a body's stood on its
-    // ground as the frame's bodies are gone through, and one put down after that is at no height
-    // yet, so its bar was drawn for a frame wherever that put its head, hundreds of pixels down
-    // the screen out on high ground, and, lying there under someone else's, was then kept hidden
-    // half a second as one covered is (hud.js PLATE_COVER.hold)
+    // screen they are, the nearer the camera first of two as tall. (One just put down has its bar
+    // as anyone has, over its head from that frame: #place stands it on its ground)
     #plated = (entry) => {
         const { actor } = entry;
         const avatar = this.avatars.get(actor.id);
 
         if (actor.id === this.me || !avatar || !this.hud.tracked.has(actor.id)) {
-            return false;
-        }
-
-        if (avatar.putDown) {
-            avatar.putDown = false;
-            this.hud.place(actor.id, null);
-
             return false;
         }
 
@@ -10964,10 +10953,14 @@ export class Game {
         const avatar = this.avatars.get(actor.id);
 
         avatar.place(ox + actor.x, oz + actor.y, actor.facing);
-        // (Stood straight on the ground there, not eased to it from wherever they were)
+        // (Stood straight on the ground there, not eased to it from wherever they were; and from
+        // this frame, not the next. A body's stood on its ground as the frame's bodies are gone
+        // through (#updateBody), and one put down after that, drawn this frame (#visit) or built
+        // in full in its crowd figure's place, was at no height till the frame after: the bar
+        // over its head, put where the camera sees its head, was drawn for that frame hundreds
+        // of pixels down the screen, out on high ground)
         avatar.standing = undefined;
-        // (And no bar over them till they are: #plated)
-        avatar.putDown = true;
+        avatar.object.position.y = this.#standsAt(actor.map, actor.x, actor.y);
 
         if (actor.id === this.me) {
             this.focusHeight = undefined;

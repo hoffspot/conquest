@@ -7237,12 +7237,14 @@ the Bindings page till one's chosen.
    are as they were. A soldier has a bar only
    within 60 m of the player (and 6 m further once it has one; the one the player's set on
    wherever it is): a hundred in an invasion each had one in the page, most of them past where
-   a bar's drawn at all. And no one has a bar on the frame they're put down (drawn that frame, or
-   come through a door: game.js `#place`, `#plated`): a body's stood on its ground as the frame's
-   bodies are gone through, and one put down after that is at no height yet, so its bar was
-   drawn for a frame wherever that put its head (hundreds of pixels down the screen, out on high
-   ground), and, lying there under someone else's, would be kept hidden for the half second
-   after. Each bar
+   a bar's drawn at all. A body's stood on its ground the frame it's put down (drawn that frame,
+   built in full in its crowd figure's place, or come through a door: game.js `#place`), so its
+   bar is over its head from that frame. It used to be at no height till the frame after (a
+   body's stood on its ground as the frame's bodies are gone through, and these are put down
+   after that), its bar drawn for that frame hundreds of pixels down the screen, out on high
+   ground, where, lying under someone else's, it would then be kept hidden half a second; and a
+   first mend, giving no one a bar on the frame they were put down, made a soldier's bar blink
+   off for a frame each time its body was built in full in its crowd figure's place. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's
    placed (view.js `#place`, and again as the greater spells shake it), not only as it's drawn, so
    a bar no longer trails its character by a frame as the camera turns (it shook, the more the
@@ -8155,7 +8157,10 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   hand's breadth behind the other, have bars again, the one the player's set on shown, lit and
   over them all and the other's under it not shown, and the other way about from the next frame
   once they're set on the other. And, of four slimes drawn before the camera, each one's bar is
-  over its head from the first frame it's put anywhere, none on the frame its body's drawn.
+  over its head from the first frame it's put anywhere, the frame its body's drawn. And twelve
+  soldiers before the camera, their bars clear of one another, each keep their bar shown on
+  every frame as five or more of them are let go to their kinds' crowds for want of room and
+  built in full again in the figures' places.
 - `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
   (`Character.merging`): the same mesh and the very same material as one dressed all at once;
   one by one till the one step that puts them together; in a step where someone else wears the
