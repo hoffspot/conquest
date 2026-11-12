@@ -81,6 +81,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 25 --layout spread --activity night --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-night.json
 
+      # (A turn of the war and its save in the run: what those steps cost, in a war 35 turns old)
+      - name: Load, 8 players spread, over a turn of the war
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 8 --layout spread --activity warturn --turns 35 --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/8-spread-warturn.json
+
       - name: Load, 50 players, four to a town, sticks held
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 50 --layout towns --activity stick --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/50-towns-stick.json

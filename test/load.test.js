@@ -12,6 +12,7 @@ import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { ACTIVITY_SCHEMAS, checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
 import { AHEAD } from "../server/ahead.js";
+import { KEEPER } from "../server/keeper.js";
 
 describe("the load's layouts (scripts/load.js layoutOf)", () => {
     let plan;
@@ -189,10 +190,54 @@ describe("the load at night (scripts/load.js load, activity night)", () => {
     });
 });
 
+describe("the load over a turn of the war (scripts/load.js load, activity warturn)", () => {
+    let report;
+
+    before(async () => {
+        report = await load({ seed: 2, players: 4, layout: "one-town", activity: "warturn", seconds: 5, eventAt: 2000 });
+    });
+
+    it("waits, untimed, till the war's next turn falls when it's asked for in the run, and the world's saved four steps after as a world server saves it", () => {
+        const { warturn } = report;
+
+        assert.deepEqual(checkReport(report), []);
+        assert.deepEqual(report.problems, []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+        assert.equal(report.steps.count, (5 * 1000) / STEP_MS);
+        assert.deepEqual({ played: warturn.played, turns: warturn.turns, at: warturn.turn.at, number: warturn.turn.number }, { played: 0, turns: 1, at: 2000, number: 1 });
+        assert.deepEqual({ at: warturn.save.at, after: warturn.save.after, written: warturn.save.written }, { at: 2000 + KEEPER.after * STEP_MS, after: KEEPER.after, written: 1 });
+        assert.ok(warturn.save.bytes > 10000 && warturn.save.zipped > 0 && warturn.save.zipped < warturn.save.bytes, `${warturn.save.bytes} bytes written, ${warturn.save.zipped} gzipped`);
+        assert.equal(report.passes.war.calls, report.steps.count);
+    });
+
+    it("says which of the steps between the two was longest and the pass that took most of it, and what the steps round them were", () => {
+        const { warturn } = report;
+
+        assert.ok(warturn.between.after >= 1 && warturn.between.after < KEEPER.after);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(warturn.between.pass), warturn.between.pass);
+        assert.deepEqual(Object.keys(warturn.round.before), ["mean", "p50", "p99", "worst", "worstAt"]);
+        assert.equal(warturn.all.length, 1);
+        assert.deepEqual(Object.keys(warturn.all[0]), ["at", "number", "turn", "between", "save"]);
+        assert.deepEqual([warturn.all[0].at, warturn.all[0].number, warturn.all[0].turn, warturn.all[0].save], [2000, 1, warturn.turn.wall, warturn.save.wall]);
+        assert.ok(wordsOf(report).some((line) => /^The war's turn 1 at 2 s: its step /.test(line)));
+        assert.ok(wordsOf(report).some((line) => /^Its save 4 steps after: that step .* 1 turn in the run$/.test(line)));
+    });
+
+    it("is held to what such a run reports, and fails if the turn didn't come or wasn't saved", () => {
+        const { warturn, ...without } = report;
+
+        assert.deepEqual(Object.keys(warturn).sort(), Object.keys(ACTIVITY_SCHEMAS.warturn).sort());
+        assert.deepEqual(checkReport(without), ["report.warturn: missing"]);
+        assert.deepEqual(checkReport({ ...report, warturn: { ...warturn, save: { ...warturn.save, bytes: null }, all: 1 } }).sort(), ["report.warturn.all: not an array", "report.warturn.save.bytes: not a number"]);
+        assert.deepEqual(failuresOf({ ...report, problems: ["the war's turn waited for at 2 s didn't come then"] }), ["the war's turn waited for at 2 s didn't come then"]);
+        assert.deepEqual(failuresOf({ ...report, problems: ["the war's turn wasn't saved within the run"] }), ["the war's turn wasn't saved within the run"]);
+    });
+});
+
 describe("the load's options", () => {
     it("names every activity the plan lists: those built, and those that say they aren't yet", async () => {
         assert.deepEqual([...LOAD.activities, ...Object.keys(LOAD.unbuilt)].sort(), ["battle", "dungeons", "fights", "hellrift", "invasion", "joinstorm", "night", "stick", "walk", "warturn"]);
-        assert.deepEqual(Object.keys(LOAD.unbuilt), ["warturn", "joinstorm", "dungeons"]);
+        assert.deepEqual(Object.keys(LOAD.unbuilt), ["joinstorm", "dungeons"]);
         assert.deepEqual(LOAD.players, [8, 25, 50, 100]);
         assert.deepEqual(LOAD.seeds, [2, 7]);
 
@@ -210,6 +255,7 @@ describe("the load's options", () => {
     it("refuses what it doesn't know, saying what it does", async () => {
         await assert.rejects(load({ activity: "dancing" }), /No activity called dancing: walk, stick, fights, battle, invasion, hellrift, night, warturn, joinstorm, dungeons/);
         await assert.rejects(load({ players: 0 }), /--players takes a whole number/);
+        await assert.rejects(load({ turns: -1 }), /--turns takes how many turns of the war/);
         assert.ok(Object.keys(REPORT_SCHEMA).length >= 15);
     });
 });
