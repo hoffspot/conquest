@@ -71,6 +71,9 @@ const started = clock();
 const stored = await StoredWorld.open(workerData.folder);
 const kept = stored.meta.heroes === "kept";
 let settings = { ...stored.meta.settings };
+// The most players it takes at once: its world's setting, unless its server was opened with
+// another in its place (world-thread.js: only a soak's is)
+const mostPlayers = () => workerData.mostPlayers ?? settings.mostPlayers;
 let opened;
 
 try {
@@ -113,7 +116,7 @@ const peers = new Map();
 // Heroes being kept, one after another
 let keeping = Promise.resolve();
 
-hosting.most = settings.mostPlayers;
+hosting.most = mostPlayers();
 // (Each known by the player their ticket proves, theirs taken over only under the same id: never
 // another player's by a copy of their character)
 hosting.byCharacter = false;
@@ -457,7 +460,7 @@ parentPort.on("message", async (message) => {
             Object.assign(stored.meta, rest);
             stored.meta.settings = { ...stored.meta.settings, ...changed };
             settings = { ...settings, ...changed };
-            hosting.most = settings.mostPlayers;
+            hosting.most = mostPlayers();
             look();
             break;
         }

@@ -2,11 +2,18 @@
 // memory flat after the first hour (the world's thread no more than SERVER_SOAK.growth above
 // where it stood then, its last ten minutes' least taken, so a collection due doesn't count), and
 // every minute's 99th-percentile step under a step's time once the players are all in. The soak
-// itself runs for two hours (npm run soak:server); this is how it's judged.
+// itself runs for two hours (npm run soak:server); this is how it's judged. And its thin players
+// (generated/multiplayer_scaling_plan.md 0-3): who's counted as not having stayed in, the limits a
+// server's opened with for more players than any real one takes, which are options of that call
+// and never settings, and a short soak of nine thin players in one world, one more than a world's
+// own setting can allow.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { judge, SERVER_SOAK } from "../scripts/server-soak.js";
+import { LIMITS } from "../server/access/limits.js";
+import { SETTINGS } from "../server/storage/settings.js";
+import { WORLD_SETTINGS } from "../server/storage/worlds.js";
+import { judge, limitsFor, SERVER_SOAK, soakServer, stayed } from "../scripts/server-soak.js";
 
 const MB = 1048576;
 
@@ -45,5 +52,58 @@ describe("the server soak's judgement", () => {
         assert.equal(judged.settled, null);
         assert.equal(judged.flat, true);
         assert.deepEqual(judged.failures, []);
+    });
+});
+
+describe("the server soak's players", () => {
+    it("counts as not having stayed in whoever's gone, closed, dropped or sent out, and a thin one refused or never welcomed", () => {
+        const reports = [
+            { name: "Soak1", me: "a" },
+            { name: "Soak2", me: "b", gone: true },
+            { name: "Soak3", me: "c", closed: "full" },
+            { name: "Soak4", me: "d", dropped: true },
+            { name: "Soak5", me: "e", kicked: { reason: "afk", step: 9 } },
+            { name: "Thin1", thin: true, me: "f", kicked: null, refused: null },
+            { name: "Thin2", thin: true, me: null, refused: "full" },
+            { name: "Thin3", thin: true, me: null, refused: null },
+        ];
+
+        assert.deepEqual(stayed(reports), [
+            "Soak2 didn't stay in (gone)",
+            "Soak3 didn't stay in (full)",
+            "Soak4 didn't stay in (dropped)",
+            "Soak5 didn't stay in (sent out: afk)",
+            "Thin2 didn't stay in (refused: full)",
+            "Thin3 didn't stay in (never welcomed)",
+        ]);
+    });
+
+    it("opens its server with limits raised only as far as its players need, and with none for 8 or fewer", () => {
+        assert.deepEqual(limitsFor(8), {});
+        assert.deepEqual(limitsFor(9), { mostPlayers: 9 });
+        assert.deepEqual(limitsFor(29), { mostPlayers: 29 });
+        assert.deepEqual(limitsFor(LIMITS.socketsPerAddress + 1), { mostPlayers: 33, socketsPerAddress: 33 });
+        assert.deepEqual(limitsFor(LIMITS.players + 36), { mostPlayers: 100, players: 100, socketsPerAddress: 100 });
+    });
+
+    it("has no setting that could raise them: a world's own takes 8 at the most, and a server's settings name none of them", () => {
+        assert.equal(WORLD_SETTINGS.mostPlayers.max, 8);
+        assert.deepEqual(Object.keys(SETTINGS).filter((key) => /limit|mostPlayers|socketsPer|^players/i.test(key)), []);
+    });
+
+    it("plays nine thin players in one world for a quarter of a minute: all in, none sent out, none sent the world again", async () => {
+        const said = [];
+        const report = await soakServer({ seed: 2, minutes: 0.25, players: 0, thin: 9, hold: true, oneTown: true, log: (line) => said.push(line) });
+        const steps = report.players.map((one) => one.step);
+
+        assert.deepEqual(report.failures, []);
+        assert.deepEqual(report.limits, { mostPlayers: 9 });
+        assert.deepEqual(report.options, { players: 0, thin: 9, hold: true, fights: false, layout: "one-town", tunnel: false });
+        assert.equal(report.players.length, 9);
+        assert.ok(report.players.every((one) => one.thin && one.me && one.race === "human" && one.states === 0 && one.held > 0), "each welcomed, holding its stick");
+        assert.equal(new Set(report.players.map((one) => one.me)).size, 9, "nine players of their own");
+        assert.ok(Math.min(...steps) > 20 && Math.max(...steps) - Math.min(...steps) <= 40, `each heard the world's steps to the end (${steps})`);
+        assert.deepEqual([report.resyncs, report.desyncs, report.skips], [0, 0, 0]);
+        assert.ok(said.some((line) => /opened with \{"mostPlayers":9\} in place of its limits/.test(line)));
     });
 });

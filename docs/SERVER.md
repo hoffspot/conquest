@@ -546,6 +546,20 @@ each starting a field battle every four minutes, the world took 136 MB an hour i
 the end, its steps 4.4 ms on the mean and 30.4 ms at the worst minute's 99th percentile, its
 thread a fifth of a core.
 
+`--thin 25` adds 25 thin players to the soak (generated/multiplayer_scaling_plan.md 0-3). A thin
+player holds no copy of the world: it speaks what a game speaks on the play socket, reads only its
+welcome and what it's told of its own hero, and sends itself about from where it came in (or, with
+`--hold`, holds a stick: 16 commands a second). They all run in one process, so the world can be
+loaded with more players than the machine could play whole copies for, while the `--players` beside
+them still play theirs and say whether a copy keeps to the world. `--tunnel` brings every player in
+through the tunnel listener, so as the internet's.
+
+A world takes 8 players at the most by its own setting, a server 64 in all its worlds and 32 play
+sockets from one address (`server/access/limits.js`). A soak with more opens its server with those
+raised, by `limits` among the options of `WorldServer.open` (`mostPlayers`, `players`,
+`socketsPerAddress`). They are options of that call alone: no setting, file or request sets them,
+so a server that's run as one (`npm run world-server`, the Mac app) always has its own limits.
+
 ## Crash reports
 
 When a player's game falls over in a world here (a phone running out of memory, say) and they come
