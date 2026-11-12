@@ -36,6 +36,8 @@
 // hello within a second of one another ten seconds in, to a world that lets them in as a world
 // server does: two coming in at once, the rest told their place in the line, and the world taken
 // for them no oftener than its share of the thread allows, core/netplay.js WELCOMES, WORLDS; each
+// comes back where they were, as a kept hero does, the ground round them made ahead while they
+// wait and they let in once it is, server/ahead.js expect, or with --cold not, as it was; each
 // is a second making their copy, then walks); and dungeons (four to a door, whatever the layout:
 // every other party by a dungeon's way in out in the wilds, the rest in a town by its tavern's
 // door; ten seconds in, a party every two seconds, each is stood at its door and goes in by it,
@@ -78,7 +80,7 @@ import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { FIELD_BATTLE, Host } from "../client/js/core/host.js";
 import { torchesLit } from "../client/js/core/light.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
-import { HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
+import { characterFrom, HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
 import { WorldRunner } from "../client/js/core/runner.js";
@@ -130,6 +132,13 @@ export const LOAD = Object.freeze({
     welcomes: 2,
     loading: 1000,
     tick: 50,
+    // (How far from where they were, squares each way, one who comes back may be stood: what the
+    // host looks round it for a free one, core/host.js join. And how often a storm's world has
+    // what's wanted made ahead between two steps: a world server looks at its world twice a
+    // step, server/world-worker.js tick, and makes ahead at each look; how long the line waits
+    // is how fast the ground's made, so the storm makes it as fast as a server does)
+    back: 8,
+    looks: 2,
     // Dungeons and buildings: a party waits `away` metres from its dungeon's way in (further than
     // a dungeon's made from, core/dungeons/play.js DELVES.near, and `clear` more), the parties come
     // to their doors `stagger` ms apart (so the steps till the next comes are that door's: its
@@ -407,7 +416,7 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * how it's going, a line at a time. An activity that isn't built yet resolves to a report that
  * only says so ({ schema, run, built: false, reason }).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, log = () => {} } = {}) {
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, log = () => {} } = {}) {
     const run = { seed, players: count, layout, activity, seconds, whole, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
 
     if (Object.hasOwn(LOAD.unbuilt, activity)) {
@@ -688,8 +697,9 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // they were, and count their commands from the first again)
     const storm =
         activity === "joinstorm"
-            ? { at: eventAt, over: burst, welcomes: LOAD.welcomes, loading: LOAD.loading, asked: 0, welcomed: 0, waiting: 0, queued: 0, snapshots: 0, done: -1, lastWaited: 0, waits: null, steps: null, admit: null, longest: null, first: eventAt / STEP_MS, last: -1, waited: [], admitting: 0, admits: [], worst: null }
+            ? { at: eventAt, over: burst, welcomes: LOAD.welcomes, loading: LOAD.loading, asked: 0, welcomed: 0, waiting: 0, queued: 0, snapshots: 0, done: -1, lastWaited: 0, waits: null, steps: null, admit: null, longest: null, ground: null, first: eventAt / STEP_MS, last: -1, waited: [], admitting: 0, admits: [], worst: null, letting: 0, stepping: false, made: { steps: { chunks: 0, tiles: 0 }, ahead: { chunks: 0, tiles: 0 } } }
             : null;
+    const wasComing = Ahead.coming;
 
     if (storm) {
         for (const peer of peers) {
@@ -700,6 +710,33 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         counted();
         hosting.sparing = true;
         hosting.welcomes = storm.welcomes;
+
+        // (Each comes back as a hero the world's kept comes back: where they were, which the
+        // world knows before they're in. So what's round them is made ahead while they wait
+        // their turn, and they're let in once it is, as a world server lets them: server/
+        // world-worker.js; or, `cold`, nothing's made for them till they're in and no one waits
+        // for it, as it was before generated/multiplayer_scaling_plan.md 1-26, to compare)
+        hosting.characterOf = (peer, character) => {
+            const brought = characterFrom(character);
+            const [x, y] = byPeer.get(peer).home.at;
+
+            return brought && { ...brought, place: { x: x + 0.5, y: y + 0.5, facing: 0 } };
+        };
+        hosting.ground = ([x, y]) => ahead.grounded(x, y);
+        Ahead.coming = !cold;
+
+        // (What the steps make for themselves from here on, where a step's the hearing and the
+        // step both: the ground's chunks. The navigation's tiles baked in them are counted by
+        // the mesh, `baked`, and those baked ahead by what's added besides)
+        const groundChunk = overworld.ground.chunk.bind(overworld.ground);
+
+        overworld.ground.chunk = (cx, cy) => {
+            if (storm.stepping && !overworld.ground.peek(cx, cy)) {
+                storm.made.steps.chunks++;
+            }
+
+            return groundChunk(cx, cy);
+        };
 
         // (The letting in timed by itself, a step at a time: bringing each into the world, taking
         // it, writing it and sending it them, Session.admit. No pass of the step has its name:
@@ -959,10 +996,16 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
         const saying = said(step);
         const passesBefore = keeper || (storm && step >= storm.first) || delving?.some(({ came }) => came >= 0) ? new Map([...probes.passes].map(([name, { ms }]) => [name, ms])) : null;
+        const stormy = storm && step >= storm.first;
+        const [bakedBefore, addedBefore, madeBefore] = [navigation.baked, navigation.added, ahead.made];
         const cpuBefore = cpuNow();
         const before = clock();
 
         within.since = before;
+
+        if (stormy) {
+            storm.stepping = true;
+        }
 
         for (const [peer, text] of saying) {
             hear(peer, text);
@@ -973,6 +1016,12 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         runner.advance(STEP_MS);
 
         const after = clock();
+        const [bakedIn, addedIn] = [navigation.baked - bakedBefore, navigation.added - addedBefore];
+
+        if (stormy) {
+            storm.stepping = false;
+            storm.made.steps.tiles += bakedIn;
+        }
 
         cpu[step] = cpuNow() - cpuBefore;
         wall[step] = after - before;
@@ -989,6 +1038,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         // while anyone's still to come in, the pass that took most of it)
         if (storm && step >= storm.first && (storm.asked < count || storm.waited.length < storm.asked)) {
             storm.admits.push(storm.admitting);
+            storm.letting += wall[step] > LOAD.tick && wall[step] - storm.admitting <= LOAD.tick ? 1 : 0;
 
             if (!storm.worst || wall[step] > wall[storm.worst.step]) {
                 const [pass, ms] = [...probes.passes].map(([name, { ms: spent }]) => [name, spent - (passesBefore.get(name) ?? 0)]).sort(([, a], [, b]) => b - a)[0];
@@ -1040,16 +1090,18 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             }
         }
 
-        // (Whoever this step's sending let in, stood where they were, untimed as their first
-        // standing was; a kept hero comes back where they left)
+        // (Whoever this step's sending let in: come back where they were, as a kept hero does,
+        // to within the few squares the host looks round it for one that's free)
         for (const peer of storm ? peers : []) {
             if (peer.state === "asked" && hosting.players.has(peer.peer)) {
                 Object.assign(peer, { id: hosting.players.get(peer.peer), state: "loading", welcomedAt: step });
                 storm.waited.push((step - peer.askedAt) * STEP_MS);
                 storm.last = step;
 
-                if (!stand(peer)) {
-                    problems.push(`${peer.peer} couldn't be stood in ${peer.home.place} as the storm let them in`);
+                const { square, map } = host.battle.actor(peer.id);
+
+                if (map !== "town" || Math.max(Math.abs(square[0] - peer.home.at[0]), Math.abs(square[1] - peer.home.at[1])) > LOAD.back) {
+                    problems.push(`${peer.peer} didn't come back to where they were in ${peer.home.place} as the storm let them in`);
                 }
             }
         }
@@ -1087,13 +1139,27 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             memory.heapMost = Math.max(memory.heapMost, process.memoryUsage().heapUsed);
         }
 
-        // (Between steps, as on a server: what's wanted made ahead, and the workers heard)
-        const making = clock();
+        // (Between steps, as on a server: what's wanted made ahead, round those waiting to come
+        // in too, and the workers heard)
+        for (let look = 0; look < (storm ? LOAD.looks : 1); look++) {
+            const making = clock();
 
-        runner.bakeAhead(ahead);
-        parts.ahead += clock() - making;
-        await new Promise((resolve) => setImmediate(resolve));
+            if (storm) {
+                ahead.expect(hosting.coming());
+            }
+
+            runner.bakeAhead(ahead);
+            parts.ahead += clock() - making;
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        if (stormy) {
+            storm.made.ahead.chunks += ahead.made - madeBefore;
+            storm.made.ahead.tiles += navigation.added - addedBefore - addedIn;
+        }
     }
+
+    Ahead.coming = wasComing;
 
     uninstall();
 
@@ -1160,9 +1226,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     }
 
     if (storm) {
-        const { first, last, waited, admits, worst, ...rest } = storm;
+        const { first, last, waited, admits, worst, made, letting, ...rest } = storm;
 
         delete rest.admitting;
+        delete rest.stepping;
         const from = Math.min(first, steps);
         const to = last < 0 ? steps : last + 1;
 
@@ -1177,11 +1244,15 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             lastWaited: waited.at(-1) ?? 0,
             waits: spreadOf(waited),
             // (The steps from the first hello to the last welcome: the storm's own)
-            steps: { count: to - from, wall: spreadOf(wall.subarray(from, to)), cpu: spreadOf(cpu.subarray(from, to)), over: wall.subarray(from, to).reduce((sum, ms) => sum + (ms > LOAD.tick ? 1 : 0), 0) },
+            steps: { count: to - from, wall: spreadOf(wall.subarray(from, to)), cpu: spreadOf(cpu.subarray(from, to)), over: wall.subarray(from, to).reduce((sum, ms) => sum + (ms > LOAD.tick ? 1 : 0), 0), letting },
             // (Of those steps, the letting in alone, by the clock; and the longest step: when,
             // how long, the letting in in it, and the pass that took most of it)
             admit: spreadOf(admits),
             longest: worst ? { at: worst.step * STEP_MS, wall: round(wall[worst.step]), cpu: round(cpu[worst.step]), admit: round(worst.admit), pass: worst.pass, ms: round(worst.ms) } : { at: -1, wall: 0, cpu: 0, admit: 0, pass: "", ms: 0 },
+            // (The ground's chunks and the navigation's tiles made from the first hello to the
+            // run's end: by the steps for themselves, and ahead of them, between steps; and
+            // whether what's round those waiting was made ahead, or, `cold`, not)
+            ground: { ahead: !cold, steps: made.steps, between: made.ahead },
         });
         report.joinstorm = rest;
 
@@ -1376,10 +1447,14 @@ export const REPORT_SCHEMA = Object.freeze({
  * their place in the line; how many times the world was taken for them; when the last came in (ms
  * into the run: -1, if some never did) and how long they'd waited (ms of the world's time), with
  * everyone's waits; and the steps from the first hello to the last welcome, by the clock and in
- * the thread's time, with how many were over LOAD.tick by the clock; of those steps, the letting
+ * the thread's time, with how many were over LOAD.tick by the clock, and how many of those would
+ * not have been but for the letting in in them (`letting`); of those steps, the letting
  * in alone (bringing each into the world, taking it, writing it and sending it: Session.admit),
  * by the clock; and the longest of them: when, how long, the letting in in it, and the pass that
- * took most of it, by name, and its time. `dungeons`: how many parties, and of their doors how
+ * took most of it, by name, and its time; and the ground's chunks and the navigation's tiles
+ * made from the first hello to the run's end, inside the steps (the hearing and the step) and
+ * between them, ahead (`ground`; `ahead`, whether what's round those waiting was made ahead and
+ * waited for, as a world server does, or, --cold, not). `dungeons`: how many parties, and of their doors how
  * many are dungeons' and how many buildings'; when the first came to its door (ms into the run)
  * and how long after one another; the doors whose floors were made in the run (how many dungeons
  * and buildings, and how many levels the dungeons have); the longest step of each door's coming
@@ -1415,9 +1490,10 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
         done: "number",
         lastWaited: "number",
         waits: SPREAD,
-        steps: { count: "number", wall: SPREAD, cpu: SPREAD, over: "number" },
+        steps: { count: "number", wall: SPREAD, cpu: SPREAD, over: "number", letting: "number" },
         admit: SPREAD,
         longest: { at: "number", wall: "number", cpu: "number", admit: "number", pass: "string", ms: "number" },
+        ground: { ahead: "boolean", steps: { chunks: "number", tiles: "number" }, between: { chunks: "number", tiles: "number" } },
     },
     dungeons: {
         parties: "number",
@@ -1546,7 +1622,8 @@ export function wordsOf(report) {
         ...(report.joinstorm
             ? [
                   `The join storm at ${report.joinstorm.at / 1000} s: ${report.joinstorm.asked} said hello within ${report.joinstorm.over / 1000} s, let in ${report.joinstorm.welcomes} at a time, each ${report.joinstorm.loading / 1000} s making their copy: ${report.joinstorm.welcomed} let in${report.joinstorm.done < 0 ? `, ${report.joinstorm.waiting} still waiting` : `, the last ${report.joinstorm.done / 1000} s into the run`} (they'd waited ${(report.joinstorm.lastWaited / 1000).toFixed(1)} s; the middle one ${(report.joinstorm.waits.p50 / 1000).toFixed(1)} s); ${report.joinstorm.queued} tellings of a place in the line, ${report.joinstorm.snapshots} takings of the world`,
-                  `Its ${report.joinstorm.steps.count} steps by the clock: mean ${report.joinstorm.steps.wall.mean.toFixed(2)} ms, p99 ${report.joinstorm.steps.wall.p99.toFixed(2)} ms, worst ${report.joinstorm.steps.wall.worst.toFixed(1)} ms (in the thread's time ${report.joinstorm.steps.cpu.mean.toFixed(2)}, ${report.joinstorm.steps.cpu.p99.toFixed(2)} and ${report.joinstorm.steps.cpu.worst.toFixed(1)}); ${report.joinstorm.steps.over} over ${LOAD.tick} ms. The letting in alone: mean ${report.joinstorm.admit.mean.toFixed(2)} ms a step, p99 ${report.joinstorm.admit.p99.toFixed(2)}, worst ${report.joinstorm.admit.worst.toFixed(1)}; the longest step, at ${report.joinstorm.longest.at / 1000} s, ${report.joinstorm.longest.wall.toFixed(1)} ms: letting in ${report.joinstorm.longest.admit.toFixed(1)}, ${report.joinstorm.longest.pass} ${report.joinstorm.longest.ms.toFixed(1)}`,
+                  `Its ${report.joinstorm.steps.count} steps by the clock: mean ${report.joinstorm.steps.wall.mean.toFixed(2)} ms, p99 ${report.joinstorm.steps.wall.p99.toFixed(2)} ms, worst ${report.joinstorm.steps.wall.worst.toFixed(1)} ms (in the thread's time ${report.joinstorm.steps.cpu.mean.toFixed(2)}, ${report.joinstorm.steps.cpu.p99.toFixed(2)} and ${report.joinstorm.steps.cpu.worst.toFixed(1)}); ${report.joinstorm.steps.over} over ${LOAD.tick} ms, ${report.joinstorm.steps.letting} of them only for the letting in. The letting in alone: mean ${report.joinstorm.admit.mean.toFixed(2)} ms a step, p99 ${report.joinstorm.admit.p99.toFixed(2)}, worst ${report.joinstorm.admit.worst.toFixed(1)}; the longest step, at ${report.joinstorm.longest.at / 1000} s, ${report.joinstorm.longest.wall.toFixed(1)} ms: letting in ${report.joinstorm.longest.admit.toFixed(1)}, ${report.joinstorm.longest.pass} ${report.joinstorm.longest.ms.toFixed(1)}`,
+                  `Made from the first hello on${report.joinstorm.ground.ahead ? "" : " (nothing made ahead for those waiting, nor waited for: --cold)"}: ${report.joinstorm.ground.steps.chunks} chunks of ground and ${report.joinstorm.ground.steps.tiles} navigation tiles inside steps, ${report.joinstorm.ground.between.chunks} and ${report.joinstorm.ground.between.tiles} ahead of them, between steps`,
               ]
             : []),
         ...(report.dungeons
@@ -1573,12 +1650,13 @@ async function main() {
             ceiling: { type: "string" },
             json: { type: "boolean", default: false },
             whole: { type: "boolean", default: false },
+            cold: { type: "boolean", default: false },
         },
     });
     let report;
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, turns: Number(values.turns), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, turns: Number(values.turns), log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

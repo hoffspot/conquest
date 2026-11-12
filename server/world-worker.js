@@ -68,6 +68,14 @@ import { installWorkers } from "./workers.js";
  */
 export const WORKER = Object.freeze({ tick: 25, report: 1000, loading: 60000, behindEvery: 60000 });
 
+/**
+ * At a world's start, the ground of the heroes who were last in it is made ahead as if they were
+ * waiting to come in (generated/multiplayer_scaling_plan.md 1-26): for `forMs` after it's opened
+ * (as long as a place in the line is held: by then whoever's coming back has said hello, and is
+ * among those waiting, or isn't coming), those kept within `within` ms of the last one kept.
+ */
+export const LAST_IN = Object.freeze({ forMs: 60000, within: 10000 });
+
 const post = (message) => parentPort.postMessage(message);
 const clock = () => performance.now();
 
@@ -104,11 +112,18 @@ try {
 
 const { host } = opened;
 const saving = [];
+// Where those last in the world were ([[x, y]...]): whoever the save had in it still, and the
+// heroes kept last (LAST_IN)
+const lastIn = [];
 
 // (Anyone the save had in the world, who never left it, as the server stopped: out of it, and
 // their heroes kept where they were; or, visitors, what the world knows of them remembered)
 for (const id of [...host.players.keys()]) {
     const place = host.placeOf(id);
+
+    if (place) {
+        lastIn.push([place.x, place.y]);
+    }
     const vitals = host.vitalsOf(id);
     const character = host.leave(id);
     const [, player, slot] = slotOf(id) ?? [];
@@ -120,8 +135,16 @@ for (const id of [...host.players.keys()]) {
     }
 }
 
+// (The heroes kept last, read before those just put out of the world are kept beside them: a
+// world set aside with players in it kept them all as it stopped, one its last player left kept
+// that one)
+if (kept && !lastIn.length) {
+    lastIn.push(...(await stored.heroes.lastPlaces({ within: LAST_IN.within, most: mostPlayers() }).catch(() => [])));
+}
+
 await Promise.all(saving);
 
+const openedAt = clock();
 const runner = new WorldRunner(host, { clock });
 const keeper = new Keeper(runner, stored);
 const ahead = new Ahead(host.world, { host, clock });
@@ -161,6 +184,11 @@ hosting.idOf = (peer) => {
     return kept ? heroId(one.player, one.slot) : one.player;
 };
 hosting.characterOf = (peer) => peers.get(peer)?.character ?? null;
+// (One waiting to come in let in once the ground they'll stand on is made, ahead.js grounded, the
+// world being told each look where they'll stand, tick; but at once while the world's clock is
+// stopped, when no step can be held up making it and it's made while they make their copy, as
+// ever)
+hosting.ground = ([x, y]) => !running || ahead.grounded(x, y);
 // (One let in, in their turn: how long they take loading counted from now; and the world looked
 // at once it's been sent, in tick or as their hello's heard)
 let came = false;
@@ -440,6 +468,10 @@ function report() {
 // unevenness that every joined game covered with another step kept in hand.)
 function tick() {
     const now = clock();
+
+    // (Where those waiting to come in will stand, and for a while after the world's opened those
+    // who were last in it: their ground made ahead, after what's round the players in)
+    ahead.expect(now - openedAt < LAST_IN.forMs ? [...hosting.coming(), ...lastIn] : hosting.coming());
 
     if (running) {
         runner.advance(now - last, { most: RUNNER.catchUp });

@@ -22,6 +22,15 @@
 // waiting round one who's gone (out of the world, or through a portal to somewhere else) is let
 // go, and the world keeps as many chunks as those who are here want (core/overworld.js keep), so
 // that it never lets one go to make another.
+//
+// And it's told where those not yet in will stand (expect: those waiting their turn to come in,
+// core/netplay.js Session coming, and at a server's start the heroes who were last in the world;
+// generated/multiplayer_scaling_plan.md 1-26): the chunks round each, the ground a town by them
+// will stand its soldiers and townsfolk on as they arrive (core/host.js soon's `theirs`) and the
+// navigation's tiles round them are made after what's round the players who are in, in the order
+// they wait, and kept as a player's are; and it says when one's are made (grounded), for the world
+// to let them in then and not before (Session ground). Without it each who came back, and
+// everyone after a restart, came to ground the step they arrived in had to make.
 
 import { keepRooms, navigatorOf } from "../client/js/core/navigation.js";
 import { CHUNK, CHUNKS } from "../client/js/core/overworld.js";
@@ -57,7 +66,24 @@ export const AHEAD = Object.freeze({
     // How long (ms) a chunk waits for its land's heights, or a settlement by it, to come back
     // from a worker before it's made without them (worked out here, as ever: a worker gone quiet)
     patience: 2000,
+    // Round one not yet in (expect): how far the chunks are made (each way, of AHEAD.chunks: the
+    // rest once they're in, as round anyone), and how far the navigation's tiles are baked (m)
+    // before their ground's said to be made (grounded)
+    coming: Object.freeze({ chunks: 2, reach: 96 }),
 });
+
+// The chunks a box of squares touches, on the world: [[cx, cy]...]
+function chunksIn([x0, y0, x1, y1]) {
+    const chunks = [];
+
+    for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
+        for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
+            chunks.push([cx, cy]);
+        }
+    }
+
+    return chunks;
+}
 
 export class Ahead {
     /**
@@ -66,6 +92,14 @@ export class Ahead {
      * the world's steps come out the same either way, and what it saves them.
      */
     static soon = true;
+
+    /**
+     * Whether what's round those not yet in is made ahead (expect) and waited for (grounded), as
+     * it always is, or nothing's made for them till they're in and none of them waits, as it
+     * was: only for the tests and scripts that check the world's steps come out the same either
+     * way, and what it saves them.
+     */
+    static coming = true;
 
     /**
      * @param {object} world - The world (core/overworld.js buildWorld's: its overworld, maps.town).
@@ -124,6 +158,100 @@ export class Ahead {
         this.asked = null;
         this.stale = true;
         this.waited = new Map();
+
+        /**
+         * Where those not yet in will stand (expect: [[x, y]...], in the order they wait), and
+         * what each wants made, as it was last looked over (#review), by `${x},${y}`: { chunks
+         * (their keys), ready (whether it was all found made, since) }.
+         */
+        this.coming = [];
+        this.needs = new Map();
+        this.expected = "";
+        this.tilesAt = 0;
+    }
+
+    /**
+     * Where those not yet in the world will stand when they come ([[x, y]...], metres, the first
+     * to come first: core/host.js whereFor's), told as often as it may have changed (each look):
+     * what's round each is made ahead after what's round the players in, and kept, till they're
+     * no longer among them (in, and so among the players; or gone).
+     */
+    expect(places) {
+        const coming = Ahead.coming ? places : [];
+        const expected = coming.map(([x, y]) => `${x},${y}`).join(" ");
+
+        if (expected !== this.expected) {
+            this.expected = expected;
+            this.coming = [...new Map(coming.map((place) => [`${place[0]},${place[1]}`, place])).values()];
+            this.stale = true;
+        }
+    }
+
+    /**
+     * Whether what one who'd be stood at a place wants is made: the chunks within
+     * AHEAD.coming.chunks of them, the ground a town near them will stand its people on as they
+     * come, and the navigation's tiles within AHEAD.coming.reach of them (or as far as they're
+     * baked round anyone now, if that's less: #tiles). Of a place it hasn't been told of yet
+     * (expect), as the host says now what one there would want: so one whose ground is made
+     * already, come to where others are, waits for nothing.
+     */
+    grounded(x, y) {
+        if (!Ahead.coming) {
+            return true;
+        }
+
+        const one = this.needs.get(`${x},${y}`) ?? this.#needsOf(x, y);
+
+        if (one.ready) {
+            return true;
+        }
+
+        if (one.chunks.some((key) => !this.#made(key % CHUNKS, Math.floor(key / CHUNKS)))) {
+            return false;
+        }
+
+        const { navigation } = this.navBaker;
+
+        one.ready = this.#tilesRound(x, y).every(([tx, ty]) => navigation.has(tx, ty));
+
+        return one.ready;
+    }
+
+    // What one who'd be stood at a place wants made, asked of the host for them alone (till
+    // what's wanted is next looked over, #review, which asks for everyone not yet in at once),
+    // and kept: { chunks, ready }
+    #needsOf(x, y) {
+        const theirs = (Ahead.soon && this.host?.soon?.([[x, y]]).theirs?.[0]) || [];
+        const one = { chunks: this.#chunksFor(x, y, theirs), ready: false };
+
+        this.needs.set(`${x},${y}`, one);
+
+        return one;
+    }
+
+    // The chunks one who'd be stood at a place wants (their keys, nearest them first): those
+    // within AHEAD.coming.chunks of theirs, then those under the boxes the host says a town by
+    // them would stand its people on (`theirs`: [[x0, y0, x1, y1]...], squares)
+    #chunksFor(x, y, theirs) {
+        const ring = this.#ring(Math.floor(x / CHUNK), Math.floor(y / CHUNK), AHEAD.coming.chunks).sort((a, b) => a[2] - b[2]);
+
+        return [...new Set([...ring, ...theirs.flatMap(chunksIn)].map(([cx, cy]) => cy * CHUNKS + cx))];
+    }
+
+    // The navigation's tiles on the map within reach of one not yet in ([[tx, ty]...])
+    #tilesRound(x, y) {
+        const { navigation } = this.navBaker;
+        const { tile } = navigation.measures;
+        const reach = Math.min(AHEAD.coming.reach, this.reach);
+        const tiles = [];
+
+        for (let ty = Math.max(0, Math.floor((y - reach) / tile)); ty <= Math.floor((y + reach) / tile) && ty * tile < navigation.size[1]; ty++) {
+            for (let tx = Math.max(0, Math.floor((x - reach) / tile)); tx <= Math.floor((x + reach) / tile) && tx * tile < navigation.size[0]; tx++) {
+                tiles.push([tx, ty]);
+            }
+        }
+
+        return tiles;
     }
 
     /**
@@ -144,11 +272,11 @@ export class Ahead {
     }
 
     // The chunks within AHEAD.chunks of one, each with how many chunks off it is: [[cx, cy, rings]]
-    #ring(cx, cy) {
+    #ring(cx, cy, within = AHEAD.chunks) {
         const ring = [];
 
-        for (let dy = -AHEAD.chunks; dy <= AHEAD.chunks; dy++) {
-            for (let dx = -AHEAD.chunks; dx <= AHEAD.chunks; dx++) {
+        for (let dy = -within; dy <= within; dy++) {
+            for (let dx = -within; dx <= within; dx++) {
                 const [ax, ay] = [cx + dx, cy + dy];
 
                 if (ax >= 0 && ay >= 0 && ax < CHUNKS && ay < CHUNKS) {
@@ -184,9 +312,14 @@ export class Ahead {
         this.asked = host.lookAt;
         this.stale = false;
 
-        const { around, boxes, dungeons } = host.soon();
+        const coming = Ahead.coming ? this.coming : [];
+        const { around, boxes, dungeons, theirs } = host.soon(coming);
         const rings = new Map();
         const soon = new Map();
+        // (What those not yet in want, that the players in don't: by its key, in the order it's
+        // to be made, the first to come first and nearest them first; and each one's own)
+        const next = new Map();
+        const needs = new Map();
 
         for (const [x, y] of around) {
             for (const [cx, cy, off] of this.#ring(Math.floor(x / CHUNK), Math.floor(y / CHUNK))) {
@@ -196,13 +329,21 @@ export class Ahead {
             }
         }
 
-        for (const [x0, y0, x1, y1] of Ahead.soon ? boxes : []) {
-            for (let cy = Math.max(0, Math.floor(y0 / CHUNK)); cy <= Math.min(CHUNKS - 1, Math.floor(y1 / CHUNK)); cy++) {
-                for (let cx = Math.max(0, Math.floor(x0 / CHUNK)); cx <= Math.min(CHUNKS - 1, Math.floor(x1 / CHUNK)); cx++) {
-                    if (!rings.has(cy * CHUNKS + cx)) {
-                        soon.set(cy * CHUNKS + cx, [cx, cy]);
-                    }
+        coming.forEach(([x, y], k) => {
+            const chunks = this.#chunksFor(x, y, Ahead.soon ? theirs[k] : []);
+
+            needs.set(`${x},${y}`, { chunks, ready: false });
+
+            for (const key of chunks) {
+                if (!rings.has(key) && !next.has(key)) {
+                    next.set(key, [key % CHUNKS, Math.floor(key / CHUNKS)]);
                 }
+            }
+        });
+
+        for (const [cx, cy] of (Ahead.soon ? boxes : []).flatMap(chunksIn)) {
+            if (!rings.has(cy * CHUNKS + cx) && !next.has(cy * CHUNKS + cx)) {
+                soon.set(cy * CHUNKS + cx, [cx, cy]);
             }
         }
 
@@ -212,14 +353,22 @@ export class Ahead {
         // that its steps happen not to have read)
         const waiting = (key) => !(this.overworld.wanted?.(key % CHUNKS, Math.floor(key / CHUNKS)) ?? this.#made(key % CHUNKS, Math.floor(key / CHUNKS)));
         const near = [...rings.keys()].filter(waiting).sort((a, b) => rings.get(a) - rings.get(b));
+        const theirsNext = [...next.keys()].filter(waiting);
         const later = [...soon.keys()].filter(waiting);
 
-        this.chunks = [...near, ...later].map((key) => [key % CHUNKS, Math.floor(key / CHUNKS)]);
-        this.wanted = rings.size + soon.size;
+        // (What those not yet in want comes after the chunks next to each player in, and before
+        // those further round them, which no step wants yet: or each let in would hold up
+        // everyone behind them for as long as all 49 round them took)
+        const inner = theirsNext.length ? near.findIndex((key) => rings.get(key) > AHEAD.coming.chunks) : -1;
+        const [nearest, further] = inner < 0 ? [near, []] : [near.slice(0, inner), near.slice(inner)];
+
+        this.chunks = [...nearest, ...theirsNext, ...further, ...later].map((key) => [key % CHUNKS, Math.floor(key / CHUNKS)]);
+        this.wanted = rings.size + next.size + soon.size;
+        this.needs = needs;
         this.overworld.keep?.(this.wanted + AHEAD.spareChunks);
 
         for (const key of this.waited.keys()) {
-            if (!rings.has(key) && !soon.has(key)) {
+            if (!rings.has(key) && !next.has(key) && !soon.has(key)) {
                 this.waited.delete(key);
             }
         }
@@ -228,22 +377,60 @@ export class Ahead {
         // back by the time they're made)
         this.terrains?.want(this.chunks);
 
-        for (const [cx, cy] of this.#spread(later)) {
+        for (const [cx, cy] of this.#spread([...theirsNext, ...later])) {
             this.layouts?.ahead(cx, cy);
         }
 
-        this.#tiles(around);
+        const standing = coming.length ? [...around, ...coming] : around;
 
-        // (The navigation's tiles waiting round where no player is any more: let go)
-        const { tile } = this.navBaker.navigation.measures;
+        this.#tiles(standing, around);
+
+        // (The navigation's tiles waiting round where no player is any more, nor is to be: let go)
+        const { navigation } = this.navBaker;
+        const { tile } = navigation.measures;
         const reach = this.reach + tile;
 
-        this.navBaker.queue = this.navBaker.queue.filter(([tx, ty]) => around.some(([x, y]) => Math.abs((tx + 0.5) * tile - x) <= reach && Math.abs((ty + 0.5) * tile - y) <= reach));
+        this.navBaker.queue = this.navBaker.queue.filter(([tx, ty]) => standing.some(([x, y]) => Math.abs((tx + 0.5) * tile - x) <= reach && Math.abs((ty + 0.5) * tile - y) <= reach));
+
+        this.#tilesComing();
 
         this.layouts?.delve(Ahead.soon ? dungeons : []);
     }
 
-    // The navigation's tiles round the players (`around`: [[x, y]]): the mesh told to keep as many
+    // The navigation's tiles round the first few of those not yet in whose ground isn't all made
+    // (AHEAD.tiles of them: grounded), those of them whose own ground is made by now: put after
+    // whatever's waiting to be baked already (round the players in, first). The rest once theirs
+    // is: looked at again whenever a chunk's been made since (pump)
+    #tilesComing() {
+        const { queue, asked } = this.navBaker;
+        let queued = null;
+        let places = 0;
+
+        this.tilesAt = this.made;
+
+        for (const [x, y] of this.coming) {
+            if (places >= AHEAD.tiles) {
+                break;
+            }
+
+            if (this.grounded(x, y)) {
+                continue;
+            }
+
+            places++;
+            queued ??= new Set(queue.map(([tx, ty]) => ty * 65536 + tx));
+
+            for (const [tx, ty] of this.#tilesRound(x, y)) {
+                if (!queued.has(ty * 65536 + tx) && !asked.has(`${tx} ${ty}`) && this.#bakeable(tx, ty)) {
+                    queued.add(ty * 65536 + tx);
+                    queue.push([tx, ty]);
+                }
+            }
+        }
+    }
+
+    // The navigation's tiles round the players, and those not yet in with them (`around`: [[x,
+    // y]]; `players`, those in alone): the mesh told to keep as many
     // as are within AHEAD.reach of them all, and AHEAD.spareTiles more (it kept 1,024 whoever was
     // in, eight players' at 121 each, and with more apart let go of one's to bake another's, over
     // and over, in the steps too: 25 apart want 3,025). Its most is Detour's (core/navigation.js
@@ -252,7 +439,7 @@ export class Ahead {
     // them, as ever: nothing a step works out changes, only when the tile's baked. Those in
     // are counted as used whenever one's been added since (the next let go of is then one no
     // one's near), and what's newly within reach is asked for
-    #tiles(around) {
+    #tiles(around, players = around) {
         const { navigation } = this.navBaker;
 
         if (!navigation.keepTiles) {
@@ -302,7 +489,7 @@ export class Ahead {
 
         // (Room for more round each than there was, players having left: asked for)
         if (reach > was) {
-            for (const [x, y] of around) {
+            for (const [x, y] of players) {
                 this.navBaker.around(x, y, reach);
             }
         }
@@ -343,6 +530,11 @@ export class Ahead {
 
         if (!this.chunks.length) {
             this.#inside();
+        }
+
+        // (Ground made since for one not yet in: its tiles asked for)
+        if (this.coming.length && this.made !== this.tilesAt) {
+            this.#tilesComing();
         }
 
         this.navBaker.pump(AHEAD.tiles);

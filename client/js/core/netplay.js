@@ -552,6 +552,17 @@ export class Session {
         this.welcomes = 0;
         this.waiting = new Map();
 
+        /**
+         * Whether the ground one waiting will come in on is made (place: [x, y], Host.whereFor's),
+         * as whoever makes the world ahead of need says (the world server: server/ahead.js
+         * grounded, told where they'll stand by `coming`; plan 1-26); or null, the default and a
+         * player's own world's: no one's kept waiting for it. One whose ground isn't made yet
+         * waits a look longer, those behind them let in meanwhile, but no longer than
+         * WELCOMES.timeout after their hello, by the clock: then they come in as they always
+         * did, and the step makes what's missing.
+         */
+        this.ground = null;
+
         /** Those sent the world and still making their copy of it (by peer: when, by the clock), while that's counted. */
         this.loading = new Map();
 
@@ -619,6 +630,11 @@ export class Session {
     #entering = new Map();
 
     #admitting = false;
+
+    // Of each who's waiting (by peer): when they said hello, by the clock ({ at }), and, once
+    // it's been asked (#lineOf), the character they'd come in with and where they'd stand
+    // ({ brought, place }: place null, nowhere to say, or not let in at all)
+    #line = new Map();
 
     /** Those who've joined and may be sent what everyone's sent: all of them but those in the world not yet sent it (#enter). */
     reached() {
@@ -822,6 +838,7 @@ export class Session {
 
         if (this.welcomes > 0) {
             this.waiting.set(peer, hello);
+            this.#line.set(peer, { at: this.clock?.() ?? 0 });
 
             return;
         }
@@ -925,8 +942,14 @@ export class Session {
                         break;
                     }
 
+                    // (Their ground still being made: a look longer, those behind them meanwhile)
+                    if (!this.#grounded(peer, hello)) {
+                        continue;
+                    }
+
                     this.waiting.delete(peer);
                     this.placed.delete(peer);
+                    this.#line.delete(peer);
                     free -= this.#enter(peer, hello) ? 1 : 0;
                 }
 
@@ -946,6 +969,58 @@ export class Session {
         } finally {
             this.#admitting = false;
         }
+    }
+
+    // What's known of one waiting (#line), with the character they'd come in with and where
+    // they'd be stood (Host.whereFor: asked once, their character and the world's start being
+    // what they were when they said hello)
+    #lineOf(peer, hello) {
+        const one = this.#line.get(peer) ?? this.#line.set(peer, { at: this.clock?.() ?? 0 }).get(peer);
+
+        if (one.place === undefined) {
+            const brought = this.characterOf(peer, hello.character);
+            const comes = Boolean(brought) && !brought.refused;
+
+            one.brought = comes ? brought : null;
+            one.place = comes ? this.host.whereFor({ ...brought, ...spawnFor(this.host.world, brought.hero.race) }) : null;
+        }
+
+        return one;
+    }
+
+    // Whether one waiting has their ground made, as whoever makes it says (ground): always, if
+    // no one says, there's no clock to count their wait by, they've waited WELCOMES.timeout since
+    // their hello, there's nowhere to say they'd stand (or they're to be refused: told so in
+    // their turn), or they'd take over one of theirs in the world already, who stands where
+    // they stand
+    #grounded(peer, hello) {
+        if (!this.ground || !this.clock) {
+            return true;
+        }
+
+        const { at, brought, place } = this.#lineOf(peer, hello);
+
+        return !place || this.clock() - at >= WELCOMES.timeout || Boolean(this.#playing(peer, brought)) || Boolean(this.ground(place, peer));
+    }
+
+    /**
+     * Where each of those waiting will be stood when they're let in ([[x, y]...], metres out in
+     * the world, in the order they wait: Host.whereFor), for whoever makes their ground ahead
+     * (server/ahead.js expect, Host.soon's `coming`). Not those with nowhere to say, nor those
+     * who'd take over one of theirs in the world already. Nothing changes for the asking.
+     */
+    coming() {
+        const places = [];
+
+        for (const [peer, hello] of this.waiting) {
+            const { brought, place } = this.#lineOf(peer, hello);
+
+            if (place && !this.#playing(peer, brought)) {
+                places.push(place);
+            }
+        }
+
+        return places;
     }
 
     // How many are coming in just now: sent the world, still in it, not yet ready, and not so
@@ -1165,6 +1240,7 @@ export class Session {
     gone(peer) {
         // (One who was waiting to come in: no longer)
         this.waiting.delete(peer);
+        this.#line.delete(peer);
         this.placed.delete(peer);
 
         const id = this.players.get(peer);
@@ -1681,7 +1757,7 @@ export class Hosting {
 
 // Each of a hosting's parts' own, as the hosting's own: read and set there as they always were
 for (const [part, keys] of [
-    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms"]],
+    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "ground", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms"]],
     ["feed", ["ops", "steps", "checkDue", "motionDue", "sendsPlaces", "asked", "worlds", "sparing", "taken"]],
 ]) {
     for (const key of keys) {
@@ -1699,7 +1775,7 @@ for (const [part, keys] of [
 
 // And what each does that whoever runs the world asks of it
 for (const [part, names] of [
-    ["session", ["hear", "chat", "takeDms", "admit", "pause", "still", "kick", "gone", "slowest"]],
+    ["session", ["hear", "chat", "takeDms", "admit", "coming", "pause", "still", "kick", "gone", "slowest"]],
     ["feed", ["turned", "resync"]],
 ]) {
     for (const name of names) {

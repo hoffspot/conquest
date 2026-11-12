@@ -10,7 +10,7 @@
 // the browser reads its own with when it's brought into the world (core/host.js join). One kept by
 // a newer server is refused, as everything is (versions.js).
 
-import { readdir, rm } from "node:fs/promises";
+import { readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { SAVE_VERSION } from "../../client/js/app/save.js";
 import { isGuid, withGuid } from "../../client/js/core/guid.js";
@@ -110,6 +110,55 @@ export class KeptHeroes {
         }
 
         return found;
+    }
+
+    /**
+     * Where the heroes last in the world were ([[x, y]...], metres: each one's `place`, as
+     * core/host.js placeOf said it when they left): those kept within `within` ms of the one
+     * kept latest of all, as a world set aside keeps everyone in it together, and a world its
+     * last player left keeps that one; `most` at most, the latest first. By when each file was
+     * written, so only those few are read; one that can't be read, or has no place, is left out.
+     * For whoever makes the world ahead of need as it's opened (server/world-worker.js;
+     * generated/multiplayer_scaling_plan.md 1-26).
+     */
+    async lastPlaces({ within = 10000, most = 100 } = {}) {
+        if (!(await exists(this.folder))) {
+            return [];
+        }
+
+        const kept = [];
+
+        for (const player of await readdir(this.folder)) {
+            if (!PLAYER.test(player)) {
+                continue;
+            }
+
+            for (const slot of await this.slotsOf(player).catch(() => [])) {
+                const at = await stat(this.#fileOf(player, slot)).then(({ mtimeMs }) => mtimeMs, () => null);
+
+                if (at !== null) {
+                    kept.push({ player, slot, at });
+                }
+            }
+        }
+
+        kept.sort((a, b) => b.at - a.at);
+
+        const places = [];
+
+        for (const { player, slot, at } of kept) {
+            if (places.length >= most || kept[0].at - at > within) {
+                break;
+            }
+
+            const place = await this.#read(player, slot).then(({ character }) => character.place, () => null);
+
+            if (place && [place.x, place.y].every(Number.isFinite)) {
+                places.push([place.x, place.y]);
+            }
+        }
+
+        return places;
     }
 
     /**

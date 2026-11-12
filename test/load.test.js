@@ -12,7 +12,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
-import { AHEAD } from "../server/ahead.js";
+import { AHEAD, Ahead } from "../server/ahead.js";
 import { KEEPER } from "../server/keeper.js";
 
 describe("the load's layouts (scripts/load.js layoutOf)", () => {
@@ -308,6 +308,32 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
         assert.deepEqual({ asked: short.joinstorm.asked, welcomed: short.joinstorm.welcomed, waiting: short.joinstorm.waiting, done: short.joinstorm.done }, { asked: 8, welcomed: 2, waiting: 6, done: -1 });
         assert.deepEqual(short.problems, ["6 of the storm's 8 hadn't been let in when the run ended (6 still waiting their turn)"]);
         assert.deepEqual(failuresOf(short, { ceiling: 50 }), [], "how far a storm gets is the run's length, not a failure");
+    });
+
+    it("brings each back where they were, as a kept hero comes; says what ground the steps made and what was made ahead; and with `cold` makes none ahead for those waiting, nor waits for it", async () => {
+        const { ground } = report.joinstorm;
+
+        // (No one "didn't come back to where they were": each stood within LOAD.back of it)
+        assert.deepEqual(report.problems, []);
+        assert.ok(LOAD.back === 8 && LOAD.looks === 2);
+        assert.ok(report.joinstorm.steps.letting >= 0 && report.joinstorm.steps.letting <= report.joinstorm.steps.over);
+        assert.equal(ground.ahead, true);
+
+        for (const count of [ground.steps.chunks, ground.steps.tiles, ground.between.chunks, ground.between.tiles]) {
+            assert.ok(Number.isInteger(count) && count >= 0, `${count}`);
+        }
+
+        assert.ok(wordsOf(report).some((line) => line.startsWith(`Made from the first hello on: ${ground.steps.chunks} chunks of ground and ${ground.steps.tiles} navigation tiles inside steps, ${ground.between.chunks} and ${ground.between.tiles} ahead of them`)));
+
+        // (Into one town, its ground made already, no one waits for any: the line goes as it
+        // went, made ahead for or not)
+        const cold = await load({ seed: 2, players: 8, layout: "one-town", activity: "joinstorm", seconds: 2, eventAt: 1000, burst: 0, cold: true });
+
+        assert.deepEqual(checkReport(cold), []);
+        assert.equal(cold.joinstorm.ground.ahead, false);
+        assert.deepEqual({ asked: cold.joinstorm.asked, welcomed: cold.joinstorm.welcomed, waiting: cold.joinstorm.waiting }, { asked: 8, welcomed: 2, waiting: 6 });
+        assert.ok(wordsOf(cold).some((line) => line.startsWith("Made from the first hello on (nothing made ahead for those waiting, nor waited for: --cold): ")));
+        assert.equal(Ahead.coming, true, "the switch put back");
     });
 });
 
