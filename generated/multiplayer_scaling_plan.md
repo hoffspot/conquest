@@ -258,7 +258,7 @@ Linux is already the platform CI tests ([ci.yml:32](../.github/workflows/ci.yml#
 
 | Id | From | What changes, and where | Stays playable because | Tests and acceptance |
 |---|---|---|---|---|
-| 6A-1 | Persistence O1 | `server/metrics.js`: counters, gauges, fixed-bucket histograms, a Prometheus text encoder | New module, unused | Tests parse its output |
+| 6A-1 | Persistence O1 | **Done** ([metrics.js](../server/metrics.js), `test/metrics.test.js`): the registry takes no label but those it is told of, and `parseText` and `quantile` read its output back. `server/metrics.js`: counters, gauges, fixed-bucket histograms, a Prometheus text encoder | New module, unused | Tests parse its output |
 | 6A-2 | Persistence O2; Authority S0.3 | The world thread records histograms (step and its parts, event-loop delay, GC by kind, heap, actors, players, commands) and sends deltas in its existing `state` message ([world-worker.js:326-357](../server/world-worker.js#L326-L357)); `StepTimes` gains histograms | Authority only | `runner.test.js` extended; under 0.05 ms a step, asserted by `step-budget` |
 | 6A-3 | Persistence O3; Split 1 | Supervisor metrics (sockets, joins and refusals by reason, bytes per world, backlog, saves, event-loop utilisation and delay, each world's share of step time on inside maps); `GET /metrics` on the loopback admin listener; an optional bearer token for a remote scraper | New route on loopback only | Unit tests; labels are `world` and `thread`, never a player |
 | 6A-4 | Persistence O4 | History with no service: a ring per series (24 h at 10 s, a week at 5 min) kept across restarts; charts on the management page; `soak:server` writes the histograms into its report | Read-only page addition | The page shows 24 hours after a restart |
