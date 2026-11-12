@@ -3467,6 +3467,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   but no step from the host for 2 seconds, "Waiting for the host…".
 
 **How it's kept the same** (`core/netplay.js`):
+- **The link seam.** A joined game reaches its link to the world (`game.remote`) through one
+  list of members and no others, `REMOTE` in `core/remote.js`: what it calls (`step`, `pace`,
+  `command`, `ping`, `hold`, `chat`, `takeDms`, `clock`), reads (`self`, `behind`, `delay`,
+  `inHand`, `lately`, `paused`, `farBehind`, `received`) and sets to be told (`onSelf`, `onWay`,
+  `onChat`, `onUnsaid`). `Joining`, below, is its one implementation; a game's given its link
+  through `asRemote` (app/session.js), and `test/remote.test.js` fails for a use of `remote`
+  that isn't on the list. It's there so another way of being linked to a world can stand in the
+  same place (generated/multiplayer_scaling_plan.md 3-2).
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
   moved on, each command anyone gives, each player come or gone.

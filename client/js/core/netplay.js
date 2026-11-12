@@ -1262,7 +1262,8 @@ export class Hosting {
  * A game joining a world someone else hosts: says who's coming (`hello`), hears the world
  * (`onWelcome`, to make its copy and `attach` it), then plays it on as the host did (`step`),
  * its player's commands going to the host (`command`). What's to be sent goes by `send(text)`;
- * `clock` tells the time (ms: only to time the link, never in the world).
+ * `clock` tells the time (ms: only to time the link, never in the world). To the game it's the
+ * link seam's one implementation (core/remote.js REMOTE): lockstep.
  */
 export class Joining {
     #last = null;
