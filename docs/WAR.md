@@ -3163,7 +3163,9 @@ settlement and navigation tile the moment someone first walked into it:
   (`ThreadWorker`), and the game's own workers run there unchanged: the navigation's tiles baked
   (world/navworker.js), settlements laid out (world/layout-worker.js) and the land's heights
   worked out and the trails found (world/terrain-worker.js: a fifth of a chunk's making), to the
-  same bytes as here.
+  same bytes as here. That third worker, with its own copy of the plan, is about 37 MB more of
+  the machine's memory for each world running (a world of four players settled: 277 MB resident
+  where it was 240; its heap the same 49 MB).
 - **Round each player** (`Ahead`): the chunks within 3 of their own made between steps, nearest
   first, a piece of one at a time (8 ms a time, `AHEAD.budget`: `Overworld.chunkWithin`, below); the
   settlements near laid out on a worker; the navigation's tiles within 160 m baked on another,
@@ -3200,7 +3202,11 @@ settlement and navigation tile the moment someone first walked into it:
   it let one go to make another over and over (eight players remade 1,233 chunks in five
   minutes, 60% of the world thread's time, and never settled). `Ahead` tells the world to keep
   what its players and what's wanted soon take, and 64 more (`spareChunks`), as they come and go;
-  never fewer than 256. About 70 KB a chunk.
+  never fewer than 256. About 70 KB a chunk. The navigation's tiles are still 1,024 at most
+  (core/navigation.js `KEEP_TILES`), which eight players' 121 each fit, barely: Detour's
+  references are 32 bits, and at 4,096 polygons a tile (`MAX_POLYS`) it takes no more tiles than
+  that (asked for 2,048, it refuses). More players than eight in a world want fewer polygons a
+  tile, or tiles kept by who's near them.
 - **Where the players are, from the host.** What's wanted is looked over from where the host says
   its players are (`soon`'s `around`: out in the world, or the door of the building they're in):
   what was waiting round one who's left the world, or gone through a portal to somewhere else,
