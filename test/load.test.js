@@ -5,11 +5,12 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { KEEP_TILES, TILE } from "../client/js/core/navigation.js";
+import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
+import { AHEAD } from "../server/ahead.js";
 
 describe("the load's layouts (scripts/load.js layoutOf)", () => {
     let plan;
@@ -50,14 +51,17 @@ describe("the load's layouts (scripts/load.js layoutOf)", () => {
         assert.throws(() => layoutOf(plan, 8, "scattered"), /No layout called scattered: spread, towns, one-town/);
     });
 
-    it("knows the navigation can't keep the tiles more than eight players spread want round them", () => {
+    it("knows how many tiles its players want round them, and when that's more than the navigation takes: not at 25 spread, as it was, but at 50", () => {
         const places = (players) => layoutOf(plan, players, "spread").map(({ at }) => at);
         const eight = tilesWanted(places(8), { tile: TILE, keep: KEEP_TILES });
-        const twentyFive = tilesWanted(places(25), { tile: TILE, keep: KEEP_TILES });
+        const twentyFive = tilesWanted(places(25), { tile: TILE, keep: MOST_TILES, spare: AHEAD.spareTiles });
+        const fifty = tilesWanted(places(50), { tile: TILE, keep: MOST_TILES, spare: AHEAD.spareTiles });
 
         assert.equal(eight.capped, false, `${eight.wanted} wanted, ${KEEP_TILES} kept`);
-        assert.equal(twentyFive.capped, true);
-        assert.ok(twentyFive.wanted > 2 * KEEP_TILES);
+        assert.ok(twentyFive.wanted > 2 * KEEP_TILES, "more than the 1,024 it kept, whoever was in");
+        assert.equal(twentyFive.capped, false, `${twentyFive.wanted} wanted and ${AHEAD.spareTiles} to spare, ${MOST_TILES} taken`);
+        assert.equal(fifty.capped, true);
+        assert.equal(tilesWanted(places(8), { tile: TILE, keep: eight.wanted + 10, spare: 11 }).capped, true, "what's to spare counted");
         // (Two players in one place want the same tiles)
         assert.equal(tilesWanted([[500, 500], [500, 500]], { tile: 32, keep: 8, reach: 32 }).wanted, 9);
         assert.equal(tilesWanted([[500, 500]], { tile: 32, keep: 8, reach: 32 }).capped, true);
@@ -127,7 +131,7 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
 
         const slow = { ...report, steps: { ...report.steps, cpu: { ...report.steps.cpu, mean: 61.25 } } };
-        const out = { ...report, problems: ["2 of the players were sent out of the world", "the navigation keeps 1024 tiles (core/navigation.js KEEP_TILES) and these 25 players want 3025 baked round them"] };
+        const out = { ...report, problems: ["2 of the players were sent out of the world", "the navigation takes 4096 tiles at most (core/navigation.js MOST_TILES) and these 50 players want 6050 baked round them"] };
 
         assert.deepEqual(failuresOf(slow, { ceiling: 50 }), ["the mean step took 61.3 ms of the thread's time, over the ceiling of 50 ms"]);
         assert.deepEqual(failuresOf(slow), [], "no ceiling given, no time judged");

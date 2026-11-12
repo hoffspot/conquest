@@ -77,6 +77,7 @@ import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } fr
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
+import { Culling, Near } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
@@ -92,6 +93,10 @@ export const HOST_PLAYER = "player";
  * folk about their business inside; those `far` from every player let go.
  */
 export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
+
+// The side of a cell of the players' places (metres), where the passes that measure the world
+// against them look for those near (near.js): about as far as most of them ask
+const NEAR_CELL = 256;
 
 /** The orc's weapon (the town's one enemy, for now). */
 export const ORC_WEAPON = "cleaver";
@@ -1245,6 +1250,19 @@ function cardOf(standing, { knowledge = [] } = {}) {
 }
 
 export class Host {
+    /**
+     * Whether what's near the players is looked for by cell (near.js), as it always is, or by
+     * going through everyone and everything, as it was: only for the tests that check the world
+     * comes out the same either way, step for step.
+     */
+    static get culling() {
+        return Culling.on;
+    }
+
+    static set culling(on) {
+        Culling.on = Boolean(on);
+    }
+
     /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
@@ -2438,18 +2456,40 @@ export class Host {
         const out = (actor) => actor && actor.map === "town" && !actor.dead;
         const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter(out).map(({ x, y }) => [x, y]);
         const dark = torchesLit(elapsed);
+        const torches = [];
+        const globes = [];
+        const tally = { pairs: 0 };
 
-        count("light.actors", (dark ? 2 : 1) * this.battle.actors.length);
+        // (Everyone gone through once for both, each list in the battle's order as ever)
+        for (const actor of this.battle.actors) {
+            if (actor.map === "town" && !actor.dead) {
+                if (dark && carriesTorch(actor, dark)) {
+                    torches.push([actor.x, actor.y]);
+                }
 
-        return lighting({
+                // (Only those with any spell on them asked which: most have none)
+                if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+                    globes.push([actor.x, actor.y]);
+                }
+            }
+        }
+
+        count("light.actors", this.battle.actors.length);
+
+        const light = lighting({
             elapsed,
             plan: this.world.plan,
             players,
             camps: [...[...this.camps.values()].map(({ fire }) => fire), ...this.campfires.map(({ fire }) => fire)],
             fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
-            torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
-            globes: this.battle.actors.filter((actor) => out(actor) && this.battle.buffOf(actor, "light")).map(({ x, y }) => [x, y]),
+            torches,
+            globes,
+            tally,
         });
+
+        count("light.pairs", tally.pairs);
+
+        return light;
     }
 
     /**
@@ -3097,11 +3137,16 @@ export class Host {
             // be measured)
             const reach = SIGHTING.reach[1];
 
+            // (Looked for among those in the cells round the player, near.js, in their own order:
+            // the world's are a few thousand, a kilometre's a few dozen)
+            const findables = this.#findables();
+            const about = (this.findablesNear ??= new Near(findables, SIGHTING.reach[1], ({ at: where }) => where)).within(at[0], at[1], reach);
+
             if (probing()) {
-                count("spotting.pairs", this.#findables().length);
+                count("spotting.pairs", about.length);
             }
 
-            const unfound = this.#findables().filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
+            const unfound = about.map((k) => findables[k]).filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
             const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
 
             if (!seen.length) {
@@ -5953,9 +5998,11 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const near = (middle, edge, within) => places.some(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge < within);
-
-        count("townsfolk.pairs", this.townsfolk.size * places.length);
+        // (Against the players in the cells round each, near.js, and how many were measured
+        // counted)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const near = (middle, edge, within) => about.some(middle[0], middle[1], within + edge, ([x, y]) => (measured++, hypot(x - middle[0], y - middle[1]) - edge < within));
 
         // (Those out, far from every player now: home)
         for (const [id, out] of [...this.townsfolk]) {
@@ -5967,30 +6014,34 @@ export class Host {
         }
 
         // (Those a player's come near: out)
-        for (const where of this.#peopledNear(places)) {
+        for (const where of this.#peopledNear(about)) {
             if (!this.townsfolk.has(where.id) && near(where.middle, where.edge, TOWNSFOLK_REACH.near)) {
                 this.#outward(where);
             }
         }
+
+        count("townsfolk.pairs", measured);
     }
 
-    // The settlements and the castles set down within reach of any of `places` (players'
-    // whereabouts): [{ id, kind, people, name, middle, edge }]
-    #peopledNear(places) {
+    // The settlements and the castles set down within reach of any of the players' whereabouts
+    // (`about`: those, by cell, near.js): [{ id, kind, people, name, middle, edge }]
+    #peopledNear(about) {
         const reach = TOWNSFOLK_REACH.near + 120;
         const found = [];
 
         this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
 
         for (const place of this.settlementPlaces) {
-            if (places.some(([x, y]) => hypot(x - place.at[0], y - place.at[1]) < SETTLEMENT_KINDS[place.kind].radius + reach)) {
+            const within = SETTLEMENT_KINDS[place.kind].radius + reach;
+
+            if (about.some(place.at[0], place.at[1], within, ([x, y]) => hypot(x - place.at[0], y - place.at[1]) < within)) {
                 found.push(this.#peopledAt(place.id));
             }
         }
 
         // (Not those that couldn't be set down: sites.js keeps them, as null)
         for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
-            if (set && (set.site.kind === "castle" || set.citadel) && places.some(([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
+            if (set && (set.site.kind === "castle" || set.citadel) && about.some(set.x, set.y, set.radius + reach, ([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
                 found.push(this.#peopledAt(set.site.id));
             }
         }
@@ -6162,21 +6213,25 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-
-        count("muster.pairs", (war.towns.length + war.works.length) * places.length);
+        // (Each town, works, camp and army against the players in the cells round it, near.js,
+        // and how many were measured counted. Is any player within so far of a point's edge; is
+        // every one of them further than so far from it: as measuring them all answered)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const within = ([mx, my], edge, reach) => about.some(mx, my, reach + edge, ([x, y]) => (measured++, hypot(x - mx, y - my) - edge < reach));
+        const beyond = ([mx, my], edge, reach) => !about.some(mx, my, reach + edge, ([x, y]) => (measured++, !(hypot(x - mx, y - my) - edge > reach)));
 
         for (const town of war.towns) {
             const place = this.#placeOf(town.id);
             const middle = this.#middleOf(place);
             const edge = SETTLEMENT_KINDS[place.kind].radius;
-            const distances = places.map(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge);
             const mustered = this.mustered.get(town.id);
 
-            if (mustered && (mustered.people !== town.owner || distances.every((distance) => distance > MUSTER.far))) {
+            if (mustered && (mustered.people !== town.owner || beyond(middle, edge, MUSTER.far))) {
                 this.#dismiss(town.id);
             }
 
-            if (!this.mustered.has(town.id) && distances.some((distance) => distance < MUSTER.near)) {
+            if (!this.mustered.has(town.id) && within(middle, edge, MUSTER.near)) {
                 this.#raise(town, place, middle);
             } else if (this.mustered.has(town.id)) {
                 this.#relieve(town, place, middle);
@@ -6187,13 +6242,12 @@ export class Host {
         // every player's far, or it's changed hands
         for (const works of war.works) {
             const out = this.worksOut.get(works.id);
-            const distances = places.map(([x, y]) => hypot(x - works.at[0], y - works.at[1]));
 
-            if (out && (out.held !== works.held || (!works.held && out.people !== works.owner) || distances.every((distance) => distance > WORKS_OUT.far))) {
+            if (out && (out.held !== works.held || (!works.held && out.people !== works.owner) || beyond(works.at, 0, WORKS_OUT.far))) {
                 this.#standDown(works.id);
             }
 
-            if (!this.worksOut.has(works.id) && distances.some((distance) => distance < WORKS_OUT.near)) {
+            if (!this.worksOut.has(works.id) && within(works.at, 0, WORKS_OUT.near)) {
                 this.#manWorks(works);
             } else if (this.worksOut.has(works.id) && !works.held) {
                 this.#relieveWorks(works);
@@ -6205,7 +6259,9 @@ export class Host {
         // far from every player (or gone) struck
         this.#stockadesChanged();
 
-        const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
+        count("muster.pairs", measured);
+
+        const near = (camp, reach) => about.some(camp.at[0], camp.at[1], reach, ([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < reach);
 
         for (const id of [...this.camps.keys()]) {
             const camp = war.camp(id) ?? war.depot(id);
@@ -10423,9 +10479,12 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
-
-        count("wilds.pairs", this.wild.size * places.length);
+        // (Is a creature further than so far from every player? Measured against the players in
+        // the cells round it, near.js, and how many were measured counted: the same answer as
+        // the least of its distances to them all being more than that)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const beyond = (actor, far) => !about.some(actor.x, actor.y, far, ([x, y]) => (measured++, !(hypot(actor.x - x, actor.y - y) > far)));
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
@@ -10445,15 +10504,16 @@ export class Host {
 
             if (!actor) {
                 this.#unwild(id);
-            } else if (roaming && (distanceTo(actor) > (one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
+            } else if (roaming && (beyond(actor, one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && beyond(actor, WILDS.from)))) {
                 this.#release(id);
-            } else if (!actor.dead && actor.mood?.kind === "flee" && distanceTo(actor) > NERVE_GONE.gone) {
+            } else if (!actor.dead && actor.mood?.kind === "flee" && beyond(actor, NERVE_GONE.gone)) {
                 // (A wary beast whose nerve went, limped off well away from everyone: gone, its
                 // spoils with it, core/wary.js MORALE)
                 this.#release(id);
             }
         }
 
+        count("wilds.pairs", measured);
         this.#wildCamps(homes);
         this.#dens(homes);
         this.#moonTrials(homes);
@@ -10671,11 +10731,13 @@ export class Host {
     #groups() {
         const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
         const at = new Map(standing.map((one) => [one.player.id, one]));
+        const tally = { pairs: 0 };
+        const groups = groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y })), STRENGTH.apart, tally);
 
         count("groups.calls");
-        count("groups.pairs", standing.length * standing.length);
+        count("groups.pairs", tally.pairs);
 
-        return groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y }))).map((members) => {
+        return groups.map((members) => {
             const players = members.map(({ id }) => at.get(id).player);
             const led = this.partyFor(players[0].id)?.leader;
             const leader = players.find((player) => player.id === led) ?? players[0];
@@ -11402,7 +11464,10 @@ export class Host {
     // castles and the dragon's lair keep their own masters (#lairs).
     #places(places, homes) {
         const plan = this.world.plan;
-        const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
+        // (Against the players in the cells round each place, near.js: there are hundreds of
+        // places worth finding, and a few of them near anyone)
+        const about = new Near(places, NEAR_CELL);
+        const near = (at, within) => about.some(at[0], at[1], within, ([x, y]) => hypot(x - at[0], y - at[1]) < within);
 
         if (!this.war) {
             return;
@@ -18878,7 +18943,14 @@ export class Host {
             this.buildingsInOrder = { of: interiors, version: interiors.version, list: [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
         }
 
-        count("lookAround.pairs", this.buildingsInOrder.list.length * places.length);
+        // (Each building's door against the players in the cells round it, near.js, and how many
+        // were measured counted: one not open, is anyone out in the world near it; one open, is
+        // everyone far from it, which no one is while a player's whereabouts aren't known. As
+        // measuring every building against every player answered: a thousand buildings and 50
+        // players were 100,000 measurings a look)
+        const known = places.filter(Boolean);
+        const about = new Near(known, NEAR_CELL, (place) => [place.x, place.y]);
+        let measured = 0;
 
         for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {
@@ -18886,15 +18958,17 @@ export class Host {
             }
 
             const { x, z } = building.entrance.door;
-            const near = wanted.has(building.key) || places.some((place) => place?.out && hypot(x - place.x, z - place.y) < RELEVANCE.near);
-            const far = !wanted.has(building.key) && places.every((place) => place && hypot(x - place.x, z - place.y) > RELEVANCE.far);
 
-            if (!this.open.has(building.key) && near) {
-                this.#openBuilding(building.key);
-            } else if (this.open.has(building.key) && far) {
+            if (!this.open.has(building.key)) {
+                if (wanted.has(building.key) || about.some(x, z, RELEVANCE.near, (place) => (measured++, place.out && hypot(x - place.x, z - place.y) < RELEVANCE.near))) {
+                    this.#openBuilding(building.key);
+                }
+            } else if (!wanted.has(building.key) && known.length === places.length && !about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
                 this.#closeBuilding(building.key);
             }
         }
+
+        count("lookAround.pairs", measured);
     }
 
     // A building (by key), added to the world's if it's in a settlement not laid out yet

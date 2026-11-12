@@ -187,6 +187,17 @@ The engine is built for this from the start. These are its rules:
      that any player is heading into or is in; let go once every player's more than 90 away);
    - later, the war's forces in skirmishes.
 
+   Twice a second (`RELEVANCE.every`) it looks round: buildings, towns' soldiers and townsfolk,
+   works, camps, armies, the wild, what's to be seen from high ground. Each of those is measured
+   against the players in the cells round it (core/near.js: the players' places kept by cell,
+   256 m a side, made afresh each look), not against every player: the grid only leaves out
+   players too far off to pass the test that's made, so each answer is the one measuring
+   everyone gave, and every copy of the world agrees whichever way it's asked. `Host.culling`
+   off measures everyone, as before, and a world of 25 players plays out the same step for step
+   either way (test/culling.test.js). With 50 players apart, ten seconds' looks measured 400,000
+   buildings against players and now measure 6,700; towns and works, 134,000 and 1,300
+   (test/budget.test.js holds them there).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk
@@ -3202,11 +3213,28 @@ settlement and navigation tile the moment someone first walked into it:
   it let one go to make another over and over (eight players remade 1,233 chunks in five
   minutes, 60% of the world thread's time, and never settled). `Ahead` tells the world to keep
   what its players and what's wanted soon take, and 64 more (`spareChunks`), as they come and go;
-  never fewer than 256. About 70 KB a chunk. The navigation's tiles are still 1,024 at most
-  (core/navigation.js `KEEP_TILES`), which eight players' 121 each fit, barely: Detour's
-  references are 32 bits, and at 4,096 polygons a tile (`MAX_POLYS`) it takes no more tiles than
-  that (asked for 2,048, it refuses). More players than eight in a world want fewer polygons a
-  tile, or tiles kept by who's near them.
+  never fewer than 256. About 70 KB a chunk.
+- **As many navigation tiles as its players need, up to 4,096** (core/navigation.js `keepTiles`,
+  `MOST_TILES`). The navigation kept 1,024 tiles whoever was in, which eight players' 121 each
+  fit, barely: 25 apart want 3,025, and it let one's go to bake another's, in the steps too
+  (3,611 let go of in two minutes of 25 players apart). Detour's references are 32 bits, ten of
+  them telling a tile from the one that was in its place before, so a mesh's tiles times a
+  tile's polygons are 4,194,304 at most: it was made for 1,024 tiles of 4,096 polygons, and
+  refuses 2,048 of those. A tile of the overworld's has 40 polygons on average and 335 at the
+  most among 15,000 measured in and round two worlds' towns, so the overworld's mesh is made for
+  4,096 tiles of 1,024 polygons, on every machine (a tile with more is refused, where Detour
+  would have taken it and answered wrongly). Only its references change, which never leave the
+  navigation: the tiles' bytes, the ways over them and the world step for step are the same
+  (test/tilecap.test.js, with `Navigation.roomy` off for the mesh as it was). A browser still
+  keeps 1,024. `Ahead` tells a world server's to keep what's within 160 m of its players, and
+  256 more (`spareTiles`) for what the steps' ways bake besides, and counts those round the
+  players as used, so what's let go is what no one's near. That's room for 31 players apart at
+  121 tiles each (a tile is 6.4 KB on average: 26 MB with all 4,096 kept). With more, the tiles
+  are baked ahead less far round each, a tile's width at a time till they fit (`Ahead.reach`:
+  50 apart 96 m, 100 apart 64 m), and a way that wants one further out bakes it in its step, as
+  ever: slower there, and nothing let go and baked again in a loop. Past that, the next step is
+  8,192 tiles of 512 polygons (65 players at the full reach), which leaves a tile half as much
+  room again as the most measured, and is the owner's call.
 - **Where the players are, from the host.** What's wanted is looked over from where the host says
   its players are (`soon`'s `around`: out in the world, or the door of the building they're in):
   what was waiting round one who's left the world, or gone through a portal to somewhere else,
