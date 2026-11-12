@@ -447,7 +447,8 @@ export class ServerClient {
             // (Another version: which is the newer, by the server's version where it says it)
             const message = answer?.error === "version" ? versionWords(answer.net, { server: true }) : (SERVER_REFUSALS[answer?.error] ?? answer?.message);
 
-            throw new ServerRefusal(answer?.error ?? "unreachable", message, answer?.wait ? { wait: answer.wait } : {});
+            // (And its version, where it said: the game may have the update to match it already)
+            throw new ServerRefusal(answer?.error ?? "unreachable", message, { ...(answer?.wait ? { wait: answer.wait } : {}), ...(Number.isInteger(answer?.net) ? { net: answer.net } : {}) });
         }
 
         return answer;
