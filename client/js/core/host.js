@@ -1898,6 +1898,22 @@ export class Host {
     }
 
     /**
+     * Where one coming into the world would be stood, out in it ([x, y], metres), as join would
+     * take them (the same character, `square` and `map`): where they were when they left
+     * (`place`), or where they'd come in new; null if that's not out in the world. Nothing changes
+     * for the asking, and no ground is made for it: so it's where they were to within the few
+     * squares join looks round it for one that's free, and one whose place can no longer be stood
+     * on at all comes in new instead. For whoever makes the world ahead of need (soon's `coming`).
+     */
+    whereFor({ place = null, square = this.world.spawns?.player, map = "town" } = {}) {
+        if (place && [place.x, place.y, place.facing].every(Number.isFinite)) {
+            return [place.x, place.y];
+        }
+
+        return map === "town" && Array.isArray(square) && square.slice(0, 2).every(Number.isFinite) ? [square[0] + 0.5, square[1] + 0.5] : null;
+    }
+
+    /**
      * Where a player is, to come back to when they next come in (join's `place`): { x, y, facing }
      * out in the world, or outside the door of the building they're in, or where they'll get up
      * if they're down; null if there's no such player, or nowhere to say.
@@ -6416,19 +6432,51 @@ export class Host {
      *    each as it would be made were they to come to it as they are ([{ key, seed, theme, tier,
      *    generation }]: the building's key and core/dungeons/build.js buildDungeon's own; the
      *    tier its finders' might would give it, #findersTier).
+     * Told where others are about to come in (`coming`: [[x, y]...], whereFor's: those waiting
+     * their turn on a world server, generated/multiplayer_scaling_plan.md 1-26), the `boxes` are
+     * those wanted were they in already as well, and `theirs` says which of them each would
+     * want ([[box...]...], in `coming`'s order: so that whoever lets them in can tell when their
+     * own ground's made); `around` and `dungeons` are the players' own.
      */
-    soon() {
-        const places = this.world.plan && this.world.maps?.town?.chunk ? this.#whereabouts() : [];
+    soon(coming = []) {
+        const outside = Boolean(this.world.plan && this.world.maps?.town?.chunk);
+        const around = outside ? this.#whereabouts() : [];
+        const places = outside && coming.length ? [...around, ...coming] : around;
         const boxes = [];
         const dungeons = [];
 
+        const theirs = coming.map(() => []);
+
         if (!places.length) {
-            return { around: places, boxes, dungeons };
+            return { around, boxes, dungeons, theirs };
         }
 
         const { margin } = SOON;
-        const near = ([ax, ay], within) => places.some(([x, y]) => hypot(x - ax, y - ay) < within + margin);
-        const box = ([x, y], reach) => boxes.push([Math.floor(x - reach), Math.floor(y - reach), Math.ceil(x + reach), Math.ceil(y + reach)]);
+        // (Which of those coming the last thing asked about is near, for its boxes to be theirs)
+        let nearing = [];
+        const near =
+            places === around
+                ? ([ax, ay], within) => places.some(([x, y]) => hypot(x - ax, y - ay) < within + margin)
+                : ([ax, ay], within) => {
+                      nearing = [];
+
+                      for (let k = around.length; k < places.length; k++) {
+                          if (hypot(places[k][0] - ax, places[k][1] - ay) < within + margin) {
+                              nearing.push(k - around.length);
+                          }
+                      }
+
+                      return nearing.length > 0 || around.some(([x, y]) => hypot(x - ax, y - ay) < within + margin);
+                  };
+        const box = ([x, y], reach) => {
+            const one = [Math.floor(x - reach), Math.floor(y - reach), Math.ceil(x + reach), Math.ceil(y + reach)];
+
+            boxes.push(one);
+
+            for (const k of nearing) {
+                theirs[k].push(one);
+            }
+        };
         const war = this.war;
 
         // Each settlement's townsfolk, and a castle's in its wards (#townsfolk)
@@ -6513,7 +6561,7 @@ export class Host {
             const key = `site:${site.id}`;
             const building = interiors.buildings.get(key);
 
-            if (!building || building.made || building.kind !== "dungeon" || !this.#byWayIn(site, places, SOON.delve)) {
+            if (!building || building.made || building.kind !== "dungeon" || !this.#byWayIn(site, around, SOON.delve)) {
                 continue;
             }
 
@@ -6527,7 +6575,7 @@ export class Host {
             dungeons.push({ key, seed: building.seed, theme: building.theme ?? "caves", tier, generation: building.generation ?? 0 });
         }
 
-        return { around: places, boxes, dungeons };
+        return { around, boxes, dungeons, theirs };
     }
 
     // One of the plan's places, by its id (or undefined). Looked up in a table made once: the
