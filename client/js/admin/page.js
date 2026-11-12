@@ -10,7 +10,8 @@
 //   Keys, Players, Backups, Crash reports, Settings, Export, Delete (its name typed).
 // - New world: its basics, heroes and rules; then its owner's and players' keys, as links and QR codes.
 // - Settings: the server's, each with what it's for; creator keys.
-// - Activity: the server's journal and every world's. Health: how each world's keeping up.
+// - Activity: the server's journal and every world's. Health: how each world's keeping up, and
+//   how it's been over the last day or week, charted (what the server keeps of it: history.js).
 
 import { qrcode } from "../../vendor/qrcode-generator-2.0.4/qrcode.min.js";
 import { addressOf, inviteLink } from "../app/invites.js";
@@ -2145,7 +2146,167 @@ async function renderHealth() {
                 ["Up for", duration(health.server.uptime)],
             ]),
         ),
+        charts(),
     );
+}
+
+// ---- How it's been keeping up: the last day or week, charted
+
+/** The charts: which span's shown, when it was last asked for (they're asked for again every `every` ms, not with the rest of Health), and where they're drawn. */
+const CHARTS = { span: "day", every: 60000, asked: 0, node: null };
+
+const SVG = "http://www.w3.org/2000/svg";
+
+function svg(tag, attributes = {}, ...children) {
+    const node = document.createElementNS(SVG, tag);
+
+    for (const [key, value] of Object.entries(attributes)) {
+        node.setAttribute(key, String(value));
+    }
+
+    node.append(...children);
+
+    return node;
+}
+
+// A charted value in words, by its unit
+function measured(unit, value) {
+    if (value === null || value === undefined) {
+        return "—";
+    }
+
+    return unit === "ms" ? `${value < 10 ? value.toFixed(1) : Math.round(value)} ms` : unit === "bytes" ? bytes(Math.round(value)) : unit === "share" ? `${Math.round(value * 100)}%` : String(Math.round(value));
+}
+
+// The top of a chart's scale: a round number at or over the most it shows (a share's is the whole)
+function scaleOf(unit, most) {
+    if (unit === "share") {
+        return 1;
+    }
+
+    const size = 10 ** Math.floor(Math.log10(Math.max(most, 1e-9)));
+
+    return [1, 2, 5, 10].map((times) => times * size).find((top) => top >= most) ?? most;
+}
+
+/**
+ * One thing over the span, drawn: its line (broken where nothing was measured), the line it's
+ * judged against if it has one, what it is now and the most it's been; under the pointer, what
+ * it was then.
+ */
+function chart(one, { step, end }) {
+    const W = 320;
+    const H = 80;
+    const { values, unit, limit } = one;
+    const known = values.filter((value) => value !== null);
+    const latest = values.at(-1);
+    const most = Math.max(...known);
+    const top = scaleOf(unit, Math.max(most, limit ?? 0));
+    const x = (k) => ((k + 0.5) / values.length) * W;
+    const y = (value) => H - 1 - (Math.min(value, top) / top) * (H - 6);
+    let path = "";
+    let drawing = false;
+
+    values.forEach((value, k) => {
+        if (value === null) {
+            drawing = false;
+
+            return;
+        }
+
+        // (A point with a gap either side is drawn as a short stroke, so it's seen)
+        const alone = !drawing && (values[k + 1] ?? null) === null;
+
+        path += alone ? `M${(x(k) - 0.6).toFixed(1)} ${y(value).toFixed(1)}h1.2` : `${drawing ? "L" : "M"}${x(k).toFixed(1)} ${y(value).toFixed(1)}`;
+        drawing = true;
+    });
+
+    const timeOf = (k) => new Date(end - (values.length - k) * step).toLocaleString(undefined, step >= 600000 ? { weekday: "short", hour: "2-digit", minute: "2-digit" } : { hour: "2-digit", minute: "2-digit" });
+    const summary = `now ${measured(unit, latest)}, at most ${measured(unit, most)}`;
+    const now = h("span", { class: "chart-now" }, measured(unit, latest));
+    const hair = h("div", { class: "chart-hair", hidden: true });
+    const plot = h(
+        "div",
+        { class: "chart-plot" },
+        svg(
+            "svg",
+            { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", "aria-hidden": "true" },
+            svg("line", { class: "chart-base", x1: 0, x2: W, y1: H - 0.5, y2: H - 0.5 }),
+            ...(limit ? [svg("line", { class: "chart-limit", x1: 0, x2: W, y1: y(limit), y2: y(limit) })] : []),
+            svg("path", { class: "chart-line", d: path }),
+        ),
+        hair,
+    );
+
+    // (Under the pointer or a finger: when, and what it was then; the nearest measured point within a few)
+    const point = (event) => {
+        const box = plot.getBoundingClientRect();
+        const at = Math.max(0, Math.min(values.length - 1, Math.floor(((event.clientX - box.left) / box.width) * values.length)));
+        const near = [0, -1, 1, -2, 2].map((by) => at + by).find((k) => (values[k] ?? null) !== null) ?? at;
+
+        hair.hidden = false;
+        hair.style.left = `${((near + 0.5) / values.length) * 100}%`;
+        now.textContent = `${timeOf(near)}: ${measured(unit, values[near])}`;
+    };
+    const leave = () => {
+        hair.hidden = true;
+        now.textContent = measured(unit, latest);
+    };
+
+    plot.addEventListener("pointermove", point);
+    plot.addEventListener("pointerdown", point);
+    plot.addEventListener("pointerleave", leave);
+
+    return h(
+        "figure",
+        { class: "chart", role: "group", "aria-label": `${one.title}${one.name ? `, ${one.name}` : ""}: ${summary}` },
+        h("figcaption", {}, h("span", {}, one.title), now),
+        plot,
+        h("p", { class: "chart-foot muted" }, h("span", {}, `Up to ${measured(unit, top)}${limit ? `; the dashed line is ${measured(unit, limit)}` : ""}`), h("span", {}, `At most ${measured(unit, most)}`)),
+    );
+}
+
+// The charts drawn again from what the server keeps: the server's own, then each world's
+async function drawCharts() {
+    const history = await call("GET", `/server/history/${CHARTS.span}`);
+    const worlds = [...new Map(history.series.filter((one) => one.world).map((one) => [one.world, one.name])).entries()];
+    const group = (title, series) => h("div", { class: "chart-group" }, h("h3", {}, title), h("div", { class: "charts" }, series.map((one) => chart(one, history))));
+    const choose = (span, label) =>
+        h(
+            "button",
+            {
+                type: "button",
+                class: "quiet",
+                "aria-pressed": String(CHARTS.span === span),
+                onClick: () => {
+                    CHARTS.span = span;
+                    doing(drawCharts);
+                },
+            },
+            label,
+        );
+
+    CHARTS.asked = Date.now();
+    CHARTS.node.replaceChildren(
+        h("h2", {}, CHARTS.span === "week" ? "The last week" : "The last day"),
+        h("div", { class: "row" }, choose("day", "Day"), choose("week", "Week")),
+        h("p", { class: "muted small" }, `A point every ${Math.round(history.step / 60000)} minutes: the worst of them for what's judged by its worst (the slowest steps, memory), the mean for the rest. A gap is when nothing was measured: the server stopped, or a world set aside. Kept on the server across restarts.`),
+        history.series.length
+            ? h("div", {}, group("The server", history.series.filter((one) => !one.world)), worlds.map(([id, name]) => group(name, history.series.filter((one) => one.world === id))))
+            : h("p", { class: "muted" }, "Nothing's been measured yet: the first points come ten seconds after the server starts."),
+    );
+}
+
+// The charts under Health: kept as they are while Health's shown again, and drawn again every so often
+function charts() {
+    CHARTS.node ??= h("section", { class: "panel" });
+
+    if (Date.now() - CHARTS.asked >= CHARTS.every) {
+        CHARTS.asked = Date.now();
+        drawCharts().catch((error) => say(error.message, { bad: true }));
+    }
+
+    return CHARTS.node;
 }
 
 // ---- The sections

@@ -136,7 +136,7 @@ export class WorldMetrics {
         this.before = { dropped: 0, cpu: { user: 0, system: 0 }, made: { chunks: 0, rooms: 0 } };
     }
 
-    /** A look at the world that played steps: how long its steps and what's sent of them took, then what's made ahead, and the battle's time it ended at. */
+    /** A look at the world while its clock runs: how long its steps and what's sent of them took, then what's made ahead, and the battle's time it ended at. */
     tick(advance, ahead, at) {
         this.advance.add(advance);
         this.ahead.add(ahead);

@@ -165,6 +165,16 @@ describe("the supervisor adding up what its worlds count (server/server-metrics.
         assert.equal(valueOf(families, "pellagos_world_running", w1), 0);
         assert.equal(valueOf(families, "pellagos_heap_bytes", { thread: "world", ...w1 }), 9e7);
         assert.equal(valueOf(families, "pellagos_external_bytes", { thread: "world", ...w1 }), 2e7);
+
+        // (Its histograms as plain data, for a run's report: scripts/server-soak.js)
+        const plain = server.histogramsOf("w1");
+
+        assert.deepEqual(Object.keys(plain), ["step", "tick", "advance", "ahead", "save"]);
+        assert.deepEqual(plain.step.bounds, SECONDS);
+        assert.equal(plain.step.count, 30);
+        assert.equal(plain.step.counts.reduce((sum, count) => sum + count, 0), 30);
+        assert.equal(plain.save.count, 2);
+        assert.deepEqual(JSON.parse(JSON.stringify(plain)), plain);
     });
 
     it("sets how late a world's thread ran and counts its collections, by kind", () => {

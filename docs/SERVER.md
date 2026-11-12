@@ -55,7 +55,7 @@ answered from the internet. Its tabs:
   servers list it under its new name within a few seconds), this page, and the name of the
   server's archives. A game already open picks it up the next time it asks the server.
 - **Activity** (what's happened, the server's and each world's) and **Health** (each world's
-  steps and memory, and the server's).
+  steps and memory, and the server's, now and charted over the last day or week).
 
 ## Worlds and who comes in
 
@@ -512,6 +512,7 @@ secrets.json             the admin key's and creator keys' hashes (never a key a
 identity.key             the server's identity (the key it proves its id with)
 certificates/            its certificates, and the DNS host's token where there's no Keychain
 journal.log              what's happened to the server
+history.json.gz          how it's been running, for Health's charts (the last day and week)
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
                          access.json (its keys' hashes, players, bans), journal.log,
                          crashes.json (its last crash reports)
@@ -541,6 +542,26 @@ its event loop ran, its garbage collections by kind, its heap, how many are in i
 the world, and what its players' games have said to it. The server adds them up for as long as
 it runs, a world's carrying on when it's set aside and started again. Counting costs a step
 under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+
+### The last day and week
+
+Under them, Health draws how it's been: for the server, how many players' games were linked,
+what it sent them a second, how late its own event loop ran, how busy its own thread was and its
+memory; for each world, its slowest 1% of steps and of whole ticks (with a dashed line at a
+step's 50 ms), its pace, its players, how many were in its battle and its memory. **Day** is the
+last 24 hours, a point every two minutes; **Week** the last seven days, a point every fifteen.
+A point is the worst of its time for what's judged by its worst (slow steps, memory) and the mean
+for the rest. Point at a chart, or touch it, for what it was at that time. A gap is when nothing
+was measured: the server stopped, a world set aside, or no step played.
+
+The server keeps these itself, with nothing else to install: a point of each every ten seconds
+for a day and every five minutes for a week, about a megabyte of memory for a server with three
+worlds, written to `history.json.gz` in its data folder every five minutes and as it stops. So
+the charts are there after a restart or an update, with a gap as long as it was down (after a
+crash or a power cut, the last five minutes may be missing too). It's this computer's history,
+not its worlds': it isn't put in an archive, and restoring one leaves it as it is. A file that
+can't be read is started afresh. The slowest 1% are worked out from the buckets below, so they're
+as near as the buckets are: between 20 and 35 ms, say, not to the tenth.
 
 ### Metrics
 

@@ -31,6 +31,7 @@ import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
+import { CHART_POINTS } from "./history.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
 import { bringForward, freshStart, importSolo } from "./reopen.js";
@@ -402,6 +403,7 @@ export class Management {
         await stored.backUp("before-delete");
         this.server.access.removeWorld(id);
         this.server.worlds.delete(id);
+        this.server.history.forget(id);
         await rm(stored.folder, { recursive: true, force: true });
         await this.journal(`The world "${stored.meta.name}" (${id}) was deleted${by ? ` by ${by}` : ""}: its backups are kept in backups/${id}/.`);
 
@@ -1547,6 +1549,22 @@ export class Management {
         ];
 
         return all.sort((a, b) => b.when.localeCompare(a.when)).slice(0, lines);
+    }
+
+    /**
+     * How it's been keeping up (history.js): the last day (`span` "day": a point every two
+     * minutes) or week ("week": every fifteen) of what Health charts, each world's with its name,
+     * a deleted world's left out. { span, step, end, series: [{ id, world, name, title, unit,
+     * limit, values }] }.
+     */
+    history(span = "day") {
+        const read = this.server.history.read(span, Date.now(), { most: CHART_POINTS });
+        const short = (value) => (value === null ? null : Number(value.toPrecision(4)));
+
+        return {
+            ...read,
+            series: read.series.filter((one) => one.world === null || this.server.worlds.has(one.world)).map((one) => ({ ...one, name: one.world ? this.server.metaOf(one.world).name : null, values: one.values.map(short) })),
+        };
     }
 
     /**

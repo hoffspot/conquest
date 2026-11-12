@@ -100,6 +100,9 @@ export class ServerMetrics {
         // The worlds it has series for; and the supervisor's own sampling, once it's started
         this.known = new Set();
         this.sampling = null;
+
+        /** Told each time the supervisor's own has been sampled (the charts' history takes its points then: history.js). */
+        this.onSample = null;
     }
 
     /**
@@ -203,6 +206,7 @@ export class ServerMetrics {
         this.server.utilization.set(performance.eventLoopUtilization(busy, sampling.busy).utilization);
         sampling.busy = busy;
         this.threadIs(SUPERVISOR, { loop: sampling.loop.take(), gc: sampling.collections.take() });
+        this.onSample?.();
     }
 
     /** No longer sampling the supervisor's own. */
@@ -273,6 +277,22 @@ export class ServerMetrics {
             world.cpu.with({ ...labels, kind: "user" }).inc(micro(Math.max(0, counted.cpu.user)));
             world.cpu.with({ ...labels, kind: "system" }).inc(micro(Math.max(0, counted.cpu.system)));
         }
+    }
+
+    /**
+     * A world's histograms as they stand: { step, tick, advance, ahead, save }, each { bounds
+     * (seconds), counts (a bucket each, the last over every bound), count, sum (seconds) }. For a
+     * report of a run (scripts/server-soak.js), which reads what /metrics would say.
+     */
+    histogramsOf(id) {
+        const { step, tick, part, save } = this.world;
+        const plain = (metric, labels) => {
+            const { bounds, counts, count, sum } = metric.with(labels);
+
+            return { bounds: [...bounds], counts: [...counts], count, sum };
+        };
+
+        return { step: plain(step, { world: id }), tick: plain(tick, { world: id }), advance: plain(part, { world: id, kind: "advance" }), ahead: plain(part, { world: id, kind: "ahead" }), save: plain(save, { world: id }) };
     }
 
     /** A world set aside (its thread ended): what was so of it while it ran let go of; what it counted kept. */

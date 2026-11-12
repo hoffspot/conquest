@@ -33,6 +33,7 @@ import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { Certifier, tokensFileOf } from "./certify.js";
 import { Funnel } from "./funnel.js";
+import { History, HISTORY_FILE, HISTORY_SAVE, samplerOf } from "./history.js";
 import { attachBroker, BROKER_PATH } from "./broker.js";
 import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
 import { Management } from "./manage.js";
@@ -101,6 +102,8 @@ export class WorldServer {
         const { identity } = await ServerIdentity.open(root);
         const server = new WorldServer({ root, folder, access, identity, adminKey, ...options });
 
+        server.history = await History.open(path.join(root, HISTORY_FILE));
+
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
         }
@@ -132,6 +135,24 @@ export class WorldServer {
          */
         this.metrics = new ServerMetrics();
         this.metrics.watch(this);
+
+        /**
+         * The last day and week of what the Health page charts (history.js), kept in the data
+         * folder across restarts: a point of each taken whenever the supervisor's own is sampled
+         * (every ten seconds, once it's listening), and written every HISTORY_SAVE and as it stops.
+         */
+        this.history = new History();
+        this.keeping = null;
+
+        const sampler = samplerOf(this.metrics, this);
+
+        this.metrics.onSample = () => {
+            const samples = sampler();
+
+            if (samples) {
+                this.history.record(Date.now(), samples);
+            }
+        };
 
         this.registry = new Registry({
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
@@ -404,6 +425,8 @@ export class WorldServer {
         this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
         this.looking.unref?.();
         this.metrics.start();
+        this.keeping = setInterval(() => this.history.save(), HISTORY_SAVE);
+        this.keeping.unref?.();
         this.certifier.start();
         this.certifier.renew().catch(() => {});
         this.followRouter();
@@ -713,7 +736,9 @@ export class WorldServer {
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
         clearInterval(this.looking);
+        clearInterval(this.keeping);
         this.metrics.stop();
+        await this.history.save();
         this.updater.close();
         this.nearby.stop();
         await this.certifier.close();

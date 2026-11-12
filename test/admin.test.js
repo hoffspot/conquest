@@ -668,6 +668,19 @@ describe("the server's settings, creator keys, journal and health (server/manage
         assert.deepEqual(health.json.worlds, []);
         assert.ok(health.json.server.rss > 0 && health.json.machine.cores >= 1);
 
+        // (And how it's been keeping up, for Health's charts: the last day or week, the admin's alone)
+        server.metrics.sample();
+        server.metrics.sample();
+
+        const day = await admin.call("GET", "/server/history/day");
+        const week = await admin.call("GET", "/server/history/week");
+
+        assert.equal(day.status, 200);
+        assert.deepEqual([day.json.span, day.json.step, week.json.span, week.json.step], ["day", 120000, "week", 900000]);
+        assert.ok(day.json.series.some((one) => one.id === "rss" && one.unit === "bytes" && one.values.length === 720 && one.values.at(-1) > 1e6));
+        assert.equal((await admin.call("GET", "/server/history/year")).status, 404);
+        assert.equal((await wifi(server, "GET", "/server/history/day", { headers: { [ADMIN_HEADER]: ADMIN_VALUE } })).status, 403, "not without the admin key");
+
         // (A new admin key, from the computer itself: the old one no longer works)
         const old = server.adminKey;
         const renewed = await admin.call("POST", "/server/admin-key", {});
