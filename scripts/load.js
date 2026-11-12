@@ -391,7 +391,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     const ahead = new Ahead(world, { host, clock });
     const warmed = clock();
-    let settled = false;
+    let settled;
 
     // What's round the players made between steps until nothing's waiting (true), or until
     // nothing new has been made for LOAD.stall, or, the navigation over its cap, until the chunks
