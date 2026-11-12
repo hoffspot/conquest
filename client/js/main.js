@@ -5110,7 +5110,7 @@ function bringFromFile(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 
@@ -5178,6 +5178,8 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         state.onServer = null;
         tell.problem(reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
     };
+    // (Others coming into the world before them, each sent the whole of it: their place in the line)
+    joined.joining.onQueued = (place) => tell.waiting?.(queuedWords(place));
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");

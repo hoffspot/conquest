@@ -249,6 +249,17 @@ each told who paused it, till you resume; if your link drops meanwhile, it goes 
 Nothing else stops a world anyone else is in. Alone in it, your menu stops it, and so does your
 page hidden (its rule **Stopped while its one player's page is hidden**, on unless you turn it off).
 
+**Coming in, in turn.** Everyone who comes into a world is sent the whole of it, which is the
+dearest thing its thread does for one player. So a world lets two come in at once (its setting
+`welcomes`, 0 to 8; 0 lets any number, as it was before there was a setting): the rest wait in the
+order they asked, are told their place ("Others are coming into that world: 2 before you."), and
+are let in as places free, together where there's room for more than one, all from one taking of
+the world. A place frees when a player's game says it has finished loading, when they leave or
+their link is gone, or after a minute. The setting is changed with a world's other settings
+(`PATCH /api/v1/worlds/<id>` as its owner, `settings: { welcomes }`); the management page has no
+field for it yet. A world a player hosts in their own browser doesn't queue: each is welcomed at
+once.
+
 ### Playing
 
 | You have | Do this |

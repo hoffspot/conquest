@@ -3609,6 +3609,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     takings together to an eightieth of its thread (`WORLDS`, the server's `sparing`: none for
     2 s after one that took 25 ms) and takes none in the step that turns the war; a world
     hosted in a browser doesn't.
+  - **Coming in:** a host may let only so many come in at once (`Hosting.welcomes`: a world
+    server's world, by its `welcomes` setting, 2; a world hosted in a browser sets none and
+    welcomes each at once). A hello past that waits its turn and is told its place
+    (`{ kind: "queued", place }`, again as it changes); those waiting are let in as the world's
+    next looked at, as many as there's room for, all brought into the world first and then each
+    sent it from one taking, nothing else sent them before their welcome. A place frees when
+    one says it's ready, leaves, or has taken a minute (`WELCOMES.timeout`). `queued` came with
+    `NET_VERSION` 225.
     Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
     asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
     that needs it twice running through no fault of its own: one slow to load that falls too far

@@ -52,7 +52,7 @@ import { Ahead } from "./ahead.js";
 import { Keeper } from "./keeper.js";
 import { openWorld } from "./reopen.js";
 import { MOST_HEROES } from "./storage/heroes.js";
-import { StoredWorld } from "./storage/worlds.js";
+import { StoredWorld, WORLD_SETTINGS } from "./storage/worlds.js";
 import { WorldMetrics } from "./world-metrics.js";
 import { installWorkers } from "./workers.js";
 
@@ -80,6 +80,8 @@ let settings = { ...stored.meta.settings };
 // The most players it takes at once: its world's setting, unless its server was opened with
 // another in its place (world-thread.js: only a soak's is)
 const mostPlayers = () => workerData.mostPlayers ?? settings.mostPlayers;
+// How many it lets come in at once (its world's setting: a world kept before there was one, the default)
+const welcomes = () => settings.welcomes ?? WORLD_SETTINGS.welcomes.default;
 let opened;
 
 try {
@@ -132,6 +134,8 @@ hosting.most = mostPlayers();
 // (Taking the world for its players held to a share of the thread, and never in a turn's step:
 // core/netplay.js WORLDS)
 hosting.sparing = true;
+// (Only so many coming in at once, each sent the whole world: the rest wait their turn)
+hosting.welcomes = welcomes();
 // (Each known by the player their ticket proves, theirs taken over only under the same id: never
 // another player's by a copy of their character)
 hosting.byCharacter = false;
@@ -142,6 +146,19 @@ hosting.idOf = (peer) => {
     return kept ? heroId(one.player, one.slot) : one.player;
 };
 hosting.characterOf = (peer) => peers.get(peer)?.character ?? null;
+// (One let in, in their turn: how long they take loading counted from now; and the world looked
+// at once it's been sent, in tick or as their hello's heard)
+let came = false;
+
+hosting.onJoin = (id, peer) => {
+    const one = peers.get(peer);
+
+    if (one) {
+        one.since = clock();
+    }
+
+    came = true;
+};
 hosting.onReady = (peer) => {
     peers.get(peer).ready = true;
     look();
@@ -303,10 +320,11 @@ async function heard(peer, text) {
         await stored.journal(`Couldn't bring a hero in for ${one.player}: ${error.message}`).catch(() => {});
     }
 
-    // (Still here: in, if their hero's found; else refused, "character")
+    // (Still here: in, if their hero's found, now or in their turn; else refused, "character")
     if (peers.get(peer) === one) {
         hosting.hear(peer, text);
         one.since = clock();
+        came = false;
         look();
     }
 }
@@ -415,6 +433,15 @@ function tick() {
 
     last = now;
 
+    // (Whoever's waiting to come in let in, if there's room now: with its steps, if it's going;
+    // and if anyone came, who's present looked at again)
+    hosting.admit();
+
+    if (came) {
+        came = false;
+        look();
+    }
+
     const stepped = clock();
 
     runner.bakeAhead(ahead);
@@ -486,6 +513,7 @@ parentPort.on("message", async (message) => {
             stored.meta.settings = { ...stored.meta.settings, ...changed };
             settings = { ...settings, ...changed };
             hosting.most = mostPlayers();
+            hosting.welcomes = welcomes();
             look();
             break;
         }

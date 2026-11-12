@@ -105,6 +105,7 @@ export const isOffline = (meta) => meta?.state === "offline";
 /** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
+    welcomes: { kind: "integer", min: 0, max: 8, default: 2, about: "How many may be coming in at once, each sent the whole world: the rest wait their turn (0: any number)" },
     listed: { kind: "boolean", default: false, about: "Shown to anyone who asks the server what worlds it has" },
     open: { kind: "boolean", default: false, about: "Open to anyone: whoever opens the server may come in, no key or link needed (shown to them too)" },
     pauseWhenHidden: { kind: "boolean", default: true, about: "Stopped while its one player's page is hidden (never while anyone else is in it)" },

@@ -91,6 +91,11 @@
 //                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
 //                                                    and by whom; or going again)
 //                    { kind: "refused", reason }
+//                    { kind: "queued", place }                 (their hello heard, others coming in
+//                                                    before them: how many are ahead of them and
+//                                                    themselves, 1 the next; again as it changes,
+//                                                    then their welcome. Only from a host that
+//                                                    lets so many in at once: Hosting `welcomes`)
 //                    { kind: "chat", from, name, text, to, toName, dm }
 //                                                    (a line said in their party; or a direct
 //                                                    message, to them or theirs heard back: `dm`
@@ -122,7 +127,7 @@ import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 224;
+export const NET_VERSION = 225;
 
 /**
  * How many steps the host plays between telling how the world should stand (a fifth of a second:
@@ -155,6 +160,18 @@ export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
  * two steps, nothing done since, is taken once however often it's wanted.
  */
 export const WORLDS = Object.freeze({ share: 1 / 80, every: 2000 });
+
+/**
+ * How long one who's been sent the world may take making their copy of it before they no longer
+ * count among those coming in (ms, by the host's clock: Hosting `welcomes`), as the world server
+ * takes one loading that long to be present anyway. One whose link's gone stops counting at once.
+ */
+export const WELCOMES = Object.freeze({ timeout: 60000 });
+
+/** What one waiting to come into a world is told, by their place in the line (a `queued`'s: 1, the next). */
+export function queuedWords(place) {
+    return place > 1 ? `Others are coming into that world: ${place - 1} before you.` : "Others are coming into that world: you're next.";
+}
 
 // What stands in a text for the world, or for its players, while the rest is written; and as
 // it's written (a text that has it anywhere else is written the slow way)
@@ -528,6 +545,25 @@ export class Hosting {
         this.most = MOST_PLAYERS;
 
         /**
+         * How many may be coming in at once (sent the world, their copy of it not yet made: till
+         * they say they're ready, leave, or WELCOMES.timeout has gone by): 0, any number, each
+         * welcomed as their hello's heard (a player's own world, always; and the default). More
+         * (the world server's, its world's `welcomes` setting; generated/
+         * multiplayer_scaling_plan.md 1-5): those who say hello wait their turn (`waiting`, by
+         * peer: their hello, in the order they came), are told their place as it changes
+         * (`queued`), and are let in as the world's next sent what's been done (flush) or looked
+         * at (admit), as many as there's room for together, all from one taking of the world.
+         */
+        this.welcomes = 0;
+        this.waiting = new Map();
+
+        /** Those sent the world and still making their copy of it (by peer: when, by the clock), while that's counted. */
+        this.loading = new Map();
+
+        // The place each who's waiting was last told (by peer)
+        this.placed = new Map();
+
+        /**
          * The id each who joins plays under (peer): a guest's, unless whoever runs it says
          * otherwise (the world server: the player its tickets know, and which of their heroes).
          */
@@ -588,6 +624,11 @@ export class Hosting {
     #worldAfter = -Infinity;
     #turned = false;
 
+    // Those in the world not yet sent it (by peer: { id, took }), who are sent nothing else till
+    // they are (#enter, #welcomed); and whether those waiting are being let in just now (admit)
+    #entering = new Map();
+    #admitting = false;
+
     #record(op) {
         this.#changes++;
         this.#world = null;
@@ -625,7 +666,7 @@ export class Hosting {
     }
 
     #sendAll(kind, text) {
-        this.#sendTo([...this.players.keys()], kind, text);
+        this.#sendTo(this.#entering.size ? [...this.players.keys()].filter((peer) => !this.#entering.has(peer)) : [...this.players.keys()], kind, text);
     }
 
     // The same text to several who've joined: in one go, if whoever runs it can (sendAll), counted
@@ -659,6 +700,8 @@ export class Hosting {
             this.ops = [];
             this.checkDue = false;
             this.motionDue = false;
+            this.#turned = false;
+            this.admit();
             lap(null);
 
             return;
@@ -693,8 +736,70 @@ export class Hosting {
         this.#selves(step);
         lap("flush.worlds");
         this.#worlds();
+        this.admit();
         this.#turned = false;
         lap(null);
+    }
+
+    /**
+     * Those waiting to come in let in, as many as there's room for (`welcomes`, less those still
+     * making their copies), in the order they said hello: all into the world first, then each
+     * sent it from the one taking of it. Not if the world may not be taken just now (sparing):
+     * they wait. Then each still waiting told their place, if it's changed. Called with every
+     * flush; whoever runs a world that isn't going calls it as it looks at the world.
+     */
+    admit() {
+        if (!this.waiting.size || this.#admitting) {
+            return;
+        }
+
+        this.#admitting = true;
+
+        try {
+            let free = this.welcomes > 0 ? this.welcomes - this.#loadingNow() : Infinity;
+
+            if (free > 0 && this.#mayTake({ afresh: true })) {
+                for (const [peer, hello] of [...this.waiting]) {
+                    if (free <= 0) {
+                        break;
+                    }
+
+                    this.waiting.delete(peer);
+                    this.placed.delete(peer);
+                    free -= this.#enter(peer, hello) ? 1 : 0;
+                }
+
+                this.#welcomed();
+            }
+
+            let place = 0;
+
+            for (const peer of this.waiting.keys()) {
+                place++;
+
+                if (this.placed.get(peer) !== place) {
+                    this.placed.set(peer, place);
+                    this.#send(peer, "queued", encode({ kind: "queued", place }));
+                }
+            }
+        } finally {
+            this.#admitting = false;
+        }
+    }
+
+    // How many are coming in just now: sent the world, still in it, not yet ready, and not so
+    // long at it that they no longer count (WELCOMES.timeout, by the clock). Counted from who's
+    // here, so one whose link died as the world came holds no place
+    #loadingNow() {
+        const now = this.clock?.() ?? 0;
+
+        for (const [peer, at] of [...this.loading]) {
+            if (!this.players.has(peer) || now - at >= WELCOMES.timeout) {
+                this.loading.delete(peer);
+            }
+        }
+
+        return this.loading.size;
     }
 
     /**
@@ -708,8 +813,9 @@ export class Hosting {
     // Whether the world may be taken for those who've joined just now: always, unless that's held
     // to a share of the thread (sparing, by the clock: WORLDS) and it's too soon after the last,
     // or this step turned the war. The world as it stands, taken already, may always be had again
-    #mayTake() {
-        if (!this.sparing || !this.clock || (this.#world?.time === this.host.battle.time && this.#world.changes === this.#changes)) {
+    // (unless it's to be taken `afresh`: for those about to come into it, which changes it)
+    #mayTake({ afresh = false } = {}) {
+        if (!this.sparing || !this.clock || (!afresh && this.#world?.time === this.host.battle.time && this.#world.changes === this.#changes)) {
             return true;
         }
 
@@ -860,7 +966,7 @@ export class Hosting {
         for (const [peer, id] of this.players) {
             const actor = this.host.battle.actor(id);
 
-            if (!actor) {
+            if (!actor || this.#entering.has(peer)) {
                 continue;
             }
 
@@ -912,6 +1018,7 @@ export class Hosting {
                 break;
             case "ready":
                 if (this.players.has(peer)) {
+                    this.loading.delete(peer);
                     this.onReady(peer);
                 }
 
@@ -1049,22 +1156,37 @@ export class Hosting {
         return { ok: true };
     }
 
-    // Someone joining, with their character: into the world (by their people's town, if it isn't
-    // the host's people's), and sent it as it is
-    #hello(peer, { version, character }) {
-        if (this.players.has(peer)) {
+    // Someone joining, with their character: into the world and sent it as it is, at once; or,
+    // where only so many come in at once (welcomes), in their turn (admit)
+    #hello(peer, hello) {
+        if (this.players.has(peer) || this.waiting.has(peer)) {
             return;
         }
-
-        const refuse = (reason, more = {}) => this.#send(peer, "refused", encode({ kind: "refused", reason, ...more }));
 
         // (With this version, for the joiner to say which is the newer: versionWords. A refusal's
         // words are read by games of every version, so they only ever gain what can be left out)
-        if (version !== NET_VERSION) {
-            refuse("version", { net: NET_VERSION });
+        if (hello.version !== NET_VERSION) {
+            this.#send(peer, "refused", encode({ kind: "refused", reason: "version", net: NET_VERSION }));
 
             return;
         }
+
+        if (this.welcomes > 0) {
+            this.waiting.set(peer, hello);
+
+            return;
+        }
+
+        this.#enter(peer, hello);
+        this.#welcomed();
+    }
+
+    // One who's said hello brought into the world with their character (by their people's town,
+    // if it isn't the host's people's), or onto the link of one of theirs in it already
+    // (#takeOver); not yet sent it (#welcomed), and sent nothing till they are. Returns whether
+    // they're in: else they've been told why not
+    #enter(peer, { character }) {
+        const refuse = (reason, more = {}) => this.#send(peer, "refused", encode({ kind: "refused", reason, ...more }));
 
         // (Or refused saying why, if it can say: a world server's, a character copied in already)
         const brought = this.characterOf(peer, character);
@@ -1072,7 +1194,7 @@ export class Hosting {
         if (!brought || brought.refused) {
             refuse(NET_REFUSALS[brought?.refused] ? brought.refused : "character");
 
-            return;
+            return false;
         }
 
         // (The same character in the world already, through another link: another device, or one
@@ -1084,7 +1206,7 @@ export class Hosting {
         if (same) {
             this.#takeOver(peer, same);
 
-            return;
+            return true;
         }
 
         const id = this.idOf(peer);
@@ -1094,7 +1216,7 @@ export class Hosting {
         } else if (this.host.players.size >= this.most) {
             refuse("full");
 
-            return;
+            return false;
         }
 
         const { world } = this.host;
@@ -1105,8 +1227,30 @@ export class Hosting {
         this.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", this.#withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, paused: this.paused }, this.#worldFor(id)));
-        this.onJoin(id, peer);
+        this.#entering.set(peer, { id, took: false });
+
+        return true;
+    }
+
+    // Each brought into the world and not yet sent it (#enter), sent it as it is: from the one
+    // taking of it, however many they are; and whoever runs the world told they've come
+    #welcomed() {
+        const entering = [...this.#entering];
+        const { world } = this.host;
+
+        this.#entering.clear();
+
+        for (const [peer, { id, took }] of entering) {
+            this.#send(peer, "welcome", this.#withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, ...(took ? { took: true } : {}), paused: this.paused }, this.#worldFor(id)));
+
+            if (this.welcomes > 0) {
+                this.loading.set(peer, this.clock?.() ?? 0);
+            }
+        }
+
+        for (const [peer, { id }] of entering) {
+            this.onJoin(id, peer);
+        }
     }
 
     // The player in the world already whose link one joining (`peer`, with the character they
@@ -1130,11 +1274,10 @@ export class Hosting {
 
     // One joining taking over their character in the world (`id`), from the link they were on
     // (`peer`'s now): that one told why ("elsewhere") and let go of, its link closed by whoever runs
-    // it (onKick), its character left as it stands, not gone and come again; and this one sent the
-    // world as it is, told it took them over
+    // it (onKick), its character left as it stands, not gone and come again; and this one to be
+    // sent the world as it is, told it took them over (#welcomed)
     #takeOver(peer, id) {
         const old = [...this.players].find(([, player]) => player === id)?.[0];
-        const { world } = this.host;
 
         this.flush();
 
@@ -1148,8 +1291,7 @@ export class Hosting {
 
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", this.#withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, took: true, paused: this.paused }, this.#worldFor(id)));
-        this.onJoin(id, peer);
+        this.#entering.set(peer, { id, took: true });
     }
 
     // One in the world sent out for another of the same player's coming in (`reason`): told why,
@@ -1281,7 +1423,7 @@ export class Hosting {
     still(peers) {
         const here = new Set(peers);
 
-        for (const peer of [...this.players.keys()]) {
+        for (const peer of [...this.players.keys(), ...this.waiting.keys()]) {
             if (!here.has(peer)) {
                 this.gone(peer);
             }
@@ -1313,6 +1455,10 @@ export class Hosting {
      * as it's to be kept, where they were and as they were (Host.placeOf, vitalsOf: to come back to).
      */
     gone(peer) {
+        // (One who was waiting to come in: no longer)
+        this.waiting.delete(peer);
+        this.placed.delete(peer);
+
         const id = this.players.get(peer);
 
         if (!id) {
@@ -1336,6 +1482,8 @@ export class Hosting {
         this.worlds.delete(peer);
         this.allowance.delete(peer);
         this.hidden.delete(peer);
+        this.loading.delete(peer);
+        this.#entering.delete(peer);
     }
 
     /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */
@@ -1360,7 +1508,7 @@ export class Hosting {
 
     /** The world closed to others again: everyone who'd joined out of it, and nothing more recorded. */
     stop() {
-        for (const peer of [...this.players.keys()]) {
+        for (const peer of [...this.players.keys(), ...this.waiting.keys()]) {
             this.gone(peer);
         }
 
@@ -1485,6 +1633,13 @@ export class Joining {
         this.onRefused = () => {};
         this.onKicked = () => {};
 
+        /**
+         * Its place among those waiting to come into the world, as the host last said (1, the
+         * next), or null: not waiting; and who's told as it's said (place).
+         */
+        this.queued = null;
+        this.onQueued = () => {};
+
         /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
         this.onPong = () => {};
 
@@ -1523,6 +1678,7 @@ export class Joining {
         switch (message?.kind) {
             case "welcome":
                 this.me = message.id;
+                this.queued = null;
                 // (Their character was in the world already, on another link: taken over, as it stood)
                 this.took = message.took === true;
                 this.paused = pausedOf(message.paused);
@@ -1604,6 +1760,14 @@ export class Joining {
                 break;
             case "refused":
                 this.onRefused(message.reason, message);
+                break;
+            case "queued":
+                // (Others coming in before it: its place in the line, till its welcome comes)
+                if (!this.me && Number.isInteger(message.place) && message.place > 0) {
+                    this.queued = message.place;
+                    this.onQueued(message.place);
+                }
+
                 break;
             case "kicked":
                 this.onKicked(message.reason);
