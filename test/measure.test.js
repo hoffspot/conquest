@@ -233,6 +233,143 @@ describe("a measured run's percentiles (measure.js Meter)", () => {
     });
 });
 
+describe("heat and the graphics card, told from the frames (measure.js MEASURE.heat, MEASURE.probe)", () => {
+    // A run on a device whose frames' work takes `work(minutes in)` ms and whose frames come every
+    // `interval(drawing fewer pixels?, minutes in)` ms, till the run's done or `till` minutes in.
+    // Returns when the meter went into and out of its probes (seconds into the run)
+    function device(meter, { work = () => 8, interval = () => 1000 / 60, till = Infinity } = {}) {
+        const turned = [];
+        let probing = false;
+
+        while (!meter.done && meter.elapsed < till * 60000) {
+            const at = meter.elapsed / 60000;
+
+            meter.frame[FRAME.interval] = interval(probing, at);
+            meter.frame[FRAME.work] = work(at);
+            PHASES.forEach((name, k) => (meter.frame[FRAME.phases + k] = work(at) / PHASES.length));
+            meter.observe(1, 100);
+
+            // (As the game does: the pixels changed the frame after the meter says so)
+            if (meter.probing !== probing) {
+                probing = meter.probing;
+                turned.push(Math.round(meter.elapsed / 100) / 10);
+            }
+        }
+
+        return turned;
+    }
+
+    const within = (value, aim, by, what) => assert.ok(Math.abs(value - aim) <= by, `${what}: ${value}, for ${aim}`);
+
+    it("a device that keeps cool, its frames on the screen's beat: no heat, and the graphics card not the limit", () => {
+        const meter = new Meter({ minutes: 12 });
+        const turned = device(meter);
+        const { heat, gpuBound, windows } = meter.report();
+
+        // (Twelve minutes: the twelfth against the second; fewer pixels for the twenty seconds up to 6:00 and to 11:00)
+        assert.deepEqual([windows.cool.from, windows.cool.to, windows.warm.from, windows.warm.to], [60, 120, 660, 720]);
+        assert.deepEqual(windows.probes.map(({ pixels, before, during }) => [pixels, before.from, before.to, during.from, during.to]), [[0.7, 320, 340, 340, 360], [0.7, 620, 640, 640, 660]]);
+        assert.equal(turned.length, 4);
+        [340, 360, 640, 660].forEach((at, k) => within(turned[k], at, 0.05, "the probe's turn"));
+        assert.equal(meter.pixels, MEASURE.probe.pixels);
+        assert.equal(meter.probing, false, "all the pixels again at the end");
+
+        within(heat, 1, 0.03, "heat");
+        assert.equal(gpuBound, false);
+        within(windows.cool.frames, 3600, 2, "the cool minute's frames");
+        within(windows.warm.frames, 3600, 2, "the warm minute's frames");
+        near(windows.cool.work, 8, "the cool minute's work");
+
+        for (const { before, during, gpuBound: bound } of windows.probes) {
+            within(before.frames, 1200, 2, "frames before a probe");
+            within(during.frames, 1200, 2, "frames in a probe");
+            near(during.interval, 1000 / 60, "a probe's frames");
+            assert.equal(bound, false);
+        }
+    });
+
+    it("a device that warms up: the twelfth minute's work over the second's", () => {
+        const meter = new Meter({ minutes: 12 });
+
+        // (Its work 40% longer by the end, a little each minute)
+        device(meter, { work: (at) => 8 * (1 + (0.4 * at) / 12) });
+
+        const { heat, gpuBound, windows } = meter.report();
+
+        within(heat, (1 + (0.4 * 11.5) / 12) / (1 + (0.4 * 1.5) / 12), 0.05, "heat");
+        assert.ok(heat > 1.25, "past what the plan calls green");
+        near(windows.warm.work, 8 * (1 + (0.4 * 11.5) / 12), "the warm minute's work");
+        assert.equal(gpuBound, false, "its frames still on the beat");
+    });
+
+    it("frames that come quicker for fewer pixels: the graphics card was the limit; frames that don't, the processor", () => {
+        // (Every other beat at all its pixels, every beat at half of them)
+        const card = new Meter({ minutes: 12 });
+
+        device(card, { interval: (fewer) => (fewer ? 1000 / 60 : 1000 / 30) });
+
+        const bound = card.report();
+
+        assert.equal(bound.gpuBound, true);
+        assert.deepEqual(bound.windows.probes.map(({ gpuBound }) => gpuBound), [true, true]);
+        near(bound.windows.probes[0].before.interval, 1000 / 30, "the frames before the probe");
+        near(bound.windows.probes[0].during.interval, 1000 / 60, "the frames in it, the one drawn before the pixels changed left out");
+
+        // (Every other beat whatever's drawn)
+        const processor = new Meter({ minutes: 12 });
+
+        device(processor, { interval: () => 1000 / 30 });
+        assert.equal(processor.report().gpuBound, false);
+        within(processor.report().heat, 1, 0.03, "heat");
+
+        // (The graphics card the limit only once it's hot, by the second probe: said of the run)
+        const later = new Meter({ minutes: 12 });
+
+        device(later, { interval: (fewer, at) => (at > 9 && !fewer ? 1000 / 30 : 1000 / 60) });
+        assert.deepEqual(later.report().windows.probes.map(({ gpuBound }) => gpuBound), [false, true]);
+        assert.equal(later.report().gpuBound, true);
+
+        // (A little quicker isn't quicker: within a tenth, the same)
+        const hardly = new Meter({ minutes: 12 });
+
+        device(hardly, { interval: (fewer) => (fewer ? 31 : 1000 / 30) });
+        assert.equal(hardly.report().gpuBound, false);
+    });
+
+    it("says nothing of what it hasn't measured: a run cut short, a short run, a run of too few frames", () => {
+        // (Cut short at five minutes: no warm minute, no probe yet; at seven, the first probe's)
+        const short = new Meter({ minutes: 12 });
+
+        device(short, { till: 5, interval: (fewer) => (fewer ? 1000 / 60 : 1000 / 30) });
+        assert.deepEqual([short.report().heat, short.report().gpuBound, short.report().done], [null, null, false]);
+        assert.equal(short.report().windows.probes.length, 2);
+        device(short, { till: 7, interval: (fewer) => (fewer ? 1000 / 60 : 1000 / 30) });
+        assert.deepEqual([short.report().heat, short.report().gpuBound], [null, true]);
+        assert.deepEqual(short.report().windows.probes.map(({ gpuBound }) => gpuBound), [true, null]);
+
+        // (Two minutes: too short to draw fewer pixels in; its last ten seconds against its second ten)
+        const brief = new Meter({ minutes: 2 });
+        const turned = device(brief, { work: (at) => (at < 1 ? 8 : 10) });
+
+        assert.deepEqual(turned, []);
+        assert.equal(brief.report().gpuBound, null);
+        assert.deepEqual(brief.report().windows.probes, []);
+        assert.deepEqual([brief.report().windows.cool.from, brief.report().windows.cool.to, brief.report().windows.warm.from], [10, 20, 110]);
+        within(brief.report().heat, 1.25, 0.04, "heat");
+
+        // (Three minutes at two frames a second: probed, but ten frames a window say nothing)
+        const slow = new Meter({ minutes: 3 });
+
+        assert.equal(device(slow, { interval: (fewer) => (fewer ? 250 : 500) }).length, 4);
+        assert.deepEqual(slow.report().windows.probes.map(({ gpuBound }) => gpuBound), [null, null]);
+        assert.equal(slow.report().gpuBound, null);
+        assert.equal(slow.report().heat, 1, "its fifteen seconds of each are thirty frames: enough for heat");
+
+        // (And nothing at all before a frame)
+        assert.deepEqual([new Meter().report().heat, new Meter().report().gpuBound], [null, null]);
+    });
+});
+
 describe("a measured run's report (measure.js Meter.report)", () => {
     const bytes = (report) => new TextEncoder().encode(JSON.stringify(report)).length;
 

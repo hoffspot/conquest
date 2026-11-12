@@ -588,7 +588,10 @@ browser, screen and cores). No game sends one unless its link asked for the run.
   long it was ("ended early" for one the browser cut short), and how it went in a line (the
   frames' middle and 95th percentile, their work, a step of the world, the share of frames more
   than 50 ms late, the most held), with the quality it was drawn at, the frames a second the
-  browser was asking for, and how many were in the world.
+  browser was asking for, how many were in the world, and what the run found of the device where
+  it could: **heat** (its frames' work in the last twelfth of the run over their work in the
+  second: 1 is no warmer) and whether **the graphics card** was the limit (the frames came quicker
+  for the twenty seconds it drew half the pixels) or not.
 - **Minutes** shows the run minute by minute: the frames, their interval (middle, 95 in 100,
   worst), their work and a step (95 in 100), the frames over 50 ms, and the most held (MB).
 - **Copy all** and each run's **Copy** copy them as JSON (the world, who and when, and the whole
@@ -621,13 +624,16 @@ table wanted (8 players spread, 8 in one town, each with and without a field bat
    Safari on the phone and go into the world. The countdown starts at the top of the screen once
    the game's under way ("Measuring iphone-8-spread: 12:00 left").
 4. **For twelve minutes, play:** walk and fight as the table says, and leave the game in front
-   the whole time (put away, the run stops, and goes on when it's back).
+   the whole time (put away, the run stops, and goes on when it's back). Twice in the run, for the
+   twenty seconds up to 6:00 and up to 11:00, the picture's a little softer: the game's drawing
+   half the pixels, to tell whether it's the graphics card that holds the frames back. Play
+   through them.
 5. **What comes back:** the words turn to "Measured iphone-8-spread: sent to <the server>". On
    the Mac, the management page (`http://localhost:8481`), **Worlds**, the world's **Measured
    runs**: the run's row, its **Minutes**, and **Copy** for the whole report to paste into the
    baseline. The plan's reading of it: green is a step's 95th percentile at 5 ms or under, the
-   frames' at 20 ms or under, fewer than 1 frame in 100 over 50 ms and 400 MB or less held; amber
-   is a step's 95th percentile at 12 ms or under; anything else is red.
+   frames' at 20 ms or under, fewer than 1 frame in 100 over 50 ms, heat 1.25 or under and 400 MB
+   or less held; amber is a step's 95th percentile at 12 ms or under; anything else is red.
    If the words say it couldn't be sent, **Copy results** on the phone copies it (selected to
    copy by hand, on plain `http://`), and it's sent anyway the next time the phone's in the world.
 

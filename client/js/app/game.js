@@ -1671,6 +1671,7 @@ export class Game {
          */
         this.measure = null;
         this.measureClock = 0;
+        this.measureProbing = false;
         this.thronged = new Map();
 
         // (Those in a crowd fading from sight as one drawn in full takes their place: #handOver)
@@ -4164,7 +4165,8 @@ export class Game {
     // guard reads it and no oftener, just after the frame (a reading the guard took in that time
     // will do: on a phone, the guard's own, so measuring walks the bodies about no more than
     // playing does). The frame's times are written straight into the meter's own array, so a
-    // frame measured makes nothing new
+    // frame measured makes nothing new. And the run's probes (measure.js MEASURE.probe) put into
+    // effect: fewer pixels drawn while the meter says it's in one
     #measured(interval, steps) {
         const meter = this.measure;
         const { frame, at } = meter;
@@ -4174,6 +4176,13 @@ export class Game {
 
         if (!meter.observe(steps, this.view.renderer.info.render.calls)) {
             return;
+        }
+
+        // (In one of the run's probes, or out of it again: fewer of the pixels drawn meanwhile,
+        // to see whether the frames come quicker for it. Twenty seconds, twice in twelve minutes)
+        if (meter.probing !== this.measureProbing) {
+            this.measureProbing = meter.probing;
+            this.view.adapt(meter.probing ? meter.pixels : 1);
         }
 
         if ((this.measureClock -= interval) > 0) {

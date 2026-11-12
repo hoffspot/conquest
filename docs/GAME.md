@@ -7783,15 +7783,18 @@ unless said, 30 at most, a part of a minute will do):
   on servers**): the first game under way from the page is the one measured.
 
 Without `measure` in the link nothing of it runs: its code isn't read (main.js `measure`), no game
-has a meter (`game.measure` is null, one test of it a frame), and nothing's kept or sent.
+has a meter (`game.measure` is null, one test of it a frame), and nothing's kept or sent. Its two
+modules aren't among what's downloaded before the game starts either (they're not in the manifest,
+as the Action Bar's set-up isn't): they're fetched when a link first asks for a run, so that load
+needs the network.
 
 - **The run** begins once the game's under way and is as long as its frames' own times add up to,
   so a game stopped (the menu open with nobody else in the world, the page put away) stops the run
   with it. Another game come to from the same page (another world gone into) carries the same run
   on. A name is kept to letters, digits, dots and dashes, forty at most.
 - **One quality throughout:** Adaptive is off for the run whatever Game options says (main.js
-  `applyViewSettings`), so the level and the pixels drawn don't change under what's measured and
-  everyone's drawn in full. The level is the one chosen (or suggested, left to the game), or the
+  `applyViewSettings`), so the level and the pixels drawn don't change under what's measured (but
+  for the run's own two probes, below) and everyone's drawn in full. The level is the one chosen (or suggested, left to the game), or the
   link's own `&quality=low`, `medium` or `high`. The memory guard still acts, as it does for a
   player; the report says its level.
 - **What's counted** (measure.js `Meter`), each frame: its interval (ms since the frame before),
@@ -7804,6 +7807,25 @@ has a meter (`game.measure` is null, one test of it a frame), and nothing's kept
   so a percentile read from one is within 2.2% of the time it stands for; the worst is kept as it
   was. Counting a frame makes no object, array or number (the frame's times are written into the
   meter's own array), so measuring gives the device no garbage to collect.
+- **Heat** (`MEASURE.heat`; the report's `heat`): a phone that warms up slows its processor down,
+  and Safari tells a page nothing of it, so it's read from the frames: the middle of their work in
+  the twelfth minute over the middle of it in the second (of a run of another length, its last
+  twelfth over its second: `windows.cool`, `windows.warm`). 1 is no warmer; 1.25, a quarter longer
+  for the same work. Null where either stretch had fewer than thirty frames (a run cut short
+  before its last twelfth).
+- **The graphics card or the processor** (`MEASURE.probe`; the report's `gpuBound`): for the twenty
+  seconds up to 6:00 and up to 11:00 the game draws 0.7 of the pixels each way, half of them (the
+  meter's `probing`, put into effect by game.js `#measured` with the view's `adapt`, the picture
+  a little softer meanwhile), and the frames then are set against those of the twenty seconds
+  before (`windows.probes`: `before` and `during`, each how the frames came, the mean of the
+  quickest 95 in 100 of their intervals so the hitch as the picture's resized doesn't count, and
+  the middle of their work). Frames that came in nine tenths of the time or less for half the
+  pixels were waiting on the graphics card: `gpuBound` true (for the run, if either probe says
+  so). Frames that came no quicker were held by the processor, or weren't held at all, on the
+  screen's beat already: false. The probes end before the twelfth minute begins, so heat is told
+  from frames drawn whole. Only in a run of three minutes or more (of another length, the same
+  shares of it: a thirty-sixth of the run up to its half and up to its eleventh twelfth), and
+  null where a stretch had fewer than thirty frames.
 - **What's held** is read every two seconds, as often as the memory guard reads it and no oftener
   (`MEASURE.every`; game.js `#measured`: just after a frame, and on a phone the guard's own
   reading, so measuring walks the bodies about no more than playing does), counted as the guard
@@ -7817,7 +7839,8 @@ has a meter (`game.measure` is null, one test of it a frame), and nothing's kept
   drawing's size, the cores); `seconds` measured and whether it was `done`; over the run, `frames`,
   how many came more than 33, 50, 100 and 200 ms after the one before (`over`), `stepsPlayed` and
   `stepMs` (the ms a step took on average), the draw calls a frame (`calls`), the most held
-  (`heldMB`), and each series' count, mean, p50, p95, p99 and worst (`total`); a row for each
+  (`heldMB`), `heat` and `gpuBound` with the stretches they're told from (`windows`), and each
+  series' count, mean, p50, p95, p99 and worst (`total`); a row for each
   minute (`rows`: the same counts, and each series as `[p50, p95, p99, worst]`), the last a part of
   a minute if the run ended in one; each series' histogram (`histograms`: its first bucket with
   anything in it, then each bucket's count; `percentileOf` reads any percentile back); and every
@@ -8220,7 +8243,12 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   took minutes; what's held kept, never more readings than the guard's cadence gives; fifteen
   minutes' report under 48 KB, as a phone has them and with every bucket of every histogram filled;
   and, by the engine's own sampling of what's made, `observe()` making nothing on a frame (closing
-  a minute, under 4 KB of numbers). `test/measuring.test.js`: the run a link asks for (none without
+  a minute, under 4 KB of numbers); heat and the probes on devices made up for it: one that keeps
+  cool on the screen's beat (heat 1, the graphics card not the limit, the probes at 5:40 to 6:00
+  and 10:40 to 11:00), one whose work grows 40% (its twelfth minute over its second), one whose
+  frames come twice as quick for fewer pixels (the graphics card the limit), one whose frames
+  don't, one bound only once it's hot, one a little quicker (not bound); and nothing said of what
+  wasn't measured (a run cut short, a run too short to probe, too few frames). `test/measuring.test.js`: the run a link asks for (none without
   the parameter; its name and minutes); the first game under way measured, the countdown following
   the frames, another game carrying the run on, the screen asked to stay awake and again as the
   page comes back; the report kept every ten seconds and as it ends, the timer stopped, the screen

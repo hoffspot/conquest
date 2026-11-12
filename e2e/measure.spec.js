@@ -85,6 +85,12 @@ test("a measured run: a link's ?measure= counts down twenty seconds of play at o
     expect(report.held.mb.length).toBeLessThanOrEqual(Math.ceil(report.seconds / MEASURE.every) + 1);
     expect(report.heldMB).toBeGreaterThan(10);
 
+    // (Heat and the graphics card: carried, though twenty seconds are too short to draw fewer
+    // pixels in, and drawn in software may be too few frames to say how it warmed)
+    expect(report).toMatchObject({ gpuBound: null, windows: { cool: { from: 1.7, to: 3.4 }, warm: { from: 18.7, to: 20.4 }, probes: [] } });
+    expect(report.heat === null || report.heat > 0).toBe(true);
+    expect(report.pixels).toBe(1);
+
     // (Done: the game's no longer measured)
     expect(await page.evaluate(() => window.pellagos.game.measure)).toBe(null);
 });

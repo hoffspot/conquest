@@ -374,7 +374,9 @@ test("a world's measured runs: one a player's game sent, read by the admin with 
     await expect(rows.first()).toContainText("abc1234567");
     await expect(rows.first()).toContainText(`Frames ${report.total.interval.p50} ms (95 in 100 within ${report.total.interval.p95} ms)`);
     await expect(rows.first()).toContainText(`${Math.round((report.over[50] / report.frames) * 1000) / 10}% over 50 ms; held 316 MB`);
-    await expect(rows.first()).toContainText("drawn at high; 60 frames a second asked for; 8 in the world");
+    await expect(rows.first()).toContainText(`drawn at high; 60 frames a second asked for; 8 in the world; heat ${report.heat}`);
+    expect(report.heat).toBe(1);
+    expect(report.gpuBound).toBe(null);
 
     // Its minutes, a row each: the whole one, and the half
     await rows.first().getByRole("button", { name: "Minutes" }).click();

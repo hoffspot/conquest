@@ -11,7 +11,11 @@
 //    how many frames came later than each of MEASURE.over ms after the one before; the steps
 //    played and the ms a step took on average; the draw calls a frame made; and the most the game
 //    held (MB, as the memory guard counts it, read no oftener than it reads: app/memoryguard.js);
-//  - the same over the whole run, with each series' histogram.
+//  - the same over the whole run, with each series' histogram;
+//  - **heat**: how much longer the frames' work took late in the run than early in it (a phone
+//    that's warmed up slows its processor down); and whether the **graphics card** was what held
+//    the frames back (`gpuBound`), found by drawing fewer pixels for twenty seconds, twice, and
+//    seeing whether the frames came quicker for it (MEASURE.heat, MEASURE.probe).
 //
 // A phone's browser tells nothing of long frames or of heat (Safari has neither Long Animation
 // Frames nor Long Tasks), so both are read from the frames' own timings.
@@ -35,6 +39,17 @@ import { PHASES } from "./telemetry.js";
  * - `every`: how often what's held is read (seconds: the memory guard's).
  * - `bytes`: the most a report of `sized` minutes may be as JSON (the server takes 64 KB:
  *   server/storage/measures.js).
+ * - `heat`: the device warming up, told by its work: the middle of the frames' work over the
+ *   `warm` share of the run against that over the `cool` share (each [from, to] as shares of the
+ *   run: of twelve minutes, the twelfth minute against the second), each of `frames` frames or
+ *   more.
+ * - `probe`: whether it's the graphics card or the processor that holds the frames back, told by
+ *   drawing fewer pixels a while: `pixels` of them each way (0.7: half the pixels), for `length`
+ *   of the run up to each of `ends` (shares of the run: of twelve minutes, the 20 seconds up to
+ *   6:00 and to 11:00), set against the same length just before. The frames coming in `quicker`
+ *   of the time or less (the mean of the quickest `kept` of them, so a hitch as the picture's
+ *   resized doesn't count) say the graphics card was the limit. Only in a run of `least` minutes
+ *   or more, and of windows of `frames` frames or more each.
  */
 export const MEASURE = Object.freeze({
     version: 1,
@@ -47,6 +62,8 @@ export const MEASURE = Object.freeze({
     every: MEMORY_GUARD.every,
     bytes: 48 * 1024,
     sized: 15,
+    heat: Object.freeze({ cool: Object.freeze([1 / 12, 2 / 12]), warm: Object.freeze([11 / 12, 1]), frames: 30 }),
+    probe: Object.freeze({ pixels: 0.7, ends: Object.freeze([6 / 12, 11 / 12]), length: 1 / 36, quicker: 0.9, kept: 0.95, least: 3, frames: 30 }),
 });
 
 /** What's measured of a frame, in order: a histogram and a row's four numbers for each. */
@@ -79,6 +96,13 @@ const ROW = STEPS + 6;
 const LENGTH = 0;
 const ELAPSED = 1;
 const CLOSING = 2;
+// (The stretches of the run whose frames are counted apart, each with a histogram of the frames'
+// intervals and one of their work: the cool one and the warm one, then for each probe the stretch
+// before it and the stretch of it, the probes' own the odd ones)
+const COOL = 0;
+const WARM = 1;
+const PROBES = 2;
+const WINDOWS = PROBES + MEASURE.probe.ends.length * 2;
 
 const round = (value, places = 2) => Math.round(value * 10 ** places) / 10 ** places;
 
@@ -159,6 +183,13 @@ export class Meter {
     #held;
     #readings = 0;
     #scratch = new Float64Array(ROW);
+    // (The stretches counted apart: when each begins and ends (ms into the run; never, a probe in
+    // a run too short for one), its two histograms, and how many frames fell in it. And the
+    // buckets the frame in hand's times fell in, for them)
+    #spans = new Float64Array(WINDOWS * 2).fill(-1);
+    #windows = new Uint32Array(WINDOWS * 2 * BUCKETS);
+    #windowed = new Uint32Array(WINDOWS);
+    #buckets = new Uint16Array(SERIES.length);
 
     /**
      * @param {object} [options]
@@ -183,6 +214,26 @@ export class Meter {
 
         /** Has the run been measured through? Nothing more is counted once it has. */
         this.done = false;
+
+        /**
+         * Is the run in one of its probes just now (MEASURE.probe)? While it is, whoever measures
+         * draws `pixels` of the pixels each way, and all of them again once it isn't.
+         */
+        this.probing = false;
+        this.pixels = MEASURE.probe.pixels;
+
+        const length = this.#clock[LENGTH];
+        const span = (window, from, to) => this.#spans.set([from * length, to * length], window * 2);
+
+        span(COOL, ...MEASURE.heat.cool);
+        span(WARM, ...MEASURE.heat.warm);
+
+        if (this.minutes >= MEASURE.probe.least) {
+            MEASURE.probe.ends.forEach((end, k) => {
+                span(PROBES + k * 2, end - MEASURE.probe.length * 2, end - MEASURE.probe.length);
+                span(PROBES + k * 2 + 1, end - MEASURE.probe.length, end);
+            });
+        }
     }
 
     /** How much of the run has been measured (ms), and how much is left. */
@@ -226,6 +277,7 @@ export class Meter {
             const bucket = ms >= MEASURE.low ? 1 + Math.floor(Math.log2(ms / MEASURE.low) * MEASURE.per) : 0;
             const at = series * BUCKETS + (bucket < BUCKETS ? bucket : BUCKETS - 1);
 
+            this.#buckets[series] = at - series * BUCKETS;
             this.#minute[at]++;
             this.#total[at]++;
             this.#counted[series * 2]++;
@@ -263,6 +315,23 @@ export class Meter {
         if (interval > 0) {
             clock[ELAPSED] += interval;
         }
+
+        // (The stretches counted apart that this frame ended in: its interval and its work counted
+        // there too; and in a probe's own, the frames to come drawn at fewer pixels)
+        const spans = this.#spans;
+        const elapsed = clock[ELAPSED];
+        let probing = false;
+
+        for (let window = 0; window < WINDOWS; window++) {
+            if (elapsed > spans[window * 2] && elapsed <= spans[window * 2 + 1]) {
+                this.#windows[window * 2 * BUCKETS + this.#buckets[FRAME.interval]]++;
+                this.#windows[(window * 2 + 1) * BUCKETS + this.#buckets[FRAME.work]]++;
+                this.#windowed[window]++;
+                probing ||= window >= PROBES && (window - PROBES) % 2 === 1;
+            }
+        }
+
+        this.probing = probing;
 
         // (A minute measured through: its row kept, the next begun. A frame that took minutes,
         // the page put away meanwhile, leaves those minutes' rows empty)
@@ -347,6 +416,13 @@ export class Meter {
      *     stepsPlayed, stepMs,                       steps played, and the ms one took on average
      *     calls: { mean, most },                     draw calls a frame
      *     heldMB,                                    the most held
+     *     heat,                                      the work late in the run over the work early in it
+     *                                                (MEASURE.heat), or null if there wasn't enough of either
+     *     gpuBound,                                  whether fewer pixels brought the frames quicker
+     *                                                (MEASURE.probe: any probe's), or null with no probe
+     *     windows: { cool, warm, probes: [{ pixels, before, during, gpuBound }] },
+     *                                                each stretch they're told from: { from, to (s),
+     *                                                frames, interval, work (ms) }
      *     total: { <series>: { count, mean, p50, p95, p99, worst } },
      *     rows: [{ minute, seconds, frames, over: [..], stepsPlayed, stepMs, calls, callsMost, heldMB,
      *              <series>: [p50, p95, p99, worst] }],   a minute each; the last, a part of one
@@ -387,6 +463,18 @@ export class Meter {
             histograms[name] = first < 0 ? [] : [first, ...counts.slice(first, counts.findLastIndex((each) => each > 0) + 1)];
         });
 
+        // (Heat: the frames' work late in the run over their work early in it. And each probe:
+        // whether the frames came quicker for fewer pixels, which only the graphics card's limit
+        // would have them do)
+        const cool = this.#windowOf(COOL);
+        const warm = this.#windowOf(WARM);
+        const enough = (window, frames) => window.frames >= frames;
+        const probes = MEASURE.probe.ends
+            .map((end, k) => ({ before: this.#windowOf(PROBES + k * 2), during: this.#windowOf(PROBES + k * 2 + 1) }))
+            .filter(({ during }) => during.to > 0)
+            .map(({ before, during }) => ({ pixels: MEASURE.probe.pixels, before, during, gpuBound: enough(before, MEASURE.probe.frames) && enough(during, MEASURE.probe.frames) ? during.interval <= before.interval * MEASURE.probe.quicker : null }));
+        const bound = probes.map(({ gpuBound }) => gpuBound).filter((each) => each !== null);
+
         return {
             measure: MEASURE.version,
             ...about,
@@ -400,10 +488,39 @@ export class Meter {
             stepMs: all[STEPS] ? round(all[STEP_MS] / all[STEPS]) : 0,
             calls: { mean: all[FRAMES] ? Math.round(all[CALLS] / all[FRAMES]) : 0, most: all[CALLS_MOST] },
             heldMB: all[HELD],
+            heat: enough(cool, MEASURE.heat.frames) && enough(warm, MEASURE.heat.frames) && cool.work > 0 ? round(warm.work / cool.work) : null,
+            gpuBound: bound.length ? bound.includes(true) : null,
+            windows: { cool, warm, probes },
             total,
             rows,
             histograms,
             held: { every: MEASURE.every, mb: Array.from(this.#held.subarray(0, this.#readings)) },
+        };
+    }
+
+    // A stretch counted apart, as a report carries it: when it was (seconds into the run), how
+    // many frames fell in it, how they came (ms: the mean of the quickest MEASURE.probe.kept of
+    // their intervals) and the middle of their work (ms)
+    #windowOf(window) {
+        const frames = this.#windowed[window];
+        const intervals = window * 2 * BUCKETS;
+        const kept = Math.max(1, Math.ceil(frames * MEASURE.probe.kept));
+        let sum = 0;
+        let seen = 0;
+
+        for (let bucket = 0; bucket < BUCKETS && seen < kept; bucket++) {
+            const here = Math.min(this.#windows[intervals + bucket], kept - seen);
+
+            sum += here * bucketMs(bucket);
+            seen += here;
+        }
+
+        return {
+            from: round(Math.max(0, this.#spans[window * 2]) / 1000, 1),
+            to: round(Math.max(0, this.#spans[window * 2 + 1]) / 1000, 1),
+            frames,
+            interval: frames ? round(sum / kept) : 0,
+            work: round(percentile(this.#windows, (window * 2 + 1) * BUCKETS, frames, 0.5, Infinity)),
         };
     }
 

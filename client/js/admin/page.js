@@ -1561,6 +1561,13 @@ function measuredWords(report) {
     return `Frames ${ms(total.interval?.p50)} (95 in 100 within ${ms(total.interval?.p95)}); work ${ms(total.work?.p95)}; a step ${ms(total.perStep?.p95)}; ${late} over 50 ms; held ${report?.heldMB ?? "—"} MB`;
 }
 
+// What a measured run found of the device, where it could: how it warmed (`heat`: its frames' work
+// late in the run over their work early in it) and whether the graphics card held its frames back
+// (`gpuBound`: they came quicker for fewer pixels), each said only if the run could tell
+function measuredFindings(report) {
+    return [Number.isFinite(report?.heat) ? `heat ${report.heat}` : null, report?.gpuBound === true ? "the graphics card the limit (quicker for fewer pixels)" : report?.gpuBound === false ? "the graphics card not the limit" : null].filter(Boolean);
+}
+
 // A measured run's minutes as a table: each minute's frames, how they came (the middle, 95 in 100,
 // the worst), their work, a step, how many came more than 50 ms late, and the most held
 function measuredTable(report) {
@@ -1650,7 +1657,7 @@ async function worldMeasures(world) {
                             h("td", {}, when(run.began ?? run.received), h("div", { class: "muted small" }, `sent ${when(run.received)}`)),
                             h("td", {}, run.name ?? run.player ?? "—", run.from === "internet" ? h("div", { class: "muted small" }, "from the internet") : null),
                             h("td", {}, run.run ?? "—", h("div", { class: "muted small" }, length(run))),
-                            h("td", {}, measuredWords(run.report), h("div", { class: "muted small" }, [run.report?.quality ? `drawn at ${run.report.quality}` : null, Number.isFinite(run.report?.hz) ? `${run.report.hz} frames a second asked for` : null, run.report?.world?.players ? `${run.report.world.players} in the world` : null].filter(Boolean).join("; "))),
+                            h("td", {}, measuredWords(run.report), h("div", { class: "muted small" }, [run.report?.quality ? `drawn at ${run.report.quality}` : null, Number.isFinite(run.report?.hz) ? `${run.report.hz} frames a second asked for` : null, run.report?.world?.players ? `${run.report.world.players} in the world` : null, ...measuredFindings(run.report)].filter(Boolean).join("; "))),
                             h("td", {}, h("code", {}, run.code ?? "—")),
                             h(
                                 "td",
