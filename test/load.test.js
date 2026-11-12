@@ -9,7 +9,7 @@ import { DAY } from "../client/js/core/daytime.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
+import { BATTLE_KINDS, BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
 import { AHEAD } from "../server/ahead.js";
@@ -82,7 +82,7 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.deepEqual(checkReport(report), []);
         assert.deepEqual(checkReport(JSON.parse(JSON.stringify(report))), []);
         assert.equal(report.schema, LOAD.schema);
-        assert.deepEqual(report.run, { seed: 2, players: 8, layout: "one-town", activity: "fights", seconds: 15, node: process.version, platform: process.platform, arch: process.arch, cpus: report.run.cpus });
+        assert.deepEqual(report.run, { seed: 2, players: 8, layout: "one-town", activity: "fights", seconds: 15, whole: false, node: process.version, platform: process.platform, arch: process.arch, cpus: report.run.cpus });
         assert.equal(report.built, true);
     });
 
@@ -109,6 +109,22 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.deepEqual(HOST_PASSES.filter((name) => !report.passes[name]), []);
         assert.deepEqual(FLUSH_PASSES.filter((name) => !report.passes[name]), []);
         assert.equal(report.passes.battle.calls, steps);
+
+        // (The battle's step by its parts, and all of them together; who's in it, by kind: the
+        // eight players standing in the one town, the town's folk and soldiers round them)
+        assert.deepEqual(Object.keys(report.passes).filter((name) => name.startsWith("battle.") && !BATTLE_PASSES.includes(name)), []);
+        assert.equal(report.passes["battle.fight"].calls, steps);
+        assert.ok(report.battle.ms >= report.passes["battle.fight"].ms + report.passes.battle.ms && report.battle.share > 0 && report.battle.share < 1);
+        assert.deepEqual(Object.keys(report.census), ["player", ...BATTLE_KINDS]);
+        assert.equal(report.census.player.all, 8);
+        assert.equal(Object.values(report.census).reduce((sum, { all }) => sum + all, 0), report.actors.end);
+        assert.ok(report.census.routine.all > 0 && report.census.patrol.all > 0);
+
+        for (const { all, indoors, m30, m60, m120, m250, beyond } of Object.values(report.census)) {
+            assert.equal(indoors + m30 + m60 + m120 + m250 + beyond, all);
+        }
+
+        assert.equal(report.counts["battle.actors"], BATTLE_KINDS.reduce((sum, kind) => sum + report.counts[`battle.actors.${kind}`], 0));
         assert.deepEqual(Object.keys(report.counts).filter((name) => !COUNTERS.includes(name)), []);
         assert.ok(report.named >= 0.9 && report.named <= 1, `named passes ${report.named} of the steps' time (the plan's 90%)`);
         assert.equal(probing(), false, "the probes taken out again");
@@ -215,7 +231,7 @@ describe("the load over a turn of the war (scripts/load.js load, activity wartur
         const { warturn } = report;
 
         assert.ok(warturn.between.after >= 1 && warturn.between.after < KEEPER.after);
-        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(warturn.between.pass), warturn.between.pass);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(warturn.between.pass), warturn.between.pass);
         assert.deepEqual(Object.keys(warturn.round.before), ["mean", "p50", "p99", "worst", "worstAt"]);
         assert.equal(warturn.all.length, 1);
         assert.deepEqual(Object.keys(warturn.all[0]), ["at", "number", "turn", "between", "save"]);
@@ -275,7 +291,7 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
         assert.deepEqual(Object.keys(joinstorm.admit), ["mean", "p50", "p99", "worst", "worstAt"]);
         assert.ok(joinstorm.longest.at >= joinstorm.at && joinstorm.longest.at < joinstorm.done);
         assert.equal(joinstorm.longest.wall, joinstorm.steps.wall.worst);
-        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(joinstorm.longest.pass), joinstorm.longest.pass);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(joinstorm.longest.pass), joinstorm.longest.pass);
         assert.ok(wordsOf(report).some((line) => /^The join storm at 1 s: 8 said hello within 0 s, let in 2 at a time, each 1 s making their copy: 8 let in, .* 12 tellings of a place in the line, 4 takings of the world$/.test(line)));
     });
 
@@ -356,8 +372,8 @@ describe("the load's dungeons and buildings (scripts/load.js doorsOf, load, acti
         assert.ok(["dungeon", "building"].includes(dungeons.coming.longest.door));
         assert.ok(dungeons.coming.longest.after >= 0 && dungeons.coming.longest.after < LOAD.stagger);
         assert.ok(dungeons.coming.longest.at >= 1000 && dungeons.coming.longest.at < 1000 + 2 * LOAD.stagger);
-        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(dungeons.coming.longest.pass), dungeons.coming.longest.pass);
-        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(dungeons.steps.longest.pass), dungeons.steps.longest.pass);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(dungeons.coming.longest.pass), dungeons.coming.longest.pass);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(dungeons.steps.longest.pass), dungeons.steps.longest.pass);
         assert.equal(dungeons.steps.longest.wall, dungeons.steps.wall.worst);
         assert.ok(wordsOf(report).some((line) => /^Doors, from 1 s, a party every 2 s: 2 parties at 1 dungeons and 1 buildings; \d got in, /.test(line)));
         assert.ok(wordsOf(report).some((line) => /^Made in the run: 1 dungeons \(\d+ levels\) and [01] buildings\. The longest step of a dungeon's coming: /.test(line)));
@@ -382,7 +398,7 @@ describe("the load's options", () => {
         assert.deepEqual(Object.keys(ACTIVITY_SCHEMAS), ["night", "warturn", "joinstorm", "dungeons"]);
 
         // (What an unbuilt one's report would hold: nothing judged, nothing failed)
-        const unbuilt = { schema: LOAD.schema, run: { seed: 2, players: 8, layout: "spread", activity: "dancing", seconds: 120, node: process.version, platform: process.platform, arch: process.arch, cpus: 4 }, built: false, reason: "not built yet: no one knows the steps" };
+        const unbuilt = { schema: LOAD.schema, run: { seed: 2, players: 8, layout: "spread", activity: "dancing", seconds: 120, whole: false, node: process.version, platform: process.platform, arch: process.arch, cpus: 4 }, built: false, reason: "not built yet: no one knows the steps" };
 
         assert.deepEqual(checkReport(unbuilt), []);
         assert.deepEqual(checkReport({ ...unbuilt, reason: undefined }, UNBUILT_SCHEMA), ["report.reason: not a string"]);
