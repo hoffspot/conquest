@@ -234,10 +234,70 @@ describe("the load over a turn of the war (scripts/load.js load, activity wartur
     });
 });
 
+describe("the load's join storm (scripts/load.js load, activity joinstorm)", () => {
+    let report;
+
+    before(async () => {
+        // (All eight in one step: who comes in with whom is then the same on any machine)
+        report = await load({ seed: 2, players: 8, layout: "one-town", activity: "joinstorm", seconds: 9, eventAt: 1000, burst: 0 });
+    });
+
+    it("has everyone out again once the ground's made, and all say hello at once to a world that lets two come in at a time, as a world server does", () => {
+        const { joinstorm } = report;
+
+        assert.deepEqual(checkReport(report), []);
+        assert.deepEqual(report.problems, []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+        assert.equal(report.joined.players, 8);
+        assert.deepEqual(
+            { at: joinstorm.at, over: joinstorm.over, welcomes: joinstorm.welcomes, loading: joinstorm.loading, asked: joinstorm.asked, welcomed: joinstorm.welcomed, waiting: joinstorm.waiting },
+            { at: 1000, over: 0, welcomes: LOAD.welcomes, loading: LOAD.loading, asked: 8, welcomed: 8, waiting: 0 },
+        );
+        assert.equal(LOAD.welcomes, 2, "a world server's default (server/storage/worlds.js WORLD_SETTINGS.welcomes)");
+    });
+
+    it("takes the world once for each two let in, tells the rest their place as it changes, and the last waits on three pairs' loading", () => {
+        const { joinstorm } = report;
+
+        // (Four pairs: four takings, and eight welcomes of them; six told their place, then four, then two)
+        assert.equal(joinstorm.snapshots, 4);
+        assert.equal(report.bytes.byKind.welcome.messages, 8);
+        assert.equal(joinstorm.queued, 12);
+        assert.equal(report.bytes.byKind.queued.messages, 12);
+        assert.equal(report.counts.snapshots, 4);
+        assert.ok(joinstorm.lastWaited >= 3 * LOAD.loading, `the last waited ${joinstorm.lastWaited} ms`);
+        assert.equal(joinstorm.waits.worst, joinstorm.lastWaited);
+        assert.ok(joinstorm.done >= joinstorm.at + joinstorm.lastWaited && joinstorm.done <= 9000);
+        assert.equal(joinstorm.steps.count, (joinstorm.done - joinstorm.at) / STEP_MS);
+        assert.ok(joinstorm.steps.over >= 0 && joinstorm.steps.over <= joinstorm.steps.count);
+        // (The letting in timed by itself in each of those steps, and the longest of them named)
+        assert.deepEqual(Object.keys(joinstorm.admit), ["mean", "p50", "p99", "worst", "worstAt"]);
+        assert.ok(joinstorm.longest.at >= joinstorm.at && joinstorm.longest.at < joinstorm.done);
+        assert.equal(joinstorm.longest.wall, joinstorm.steps.wall.worst);
+        assert.ok([...HOST_PASSES, ...FLUSH_PASSES].includes(joinstorm.longest.pass), joinstorm.longest.pass);
+        assert.ok(wordsOf(report).some((line) => /^The join storm at 1 s: 8 said hello within 0 s, let in 2 at a time, each 1 s making their copy: 8 let in, .* 12 tellings of a place in the line, 4 takings of the world$/.test(line)));
+    });
+
+    it("is held to what a storm reports; one still coming in as the run ends is said, and no one's taken for sent out", async () => {
+        const { joinstorm, ...without } = report;
+
+        assert.deepEqual(Object.keys(joinstorm).sort(), Object.keys(ACTIVITY_SCHEMAS.joinstorm).sort());
+        assert.deepEqual(checkReport(without), ["report.joinstorm: missing"]);
+        assert.deepEqual(checkReport({ ...report, joinstorm: { ...joinstorm, steps: { ...joinstorm.steps, over: undefined } } }), ["report.joinstorm.steps.over: not a number"]);
+
+        const short = await load({ seed: 2, players: 8, layout: "one-town", activity: "joinstorm", seconds: 2, eventAt: 1000, burst: 0 });
+
+        assert.deepEqual(checkReport(short), []);
+        assert.deepEqual({ asked: short.joinstorm.asked, welcomed: short.joinstorm.welcomed, waiting: short.joinstorm.waiting, done: short.joinstorm.done }, { asked: 8, welcomed: 2, waiting: 6, done: -1 });
+        assert.deepEqual(short.problems, ["6 of the storm's 8 hadn't been let in when the run ended (6 still waiting their turn)"]);
+        assert.deepEqual(failuresOf(short, { ceiling: 50 }), [], "how far a storm gets is the run's length, not a failure");
+    });
+});
+
 describe("the load's options", () => {
     it("names every activity the plan lists: those built, and those that say they aren't yet", async () => {
         assert.deepEqual([...LOAD.activities, ...Object.keys(LOAD.unbuilt)].sort(), ["battle", "dungeons", "fights", "hellrift", "invasion", "joinstorm", "night", "stick", "walk", "warturn"]);
-        assert.deepEqual(Object.keys(LOAD.unbuilt), ["joinstorm", "dungeons"]);
+        assert.deepEqual(Object.keys(LOAD.unbuilt), ["dungeons"]);
         assert.deepEqual(LOAD.players, [8, 25, 50, 100]);
         assert.deepEqual(LOAD.seeds, [2, 7]);
 

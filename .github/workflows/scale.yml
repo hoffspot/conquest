@@ -86,6 +86,12 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 8 --layout spread --activity warturn --turns 35 --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/8-spread-warturn.json
 
+      # (100 saying hello in a second, let in two at a time: the plan's 1-5. A minute of the
+      # world's time lets the last in, so never fewer seconds than that)
+      - name: Load, a join storm of 100 into one town
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 100 --layout one-town --activity joinstorm --seed "$SEED" --seconds 120 --ceiling 50 --out test-results/load/100-one-town-joinstorm.json
+
       - name: Load, 50 players, four to a town, sticks held
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 50 --layout towns --activity stick --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/50-towns-stick.json
