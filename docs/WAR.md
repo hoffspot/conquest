@@ -3598,6 +3598,18 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   3.0 KB; in a field battle of 15 a side, 4.5 KB (what's done 2.4, their own hero 2.0). The
   world as one comes in is 80 KB of text there, and 120 to 300 KB with a battle or with eight
   players over six towns: a sixth to a fifth of that on its way, compressed (below).
+- **The host's two parts** (`Session` and `OpsFeed` in `core/netplay.js`, which `Hosting` is made
+  of; generated/multiplayer_scaling_plan.md 3-1). The session is who's in and everything between
+  each of them and the host that isn't the world itself: coming in and the line for it, a
+  character taken over on another link, the part each plays, chat, the world's stopping, being
+  sent out, each one's own hero told them, and their commands with their limits (`HEARD`, by
+  the clock). The feed is the world as it's sent them, by lockstep: what's done each step, the
+  checksum, the motion stream where a host sends it, and the whole world for one coming in, one
+  asking again (`AGAIN`, `WORLDS`) or everyone after the host's link drops. `Hosting` carries
+  what both send and sends for both in one order (`flush`), and everything of either is still
+  read and set on it (`hosting.players`, `hosting.asked`, `hosting.pause()`), so whoever runs a
+  world, a browser's game or a world server's thread, uses it as before. Another feed can stand
+  in the lockstep one's place without the session changing.
 - **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
   made point to point passes no server that would hold them to anything):
   - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
