@@ -28,6 +28,7 @@ const NOT_KEPT = Object.freeze({
     recorder: "whoever's listening to this world (netplay's Hosting), not the world",
     replay: "the host's ways waiting on a joined copy, not the world",
     findables: "made on first use from the world's plan",
+    findablesNear: "those, by cell (core/near.js), made on first use: never saved, and nothing of what's happened in it",
     keepSites: "made on first use from the world's plan",
     settlementPlaces: "made on first use from the world's plan",
     placesById: "the plan's places by their ids, a table made on first use: the plan never changes",

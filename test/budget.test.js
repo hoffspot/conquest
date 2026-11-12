@@ -5,8 +5,8 @@
 // be held here, among the unit tests, where times can't.
 //
 // What's counted is how many of the world's things each pass measured against how many players.
-// Today every such pass measures everything against everyone, so each budget below is what that
-// costs at 50 (counted on 12 November 2026: 100,000 pairs of players, 399,550 buildings, 325,000
+// Every such pass measured everything against everyone, and each budget below began as what that
+// cost at 50 (counted on 12 November 2026: 100,000 pairs of players, 399,550 buildings, 325,000
 // things to find, 134,000 towns and works, 48,450 peopled settlements, 5,300 of the wild, the
 // battle's index made 200 times over 316,274 actors), with room for the world to change a little.
 // (Since 1-10 the battle's index is brought up to date in place, and made afresh only as someone
@@ -37,14 +37,18 @@ const BUDGETS = [
     // (Each player against those in the cells round them, each time they're grouped: 40
     // groupings of 50 standing apart. It was every player against every player, 100,000)
     ["groups.pairs", 2_800, "pairs of players measured as they're grouped"],
-    // (Every made building against every player, each look: 1-9 takes it to those near)
-    ["lookAround.pairs", 440_000, "buildings measured against players' places"],
-    // (Everything to be found against each player out in the world: 1-9)
-    ["spotting.pairs", 360_000, "things to be found gone through for players"],
-    // (Every town and works against every player: 1-9)
-    ["muster.pairs", 150_000, "towns and works measured against players' places"],
-    // (Every settlement whose folk are out against every player: 1-9)
-    ["townsfolk.pairs", 55_000, "peopled settlements measured against players' places"],
+    // (Each made building's door against the players in the cells round it, each look, since
+    // 1-9: it was every building against every player, 399,550)
+    ["lookAround.pairs", 9_500, "buildings measured against players' places"],
+    // (What's to be found in the cells within a kilometre of each player out in the world, since
+    // 1-9: it was everything to be found in the world for each, 325,000)
+    ["spotting.pairs", 55_000, "things to be found gone through for players"],
+    // (Each town and works against the players in the cells round it, since 1-9: it was every
+    // one against every player, 134,000)
+    ["muster.pairs", 1_900, "towns and works measured against players' places"],
+    // (Each settlement whose folk are out, and each a player might be near, against the players
+    // in the cells round it, since 1-9: it was every one out against every player, 48,450)
+    ["townsfolk.pairs", 1_800, "peopled settlements measured against players' places"],
     // (Each creature of the wild against the players in the cells round it, since 1-8: it was
     // every creature against every player, 5,300)
     ["wilds.pairs", 150, "the wild's creatures measured against players' places"],
@@ -94,10 +98,14 @@ describe("the work of a world's steps, by count (core/probe.js), at 50 players s
         assert.equal(host.battle.actors.filter(({ kind, dead }) => kind === "player" && !dead).length, PLAYERS);
     });
 
-    it("measures everything against everyone where nothing's culled yet: the counts that are sums of products are those products", () => {
-        // (Each look, every town and works against every player's place: nothing's culled yet.
-        // When 1-9 lands, this is what it stops being, and the budget below is what holds it)
-        assert.equal(counts["muster.pairs"], LOOKS * (host.war.towns.length + host.war.works.length) * PLAYERS);
+    it("measures each thing against the players near it, not against everyone: far fewer than the products they were", () => {
+        // (Each look, every town and works was measured against every player's place; since 1-9
+        // against those in the cells round it, and standing apart, in a settlement each, that's
+        // about the one player there)
+        const everyone = LOOKS * (host.war.towns.length + host.war.works.length) * PLAYERS;
+
+        assert.equal(everyone, 134_000, "(what it was)");
+        assert.ok(counts["muster.pairs"] < everyone / 50, `${counts["muster.pairs"]} of ${everyone}`);
         // (Since 1-7 a grouping measures each player against those in the cells round them:
         // standing apart, against themselves alone, where it was all 50 against all 50)
         assert.equal(counts["groups.pairs"], counts["groups.calls"] * PLAYERS);

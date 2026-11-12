@@ -187,6 +187,17 @@ The engine is built for this from the start. These are its rules:
      that any player is heading into or is in; let go once every player's more than 90 away);
    - later, the war's forces in skirmishes.
 
+   Twice a second (`RELEVANCE.every`) it looks round: buildings, towns' soldiers and townsfolk,
+   works, camps, armies, the wild, what's to be seen from high ground. Each of those is measured
+   against the players in the cells round it (core/near.js: the players' places kept by cell,
+   256 m a side, made afresh each look), not against every player: the grid only leaves out
+   players too far off to pass the test that's made, so each answer is the one measuring
+   everyone gave, and every copy of the world agrees whichever way it's asked. `Host.culling`
+   off measures everyone, as before, and a world of 25 players plays out the same step for step
+   either way (test/culling.test.js). With 50 players apart, ten seconds' looks measured 400,000
+   buildings against players and now measure 6,700; towns and works, 134,000 and 1,300
+   (test/budget.test.js holds them there).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk
