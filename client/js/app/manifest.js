@@ -226,7 +226,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/navigation/walk.js", 2668, "53daf90e1d"],
             ["js/core/netplay.js", 100030, "7f595d52ee"],
             ["js/core/noise.js", 2506, "bcaaa4faa1"],
-            ["js/core/overworld.js", 124368, "b2fbdb4c4b"],
+            ["js/core/overworld.js", 124580, "c8dc094553"],
             ["js/core/portals.js", 5207, "e05e814777"],
             ["js/core/prismatic.js", 7362, "6f6e67827f"],
             ["js/core/probe.js", 12470, "7010ade747"],
