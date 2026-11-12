@@ -16,6 +16,7 @@
 // onto the shins below the knees at each height, so the skirt never comes out through it.
 
 import * as THREE from "three";
+import { regionAt } from "./garment-pictures.js";
 import { LIVERIES } from "./liveries.js";
 
 /**
@@ -150,7 +151,7 @@ function outline(character, measures, bottom, top, centre = null, worn = null) {
     for (let v = 0; v < vertices.length; v++) {
         const out = worn ? worn[v] : 0;
         const y = positions[v * 3 + 1] + (out && normals[v * 3 + 1] * out);
-        const { region } = vertices[v];
+        const region = regionAt(vertices, v);
 
         if (y >= bottom && y <= top && (region === "torso" || region === "leg")) {
             points.push([positions[v * 3] + (out && normals[v * 3] * out), positions[v * 3 + 2] + (out && normals[v * 3 + 2] * out)]);

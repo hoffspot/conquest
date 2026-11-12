@@ -2110,7 +2110,7 @@ async function renderHealth() {
                       h(
                           "table",
                           {},
-                          h("thead", {}, h("tr", {}, ["World", "Now", "Players", "Step (mean)", "Slowest 1%", "Worst", "Memory", "Its save"].map((head) => h("th", {}, head)))),
+                          h("thead", {}, h("tr", {}, ["World", "Now", "Players", "Step (mean)", "Slowest 1%", "Worst", "Whole tick, slowest 1%", "Worst", "Pace", "Memory", "Its save"].map((head) => h("th", {}, head)))),
                           h(
                               "tbody",
                               {},
@@ -2124,6 +2124,9 @@ async function renderHealth() {
                                       h("td", {}, ms(world.steps?.mean)),
                                       h("td", { class: world.slow ? "bad" : "" }, ms(world.steps?.p99)),
                                       h("td", {}, ms(world.steps?.worst)),
+                                      h("td", { class: (world.ticks?.p99 ?? 0) > 50 ? "bad" : "" }, ms(world.ticks?.p99)),
+                                      h("td", {}, ms(world.ticks?.worst)),
+                                      h("td", { class: (world.pace ?? 1) < 0.99 ? "bad" : "" }, `${Math.round((world.pace ?? 1) * 100)}%`),
                                       h("td", {}, bytes(world.memory ? world.memory.heap + world.memory.external : null)),
                                       h("td", {}, bytes(world.save)),
                                   ),

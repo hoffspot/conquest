@@ -1504,8 +1504,9 @@ player first*).
   (battle.js `formation` `charge`: an invasion's, *Invasions* below) runs on to where it's going
   whoever of it is fighting, each of it running with it (at its chase), and stops charging once
   it's there. A player in among them has at
-  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`); the rest fight the
-  player's own.
+  most 6 enemies on them up close and 4 shooting or casting (`AGGRO`), and whoever they've
+  struck besides: the cap holds back only those they haven't (docs/GAME.md *The player first*);
+  the rest fight the player's own.
 
 **Tried** (a field battle on open ground, `test/formation.test.js` and play-testing): 50 a side
 fight to the last few in under two minutes; 200 a side take longer, as a Total War battle
@@ -2528,7 +2529,7 @@ covered, the stakes' 300 hit points, and an army met keeping its mix as it's few
 
 A big band of raiders comes down one of a town's roads to attack it, and a big force of the town's
 own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
-The first comes to a character five minutes after they land in a town, whichever town that is; the
+The first comes to a character ten minutes after they land in a town, whichever town that is; the
 rest come now and then while they're in towns, each as big as the devices in it can draw and keep
 moving. A character's first is bandits'; every one after, any of five bands, or by night, one time
 in three, the Behemoth of the Rift (below).
@@ -2540,8 +2541,14 @@ in three, the Behemoth of the Rift (below).
   saved with what they carry, to every world they play in: how many invasions they've been in
   (`seen`), their time in towns since the last (`clock`), when the next is due (`due`), and the town
   they're in now and how long they've been there (`place`, `here`).
-- **The first** five minutes into it (`first`), 30 seconds at least in the town it comes to
-  (`settleFirst`); **every one after** half an hour to an hour of it later (`every`, at random),
+- **The first** ten minutes into it (`first`: five, till the owner asked for ten, "Back the first
+  raid showing up to 10 minutes"; its size as it was), 30 seconds at least in the town it comes
+  to (`settleFirst`). A character's first is always due at `first`, whatever was kept for them
+  (`clockOf`: it's never rolled): one kept while it was five minutes who hasn't seen it has it at
+  ten like anyone, and one already past ten has it once they've been 30 seconds in a town.
+  Ten minutes is also when a player who's given no command is marked away (`AFK.mark`), and an
+  away player's time isn't counted: one who's stood in their town untouched since they began
+  doesn't meet it, and has it 30 seconds after they're back. **Every one after** half an hour to an hour of it later (`every`, at random),
   never in their first three minutes in a town (`settle`). Villages, hamlets and farmsteads are
   never invaded, nor a town whose people are the character's enemies (they'd fight them beside the
   raiders).
@@ -3154,12 +3161,57 @@ server draws nothing, so it makes it ahead, between its steps, or its steps woul
 settlement and navigation tile the moment someone first walked into it:
 - **Workers.** Node has no Web Workers, so the server gives it one on its own threads
   (`ThreadWorker`), and the game's own workers run there unchanged: the navigation's tiles baked
-  (world/navworker.js) and settlements laid out (world/layout-worker.js), to the same bytes as here.
-- **Round each player** (`Ahead`): the chunks within 3 of their own made a few at a time between
-  steps (8 ms a time), nearest first; the settlements near laid out on a worker; the navigation's
-  tiles within 160 m baked on another, once their ground's made; and the insides of the buildings
-  open near them baked between steps, a tile at a time. A player arriving waits for all of it
+  (world/navworker.js), settlements laid out (world/layout-worker.js) and the land's heights
+  worked out and the trails found (world/terrain-worker.js: a fifth of a chunk's making), to the
+  same bytes as here. That third worker, with its own copy of the plan, is about 37 MB more of
+  the machine's memory for each world running (a world of four players settled: 277 MB resident
+  where it was 240; its heap the same 49 MB).
+- **Round each player** (`Ahead`): the chunks within 3 of their own made between steps, nearest
+  first, a piece of one at a time (8 ms a time, `AHEAD.budget`: `Overworld.chunkWithin`, below); the
+  settlements near laid out on a worker; the navigation's tiles within 160 m baked on another,
+  once their ground's made; and the insides of the buildings open near them baked between steps, a
+  tile at a time. A chunk whose settlement is still being laid out, or a trail near it found, on a
+  worker waits for it (2 seconds at most, `patience`: made first, the chunk would do that work on
+  the world's thread, a couple of hundred milliseconds for a capital), and one whose heights
+  aren't back waits while there's another to make. A player arriving waits for all of it
   (`settled`) before their world's clock starts.
+- **A chunk a piece at a time** (core/overworld.js `chunkWithin`, `MAKING`). A chunk took 20 to 28
+  ms of the world's thread in one go, two or three times what a pump is allowed, so each one made
+  ran on into the next step's time. It's made in fourteen pieces now (its squares eight rows at a
+  time, its ground, its trees, its features: about a millisecond each, the features four), a pump
+  doing as many as it has time for and carrying the chunk on at the next. One asked for whole
+  meanwhile (a step's: `chunk`) is finished there and then; one half made when what stands in
+  the world changes (a fortification, a stockade, what's fallen across the way) is begun again.
+  The chunk is the same however it was made (test/overworld.test.js).
+- **What the world will soon want** (core/host.js `soon`, `SOON`; generated/
+  multiplayer_scaling_plan.md 1-6). A town's soldiers, its townsfolk, a works' guards, a camp, an
+  army, an envoy, a convoy, a wagon or a fortification comes out in the step a player comes
+  within its distance, and that step stands them on free ground: a city's was 4 to 8 chunks not
+  made yet, further off than the 3 round the player, and the step made them (75 to 155 ms on a
+  world server, 120 to 480 in a browser's world, with the town in plain view). The distances are
+  the host's, so it's the host that says: once a player's within 80 m more (`margin`), the
+  squares within so many metres of where they'll stand are wanted (a settlement's own and 40 m
+  past its edge; 72 m round an army or a camp; the stops of a forward garrison's squads'
+  rounds). `Ahead` asks twice a second and makes them after what's round the players; the
+  browser's game makes them a piece a frame (docs/GAME.md *The world outside*). Asking changes
+  nothing, and a step makes what it finds missing as ever, so the world's the same whether it's
+  made in time or not (test/soon.test.js: step for step, with and without). `Ahead.soon` turns
+  it off, for the tests and scripts that compare.
+- **As many chunks as its players need** (`Overworld.keep`, `Ground.keep`). The world kept 256
+  chunks, a browser's, and each player's surroundings are 49: six players apart wanted 294, and
+  it let one go to make another over and over (eight players remade 1,233 chunks in five
+  minutes, 60% of the world thread's time, and never settled). `Ahead` tells the world to keep
+  what its players and what's wanted soon take, and 64 more (`spareChunks`), as they come and go;
+  never fewer than 256. About 70 KB a chunk. The navigation's tiles are still 1,024 at most
+  (core/navigation.js `KEEP_TILES`), which eight players' 121 each fit, barely: Detour's
+  references are 32 bits, and at 4,096 polygons a tile (`MAX_POLYS`) it takes no more tiles than
+  that (asked for 2,048, it refuses). More players than eight in a world want fewer polygons a
+  tile, or tiles kept by who's near them.
+- **Where the players are, from the host.** What's wanted is looked over from where the host says
+  its players are (`soon`'s `around`: out in the world, or the door of the building they're in):
+  what was waiting round one who's left the world, or gone through a portal to somewhere else,
+  is let go (49 chunks and 121 tiles made for no one, before), and a chunk a player still needs
+  that was let go waits to be made again.
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
@@ -3167,7 +3219,38 @@ settlement and navigation tile the moment someone first walked into it:
   three minutes): a step takes 1.2 ms on the mean, 3.8 ms at the 99th percentile, and none over a
   step's 50 ms. Without making ahead: 4.7 ms, 44 ms, and several over 50 ms. The dearest left is
   a war turn mustering armies far from any player, which makes the chunks where they gather
-  (about 30 ms).
+  (about 30 ms). It judges a step by the thread's own processor time
+  (`process.threadCpuUsage`), and says the clock's beside it: on a machine busy with other work
+  (a load of 14 on 4 cores) a minute's steps took 0.8 ms each of the thread's time and 16 ms at
+  the worst, and 2 to 4 of the 1,200 were over 50 ms by the clock, put off the processor, which
+  failed it one run in three while it judged by the clock. `-- --field 50` has the first player
+  begin a field battle of 50 a side ten seconds in (250 in the battle): 2.5 ms a step, 16 ms at
+  the worst.
+- **Timed to when it's due** (`server/world-worker.js` `tick`, `RUNNER` `catchUp`, `behind`).
+  The world's thread looks at the world when its next step is due (and every 25 ms at most, to
+  make ahead meanwhile), not every 25 ms whatever's due: a timer comes a little late, so now and
+  then a step came a whole look early and the rest counted late against it, which a joined game
+  covers by keeping another step in hand. Measured on a world server with one player in, over
+  its socket, on a machine busy with other work (three half minutes each way): the steps'
+  lateness as a joined game reckons it, against the quickest of the last two seconds, was 27 to
+  32 ms at the median and 53 to 59 at the 90th percentile, and one sending in five carried two
+  steps or more; it's 1 ms and 7 to 12, and every sending one step. Fallen behind its clock (a save, a slow step, the machine
+  asleep), it plays two steps a look, each sent as it's done, hearing what's been said to it
+  between looks, and lets go of all it's behind by beyond a quarter of a second: its time runs
+  that much slow, and it's never further behind. It used to play every step it was behind back
+  to back before anything was sent or heard, so a world whose steps took longer than a step
+  would have fallen behind for ever. What it lets go is told in the world's journal (once a
+  minute at most) and on the Health page (its **pace**: 100%, unless it has).
+- **Measured again, 2026-11-11** (the performance review's scripts, the world thread's own
+  processor time on a busy 4-core machine, seed 2). One player walking up to a city from the
+  wilds, everything made ahead given its time between steps: the step that musters it took 89
+  ms and made 5 chunks, the one that brings out its townsfolk 63 ms; with what the world will
+  soon want made ahead, 8 ms each and no chunk. An orc capital: 200 and 55 ms, now 10 and 19.
+  Eight players walking about in eight towns for five minutes: 1,233 chunks made between steps
+  while they played (and 74 inside steps), 3.3 ms of every step's time spent pumping, 33.6 s of
+  the thread's time in all, never settled; now 96 chunks (5 inside steps), 0.44 ms, 14.5 s, and
+  settled 13 seconds after they came in. A minute of the same once settled: 2,400 pumps, 0.22 ms
+  each, one over 16 ms (a tile of a building's inside baked: 17 ms).
 
 **Away from the game** (core/host.js `AFK`; generated/world_server_plan.md §4). A player who's
 given no command for 10 minutes of the world's time is marked away: "AFK" by their name, over
@@ -3212,15 +3295,16 @@ Chromium, WebKit and Firefox, each in their own people's town (human, elf, orc, 
 itself about near where it came in, starts a field battle every four minutes (they're all owners:
 the world's `Hosting.roleOf`, which the world server will answer by the key each came with) and
 goes for its foes. One more in Node does nothing at all, to be marked away at 10 minutes and sent
-out at 30. Every copy is checked against the host's as any joined game's is (a checksum every 5
-seconds, everyone's motion with each sending). The soak fails if any copy is sent the world again
+out at 30. Every copy is checked against the host's as any joined game's is (a checksum every
+fifth of a second, among what's done). The soak fails if any copy is sent the world again
 once a player-hour or more, or sees the one doing nothing marked away or sent out at another step
 than the host does. Its clock starts once everyone's in and their copies are made: a browser slow
 to load can be too far behind by then and sent the world as it is ("Pace" below), which is shown
 ("arriving") but not counted. It runs by hand on GitHub (Actions, Soak) and for three minutes on any pull
 request that changes it.
 - **Measured** (seed 2, 32 minutes, Node and Chromium): no copy went astray or was sent the world
-  again (each about 38,600 steps, 386 checksums and 9,600 motion checks, all matching); the one
+  again (each about 38,600 steps, 386 checksums and 9,600 motion checks, all matching, as copies
+  were checked then: a checksum every 5 seconds, and where everyone stood every fifth); the one
   doing nothing marked away at step 12,000 and sent out at step 36,000 on the host and every copy.
   The host's steps took 2.4 ms on the mean and 7 ms at the 99th percentile, with 16 field battles
   fought round two towns, and a few over 50 ms (the worst 143 ms), which the soak lists (when, how
@@ -3394,6 +3478,11 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   battle takes the host's way rather than finding its own (`Host.replaying`), so what each copy
   has made of the meshes (as each has needed them) doesn't matter: a copy finds none at all. (A
   way a copy finds missing, having strayed, it finds itself, and its next check sets it right.)
+  A copy's battle still asks the mesh one thing for itself, whether a walker stepping round
+  someone stays on it, so the copy's game is told each way as it's heard (`Joining.onWay`), a few
+  steps before it's played, and has the tiles under it baked off the page's thread meanwhile
+  (WORLD.md, *Navigation meshes*): the tiles are the same bytes wherever and whenever they're
+  baked, so nothing of the copy hangs on it.
   Games before these (`NET_VERSION` 6) can't join, nor games whose ground is made otherwise
   (before mountain streams: 7; before graded roads and mountain paths: 8; before camps on
   flats and castles on rises: 9; before settlements lying with the land: 10), since where anyone can walk must be the same in every copy.
@@ -3460,7 +3549,8 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     by step. It plays none of them, asks for the world as it now is, as a copy gone astray does,
     and carries on from that (`Joining.farBehind`; the HUD says "Catching up with the world…"
     meanwhile, and the debug overlay counts them). A step with a fight costs some 2 ms on a desktop
-    and 10 on a phone; the world sent again, some 120 KB and 20 ms to take in (100 on a phone). So
+    and 10 on a phone; the world sent again, 80 to 300 KB of text (a sixth of that on its
+    way, compressed) and 20 to 40 ms to take in (five times that on a phone). So
     a phone hidden 30 s was back to the present 9.5 s after it was shown, fast-forwarding through
     what it missed, and now is in half a second (a modelled run; a desktop, 2.4 s against 0.2).
   - **Drawn after the world's sent again** (`game.rehost`): whoever's moved is drawn going there
@@ -3479,25 +3569,54 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Commands.** A joined player's own commands go to the host, and come back among the rest. What
   came of them (a request offered, gold paid, a door gone through) is what came of them on
   their copy, a moment later: the talk says it again as it now is (`Conversation.retell`).
-- **Checks.** Every 100 steps the host says how the world should stand (`Host.checksum`: everyone
-  in it, where and how they are, and the war's turn and clock). A copy that doesn't match (a
-  browser whose sums come out a hair different) asks for the world again and carries on from it
-  (`Host.adopt`, `game.rehost`).
-- **The motion stream** (`core/motion.js`, `MOTION`). Every 4 steps (five times a second) the host
-  also sends where its characters near the players stand, and how they're going:
+- **Checks.** Every 4 steps (`CHECK_EVERY`: five times a second) the host says how the world
+  should stand (`Host.checksum`: everyone in it, where they are to the millimetre and how they
+  are, whom they're on, and the war's turn and clock), among what's done: `["k", sum]`, 17
+  characters in a sending that goes anyway. A copy compares it just where the host worked it
+  out, once what came before has been played. One that doesn't match (a browser whose sums come
+  out a hair different) asks for the world again and carries on from it (`Host.adopt`,
+  `game.rehost`): within a fifth of a second of going astray.
+- **The motion stream** (`core/motion.js`, `MOTION`; off: `Hosting` `sendsPlaces`). Until
+  `NET_VERSION` 224 the sum was said every 100 steps, five seconds, and every 4 steps the host
+  also sent where its characters near the players stood and how they were going, for a copy to
+  compare meanwhile:
   - **Which:** those within 160 m of any player, on that player's map; the nearest 64 at most.
   - **Each, in 16 bytes:** its place among the battle's characters (the same in every copy); where
     it is and how fast it's going, to the centimetre; which way it faces; whether it's moving,
-    running, fighting or dead; and how many corners are left on its way. All of it is sent as
+    running, fighting or dead; and how many corners are left on its way. All of it sent as
     base64 (`core/wire.js`), since the relay carries text.
-  - **Compared:** the copy compares just where the host packed it, once what came before has been
-    played. Anyone more than a centimetre from where the host had them (or missing) means it's
-    gone astray: it asks for the world again at once. That's within a fifth of a second, where
-    the checksum would have taken up to five seconds.
-  - **What it costs:** in seed 2's start town, about 1.2 KB a second to each who's joined, beside
-    about 0.5 KB a second of what's done (about 1 KB now that each step's sent as it's done: some
-    47 characters, twenty times a second rather than ten).
-  - Games before it (`NET_VERSION` 11) can't join.
+  - **Why it's off.** Nothing read it but that comparison, which the sum makes as soon now, and
+    it was the most of what a joined game was sent: 2.4 KB a second of 3.6 standing in seed 2's
+    start town, 5.0 of 9.3 in a field battle of 15 a side (measured, the host's player and three
+    joined; a hosting phone sent each its own copy). A host with `sendsPlaces` set still sends it
+    and a copy still compares it, anyone more than a centimetre from where the host had them
+    meaning it's gone astray: kept for whatever comes to draw others from what's sent
+    (generated/multiplayer_scaling_plan.md).
+- **What's sent, measured** (seed 2's start town, the host's player and three joined, a second,
+  to each of them): standing, 1.2 KB in 22 messages (what's done 1.0 KB: 51 characters, twenty
+  times a second; their own hero 0.1; the link's timing); walking, one of them on the stick,
+  3.0 KB; in a field battle of 15 a side, 4.5 KB (what's done 2.4, their own hero 2.0). The
+  world as one comes in is 80 KB of text there, and 120 to 300 KB with a battle or with eight
+  players over six towns: a sixth to a fifth of that on its way, compressed (below).
+- **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
+  made point to point passes no server that would hold them to anything):
+  - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
+    left unused, answered at once; past those, an asking waits till its time's come (answered
+    as the game's next heard from), and everyone asking in a step is sent the one snapshot.
+    Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
+    asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
+    that needs it twice running through no fault of its own: one slow to load that falls too far
+    behind as it comes in and again before it's found its feet, which plays nothing till the
+    world comes (with none in hand, a soak's player stood still 10 seconds so), or a link that
+    drops twice in a few seconds.
+  - **Commands:** 30 a second, 60 at once (a stick turning sends 16 a second); more are let go
+    of unanswered, as a world server lets go of what comes too fast.
+  - **Nothing longer than 64 KB:** a character coming in is the longest thing a joined game
+    says, and one longer is told they can't be brought in.
+  - **On a direct link** (`app/peer.js` `MOST`): a message's pieces are kept to 4 MB, one whose
+    pieces run on past that let go of; and a game with 8 MB waiting to go to it, too slow to take
+    it, has its channel closed, as the servers' sockets close on one (its place is kept, and a
+    joined game falls back to the server's relaying).
 - **Your hero, drawn ahead** (`app/forecast.js`, `core/selfstate.js`). A joined player's command
   goes to the host and is done there half a round trip later, and the copy plays the host's steps
   later still: a fifth of a second or more, half a second and more over a mobile network. So the
@@ -3518,7 +3637,10 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     at most). So a swing, a cast or a stagger holds them there as it does on the host, the stick's
     way slides round a lamppost there, and they stop where the host will stop them. It's made
     again at each of the host's words, and each command sent. Its ways are found over the
-    navigation tiles made already only (`bakedOnly`); off them, the stick's way goes straight on.
+    navigation tiles made already only (`bakedOnly`: those within 96 m of the hero are baked
+    ahead off the page's thread, as a host's game bakes them round each player; a copy baked
+    none ahead before, and had only those its own steps had happened to ask for); off them,
+    the stick's way goes straight on.
     What it does is only drawn: no blow it strikes lands, nothing it says is heard, and the copy
     of the world is never touched, so the rules never guess.
   - **When.** The host's time now is reckoned from the quickest of its words of the last second
@@ -3583,7 +3705,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Debug.** The debug overlay's `Net` line shows, joined, that round trip, the steps in hand
   against those it means to keep (and how late they come, all but the latest tenth), the checks made and found astray, the
   resyncs, and what it's hearing a second; hosting, how many have joined and what's sent them a
-  second (and of that, the motion stream).
+  second (and of that, what's done).
 - **What's drawn.** Each game draws what's round its own player: others far off, and whoever's near
   them, aren't drawn (`DRAW_REACH`).
 
@@ -3591,9 +3713,23 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 a room's host and those who've joined it, untouched. It knows nothing of the game. It's a WebSocket
 written out in full (RFC 6455), so the server needs nothing but Node. Pages served elsewhere (GitHub
 Pages) name the relay to use: `?relay=wss://...`. What it takes is bounded (`RELAY_LIMITS`): a
-message no longer than 4 MB (a world's state is about 100 KB after a good while's play), read in
+message no longer than 4 MB (a world's state is 80 to 300 KB), read in
 the pieces it comes in and joined once it's all there; and one who's too slow to take what's sent
-them (8 MB waiting) is let go rather than piling it up.
+them (8 MB waiting) is let go rather than piling it up. A browser that offers to have its
+messages compressed is taken up on it (permessage-deflate, RFC 7692, written out with Node's
+zlib; every browser offers it of itself, so the game's code is the same either way): what the
+relay sends over 1 KB goes compressed, which is the world as one comes in or is sent it again:
+a start town's 75 KB as 14, 195 KB with a field battle as 34, in a millisecond or so each
+(measured); a step's worth, 50 to 120 bytes, goes as it is. What it hears is read back to no more than the longest message it takes, whatever a few
+bytes claim to hold. The world server's sockets are the same (`server/play.js`,
+`server/broker.js`; its `compress` setting turns it off). A link made point to point (WebRTC)
+compresses a long message itself (`app/peer.js` `PACKED`, with the browser's
+`CompressionStream`, sent as base64 in the channel's pieces: the same worlds as 15 and 36 KB),
+for a game that's said it can read one: each says so as its channel opens, in a word that isn't
+JSON, which a game from before this lets go of unread, so it's sent everything plain and hears
+plainly that it's to update. Compressing and reading back take the browser a moment each, and
+whatever's said or heard meanwhile waits its turn, so everything's heard in the order it was
+said.
 - **Places kept.** The host and each who joins are given a token with their place. A link that
   drops without a word keeps its place 30 seconds (`grace`): the host isn't told a joiner's gone,
   and those in a room whose host's link dropped are told it's `away` (and `back`); no one new joins
@@ -3689,6 +3825,13 @@ say what they'd want and stay where they are.
   too (someone's after them, or they're after someone), when they fight on where they are. One
   told to wait stays where they were told;
 - they go after any enemy of their leader's they can see within 12 steps of them;
+- **their leader down, or on another floor, they defend themselves** (the owner: "a follower
+  whose leader is down or on another floor defends itself"): they strike back at whoever they
+  can see that's on them (set on them, or striking at them), has struck them in the last 10
+  seconds (`DEFEND_MS`), or struck their leader in the 10 seconds before they fell beside them;
+  a mage with their spells, as ever. With no one to strike back at they hold where they are:
+  they don't go looking for a fight, nor walk on. (Before, they did nothing at all, not even
+  when struck.)
 - through a door or up the stairs, they come out beside their leader;
 - they stand with their leader against the wild, and as their people stand with the others;
 - what they bring down counts for their leader: its loot is theirs, and it counts towards their
@@ -4183,7 +4326,22 @@ kept from.
 it's done (`["a", ms]`, `["c", playerId, command]`, `["j", options]`, `["l", id]`, `["p"]`, and
 the ways the battle found doing each, `["v", time, id, way]`), for those who've joined to do
 again; `replaying()` has a copy's battle take those ways rather than find its own. `adopt(snapshot)` carries on from a snapshot in place. `checksum()`
-tells two copies of a world apart. Buildings are looked over in the order of their keys, and the
+tells two copies of a world apart. A snapshot holds every clock the rules read, not the battle's
+alone (when the war's messengers are next looked to, how far the wilds director has counted the
+rare encounters' time, when the Order's court last warned each player off): a copy made without
+one began it afresh, sent its messengers or rolled the world's dice at another step than the
+host, and was sent the whole world again, every joined game at once. `test/snapshot-fields.test.js`
+holds it so: a world played two minutes with a battle in it, carried on from its snapshot and set
+right in place, has every field of the host, the battle and each character as it was, or the
+field's in the test's list with why it needn't be kept. Each character is kept without what it
+has as one just made has it (`core/keptactor.js` `ACTOR_DEFAULTS`, through the battle's
+`snapshot({ keep })`: about 0.8 KB each where it was 2), which is half the snapshot's text. The
+battle makes it whole again, as it makes every character (`Battle.restore`, `#made`: one made
+with nothing else, then what was kept put on it, its attacks its weapon's if they weren't
+kept), so a world kept whole by an older version reads the same way, and the test holds every
+field left out to what the battle makes a character of every kind with; and with the "never yet"s gone from them (-Infinity, which JSON can't
+carry), what reads a snapshot reads it as plain JSON (`core/wire.js` `decode`: 2 ms for a world
+of eight players, where a reviver took 25). (`SNAPSHOT_VERSION` 53.) Buildings are looked over in the order of their keys, and the
 settlements round each player are laid out by the world itself, so what's got ready, and when,
 never hangs on what a game's drawn.
 

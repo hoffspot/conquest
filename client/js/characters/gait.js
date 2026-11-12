@@ -52,8 +52,11 @@ export function curveAt(curve, phase) {
     const harmonics = curve.harmonics;
     let angle = curve.mean;
 
+    // (Each pair's two by their places: taken apart as a list, `[a, b]`, an iterator was made
+    // for each, a dozen and more curves a body a frame)
     for (let i = 0; i < harmonics.length; i++) {
-        const [a, b] = harmonics[i];
+        const a = harmonics[i][0];
+        const b = harmonics[i][1];
         const x = 2 * Math.PI * (i + 1) * phase;
 
         angle += a * Math.cos(x) + b * Math.sin(x);

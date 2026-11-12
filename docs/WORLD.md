@@ -310,7 +310,17 @@ where a player of that people starts (`startFor`), and makes the world outside, 
 map like any other (`core/grid.js`: blocked, opaque and ground for any square), all 8 km of it on
 1-metre squares, made a chunk at a time as it's needed and kept (the last 256 used: about 5 megabytes), the same
 every time it's made again. The game draws it round the player as they go (`world/chunks3d.js`:
-see GAME.md). Each square of a chunk comes from the plan's cell under it:
+see GAME.md). A world server, with players in several places at once, keeps as many chunks as
+they need (`keep`, told by `server/ahead.js`; its ground's heights with them, `Ground.keep`):
+never fewer than the 256. A chunk can be made a piece at a time by whoever makes the world ahead
+of need (`chunkWithin`, `MAKING`: its squares eight rows a piece, then its ground, its trees, its
+features; a piece at the least each time it's asked for, the chunk kept once it's whole, and
+finished at once if it's asked for whole meanwhile), which is how the server makes what's round
+its players between its steps and the game makes the ground the world will soon want between its
+frames (docs/WAR.md *Made ahead on the world server*). The chunk is the same however it was
+made; one half made when a fortification, a stockade or what's fallen across the way changes is
+begun again, so none is made of the world at two moments. Each square of a chunk comes from the
+plan's cell under it:
 
 - **The town**, where it's set in: its own squares, just as it was made.
 - **The other settlements** (`core/settlements.js`): each capital, city, town, village, hamlet
@@ -318,7 +328,8 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   main streets heading the ways its roads leave it) when the world within a chunk of its square
   is first made, and kept. The same place is laid out the same every time. A town takes tens of
   milliseconds to lay out, a capital up to two hundred (more on a phone), so the game lays out
-  those within five chunks of the player ahead, in a worker (`world/layouts.js`), and gives them
+  those within five chunks of the player ahead, and those by the ground the world will soon want
+  (`core/host.js` `soon`), in a worker (`world/layouts.js`), and gives them
   to the world (`give`), which takes one when it's first wanted if it was laid out from just what
   it would be laid out from here (`specOf`), and otherwise lays it out itself: the same either
   way, so everyone playing together has the same world, and in the same order. Where it has
@@ -1117,8 +1128,9 @@ The world is played on the land's height with what's built levelled into it (`Gr
   each square's two triangles, split from north-west to south-east, exactly as the ground's drawn,
   so whatever stands on the ground stands on what's seen. They're the same whatever order chunks
   are made in (a road's or pad's height is worked out from the land's own, never from kept
-  chunks). The land's own heights for chunks ahead of the player are worked out off the page's
-  thread (`world/terrains.js`, `terrain-worker.js`).
+  chunks). The land's own heights for chunks ahead of the player, and for the ground the world
+  will soon want (`want`), are worked out off the page's thread (`world/terrains.js`,
+  `terrain-worker.js`); a world server's the same, off its world's thread (`server/ahead.js`).
 - **The overworld** (`overworld.js`) gives each chunk its corner heights and each square's slope
   class: squares steeper than 38° are blocked, but for roads, bridges and what's built. Lakes and
   the sea are wet where the ground's below their water. `heightAt(x, y)` is the ground, or a
@@ -1155,9 +1167,14 @@ The world is played on the land's height with what's built levelled into it (`Gr
 ## Navigation meshes (`core/navigation.js`, `core/navigation/`)
 
 Where the world can be walked, as polygons rather than squares: Recast and Detour (built to
-WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.43.1/` by
-`npm run vendor:recast`; about 200 KB gzipped, loaded with the rules). Everyone walks them
-(core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*).
+WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigation-0.44.0/` by
+`npm run vendor:recast`, which writes the folder's name into the one place the game spells it,
+`navigation/recast.js`; about 200 KB gzipped, loaded with the rules). Everyone walks them
+(core/battle.js: GAME.md's *Moving*); debug mode draws them (*Navigation mesh*). Every device
+bakes its own tiles, so a new version of Recast must bake the same bytes: `test/bake.test.js`
+holds three made-up tiles' bytes and the ways over them as recorded (0.44.0 baked 1,095 tiles of
+three worlds, their towns', a scene's and their dungeons', byte for byte as 0.43.1 did, and
+found the same 2,012 ways over them to the last bit).
 
 - **Tiles.** The world is cut into 32 m tiles from its origin (256 a side). A tile is baked from
   its square and a 1 m border round it (`tiles.js tileInput`), so it depends only on the world
@@ -1270,11 +1287,42 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
   several times that on a phone), and stands where it is, unseen, till it can go.
   At most 1,024 tiles are kept (a kilometre square), the longest unused let go first.
+  A copy of a world someone else hosts finds no ways (it takes the host's), but its battle asks
+  the mesh where a walker stepping round someone may stand (GAME.md's *Moving*), and it baked no
+  tile ahead: each was baked in the step that first asked about it, on the page's thread. Now
+  its game bakes those round its own hero ahead as a host's does (its look ahead at its hero
+  finds its ways over them too), and those under each way the host sends as the way's heard,
+  some steps before it's played (`Joining.onWay`; `NavBaker.along`: the tiles within 4 m of the
+  way's first 96 m, after those round the hero, and only those whose ground the copy has made).
+  Measured with a host and a copy in one process, in the clock's own time, over an 80 ms link,
+  both heroes walking about the start town's market for two minutes: before, 12 tiles baked
+  inside 12 of the copy's steps, 404 ms of those steps in all, 87 ms the worst; after, none,
+  77 tiles baked on the worker. (Both standing still, the folk alone stepping round each other:
+  12 tiles in 12 steps and 203 ms, and 6 in 4 and 120 ms on another world; none after.) The
+  copy's checks against the host's passed the same number of times either way, 23 of the world
+  and 599 of where everyone stood, none failing: a step's the same wherever a tile was baked.
+  A tile let go of while it's away at the worker, what stands on it changed (a fortification
+  gone up: `dropTiles`), isn't taken when it comes back, the ground as it was: it's baked again
+  from what's there now (`changed`). (It was taken, and stayed, a tile that game alone had
+  wrong.)
+- **A building's floors** are baked in the worker too, as the building's got ready (the host's
+  "open": `NavBaker.floor`, for each of its maps; a scene's 132 tiles sixteen a frame). Its mesh
+  isn't made for it (a mesh with no tile in it holds 265 KB of Recast's memory, and only 16 are
+  kept): the tiles are kept by the navigation (`bakedAhead`) till the floor's mesh is made, the
+  first time anyone walks it, and taken then, none baked (`ensure`); let go of when the building
+  is. A floor asked for before its tile's back is baked where it's wanted, as ever. A floor's
+  triangles take 0.02 to 0.25 ms on the page; Recast's part, off it now, 13 to 30 ms a tavern's
+  or a keep's floor on a busy desktop, 200 ms a dungeon's five levels, and a second for
+  Bellhaven's grounds. Measured hosting a world in the clock's own time, a player run from door
+  to door through the start town for three minutes (ten doors): before, 11 floors' tiles baked
+  inside 11 of the world's steps; after, none, each taken from the worker's (their folk first
+  walk a floor 4 to 13 seconds after it's got ready; once, a step after, as the world began,
+  and that one is baked in its step when the worker's not back yet).
 - **Maps of squares** (a building's floors, a town laid out on its own, a test's rows) have
   meshes of their own (`navigatorOf`, `squares.js`): flat, a square that isn't blocked two
   triangles of floor, in voxels a tenth of a metre across, keeping walkers 0.3 m from walls, so
   a doorway a square wide is still walked; 32 m tiles, baked as they're wanted (about 25 ms a
-  tavern floor). The 16 last walked keep theirs.
+  tavern floor) or taken, baked ahead (above). The 16 last walked keep theirs.
 - **Asking** (`Navigation`), in the rules' ground coordinates ([x, y], or [x, y, height]):
   - `path(from, to)`: the way's corners. The tiles between are made sure of first, and 4 m round
     them; if the way falls short, a ring of tiles round them and then three (across a long way,
@@ -1295,9 +1343,51 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   half-metre voxels it was 3 ms; open country a little more, its ground's slopes cut finer), its
   data about 10 KB (5–8). A way found takes 0.05 ms at the
   median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
-  say) searches every tile kept before giving up, up to 0.5 ms.
+  say) searches every tile kept before giving up, up to 0.5 ms. Asking whether a point can be
+  stood on (`walkable`, which the battle asks eight times for one step aside) takes 3.1 µs in a
+  town on a busy desktop: Detour's own call made straight, answered into three objects the mesh
+  keeps (4.8 µs through the wrapper's, which makes and destroys them each asking; the same
+  answer to the last bit, tested).
+- **What a bake leaves behind:** nothing. Recast's WebAssembly is handed to JavaScript by a
+  binder that keeps a wrapper on this side for every object, until it's destroyed. The bake uses
+  one build context for all its tiles (its timers and logs off: nothing in it from one bake to
+  the next), destroys the tile's params, and has the binder forget each heightfield and mesh as
+  Recast frees it. (Before, a context, a tile's params and the result of making its data were
+  left every bake, and a wrapper for every address a heightfield or a mesh had ever been at:
+  2,584 bytes of JavaScript's heap a bake, measured over 400 bakes of the start town's tile, for
+  good; a world server that bakes for weeks paid most. Now the heap is level, 0.02 MB over
+  1,800 bakes, the measurement's own rounding.) Nor does a mesh: the array a tile's data is
+  carried into it in is let go of once the mesh has it (as one that only looks at the data,
+  which the mesh owns and frees with the tile), the mesh's params once Detour has copied them,
+  and the query's wrapper with the query; the query takes the mesh's one filter for its own. (A
+  wrapper was left for every tile ever added, and three for every mesh let go of, a building's
+  floor's each time it was walked again.) And a tile's data is kept once, in the mesh: the
+  second copy JavaScript kept beside it, which nothing read, was 10 KB a tile in a town, 10 MB
+  of an overworld's 1,024 tiles.
 
 ## Tests
+
+`test/navbaker.test.js` checks the baking off the asking thread, on Node's threads as the world
+server runs the game's workers: each kind of mesh's tiles the same bytes from the worker as baked
+here (a scene's with its ledges left); a building's floors baked as it's got ready, taken by
+each floor's mesh when it's made, which bakes none and walks as one baked here; a big floor's
+tiles sent a few at a time, and none kept for a floor let go of; a tile let go of while it was
+away, what stands on it changed, baked again from what stands there now; the tiles a way runs over
+wanted for a copy, and nothing of a way that isn't one; and a battle given its ways asking the
+mesh about a walker stepping round another without baking a tile in a step, its walkers ending
+where they do when it's baked there.
+
+`test/bake.test.js` holds the bytes of three made-up tiles (the overworld's kind, a scene's, a map
+of squares') and the corners of a way over each as recorded: a version of Recast or a setting of
+the bake that changes one fails it, before copies of a world part over it. And that bakes leave
+nothing behind: after a dozen rounds of each kind of tile, and of one with nothing to walk, the
+binder keeps no more wrappers of any class than before; nor after a tile's added and let go of a
+dozen times with ways found between, the way the same each time, or a mesh made and let go of;
+that the nearest point on a mesh is answered as the wrapper's own asking answers it, on the mesh,
+off it and nowhere near.
+And that the vendored Recast is the one version `package.json` names, exactly: the lockfile's,
+the only folder of it in `client/vendor`, the one `recast.js` imports, once, and the one the docs
+and the tests that read its files name.
 
 `test/navigation.test.js` checks the navigation meshes: a tile's triangles and bytes the same
 whichever chunks were made first; the town's streets walked as roads, nothing on roofs; ways round

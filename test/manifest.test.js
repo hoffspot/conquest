@@ -45,7 +45,7 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         const { masks, pictures = {}, skin = {} } = readHumanFiles().manifest;
         const body = [`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`, ...[...masks, ...Object.values(pictures), ...Object.values(skin)].map((file) => `characters/${file}`)];
 
-        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.43.1/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2"]) {
+        for (const needed of ["vendor/three-r186/three.module.min.js", "vendor/three-r186/three.core.min.js", "vendor/recast-navigation-0.44.0/recast.mjs", "vendor/recast-navigation-0.44.0/core.min.mjs", "vendor/recast-navigation-0.44.0/recast-navigation.wasm.js", "vendor/recast-navigation-0.44.0/recast-navigation.wasm.wasm", "js/app/game.js", "js/app/creator.js", ...body, "fonts/UnifrakturMaguntia.woff2"]) {
             assert.ok(paths.includes(needed), needed);
         }
 

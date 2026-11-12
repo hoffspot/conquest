@@ -4,7 +4,9 @@
 // on every machine: in a worker ahead of time (world/navworker.js), or here when one's wanted and
 // isn't ready. Tiles no one is near are let go of, the longest unused first. A map of squares on
 // its own (a building's floor, a test's rows) has a mesh of its own, baked from its squares
-// (navigation/squares.js) in finer voxels, a tile at a time as it's wanted: navigatorOf.
+// (navigation/squares.js) in finer voxels, a tile at a time as it's wanted: navigatorOf. Its
+// tiles too can be baked in the worker before its mesh is made (bakedAhead: a building's floors
+// as it's got ready), and are taken then, not baked.
 //
 // Points are the rules' ground coordinates: [x, y] (metres), or [x, y, z] with z the height.
 // Detour's own polygon references never leave this file: they depend on which tiles were added,
@@ -77,6 +79,11 @@ export function tileOf(x, y) {
 const navigators = new WeakMap();
 const rooms = new Set();
 
+// The tiles of small maps (a building's floors, a scene's) baked ahead of need, off the page's
+// thread (bakedAhead), by map: each by its key, Detour's data or null, till the map's mesh wants
+// it (ensure takes it, baking none) or the map's forgotten (forgetAhead)
+const aheads = new WeakMap();
+
 /**
  * The navigation mesh of a map (a battle's: the Overworld, or a map of squares on its own), made
  * the first time it's wanted. Only a few maps of squares keep theirs at once: the one longest
@@ -87,6 +94,7 @@ export function navigatorOf(map) {
 
     if (!navigation) {
         navigation = map.ground?.heightAt && map.chunkAt ? new Navigation(recast, map) : map.walk ? walkNavigation(map) : squaresNavigation(map);
+        navigation.ready = aheads.get(map) ?? null;
         navigators.set(map, navigation);
     }
 
@@ -119,7 +127,8 @@ export function releaseNavigation(map) {
 /**
  * Let go of a map's tiles over a box of its squares ([x0, y0, x1, y1]), and a little round it, if
  * it has a mesh: each made again from its squares as it's next wanted (what stands there changed:
- * a fortification gone up or come down, core/overworld.js setForts).
+ * a fortification gone up or come down, core/overworld.js setForts). Each is marked changed, so
+ * one being baked elsewhere meanwhile, from what stood there before, isn't taken (changed).
  */
 export function dropTiles(map, [x0, y0, x1, y1]) {
     const navigation = navigators.get(map);
@@ -134,8 +143,28 @@ export function dropTiles(map, [x0, y0, x1, y1]) {
     for (let ty = ty0; ty <= ty1; ty++) {
         for (let tx = tx0; tx <= tx1; tx++) {
             navigation.drop(tx, ty);
+            navigation.changes.set(key(tx, ty), navigation.changed(tx, ty) + 1);
         }
     }
+}
+
+/**
+ * What a small map's mesh is made with (a fixed scene's, or a map of squares on its own; null for
+ * the Overworld): { squares, measures, input (a tile's triangles, (tx, ty)), heightAt, size }. For
+ * its mesh (navigatorOf), and for baking its tiles ahead of it elsewhere (world/navbaker.js floor).
+ */
+export function floorOf(map) {
+    if (map.ground?.heightAt && map.chunkAt) {
+        return null;
+    }
+
+    const squares = squaresOf(map);
+
+    if (map.walk) {
+        return { squares, measures: SCENES, input: (tx, ty) => walkInput(map.walk, tx, ty, SCENES), heightAt: (x, y) => map.heightAt(x, y), size: [map.width, map.height] };
+    }
+
+    return { squares, measures: ROOMS, input: (tx, ty) => squaresInput(squares, tx, ty, ROOMS), heightAt: () => 0, size: [squares.width, squares.height] };
 }
 
 /**
@@ -143,14 +172,51 @@ export function dropTiles(map, [x0, y0, x1, y1]) {
  * from its walk's floors at their heights; a way's points' heights the floor's (its heightAt).
  */
 export function walkNavigation(map) {
-    return new Navigation(recast, squaresOf(map), { measures: SCENES, input: (tx, ty) => walkInput(map.walk, tx, ty, SCENES), heightAt: (x, y) => map.heightAt(x, y), size: [map.width, map.height] });
+    const floor = floorOf(map);
+
+    return new Navigation(recast, floor.squares, floor);
 }
 
 /** A mesh of its own for a map of squares (grid.js squaresOf's: settings.js ROOMS). */
 export function squaresNavigation(map) {
-    const squares = squaresOf(map);
+    const floor = floorOf(map);
 
-    return new Navigation(recast, squares, { measures: ROOMS, input: (tx, ty) => squaresInput(squares, tx, ty, ROOMS), heightAt: () => 0, size: [squares.width, squares.height] });
+    return new Navigation(recast, floor.squares, floor);
+}
+
+/**
+ * A tile of a small map's (floorOf), baked ahead of need off the page's thread (`data`: bakeTile's
+ * for its triangles, the same bytes as its mesh would bake; null with nothing to walk): added to
+ * the map's mesh if it has one, else kept till it has, when its mesh takes it for the asking, not
+ * baking it (ensure). Let go of with the map (forgetAhead).
+ */
+export function bakedAhead(map, tx, ty, data) {
+    const navigation = navigators.get(map);
+
+    if (navigation) {
+        navigation.add(tx, ty, data);
+
+        return;
+    }
+
+    let ahead = aheads.get(map);
+
+    if (!ahead) {
+        ahead = new Map();
+        aheads.set(map, ahead);
+    }
+
+    ahead.set(key(tx, ty), data);
+}
+
+/** Whether a small map's tile is still to be baked: neither in its mesh, if it has one, nor baked ahead. */
+export function floorWants(map, tx, ty) {
+    return !navigators.get(map)?.has(tx, ty) && !aheads.get(map)?.has(key(tx, ty));
+}
+
+/** Let go of what was baked ahead for a map and not taken yet (its building let go of: core/host.js close). */
+export function forgetAhead(map) {
+    aheads.get(map)?.clear();
 }
 
 export class Navigation {
@@ -172,8 +238,12 @@ export class Navigation {
         this.size = size;
         this.keep = measures.keep ?? (measures === OVERWORLD ? KEEP_TILES : KEEP_ROOM_TILES);
         this.mesh = new recast.NavMesh();
-        this.mesh.initTiled(recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS }));
-        this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES });
+
+        // (Detour takes a copy of the mesh's params: they're let go of at once, not left for good)
+        const params = recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS });
+
+        this.mesh.initTiled(params);
+        recast.Raw.destroy(params.raw);
         this.filter = new recast.QueryFilter();
         this.filter.includeFlags = WALK;
         this.filter.excludeFlags = 0;
@@ -182,11 +252,34 @@ export class Navigation {
             this.filter.setAreaCost(Number(area), cost);
         }
 
+        // (The query's own filter this one, which every asking names anyway: it would make
+        // another, never used and never let go of)
+        this.query = new recast.NavMeshQuery(this.mesh, { maxNodes: MAX_NODES, defaultQueryFilter: this.filter });
+
+        // What Detour answers the nearest point into (nearestIn), kept for every asking: the
+        // wrapper's own findClosestPoint makes and destroys the three each time, six calls into
+        // Recast an asking, and the battle asks eight times for one step aside
+        this.answer = { ref: new recast.Raw.UnsignedIntRef(), point: new recast.Raw.Vec3(), over: new recast.Raw.BoolRef() };
+
         // The tiles in the mesh, by key: { tx, ty, ref (Detour's, or 0 for one with nothing to
-        // walk), data }, the most recently used last
+        // walk) }, the most recently used last. (Not their data: the mesh has its own copy, and a
+        // second kept here was 10 KB a tile no one read, 10 MB of a full overworld's.)
         this.tiles = new Map();
         this.baked = 0;
         this.added = 0;
+
+        // How often each tile's been let go of for what stands on it having changed (dropTiles),
+        // by key
+        this.changes = new Map();
+
+        /**
+         * Tiles baked ahead of this mesh, by key (navigatorOf gives a small map's: bakedAhead),
+         * each taken the first time it's wanted (ensure), not baked here; or null.
+         */
+        this.ready = null;
+
+        /** Whether it's been let go of (dispose): nothing more is added to it. */
+        this.disposed = false;
 
         /**
          * Where a tile not in yet goes when a way's to wait for it (path's `wait`): to be baked off
@@ -210,11 +303,21 @@ export class Navigation {
         return this.tiles.has(key(tx, ty));
     }
 
+    /**
+     * How often a tile's been let go of for what stands on it having changed (dropTiles): a tile
+     * baked elsewhere is taken only if this is as it was when its triangles were worked out
+     * (world/navbaker.js), or it would be the ground as it was, added after it was let go of.
+     */
+    changed(tx, ty) {
+        return this.changes.get(key(tx, ty)) ?? 0;
+    }
+
     /** Add a tile's baked data (bakeTile's, or null for one with nothing to walk), if it's not in. */
     add(tx, ty, data) {
         const k = key(tx, ty);
 
-        if (this.tiles.has(k)) {
+        // (In already; or the mesh let go of while the tile was being baked elsewhere)
+        if (this.tiles.has(k) || this.disposed) {
             return;
         }
 
@@ -231,16 +334,20 @@ export class Navigation {
 
             const added = this.mesh.addTile(raw, this.recast.Detour.DT_TILE_FREE_DATA, 0);
 
-            // (The mesh owns its data once it's in)
             if (!this.recast.statusSucceed(added.status)) {
                 raw.destroy();
                 throw new Error(`Detour wouldn't take tile ${tx}, ${ty}: ${this.recast.statusToReadableString(added.status)}`);
             }
 
+            // (The mesh owns its data once it's in, and frees it with the tile: the array that
+            // carried it there is let go of as one that only looks at it, which frees none of
+            // it. Left, an array's wrapper stayed for good for every tile ever added.)
+            raw.raw.isView = true;
+            raw.destroy();
             ref = added.tileRef;
         }
 
-        this.tiles.set(k, { tx, ty, ref, data });
+        this.tiles.set(k, { tx, ty, ref });
         this.added++;
     }
 
@@ -273,6 +380,16 @@ export class Navigation {
 
         // (Off the map's edge: nothing, and nothing kept)
         if (!this.#inside(tx, ty)) {
+            return;
+        }
+
+        // (Baked ahead of the mesh, elsewhere: taken, the same bytes as baking it here gives)
+        if (this.ready?.has(k)) {
+            const data = this.ready.get(k);
+
+            this.ready.delete(k);
+            this.add(tx, ty, data);
+
             return;
         }
 
@@ -535,9 +652,15 @@ export class Navigation {
      * null: for what's only drawn, as wayIn.
      */
     nearestIn(point, across = NEAR.across) {
-        const found = this.query.findClosestPoint(this.#point(point), { filter: this.filter, halfExtents: { x: across, y: NEAR.up, z: across } });
+        const [x, y, z] = point;
+        const { ref, point: at, over } = this.answer;
 
-        return found.success && found.polyRef ? [found.point.x, found.point.z, found.point.y] : null;
+        // (Detour's own call, as the wrapper's findClosestPoint makes it, with the same numbers:
+        // the answer's the same. Where it finds nothing it leaves what it last answered, and
+        // says it failed)
+        const status = this.query.raw.findClosestPoint([x, z ?? this.heightAt(x, y), y], [across, NEAR.up, across], this.filter.raw, ref, at, over);
+
+        return this.recast.statusSucceed(status) && ref.value ? [at.x, at.z, at.y] : null;
     }
 
     /**
@@ -571,10 +694,23 @@ export class Navigation {
 
     /** Let go of the mesh and everything Detour holds for it. */
     dispose() {
+        if (this.disposed) {
+            return;
+        }
+
+        // (The query's own, then what carries it: the binder's wrapper and its few bytes, which
+        // the query's destroy leaves)
         this.query.destroy();
+        this.recast.Raw.destroy(this.query.raw);
         this.recast.Raw.destroy(this.filter.raw);
+
+        for (const each of Object.values(this.answer)) {
+            this.recast.Raw.destroy(each);
+        }
+
         this.mesh.destroy();
         this.tiles.clear();
+        this.disposed = true;
     }
 
     /**

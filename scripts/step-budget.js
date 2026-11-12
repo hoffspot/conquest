@@ -5,9 +5,18 @@
 // and how long each of its steps took. No step should take longer than a step (50 ms): one that
 // does holds up every player in the world.
 //
+// Each step is timed twice: by the clock, which is what a player would wait (the mean, the 99th
+// percentile and the worst said are the clock's), and in the thread's own processor time
+// (process.threadCpuUsage), which is what the step cost whatever else the machine was doing. It's
+// judged by the second: on a busy machine a step is put off the processor for tens of
+// milliseconds now and then, and judged by the clock the script failed one run in three for a
+// step that took 14 ms of work. The thread's time is told to the system's tick (4 ms here), so a
+// step within a tick of the budget may be counted over it: never under.
+//
 //     npm run step-budget                    # 60 s of the world's time, seed 2
 //     npm run step-budget -- --seconds 600   # longer
 //     npm run step-budget -- --seed 7        # another world
+//     npm run step-budget -- --field 50      # with a field battle, 50 a side, begun by the first player 10 s in
 //     npm run step-budget -- --no-ahead      # without making anything ahead (to compare)
 //     npm run step-budget -- --json          # the numbers as JSON
 //
@@ -28,7 +37,15 @@ import { installWorkers } from "../server/workers.js";
  * (m); and how long (ms of the wall's time) at most what's round them is made ahead before the
  * world's clock starts (as it will be while a player arriving loads).
  */
-export const RUN = Object.freeze({ peoples: ["human", "elf", "orc", "cat"], every: 5000, roam: 40, ready: 60000 });
+export const RUN = Object.freeze({ peoples: ["human", "elf", "orc", "cat"], every: 5000, roam: 40, ready: 60000, fieldAt: 10000 });
+
+// The processor time this thread has had (ms: user and system); the whole process's, where a Node
+// hasn't the thread's (more than the thread's, never less: the budget's no looser for it)
+const cpuNow = () => {
+    const { user, system } = process.threadCpuUsage?.() ?? process.cpuUsage();
+
+    return (user + system) / 1000;
+};
 
 const hero = (name, race) => ({ name, race, shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -38,18 +55,22 @@ const hero = (name, race) => ({ name, race, shape: {}, look: {}, weapon: "sword"
  * opening step (its people put about, its buildings opened: the world loading), and what's round
  * the players made ahead (as while they load). Resolves to { steps (StepTimes.toJSON, the steps
  * after those), over: [{ ms, at }] (those over a step), made (chunks made ahead), ready (ms till
- * all round the players was made), heap (MB), wall (s) }.
+ * all round the players was made), heap (MB), wall (s) }. The steps over one are those over it in
+ * the thread's processor time (`over`), each with the clock's time for it (`wall`); `late` counts
+ * those over it by the clock; `cpu` is the thread's time for all the steps, a step ({ mean, worst }).
+ * With `field`, the first player begins a field battle of that many a side RUN.fieldAt in.
  */
-export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true } = {}) {
+export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true, field = 0 } = {}) {
     installWorkers();
 
     const world = buildWorld({ seed });
-    const host = new Host(world, { populate: false, rules: { rest: "everyone", debug: "none" } });
+    // (A field battle is the debug overlay's: its first player an owner who may ask for one)
+    const host = new Host(world, { populate: false, rules: { rest: "everyone", debug: field ? "owner" : "none" } });
     const homes = RUN.peoples.map((race, k) => {
         const { at } = startFor(world.plan, race);
         const square = [Math.round(at[0]), Math.round(at[1])];
 
-        host.join({ id: `p${k + 1}`, hero: hero(`P${k + 1}`, race), square, map: "town" });
+        host.join({ id: `p${k + 1}`, hero: hero(`P${k + 1}`, race), square, map: "town", ...(field && k === 0 ? { role: "owner" } : {}) });
 
         return square;
     });
@@ -83,9 +104,18 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true 
 
     runner.times = new StepTimes();
 
+    const cpu = { total: 0, worst: 0 };
+    let late = 0;
+    let fought = null;
+
     for (let t = 0; t < seconds * 1000; t += STEP_MS) {
         if (t % RUN.every === 0) {
-            homes.forEach(([x, y], k) => host.command(`p${k + 1}`, { type: "move", to: [Math.round(x + roll() * RUN.roam), Math.round(y + roll() * RUN.roam)] }));
+            // (The first player stays by their battle, once it's begun)
+            homes.forEach(([x, y], k) => (fought && k === 0 ? null : host.command(`p${k + 1}`, { type: "move", to: [Math.round(x + roll() * RUN.roam), Math.round(y + roll() * RUN.roam)] })));
+        }
+
+        if (field && t === RUN.fieldAt) {
+            fought = host.command("p1", { type: "fieldBattle", size: field, facing: 0 });
         }
 
         if (ahead) {
@@ -93,14 +123,20 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true 
         }
 
         const before = runner.times.count;
+        const cpuBefore = cpuNow();
 
         runner.advance(STEP_MS);
 
         if (runner.times.count > before) {
+            const spent = cpuNow() - cpuBefore;
             const ms = runner.times.recent.at(-1);
 
-            if (ms > STEP_MS) {
-                worst.push({ ms: Math.round(ms), at: t });
+            cpu.total += spent;
+            cpu.worst = Math.max(cpu.worst, spent);
+            late += ms > STEP_MS ? 1 : 0;
+
+            if (spent > STEP_MS) {
+                worst.push({ ms: Math.round(spent), wall: Math.round(ms), at: t });
             }
         }
 
@@ -108,7 +144,18 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true 
         await new Promise((resolve) => setImmediate(resolve));
     }
 
-    const result = { steps: runner.times.toJSON(), over: worst, made: ahead?.made ?? 0, rooms: ahead?.rooms ?? 0, ready, heap: Math.round(process.memoryUsage().heapUsed / 2 ** 20), wall: Math.round((clock() - started) / 100) / 10 };
+    const result = {
+        steps: runner.times.toJSON(),
+        cpu: { mean: cpu.total / Math.max(1, runner.times.count), worst: cpu.worst },
+        over: worst,
+        late,
+        ...(field ? { field: { size: field, ok: fought?.ok === true, actors: host.battle.actors.length } } : {}),
+        made: ahead?.made ?? 0,
+        rooms: ahead?.rooms ?? 0,
+        ready,
+        heap: Math.round(process.memoryUsage().heapUsed / 2 ** 20),
+        wall: Math.round((clock() - started) / 100) / 10,
+    };
 
     ahead?.dispose();
 
@@ -116,20 +163,26 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true 
 }
 
 async function main() {
-    const { values } = parseArgs({ options: { seed: { type: "string", default: "2" }, seconds: { type: "string", default: "60" }, "no-ahead": { type: "boolean", default: false }, json: { type: "boolean", default: false } } });
-    const result = await stepBudget({ seed: Number(values.seed), seconds: Number(values.seconds), ahead: !values["no-ahead"] });
+    const { values } = parseArgs({ options: { seed: { type: "string", default: "2" }, seconds: { type: "string", default: "60" }, field: { type: "string", default: "0" }, "no-ahead": { type: "boolean", default: false }, json: { type: "boolean", default: false } } });
+    const result = await stepBudget({ seed: Number(values.seed), seconds: Number(values.seconds), ahead: !values["no-ahead"], field: Number(values.field) || 0 });
 
     if (values.json) {
         console.log(JSON.stringify(result, null, 2));
     } else {
-        const { steps, over, made, ready, heap, wall } = result;
+        const { steps, cpu, over, late, made, ready, heap, wall } = result;
 
-        console.log(`${steps.count} steps in ${wall} s: mean ${steps.mean.toFixed(2)} ms, p99 ${steps.p99.toFixed(1)} ms, worst ${steps.worst.toFixed(1)} ms at ${(steps.worstAt / 1000).toFixed(1)} s`);
+        console.log(`${steps.count} steps in ${wall} s, by the clock: mean ${steps.mean.toFixed(2)} ms, p99 ${steps.p99.toFixed(1)} ms, worst ${steps.worst.toFixed(1)} ms at ${(steps.worstAt / 1000).toFixed(1)} s${late ? `; ${late} over ${STEP_MS} ms` : ""}`);
+        console.log(`In the thread's own processor time: mean ${cpu.mean.toFixed(2)} ms, worst ${cpu.worst.toFixed(1)} ms`);
+
+        if (result.field) {
+            console.log(result.field.ok ? `A field battle of ${result.field.size} a side from ${RUN.fieldAt / 1000} s: ${result.field.actors} in the battle at the end` : `No field battle: it was refused`);
+        }
+
         console.log(`${made} chunks and ${result.rooms} buildings' insides' tiles made ahead, all round the players in ${ready} ms; heap ${heap} MB`);
-        console.log(over.length ? `${over.length} steps over ${STEP_MS} ms: ${over.map(({ ms, at }) => `${ms} ms at ${(at / 1000).toFixed(1)} s`).join(", ")}` : `No step over ${STEP_MS} ms.`);
+        console.log(over.length ? `${over.length} steps over ${STEP_MS} ms of the thread's time: ${over.map(({ ms, wall: clocked, at }) => `${ms} ms (${clocked} by the clock) at ${(at / 1000).toFixed(1)} s`).join(", ")}` : `No step over ${STEP_MS} ms of the thread's time.`);
     }
 
-    process.exitCode = result.over.length ? 1 : 0;
+    process.exitCode = result.over.length || (result.field && !result.field.ok) ? 1 : 0;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -5258,9 +5258,10 @@ test("the bars over others: each stays on the head it's over as the camera turns
         expect(near.layer).toBeGreaterThan(middle.layer);
         expect(middle.layer).toBeGreaterThan(far.layer);
 
-        // Each bar was over its slime's head from the first frame it was put anywhere: none
-        // over a body the frame it's drawn, not yet stood on its ground, which put it far down
-        // the screen for a frame (and, there under a nearer one's, hidden for half a second after)
+        // Each bar was over its slime's head from the first frame it was put anywhere, the frame
+        // its body was drawn: a body's stood on its ground as it's put down (it was at no height
+        // till the frame after, which put its bar far down the screen for a frame, and, there
+        // under a nearer one's, hidden for half a second after)
         const put = await page.evaluate(() => window.barsPut);
 
         for (const id of ["slime0", "slime1", "slime2"]) {
@@ -14168,6 +14169,136 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
+test("coming up to a city, the ground its soldiers and townsfolk are stood on is made a piece a frame before the steps that bring them out, which make none; and a dungeon's levels are worked out before the player's at its door, and it's made of them", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=2");
+
+    const came = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+        const overworld = game.world.maps.town;
+        const { nearestFree, squaresOf } = await import("/js/core/grid.js");
+        const { SETTLEMENT_KINDS } = await import("/js/core/setpieces/town.js");
+        const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        game.stop();
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (The chunks the world's steps make for themselves, counted, with what each step did:
+        // those made between steps, by the drawing or ahead, aren't)
+        const steps = [];
+        let stepping = false;
+        const [advance, ground] = [host.advance.bind(host), overworld.ground.chunk.bind(overworld.ground)];
+
+        host.advance = (ms) => {
+            steps.push({ chunks: 0, types: [] });
+            stepping = true;
+
+            try {
+                const events = advance(ms);
+
+                steps.at(-1).types = [...new Set(events.map(({ type }) => type))];
+
+                return events;
+            } finally {
+                stepping = false;
+            }
+        };
+        overworld.ground.chunk = (cx, cy) => {
+            if (stepping && !overworld.ground.peek(cx, cy)) {
+                steps.at(-1).chunks++;
+            }
+
+            return ground(cx, cy);
+        };
+
+        // The player put somewhere out in the world, what's drawn round them there drawn (their
+        // chunks made by the drawing, as they are when they walk there), no step played
+        const put = async ([x, y]) => {
+            Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null, progress: null });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await turn();
+            }
+        };
+        // Frames played, a step in each (without drawing), till `done` or so many
+        const frames = async (most, done = () => false) => {
+            let played = 0;
+
+            for (; played < most && !done(); played++) {
+                game.advance(0.05, { render: false });
+                await turn();
+            }
+
+            return played;
+        };
+        const free = (x, y, within = 40) => nearestFree(squaresOf(overworld), [Math.round(x), Math.round(y)], { within });
+        const made = ([x0, y0, x1, y1]) => overworld.made(x0, y0, x1, y1);
+
+        // A city, come up to from the west: 180 m from its edge, further than its soldiers
+        // muster at (120 m: core/host.js MUSTER) and within the 80 m more at which its ground's
+        // wanted (SOON)
+        const place = game.world.plan.places.find(({ id }) => id === "human-city-1");
+        const edge = SETTLEMENT_KINDS[place.kind].radius;
+        const from = (off) => free(place.at[0] - edge - off, place.at[1]);
+        const holds = ([x0, y0, x1, y1]) => place.at[0] >= x0 && place.at[0] <= x1 && place.at[1] >= y0 && place.at[1] <= y1;
+
+        await put(from(180));
+
+        const wanted = host.soon().boxes.filter(holds);
+        const unmade = wanted.filter((box) => !made(box)).length;
+        const before = steps.length;
+        const taken = await frames(1500, () => wanted.every(made));
+        const waiting = game.soonChunks?.length ?? null;
+        const far = { wanted: wanted.length, unmade, taken, made: wanted.every(made), mustered: host.mustered.has(place.id), waiting, inSteps: steps.slice(before + 1).reduce((sum, step) => sum + step.chunks, 0) };
+
+        // (Nearer: its soldiers out, then its townsfolk, in steps that make no ground)
+        await put(from(110));
+        await frames(60, () => host.mustered.has(place.id));
+        await put(from(90));
+        await frames(60, () => host.townsfolk.has(place.id));
+
+        const out = { mustered: host.mustered.has(place.id), townsfolk: host.townsfolk.has(place.id), muster: steps.find(({ types }) => types.includes("muster"))?.chunks ?? null, folk: steps.filter(({ types }) => types.includes("townsfolk")).at(-1)?.chunks ?? null };
+
+        // A dungeon out in the wilds, come up to: 100 m from its way in, nearer than its levels
+        // are wanted at (150 m: SOON.delve) and further than it's made at (45 m: DELVES.near)
+        const site = game.world.plan.sites
+            .filter(({ kind }) => kind === "dungeon")
+            .sort((a, b) => Math.hypot(a.at[0] - place.at[0], a.at[1] - place.at[1]) - Math.hypot(b.at[0] - place.at[0], b.at[1] - place.at[1]))
+            .find((one) => {
+                try {
+                    return Boolean(free(one.at[0] - 100, one.at[1], 20));
+                } catch {
+                    return false;
+                }
+            });
+        const building = () => game.world.interiors.buildings.get(`site:${site.id}`);
+
+        await put(free(site.at[0] - 100, site.at[1], 20));
+
+        const waited = await frames(600, () => Boolean(building()?.given));
+        const given = building()?.given ?? null;
+        const ahead = { waited, given: Boolean(given), madeYet: Boolean(building()?.made), told: host.soon().dungeons.map(({ key }) => key), tier: given?.from.tier ?? null };
+
+        await put(free(site.at[0] - 25, site.at[1], 20));
+        await frames(60, () => Boolean(building()?.made));
+
+        return { far, out, ahead, delved: { made: Boolean(building()?.made), taken: Boolean(given) && building().dungeon === given.dungeon, tier: building().tier ?? null, kept: building().given ?? null, key: `site:${site.id}` } };
+    });
+
+    // (Its ground wanted, not all of it made by what's drawn round the player; made ahead in
+    // frames, none of it by a step, before its soldiers are out)
+    expect(came.far.wanted).toBeGreaterThan(0);
+    expect(came.far.unmade).toBeGreaterThan(0);
+    expect(came.far).toMatchObject({ made: true, mustered: false, inSteps: 0 });
+    expect(came.far.taken).toBeGreaterThan(20);
+    expect(came.out).toEqual({ mustered: true, townsfolk: true, muster: 0, folk: 0 });
+    // (The dungeon's levels given before it's made, and it's made of them, at the tier they were worked out for)
+    expect(came.ahead).toMatchObject({ given: true, madeYet: false, told: [came.delved.key] });
+    expect(came.delved).toMatchObject({ made: true, taken: true, tier: came.ahead.tier, kept: null });
+});
+
 test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
     test.setTimeout(300000);
     // (Of where a dungeon puts the camera: left to the game from the start)
@@ -18404,6 +18535,15 @@ test("bars over a file of soldiers seen end-on: placed in the order of precedenc
                 }
 
                 Object.assign(player, { hp: player.maxHp, lock: window.locked });
+
+                // (And the field battle kept from running out (core/host.js FIELD_BATTLE.lasts:
+                // five minutes of the game's time, then everyone left in it goes): bodies are
+                // built by the machine's own time, so a slow one plays many more of the game's
+                // seconds getting here, and its soldiers were gone from under the test)
+                for (const field of game.host.fields) {
+                    field.at = game.battle.time;
+                }
+
                 game.advance(1 / 30, { render: false, wait: true });
                 // (Which of the file's bars are shown, frame by frame)
                 window.barFrames?.push({ clock: game.clock, shown: friends.map(({ id }) => Boolean(game.hud.tracked.get(id)) && !game.hud.tracked.get(id).hidden) });
@@ -18558,6 +18698,162 @@ test("bars over a file of soldiers seen end-on: placed in the order of precedenc
     expect(turned.foes[1].layer).toBeGreaterThan(Math.max(...[...turned.friends, turned.foes[0]].filter((each) => each.shown).map((each) => each.layer)));
     await expect.poll(async () => (await foes())[0], { timeout: 60000, intervals: [100] }).toEqual({ tracked: true, shown: false, targeted: false, covered: true });
     expect((await bars()).foes[1]).toMatchObject({ shown: true, targeted: true });
+});
+
+// A soldier's bar is over whichever body's drawn for it: let go to its kind's crowd for want of
+// room, and built in full again in the figure's place, the bar that was showing shows on every
+// frame through both. (A body built in full was put down at no height till the frame after, its
+// bar hundreds of pixels from its head for that frame; and a rule that passed a bar over on the
+// frame its body was put down made one blink off for a frame at every such change.)
+test("a soldier's bar stays over it, shown on every frame, as its body's let go to its kind's crowd and as it's built in full again in the figure's place", async ({ page }) => {
+    test.setTimeout(480000);
+    await playing(page, "/?play&seed=2");
+
+    // (Two armies of twelve: the player's people's, and their foes)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.fieldBattle(12);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.filter(({ id }) => id.startsWith("field-")).length >= 24, { seconds: 5 })).toBe(true);
+
+    // The player's people's twelve stood before the camera in two ranks of six, 2.5 m apart
+    // (their bars clear of one another: none's hidden under another's), each hurt, so each has
+    // a bar; their foes 200 m off. Kept there as the game plays on
+    const friends = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor(game.me);
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const friends = fielded.filter((actor) => !game.battle.hostile(actor, player)).slice(0, 12);
+        const foes = fielded.filter((actor) => game.battle.hostile(actor, player));
+        const camera = game.view.camera.position;
+        const mine = game.avatars.get(game.me).object.position;
+        const length = Math.hypot(mine.x - camera.x, mine.z - camera.z);
+        const ahead = [(mine.x - camera.x) / length, (mine.z - camera.z) / length];
+        const across = [-ahead[1], ahead[0]];
+        const before = (forward, sideways) => [player.x + ahead[0] * forward + across[0] * sideways, player.y + ahead[1] * forward + across[1] * sideways];
+
+        for (const id of Object.keys(game.battle.formations)) {
+            game.battle.formation(id, { to: null, advance: false });
+        }
+
+        window.pinned = new Map([
+            ...friends.map((actor, k) => [actor.id, before(8 + Math.floor(k / 6) * 5, ((k % 6) - 2.5) * 2.5)]),
+            ...foes.map((actor, k) => [actor.id, before(-200, k * 2)]),
+        ]);
+        window.barFrames = null;
+        window.playPinned = async (seconds) => {
+            for (let time = 0; time < seconds; time += 1 / 30) {
+                for (const [id, [x, y]] of window.pinned) {
+                    // (Hurt, and too hale for their healers to make whole between two frames)
+                    Object.assign(game.battle.actor(id), { x, y, square: [Math.floor(x), Math.floor(y)], path: [], dead: false, maxHp: 1e6, hp: 5e5 });
+                }
+
+                player.hp = player.maxHp;
+
+                // (And the field battle kept from running out (core/host.js FIELD_BATTLE.lasts:
+                // five minutes of the game's time, then everyone left in it goes): bodies are
+                // built by the machine's own time, so a slow one plays many more of the game's
+                // seconds getting here, and its soldiers were gone from under the test)
+                for (const field of game.host.fields) {
+                    field.at = game.battle.time;
+                }
+
+                game.advance(1 / 30, { render: false, wait: true });
+                // (Frame by frame: whether each one's bar is shown, and whether it's drawn in its crowd)
+                window.barFrames?.push({
+                    clock: game.clock,
+                    shown: friends.map(({ id }) => Boolean(game.hud.tracked.get(id)) && !game.hud.tracked.get(id).hidden),
+                    crowd: friends.map(({ id }) => game.avatars.get(id)?.constructor.name === "CrowdAvatar"),
+                });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        window.crowded = () => friends.filter(({ id }) => game.avatars.get(id)?.constructor.name === "CrowdAvatar").length;
+        window.building = () => [...game.enlisting, ...game.enlistees.keys()].some((id) => friends.some((actor) => actor.id === id));
+
+        return friends.map(({ id }) => id);
+    });
+
+    expect(friends).toHaveLength(12);
+
+    // (Till every one of them is drawn in full where it's put, none still being built)
+    const stood = () =>
+        page.evaluate(async (ids) => {
+            const { game } = window.pellagos;
+            const [ox, oz] = game.originOf("town");
+
+            await window.playPinned(1);
+
+            return (
+                !window.crowded() &&
+                !window.building() &&
+                ids.every((id) => {
+                    const avatar = game.avatars.get(id);
+                    const [x, y] = window.pinned.get(id);
+
+                    return avatar && Math.hypot(avatar.object.position.x - ox - x, avatar.object.position.z - oz - y) < 0.3;
+                })
+            );
+        }, friends);
+
+    await expect.poll(stood, { timeout: 240000, intervals: [100] }).toBe(true);
+
+    // Every one of the twelve has its bar, shown
+    const shown = () => page.evaluate((ids) => ids.map((id) => Boolean(window.pellagos.game.hud.tracked.get(id)) && !window.pellagos.game.hud.tracked.get(id).hidden), friends);
+
+    await page.evaluate(() => window.playPinned(1));
+    expect(await shown()).toEqual(friends.map(() => true));
+
+    // Room in full for only two of them now (as a phone's memory might have it, full with a
+    // capital's townsfolk): the rest are let go to their kinds' crowds as the figures are made
+    await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const quality = session.view.quality;
+        const others = [...game.avatars].filter(([id, avatar]) => !id.startsWith("field-") && avatar.constructor.name !== "CrowdAvatar").length;
+
+        window.roomy = quality;
+        window.barFrames = [];
+        session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 2 };
+    });
+
+    const gone = async () => {
+        await page.evaluate(() => window.playPinned(1));
+
+        return page.evaluate(() => window.crowded());
+    };
+
+    await expect.poll(gone, { timeout: 300000, intervals: [100] }).toBeGreaterThanOrEqual(5);
+
+    // And room for them all again: each built in full in its crowd figure's place
+    await page.evaluate(() => {
+        window.pellagos.session.view.quality = window.roomy;
+    });
+
+    const back = async () => {
+        await page.evaluate(() => window.playPinned(1));
+
+        return page.evaluate(() => window.crowded() + Number(window.building()));
+    };
+
+    await expect.poll(back, { timeout: 300000, intervals: [100] }).toBe(0);
+    await page.evaluate(() => window.playPinned(1));
+
+    const frames = await page.evaluate(() => window.barFrames);
+    const turned = (to) => friends.map((id, k) => frames.filter((frame, at) => at > 0 && frame.crowd[k] === to && frames[at - 1].crowd[k] !== to).length);
+
+    // Five or more went to their crowds and came back in full while it was watched; and every
+    // one's bar was shown on every frame of it
+    expect(turned(true).filter(Boolean).length, JSON.stringify(turned(true))).toBeGreaterThanOrEqual(5);
+    expect(turned(false).filter(Boolean).length, JSON.stringify(turned(false))).toBeGreaterThanOrEqual(5);
+
+    for (const [k, id] of friends.entries()) {
+        const unshown = frames.filter((frame) => !frame.shown[k]).map((frame) => `${frame.clock.toFixed(3)}${frame.crowd[k] ? " in its crowd" : ""}`);
+
+        expect(unshown, `${id}: no bar shown at ${unshown.slice(0, 6).join(", ")}`).toEqual([]);
+    }
 });
 
 test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {

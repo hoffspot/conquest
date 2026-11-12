@@ -268,7 +268,8 @@ export class PackPanel {
      * had), about, info }),
      * unwanted (what it won't buy, said, or null) }, trade: null or (trading
      * with another player) { name, mine, theirs (what each offers: { gold, items: [{ id, quality,
-     * count, label }] }), agreed: { mine, theirs } } }.
+     * count, label }] }), agreed: { mine, theirs }, rev (which offers these are: the host's count of
+     * them, said back in agreeing, so an offer changed meanwhile isn't agreed to unseen) } }.
      */
     show(view) {
         const { gold, pack, shop, trade = null } = view;
@@ -838,7 +839,7 @@ export class PackPanel {
         actions.append(
             button(trade.mine.gold ? "Change the gold" : "Offer gold", offerGold, { disabled: !gold }),
             button("Call it off", () => this.onCommand({ type: "cancel" })),
-            button(trade.agreed.mine ? "Agreed" : "Agree", () => this.onCommand({ type: "agree" }), { label: trade.agreed.mine ? "You've agreed" : `Agree to trade with ${trade.name}`, disabled: trade.agreed.mine, className: "pack-button primary" }),
+            button(trade.agreed.mine ? "Agreed" : "Agree", () => this.onCommand({ type: "agree", rev: trade.rev }), { label: trade.agreed.mine ? "You've agreed" : `Agree to trade with ${trade.name}`, disabled: trade.agreed.mine, className: "pack-button primary" }),
         );
 
         return actions;

@@ -8,8 +8,9 @@ import { once } from "node:events";
 import http from "node:http";
 import net from "node:net";
 import { after, before, describe, it } from "node:test";
+import zlib from "node:zlib";
 import { EventEmitter } from "node:events";
-import { attachRelay, CODE_LENGTH, CODE_LETTERS, RECONNECTING, RELAY_LIMITS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
+import { attachRelay, CODE_LENGTH, CODE_LETTERS, deflateOffered, RECONNECTING, RELAY_LIMITS, RELAY_PATH, roomCode, Socket } from "../server/relay.js";
 import { createServer } from "../server/index.js";
 
 let server;
@@ -348,6 +349,123 @@ describe("the relay (server/relay.js)", () => {
         wire.writableLength = 64 * 1024 * 1024;
         socket.send("more");
         assert.ok(closed);
+    });
+
+    it("agrees to compressed messages with a browser that offers them (permessage-deflate): Node's own WebSocket does, and a world goes through both ways whole", async () => {
+        const { host, code } = await hosting();
+        const ann = await connect();
+
+        assert.equal(host.extensions, "permessage-deflate; server_no_context_takeover; client_no_context_takeover");
+        ann.send(`join ${code}`);
+        assert.match(await ann.next(), /^joined p1 /);
+        assert.equal(await host.next(), "peer p1");
+
+        // (A world as it's sent: JSON, the same few words over and over)
+        const world = JSON.stringify({ kind: "welcome", actors: Array.from({ length: 3000 }, (_, k) => ({ id: `townsfolk:human-town-4/${k}`, x: k * 1.37, y: k * 2.11, hp: 100, team: "human", kind: "folk" })) });
+
+        host.send(`to p1\n${world}`);
+        assert.equal(await ann.next(), `data\n${world}`);
+        ann.send(`data\n${world}`);
+        assert.equal(await host.next(), `from p1\n${world}`);
+
+        // (And what's sent of it is a fraction of it: the relay's own count of what it sent the host)
+        const { sent } = server.relay.rooms.get(code).host;
+
+        assert.ok(sent.bytes > world.length && sent.wire < sent.bytes / 4, JSON.stringify(sent));
+        host.close();
+        await host.closed;
+
+        // What's offered and taken: permessage-deflate, however a browser words it; not an offer
+        // that asks the server for a smaller window than it uses, nor another extension
+        assert.equal(deflateOffered({ "sec-websocket-extensions": "permessage-deflate; client_max_window_bits" }), true);
+        assert.equal(deflateOffered({ "sec-websocket-extensions": "x-webkit-deflate-frame, Permessage-Deflate" }), true);
+        assert.equal(deflateOffered({ "sec-websocket-extensions": "permessage-deflate; server_max_window_bits=10" }), false);
+        assert.equal(deflateOffered({ "sec-websocket-extensions": "permessage-deflate; server_max_window_bits=10, permessage-deflate" }), true);
+        assert.equal(deflateOffered({ "sec-websocket-extensions": "x-webkit-deflate-frame" }), false);
+        assert.equal(deflateOffered({}), false);
+    });
+
+    it("compresses what's long and sends what's short as it is; reads a compressed message whole, in one frame or several; and closes on one that won't read, is longer read than it may be, or is compressed where that wasn't agreed", () => {
+        const TAIL = Buffer.from([0, 0, 255, 255]);
+        const linked = (options) => {
+            const wire = Object.assign(new EventEmitter(), { writableLength: 0, written: [], write: (data) => wire.written.push(data), end() {}, destroy() {} });
+            const socket = new Socket(wire, Buffer.alloc(0), options);
+            const heard = [];
+
+            socket.onMessage = (message) => heard.push(message);
+
+            return { wire, socket, heard };
+        };
+        // A client's frame (masked): `first` its first byte (fin, compressed, what it is)
+        const frame = (first, payload) => {
+            const mask = Buffer.from([9, 8, 7, 6]);
+            const header = payload.length < 126 ? Buffer.from([first, 0x80 | payload.length]) : Buffer.concat([Buffer.from([first, 0x80 | 126]), Buffer.from([payload.length >> 8, payload.length & 255])]);
+
+            return Buffer.concat([header, mask, payload.map((byte, k) => byte ^ mask[k & 3])]);
+        };
+        const packed = (text) => zlib.deflateRawSync(Buffer.from(text), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).subarray(0, -4);
+        // The payload of a frame the server wrote, and its first byte
+        const written = (data) => ({ first: data[0], payload: data.subarray(data[1] < 126 ? 2 : data[1] === 126 ? 4 : 10) });
+        const closedWith = (wire) => wire.written.map(written).find(({ first }) => first === 0x88)?.payload.readUInt16BE(0) ?? null;
+
+        // Out: a step's worth as it is; a world compressed, to a fraction, and reading back the same
+        const { wire, socket, heard } = linked({ deflate: true });
+        const world = JSON.stringify({ kind: "state", actors: Array.from({ length: 2000 }, (_, k) => ({ id: `soldier-${k}`, x: k + 0.5, y: 2 * k + 0.5, hp: 100 })) });
+
+        socket.send('{"kind":"ops","step":12,"ops":[["a",50]]}');
+        assert.equal(written(wire.written[0]).first, 0x81);
+        assert.equal(written(wire.written[0]).payload.toString(), '{"kind":"ops","step":12,"ops":[["a",50]]}');
+        socket.send(world);
+        assert.equal(written(wire.written[1]).first, 0xc1, "marked compressed");
+        assert.ok(written(wire.written[1]).payload.length < world.length / 5, `${written(wire.written[1]).payload.length} bytes for ${world.length}`);
+        assert.equal(zlib.inflateRawSync(Buffer.concat([written(wire.written[1]).payload, TAIL]), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString(), world);
+        assert.deepEqual(socket.sent, { messages: 2, bytes: 41 + world.length, wire: 41 + written(wire.written[1]).payload.length });
+
+        // (The very same to another socket: the same bytes)
+        const other = linked({ deflate: true });
+
+        other.socket.send(world);
+        assert.ok(written(other.wire.written[0]).payload.equals(written(wire.written[1]).payload));
+
+        // (One that didn't agree to it is sent it as it is)
+        const plain = linked();
+
+        plain.socket.send(world);
+        assert.equal(written(plain.wire.written[0]).first, 0x81);
+        assert.equal(written(plain.wire.written[0]).payload.length, world.length);
+
+        // In: compressed in one frame, in two, and not compressed at all
+        const command = '{"kind":"command","seq":7,"command":{"type":"ahead","facing":1.25,"run":true}}';
+        const cut = packed(command);
+
+        wire.emit("data", frame(0xc1, cut));
+        wire.emit("data", Buffer.concat([frame(0x41, cut.subarray(0, 10)), frame(0x80, cut.subarray(10))]));
+        wire.emit("data", frame(0x81, Buffer.from(command)));
+        assert.deepEqual(heard, [command, command, command]);
+        assert.equal(socket.open, true);
+
+        // One that reads longer than a message may be (a few bytes that say they're megabytes)
+        const bomb = linked({ deflate: true, limit: 64 * 1024 });
+
+        bomb.wire.emit("data", frame(0xc1, packed("0".repeat(1024 * 1024))));
+        assert.deepEqual([bomb.heard.length, bomb.socket.open, closedWith(bomb.wire)], [0, false, 1009]);
+
+        // One that isn't compressed data at all
+        const junk = linked({ deflate: true });
+
+        junk.wire.emit("data", frame(0xc1, Buffer.from([0xff, 0xff, 0xff, 0xff, 0xff])));
+        assert.deepEqual([junk.heard.length, junk.socket.open, closedWith(junk.wire)], [0, false, 1007]);
+
+        // Marked compressed where that wasn't agreed; and a later frame of a message marked so
+        const never = linked();
+
+        never.wire.emit("data", frame(0xc1, cut));
+        assert.deepEqual([never.heard.length, never.socket.open, closedWith(never.wire)], [0, false, 1002]);
+
+        const late = linked({ deflate: true });
+
+        late.wire.emit("data", Buffer.concat([frame(0x41, cut.subarray(0, 10)), frame(0xc0, cut.subarray(10))]));
+        assert.deepEqual([late.heard.length, late.socket.open, closedWith(late.wire)], [0, false, 1002]);
     });
 
     it("turns away anything but the relay's WebSockets, and those who don't say who they are", async () => {

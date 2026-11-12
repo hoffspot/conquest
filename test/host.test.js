@@ -68,6 +68,43 @@ describe("keeping where things have got to (random.js, variety.js, wire.js)", ()
         assert.deepEqual(back.c, { d: 2, e: "x" });
         assert.ok(Number.isNaN(back.f), "(a lone $ is always a number)");
     });
+
+    it("reads text as plain JSON, going through it only where a number JSON can't carry could be: the same data either way, however it's written", () => {
+        // What the reviver it used to read with made of each text: every mark put back, at any
+        // depth, and nothing else touched
+        const revived = (text) =>
+            JSON.parse(text, (key, each) => (each && typeof each === "object" && !Array.isArray(each) && typeof each.$ === "string" && Object.keys(each).length === 1 ? Number(each.$) : each));
+        const texts = [
+            // (Nothing to put back: read as it is, and the very object JSON made of it)
+            '{"kind":"ops","step":12,"ops":[["a",50],["c","guest-1",{"type":"move","to":[3,4]},7]]}',
+            "[1,2,[3,[4,null,true,\"x\"]]]",
+            "null",
+            "7",
+            '"a $ in a line said"',
+            // (Marks: alone, in lists, in tables, deep, beside a line with a $ in it)
+            '{"$":"-Infinity"}',
+            '[{"$":"Infinity"},{"$":"NaN"},[{"$":"-Infinity"}]]',
+            '{"a":{"b":{"c":[1,{"at":{"$":"-Infinity"}},"costs $5"]}},"d":{"$":"Infinity"}}',
+            // (Not marks: a $ with something beside it, or one that isn't text; a mark in a mark)
+            '{"a":{"$":"Infinity","more":1},"b":{"$":7},"c":{"$":{"$":"Infinity"}},"d":{}}',
+            // (A mark written another way, by something that isn't this game: put back all the same)
+            '{"a":{"\\u0024":"Infinity"},"b":{ "$" : "-Infinity" }}',
+        ];
+
+        for (const text of texts) {
+            assert.deepEqual(decode(text), revived(text), text);
+        }
+
+        assert.equal(decode('{"\\u0024":"Infinity"}'), Infinity);
+        assert.deepEqual(decode('{"a":{ "$" : "-Infinity" }}'), { a: -Infinity });
+        assert.throws(() => decode("{not json"), SyntaxError);
+
+        // (A whole world, there and back: what a snapshot holds reads the same as it did)
+        const world = { time: 1250, actors: Array.from({ length: 50 }, (_, k) => ({ id: `orc-${k}`, x: k + 0.5, foughtAt: k % 3 ? -Infinity : 1200, foes: { [`p${k}`]: [1, Infinity] }, path: [] })) };
+
+        assert.deepEqual(decode(encode(world)), world);
+        assert.deepEqual(decode(encode(world)), revived(encode(world)));
+    });
 });
 
 describe("a battle kept and made again (battle.js snapshot, restore)", () => {

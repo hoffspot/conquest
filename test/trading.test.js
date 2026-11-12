@@ -42,7 +42,39 @@ function together() {
 
 const trades = (events, id) => events.filter((event) => event.type === "trade" && event.id === id).map(({ change }) => change);
 
+// Which offers a world's trade stands at now (its `rev`), as a player looking at it would agree to
+const rev = (host) => [...host.trades.values()].find(({ open }) => open)?.rev ?? 0;
+
 describe("trading face to face (host.js)", () => {
+    it("takes an agreeing only for the offers its player saw: one changed meanwhile isn't agreed to unseen", () => {
+        const { host, progress } = together();
+
+        host.command(HOST_PLAYER, { type: "trade", with: "bryn" });
+        host.command("bryn", { type: "trade", with: HOST_PLAYER });
+        assert.equal(rev(host), 0);
+        host.command(HOST_PLAYER, { type: "offer", gold: 30, items: [] });
+        host.command("bryn", { type: "offer", gold: 0, items: [{ id: "wolfPelt", count: 2 }] });
+
+        // Ada looks at the two pelts for her 30 gold, and agrees; her word's on its way when Bryn
+        // offers one pelt instead and agrees to that
+        const seen = rev(host);
+
+        assert.equal(seen, 2);
+        host.command("bryn", { type: "offer", gold: 0, items: [{ id: "wolfPelt", count: 1 }] });
+        assert.deepEqual(host.command("bryn", { type: "agree", rev: rev(host) }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: seen }), { ok: false, reason: "reoffered" });
+        assert.deepEqual([progress(HOST_PLAYER).gold, progress("bryn").gold, progress("bryn").held("wolfPelt")], [40, 10, 2], "nothing's changed hands");
+        assert.equal(host.trades.get("trade-1").agreed.bryn, true, "Bryn's agreeing stands, to what they offer now");
+
+        // (Nor one that names no offers at all: a game that doesn't say what it saw)
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree" }), { ok: false, reason: "reoffered" });
+        assert.equal(host.trades.size, 1);
+
+        // Ada looks again, and agrees to what's there
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: rev(host) }), { ok: true });
+        assert.deepEqual([progress(HOST_PLAYER).gold, progress("bryn").gold, progress(HOST_PLAYER).held("wolfPelt")], [10, 40, 1]);
+    });
+
     it("asks, is said yes to, takes offers, and once both agree hands it all over at once", () => {
         const { host, progress } = together();
 
@@ -60,7 +92,7 @@ describe("trading face to face (host.js)", () => {
         // Ada offers two draughts and 5 gold; Bryn a pelt, then (thinking better of it) both
         assert.deepEqual(host.command(HOST_PLAYER, { type: "offer", gold: 5, items: [{ id: "potion", quality: "common", count: 2 }] }), { ok: true });
         assert.deepEqual(host.command("bryn", { type: "offer", gold: 0, items: [{ id: "wolfPelt", count: 1 }] }), { ok: true });
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree" }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: rev(host) }), { ok: true });
         assert.deepEqual(host.command("bryn", { type: "offer", gold: 0, items: [{ id: "wolfPelt", count: 2 }] }), { ok: true });
         assert.equal(host.trades.get("trade-1").agreed[HOST_PLAYER], false, "a changed offer's to be agreed to again");
 
@@ -74,9 +106,9 @@ describe("trading face to face (host.js)", () => {
         assert.deepEqual(host.trades.get("trade-1").offers.bryn, { gold: 0, items: [{ id: "wolfPelt", quality: "common", count: 2 }] }, "their offer stands");
 
         run(host, STEP_MS);
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree" }), { ok: true });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: rev(host) }), { ok: true });
         assert.equal(progress(HOST_PLAYER).held("potion"), 3, "nothing's changed hands till both agree");
-        assert.deepEqual(host.command("bryn", { type: "agree" }), { ok: true });
+        assert.deepEqual(host.command("bryn", { type: "agree", rev: rev(host) }), { ok: true });
 
         assert.equal(host.trades.size, 0);
         assert.deepEqual([progress(HOST_PLAYER).gold, progress(HOST_PLAYER).held("potion"), progress(HOST_PLAYER).held("wolfPelt")], [35, 1, 2]);
@@ -97,7 +129,7 @@ describe("trading face to face (host.js)", () => {
 
         assert.deepEqual(host.command(HOST_PLAYER, { type: "trade", with: HOST_PLAYER }), { ok: false, reason: "target" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "trade", with: "nobody" }), { ok: false, reason: "target" });
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree" }), { ok: false, reason: "trade" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: rev(host) }), { ok: false, reason: "trade" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "cancel" }), { ok: false, reason: "trade" });
 
         // (Too far off to trade)
@@ -134,11 +166,11 @@ describe("trading face to face (host.js)", () => {
         open();
         host.command(HOST_PLAYER, { type: "offer", gold: 0, items: [{ id: "potion", count: 3 }] });
         host.command("bryn", { type: "offer", gold: 10, items: [] });
-        host.command(HOST_PLAYER, { type: "agree" });
+        host.command(HOST_PLAYER, { type: "agree", rev: rev(host) });
 
         // (Ada drinks one before Bryn agrees: it's not all there)
         progress(HOST_PLAYER).remove("potion", 1);
-        assert.deepEqual(host.command("bryn", { type: "agree" }), { ok: false, reason: "changed" });
+        assert.deepEqual(host.command("bryn", { type: "agree", rev: rev(host) }), { ok: false, reason: "changed" });
         assert.deepEqual([progress(HOST_PLAYER).gold, progress("bryn").gold, progress(HOST_PLAYER).held("potion")], [40, 10, 2], "nothing's changed hands");
         assert.deepEqual(host.trades.get("trade-1").agreed, { [HOST_PLAYER]: false, bryn: false }, "neither agrees now");
         assert.deepEqual(trades(run(host, STEP_MS), "bryn").at(-1), "failed");
@@ -151,17 +183,17 @@ describe("trading face to face (host.js)", () => {
         }
 
         host.command(HOST_PLAYER, { type: "offer", gold: 0, items: [{ id: "potion", count: 2 }] });
-        host.command("bryn", { type: "agree" });
+        host.command("bryn", { type: "agree", rev: rev(host) });
 
         const before = structuredClone([progress(HOST_PLAYER).toJSON(), progress("bryn").toJSON()]);
 
-        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree" }), { ok: false, reason: "theirs" });
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "agree", rev: rev(host) }), { ok: false, reason: "theirs" });
         assert.deepEqual([progress(HOST_PLAYER).toJSON(), progress("bryn").toJSON()], before, "each as they were");
 
         // With something of Bryn's going the other way, there's room
         host.command("bryn", { type: "offer", gold: 0, items: [{ id: "wolfPelt", count: 2 }] });
-        host.command(HOST_PLAYER, { type: "agree" });
-        assert.deepEqual(host.command("bryn", { type: "agree" }), { ok: true });
+        host.command(HOST_PLAYER, { type: "agree", rev: rev(host) });
+        assert.deepEqual(host.command("bryn", { type: "agree", rev: rev(host) }), { ok: true });
         assert.deepEqual([progress("bryn").held("potion"), progress(HOST_PLAYER).held("wolfPelt")], [2, 2]);
     });
 
@@ -214,12 +246,12 @@ describe("trading face to face (host.js)", () => {
         host.command(HOST_PLAYER, { type: "trade", with: "bryn" });
         host.command("bryn", { type: "trade", with: HOST_PLAYER });
         host.command(HOST_PLAYER, { type: "offer", gold: 12, items: [{ id: "potion", count: 1 }] });
-        host.command(HOST_PLAYER, { type: "agree" });
+        host.command(HOST_PLAYER, { type: "agree", rev: rev(host) });
 
         const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
 
         assert.deepEqual([...again.trades.values()], [...host.trades.values()]);
-        assert.deepEqual(again.command("bryn", { type: "agree" }), { ok: true });
+        assert.deepEqual(again.command("bryn", { type: "agree", rev: rev(again) }), { ok: true });
         assert.deepEqual([again.players.get("bryn").progress.gold, again.players.get("bryn").progress.held("potion")], [22, 1]);
     });
 
@@ -283,8 +315,8 @@ describe("trading face to face (host.js)", () => {
         joining.command({ type: "offer", gold: 0, items: [{ id: "boarTusk", count: 2 }] }, (result) => heard.push(result));
         deliver();
         play(1);
-        host.command(HOST_PLAYER, { type: "agree" });
-        joining.command({ type: "agree" }, (result) => heard.push(result));
+        host.command(HOST_PLAYER, { type: "agree", rev: rev(host) });
+        joining.command({ type: "agree", rev: rev(host) }, (result) => heard.push(result));
         deliver();
         play(2);
 

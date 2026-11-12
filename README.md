@@ -767,9 +767,9 @@ client/                 The game (static files served to the browser)
   vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map),
                         with the Basis Universal transcoder KTX2 textures are read with (fetched
                         only once a model has one: the catalog's basis-transcoder)
-  vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
+  vendor/recast-navigation-0.44.0/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js); its memory starting with 16 MB
-                        (scripts/wasm-memory.js)
+                        (scripts/wasm-memory.js); recast.mjs the one module the game imports
   js/main.js            The screens, from loading to playing (no Three.js: it loads first)
   js/app/               The game on the page
     loader.js           Downloads everything, counting every byte; manifest.js lists it
@@ -849,7 +849,8 @@ client/                 The game (static files served to the browser)
                         the trails' signs read and the homes tracked
     portals.js          The guild's portals: the branches open to step through to, and their fares
     host.js             The one authority over a running world: its players (by id), their
-                        commands, the buildings near them got ready, kept and made again
+                        commands, the buildings near them got ready, kept and made again; and
+                        what ground and which dungeons it will soon want made (soon)
     wire.js             What goes between host and players, and into a save, as text
     netplay.js          Playing together: what's done in a hosted world, sent to those who've
                         joined it and done again on their copies of it, step for step
@@ -931,7 +932,8 @@ client/                 The game (static files served to the browser)
                         and the settlements' buildings, each drawn a step at a time in each
                         frame's budget
     layouts.js          The settlements a little way ahead, laid out in a worker
-                        (layout-worker.js) for the world to take when it first wants them
+                        (layout-worker.js) for the world to take when it first wants them;
+                        and the levels of a dungeon the player's coming to, worked out there
     town3d.js           The town's buildings, props and trees, merged into few meshes
     interiors3d.js      Inside the buildings: the taverns', smithies', temples' and guilds'
                         rooms and furniture, the fires, the boar on its spit, and taking
@@ -1240,7 +1242,7 @@ what it doesn't cover.
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT
-  license), in `client/vendor/recast-navigation-0.43.1/` with both licences (its WebAssembly's
+  license), in `client/vendor/recast-navigation-0.44.0/` with both licences (its WebAssembly's
   memory made to start with 16 MB, not 64: noted there).
 
 This repository began as a modernization of Last Colony, the real-time strategy game from

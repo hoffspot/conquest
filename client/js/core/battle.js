@@ -25,7 +25,9 @@
 //    round), or one of its own it can see is fighting one, it chases them and attacks whenever
 //    they're within reach, giving up and going back to its patrol if it loses sight of them for
 //    GIVE_UP_MS. Struck, it (and a creature's whole pack) goes after whoever did it, beyond its
-//    leash and unseen, till DEFEND_MS after the last blow (#provoke).
+//    leash and unseen, till DEFEND_MS after the last blow (#provoke). Set on no one, it looks
+//    round for an enemy four times a second, in a step of its own (RETHINK_MS, turnOf), not
+//    every step; a player it notices in the step they come into sight all the same.
 //
 // Told to run (an order with run: true), a character sprints: SPRINT times as fast as it walks,
 // speeding up and slowing down as runners do (ACCELERATION, BRAKING), and slowing to a walk in
@@ -46,9 +48,10 @@
 // back to its patrol.
 //
 // An attack (weapons.js) lands its blow hitAt into it: melee attacks hit if the target is still
-// within reach, ranged attacks let go of a projectile that flies to the target. Each hit rolls its
-// damage and takes it off the target's hit points; at none, the target dies, and comes back to
-// life at its starting point a while later (KINDS: respawn).
+// within reach, ranged attacks let go of a projectile that flies to the target, after it as it
+// moves, and gives up once it's flown half as far again as the attack reaches (SHOT_FLIES). Each
+// hit rolls its damage and takes it off the target's hit points; at none, the target dies, and
+// comes back to life at its starting point a while later (KINDS: respawn).
 //
 // Told to "approach" someone, the player walks up to them (next to them, or across a bar, a table
 // or a counter: TALK_REACH) and stops there, facing them ("arrived"): to talk. Someone talking (talk()) stops what they're doing and faces
@@ -58,7 +61,8 @@
 // enemy comes into sight, or anyone's after them, or the player is told to fight someone. Drawing
 // takes a moment (DRAW_MS) before the weapon can be used; once no enemy has been in sight or
 // after them for SHEATHE_AFTER_MS, they put it away again, which takes a while too (SHEATHE_MS).
-// (A "draw" event: { id, on }.)
+// (A "draw" event: { id, on }.) Set on no one and with no one after them, they ask whether an
+// enemy's in sight four times a second (#arm, RETHINK_MS).
 //
 // The folk (roles.js) rest now and then while the player can see them: every several seconds
 // (REST_EVERY) one of their role's five rests, never the same twice running, staying put until
@@ -376,9 +380,33 @@ const BRAKING = 7;
 // An enemy that hasn't seen its target for this long goes back to its patrol (ms)
 const GIVE_UP_MS = 3000;
 
+// A shot follows whoever it was let go at, and gives up once it's flown this many times as far as
+// its attack reaches without coming up with them (#fly: it fizzles, and hits no one): one let go
+// at a rider galloping off followed them a third of a kilometre, and landed when they stopped
+const SHOT_FLIES = 1.5;
+
 // One in a formation looks again for whom to fight only this often (ms), meanwhile set on whoever
-// it's set on: a field battle's hundreds each looking every step was most of what it cost
+// it's set on: a field battle's hundreds each looking every step was most of what it cost. And
+// anyone set on no one looks round for an enemy only as often (#patrol, #wild), and asks whether
+// it's in a fight (#arm): a camp at peace, each asking every step with no one to find, cost three
+// times what the same hundred cost fighting. A player's noticed in the step they come into sight
+// all the same (#playerSeen), and whoever a blow or a chase is already on is in its fight at once
 const RETHINK_MS = 250;
+
+// Which step of so many is a character's own, for what each does only every so often (looking
+// round, RETHINK_MS; the folk looking about them, FLEE.look; a new way after someone, REPATH_MS):
+// by its id, so it's the same in every copy of the world with nothing kept of it, and those who'd
+// all do it in the same step (a camp, a line of battle, a pack setting out together) each do it
+// in a step of their own
+const turnOf = (id, steps) => {
+    let sum = 0;
+
+    for (let k = 0; k < id.length; k++) {
+        sum += id.charCodeAt(k);
+    }
+
+    return sum % steps;
+};
 
 // How often the colossal (#colossus) looks again for whom it'd fight (ms), how many of their
 // fellows within how far (metres) of one make them worth its breath, and how near it comes to
@@ -391,7 +419,8 @@ const COLOSSAL_ENMITY = 2;
 
 // Enemies near a player go for them before anyone else: those within `reach` squares, at most
 // `melee` of them up close and `ranged` shooting or casting at once (the rest fight whoever else
-// is near)
+// is near). The cap holds back only those the player hasn't struck: one they strike (or stun, or
+// cast at, or taunt) may come for them however many are on them already (#turnOn, #roomOn)
 export const AGGRO = Object.freeze({ reach: 15, melee: 6, ranged: 4 });
 
 // One struck (or cast at) goes after whoever did it, however far that is beyond the leash that
@@ -437,6 +466,18 @@ export const TAUNT = Object.freeze({
 });
 
 /**
+ * Stuns on a boss (whatever resists taunts: a dungeon's boss, a hell level's own, one of a kind, an
+ * elite, the Behemoth, #resists): a stun of any kind (a spell's, a shield bash's, a legendary
+ * weapon's) lasts `share` as long on one, and each one within `within` ms of the last `share` as
+ * long again (kept on it, `stunned`: { count, at }), till it's shorter than a step and shrugged
+ * off; none for `within`, the next lasts its half again. As Fear wears thin (FEAR_MEMORY), and
+ * with the taunts' own numbers (TAUNT resist): the owner, "For hold, halve stuns on bosses and
+ * shorten each repeat, as Fear already wears thin". Hold alone, cast again as it came ready, kept
+ * a dungeon's boss stunned 99.5% of a fight; so it's a breathing space now, not a lock.
+ */
+export const STUNS = Object.freeze({ share: 0.5, within: 20000 });
+
+/**
  * Slipping away (FFXIV's old Diversion, WoW's Fade): one's enmity with every foe within `reach`
  * squares cut to `share` of it, and any taunt of theirs given up, every `cooldown` ms; a player's
  * (Evasion), and a seasoned rogue's whenever a foe near it's on it (followers.js MERCENARY slip)
@@ -474,7 +515,7 @@ export const ADVANCE = Object.freeze({ sight: 60, to: 2 });
 
 // One's attacks: its weapon's, and its kicks; an archer's or a caster's in a line of battle (its
 // `formation`), its knife first, for one come at it that it can't get away from (weapons.js KNIFE)
-const armsIn = (weapon, boots, formation) => (formation?.role === "archer" || formation?.role === "caster" ? [KNIFE, ...armsOf(weapon, boots)] : armsOf(weapon, boots));
+export const armsIn = (weapon, boots, formation) => (formation?.role === "archer" || formation?.role === "caster" ? [KNIFE, ...armsOf(weapon, boots)] : armsOf(weapon, boots));
 
 // How long an enemy waits at each end of its patrol (ms)
 const PATROL_PAUSE_MS = 1500;
@@ -527,17 +568,22 @@ const wrapAngle = (angle) => angle - Math.PI * 2 * Math.floor((angle + Math.PI) 
 
 // How far a square is from a patrol's round (metres): from the nearest point of the way between
 // its points, each to the next and the last back to the first (a post's: from the post)
-function offRound(patrol, [x, y]) {
-    let nearest = distanceBetween(patrol[0], [x, y]);
+function offRound(patrol, square) {
+    const x = square[0];
+    const y = square[1];
+    let nearest = distanceBetween(patrol[0], square);
 
     for (let k = 0; patrol.length > 1 && k < patrol.length; k++) {
-        const [ax, ay] = patrol[k];
-        const [bx, by] = patrol[(k + 1) % patrol.length];
-        const [dx, dy] = [bx - ax, by - ay];
+        const ax = patrol[k][0];
+        const ay = patrol[k][1];
+        const dx = patrol[(k + 1) % patrol.length][0] - ax;
+        const dy = patrol[(k + 1) % patrol.length][1] - ay;
         const length = dx * dx + dy * dy;
         const along = length ? Math.min(1, Math.max(0, ((x - ax) * dx + (y - ay) * dy) / length)) : 0;
+        const px = ax + dx * along;
+        const py = ay + dy * along;
 
-        nearest = Math.min(nearest, distanceBetween([ax + dx * along, ay + dy * along], [x, y]));
+        nearest = Math.min(nearest, Math.sqrt((px - x) * (px - x) + (py - y) * (py - y)));
     }
 
     return nearest;
@@ -675,6 +721,10 @@ const CORNER_SLACK = 0.6;
 // new or has gone further than INDEX_SLACK metres from where it was made (a step's walk is far less)
 const INDEX_CELL = 8;
 const INDEX_SLACK = 1;
+// Two no more than so many squares apart are no more than that many metres apart and this much
+// (each's middle anywhere on its own square: a square's diagonal, and a little): what's added to
+// a reach in squares to look for those within it by where they stand (#standingNear)
+const SQUARE_SLACK = 1.5;
 
 // Getting no nearer where it's going (by PROGRESS metres) for STUCK_MS, jostling with others in
 // a narrow way, a character squeezes past them for SQUEEZE_MS, through anyone (not walls)
@@ -717,6 +767,29 @@ const cellOf = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
 const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 const TALK_SEARCH = 800;
 
+/**
+ * What only some characters come to have, given them by the battle as they fight or by the host
+ * (a player's gear, a follower's orders, a boss's fight, a wary beast's mood...): every character
+ * is made with every one of them, undefined till it's given, after what add's own literal gives
+ * it and in this order (#made). So every character in a battle is of one shape, which is what
+ * lets the engine read `actor.x` the same quick way wherever it's asked: with eight or nine
+ * shapes among a field battle's hundred, as there were, every read was a slower one. Undefined
+ * is left out of what a snapshot's text holds (core/wire.js), as these were when they weren't
+ * there. Never `delete` one off a character (that alone made every read of it a lookup for good):
+ * make it undefined. A new one of the kind goes here too (test/field-battle.test.js checks the
+ * field battle's characters are all one shape, test/battle-rules.test.js a battle of every sort).
+ */
+const OPTIONAL = Object.freeze([
+    "abilityReadyAt", "abilityTimes", "backOffAt", "backing", "bleed", "bombAt", "burntAt", "callAt",
+    "charge", "coverUntil", "cries", "cryReadyAt", "darkSight", "distracted", "eating", "endurance",
+    "enmityWeight", "enrageAt", "enraged", "facingTo", "fallBackUntil", "fallsAt", "faster",
+    "fightSince", "fought", "guardAt", "guarding", "guise", "haste", "hatchAt", "hidden", "holdFire",
+    "holds", "leech", "legendary", "lingering", "lying", "mastered", "mood", "moveAt", "movesAt", "oil",
+    "onGuard", "phase", "rallied", "rank", "recovery", "regrowAt", "ruler", "siege", "slipReadyAt",
+    "slips", "snaredUntil", "steeled", "steeledAt", "still", "stoneUntil", "stunned", "tauntProofUntil",
+    "tauntReadyAt", "tauntsTaken", "thrownAt", "treadAt", "unmasked", "ward", "warnedAt",
+]);
+
 export class Battle {
     /**
      * Whether the nearest enemy, who's in the way and who's on a square are looked for among those
@@ -732,12 +805,23 @@ export class Battle {
     #index = null;
     #version = 0;
 
-    // The players in the battle, and how many of their enemies are set on each (melee, ranged),
-    // as they are this step (#drawnTo); and who's after whom as the step began (#inFight: id ->
-    // the ids of those set on, attacking or told to fight them)
+    // The players in the battle still standing as the step began, and how many of their enemies
+    // are set on each (melee, ranged), as they are this step (#drawnTo); every player in it,
+    // fallen or not (`#heroes`: #beckon, #rest); and who's after whom as the step began
+    // (#inFight: id -> the ids of those set on, attacking or told to fight them)
     #players = [];
+    #heroes = [];
     #onPlayers = new Map();
     #chasers = new Map();
+
+    // Those found near a point by the search just made (#foundNear: their places in `actors`), in
+    // the one list every such search fills, so none makes a list of its own: read at once by whoever
+    // asked, before anything else can search (nothing a loop over it calls may, or it would be
+    // filled again under it: the colossal's searches, which nest, ask #within for lists of their
+    // own). And #provoke's marks of whom it's looked at already, by place in `actors`
+    #found = new Int32Array(64);
+    #marks = [];
+    #marking = 0;
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -847,7 +931,22 @@ export class Battle {
      * `rises` (a share of DOWNED ms: a hired adventurer's) is only knocked down when it falls,
      * up again where it fell (#rise), dodging `dodge` of blows.
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null, rises = null, dodge = 0 }) {
+    add(given) {
+        const actor = this.#made(given);
+
+        this.actors.push(actor);
+        this.#roster++;
+        this.#version++;
+        this.#regroup(actor);
+
+        return actor;
+    }
+
+    // A character as add makes one, in no battle yet. Every one's made here, add's and those
+    // carried on from a snapshot (restore): by the one literal, every property of it there
+    // whatever was given, and then every property only some come to have (OPTIONAL), so that all
+    // are one shape
+    #made({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null, rises = null, dodge = 0 }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -889,7 +988,7 @@ export class Battle {
             armor,
             // (How little some kinds of harm hurt it: a player's charms, set by the host; a
             // creature's own, creatures.js `wards`. `charmed`)
-            ...(wards ? { wards: { ...wards } } : {}),
+            wards: wards ? { ...wards } : undefined,
             empowered: null,
             // The shield it carries, if any: how often it catches a blow or a shot from in front
             // on it (`chance`), how much of it the shield takes (`share`), and whether it turns
@@ -1043,15 +1142,15 @@ export class Battle {
             heals: heals ? [...heals] : null,
             // (A follower's way of fighting, by its calling (core/followers.js wayOf): whom it goes
             // for first, and how near it lets a foe come before backing off, metres)
-            ...(tactic ? { tactic } : {}),
-            ...(keep ? { keep } : {}),
-            ...(lone ? { lone: true } : {}),
-            ...(sight ? { sight } : {}),
+            tactic: tactic || undefined,
+            keep: keep || undefined,
+            lone: lone ? true : undefined,
+            sight: sight || undefined,
         };
 
-        this.actors.push(actor);
-        this.#roster++;
-        this.#version++;
+        for (const key of OPTIONAL) {
+            actor[key] = undefined;
+        }
 
         return actor;
     }
@@ -1197,7 +1296,8 @@ export class Battle {
 
         let took = 0;
 
-        for (const other of this.actors) {
+        // (Squares apart, each's middle anywhere on its own: no further than that in metres)
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (!other.dead && other.map === actor.map && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor) && this.taunt(id, other.id, { over, ms, cried: true })) {
                 took++;
             }
@@ -1227,7 +1327,7 @@ export class Battle {
 
         let from = 0;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (other.dead || other.map !== actor.map || distanceBetween(actor.square, other.square) > reach) {
                 continue;
             }
@@ -1580,11 +1680,8 @@ export class Battle {
         }
 
         if (wards !== undefined) {
-            if (wards) {
-                actor.wards = { ...wards };
-            } else {
-                delete actor.wards;
-            }
+            // (None: undefined, not deleted, which would make every read of it a lookup: OPTIONAL)
+            actor.wards = wards ? { ...wards } : undefined;
         }
 
         this.#emit("reshaped", { id, name, weapon, hp: actor.hp, maxHp: actor.maxHp });
@@ -1666,20 +1763,29 @@ export class Battle {
      * objects: ±Infinity among them, which core/wire.js carries): to keep, or to send to a player
      * joining (docs/WAR.md), and carry on from with Battle.restore exactly as this one would. The
      * world it's on isn't in it: that's made again from its seed (and its buildings' insides
-     * made again in the same order: core/host.js).
+     * made again in the same order: core/host.js). Each character is kept whole, all it's been
+     * given (#given); or, with `keep`, as that makes of it, straight from the battle's own (the
+     * host's snapshot: core/keptactor.js keptOf, which leaves out what a character has as one
+     * just made has it and copies only the rest). restore reads either.
      */
-    snapshot() {
+    snapshot({ keep = null } = {}) {
         return {
             seed: this.seed,
             time: this.time,
             lag: this.lag,
             random: this.random.state,
             nextProjectile: this.nextProjectile,
-            actors: this.actors.map(({ chance, restVariety, ...actor }) => ({
-                ...structuredClone(actor),
-                chance: chance.state,
-                restVariety: restVariety.toJSON(),
-            })),
+            actors: this.actors.map(
+                keep ??
+                    ((actor) => {
+                        const kept = structuredClone(Battle.#given(actor));
+
+                        kept.chance = actor.chance.state;
+                        kept.restVariety = actor.restVariety.toJSON();
+
+                        return kept;
+                    }),
+            ),
             projectiles: structuredClone(this.projectiles),
             hazards: structuredClone(this.hazards),
             nextHazard: this.nextHazard,
@@ -1692,6 +1798,22 @@ export class Battle {
             breaths: structuredClone(this.breaths),
             formations: structuredClone(this.formations),
         };
+    }
+
+    // What a character's been given, for what's kept of it (snapshot, fork): all it has but its
+    // own chances (kept as their states), and nothing of what it's only made with and never was
+    // given, OPTIONAL's undefined: a snapshot's text leaves those out anyway, and copying the
+    // sixty of them for every character made a snapshot half as slow again
+    static #given(actor) {
+        const given = {};
+
+        for (const key in actor) {
+            if (actor[key] !== undefined && key !== "chance" && key !== "restVariety") {
+                given[key] = actor[key];
+            }
+        }
+
+        return given;
     }
 
     /**
@@ -1708,7 +1830,7 @@ export class Battle {
             lag: 0,
             random: this.random.state,
             nextProjectile: this.nextProjectile,
-            actors: this.actors.filter(({ id }) => wanted.has(id)).map(({ chance, restVariety, ...actor }) => ({ ...actor, chance: chance.state, restVariety: restVariety.toJSON() })),
+            actors: this.actors.filter(({ id }) => wanted.has(id)).map((actor) => Object.assign(Battle.#given(actor), { chance: actor.chance.state, restVariety: actor.restVariety.toJSON() })),
             // (Nothing in the air, on the ground or lined up of its own)
             projectiles: [],
             hazards: [],
@@ -1732,8 +1854,17 @@ export class Battle {
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, falls: structuredClone(snapshot.falls ?? []), nextFall: snapshot.nextFall ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
-            const actor = structuredClone(kept);
+            // (Made as add makes one, then all that was kept of it put on it: so it's of the one
+            // shape every character is, whatever of it the snapshot left out: what it was only
+            // made with, OPTIONAL; and, in a snapshot the host took, what it had as one just made
+            // has it, core/keptactor.js ACTOR_DEFAULTS. Its attacks, left out there while they're
+            // its weapon's own, are its weapon's)
+            const actor = Object.assign(battle.#made({ id: kept.id, kind: KINDS[kept.kind] ? kept.kind : "folk", team: kept.team, square: kept.square ?? [0, 0] }), structuredClone(kept));
             const chance = createRandom(0);
+
+            if (kept.arms === undefined) {
+                actor.arms = armsIn(actor.weapon, actor.boots, actor.formation);
+            }
 
             chance.state = state;
 
@@ -1805,6 +1936,7 @@ export class Battle {
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
+        this.#regroup(actor);
         this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
 
         for (const other of this.actors) {
@@ -2571,6 +2703,13 @@ export class Battle {
             actor.drawing = null;
         }
 
+        // (Set on no one, no one after it as the step began, and in no fight when it last asked:
+        // asked again only in its own step, four times a second, RETHINK_MS; between, its weapon
+        // neither drawn nor put away)
+        if (actor.target === null && !actor.attack && actor.order?.type !== "engage" && actor.foughtAt < this.time - STEP_MS && !this.#chasers.has(actor.id) && !this.#ownStep(actor)) {
+            return;
+        }
+
         if (this.#inFight(actor)) {
             actor.foughtAt = this.time;
 
@@ -2580,6 +2719,31 @@ export class Battle {
         } else if (actor.armed && !actor.drawing && !actor.attack && this.time - actor.foughtAt >= SHEATHE_AFTER_MS) {
             this.#draw(actor, false);
         }
+    }
+
+    // Whether this step is a character's own of every `every` ms's (turnOf)
+    #ownStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+
+        return Math.floor(this.time / STEP_MS) % steps === turnOf(actor.id, steps);
+    }
+
+    // When a character's own step of every `every` ms's next comes round (ms): after this one
+    #nextStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+        const step = Math.floor(this.time / STEP_MS);
+        const wait = (turnOf(actor.id, steps) - (step % steps) + steps) % steps;
+
+        return (step + (wait || steps)) * STEP_MS;
+    }
+
+    // When a character's own step of every `every` ms's last came round (ms): this one, or the
+    // last before it
+    #lastStep(actor, every = RETHINK_MS) {
+        const steps = every / STEP_MS;
+        const step = Math.floor(this.time / STEP_MS);
+
+        return (step - (((step % steps) - turnOf(actor.id, steps) + steps) % steps)) * STEP_MS;
     }
 
     // Start drawing its weapon (`on`), or putting it away (it can't be used meanwhile)
@@ -2612,29 +2776,41 @@ export class Battle {
             return true;
         }
 
-        const after = (other) => other.target === actor.id || other.attack?.target === actor.id || (other.order?.type === "engage" && other.order.target === actor.id);
+        const id = actor.id;
+        const chasers = this.#chasers.get(id);
 
-        // (The cheap checks first: whether it's after it, or near enough to be seen, before how
-        // their peoples stand, and only then whether anything's in the way. Those near first; then
-        // anyone further off who was after it as the step began, and is still: #chasers)
-        return (
-            this.#nearSquare(actor, SIGHT).some((k) => {
-                const other = this.actors[k];
+        // (Whoever was after it as the step began, and is still, #chasers: no looking round for
+        // them, and nothing in the way asked about)
+        if (chasers) {
+            for (let i = 0; i < chasers.length; i++) {
+                const other = this.actor(chasers[i]);
 
-                if (other.dead || other.map !== actor.map) {
-                    return false;
+                if (other && !other.dead && other.map === actor.map && (other.target === id || other.attack?.target === id || (other.order?.type === "engage" && other.order.target === id)) && this.hostile(other, actor)) {
+                    return true;
                 }
+            }
+        }
 
-                const chasing = after(other);
+        // (Then those near. The cheap checks first: whether it's after it, or near enough to be
+        // seen, before how their peoples stand, and only then whether anything's in the way)
+        const count = this.#nearSquare(actor, SIGHT);
+        const near = this.#found;
 
-                return (chasing || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (chasing || this.canSee(actor, other));
-            }) ||
-            (this.#chasers.get(actor.id) ?? []).some((id) => {
-                const other = this.actor(id);
+        for (let i = 0; i < count; i++) {
+            const other = this.actors[near[i]];
 
-                return other && !other.dead && other.map === actor.map && after(other) && this.hostile(other, actor);
-            })
-        );
+            if (other.dead || other.map !== actor.map) {
+                continue;
+            }
+
+            const chasing = other.target === id || other.attack?.target === id || (other.order?.type === "engage" && other.order.target === id);
+
+            if ((chasing || this.#near(actor, other, SIGHT)) && this.hostile(other, actor) && (chasing || this.canSee(actor, other))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // --- Deciding what to do ---
@@ -2879,7 +3055,8 @@ export class Battle {
      */
     #afraid(actor) {
         if (this.time >= (actor.lookAt ?? 0)) {
-            actor.lookAt = this.time + FLEE.look;
+            // (Again in its own step of the next FLEE.look: not all the folk in the same one)
+            actor.lookAt = this.#nextStep(actor, FLEE.look);
 
             const danger = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
 
@@ -2989,7 +3166,8 @@ export class Battle {
             return false;
         }
 
-        const player = this.actors.find((other) => other.kind === "player" && !other.dead && this.canSee(actor, other));
+        // (Among the players only, #heroes: not everyone asked whether they're one)
+        const player = this.#heroes.find((other) => !other.dead && this.canSee(actor, other));
 
         if (player) {
             // Back in sight after a while out of it
@@ -3023,7 +3201,7 @@ export class Battle {
             return false;
         }
 
-        if (!this.actors.some((other) => other.kind === "player" && !other.dead && this.canSee(other, actor))) {
+        if (!this.#heroes.some((other) => !other.dead && this.canSee(other, actor))) {
             actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + actor.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
 
             return false;
@@ -3183,7 +3361,8 @@ export class Battle {
             // (Locked on one in reach: it, not whoever's nearest. Not a creature that's leaving
             // everyone be: only on purpose, told to engage it or locked on it)
             const locked = actor.lock ? this.actor(actor.lock) : null;
-            const target = locked && locked.map === actor.map && this.#reachable(actor, locked) ? locked : this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
+            // (Whoever's nearest: looked for no further off than their weapon reaches)
+            const target = locked && locked.map === actor.map && this.#reachable(actor, locked) ? locked : this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null), longestReach(actor.arms) + 1, null, true);
 
             if (target) {
                 this.#attack(actor, target);
@@ -3221,9 +3400,11 @@ export class Battle {
         }
 
         // (One in a formation: set on whoever it's set on, or no one, a while before looking again,
-        // unless whoever it's set on is gone; anyone: a player near before anyone else, as many as
-        // can be on them)
-        const thinking = !actor.formation || this.time >= actor.rethinkAt;
+        // unless whoever it's set on is gone; one in none: looking every step while it's set on
+        // someone, and set on no one only as often, RETHINK_MS, in its own step (and at once when
+        // whoever it was on is lost: `rethinkAt` is only put off by a look that found no one);
+        // anyone: a player near before anyone else, as many as can be on them)
+        const thinking = this.time >= actor.rethinkAt || (!actor.formation && actor.target !== null);
         let seen = null;
 
         // (Sent to hack down a section of a palisade, its `siege`: at it, unless an enemy's on it up
@@ -3260,9 +3441,14 @@ export class Battle {
                 this.#chosen(actor, (enemy) => this.#leashed(actor, enemy) && (enemy.id === actor.target || this.#roomOn(actor, enemy)) && sought(enemy), { hold: Boolean(actor.formation) }) ??
                 this.#seeded(actor, (seek ? null : this.#drawnTo(actor)) ?? this.#nearestSeen(actor, room) ?? (seek ? null : (this.#alarmed(actor) ?? (lap > 0 ? this.#nearestSeen(actor, helps) : null))));
 
-            if (actor.formation) {
-                actor.rethinkAt = this.time + RETHINK_MS;
+            // (Again in its own step of the next RETHINK_MS: #nextStep)
+            if (actor.formation || (!seen && actor.target === null)) {
+                actor.rethinkAt = this.#nextStep(actor);
             }
+        } else if (!broken && !seen && !actor.formation) {
+            // (Between its looks round: a player come into sight all the same, in the step they
+            // do, as far off as it sees)
+            seen = this.#seeded(actor, this.#drawnTo(actor) ?? (this.#sightOf(actor) > SIGHT ? this.#playerSeen(actor, (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy)) : null));
         }
 
         const chased = actor.target === null ? null : this.actor(actor.target);
@@ -3384,9 +3570,16 @@ export class Battle {
         const rouses = wild.reacts
             ? (enemy) => provoked(enemy) || (actor.mood?.kind === "attack" && actor.mood.by === enemy.id)
             : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard) || Boolean(this.sworn?.(actor, enemy));
-        // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY)
+        // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY. Set on no one, it
+        // looks round for them only every RETHINK_MS, in its own step, and at once when whoever
+        // it was on is lost; between its looks, for a player come into sight all the same)
         const rousing = (enemy) => leashed(enemy) && rouses(enemy);
-        const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, this.#nearestSeen(actor, rousing));
+        const looking = actor.target !== null || this.time >= actor.rethinkAt;
+        const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, looking ? this.#nearestSeen(actor, rousing) : this.#playerSeen(actor, rousing));
+
+        if (looking && !seen && actor.target === null) {
+            actor.rethinkAt = this.#nextStep(actor);
+        }
 
         if (seen) {
             // (Holding a place gone into, set on no one: a moment's pause on first seeing them,
@@ -4328,7 +4521,8 @@ export class Battle {
     // one that flanks for whom its leader's fighting. As it's told (core/host.js #orderUnit):
     // falling back (`fallBackUntil`), it runs back to its leader, after no one; guarding them
     // (`guarding`), it takes on only those after it, or after them near them (GUARD_REACH);
-    // holding fire (`holdFire`), only those after it
+    // holding fire (`holdFire`), only those after it. Its leader down, or on another floor, it
+    // holds where it is and only defends itself
     #follow(actor) {
         const leader = this.actor(actor.leader);
 
@@ -4340,8 +4534,22 @@ export class Battle {
             return;
         }
 
+        // (Its leader down, or on another floor: it defends itself where it stands, striking back
+        // at whoever's on it or has struck it lately, or struck its leader down beside it
+        // (DEFEND_MS: their `struckBy`); after no one else, and going nowhere. The owner: "a
+        // follower whose leader is down or on another floor defends itself")
         if (!leader || leader.dead || leader.map !== actor.map) {
-            actor.target = null;
+            const struck = (one, enemy) => (one?.struckBy?.[enemy.id] ?? -Infinity) > this.time;
+            const fallen = leader && leader.dead && leader.map === actor.map ? leader : null;
+            const foe = this.#nearestSeen(actor, (enemy) => enemy.target === actor.id || enemy.attack?.target === actor.id || struck(actor, enemy) || struck(fallen, enemy));
+
+            if (foe) {
+                this.#fightFor(actor, foe);
+
+                return;
+            }
+
+            Object.assign(actor, { target: null, path: [], pathGoal: null });
 
             return;
         }
@@ -4496,6 +4704,11 @@ export class Battle {
 
         if ((idle && moved) || ((idle || moved) && due)) {
             this.#pathTo(actor, goal, target.footprint ? [goal[0] + 0.5, goal[1] + 0.5] : [target.x, target.y]);
+            // (Counted as found in its own step of the REPATH_MS's, this one or the last before
+            // it: so its next way after them is found in its own step, turnOf. All who set out
+            // after someone in the same step found their way again in the same step, every
+            // tenth: a melee's worst steps, 88 ways in one of a hundred's)
+            actor.lastPathAt = this.#lastStep(actor, REPATH_MS);
         }
     }
 
@@ -4878,7 +5091,7 @@ export class Battle {
     // ground (told as "telegraph", as a blow's warning is, `fall` its kind) and coming down
     // `delay` ms later (#falling)
     #drop(actor, { under = 0, count = 0, reach = 12, radius, delay, damage, kind, element = "earth", afflict = null, toss = 0, pool = null }) {
-        const foes = this.actors.filter((other) => !other.dead && other.map === actor.map && this.hostile(actor, other) && !other.wild?.object && hypot(other.x - actor.x, other.y - actor.y) <= reach);
+        const foes = this.#standingNear(actor.map, actor.x, actor.y, reach, actor).filter((other) => !other.wild?.object);
         const spots = [];
 
         for (let k = 0; k < under && foes.length; k++) {
@@ -4954,7 +5167,7 @@ export class Battle {
     #farthest(actor, least, most) {
         let [best, far] = [null, -1];
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, most)) {
             const off = other.map === actor.map && !other.dead && !other.wild?.object ? hypot(other.x - actor.x, other.y - actor.y) : -1;
 
             if (off >= least && off <= most && off > far && this.hostile(actor, other) && this.canSee(actor, other, Math.max(SIGHT, most))) {
@@ -5134,7 +5347,8 @@ export class Battle {
     // A fortification (KINDS fort): the nearest enemy within reach of its loops shot at, whatever
     // else; never moving
     #hold(actor) {
-        const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy));
+        // (Looked for no further off than its loops reach: all it could shoot at)
+        const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy), longestReach(actor.arms) + 1, null, true);
 
         actor.target = target?.id ?? null;
 
@@ -5174,40 +5388,87 @@ export class Battle {
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
-    // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it)
-    #nearestEnemy(actor, test, within = Infinity, enemy = (other) => this.hostile(other, actor)) {
+    // squares each way, that passes `test` (an enemy: one `enemy` of it, as hostile has it). With
+    // `wide`, those standing over more than their own square too, however far off their middles
+    // are (a `footprint`: what's within reach of one is its nearest square, #aimAt)
+    #nearestEnemy(actor, test, within = Infinity, enemy = null, wide = false) {
+        const actors = this.actors;
+        const square = actor.square;
         let best = null;
         let bestDistance = Infinity;
         let bestK = Infinity;
 
-        // (The cheap checks first, and `test` for none no nearer than the nearest yet; only those
-        // near enough to be within `within`, if it's not everyone, the nearest cells first, and
-        // none in cells too far off to beat the nearest yet. Of two as near, the first)
-        for (const ring of within === Infinity ? [this.actors.keys()] : this.#ringsNear(actor, within)) {
-            if (ring.least > bestDistance) {
+        // (One looked at: the cheap checks first, and `test` for none no nearer than the nearest yet)
+        const look = (k, far = false) => {
+            const other = actors[k];
+
+            if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || (!far && !this.#near(actor, other, within))) {
+                return;
+            }
+
+            if (Math.abs(square[0] - other.square[0]) > bestDistance || Math.abs(square[1] - other.square[1]) > bestDistance) {
+                return;
+            }
+
+            const distance = distanceBetween(square, other.square);
+
+            if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && (enemy ? enemy(other) : this.hostile(other, actor)) && this.#noticed(actor, other) && test(other)) {
+                best = other;
+                bestDistance = distance;
+                bestK = k;
+            }
+        };
+
+        if (within === Infinity || !Battle.indexing) {
+            for (let k = 0; k < actors.length; k++) {
+                look(k, wide && Boolean(actors[k].footprint));
+            }
+
+            return best;
+        }
+
+        // (Among those near only: the rings of cells round its own cell walked in place, the
+        // nearest first, and none gone on to that's too far off to hold anyone nearer than the
+        // nearest yet. Anyone in a cell r rings out is at least r - 1 cells' width off, less how far
+        // they may have gone since the index was made, and a square's rounding)
+        const index = this.#indexed();
+        const cells = index.cells.get(actor.map);
+
+        // (Those over more than their square, wherever they stand: looked at twice, if they're
+        // near too, which changes nothing)
+        for (let i = 0; wide && i < index.wide.length; i++) {
+            look(index.wide[i], true);
+        }
+
+        if (!cells) {
+            return best;
+        }
+
+        const x = square[0] + 0.5;
+        const y = square[1] + 0.5;
+        const out = within + 1 + INDEX_SLACK;
+        const cx = Math.floor(x / INDEX_CELL);
+        const cy = Math.floor(y / INDEX_CELL);
+        const left = Math.floor((x - out) / INDEX_CELL);
+        const right = Math.floor((x + out) / INDEX_CELL);
+        const top = Math.floor((y - out) / INDEX_CELL);
+        const bottom = Math.floor((y + out) / INDEX_CELL);
+        const rings = Math.max(cx - left, right - cx, cy - top, bottom - cy);
+
+        for (let r = 0; r <= rings; r++) {
+            if ((r - 1) * INDEX_CELL - INDEX_SLACK - 2 > bestDistance) {
                 break;
             }
 
-            for (const k of ring) {
-                const other = this.actors[k];
+            for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
+                for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
+                    if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
+                        const list = cells.get(cellOf(nx, ny));
 
-                // (Nor a section of a palisade, nor a rift's tear or altar: none set on one of their
-                // own accord)
-                if (other.dead || other.map !== actor.map || STANDS.has(other.kind) || !this.#near(actor, other, within)) {
-                    continue;
-                }
-
-                // (Further either way than the nearest yet is: no nearer, and not worth working out)
-                if (Math.abs(actor.square[0] - other.square[0]) > bestDistance || Math.abs(actor.square[1] - other.square[1]) > bestDistance) {
-                    continue;
-                }
-
-                const distance = distanceBetween(actor.square, other.square);
-
-                if ((distance < bestDistance || (distance === bestDistance && k < bestK)) && enemy(other) && this.#noticed(actor, other) && test(other)) {
-                    best = other;
-                    bestDistance = distance;
-                    bestK = k;
+                        for (let i = 0; list && i < list.length; i++) {
+                            look(list[i]);
+                        }
+                    }
                 }
             }
         }
@@ -5219,10 +5480,39 @@ export class Battle {
     // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES;
     // or for one that looks further, its own `sight`: an invasion's close fighters, charging)
     #nearestSeen(actor, test = () => true) {
-        // (A siege engine as far as it reaches: its crew watch for it)
-        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sight = this.#sightOf(actor);
 
         return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy, sight) && test(enemy), sight);
+    }
+
+    // How far a character looks for enemies (squares: #nearestSeen). A siege engine as far as it
+    // reaches: its crew watch for it
+    #sightOf(actor) {
+        return actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+    }
+
+    // The nearest player it can see that passes `test`, as #nearestSeen finds them, looked for
+    // among the players only: what one set on no one asks between its looks round (RETHINK_MS), so
+    // a player's noticed in the step they come into sight. Of two as near, the first
+    #playerSeen(actor, test) {
+        const sight = this.#sightOf(actor);
+        let best = null;
+        let bestDistance = Infinity;
+
+        for (const player of this.#players) {
+            if (player.dead || player.map !== actor.map || !this.#near(actor, player, sight)) {
+                continue;
+            }
+
+            const distance = distanceBetween(actor.square, player.square);
+
+            if (distance < bestDistance && this.hostile(player, actor) && this.#noticed(actor, player) && this.canSee(actor, player, sight) && test(player)) {
+                best = player;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
     }
 
     // The enemy the nearest of its own it can see (on its rounds or at its post, too) is fighting,
@@ -5234,7 +5524,11 @@ export class Battle {
         let bestK = Infinity;
 
         // (The cheap checks first, and sight last. Of two as near, the first)
-        for (const k of this.#nearSquare(actor, SIGHT)) {
+        const count = this.#nearSquare(actor, SIGHT);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             if (other === actor || other.dead || other.target === null || other.ai !== "patrol" || other.team !== actor.team || other.map !== actor.map || !this.#near(actor, other, SIGHT)) {
@@ -5313,6 +5607,7 @@ export class Battle {
     #closeRanks(id, formation) {
         const members = this.actors.filter((actor) => !actor.dead && actor.formation?.id === id);
 
+        // (As many as when they were last closed, and none fallen or joined since: #regroup)
         if (members.length === formation.strength) {
             return;
         }
@@ -5349,6 +5644,17 @@ export class Battle {
 
                 left.splice(best, 1)[0].formation.slot = [right, back];
             }
+        }
+    }
+
+    // One of a formation fallen, joined or taken out: its ranks to be closed again at its next
+    // look (#closeRanks), however many it then has. (By its count alone, one fallen and another
+    // joined in the same second left the gap open and the newcomer where it was put)
+    #regroup(actor) {
+        const formation = actor.formation ? this.formations[actor.formation.id] : null;
+
+        if (formation) {
+            formation.strength = null;
         }
     }
 
@@ -5399,7 +5705,8 @@ export class Battle {
         const chasing = (id, by) => id !== null && id !== undefined && (chasers.get(id) ?? chasers.set(id, []).get(id)).push(by);
 
         chasers.clear();
-        this.#players = this.actors.filter((actor) => actor.kind === "player" && !actor.dead);
+        this.#heroes = this.actors.filter((actor) => actor.kind === "player");
+        this.#players = this.#heroes.filter((actor) => !actor.dead);
         this.#onPlayers.clear();
 
         const players = new Set(this.#players.map(({ id }) => id));
@@ -5433,9 +5740,14 @@ export class Battle {
     }
 
     // Whether there's room for one more on someone: anyone but a player; a player it's on already;
-    // or one fewer than so many are on, up close or from afar as it fights (AGGRO)
+    // a player who's struck it lately (DEFEND_MS: its `struckBy`), whoever it's on and however
+    // many are on them (the owner: "If a player strikes an enemy, it can be hostile beyond the
+    // cap". Set on no one, it turned on them at the blow already, #turnOn; on someone else, its
+    // enmity has it leave them for the player only with room, and this is that room); or one
+    // fewer than so many are on, up close or from afar as it fights (AGGRO). So the cap holds
+    // back only those the player hasn't struck
     #roomOn(actor, other) {
-        return other.kind !== "player" || actor.target === other.id || this.#onPlayer(other)[this.#shoots(actor) ? "ranged" : "melee"] < AGGRO[this.#shoots(actor) ? "ranged" : "melee"];
+        return other.kind !== "player" || actor.target === other.id || (actor.struckBy?.[other.id] ?? -Infinity) > this.time || this.#onPlayer(other)[this.#shoots(actor) ? "ranged" : "melee"] < AGGRO[this.#shoots(actor) ? "ranged" : "melee"];
     }
 
     // A player near (AGGRO), its enemy, seen and within its leash, it goes for before anyone else,
@@ -5488,7 +5800,11 @@ export class Battle {
         let worst = best ? firstShare : HEALING.below;
         let bestK = Infinity;
 
-        for (const k of best ? [] : this.#nearSquare(actor, reach)) {
+        const count = best ? 0 : this.#nearSquare(actor, reach);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             // (One knocked down the most hurt of all: healing has it up again)
@@ -5518,7 +5834,8 @@ export class Battle {
 
     // Where everyone stands, kept by cell (INDEX_CELL): made again if it might be out of date. {
     // cells: map id -> cell -> indices into `actors` (in their order), at: where each was (x, y),
-    // order: each one's index }
+    // order: each one's index, wide: the indices of those standing over more than their own
+    // square (a `footprint`: struck at its nearest square, however far off its middle is) }
     #indexed() {
         const index = this.#index;
 
@@ -5529,6 +5846,7 @@ export class Battle {
         const cells = new Map();
         const at = new Float64Array(this.actors.length * 2);
         const order = new Map();
+        const wide = [];
 
         this.actors.forEach((actor, k) => {
             const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
@@ -5544,9 +5862,13 @@ export class Battle {
             at[2 * k] = actor.x;
             at[2 * k + 1] = actor.y;
             order.set(actor, k);
+
+            if (actor.footprint) {
+                wide.push(k);
+            }
         });
 
-        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order });
+        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order, wide });
     }
 
     // Everyone on a map who might be within `reach` metres either way of a point (x, y): their
@@ -5577,49 +5899,75 @@ export class Battle {
         return found;
     }
 
-    // The same as #nearSquare, in rings of cells round the character's, nearest first: each its
-    // places in `actors`, and `least`, how near any of them could be (squares, distanceBetween)
-    #ringsNear(actor, reach) {
+    /**
+     * Everyone still standing on a map within `radius` metres of a point (x, y), and with `of`
+     * given only its enemies (hostile(of, other)): in their order in `actors`, as going through
+     * everyone comes on them, so whatever's done to each in turn (a blow, a roll of the dice) is
+     * done in the order it always was. Looked for among those near (#indexed), not through
+     * everyone, which changes nothing (Battle.indexing off, it goes through everyone: the tests'
+     * check). A list of its own, so whoever asked may search again while going through it.
+     */
+    #standingNear(mapId, x, y, radius, of = null) {
+        const actors = this.actors;
+        const near = [];
+        const found = Battle.indexing && radius < Infinity ? this.#within(mapId, x, y, radius).sort((a, b) => a - b) : null;
+
+        for (let i = 0; i < (found ?? actors).length; i++) {
+            const other = found ? actors[found[i]] : actors[i];
+
+            if (!other.dead && other.map === mapId && hypot(other.x - x, other.y - y) <= radius && (!of || this.hostile(of, other))) {
+                near.push(other);
+            }
+        }
+
+        return near;
+    }
+
+    // The same as #within, into the one list `#found` and none made: how many it found there
+    #foundNear(mapId, x, y, reach) {
+        let found = this.#found;
+        let count = 0;
+
+        if (found.length < this.actors.length) {
+            found = this.#found = new Int32Array(Math.max(64, this.actors.length * 2));
+        }
+
         if (!Battle.indexing) {
-            return [Object.assign([...this.actors.keys()], { least: -Infinity })];
+            for (let k = 0; k < this.actors.length; k++) {
+                found[count++] = k;
+            }
+
+            return count;
         }
 
         const index = this.#indexed();
-        const cells = index.cells.get(actor.map);
-        const [x, y] = [actor.square[0] + 0.5, actor.square[1] + 0.5];
-        const out = reach + 1 + INDEX_SLACK;
-        const [cx, cy] = [Math.floor(x / INDEX_CELL), Math.floor(y / INDEX_CELL)];
-        const [left, right, top, bottom] = [Math.floor((x - out) / INDEX_CELL), Math.floor((x + out) / INDEX_CELL), Math.floor((y - out) / INDEX_CELL), Math.floor((y + out) / INDEX_CELL)];
-        const rings = [];
+        const cells = index.cells.get(mapId);
+        const out = reach + INDEX_SLACK;
 
         if (!cells) {
-            return rings;
+            return 0;
         }
 
-        for (let r = 0; r <= Math.max(cx - left, right - cx, cy - top, bottom - cy); r++) {
-            // (Anyone in a cell r out is at least r - 1 cells' width off, less how far they may
-            // have gone since the index was made, and a square's rounding)
-            const ring = Object.assign([], { least: (r - 1) * INDEX_CELL - INDEX_SLACK - 2 });
+        const x1 = Math.floor((x + out) / INDEX_CELL);
+        const y1 = Math.floor((y + out) / INDEX_CELL);
 
-            for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
-                for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
-                    if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
-                        for (const k of cells.get(cellOf(nx, ny)) ?? []) {
-                            ring.push(k);
-                        }
-                    }
+        for (let cy = Math.floor((y - out) / INDEX_CELL); cy <= y1; cy++) {
+            for (let cx = Math.floor((x - out) / INDEX_CELL); cx <= x1; cx++) {
+                const list = cells.get(cellOf(cx, cy));
+
+                for (let i = 0; list && i < list.length; i++) {
+                    found[count++] = list[i];
                 }
             }
-
-            rings.push(ring);
         }
 
-        return rings;
+        return count;
     }
 
-    // Everyone who might be within `reach` squares either way of a character's square (#near)
+    // Everyone who might be within `reach` squares either way of a character's square (#near): how
+    // many, their places in `actors` in `#found` (#foundNear)
     #nearSquare(actor, reach) {
-        return this.#within(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
+        return this.#foundNear(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
     }
 
     // A character's walked on: the index made again before it's next asked, if it's gone further
@@ -5840,7 +6188,7 @@ export class Battle {
         if (!actor.path.length || held) {
             actor.progress = null;
         } else {
-            const left = this.#distanceLeft(actor, { reach: false });
+            const left = this.#distanceLeft(actor, false);
 
             if (!actor.progress || left < actor.progress.left - PROGRESS) {
                 actor.progress = { left, at: this.time };
@@ -5868,13 +6216,16 @@ export class Battle {
 
     // How far a character has to go along its path (to where the one it's after is within
     // reach, unless `reach` is false), in metres
-    #distanceLeft(actor, { reach = true } = {}) {
+    #distanceLeft(actor, reach = true) {
+        const path = actor.path;
         let left = 0;
-        let [x, y] = [actor.x, actor.y];
+        let x = actor.x;
+        let y = actor.y;
 
-        for (const [px, py] of actor.path) {
-            left += hypot(px - x, py - y);
-            [x, y] = [px, py];
+        for (let k = 0; k < path.length; k++) {
+            left += hypot(path[k][0] - x, path[k][1] - y);
+            x = path[k][0];
+            y = path[k][1];
         }
 
         if (reach && (actor.order?.type === "engage" || (actor.target !== null && actor.order?.type !== "enter"))) {
@@ -6031,7 +6382,11 @@ export class Battle {
         let nearestK = Infinity;
 
         // (Of two as near, the first)
-        for (const k of this.#within(actor.map, x, y, 2 * BODY)) {
+        const count = this.#foundNear(actor.map, x, y, 2 * BODY);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
             const other = this.actors[k];
 
             // (Nor one lurking overhead: #lurk)
@@ -6507,11 +6862,14 @@ export class Battle {
             if (this.time >= hazard.next) {
                 hazard.next += every;
 
-                for (const actor of this.actors) {
+                for (const actor of this.#standingNear(hazard.map, hazard.x, hazard.y, hazard.radius)) {
                     const theirs = side ? this.hostile(side, actor) : actor.team !== hazard.team && !actor.neutral;
 
                     if (!actor.dead && actor.map === hazard.map && theirs && hypot(actor.x - hazard.x, actor.y - hazard.y) <= hazard.radius && !this.buffOf(actor, "levitate")) {
-                        this.#hit(by, actor, { id: hazard.kind, kind: "hazard", reaction, stagger: 0, afflict, element }, null, { damage: hazard.damage, spell: hazard.spell, ground: true });
+                        // (No one's blow once its caster's fallen, as a bomb's or what falls on a
+                        // boss's arena is no one's: nothing's turned on the fallen for it, nor
+                        // counted theirs)
+                        this.#hit(by && !by.dead ? by : null, actor, { id: hazard.kind, kind: "hazard", reaction, stagger: 0, afflict, element }, null, { damage: hazard.damage, spell: hazard.spell, ground: true });
                     }
                 }
             }
@@ -6561,7 +6919,7 @@ export class Battle {
     // them, but for the mightiest, who lose PRISMATIC.mighty of their whole health. The sigil spent,
     // every stack and piece with it. How many it struck
     #prismatic(caster, target, id, spell) {
-        const struck = [target, ...this.actors.filter((other) => other !== target && !other.dead && other.map === target.map && this.hostile(caster, other) && hypot(other.x - target.x, other.y - target.y) <= spell.area)];
+        const struck = [target, ...this.#standingNear(target.map, target.x, target.y, spell.area, caster).filter((other) => other !== target)];
 
         for (const one of struck) {
             const damage = mighty(one) ? Math.max(1, Math.ceil(PRISMATIC.mighty * one.maxHp)) : Math.max(1, one.hp);
@@ -6646,7 +7004,7 @@ export class Battle {
     // round it)
     #spellStruck(caster, target, spell, { beyond = false } = {}) {
         const struck = [{ one: target, leap: 0 }];
-        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
+        const near = (from, reach) => this.#standingNear(from.map, from.x, from.y, reach, caster).filter((other) => !struck.some(({ one }) => one === other));
 
         if (spell.area) {
             struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
@@ -6948,7 +7306,16 @@ export class Battle {
         // (A bell's ring is no element's: warded against by none)
         const element = { frost: "water", shock: "air" }[look] ?? null;
         const warded = element ? this.#warded(target, { element }) : false;
-        const held = Math.round(ms * (warded ? WARD : 1));
+        // (A boss: half as long, and less each time: STUNS)
+        const held = this.#stunFor(target, Math.round(ms * (warded ? WARD : 1)));
+
+        this.#turnOn(target, by, this.time + held);
+
+        if (!held) {
+            this.#emit("resisted", { id: target.id, by: by.id, spell: null, effect: look, always: false, worn: true });
+
+            return;
+        }
 
         target.stunnedUntil = Math.max(target.stunnedUntil, this.time + held);
         target.casting = null;
@@ -6957,14 +7324,34 @@ export class Battle {
             target.attack = null;
         }
 
-        this.#turnOn(target, by, this.time + held);
         this.#emit("stunned", { id: target.id, by: by.id, effect: look, until: target.stunnedUntil });
+    }
+
+    // How long a stun of `ms` lasts on someone (ms): as long as it is; on a boss (#resists),
+    // STUNS.share as long, and as much shorter again for each stun before it that came within
+    // STUNS.within of the one before (its `stunned`: { count, at }); none at all (0) once that's
+    // less than a step: shrugged off, though it still counts as one
+    #stunFor(target, ms) {
+        if (!this.#resists(target)) {
+            return ms;
+        }
+
+        const before = target.stunned && this.time - target.stunned.at < STUNS.within ? target.stunned.count : 0;
+        let lasts = ms;
+
+        for (let k = 0; k <= before; k++) {
+            lasts *= STUNS.share;
+        }
+
+        target.stunned = { count: before + 1, at: this.time };
+
+        return lasts < STEP_MS ? 0 : Math.round(lasts);
     }
 
     // The foes of `actor` within `radius` metres of (x, y) on `map`, the nearest first (`first`, if
     // given, before them all)
     #foesNear(actor, map, x, y, radius, first = null) {
-        const near = this.actors.filter((one) => !one.dead && one.map === map && one !== actor && hypot(one.x - x, one.y - y) <= radius && this.hostile(actor, one));
+        const near = this.#standingNear(map, x, y, radius, actor).filter((one) => one !== actor);
 
         near.sort((a, b) => (a === first ? -1 : b === first ? 1 : hypot(a.x - x, a.y - y) - hypot(b.x - x, b.y - y)));
 
@@ -6977,6 +7364,16 @@ export class Battle {
             return;
         }
 
+        // (A boss: half as long, and less each time: STUNS)
+        ms = this.#stunFor(target, ms);
+        this.#turnOn(target, attacker, this.time + ms);
+
+        if (!ms) {
+            this.#emit("resisted", { id: target.id, by: attacker.id, spell: null, ability: "shieldBash", always: false, worn: true });
+
+            return;
+        }
+
         target.stunnedUntil = Math.max(target.stunnedUntil, this.time + ms);
         target.casting = null;
 
@@ -6984,7 +7381,6 @@ export class Battle {
             target.attack = null;
         }
 
-        this.#turnOn(target, attacker, this.time + ms);
         this.#emit("stunned", { id: target.id, by: attacker.id, ability: "shieldBash", until: target.stunnedUntil });
     }
 
@@ -7003,6 +7399,16 @@ export class Battle {
             ms = Math.round(ms * WARD);
         }
 
+        // (A boss: half as long, and less each time, till it shrugs them off: STUNS)
+        ms = this.#stunFor(target, ms);
+        this.#turnOn(target, caster, this.time + ms);
+
+        if (!ms) {
+            this.#emit("resisted", { id: target.id, by: caster.id, spell: id, always: false, worn: true });
+
+            return;
+        }
+
         target.stunnedUntil = Math.max(target.stunnedUntil, this.time + ms);
         target.casting = null;
 
@@ -7010,7 +7416,6 @@ export class Battle {
             target.attack = null;
         }
 
-        this.#turnOn(target, caster, this.time + ms);
         this.#emit("stunned", { id: target.id, by: caster.id, spell: id, until: target.stunnedUntil });
     }
 
@@ -7031,6 +7436,8 @@ export class Battle {
             map: actor.map,
             x: actor.x,
             y: actor.y,
+            // (How far it's flown, metres: #fly, SHOT_FLIES)
+            flown: 0,
         };
 
         this.projectiles.push(projectile);
@@ -7066,6 +7473,14 @@ export class Battle {
             } else {
                 projectile.x += (dx / distance) * travel;
                 projectile.y += (dy / distance) * travel;
+                // (One kept before shots gave up has flown no way yet)
+                projectile.flown = (projectile.flown ?? 0) + travel;
+
+                // (Flown far past its reach after someone it can't catch: spent, SHOT_FLIES)
+                if (projectile.attack.reach > 0 && projectile.flown > projectile.attack.reach * SHOT_FLIES) {
+                    this.projectiles.splice(this.projectiles.indexOf(projectile), 1);
+                    this.#emit("fizzle", { projectile: projectile.id, spent: true });
+                }
             }
         }
     }
@@ -7174,7 +7589,7 @@ export class Battle {
     #blast(by, side, map, x, y, { radius, damage, power = 1, toss, kind, spell = null, heart = null, away = null, bomb = null, spare = null, element: given, reaction = "crush", stagger = 300, afflict: leaves = null, cone = null }) {
         const half = cone ? (cone.arc * Math.PI) / 360 : null;
         const inCone = (actor) => !cone || hypot(actor.x - x, actor.y - y) < 0.8 || Math.abs(wrapAngle(atan2(actor.x - x, actor.y - y) - cone.facing)) <= half;
-        const caught = this.actors.filter((actor) => !actor.dead && actor.map === map && !spare?.has(actor.id) && hypot(actor.x - x, actor.y - y) <= radius && inCone(actor) && this.hostile(side, actor));
+        const caught = this.#standingNear(map, x, y, radius, side).filter((actor) => !spare?.has(actor.id) && inCone(actor));
         // (How near the heart each was, before any's thrown)
         const near = caught.map((actor) => hypot(actor.x - x, actor.y - y));
         const throws = caught.map((actor, k) => this.#toss(actor, [x, y], near[k] / radius, toss, heart, away)).filter(Boolean);
@@ -7282,7 +7697,7 @@ export class Battle {
                 }
             }
 
-            if (this.buffOf(actor, "invisibility")) {
+            if (actor.buffs?.length && this.buffOf(actor, "invisibility")) {
                 this.#seeThrough(actor);
             }
         }
@@ -7327,7 +7742,7 @@ export class Battle {
     #seeThrough(actor) {
         const seconds = STEP_MS / 1000;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, SEE_THROUGH.near)) {
             const mighty = (other.wild?.tier ?? 0) >= SEE_THROUGH.tier || Boolean(other.wild?.unique);
             const near = mighty && !other.dead && other.map === actor.map && this.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) <= SEE_THROUGH.near && this.canSee(other, actor);
 
@@ -7657,7 +8072,7 @@ export class Battle {
             }
         }
 
-        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sight = this.#sightOf(actor);
         const sees = (other) => this.canSee(actor, other, sight);
 
         if (held && top !== held && sees(top) && most > holding * (distanceBetween(actor.square, top.square) <= ENMITY.hand ? ENMITY.near : ENMITY.far)) {
@@ -7763,7 +8178,7 @@ export class Battle {
         const { reach, many, cooldown } = TAUNT.cry;
         let crowding = 0;
 
-        for (const other of this.actors) {
+        for (const other of this.#standingNear(actor.map, actor.x, actor.y, reach + SQUARE_SLACK)) {
             if (!other.dead && other.map === actor.map && this.#guards(actor, leader, other.target) && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor)) {
                 crowding++;
             }
@@ -7780,7 +8195,7 @@ export class Battle {
             return;
         }
 
-        const on = this.actors.some((other) => !other.dead && other.map === actor.map && other.target === actor.id && distanceBetween(actor.square, other.square) <= SLIP.reach && this.hostile(other, actor));
+        const on = this.#standingNear(actor.map, actor.x, actor.y, SLIP.reach + SQUARE_SLACK).some((other) => !other.dead && other.map === actor.map && other.target === actor.id && distanceBetween(actor.square, other.square) <= SLIP.reach && this.hostile(other, actor));
 
         if (on) {
             this.slipAway(actor.id);
@@ -7877,12 +8292,38 @@ export class Battle {
             // theirs, watching it strike the town's soldiers)
             const spares = (other) => attacker.lone && this.relations && !this.relations(attacker, other);
 
-            for (const other of this.actors) {
+            const wide = !Battle.indexing || Boolean(target.footprint) || Boolean(attacker.footprint);
+            const saw = (other) => {
                 // (A creature: only its own pack)
                 const own = other.team === target.team && (!target.wild || other.wild?.pack === target.wild.pack);
 
                 if (other === target || (own && !target.lone && !other.neutral && !other.dead && other.map === target.map && !spares(other) && (this.canSee(other, target) || this.canSee(other, attacker)))) {
                     other.foes[attacker.id] = until;
+                }
+            };
+
+            if (wide) {
+                for (const other of this.actors) {
+                    saw(other);
+                }
+            } else {
+                const marks = this.#marks;
+                const marking = ++this.#marking;
+
+                target.foes[attacker.id] = until;
+
+                for (const one of attacker.map === target.map ? [target, attacker] : [target]) {
+                    const count = this.#nearSquare(one, SIGHT);
+                    const near = this.#found;
+
+                    for (let i = 0; i < count; i++) {
+                        const k = near[i];
+
+                        if (marks[k] !== marking) {
+                            marks[k] = marking;
+                            saw(this.actors[k]);
+                        }
+                    }
                 }
             }
         }
@@ -7904,6 +8345,7 @@ export class Battle {
 
     #die(actor, killer) {
         actor.dead = true;
+        this.#regroup(actor);
         // (On horseback, or with one coming: it goes back into the ground)
         this.#unhorse(actor);
         // (Only knocked down, up again where it fell a while after: #rise)

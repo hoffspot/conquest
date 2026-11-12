@@ -2,7 +2,7 @@
 // attack it, and a big force of the town's own people march out to meet them at its edge, the
 // town's crier crying the way they come and calling every able hand to its defence.
 //
-// The first comes to a character five minutes after they land in a town (their time in towns, as
+// The first comes to a character ten minutes after they land in a town (their time in towns, as
 // they've spent it: `clockOf`), wherever they are; and others every half hour to an hour of their
 // time in towns after (never in their first few minutes in one). Only towns and cities are
 // invaded, and only those whose people aren't the character's enemies. In a character's first,
@@ -60,7 +60,7 @@
  *    time).
  */
 export const INVASION = Object.freeze({
-    first: 300000,
+    first: 600000,
     every: Object.freeze([1800000, 3600000]),
     settle: 180000,
     settleFirst: 30000,
@@ -380,6 +380,12 @@ export const bombersOf = (people) => BOMBERS[people] ?? BOMBERS.orc;
  * invasions they've been in), clock (their time in towns since the last, or since they began:
  * ms), due (the time in towns the next comes at), place (the town they're in now, or null), here
  * (how long they've been in it) }.
+ *
+ * A character's first is due at INVASION.first whatever was kept for it: it's never rolled
+ * (dueAfter), so what's kept is only what `first` was when they began. So a character kept while
+ * the first came at five minutes, who hasn't seen it, has it at ten like anyone: one six minutes
+ * into their time in towns has four to go, and one past ten has it as soon as they've been
+ * INVASION.settleFirst in a town (isDue).
  */
 export function clockOf(kept = null) {
     const whole = (value, least = 0) => (Number.isFinite(value) ? Math.max(least, Math.floor(value)) : least);
@@ -388,7 +394,7 @@ export function clockOf(kept = null) {
     return {
         seen,
         clock: whole(kept?.clock),
-        due: Number.isFinite(kept?.due) && kept.due > 0 ? Math.floor(kept.due) : seen ? INVASION.every[0] : INVASION.first,
+        due: !seen ? INVASION.first : Number.isFinite(kept?.due) && kept.due > 0 ? Math.floor(kept.due) : INVASION.every[0],
         place: typeof kept?.place === "string" ? kept.place : null,
         here: whole(kept?.here),
     };

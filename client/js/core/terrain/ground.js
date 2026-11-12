@@ -57,7 +57,7 @@ export const GRADE = Object.freeze({ trade: 0.1, road: 0.12, track: 0.15, path: 
  */
 export const STAIRS = Object.freeze({ steep: 0.35, reach: 10, rise: 0.18, rising: 0.5, cost: 2 });
 
-// How many chunks' heights to keep
+// How many chunks' heights to keep, at the least (more, told to: Ground keep)
 const KEEP = 256;
 
 // How far above the water a road's taken over it (metres: its bridge's ends, on the banks)
@@ -107,10 +107,42 @@ export class Ground {
         this.sunkNear = sunkNear;
         this.natural = new Map();
         this.chunks = new Map();
+
+        // How many chunks' heights are kept (keep)
+        this.kept = KEEP;
         this.levels = new Map();
         this.tilts = new Map();
         this.profiles = new Map();
         this.sides = new Map();
+    }
+
+    /**
+     * Keep as many chunks' heights as this (never fewer than KEEP: the world's, as many as it
+     * keeps chunks, core/overworld.js keep). Fewer than are kept now, the longest unused are let
+     * go.
+     */
+    keep(most) {
+        this.kept = Math.max(KEEP, Math.floor(most) || 0);
+
+        for (const kept of [this.natural, this.chunks]) {
+            while (kept.size > this.kept) {
+                kept.delete(kept.keys().next().value);
+            }
+        }
+    }
+
+    /** A chunk's ground and its land's heights, if they're kept, marked as used just now: the last let go. */
+    touch(cx, cy) {
+        const key = cy * 1024 + cx;
+
+        for (const kept of [this.natural, this.chunks]) {
+            const held = kept.get(key);
+
+            if (held) {
+                kept.delete(key);
+                kept.set(key, held);
+            }
+        }
     }
 
     /** Whether a chunk's land heights are kept (given or worked out). */
@@ -149,7 +181,7 @@ export class Ground {
 
         this.natural.delete(key);
 
-        if (this.natural.size >= KEEP) {
+        if (this.natural.size >= this.kept) {
             this.natural.delete(this.natural.keys().next().value);
         }
 
@@ -172,7 +204,7 @@ export class Ground {
         } else {
             made = this.#make(cx, cy);
 
-            if (this.chunks.size >= KEEP) {
+            if (this.chunks.size >= this.kept) {
                 this.chunks.delete(this.chunks.keys().next().value);
             }
         }

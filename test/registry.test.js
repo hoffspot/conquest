@@ -116,7 +116,11 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
 
         assert.equal(second.welcome.id, "ADA0000001.2");
         world.leave("p2");
-        await wait(1500);
+        // (Till its clock has run a second and more, as it reports it: by the world's own time,
+        // not this machine's. A world fallen behind its clock lets the time go (core/runner.js
+        // letGo), and one just opened on a slow machine, making its ground ahead, had run under
+        // a second in a second and a half of CI's)
+        await until(() => states.at(-1)?.worldTime > 1200, "its clock to have run over a second");
         world.leave("p1");
         await until(() => states.at(-1)?.running === false && states.at(-1).players.length === 0, "the clock to stop");
 

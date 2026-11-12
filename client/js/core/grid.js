@@ -47,9 +47,14 @@ export function squaresOf(map) {
  * of a square at a time over its length (`distance`, squares); the square it starts on and the one
  * it ends on not counted.
  */
-export function crosses(marked, [ax, ay], [bx, by], distance = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by))) {
+export function crosses(marked, a, b, distance = Math.sqrt((a[0] - b[0]) * (a[0] - b[0]) + (a[1] - b[1]) * (a[1] - b[1]))) {
+    const ax = a[0];
+    const ay = a[1];
+    const bx = b[0];
+    const by = b[1];
     const steps = Math.ceil(distance * 4);
-    let [lastX, lastY] = [ax, ay];
+    let lastX = ax;
+    let lastY = ay;
 
     for (let k = 1; k < steps; k++) {
         const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
@@ -59,7 +64,8 @@ export function crosses(marked, [ax, ay], [bx, by], distance = Math.sqrt((ax - b
             continue;
         }
 
-        [lastX, lastY] = [x, y];
+        lastX = x;
+        lastY = y;
 
         if (marked(x, y) && !(x === bx && y === by)) {
             return true;

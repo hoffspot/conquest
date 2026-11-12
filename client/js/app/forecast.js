@@ -24,8 +24,9 @@
 // throw is left to the copy: its arrow or its spear is the copy's, and they go together.
 //
 // The copy is never touched (fork makes its own battle). Its ways are found over the navigation
-// tiles made already only (bakedOnly: the copy's play makes those round the hero), so a frame never
-// waits on one being made; off them, the stick's way goes straight on.
+// tiles made already only (bakedOnly: the game has those round the hero baked ahead, off the
+// page's thread, app/game.js #bakeAhead), so a frame never waits on one being made; off them, the
+// stick's way goes straight on.
 
 import { ABILITIES } from "../core/progress.js";
 import { STEP_MS } from "../core/battle.js";

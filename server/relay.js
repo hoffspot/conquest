@@ -34,13 +34,14 @@
 // saying so has left (unless it says it's only reconnecting: RECONNECTING).
 
 import crypto from "node:crypto";
+import zlib from "node:zlib";
 
 /** Where on the server the relay is. */
 export const RELAY_PATH = "/relay";
 
 /**
- * How much the relay carries: the longest message (bytes: a world's state is the biggest, about
- * 100 KB after a good while's play, so this is plenty), how much can wait to go to one who's slow
+ * How much the relay carries: the longest message (bytes: a world's state is the biggest, 80 to
+ * 300 KB as it's read, a sixth of that compressed, so this is plenty), how much can wait to go to one who's slow
  * to take it before they're let go (bytes), how many rooms at once, how many in each besides its
  * host; how often it checks each is still there, how long before one that doesn't answer is let
  * go, and how long the place of one whose link has dropped is kept for them (ms).
@@ -59,6 +60,39 @@ export const CODE_LENGTH = 4;
 // The WebSocket handshake's magic (RFC 6455 section 1.3)
 const MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
+/**
+ * Messages compressed (permessage-deflate, RFC 7692), for a browser that offers it, which every
+ * one does of itself: the game's code says and hears the same text either way. What's sent is
+ * compressed only if it's longer than `over` bytes (a world, as a player comes in or is sent it
+ * again: 80 to 300 KB of JSON, a sixth of that compressed, in a millisecond or two at
+ * `level` 1; a step's worth of what's been done is 50 to 120 bytes and gains nothing), the last
+ * long one kept (`keep` bytes and over) for the next socket sent the very same. What's heard is
+ * whatever the browser chose, which is everything, 13 microseconds a message to read. Neither end
+ * keeps anything from one message to the next (both `no_context_takeover`), so a socket costs no
+ * memory for it between messages.
+ */
+export const DEFLATE = Object.freeze({ over: 1024, level: 1, keep: 16 * 1024 });
+
+// What's taken off the end of a message compressed, and put back to read one (RFC 7692 section 7.2)
+const TAIL = Buffer.from([0x00, 0x00, 0xff, 0xff]);
+
+// The last long message compressed, for whoever's sent the same next (the world again to everyone)
+const packedLast = { text: null, packed: null };
+
+/**
+ * Whether a WebSocket handshake offers compression this server takes (`headers`: the request's):
+ * permessage-deflate, in any offer that doesn't ask the server for a smaller window than it uses.
+ * And the header line that accepts it.
+ */
+export function deflateOffered(headers) {
+    return String(headers?.["sec-websocket-extensions"] ?? "")
+        .split(",")
+        .map((offer) => offer.split(";").map((part) => part.trim().toLowerCase()))
+        .some(([name, ...params]) => name === "permessage-deflate" && !params.some((param) => param.startsWith("server_max_window_bits")));
+}
+
+export const DEFLATE_ACCEPTED = "Sec-WebSocket-Extensions: permessage-deflate; server_no_context_takeover; client_no_context_takeover";
+
 const OPCODES = Object.freeze({ continuation: 0x0, text: 0x1, binary: 0x2, close: 0x8, ping: 0x9, pong: 0xa });
 
 // The first line of a message, and what's after it
@@ -73,11 +107,25 @@ function split(text) {
  * it can't make sense of, or too long, close it.
  */
 export class Socket {
-    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message, backlog = RELAY_LIMITS.backlog } = {}) {
+    /**
+     * @param {object} socket - The socket, upgraded (the handshake answered).
+     * @param {Buffer} [head] - What came on it after the handshake.
+     * @param {object} [options]
+     * @param {number} [options.limit] - The longest message taken (bytes, as it's sent and as it
+     *   reads once it's uncompressed).
+     * @param {number} [options.backlog] - How much may wait to go before it's let go (bytes).
+     * @param {boolean} [options.deflate] - Whether the handshake agreed to compressed messages
+     *   (deflateOffered, DEFLATE_ACCEPTED).
+     */
+    constructor(socket, head = Buffer.alloc(0), { limit = RELAY_LIMITS.message, backlog = RELAY_LIMITS.backlog, deflate = false } = {}) {
         this.socket = socket;
         this.limit = limit;
         this.backlog = backlog;
+        this.deflate = deflate;
         this.buffer = head;
+
+        /** What it's sent: messages, their bytes as text, and as they went (compressed or not). */
+        this.sent = { messages: 0, bytes: 0, wire: 0 };
 
         // What's come since, kept in pieces until there's enough of it for the frame being read
         // (`needed` bytes, with `buffer`): joined once, not again with every piece
@@ -86,6 +134,8 @@ export class Socket {
         this.needed = 0;
         this.parts = [];
         this.partsLength = 0;
+        // (Whether the message being heard, in `parts`, is compressed: its first frame says)
+        this.packed = false;
         this.open = true;
         this.heardAt = Date.now();
 
@@ -131,7 +181,31 @@ export class Socket {
             return;
         }
 
-        this.#frame(OPCODES.text, Buffer.from(text, "utf8"));
+        const data = Buffer.from(text, "utf8");
+        const packed = this.deflate && data.length > DEFLATE.over ? Socket.#pack(text, data) : null;
+
+        this.sent.messages++;
+        this.sent.bytes += data.length;
+        this.sent.wire += (packed ?? data).length;
+        this.#frame(OPCODES.text, packed ?? data, packed !== null);
+    }
+
+    // A message compressed as permessage-deflate has it: raw deflate, flushed, less its last four
+    // bytes; or null if it came out no smaller. The last long one's kept: the world sent again to
+    // everyone at once is compressed once
+    static #pack(text, data) {
+        if (data.length >= DEFLATE.keep && packedLast.text === text) {
+            return packedLast.packed;
+        }
+
+        const out = zlib.deflateRawSync(data, { level: DEFLATE.level, finishFlush: zlib.constants.Z_SYNC_FLUSH });
+        const packed = out.length > TAIL.length && out.subarray(-TAIL.length).equals(TAIL) && out.length - TAIL.length < data.length ? out.subarray(0, out.length - TAIL.length) : null;
+
+        if (data.length >= DEFLATE.keep) {
+            Object.assign(packedLast, { text, packed });
+        }
+
+        return packed;
     }
 
     /** Ask whether it's still there. */
@@ -170,12 +244,12 @@ export class Socket {
         }
     }
 
-    // A frame out (the server's frames aren't masked)
-    #frame(opcode, payload) {
+    // A frame out (the server's frames aren't masked), marked if its message is compressed
+    #frame(opcode, payload, packed = false) {
         const length = payload.length;
         const header = length < 126 ? Buffer.alloc(2) : length < 65536 ? Buffer.alloc(4) : Buffer.alloc(10);
 
-        header[0] = 0x80 | opcode;
+        header[0] = 0x80 | (packed ? 0x40 : 0) | opcode;
 
         if (length < 126) {
             header[1] = length;
@@ -200,6 +274,14 @@ export class Socket {
             const fin = (first & 0x80) !== 0;
             const opcode = first & 0x0f;
             const masked = (second & 0x80) !== 0;
+
+            // (A frame marked compressed where that wasn't agreed, or that isn't a message's first;
+            // or marked with what means nothing here: not made sense of)
+            if ((first & 0x30) !== 0 || ((first & 0x40) !== 0 && (!this.deflate || opcode !== OPCODES.text))) {
+                this.close(1002);
+
+                return;
+            }
             let length = second & 0x7f;
             let offset = 2;
 
@@ -248,11 +330,11 @@ export class Socket {
 
             this.buffer = this.buffer.subarray(offset + 4 + length);
             this.heardAt = Date.now();
-            this.#hear(opcode, fin, payload);
+            this.#hear(opcode, fin, payload, (first & 0x40) !== 0);
         }
     }
 
-    #hear(opcode, fin, payload) {
+    #hear(opcode, fin, payload, packed = false) {
         switch (opcode) {
             case OPCODES.text:
             case OPCODES.continuation:
@@ -262,15 +344,32 @@ export class Socket {
                     return;
                 }
 
+                if (opcode === OPCODES.text) {
+                    this.packed = packed;
+                }
+
                 this.parts.push(payload);
                 this.partsLength += payload.length;
 
                 if (fin) {
-                    const text = Buffer.concat(this.parts).toString("utf8");
+                    let whole = Buffer.concat(this.parts);
 
                     this.parts = [];
                     this.partsLength = 0;
-                    this.onMessage(text);
+
+                    // (Compressed: read back, to no more than the longest message taken, whatever
+                    // it says it holds; one that won't read, or is longer, closes it)
+                    if (this.packed) {
+                        try {
+                            whole = zlib.inflateRawSync(Buffer.concat([whole, TAIL]), { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: this.limit });
+                        } catch (error) {
+                            this.close(error?.code === "ERR_BUFFER_TOO_LARGE" ? 1009 : 1007);
+
+                            return;
+                        }
+                    }
+
+                    this.onMessage(whole.toString("utf8"));
                 }
 
                 break;
@@ -557,9 +656,11 @@ export function attachRelay(httpServer, { path = RELAY_PATH, limits = RELAY_LIMI
 
         const accept = crypto.createHash("sha1").update(key + MAGIC).digest("base64");
 
-        socket.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, "", ""].join("\r\n"));
+        const deflate = deflateOffered(request.headers);
 
-        const one = new Socket(socket, head, { limit: limits.message, backlog: limits.backlog ?? RELAY_LIMITS.backlog });
+        socket.write(["HTTP/1.1 101 Switching Protocols", "Upgrade: websocket", "Connection: Upgrade", `Sec-WebSocket-Accept: ${accept}`, ...(deflate ? [DEFLATE_ACCEPTED] : []), "", ""].join("\r\n"));
+
+        const one = new Socket(socket, head, { limit: limits.message, backlog: limits.backlog ?? RELAY_LIMITS.backlog, deflate });
 
         sockets.add(one);
         one.onClose = () => sockets.delete(one);

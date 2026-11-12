@@ -22,19 +22,47 @@ export function encode(value) {
     return JSON.stringify(value, (key, each) => (typeof each === "number" && !Number.isFinite(each) ? { [KEEP]: String(each) } : each));
 }
 
-/** Text from encode, as the plain data it was. */
-export function decode(text) {
-    return JSON.parse(text, (key, each) => {
-        if (each && typeof each === "object" && !Array.isArray(each) && typeof each[KEEP] === "string") {
-            const keys = Object.keys(each);
+// `value` (an array or an object, as JSON.parse made it) with every mark in it ({ "$": "Infinity" },
+// and nothing else beside it) put back as the number it was, in place; or that number, if it's
+// a mark itself
+function revived(value) {
+    if (Array.isArray(value)) {
+        for (let k = 0; k < value.length; k++) {
+            const each = value[k];
 
-            if (keys.length === 1) {
-                return Number(each[KEEP]);
+            if (each !== null && typeof each === "object") {
+                value[k] = revived(each);
             }
         }
 
-        return each;
-    });
+        return value;
+    }
+
+    let count = 0;
+
+    for (const key in value) {
+        const each = value[key];
+
+        count++;
+
+        if (each !== null && typeof each === "object") {
+            value[key] = revived(each);
+        }
+    }
+
+    return count === 1 && typeof value[KEEP] === "string" ? Number(value[KEEP]) : value;
+}
+
+/**
+ * Text from encode, as the plain data it was. Read as plain JSON, and gone through for the marks
+ * only if the text could hold one (a "$", or the same written as JSON's escape): a reviver takes
+ * the parser off its quick way for everything (a world of 600 KB: 34 to 41 ms with one, 3 to 9
+ * read plainly and gone through).
+ */
+export function decode(text) {
+    const value = JSON.parse(text);
+
+    return value !== null && typeof value === "object" && (text.includes(KEEP) || text.includes("\\u0024")) ? revived(value) : value;
 }
 
 /** Bytes (a Uint8Array) as base64 text. */

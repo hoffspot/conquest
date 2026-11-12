@@ -12,8 +12,12 @@
 //
 // A message too big for a data channel to be sure of (a world's snapshot: hundreds of KB) is cut
 // into PIECE-long pieces and joined again (piecesOf, Pieces); a channel with too much waiting to
-// go waits till it's gone down (back-pressure). A joined game whose direct link drops asks for it
-// again (ICE restart, through the broker); not back within PEER_TIMING.restart, it's relayed.
+// go waits till it's gone down (back-pressure). A long message is compressed first, for a game
+// that's said it can read one (PACKED: the world as a player comes in, 80 to 300 KB of text, is
+// a fifth of that sent so). A joined game whose direct link drops asks for it again (ICE
+// restart, through the broker); not back within PEER_TIMING.restart, it's relayed.
+
+import { fromBase64, toBase64 } from "../core/wire.js";
 
 /** Where on a world server the broker is, and the subprotocol it speaks. */
 export const BROKER_PATH = "/broker";
@@ -34,6 +38,16 @@ export const PIECE = 16384;
 export const HIGH = 1024 * 1024;
 export const LOW = 256 * 1024;
 
+/**
+ * What a link made point to point takes and keeps at most (characters), as the servers' sockets
+ * hold those they carry (server/relay.js): a message no longer than `message` (the longest a
+ * game says is the world, some 100 to 600 KB: one whose pieces run past this is let go of
+ * unread, so a game can't be made to keep pieces for ever), and no more than `waiting` waiting
+ * to go to one too slow to take it (its channel's closed: the host lets them go, their place
+ * kept; a joined game falls back to the broker's relay).
+ */
+export const MOST = Object.freeze({ message: 4 * 1024 * 1024, waiting: 8 * 1024 * 1024 });
+
 /** Why the broker turned a game away: shown to its player. */
 export const BROKER_ERRORS = Object.freeze({
     "no-room": "There's no world open with that code.",
@@ -52,39 +66,144 @@ export function brokerOf({ host, port, secure }) {
     return `${secure ? "wss" : "ws"}://${host}:${port}${BROKER_PATH}`;
 }
 
-/** A message cut into pieces for a data channel: each "+" but the last, "=" (joined again by Pieces). */
-export function piecesOf(text, size = PIECE) {
+/**
+ * Long messages compressed over a link made point to point (a server's own sockets compress what
+ * they carry themselves: server/relay.js DEFLATE). One longer than `over` characters is deflated
+ * by the browser (`format`: CompressionStream's) and sent as base64, its last piece marked `last`
+ * where a plain message's is "=": a world of 75 KB goes as 15, one of 195 as 36, in 3 to 5 ms
+ * to compress and 1 to 4 to read back (measured in Node). Only to a game that's
+ * said it can read one: each says so as its channel opens, in a message of one word (`can`) that
+ * isn't JSON, so a game from before this, which reads every message as JSON and lets go of what
+ * isn't, never knows it was said, and is sent everything plain (and so hears, plainly, that it's
+ * to update). A step's worth of what's been done, 50 to 120 characters, always goes as it is.
+ */
+export const PACKED = Object.freeze({ over: 4096, format: "deflate-raw", last: "~", can: "!packed" });
+
+// Whether this browser can compress and read back (every one since 2023; Node, for the tests)
+const packs = () => typeof globalThis.CompressionStream === "function" && typeof globalThis.DecompressionStream === "function";
+
+// Bytes through one of the browser's streams (a CompressionStream or a DecompressionStream), all
+// of what comes out joined; given up on (null) if it's more than `most` bytes, however little
+// went in
+async function through(stream, bytes, most = Infinity) {
+    const writer = stream.writable.getWriter();
+    const reader = stream.readable.getReader();
+    const chunks = [];
+    let length = 0;
+
+    // (Written without waiting: what's read below makes room for it. One that won't read fails
+    // the reading too, where it's caught)
+    writer.write(bytes).catch(() => {});
+    writer.close().catch(() => {});
+
+    for (;;) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+            break;
+        }
+
+        length += value.length;
+
+        if (length > most) {
+            reader.cancel().catch(() => {});
+
+            return null;
+        }
+
+        chunks.push(value);
+    }
+
+    const out = new Uint8Array(length);
+    let at = 0;
+
+    for (const chunk of chunks) {
+        out.set(chunk, at);
+        at += chunk.length;
+    }
+
+    return out;
+}
+
+/** A message compressed, as it's sent in pieces (base64); or null if it can't be, or comes out no shorter. */
+export async function packed(text) {
+    try {
+        const out = toBase64(await through(new CompressionStream(PACKED.format), new TextEncoder().encode(text)));
+
+        return out.length < text.length ? out : null;
+    } catch {
+        return null;
+    }
+}
+
+/** A message packed read back; or null if it won't read, or reads longer than `most` characters. */
+export async function unpacked(text, most = MOST.message) {
+    try {
+        const out = await through(new DecompressionStream(PACKED.format), fromBase64(text), most);
+
+        return out && new TextDecoder().decode(out);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * A message cut into pieces for a data channel: each "+" but the last, `last` ("=", or PACKED.last
+ * for one compressed: joined again by Pieces).
+ */
+export function piecesOf(text, size = PIECE, last = "=") {
     if (text.length <= size) {
-        return [`=${text}`];
+        return [`${last}${text}`];
     }
 
     const pieces = [];
 
     for (let at = 0; at < text.length; at += size) {
-        pieces.push(`${at + size >= text.length ? "=" : "+"}${text.slice(at, at + size)}`);
+        pieces.push(`${at + size >= text.length ? last : "+"}${text.slice(at, at + size)}`);
     }
 
     return pieces;
 }
 
-/** Pieces joined again: add(piece) returns the whole message once its last piece has come, else null. */
+/**
+ * Pieces joined again: add(piece) returns the whole message once its last piece has come, else
+ * null. A message longer than `most` characters is let go of, its pieces not kept (null at its
+ * last too); the next is joined as ever. `packed` says whether the message just returned came
+ * compressed (its last piece marked PACKED.last), to be read back (unpacked).
+ */
 export class Pieces {
-    constructor() {
+    constructor(most = MOST.message) {
+        this.most = most;
         this.parts = [];
+        this.length = 0;
+        this.over = false;
+        this.packed = false;
     }
 
     add(piece) {
         const text = String(piece);
+        const last = text[0] === "=" || text[0] === PACKED.last;
 
-        this.parts.push(text.slice(1));
+        this.packed = text[0] === PACKED.last;
 
-        if (text[0] !== "=") {
+        this.length += text.length - 1;
+
+        if (this.length > this.most) {
+            this.over = true;
+            this.parts = [];
+        } else {
+            this.parts.push(text.slice(1));
+        }
+
+        if (!last) {
             return null;
         }
 
-        const whole = this.parts.join("");
+        const whole = this.over ? null : this.parts.join("");
 
         this.parts = [];
+        this.length = 0;
+        this.over = false;
 
         return whole;
     }
@@ -243,38 +362,153 @@ function split(text) {
     return at < 0 ? [text, ""] : [text.slice(0, at), text.slice(at + 1)];
 }
 
-// A data channel, sending in pieces and waiting when too much is waiting to go
-class Channel {
+/**
+ * A data channel, sending in pieces and waiting when too much is waiting to go; closed, if more
+ * than MOST.waiting is (whoever's at its other end isn't taking it). A long message is compressed
+ * on its way, for one who's said they can read it (PACKED), and read back as it comes; either
+ * takes a moment (the browser's streams answer later), and whatever's said or heard meanwhile
+ * waits its turn behind it: everything goes, and is heard (`onText`), in the order it was said.
+ */
+export class Channel {
     constructor(channel) {
         this.channel = channel;
         this.waiting = [];
+        this.queued = 0;
         this.pieces = new Pieces();
+
+        // What's been said, in order: each its pieces, once they're made (a long one's, compressed)
+        this.outbox = [];
+
+        // What's been heard, in order: each its text, once it's read (null: one that wouldn't read)
+        this.inbox = [];
+
+        /** Whether whoever's at the other end has said they read compressed messages. */
+        this.packs = false;
+
+        /** What's been said on it (characters of text), and what was put on the channel for it (pieces, compressed or not). */
+        this.sent = { text: 0, wire: 0 };
+
+        /** Told each message heard (text), in the order they were said. */
+        this.onText = () => {};
+
         channel.bufferedAmountLowThreshold = LOW;
         channel.addEventListener("bufferedamountlow", () => this.#flush());
+        channel.addEventListener("open", () => this.#opened());
+
+        if (this.open) {
+            this.#opened();
+        }
     }
 
     get open() {
         return this.channel.readyState === "open";
     }
 
-    send(text) {
-        this.waiting.push(...piecesOf(text));
+    // Open: the other end told this one reads compressed messages, if it does (before anything
+    // else it says); and whatever was said before it opened sent
+    #opened() {
+        if (packs()) {
+            try {
+                this.channel.send(`=${PACKED.can}`);
+            } catch {
+                // (Closed again already)
+            }
+        }
+
         this.#flush();
+    }
+
+    send(text) {
+        const entry = { pieces: null };
+
+        this.outbox.push(entry);
+        this.sent.text += text.length;
+
+        if (this.packs && text.length > PACKED.over && packs()) {
+            packed(text).then((out) => {
+                entry.pieces = out === null ? piecesOf(text) : piecesOf(out, PIECE, PACKED.last);
+                this.#said();
+            });
+        } else {
+            entry.pieces = piecesOf(text);
+            this.#said();
+        }
+    }
+
+    // Whatever's ready at the head of what's been said put to go, in order; one too slow to take
+    // it all let go of
+    #said() {
+        while (this.outbox.length && this.outbox[0].pieces) {
+            for (const piece of this.outbox.shift().pieces) {
+                this.waiting.push(piece);
+                this.queued += piece.length - 1;
+            }
+        }
+
+        this.#flush();
+
+        if (this.queued > MOST.waiting) {
+            this.close();
+        }
     }
 
     #flush() {
         while (this.waiting.length && this.open && this.channel.bufferedAmount <= HIGH) {
-            this.channel.send(this.waiting.shift());
+            const piece = this.waiting.shift();
+
+            this.queued -= piece.length - 1;
+            this.sent.wire += piece.length;
+            this.channel.send(piece);
         }
     }
 
-    /** A piece heard: the whole message, once it's come (else null). */
+    /**
+     * A piece heard: once a message's last has come, the message told (onText), after any heard
+     * before it that's still being read back. The other end's word that it reads compressed
+     * messages is kept (packs), and told to no one.
+     */
     heard(data) {
-        return this.pieces.add(data);
+        const whole = this.pieces.add(data);
+
+        if (whole === null) {
+            return;
+        }
+
+        if (whole === PACKED.can && !this.pieces.packed) {
+            this.packs = true;
+
+            return;
+        }
+
+        const entry = { text: this.pieces.packed ? undefined : whole };
+
+        this.inbox.push(entry);
+
+        if (this.pieces.packed) {
+            unpacked(whole).then((text) => {
+                entry.text = text;
+                this.#tell();
+            });
+        } else {
+            this.#tell();
+        }
+    }
+
+    // Whatever's read at the head of what's been heard told, in order (one that wouldn't read, left out)
+    #tell() {
+        while (this.inbox.length && this.inbox[0].text !== undefined) {
+            const { text } = this.inbox.shift();
+
+            if (text !== null) {
+                this.onText(text);
+            }
+        }
     }
 
     close() {
         this.waiting = [];
+        this.outbox = [];
+        this.queued = 0;
 
         try {
             this.channel.close();
@@ -611,14 +845,9 @@ export class BrokerHost extends BrokerSocket {
             const link = new Channel(channel);
 
             place.channel = link;
+            link.onText = (text) => this.onFrom(peer, text);
             channel.addEventListener("open", () => this.onPeer(peer));
-            channel.addEventListener("message", ({ data }) => {
-                const text = link.heard(data);
-
-                if (text !== null) {
-                    this.onFrom(peer, text);
-                }
-            });
+            channel.addEventListener("message", ({ data }) => link.heard(data));
             channel.addEventListener("close", () => !place.relayed && this.#gone(peer));
         });
         connection.addEventListener("connectionstatechange", () => {
@@ -866,13 +1095,8 @@ export class BrokerJoin extends BrokerSocket {
                 this.onFound();
             }
         });
-        channel.channel.addEventListener("message", ({ data }) => {
-            const text = channel.heard(data);
-
-            if (text !== null) {
-                this.onData(text);
-            }
-        });
+        channel.onText = (text) => this.onData(text);
+        channel.channel.addEventListener("message", ({ data }) => channel.heard(data));
         channel.channel.addEventListener("close", () => {
             if (this.how === "direct" && !this.closing) {
                 this.#relayAfterDrop();
