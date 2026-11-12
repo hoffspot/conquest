@@ -273,6 +273,31 @@ their link is gone, or after a minute. The setting is changed with a world's oth
 owner, `settings: { welcomes }`), and a world kept before there was one has 2. A world a player hosts in their own browser doesn't queue: each is welcomed at
 once.
 
+**Their ground made first.** A world keeps the ground and the navigation round the players who are
+in it and lets the rest go, so one who came back to where no one was came to ground the step they
+arrived in had to make: a step of a quarter of a second, 25 coming back to 25 towns. So while
+anyone waits in the line the world is told where each will stand (a kept hero's place when they
+left; a newcomer's, their people's starting town), and between its steps it makes what they'll
+want there, after the ground next to the players already in: the chunks within two of them, the
+ground their town will stand its soldiers and townsfolk on as they arrive, and the navigation
+within 96 m. One whose ground isn't made yet when their turn comes waits a look longer (a look is
+25 ms), and those behind them whose ground is made are let in meanwhile, so the order may differ
+from the order they asked in; they keep their place in the line. No one waits for ground more
+than a minute after asking: then they're let in as they always were, and the step makes what's
+missing. Nor while the world's clock is stopped (no one in it yet has finished loading): no step
+can be held up then, and the ground is made while the first to come load. One coming to where
+others already are waits for nothing. What's left for the step after they arrive is the people
+themselves: a town's soldiers and its townsfolk are still brought out then, a few milliseconds a
+town (generated/multiplayer_scaling_plan.md, `1-26`, has what was measured).
+
+As a world is opened, the same is done for the heroes who were last in it, for its first minute:
+whoever its save still had in it (a server that stopped without their leaving), or else the
+heroes it kept last, those kept within ten seconds of the latest (a world set aside keeps
+everyone in it together), where each was. So when a server is restarted and its players all come
+back at once, the ground they come back to is being made from the moment the world opens, not
+from the moment each is let in. A world whose players bring their own characters keeps no heroes,
+so only the first of those is done for it.
+
 ### Playing
 
 | You have | Do this |
