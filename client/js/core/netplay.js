@@ -113,6 +113,7 @@ import { BANES, MENDING, MERCENARY, pickOf, RENOWN, wearable } from "./followers
 import { levelOf } from "./gear.js";
 import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
+import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, fromBase64, toBase64 } from "./wire.js";
@@ -577,6 +578,8 @@ export class Hosting {
 
     #send(peer, kind, text) {
         this.sent[kind] = (this.sent[kind] ?? 0) + text.length;
+        count("sends");
+        count("sent", text.length);
         this.send(peer, text);
     }
 
@@ -593,15 +596,19 @@ export class Hosting {
      * and may have it now. With no one joined, nothing's worked out or written.
      */
     flush() {
+        lap("flush.quiet");
         this.#quiet();
 
         if (!this.players.size) {
             this.ops = [];
             this.checkDue = false;
             this.motionDue = false;
+            lap(null);
 
             return;
         }
+
+        lap("flush.checksum");
 
         if (this.checkDue) {
             this.ops.push(["k", this.host.checksum()]);
@@ -610,6 +617,8 @@ export class Hosting {
 
         const step = this.#step();
 
+        lap("flush.ops");
+
         if (this.ops.length) {
             const text = encode({ kind: "ops", step, ops: this.ops });
 
@@ -617,13 +626,18 @@ export class Hosting {
             this.#sendAll("ops", text);
         }
 
+        lap("flush.motion");
+
         if (this.motionDue) {
             this.motionDue = false;
             this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
         }
 
+        lap("flush.selves");
         this.#selves(step);
+        lap("flush.worlds");
         this.#worlds();
+        lap(null);
     }
 
     // How many times one who's joined may be sent the world again for the asking just now (AGAIN:

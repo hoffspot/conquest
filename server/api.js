@@ -35,6 +35,10 @@
 //   POST   /worlds/:id/crashes {report}     a crash report: the game's debug log as it fell over in the
 //                                           world, sent by a player in it (their session) as they come
 //                                           back in (manage.js addCrash; up to CRASHES.bytes): { id, received }
+//   POST   /worlds/:id/measures {report}    a measured run: the report of one a link's ?measure= asked for
+//                                           (client/js/app/measure.js), sent by a player in the world (their
+//                                           session) as it ends (manage.js addMeasure; up to MEASURES.bytes):
+//                                           { id, received }
 //
 // A world's owner's (or the admin's) management of it (manage.js), the management page's:
 //
@@ -63,7 +67,9 @@
 //   PATCH  /server {settings}               settings changed
 //   GET    /server/worlds                   every world, as GET /worlds/:id
 //   GET, DELETE /server/worlds/:id/crashes   the crash reports a world keeps (its last CRASHES.kept), and cleared
+//   GET, DELETE /server/worlds/:id/measures  the measured runs a world keeps (its last MEASURES.kept), and cleared
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
+//   GET    /server/history/day, /week       how it's been keeping up: what Health charts
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
 //   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
 //   GET    /server/certificate/acme         what a free certificate needs: routes, DNS hosts, the CA's terms
@@ -95,6 +101,7 @@ import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./
 import { ARCHIVE_LIMIT, BRING_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { CRASHES } from "./storage/crashes.js";
+import { MEASURES } from "./storage/measures.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
@@ -102,10 +109,11 @@ import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
 
-/** How many times a minute one address may ask for the server's card, report how reaching it went, and send crash reports. */
+/** How many times a minute one address may ask for the server's card, report how reaching it went, and send crash reports and measured runs. */
 export const STATUS_PER_MINUTE = 60;
 export const REPORTS_PER_MINUTE = 6;
 export const CRASHES_PER_MINUTE = 6;
+export const MEASURES_PER_MINUTE = 6;
 
 /** How many worlds one address may make an hour with no creator key (the server's anyoneMakes setting). */
 export const MADE_PER_HOUR = 3;
@@ -151,6 +159,7 @@ export function apiHandler(server, { mac = false } = {}) {
     const status = new Rate(STATUS_PER_MINUTE);
     const reports = new Rate(REPORTS_PER_MINUTE);
     const crashes = new Rate(CRASHES_PER_MINUTE);
+    const measures = new Rate(MEASURES_PER_MINUTE);
     const made = new Rate(MADE_PER_HOUR, { per: 3600000 });
 
     // A player's own identity, from the proof they showed coming into a world ({ id, name }:
@@ -277,7 +286,7 @@ export function apiHandler(server, { mac = false } = {}) {
         // (Their own in it now, on another device or a link gone dead, theirs to take over: not counted)
         const others = state?.players.filter((one) => one.id && one.player !== principal.player?.id) ?? [];
 
-        if (others.length >= meta.settings.mostPlayers) {
+        if (others.length >= (server.limits?.mostPlayers ?? meta.settings.mostPlayers)) {
             throw refuse("full", { message: "That world's full." });
         }
 
@@ -539,6 +548,24 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.addCrash(world, body.report, { player: principal.player.id, name: principal.player.playerName ?? null, from: request.from }));
         }],
+        // (A measured run, from a player's game in the world as the run its link asked for ends: up to MEASURES.bytes)
+        ["POST", new RegExp(`^/worlds/${WORLD}/measures$`), { game: true, body: MEASURES.bytes }, async (request, body, [, world]) => {
+            if (!server.metaOf(world)) {
+                throw refuse("no-world");
+            }
+
+            if (!measures.allow(request.address)) {
+                throw refuse("wait", { message: "Sent too often: wait a moment." });
+            }
+
+            const principal = principalOf(request, { world });
+
+            if (principal.kind !== "player" || principal.world !== world || !principal.player) {
+                throw refuse(principal.why ?? "key");
+            }
+
+            return doing(() => manage.addMeasure(world, body.report, { player: principal.player.id, name: principal.player.playerName ?? null, from: request.from }));
+        }],
         ["POST", /^\/worlds\/([a-z0-9]{10})\/codes$/, async (request, body, [, world]) => {
             const principal = managing(request, world, "key.issue", { role: access.world(world)?.key(body.key)?.role });
             const made = await access.makeCode(world, { key: body.key, minutes: body.minutes, uses: body.uses }, { by: principal.player?.id ?? "the admin" });
@@ -704,6 +731,16 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.clearCrashes(world, { by: byOf(principal) }));
         }],
+        ["GET", new RegExp(`^/server/worlds/${WORLD}/measures$`), { server: true }, async (request, body, [, world]) => {
+            admin(request);
+
+            return { measures: await doing(() => manage.measures(world)) };
+        }],
+        ["DELETE", new RegExp(`^/server/worlds/${WORLD}/measures$`), { server: true }, async (request, body, [, world]) => {
+            const principal = admin(request);
+
+            return doing(() => manage.clearMeasures(world, { by: byOf(principal) }));
+        }],
         ["GET", /^\/server\/journal$/, { server: true }, async (request) => {
             admin(request);
 
@@ -713,6 +750,11 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return manage.health();
+        }],
+        ["GET", /^\/server\/history\/(day|week)$/, { server: true }, async (request, body, [, span]) => {
+            admin(request);
+
+            return manage.history(span);
         }],
         ["GET", /^\/server\/creators$/, { server: true }, async (request) => {
             admin(request);

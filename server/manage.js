@@ -4,7 +4,8 @@
 // - A world: what it is and how it is, in words; its settings changed (its heroes mode too, while
 //   nobody's in it); started, set aside, saved; its players sent out, banned, given another part or
 //   a new ticket; its backups listed, made, restored; exported; deleted (its name typed); the crash
-//   reports its players' games sent, kept, shown to the server's admin and cleared.
+//   reports its players' games sent, kept, shown to the server's admin and cleared; and the
+//   measured runs they sent (a link's ?measure=), the same.
 // - The server: where it can be reached (the Wi-Fi, and the internet with its certificate: one of
 //   the owner's own, or a free one it gets and renews itself, certify.js), its settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
 //   each world's), and how it's keeping up.
@@ -31,11 +32,13 @@ import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
+import { CHART_POINTS } from "./history.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
 import { bringForward, freshStart, importSolo } from "./reopen.js";
 import { ARCHIVE_LIMIT, archiveFolder, ArchiveError, readArchive, stageRestore, worldBundle, worldIds, worldsIn } from "./storage/archive.js";
 import { reportOf } from "./storage/crashes.js";
+import { runOf } from "./storage/measures.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
 import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
@@ -144,6 +147,8 @@ export class Management {
     async journal(text, when = new Date()) {
         await ensureFolder(this.server.root);
         await appendFile(path.join(this.server.root, SERVER_JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+        // (And in the structured log, scrubbed of anything shaped like a key or a whole address: log.js)
+        this.server.log?.event("journal", { text });
     }
 
     // ---- A world
@@ -402,6 +407,7 @@ export class Management {
         await stored.backUp("before-delete");
         this.server.access.removeWorld(id);
         this.server.worlds.delete(id);
+        this.server.history.forget(id);
         await rm(stored.folder, { recursive: true, force: true });
         await this.journal(`The world "${stored.meta.name}" (${id}) was deleted${by ? ` by ${by}` : ""}: its backups are kept in backups/${id}/.`);
 
@@ -717,6 +723,46 @@ export class Management {
 
         if (cleared) {
             await stored.journal(`Its crash reports (${cleared}) were cleared${by ? ` by ${by}` : ""}.`);
+        }
+
+        return { cleared };
+    }
+
+    // ---- Its measured runs (storage/measures.js)
+
+    /**
+     * A measured run a player's game sent as it ended (`given`: its report, client/js/app/
+     * measure.js Meter.report), kept with the world, the last MEASURES.kept of them; refused if it
+     * isn't one. `player`: who sent it (their id in the world, and the name they go by there);
+     * `from`: "home" or "internet". Returns { id, received }.
+     */
+    async addMeasure(id, given, { player = null, name = null, from = null } = {}) {
+        const stored = this.#world(id);
+        const run = runOf(given);
+
+        if (!run) {
+            throw new Refused(400, "bad-request", "A measured run is the game's report of one, a row for each minute.");
+        }
+
+        const kept = await stored.measures.add(run, { player, name, from });
+
+        await stored.journal(`A measured run${run.run ? ` ("${run.run}")` : ""} came in from ${name ? `${name} (${player})` : player ? `a player (${player})` : "a player"}'s game.`);
+
+        return { id: kept.id, received: kept.received };
+    }
+
+    /** The measured runs a world keeps, newest first (storage/measures.js), for the server's admin. */
+    async measures(id) {
+        return this.#world(id).measures.list();
+    }
+
+    /** Every measured run a world keeps let go of. Returns { cleared: how many there were }. */
+    async clearMeasures(id, { by = null } = {}) {
+        const stored = this.#world(id);
+        const cleared = await stored.measures.clear();
+
+        if (cleared) {
+            await stored.journal(`Its measured runs (${cleared}) were cleared${by ? ` by ${by}` : ""}.`);
         }
 
         return { cleared };
@@ -1547,6 +1593,22 @@ export class Management {
         ];
 
         return all.sort((a, b) => b.when.localeCompare(a.when)).slice(0, lines);
+    }
+
+    /**
+     * How it's been keeping up (history.js): the last day (`span` "day": a point every two
+     * minutes) or week ("week": every fifteen) of what Health charts, each world's with its name,
+     * a deleted world's left out. { span, step, end, series: [{ id, world, name, title, unit,
+     * limit, values }] }.
+     */
+    history(span = "day") {
+        const read = this.server.history.read(span, Date.now(), { most: CHART_POINTS });
+        const short = (value) => (value === null ? null : Number(value.toPrecision(4)));
+
+        return {
+            ...read,
+            series: read.series.filter((one) => one.world === null || this.server.worlds.has(one.world)).map((one) => ({ ...one, name: one.world ? this.server.metaOf(one.world).name : null, values: one.values.map(short) })),
+        };
     }
 
     /**

@@ -15,12 +15,14 @@ import { after, before, describe, it } from "node:test";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
+import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE, METRICS_PATH } from "../server/admin.js";
+import { parseText, TEXT_TYPE } from "../server/metrics.js";
 import { guard, Refusal } from "../server/guards.js";
-import { CRASHES_PER_MINUTE } from "../server/api.js";
+import { CRASHES_PER_MINUTE, MEASURES_PER_MINUTE } from "../server/api.js";
 import { clockOf, EXPORT_FORMAT, IMPORT_LIMIT } from "../server/manage.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
 import { CRASHES, CRASHES_FILE } from "../server/storage/crashes.js";
+import { MEASURES, MEASURES_FILE } from "../server/storage/measures.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
 import { LADDER } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
@@ -161,6 +163,56 @@ describe("the management page's own listener, on the server's computer (server/a
         assert.match(page.body.toString("utf8"), /<title>Pellagos Server<\/title>/);
         assert.match(page.headers["set-cookie"][0], new RegExp(`^${ADMIN_COOKIE}=[A-Za-z0-9_-]{32}; Path=/; HttpOnly; SameSite=Strict$`));
         assert.ok(cookie.length > 20);
+    });
+
+    it("gives the server's metrics to a scraper on the computer itself, as Prometheus reads them: read-only, by its own names alone, to no other site's page; and never on the play port", async () => {
+        const scraped = await raw(server.adminPort, { route: METRICS_PATH });
+        const text = scraped.body.toString("utf8");
+        const families = parseText(text);
+
+        // (No header, no cookie: a scraper has no page to get them from)
+        assert.equal(scraped.status, 200);
+        assert.equal(scraped.headers["content-type"], TEXT_TYPE);
+        assert.equal(scraped.headers["cache-control"], "no-store");
+        assert.equal(scraped.headers["set-cookie"], undefined);
+        assert.equal(scraped.headers["access-control-allow-origin"], undefined);
+        assert.equal(families.pellagos_world_step_seconds.type, "histogram");
+        assert.equal(families.pellagos_play_sockets.samples[0].value, 0);
+        assert.ok(families.pellagos_rss_bytes.samples[0].value > 1e6);
+        assert.ok(families.pellagos_heap_bytes.samples.some((sample) => sample.labels.thread === "supervisor" && sample.value > 0));
+        assert.ok(families.pellagos_worlds.samples.some((sample) => sample.labels.kind === "stored"));
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, host: `127.0.0.1:${server.adminPort}` })).status, 200);
+
+        const head = await raw(server.adminPort, { route: METRICS_PATH, method: "HEAD" });
+
+        assert.equal(head.status, 200);
+        assert.equal(head.body.length, 0);
+
+        // (Read, never changed)
+        for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {
+            assert.equal((await raw(server.adminPort, { route: METRICS_PATH, method })).status, 405, method);
+        }
+
+        // (Another name pointed at the computer, or another site's page in the computer's own
+        // browser, which may send no Origin but says it's another site's: refused)
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, host: `evil.example:${server.adminPort}` })).status, 421);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { Origin: "https://evil.example" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { Origin: "null" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "cross-site" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "same-site" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "same-origin", Origin: `http://localhost:${server.adminPort}` } })).status, 200);
+
+        // (The play port, which the Wi-Fi, the internet and a tunnel reach, has no such route:
+        // with the admin key or without, at any address the management page or the API has there)
+        for (const route of [METRICS_PATH, `/admin${METRICS_PATH}`, `/api/v1${METRICS_PATH}`, `/api/v1/server${METRICS_PATH}`]) {
+            const asked = await raw(server.port, { route, host: `127.0.0.1:${server.port}`, headers: { Authorization: `Key ${server.adminKey}`, [ADMIN_HEADER]: ADMIN_VALUE } });
+
+            assert.equal(asked.status, 404, route);
+            assert.doesNotMatch(asked.body.toString("utf8"), /pellagos_/);
+        }
+
+        // (Nor is its listener anywhere but on the computer itself)
+        assert.equal(server.admin.http.address().address, "127.0.0.1");
     });
 
     it("answers its own names alone (no DNS rebinding), its own pages alone, and calls carrying both its header and its cookie", async () => {
@@ -579,6 +631,81 @@ describe("a world's crash reports (server/api.js, manage.js, storage/crashes.js)
     });
 });
 
+describe("a world's measured runs (server/api.js, manage.js, storage/measures.js)", () => {
+    let server;
+    let admin;
+    let world;
+
+    before(async () => {
+        server = await serve();
+        admin = await mac(server);
+        world = (await admin.call("POST", "/worlds", { name: "Thornwick", race: "human", seed: 3 })).json;
+    });
+
+    // A run's report as the game sends it (client/js/app/measure.js Meter.report), one minute of it
+    const report = (name) => ({ measure: 1, name, began: "2026-11-12T09:00:00.000Z", code: "abc1234567", build: "b1", quality: "high", minutes: 1, seconds: 60, done: true, frames: 3600, rows: [{ minute: 1, seconds: 60, frames: 3600, interval: [16.7, 17.1, 33.4, 51], draw: [4, 6, 9, 30] }], device: { agent: "test" } });
+
+    it("takes them from a player in the world alone, keeps them with it, and shows and clears them for the server's admin alone", async () => {
+        const entered = (await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION } })).json;
+        const player = `Bearer ${entered.session}`;
+        const route = `/worlds/${world.world}/measures`;
+
+        // (Nobody's, and another world's: refused; what isn't one, refused)
+        assert.equal((await wifi(server, "POST", route, { body: { report: report("run 1") } })).status, 401);
+        assert.equal((await wifi(server, "POST", "/worlds/nosuchwrld/measures", { auth: player, body: { report: report("run 1") } })).json.error, "no-world");
+
+        const notOne = await wifi(server, "POST", route, { auth: player, body: { report: { events: [{ kind: "crash" }] } } });
+
+        assert.equal(notOne.status, 400);
+        assert.match(notOne.json.message, /a row for each minute/);
+
+        // (Too big: refused before it's read through)
+        const big = { report: { ...report("run 1"), padding: "x".repeat(MEASURES.bytes) } };
+
+        assert.equal((await upload(server.port, route, Buffer.from(JSON.stringify(big)), { Host: `127.0.0.1:${server.port}`, "Content-Type": "application/json", Authorization: player })).status, 413);
+
+        // (A player's: kept, said in the world's journal)
+        const sent = await wifi(server, "POST", route, { auth: player, body: { report: report("run-1") } });
+
+        assert.equal(sent.status, 200);
+        assert.match(sent.json.id, /^[0-9a-f]{12}$/);
+        assert.equal((await wifi(server, "POST", route, { auth: player, body: { report: report("run-2") } })).status, 200);
+        assert.match(await readFile(path.join(server.root, "worlds", world.world, "journal.log"), "utf8"), new RegExp(`A measured run \\("run-1"\\) came in from a player \\(${entered.player}\\)'s game\\.`));
+
+        // (Too often from one place: refused for a moment)
+        const statuses = [];
+
+        for (let n = 0; n < MEASURES_PER_MINUTE; n++) {
+            statuses.push((await wifi(server, "POST", route, { auth: player, body: { report: report("again") } })).status);
+        }
+
+        assert.equal(statuses.at(-1), 429);
+
+        // (The admin's: the newest first, who sent each, and the report as it was sent)
+        const shown = await admin.call("GET", `/server${route}`);
+
+        assert.equal(shown.status, 200);
+        assert.ok(shown.json.measures.length <= MEASURES.kept);
+        assert.deepEqual(shown.json.measures.filter(({ run }) => run !== "again").map(({ run }) => run), ["run-2", "run-1"]);
+        assert.deepEqual({ ...shown.json.measures.at(-1), id: null, received: null }, { id: null, received: null, player: entered.player, name: null, from: "home", run: "run-1", began: "2026-11-12T09:00:00.000Z", minutes: 1, seconds: 60, done: true, code: "abc1234567", build: "b1", report: report("run-1") });
+        assert.deepEqual((JSON.parse(await readFile(path.join(server.root, "worlds", world.world, MEASURES_FILE), "utf8"))).runs, shown.json.measures, "kept in the world's folder");
+
+        // (Never the player's to see or clear, nor the game's on GitHub Pages; and not among the crash reports)
+        assert.equal((await wifi(server, "GET", `/server${route}`, { auth: player, headers: { "x-pellagos": "manage" } })).status, 403);
+        assert.equal((await wifi(server, "DELETE", `/server${route}`, { auth: player, headers: { "x-pellagos": "manage" } })).status, 403);
+        assert.equal((await wifi(server, "GET", route, { auth: player })).status, 404, "nothing to read them by on the game's side");
+        assert.equal((await raw(server.port, { route: `/api/v1/server${route}`, host: `127.0.0.1:${server.port}`, headers: { Authorization: `Key ${server.adminKey}`, Origin: "https://hoffspot.github.io", "x-pellagos": "manage" } })).status, 403);
+        assert.deepEqual((await admin.call("GET", `/server/worlds/${world.world}/crashes`)).json.crashes, []);
+
+        // (Cleared by the admin: none, said in the journal)
+        const cleared = await admin.call("DELETE", `/server${route}`);
+
+        assert.deepEqual(cleared.json, { cleared: shown.json.measures.length });
+        assert.deepEqual((await admin.call("GET", `/server${route}`)).json.measures, []);
+        assert.match(await readFile(path.join(server.root, "worlds", world.world, "journal.log"), "utf8"), /Its measured runs \(\d\) were cleared by the admin, on the server's computer\./);
+    });
+});
+
 describe("the server's settings, creator keys, journal and health (server/manage.js)", () => {
     let server;
     let admin;
@@ -616,6 +743,19 @@ describe("the server's settings, creator keys, journal and health (server/manage
         assert.equal(health.json.health, "ok");
         assert.deepEqual(health.json.worlds, []);
         assert.ok(health.json.server.rss > 0 && health.json.machine.cores >= 1);
+
+        // (And how it's been keeping up, for Health's charts: the last day or week, the admin's alone)
+        server.metrics.sample();
+        server.metrics.sample();
+
+        const day = await admin.call("GET", "/server/history/day");
+        const week = await admin.call("GET", "/server/history/week");
+
+        assert.equal(day.status, 200);
+        assert.deepEqual([day.json.span, day.json.step, week.json.span, week.json.step], ["day", 120000, "week", 900000]);
+        assert.ok(day.json.series.some((one) => one.id === "rss" && one.unit === "bytes" && one.values.length === 720 && one.values.at(-1) > 1e6));
+        assert.equal((await admin.call("GET", "/server/history/year")).status, 404);
+        assert.equal((await wifi(server, "GET", "/server/history/day", { headers: { [ADMIN_HEADER]: ADMIN_VALUE } })).status, 403, "not without the admin key");
 
         // (A new admin key, from the computer itself: the old one no longer works)
         const old = server.adminKey;

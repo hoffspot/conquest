@@ -297,6 +297,21 @@ export class Telemetry {
         }
     }
 
+    /**
+     * The frame just ended (end), written into `into` for whoever counts every frame (a measured
+     * run: app/measure.js): its work (ms) at `work`, and each phase's time from `phases` on, in
+     * PHASES' order. Makes nothing.
+     */
+    lastInto(into, work, phases) {
+        const slot = (this.#at + this.#intervals.length - 1) % this.#intervals.length;
+
+        into[work] = this.#lastOwn;
+
+        for (let k = 0; k < PHASES.length; k++) {
+            into[phases + k] = this.#phases[slot * PHASES.length + k];
+        }
+    }
+
     // A freeze (`ms` long): in a frame's own work (`where`: "frame"), its phases; or between frames
     // ("between"), the time not in either and the phases of the frame before it; with what the
     // browser says ran from `from` to `end`, the jobs then, and what the graphics card was given

@@ -21,6 +21,9 @@ export class Keeper {
         /** The last save that failed: { why, error }, or null. */
         this.failed = null;
 
+        /** Told of each save once it's on the disk, or has failed: (ms it took, by the runner's clock if it has one; ok). */
+        this.onSave = null;
+
         // (Every save asked for, in order)
         this.saving = Promise.resolve();
 
@@ -34,12 +37,16 @@ export class Keeper {
 
     /** The world saved as it now is (`why`: "turn", "empty", "stopped"...). Returns when it's on the disk (or failed). */
     save(why) {
+        const started = this.runner.clock?.() ?? 0;
+        const took = () => (this.runner.clock?.() ?? 0) - started;
         const saving = this.stored.save(this.runner.host.snapshot(), { why, played: this.played }).then(
             () => {
                 this.saved++;
+                this.onSave?.(took(), true);
             },
             async (error) => {
                 this.failed = { why, error };
+                this.onSave?.(took(), false);
                 await this.stored.journal(`Couldn't save (${why}): ${error.message}`).catch(() => {});
             },
         );

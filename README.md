@@ -804,6 +804,9 @@ client/                 The game (static files served to the browser)
     debug.js            Debug mode's overlay
     telemetry.js        The debug log: the last freezes, slowdowns, errors, crashes and memory
                         passing its marks, with what was going on (Game options: Debug log)
+    measure.js          A measured run's meter: every frame counted into histograms, a row a
+                        minute, one small report; measuring.js the run on the page, asked for
+                        by a link's ?measure= (docs/GAME.md, Measuring a device)
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: the player live on a paperdoll, a slot for each part of them;
                         two pages of stacks (dragged, held, split, dropped, thrown away,

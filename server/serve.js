@@ -92,7 +92,8 @@ if (values.restore) {
     }
 }
 const update = { ...(values.releases ? { releases: values.releases } : {}), ...(values["release-key"] ? { key: readFileSync(values["release-key"], "utf8") } : {}) };
-const server = await WorldServer.open(root, { onStop: () => stop(), onRestart: () => stop(RESTART), bonjour: bonjour(), update });
+// (Its structured log, a line of JSON for each thing that happens, goes out with what it says here: log.js)
+const server = await WorldServer.open(root, { onStop: () => stop(), onRestart: () => stop(RESTART), bonjour: bonjour(), update, log: (line) => process.stdout.write(line) });
 
 // (A new version being tried: every world brought forward before anyone's let in. If one can't
 // be, it ends with why, and its launcher goes back to the version before)

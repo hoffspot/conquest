@@ -20,8 +20,14 @@
 //     npm run step-budget -- --no-ahead      # without making anything ahead (to compare)
 //     npm run step-budget -- --json          # the numbers as JSON
 //
+// It also times what the world server's thread counts of each step for its metrics (its time
+// into buckets, the look it was in and its parts: server/world-metrics.js), by itself, many
+// times over: all of it must come to under METRICS_BUDGET a step (generated/
+// multiplayer_scaling_plan.md 6A-2).
+//
 // Exits 1 if any step went over the budget (after the world's opening step and what's round the
-// players made ahead: what a player waits for while they load).
+// players made ahead: what a player waits for while they load), or if counting a step costs more
+// than it may.
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -31,6 +37,41 @@ import { StepTimes, WorldRunner } from "../client/js/core/runner.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { Ahead } from "../server/ahead.js";
 import { installWorkers } from "../server/workers.js";
+import { WorldMetrics } from "../server/world-metrics.js";
+
+/** What counting a step for the world server's metrics may cost (ms a step), and how many steps' counting is timed to say. */
+export const METRICS_BUDGET = 0.05;
+const METRICS_ROUNDS = 200000;
+
+/**
+ * What a world's thread does for its metrics each step, as world-worker.js and the runner do it
+ * (the clock read before and after the step, its time counted; the look it was in and its two
+ * parts counted; and once in twenty steps, a second, all of it taken for the supervisor), done
+ * `rounds` times over with no world: how long each took (ms).
+ */
+export function metricsCost(rounds = METRICS_ROUNDS) {
+    const clock = () => performance.now();
+    const times = new StepTimes();
+    const metrics = new WorldMetrics({ node: false });
+    let taken = 0;
+    const started = clock();
+
+    for (let k = 0; k < rounds; k++) {
+        const before = clock();
+
+        times.add(clock() - before + (k % 7), k * STEP_MS);
+
+        const stepped = clock();
+
+        metrics.tick(stepped - before, clock() - stepped, k * STEP_MS);
+
+        if (k % 20 === 19) {
+            taken += metrics.take({ steps: times, dropped: k }).ticks.counts.length;
+        }
+    }
+
+    return taken ? (clock() - started) / rounds : Infinity;
+}
 
 /**
  * The peoples whose start towns the players are in, how often each is sent somewhere (ms), how far
@@ -57,7 +98,8 @@ const hero = (name, race) => ({ name, race, shape: {}, look: {}, weapon: "sword"
  * after those), over: [{ ms, at }] (those over a step), made (chunks made ahead), ready (ms till
  * all round the players was made), heap (MB), wall (s) }. The steps over one are those over it in
  * the thread's processor time (`over`), each with the clock's time for it (`wall`); `late` counts
- * those over it by the clock; `cpu` is the thread's time for all the steps, a step ({ mean, worst }).
+ * those over it by the clock; `cpu` is the thread's time for all the steps, a step ({ mean, worst });
+ * `metrics` what counting a step for the server's metrics costs ({ step: ms, budget }).
  * With `field`, the first player begins a field battle of that many a side RUN.fieldAt in.
  */
 export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true, field = 0 } = {}) {
@@ -152,6 +194,7 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true,
         ...(field ? { field: { size: field, ok: fought?.ok === true, actors: host.battle.actors.length } } : {}),
         made: ahead?.made ?? 0,
         rooms: ahead?.rooms ?? 0,
+        metrics: { step: metricsCost(), budget: METRICS_BUDGET },
         ready,
         heap: Math.round(process.memoryUsage().heapUsed / 2 ** 20),
         wall: Math.round((clock() - started) / 100) / 10,
@@ -179,10 +222,11 @@ async function main() {
         }
 
         console.log(`${made} chunks and ${result.rooms} buildings' insides' tiles made ahead, all round the players in ${ready} ms; heap ${heap} MB`);
+        console.log(`Counting a step for the server's metrics: ${(result.metrics.step * 1000).toFixed(2)} µs (it may cost ${METRICS_BUDGET * 1000})`);
         console.log(over.length ? `${over.length} steps over ${STEP_MS} ms of the thread's time: ${over.map(({ ms, wall: clocked, at }) => `${ms} ms (${clocked} by the clock) at ${(at / 1000).toFixed(1)} s`).join(", ")}` : `No step over ${STEP_MS} ms of the thread's time.`);
     }
 
-    process.exitCode = result.over.length || (result.field && !result.field.ok) ? 1 : 0;
+    process.exitCode = result.over.length || (result.field && !result.field.ok) || !(result.metrics.step < METRICS_BUDGET) ? 1 : 0;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
