@@ -646,7 +646,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
        at least one release before the first world that can give them.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
    rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
-   screen. Never skip, disable or loosen a test to get CI green: fix the cause. A test that
+   screen. A test of how games keep together over a link uses the bad-link kit
+   (`test/badlink.js`): `BadLink`, a seeded link for Node (a round trip, jitter, hold-ups of 200
+   to 1,000 ms, which is how loss shows on an ordered stream; or unordered, losing and
+   reordering), the same every run, with a few links by name (`LINKS`); and `badProxy`, a TCP
+   proxy to put between a page and a browser test's server. Never a link of the test's own
+   making, and never the clock's time in a Node test of one. Never skip, disable or loosen a test to get CI green: fix the cause. A test that
    checks how long something takes times it with `quickEnough` (`test/helpers.js`): the other
    test files run beside it, and a busy or slow CI machine can take the cores for a while, so
    it's timed again once if it's over and fails only if it's over both times. Each timing does
