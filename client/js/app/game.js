@@ -11176,8 +11176,23 @@ export class Game {
         this.enlisting = this.enlisting.filter((id) => !ids.includes(id));
 
         for (const id of ids) {
+            this.#giveUpBuilding(id);
             this.enlistees.delete(id);
             this.aside.delete(id);
+        }
+    }
+
+    // Someone being drawn a step at a time given up on, if they're begun: their steps closed, so
+    // that what's half made of them is let go of (Character.building: the body no longer counted
+    // wearing its outfit, nor one of those its pictures' size goes by; its skin and its outfit's
+    // pictures no longer wanted of the worker, unless someone else waits on them too:
+    // characters/wardrobe.js `shared`). Only dropped, a body left waiting on its skin held its
+    // outfit's pictures whole, and on the kit, for good
+    #giveUpBuilding(id) {
+        const steps = this.enlistees.get(id)?.steps;
+
+        if (steps && !steps.done) {
+            steps.steps.return();
         }
     }
 
@@ -11213,6 +11228,7 @@ export class Game {
 
         for (const { actor } of [...this.enlistees.values()]) {
             if (this.#walledOff(actor, me)) {
+                this.#giveUpBuilding(actor.id);
                 this.enlistees.delete(actor.id);
                 this.aside.add(actor.id);
             }
@@ -11618,7 +11634,8 @@ export class Game {
     // come into the world as it's played, #dressing) drawn all at once again (OUTFITTING): once
     // one's been as it is `after` seconds, its outfit's picture is put together a step at a time
     // (Character.merging: `budget` ms a frame, a step at least, one body's at a time, the first
-    // dressed first), its garments drawn one by one meanwhile and with the one picture from the
+    // dressed first; waited for while it's painted off the page's thread, characters/wardrobe.js),
+    // its garments drawn one by one meanwhile and with the one picture from the
     // frame it's made. Changed again meanwhile, it starts over (#regear); gone, or made again
     // (polymorphed, #undress), it's forgotten
     #outfitting() {
@@ -11638,7 +11655,7 @@ export class Game {
 
             outfit.steps ??= new Steps(outfit.character.merging(), `an outfit put together for ${id}`);
 
-            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: false })) {
+            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: this.waits })) {
                 this.outfits.delete(id);
 
                 // (Unseen, by Invisibility: its one mesh as the meshes it's made from were; and

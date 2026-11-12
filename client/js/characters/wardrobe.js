@@ -15,12 +15,19 @@
 // Anyone else (a lab's figure, a crowd's figure being made) has a material of its own for the
 // outfit, its pictures as they're painted and kept on the page, if they're there: else the
 // colour that's kept, till it's asked for whole (wholeOutfit: a bestiary's portrait).
+//
+// The pictures are painted off the page's thread where they can be (`elsewhere`: in the skins'
+// worker, skins.js, which has the body and keeps its own of each garment's picture): an
+// outfit's makings here wait on its two pictures, and a garment drawn on its own on its one,
+// with nothing of them painted, nor any garment's picture kept, on the page. Where they can't
+// be (no worker, or it's failed, or the steps can't wait: all at once), they're painted here,
+// the same pictures, by the same painter (garment-pictures.js).
 
 import * as THREE from "three";
 import { Rig } from "./rig.js";
-import { COMPOSITE_BUMP, compositingGarments, forgetPoints, GARMENTS, measureBody, paintGarment, paintingGarment, pointsHeld, texelMap } from "./garments.js";
-import { PICTURES, reduced, reducing } from "./pictures.js";
-import { allAtOnce } from "../core/steps.js";
+import { COMPOSITE_BUMP, forgetPoints, GARMENTS, measureBody, paintGarment, paintingGarment, picturingOutfit, pointsHeld, surfaceOf, texelMap, tintOf } from "./garments.js";
+import { PICTURES, reduced } from "./pictures.js";
+import { allAtOnce, WAITING } from "../core/steps.js";
 import { releaseTexture } from "../world/release.js";
 
 /** The size (texels a side) garments' and outfits' pictures are painted at. */
@@ -263,9 +270,8 @@ function* makingGarment(kit, id) {
 
     if (garment.base) {
         const material = (yield* readyingGarment(kit, garment.base)).clone();
-        const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
 
-        material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
+        material.color.setRGB(...tintOf(garment));
         kit.garmentMaterials.set(id, material);
 
         return;
@@ -277,23 +283,46 @@ function* makingGarment(kit, id) {
         return;
     }
 
-    if (!kit.texelMap) {
-        kit.texelMap = texelMap(kit.human, OUTFIT_SIZE);
-        yield;
+    // (Painted on the body of the usual shape, as it's cut: off the page's thread, or here)
+    let painted = yield* elsewhere(kit, { garment: id, size: OUTFIT_SIZE });
+
+    if (!painted) {
+        if (!kit.texelMap) {
+            kit.texelMap = texelMap(kit.human, OUTFIT_SIZE);
+            yield;
+        }
+
+        painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
     }
 
-    // (Painted on the body of the usual shape, as it's cut)
-    const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
     const material = new THREE.MeshStandardMaterial({
         map: dataTexture(painted.data, painted.size, true),
         bumpMap: dataTexture(painted.bump, painted.size, false),
-        bumpScale: garment.metalness ? 0.6 : 1.5,
-        roughness: garment.roughness ?? 0.8,
-        metalness: garment.metalness ?? 0,
+        ...surfaceOf(garment),
         side: THREE.DoubleSide,
     });
 
     kit.garmentMaterials.set(id, material);
+}
+
+// A garment's own picture or an outfit's two painted off the page's thread (`what`: skins.js
+// askPicture's), a step at a time: WAITING till they're back, then returning them. Null where
+// they can't be painted there (a kit with no worker, or one that hasn't the body), or the steps
+// can't wait (told NOW), or it failed there: they're painted here then. Given up on while it's
+// waited for (the steps closed: `shared`, its last taker gone), it's no longer wanted there
+// either
+function* elsewhere(kit, what) {
+    const job = kit.skins?.askPicture(what, () => referenceMeasures(kit)) ?? null;
+
+    if (!job) {
+        return null;
+    }
+
+    try {
+        return yield* kit.skins.taking(job);
+    } finally {
+        kit.skins.forget(job);
+    }
 }
 
 /**
@@ -475,48 +504,37 @@ export function* readyingOutfit(kit, ids) {
 }
 
 // An outfit's two pictures put together from its garments' own (ids, outermost last), a step at
-// a time, returning them as they're painted: { data, surface }, OUTFIT_SIZE a side
-function* composing(kit, ids) {
-    kit.texelMap ??= texelMap(kit.human, OUTFIT_SIZE);
+// a time, returning them as they're painted (`full`, OUTFIT_SIZE a side) and at the least size
+// they're held at (`small`: its colour too, if `colour`), { data, surface } each. Off the page's
+// thread where they can be (its garments' own pictures painted and kept there); else here, from
+// the kit's own of each garment's
+function* composing(kit, ids, colour = true) {
+    const there = yield* elsewhere(kit, { outfit: ids, size: OUTFIT_SIZE, least: LEAST, colour });
 
-    // (Each garment's own picture painted, in steps the first time: then them all)
-    for (const id of ids) {
-        yield* readyingGarment(kit, id);
-        yield;
+    if (there) {
+        return there;
     }
 
-    const layers = ids.map((id) => {
-        const garment = GARMENTS[id];
-        const material = garmentMaterial(kit, id);
+    kit.texelMap ??= texelMap(kit.human, OUTFIT_SIZE);
 
-        return {
-            data: material.map.image.data,
-            bump: material.bumpMap.image.data,
-            tint: garment.base ? material.color.toArray() : null,
-            bumpScale: material.bumpScale,
-            roughness: material.roughness,
-            metalness: material.metalness,
-            garment,
-        };
-    });
-    const { data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
+    const made = yield* picturingOutfit(kit.texelMap, referenceMeasures(kit), ids, function* (id) {
+        const material = yield* readyingGarment(kit, id);
+
+        return { data: material.map.image.data, bump: material.bumpMap.image.data };
+    }, { least: LEAST, colour });
 
     // (Used till now: kept a while from here, for the next outfit made of them)
     for (const id of ids) {
         used(kit, id);
     }
 
-    return { data: bytesOf(data), surface: bytesOf(surface) };
+    return made;
 }
 
 // An outfit's pictures made, a step at a time, and kept by the kit (wearingOutfit): as they're
 // painted (`full`) and at the least size they're held at (`small`), { data, surface } each
 function* picturing(kit, key, ids) {
-    const full = yield* composing(kit, ids);
-
-    yield;
-
-    const small = { data: yield* reducing(full.data, OUTFIT_SIZE, LEAST, true), surface: yield* reducing(full.surface, OUTFIT_SIZE, LEAST, false) };
+    const { full, small } = yield* composing(kit, ids);
 
     // (`wearers`: the game's own bodies in it, by whom its pictures' size goes, `size`, in the
     // material they share, `sized`; `readers`: how many others, who share `painted`; `again`:
@@ -619,13 +637,13 @@ function fit(kit, outfit) {
     const size = outfit.sized ? wantedOf(outfit) : 0;
 
     if (!outfit.sized || size === outfit.size) {
-        outfit.again = null;
+        notAgain(outfit);
 
         return;
     }
 
     if (size < outfit.size) {
-        outfit.again = null;
+        notAgain(outfit);
         swap(kit, outfit, outfit.small, size);
     } else if (outfit.full?.surface) {
         // (Its heights at the least size made again, if they've been let go of: to go back to)
@@ -640,11 +658,19 @@ function fit(kit, outfit) {
 // An outfit's pictures made again as they're painted, a step at a time: { full, surface (its
 // heights at the least size, to go back to) }
 function* again(kit, outfit) {
-    const full = yield* composing(kit, outfit.ids);
+    const { full, small } = yield* composing(kit, outfit.ids, false);
 
-    yield;
+    return { full, surface: small.surface };
+}
 
-    return { full, surface: yield* reducing(full.surface, OUTFIT_SIZE, LEAST, false) };
+// An outfit's pictures no longer being made again (not wanted whole now: its wearer gone, or
+// seen small again): what's made of them so far given up, and what's being painted for them
+// off the page's thread no longer wanted there
+function notAgain(outfit) {
+    const steps = outfit.again;
+
+    outfit.again = null;
+    steps?.return();
 }
 
 // An outfit's pictures, made again (again's), put on
@@ -747,7 +773,7 @@ function letGoOfOutfits(kit, idle) {
     for (const gone of unworn.slice(0, Math.max(0, unworn.length - idle))) {
         disposeMaterial(gone.sized);
         disposeMaterial(gone.painted, !gone.painted?.userData.kept);
-        gone.again = null;
+        notAgain(gone);
         kit.composites.delete(gone.key);
     }
 }
@@ -773,13 +799,14 @@ export function tendKit(kit, now = performance.now(), budget = PICTURES.budget) 
     state.clock += Math.min(since, 1000);
 
     const until = performance.now() + budget;
+    let at = 0;
 
-    while (state.again.length) {
-        const outfit = state.again[0];
+    while (at < state.again.length) {
+        const outfit = state.again[at];
 
         // (No longer wanted: its wearer gone, or seen small again)
         if (!outfit.again) {
-            state.again.shift();
+            state.again.splice(at, 1);
 
             continue;
         }
@@ -797,8 +824,12 @@ export function tendKit(kit, now = performance.now(), budget = PICTURES.budget) 
         }
 
         if (step.done) {
-            state.again.shift();
+            state.again.splice(at, 1);
             whole(kit, outfit, step.value);
+        } else if (step.value === WAITING) {
+            // (Being painted off the page's thread: the next one's meanwhile, and back to it a
+            // frame on)
+            at++;
         }
 
         if (performance.now() >= until) {
@@ -825,6 +856,9 @@ export function letGoOfWardrobe(kit) {
     if (kit.texelMap) {
         forgetPoints(kit.texelMap);
     }
+
+    // (And what's kept of them off the page's thread: every garment's picture there)
+    kit.skins?.letGoOfPictures();
 }
 
 /**

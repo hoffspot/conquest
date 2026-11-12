@@ -22,7 +22,7 @@ import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
 import { PICTURES, pictureSize, sizingSkin } from "./pictures.js";
-import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitReady, outfitWhole, readyingOutfit, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
+import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitReady, outfitWhole, readyingGarment, readyingOutfit, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
 import { releaseTexture } from "../world/release.js";
@@ -378,15 +378,27 @@ export class Character {
     /**
      * The same as `new Character(kit, options)`, built a step at a time (each a yield, so the work
      * can be spread over frames: its shape, its skin painted a few rows at a time, its eyes, each
-     * garment, the pictures of what it wears, each thing it carries), returning it.
+     * garment, the pictures of what it wears, each thing it carries), returning it. Given up on
+     * before it's built (the steps closed, a generator's `return`: whoever it was for gone),
+     * what's made of it is let go of: it's no longer counted wearing its outfit (nor one of
+     * those its pictures' size goes by: wardrobe.js), its skin's no longer wanted of the worker,
+     * and what's being painted for it alone is given up there too.
      */
     static *building(kit, options = {}) {
         const character = new Character(kit, options, LATER);
+        let built = false;
 
-        yield;
-        yield* character.#building(options, { elsewhere: true });
+        try {
+            yield;
+            yield* character.#building(options, { elsewhere: true });
+            built = true;
 
-        return character;
+            return character;
+        } finally {
+            if (!built) {
+                character.dispose();
+            }
+        }
     }
 
     // Built a step at a time; its skin painted elsewhere, if `elsewhere` and it can be (the kit's
@@ -395,16 +407,23 @@ export class Character {
     *#building({ shape = {}, look = {}, equipment = [] }, { elsewhere = false } = {}) {
         const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look)), this.#skinSizes()) ?? null : null;
 
-        this.setShape(shape);
-        yield;
-        this.#wear(equipment);
+        try {
+            this.setShape(shape);
+            yield;
+            this.#wear(equipment);
 
-        // (Its hair grown once: under a hat or helmet, when it's dressed, only below the rim)
-        yield* this.#looking(look, { hair: !this.#hidesHair(), skin: !job });
-        yield* this.#dressing();
+            // (Its hair grown once: under a hat or helmet, when it's dressed, only below the rim)
+            yield* this.#looking(look, { hair: !this.#hidesHair(), skin: !job });
+            yield* this.#dressing();
 
-        if (job) {
-            yield* this.#skinning(job);
+            if (job) {
+                yield* this.#skinning(job);
+            }
+        } finally {
+            // (Given up on before its skin was put on: not painted for no one, if it's not begun)
+            if (job) {
+                this.kit.skins.forget(job);
+            }
         }
     }
 
@@ -685,6 +704,14 @@ export class Character {
 
         // All at once (but lace, see-through), outermost last, as they're worn
         const merged = this.merge ? parts.filter(({ garment }) => !garment.design) : [];
+        const apart = merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts;
+
+        // (Those drawn one by one: each one's own picture painted first, a step at a time, and
+        // off the page's thread where it can be (wardrobe.js), so that drawing with them all
+        // below is one step, with nothing to paint)
+        for (const { id } of apart) {
+            yield* readyingGarment(this.kit, id);
+        }
 
         if (merged.length > 1) {
             merged.sort((a, b) => stackOrder(a.id, b.id));
@@ -707,7 +734,7 @@ export class Character {
             }
         }
 
-        for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
+        for (const { id, geometry, garment } of apart) {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;

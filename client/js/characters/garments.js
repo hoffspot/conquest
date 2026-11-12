@@ -19,7 +19,7 @@ import { smoothstep } from "./noise.js";
 import { allAtOnce } from "../core/steps.js";
 
 // (What each garment is, and its pictures: garment-pictures.js, handed on from here)
-export { COMPOSITE_BUMP, compositeGarments, compositingGarments, DESIGNS, designSolid, emblemAt, everyVertex, forgetPoints, GARMENTS, insideBetween, insideOf, paintGarment, paintingGarment, pointsHeld, texelMap, vertexAt } from "./garment-pictures.js";
+export { COMPOSITE_BUMP, compositeGarments, compositingGarments, DESIGNS, designSolid, emblemAt, everyVertex, forgetPoints, GARMENTS, insideBetween, insideOf, paintGarment, paintingGarment, picturingOutfit, pointsHeld, surfaceOf, texelMap, tintOf, vertexAt } from "./garment-pictures.js";
 
 const ARM = /^(Left|Right)(Arm|ForeArm)$/;
 const HAND = /^(Left|Right)Hand/;

@@ -9,6 +9,7 @@
 
 import { LIVERIES } from "./liveries.js";
 import { fbm, hash3, smoothstep } from "./noise.js";
+import { reducing } from "./pictures.js";
 import { allAtOnce } from "../core/steps.js";
 
 // --- Regions, for the garments below ---
@@ -572,6 +573,63 @@ const toSRGB = (c) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.0
  */
 export function compositeGarments(map, layers, measures) {
     return allAtOnce(compositingGarments(map, layers, measures));
+}
+
+/**
+ * How a garment's own picture is drawn: { bumpScale (its heights'), roughness, metalness }.
+ */
+export function surfaceOf(garment) {
+    return { bumpScale: garment.metalness ? 0.6 : 1.5, roughness: garment.roughness ?? 0.8, metalness: garment.metalness ?? 0 };
+}
+
+/**
+ * What a people's make of a garment (`base`: liveries.js) is tinted by, drawn with the picture of
+ * the one it's made from: linear [r, g, b], which that picture's colour times is its own. Null
+ * for a garment with a picture of its own.
+ */
+export function tintOf(garment) {
+    if (!garment.base) {
+        return null;
+    }
+
+    const [from, to] = [linearColour(GARMENTS[garment.base].colour), linearColour(garment.colour)];
+
+    return [to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b)];
+}
+
+/**
+ * An outfit's two pictures put together from its garments' own (`ids`, outermost last), a step
+ * at a time, wherever they're put together (the page, wardrobe.js; the skins' worker,
+ * garment-painter.js: the same pictures either way). `pictureOf(id)`: steps (a generator's)
+ * that return a garment's picture as it's drawn, { data, bump } (a people's make of one: the
+ * picture of the one it's tinted from), painted first if need be. Returns them as they're
+ * painted (`full`: { data, surface }, bytes, `map.size` a side) and at the least size they're
+ * held at (`small`: { data, surface }, `least` a side; its `data` null unless `colour`: only its
+ * heights are wanted of an outfit made whole again, wardrobe.js `again`).
+ */
+export function* picturingOutfit(map, measures, ids, pictureOf, { least = map.size, colour = true } = {}) {
+    const layers = [];
+
+    // (Each garment's own picture painted, in steps the first time: then them all)
+    for (const id of ids) {
+        const garment = GARMENTS[id];
+        const { data, bump } = yield* pictureOf(id);
+
+        layers.push({ data, bump, tint: tintOf(garment), ...surfaceOf(GARMENTS[garment.base] ?? garment), garment });
+        yield;
+    }
+
+    const { size, data, surface } = yield* compositingGarments(map, layers, measures);
+    const full = { data: bytes(data), surface: bytes(surface) };
+
+    yield;
+
+    return { full, small: { data: colour ? yield* reducing(full.data, size, least, true) : null, surface: yield* reducing(full.surface, size, least, false) } };
+}
+
+// A picture's bytes, as a texture takes them
+function bytes(data) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.length);
 }
 
 /**
