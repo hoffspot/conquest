@@ -70,6 +70,11 @@ export const AHEAD = Object.freeze({
     // rest once they're in, as round anyone), and how far the navigation's tiles are baked (m)
     // before their ground's said to be made (grounded)
     coming: Object.freeze({ chunks: 2, reach: 96 }),
+    // What's no longer wanted (the ground round players who've gone, and its navigation) let go
+    // a little each pump, not all at the look after they went: so many chunks, with their
+    // heights, and so many of the navigation's tiles at the most. Some six towns' ground a
+    // second, at a server's two pumps a step (49 chunks round each); a hundred towns' in seven
+    ease: Object.freeze({ chunks: 16, tiles: 32 }),
 });
 
 // The chunks a box of squares touches, on the world: [[cx, cy]...]
@@ -100,6 +105,14 @@ export class Ahead {
      * way, and what it saves them.
      */
     static coming = true;
+
+    /**
+     * Whether what's no longer wanted is let go a little each pump (AHEAD.ease), as it always
+     * is, or all of it at the look after it stopped being wanted, the navigation's tiles as the
+     * next is added, as it was: only for the tests and scripts that check the world's steps come
+     * out the same either way (generated/multiplayer_scaling_plan.md 1-27).
+     */
+    static easing = true;
 
     /**
      * @param {object} world - The world (core/overworld.js buildWorld's: its overworld, maps.town).
@@ -143,6 +156,15 @@ export class Ahead {
 
         /** How many chunks the players and what's wanted soon take now (with a host: #review). */
         this.wanted = 0;
+
+        /**
+         * How many chunks the world's to keep, once it's let go of those it has over that
+         * (#ease: null, not looked over yet); and how many chunks and navigation tiles have been
+         * let go by easing, a few each pump.
+         */
+        this.keeping = null;
+        this.eased = { chunks: 0, tiles: 0 };
+        navigation.gently = Ahead.easing;
 
         /**
          * How far round each player the navigation's tiles are baked now (m: AHEAD.reach, or
@@ -365,7 +387,13 @@ export class Ahead {
         this.chunks = [...nearest, ...theirsNext, ...further, ...later].map((key) => [key % CHUNKS, Math.floor(key / CHUNKS)]);
         this.wanted = rings.size + next.size + soon.size;
         this.needs = needs;
-        this.overworld.keep?.(this.wanted + AHEAD.spareChunks);
+        this.keeping = this.wanted + AHEAD.spareChunks;
+
+        // (More to keep than it was told: at once, so that none wanted is let go to make
+        // another. Fewer: let go a few each pump, #ease; or all now, as they were)
+        if (this.overworld.keep && (!Ahead.easing || !(this.keeping < this.overworld.kept))) {
+            this.overworld.keep(this.keeping);
+        }
 
         for (const key of this.waited.keys()) {
             if (!rings.has(key) && !next.has(key) && !soon.has(key)) {
@@ -495,6 +523,36 @@ export class Ahead {
         }
     }
 
+    // What's no longer wanted let go a little: of the chunks the world has over what it's to
+    // keep (`keeping`: #review), and their heights, AHEAD.ease.chunks at the most, the longest
+    // unused first (those wanted were marked as used when they were looked over); and of the
+    // tiles the navigation has over what it's to keep (#tiles), AHEAD.ease.tiles. Nothing a
+    // step works out changes by it: a chunk or a tile kept a while longer is the one a step
+    // would make again
+    #ease() {
+        const { overworld } = this;
+        const { navigation } = this.navBaker;
+
+        navigation.gently = Ahead.easing;
+
+        if (!Ahead.easing) {
+            return;
+        }
+
+        if (overworld.keep && this.keeping !== null && this.keeping < overworld.kept) {
+            // (As many as it has, or its ground has heights for, if that's fewer than it may keep)
+            const has = Math.max(overworld.chunks.size, overworld.ground?.chunks?.size ?? 0, overworld.ground?.natural?.size ?? 0);
+            const had = overworld.chunks.size;
+
+            overworld.keep(Math.max(this.keeping, Math.min(overworld.kept, has) - AHEAD.ease.chunks));
+            this.eased.chunks += had - overworld.chunks.size;
+        }
+
+        if (navigation.keepTiles) {
+            this.eased.tiles += navigation.shed(AHEAD.ease.tiles);
+        }
+    }
+
     // A few chunks among some (keys) that the settlements near all of them are near one of: one
     // in every so many each way, as the layouts look that far round a chunk (world/layouts.js)
     #spread(keys) {
@@ -519,6 +577,7 @@ export class Ahead {
      */
     pump() {
         this.#review();
+        this.#ease();
 
         const until = this.clock() + AHEAD.budget;
 
