@@ -46,6 +46,24 @@ Others contribute too, so a green pull request can go stale (contribution.md, se
 - Merge only once CI is green on that up-to-date head and `main` hasn't moved since.
 - Use auto-merge where it's turned on.
 
+## Multiplayer: two netcodes side by side
+
+Lockstep and the replicated views ship together until the plan's gates say otherwise
+(`generated/multiplayer_scaling_plan.md`; contribution.md, section 3, the version numbers):
+
+- Never use a name again: a message's kind or field, a refusal's reason, a name in `speaks`, a
+  world's or the server's setting.
+- Everything new is behind a switch that defaults to today's behaviour, and every switch has an
+  expiry test that fails after its date.
+- A new message kind or field needs no `NET_VERSION` bump only if it's additive and opted into,
+  as contribution.md says; anything else bumps it. `VIEW_VERSION` moves only with a view
+  frame's bytes.
+- A change to what's replicated changes lockstep's op and the view's schema together.
+- No pull request for replication bumps `SNAPSHOT_VERSION`.
+- A change to the transport is tested in both netcodes.
+- No world takes more than 8 players until the replicated netcode exists (the owner's decision):
+  no setting may raise that.
+
 ## Sounds: keep the sound studio current
 
 Whenever a sound is added, changed or taken out, or where the game plays it changes, update its

@@ -553,6 +553,25 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    - `NET_VERSION` (`client/js/core/netplay.js`): anything players' games say to each other, or
      anything that changes the world or the rules two games must agree on. A game of another
      version can't join.
+     - **What needs no bump: an addition that's opted into.** A new kind of message, or a new
+       field in one there is, leaves `NET_VERSION` alone when all of these hold: it's sent only
+       to a game that has said it speaks it (`speaks`, in a joiner's `hello` and a server's
+       `/enter`: `SPEAKS` in `client/js/core/netplay.js`), or it's a field a game that doesn't
+       know it reads past; a game that never hears it plays exactly as before; it changes
+       nothing of the world or the rules two games must agree on (lockstep's ops, the steps,
+       the checksum); and a refusal's words only ever gain what can be left out, since games of
+       every version read them. Anything else bumps it, as ever. A unit test holds each such
+       addition to both ends: one that says it speaks it, and one that doesn't.
+     - **No name is ever used again.** A message's `kind`, a field of one, a refusal's reason, a
+       name in `speaks`, a world's or the server's setting: once it has shipped, its name means
+       that for good, even after what it named is taken out. A game or a server left on an
+       older version would take the new meaning for the old.
+   - `VIEW_VERSION` (`client/js/core/view.js`, once the replicated views are built:
+     generated/multiplayer_scaling_plan.md 3-13): what a view's frame holds, its first byte. It
+     moves only when the frame's bytes do, and never with `NET_VERSION`: a change to lockstep's
+     messages or to what both netcodes share bumps `NET_VERSION` alone, a change to the frame
+     bumps `VIEW_VERSION` alone, and a game says which views it reads in `speaks`. Until
+     `view.js` exists there is nothing to bump.
    - `SNAPSHOT_VERSION` (`client/js/core/host.js`): what a snapshot of the world holds. A world
      kept by an older version is carried on, not lost (the world server keeps worlds): add a step
      from the version before to `SNAPSHOT_STEPS`, filling in what the new version keeps as it
@@ -606,6 +625,23 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      code's version, so a release needs nothing: change `FIGURES_KEPT.format` there only when
      how a figure's laid out as bytes changes without the code's version changing (it can't, on
      the deployed site), and its cache's name there and in `client/sw.js` together.
+   - **Two netcodes side by side** (generated/multiplayer_scaling_plan.md, *How multiplayer
+     stays playable at every merge*). While lockstep and the replicated views both ship, every
+     change keeps to these:
+     - Everything new is behind a switch whose default is today's behaviour (a world's
+       `netcode`, the server's `replication`), and a world of 8 or fewer can always be opened
+       as lockstep again.
+     - Every switch has an expiry: a date in a test that fails once it's passed, so the switch
+       is taken out or its date argued for, never forgotten.
+     - A change to what's replicated changes lockstep's op and the view's schema in the same
+       pull request, with a test of each.
+     - **No pull request for replication bumps `SNAPSHOT_VERSION`.** The save is the same
+       `Host` snapshot whichever way its players are connected, so a release can always be
+       rolled back without stranding a world (an older server refuses a newer save).
+     - A change to the transport (the play socket, the relay, the links) is tested in both
+       netcodes.
+     - The client says what it speaks before a world asks it of anyone: a refusal's words ship
+       at least one release before the first world that can give them.
 5. **Test it.** Add or update unit tests (`test/*.test.js`, `node:test`) for every change to the
    rules, the world or the tools, and a browser test (`e2e/`) for anything a player does on
    screen. Never skip, disable or loosen a test to get CI green: fix the cause. A test that
