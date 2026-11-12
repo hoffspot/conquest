@@ -21,9 +21,11 @@
 //     npm run step-budget -- --json          # the numbers as JSON
 //
 // It also times what the world server's thread counts of each step for its metrics (its time
-// into buckets, the look it was in and its parts: server/world-metrics.js), by itself, many
-// times over: all of it must come to under METRICS_BUDGET a step (generated/
-// multiplayer_scaling_plan.md 6A-2).
+// into buckets, the look it was in and its parts, and every pass of the step and of what's sent
+// after it timed by the probes, with the work they count: server/world-metrics.js), by itself,
+// many times over: all of it must come to under METRICS_BUDGET a step (generated/
+// multiplayer_scaling_plan.md 6A-2). And the world it steps is stepped with the probes installed,
+// as a world server's is: `probes` says how many passes and counts a step of it came to.
 //
 // Exits 1 if any step went over the budget (after the world's opening step and what's round the
 // players made ahead: what a player waits for while they load), or if counting a step costs more
@@ -33,6 +35,7 @@ import { parseArgs } from "node:util";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { count, COUNTERS, FLUSH_PASSES, HOST_PASSES, install, lap, Probes, uninstall } from "../client/js/core/probe.js";
 import { StepTimes, WorldRunner } from "../client/js/core/runner.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { Ahead } from "../server/ahead.js";
@@ -46,18 +49,41 @@ const METRICS_ROUNDS = 200000;
 /**
  * What a world's thread does for its metrics each step, as world-worker.js and the runner do it
  * (the clock read before and after the step, its time counted; the look it was in and its two
- * parts counted; and once in twenty steps, a second, all of it taken for the supervisor), done
- * `rounds` times over with no world: how long each took (ms).
+ * parts counted; every pass of the step and of what's sent after it begun and ended by the
+ * probes, and each of their counters counted once, which is more than a step does: the passes
+ * that look round the players are played one step in ten; and once in twenty steps, a second,
+ * all of it taken for the supervisor), done `rounds` times over with no world: how long each
+ * took (ms). Whatever probes were installed are put back after.
  */
 export function metricsCost(rounds = METRICS_ROUNDS) {
     const clock = () => performance.now();
     const times = new StepTimes();
-    const metrics = new WorldMetrics({ node: false });
+    const metrics = new WorldMetrics({ node: false, clock });
+    const installed = uninstall();
     let taken = 0;
+
+    install(metrics.probes);
+
     const started = clock();
 
     for (let k = 0; k < rounds; k++) {
         const before = clock();
+
+        for (const pass of HOST_PASSES) {
+            lap(pass);
+        }
+
+        lap(null);
+
+        for (const pass of FLUSH_PASSES) {
+            lap(pass);
+        }
+
+        lap(null);
+
+        for (const counter of COUNTERS) {
+            count(counter, k & 7);
+        }
 
         times.add(clock() - before + (k % 7), k * STEP_MS);
 
@@ -66,11 +92,21 @@ export function metricsCost(rounds = METRICS_ROUNDS) {
         metrics.tick(stepped - before, clock() - stepped, k * STEP_MS);
 
         if (k % 20 === 19) {
-            taken += metrics.take({ steps: times, dropped: k }).ticks.counts.length;
+            const told = metrics.take({ steps: times, dropped: k });
+
+            taken += told.ticks.counts.length + Object.keys(told.passes).length;
         }
     }
 
-    return taken ? (clock() - started) / rounds : Infinity;
+    const cost = taken ? (clock() - started) / rounds : Infinity;
+
+    uninstall();
+
+    if (installed) {
+        install(installed);
+    }
+
+    return cost;
 }
 
 /**
@@ -99,7 +135,9 @@ const hero = (name, race) => ({ name, race, shape: {}, look: {}, weapon: "sword"
  * all round the players was made), heap (MB), wall (s) }. The steps over one are those over it in
  * the thread's processor time (`over`), each with the clock's time for it (`wall`); `late` counts
  * those over it by the clock; `cpu` is the thread's time for all the steps, a step ({ mean, worst });
- * `metrics` what counting a step for the server's metrics costs ({ step: ms, budget }).
+ * `metrics` what counting a step for the server's metrics costs ({ step: ms, budget }), and
+ * `probes` what the probes, installed for the run as a world server's are, were asked a step
+ * ({ laps, counts }: passes begun or ended, and counters counted).
  * With `field`, the first player begins a field battle of that many a side RUN.fieldAt in.
  */
 export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true, field = 0 } = {}) {
@@ -146,6 +184,22 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true,
 
     runner.times = new StepTimes();
 
+    // (The probes installed, as a world server's thread has them: how often they're asked counted)
+    const asked = { laps: 0, counts: 0 };
+    const probes = new (class extends Probes {
+        lap(name) {
+            asked.laps++;
+            super.lap(name);
+        }
+
+        count(name, n) {
+            asked.counts++;
+            super.count(name, n);
+        }
+    })({ clock });
+
+    install(probes);
+
     const cpu = { total: 0, worst: 0 };
     let late = 0;
     let fought = null;
@@ -186,8 +240,11 @@ export async function stepBudget({ seed = 2, seconds = 60, ahead: making = true,
         await new Promise((resolve) => setImmediate(resolve));
     }
 
+    uninstall();
+
     const result = {
         steps: runner.times.toJSON(),
+        probes: { laps: asked.laps / Math.max(1, runner.times.count), counts: asked.counts / Math.max(1, runner.times.count) },
         cpu: { mean: cpu.total / Math.max(1, runner.times.count), worst: cpu.worst },
         over: worst,
         late,
@@ -222,7 +279,7 @@ async function main() {
         }
 
         console.log(`${made} chunks and ${result.rooms} buildings' insides' tiles made ahead, all round the players in ${ready} ms; heap ${heap} MB`);
-        console.log(`Counting a step for the server's metrics: ${(result.metrics.step * 1000).toFixed(2)} µs (it may cost ${METRICS_BUDGET * 1000})`);
+        console.log(`Counting a step for the server's metrics, every pass of it timed: ${(result.metrics.step * 1000).toFixed(2)} µs (it may cost ${METRICS_BUDGET * 1000}); this world's steps had the probes installed, asked ${result.probes.laps.toFixed(1)} passes and ${result.probes.counts.toFixed(1)} counts a step`);
         console.log(over.length ? `${over.length} steps over ${STEP_MS} ms of the thread's time: ${over.map(({ ms, wall: clocked, at }) => `${ms} ms (${clocked} by the clock) at ${(at / 1000).toFixed(1)} s`).join(", ")}` : `No step over ${STEP_MS} ms of the thread's time.`);
     }
 

@@ -576,9 +576,15 @@ Each world's thread also counts what it does, and tells the server a second's wo
 every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and
 what's made ahead) into fixed buckets from half a millisecond to a second, its saves, how late
 its event loop ran, its garbage collections by kind, its heap, how many are in its battle and in
-the world, and what its players' games have said to it. The server adds them up for as long as
-it runs, a world's carrying on when it's set aside and started again. Counting costs a step
-under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+the world, and what its players' games have said to it. It times the step's own parts too: each
+pass of the rules' step by name (the light, the battle, the war, the passes that look round the
+players...) and of what's sent after it, with the work those passes count
+(`client/js/core/probe.js`), so `/metrics` says where a world's step time goes. The server adds
+them up for as long as it runs, a world's carrying on when it's set aside and started again. All
+of it costs a step about two thousandths of a millisecond, the passes' timing most of that: it's
+always on, with no setting (`npm run step-budget` times every pass of every step, 3.6
+thousandths on a 4-core container, and fails if it comes to 0.05 ms). Timing the passes changes
+nothing a world does (`test/probe.test.js`).
 
 ### The last day and week
 
@@ -641,6 +647,8 @@ address or a key.
 | `world_cpu_seconds_total` | Its thread's processor time (`kind`: `user`, `system`) |
 | `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
 | `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
+| `world_pass_seconds_total`, `world_pass_calls_total` | The time its steps have spent in each of their passes, and how often each was begun (`kind`: `light`, `battle`, `war`, `wilds`, `end`..., and of what's sent after a step `flush.ops`, `flush.motion`...: `HOST_PASSES` and `FLUSH_PASSES` in `client/js/core/probe.js`). A pass's share of the step is its rate over all of theirs |
+| `world_work_total` | The work its steps have counted (`kind`: `steps`, `wilds.pairs`, `motion.pairs`, `checksums`, `sends`...: `COUNTERS` there) |
 | `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
 | `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
 | `event_loop_delay_mean_seconds`, `_p99_seconds`, `_max_seconds` | How late each thread's event loop ran, lately |

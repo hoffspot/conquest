@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { count, COUNTERS, FLUSH_PASSES, HOST_PASSES, install, lap, uninstall } from "../client/js/core/probe.js";
 import { StepTimes, TIME_BUCKETS } from "../client/js/core/runner.js";
 import { metricsCost, METRICS_BUDGET } from "../scripts/step-budget.js";
 import { parseText, TIME_BUCKETS as SECONDS } from "../server/metrics.js";
@@ -110,6 +111,58 @@ describe("what a world's thread counts of itself (server/world-metrics.js)", () 
         assert.ok(taken.max >= 40 && taken.max < 2000, JSON.stringify(taken));
         assert.ok(taken.mean >= 0 && taken.mean <= taken.max && taken.p99 <= taken.max, JSON.stringify(taken));
         assert.equal(loop.take(), null, "stopped, it says nothing");
+    });
+
+    it("times each pass of the step by its probes once they're installed, and tells what's been measured since it last said", () => {
+        let now = 0;
+        const metrics = new WorldMetrics({ node: false, clock: () => now });
+
+        assert.deepEqual(metrics.take().passes, {}, "nothing, till they're installed");
+        assert.deepEqual(metrics.take().work, {});
+
+        try {
+            install(metrics.probes);
+
+            for (let step = 0; step < 3; step++) {
+                lap("light");
+                now += 1;
+                lap("battle");
+                count("steps");
+                count("wilds.pairs", 40);
+                now += 4;
+                lap(null);
+                // (Between a step and what's sent of it: no pass's)
+                now += 100;
+                lap("flush.ops");
+                now += 2;
+                lap(null);
+            }
+
+            const first = metrics.take();
+
+            assert.deepEqual(first.passes, { light: [3, 3], battle: [12, 3], "flush.ops": [6, 3] });
+            assert.deepEqual(first.work, { steps: 3, "wilds.pairs": 120 });
+            assert.deepEqual(metrics.take().passes, {}, "only what's new since");
+
+            // (Asked in the middle of a pass: its time so far told now, the rest the next time)
+            lap("war");
+            now += 5;
+
+            const during = metrics.take();
+
+            now += 2;
+            lap(null);
+            count("steps");
+
+            const after = metrics.take();
+
+            assert.deepEqual(during.passes, { war: [5, 1] });
+            assert.deepEqual(during.work, {});
+            assert.deepEqual(after.passes, { war: [2, 0] });
+            assert.deepEqual(after.work, { steps: 1 });
+        } finally {
+            uninstall();
+        }
     });
 
     it("costs a step far less than it may: what's counted of each, timed many times over (scripts/step-budget.js)", () => {
@@ -222,6 +275,51 @@ describe("the supervisor adding up what its worlds count (server/server-metrics.
         families = read(server);
         assert.equal(valueOf(families, "pellagos_world_step_seconds_count", { world: "w1" }), undefined);
         assert.equal(valueOf(families, "pellagos_world_step_seconds_count", { world: "w2" }), 20);
+    });
+
+    it("adds up each pass of a world's steps and the work counted, by the names the probes have and no other", () => {
+        const server = new ServerMetrics();
+        const state = stateOf(new WorldMetrics({ node: false }), new StepTimes());
+
+        state.metrics.passes = { battle: [30, 20], "flush.ops": [4, 20], wilds: [1.5, 2], "K7Q2MXD4RT.1": [9, 9] };
+        state.metrics.work = { steps: 20, "wilds.pairs": 800, someone: 4 };
+        server.heard("w1", state);
+        state.metrics.passes = { battle: [10, 5] };
+        state.metrics.work = { steps: 5 };
+        server.heard("w1", state);
+        server.heard("w2", { ...state, metrics: { ...state.metrics, passes: { battle: [1000, 1] }, work: {} } });
+
+        const families = read(server);
+        const near = (value, wanted) => assert.ok(Math.abs(value - wanted) < 1e-9, `${value}, not ${wanted}`);
+
+        near(valueOf(families, "pellagos_world_pass_seconds_total", { world: "w1", kind: "battle" }), 0.04);
+        near(valueOf(families, "pellagos_world_pass_seconds_total", { world: "w1", kind: "flush.ops" }), 0.004);
+        assert.equal(valueOf(families, "pellagos_world_pass_calls_total", { world: "w1", kind: "battle" }), 25);
+        assert.equal(valueOf(families, "pellagos_world_pass_calls_total", { world: "w1", kind: "wilds" }), 2);
+        assert.equal(valueOf(families, "pellagos_world_work_total", { world: "w1", kind: "steps" }), 25);
+        assert.equal(valueOf(families, "pellagos_world_work_total", { world: "w1", kind: "wilds.pairs" }), 800);
+        near(valueOf(families, "pellagos_world_pass_seconds_total", { world: "w2", kind: "battle" }), 1);
+
+        // (Nothing by a name the probes haven't: a series can't be made of whatever a thread says)
+        const named = new Set([...HOST_PASSES, ...FLUSH_PASSES, ...COUNTERS]);
+
+        for (const name of ["pellagos_world_pass_seconds_total", "pellagos_world_pass_calls_total", "pellagos_world_work_total"]) {
+            assert.deepEqual(families[name].samples.filter((sample) => !named.has(sample.labels.kind)), [], name);
+        }
+
+        // (As plain data, for a run's report: scripts/server-soak.js; asking makes no series)
+        const plain = server.passesOf("w1");
+
+        assert.deepEqual(Object.keys(plain.passes).sort(), ["battle", "flush.ops", "wilds"]);
+        assert.equal(plain.passes.battle.calls, 25);
+        near(plain.passes.battle.seconds, 0.04);
+        assert.deepEqual(plain.work, { steps: 25, "wilds.pairs": 800 });
+        assert.deepEqual(server.passesOf("w3"), { passes: {}, work: {} });
+        assert.equal(read(server).pellagos_world_pass_calls_total.samples.length, families.pellagos_world_pass_calls_total.samples.length);
+
+        server.forget("w1");
+        assert.deepEqual(server.passesOf("w1"), { passes: {}, work: {} });
+        assert.equal(server.passesOf("w2").passes.battle.calls, 1);
     });
 
     it("takes a world that's said nothing yet, or one of a server before this (no counts in what it says)", () => {
