@@ -76,7 +76,13 @@ test("a measured run: a link's ?measure= counts down twenty seconds of play at o
     expect(row.draw[0]).toBeGreaterThan(0);
     expect(row.work[0]).toBeGreaterThanOrEqual(row.draw[0]);
     expect(row.interval[0]).toBeGreaterThanOrEqual(row.work[0] * 0.9);
-    expect(report.stepsPlayed).toBeGreaterThan(100);
+    // (The steps it played are as many as its frames let it: a frame plays two at the most
+    // catching up (core/runner.js RUNNER.catchUp), and twenty seconds hold 400 of them, so a
+    // machine that draws few frames plays few steps. Held to the frames it drew, not to a number
+    // a slow runner can't reach: the owner's ruling, 12 November 2026)
+    expect(report.stepsPlayed).toBeGreaterThan(0);
+    expect(report.stepsPlayed).toBeLessThanOrEqual(2 * report.frames + 2);
+    expect(report.stepsPlayed).toBeGreaterThanOrEqual(0.75 * Math.min(2 * report.frames, 400));
     expect(report.calls.most).toBeGreaterThan(0);
 
     // (What's held, read every couple of seconds as the memory guard would)
