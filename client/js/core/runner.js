@@ -33,8 +33,64 @@ export const RUNNER = Object.freeze({
 });
 
 /**
- * How long the steps have taken (ms): how many, the mean, the worst (and the step it was), and the
- * 99th percentile of the last RUNNER.kept.
+ * The bounds of the buckets times are counted into (ms): half a millisecond to a second, a step
+ * (50 ms) among them. The world server's histograms are these, in seconds (server/server-metrics.js).
+ */
+export const TIME_BUCKETS = Object.freeze([0.5, 1, 2, 5, 10, 20, 35, 50, 75, 100, 150, 250, 500, 1000]);
+
+/**
+ * Times counted into fixed buckets (a histogram: how many were no longer than each bound, and how
+ * many longer than them all), every one since it was made: what a recent window's percentile
+ * forgets. Counting one is a few comparisons and two additions, and keeps nothing of it.
+ */
+export class TimeBuckets {
+    constructor(bounds = TIME_BUCKETS) {
+        this.bounds = bounds;
+
+        /** How many fell in each bucket (the last: over every bound), and what they came to (ms). */
+        this.counts = new Array(bounds.length + 1).fill(0);
+        this.sum = 0;
+
+        // As they were when last taken (take)
+        this.taken = { counts: new Array(bounds.length + 1).fill(0), sum: 0 };
+    }
+
+    /** One more time (ms). */
+    add(ms) {
+        const { bounds } = this;
+        let k = 0;
+
+        while (k < bounds.length && ms > bounds[k]) {
+            k++;
+        }
+
+        this.counts[k]++;
+        this.sum += ms;
+    }
+
+    /**
+     * What's been counted since this was last asked: { counts (a bucket each), sum (ms) }. For
+     * whoever adds them up elsewhere (a world's thread tells the server's own, a second's worth
+     * at a time: server/world-worker.js).
+     */
+    take() {
+        const counts = this.counts.map((count, k) => count - this.taken.counts[k]);
+        const sum = this.sum - this.taken.sum;
+
+        this.taken = { counts: [...this.counts], sum: this.sum };
+
+        return { counts, sum };
+    }
+
+    /** As plain data: { bounds, counts, sum }. */
+    toJSON() {
+        return { bounds: [...this.bounds], counts: [...this.counts], sum: this.sum };
+    }
+}
+
+/**
+ * How long the steps have taken (ms): how many, the mean, the worst (and the step it was), the
+ * 99th percentile of the last RUNNER.kept, and all of them counted into buckets (`buckets`).
  */
 export class StepTimes {
     constructor(kept = RUNNER.kept) {
@@ -44,12 +100,14 @@ export class StepTimes {
         this.total = 0;
         this.worst = 0;
         this.worstAt = -1;
+        this.buckets = new TimeBuckets();
     }
 
     /** One step's time (ms), and the battle's time it ended at. */
     add(ms, at) {
         this.count++;
         this.total += ms;
+        this.buckets.add(ms);
 
         if (ms > this.worst) {
             this.worst = ms;

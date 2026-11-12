@@ -64,6 +64,7 @@
 //   GET    /server/worlds                   every world, as GET /worlds/:id
 //   GET, DELETE /server/worlds/:id/crashes   the crash reports a world keeps (its last CRASHES.kept), and cleared
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
+//   GET    /server/history/day, /week       how it's been keeping up: what Health charts
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
 //   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
 //   GET    /server/certificate/acme         what a free certificate needs: routes, DNS hosts, the CA's terms
@@ -713,6 +714,11 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return manage.health();
+        }],
+        ["GET", /^\/server\/history\/(day|week)$/, { server: true }, async (request, body, [, span]) => {
+            admin(request);
+
+            return manage.history(span);
         }],
         ["GET", /^\/server\/creators$/, { server: true }, async (request) => {
             admin(request);

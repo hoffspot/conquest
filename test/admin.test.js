@@ -15,7 +15,8 @@ import { after, before, describe, it } from "node:test";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
-import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
+import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE, METRICS_PATH } from "../server/admin.js";
+import { parseText, TEXT_TYPE } from "../server/metrics.js";
 import { guard, Refusal } from "../server/guards.js";
 import { CRASHES_PER_MINUTE } from "../server/api.js";
 import { clockOf, EXPORT_FORMAT, IMPORT_LIMIT } from "../server/manage.js";
@@ -161,6 +162,56 @@ describe("the management page's own listener, on the server's computer (server/a
         assert.match(page.body.toString("utf8"), /<title>Pellagos Server<\/title>/);
         assert.match(page.headers["set-cookie"][0], new RegExp(`^${ADMIN_COOKIE}=[A-Za-z0-9_-]{32}; Path=/; HttpOnly; SameSite=Strict$`));
         assert.ok(cookie.length > 20);
+    });
+
+    it("gives the server's metrics to a scraper on the computer itself, as Prometheus reads them: read-only, by its own names alone, to no other site's page; and never on the play port", async () => {
+        const scraped = await raw(server.adminPort, { route: METRICS_PATH });
+        const text = scraped.body.toString("utf8");
+        const families = parseText(text);
+
+        // (No header, no cookie: a scraper has no page to get them from)
+        assert.equal(scraped.status, 200);
+        assert.equal(scraped.headers["content-type"], TEXT_TYPE);
+        assert.equal(scraped.headers["cache-control"], "no-store");
+        assert.equal(scraped.headers["set-cookie"], undefined);
+        assert.equal(scraped.headers["access-control-allow-origin"], undefined);
+        assert.equal(families.pellagos_world_step_seconds.type, "histogram");
+        assert.equal(families.pellagos_play_sockets.samples[0].value, 0);
+        assert.ok(families.pellagos_rss_bytes.samples[0].value > 1e6);
+        assert.ok(families.pellagos_heap_bytes.samples.some((sample) => sample.labels.thread === "supervisor" && sample.value > 0));
+        assert.ok(families.pellagos_worlds.samples.some((sample) => sample.labels.kind === "stored"));
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, host: `127.0.0.1:${server.adminPort}` })).status, 200);
+
+        const head = await raw(server.adminPort, { route: METRICS_PATH, method: "HEAD" });
+
+        assert.equal(head.status, 200);
+        assert.equal(head.body.length, 0);
+
+        // (Read, never changed)
+        for (const method of ["POST", "PUT", "DELETE", "PATCH"]) {
+            assert.equal((await raw(server.adminPort, { route: METRICS_PATH, method })).status, 405, method);
+        }
+
+        // (Another name pointed at the computer, or another site's page in the computer's own
+        // browser, which may send no Origin but says it's another site's: refused)
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, host: `evil.example:${server.adminPort}` })).status, 421);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { Origin: "https://evil.example" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { Origin: "null" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "cross-site" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "same-site" } })).status, 403);
+        assert.equal((await raw(server.adminPort, { route: METRICS_PATH, headers: { "Sec-Fetch-Site": "same-origin", Origin: `http://localhost:${server.adminPort}` } })).status, 200);
+
+        // (The play port, which the Wi-Fi, the internet and a tunnel reach, has no such route:
+        // with the admin key or without, at any address the management page or the API has there)
+        for (const route of [METRICS_PATH, `/admin${METRICS_PATH}`, `/api/v1${METRICS_PATH}`, `/api/v1/server${METRICS_PATH}`]) {
+            const asked = await raw(server.port, { route, host: `127.0.0.1:${server.port}`, headers: { Authorization: `Key ${server.adminKey}`, [ADMIN_HEADER]: ADMIN_VALUE } });
+
+            assert.equal(asked.status, 404, route);
+            assert.doesNotMatch(asked.body.toString("utf8"), /pellagos_/);
+        }
+
+        // (Nor is its listener anywhere but on the computer itself)
+        assert.equal(server.admin.http.address().address, "127.0.0.1");
     });
 
     it("answers its own names alone (no DNS rebinding), its own pages alone, and calls carrying both its header and its cookie", async () => {
@@ -616,6 +667,19 @@ describe("the server's settings, creator keys, journal and health (server/manage
         assert.equal(health.json.health, "ok");
         assert.deepEqual(health.json.worlds, []);
         assert.ok(health.json.server.rss > 0 && health.json.machine.cores >= 1);
+
+        // (And how it's been keeping up, for Health's charts: the last day or week, the admin's alone)
+        server.metrics.sample();
+        server.metrics.sample();
+
+        const day = await admin.call("GET", "/server/history/day");
+        const week = await admin.call("GET", "/server/history/week");
+
+        assert.equal(day.status, 200);
+        assert.deepEqual([day.json.span, day.json.step, week.json.span, week.json.step], ["day", 120000, "week", 900000]);
+        assert.ok(day.json.series.some((one) => one.id === "rss" && one.unit === "bytes" && one.values.length === 720 && one.values.at(-1) > 1e6));
+        assert.equal((await admin.call("GET", "/server/history/year")).status, 404);
+        assert.equal((await wifi(server, "GET", "/server/history/day", { headers: { [ADMIN_HEADER]: ADMIN_VALUE } })).status, 403, "not without the admin key");
 
         // (A new admin key, from the computer itself: the old one no longer works)
         const old = server.adminKey;

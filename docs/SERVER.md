@@ -55,7 +55,7 @@ answered from the internet. Its tabs:
   servers list it under its new name within a few seconds), this page, and the name of the
   server's archives. A game already open picks it up the next time it asks the server.
 - **Activity** (what's happened, the server's and each world's) and **Health** (each world's
-  steps and memory, and the server's).
+  steps and memory, and the server's, now and charted over the last day or week).
 
 ## Worlds and who comes in
 
@@ -512,6 +512,7 @@ secrets.json             the admin key's and creator keys' hashes (never a key a
 identity.key             the server's identity (the key it proves its id with)
 certificates/            its certificates, and the DNS host's token where there's no Keychain
 journal.log              what's happened to the server
+history.json.gz          how it's been running, for Health's charts (the last day and week)
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
                          access.json (its keys' hashes, players, bans), journal.log,
                          crashes.json (its last crash reports)
@@ -533,6 +534,128 @@ what's made ahead, which is what a player waits on (a save or a building's insid
 a tick two or three times its step). And its **pace**: how much of its clock's time the world
 has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
 go, running slow rather than further behind; its journal says when it has.
+
+Each world's thread also counts what it does, and tells the server a second's worth at a time:
+every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and
+what's made ahead) into fixed buckets from half a millisecond to a second, its saves, how late
+its event loop ran, its garbage collections by kind, its heap, how many are in its battle and in
+the world, and what its players' games have said to it. The server adds them up for as long as
+it runs, a world's carrying on when it's set aside and started again. Counting costs a step
+under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+
+### The last day and week
+
+Under them, Health draws how it's been: for the server, how many players' games were linked,
+what it sent them a second, how late its own event loop ran, how busy its own thread was and its
+memory; for each world, its slowest 1% of steps and of whole ticks (with a dashed line at a
+step's 50 ms), its pace, its players, how many were in its battle and its memory. **Day** is the
+last 24 hours, a point every two minutes; **Week** the last seven days, a point every fifteen.
+A point is the worst of its time for what's judged by its worst (slow steps, memory) and the mean
+for the rest. Point at a chart, or touch it, for what it was at that time. A gap is when nothing
+was measured: the server stopped, a world set aside, or no step played.
+
+The server keeps these itself, with nothing else to install: a point of each every ten seconds
+for a day and every five minutes for a week, about a megabyte of memory for a server with three
+worlds, written to `history.json.gz` in its data folder every five minutes and as it stops. So
+the charts are there after a restart or an update, with a gap as long as it was down (after a
+crash or a power cut, the last five minutes may be missing too). It's this computer's history,
+not its worlds': it isn't put in an archive, and restoring one leaves it as it is. A file that
+can't be read is started afresh. The slowest 1% are worked out from the buckets below, so they're
+as near as the buckets are: between 20 and 35 ms, say, not to the tenth.
+
+### Metrics
+
+All the server counts is read at `http://localhost:8481/metrics`, on the management page's own
+listener: plain text in Prometheus's format, which Prometheus, Grafana Alloy, VictoriaMetrics,
+Netdata and `curl` all read. It needs no key, as the page there needs none, and it's read-only.
+
+```sh
+curl http://localhost:8481/metrics
+```
+
+**It's never answered from the Wi-Fi or the internet.** That listener is on the computer alone
+(127.0.0.1), answers only by its own names (`localhost:8481` and `127.0.0.1:8481`), and refuses
+another site's page in the computer's own browser. The play port, which the Wi-Fi, the internet
+and a tunnel reach, has no such address. To read a rented server's metrics from elsewhere, bring
+the port to you over SSH (`ssh -L 8481:localhost:8481 you@server`), as for its management page,
+or run the scraper on the server itself. For Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: pellagos
+    static_configs:
+      - targets: ["localhost:8481"]
+```
+
+The server needs none of them: it's built on Node alone, and keeps counting whether anything
+reads it or not.
+
+What's there, every name beginning `pellagos_`. Times are seconds, sizes bytes. A series is
+labelled by its world's id (`world`), by which thread it's of (`thread`: `world`, or `supervisor`
+for the server's own, with no world), and by a `kind` or a `reason`: never by a player, an
+address or a key.
+
+| Series | What it is |
+| --- | --- |
+| `world_step_seconds`, `world_tick_seconds` | Histograms of each step's time, and each whole tick's. A step over 0.05 is late |
+| `world_tick_part_seconds` | A tick's parts (`kind`): `advance`, its steps with what's sent of them, and `ahead`, what's made ahead |
+| `world_save_seconds`, `world_save_failures_total` | Each save's time from asked to on the disk, and those that failed |
+| `world_dropped_seconds_total` | The time a world let go, fallen behind its clock (its pace, as a total) |
+| `world_cpu_seconds_total` | Its thread's processor time (`kind`: `user`, `system`) |
+| `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
+| `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
+| `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
+| `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
+| `event_loop_delay_mean_seconds`, `_p99_seconds`, `_max_seconds` | How late each thread's event loop ran, lately |
+| `gc_total`, `gc_seconds_total` | Each thread's garbage collections and their time (`kind`: `minor`, `major`, `incremental`, `weak`) |
+| `play_sockets`, `play_places` | Players' games linked now, and places held in worlds (a dropped link's is kept five minutes) |
+| `play_backlog_bytes`, `play_backlog_max_bytes` | What waits to go to games slow to take it: all of it, and the most for one |
+| `play_sent_bytes_total`, `play_sent_wire_bytes_total`, `play_sent_messages_total`, `play_received_bytes_total` | A world's traffic: sent as said, sent as it went on the wire (compressed), and heard |
+| `joins_total` | Players let into a world |
+| `refusals_total` | What was refused, by `reason` (`key`, `code`, `bad-request`...) |
+| `play_closed_total` | Games sent out or refused at the play socket, by `reason` (`afk`, `full`, `server-stopping`...) |
+| `worlds` | The server's worlds by how they are (`kind`: `stored`, `running`, `empty`...) |
+| `event_loop_utilization` | How busy the server's own thread was, lately (0 to 1) |
+| `rss_bytes`, `start_time_seconds` | The whole server's memory, and when it started |
+
+A world set aside keeps its counters and histograms and lets go of what was only so while it ran;
+a world deleted lets go of all of them. All of them start again from nothing when the server
+does.
+
+### Logs
+
+Beside the journals, which are written for people (Activity shows them), the server prints a
+**structured log** on its output: one line of JSON for each thing that happens, for whatever
+gathers logs to read (`journalctl`, Console, `jq`, a log shipper). Run from a terminal it's among
+what the server says there; the Mac app keeps it in its `server.log`.
+
+```
+{"t":"2026-11-12T19:04:11.512Z","event":"player.entered","world":"mj7dyu057o","player":"K7Q2MXD4RT","role":"player","net":"203.0.113.x","keyId":"k3f9","first":true}
+{"t":"2026-11-12T19:04:12.030Z","event":"world.life","world":"mj7dyu057o","life":"running"}
+{"t":"2026-11-12T19:09:40.870Z","event":"refused","reason":"key","net":"198.51.100.x"}
+```
+
+Every line has `t` (when) and `event`:
+
+| Event | When |
+| --- | --- |
+| `server.listening`, `server.stopped` | The server started answering, or stopped (`port`, `version`, `worlds`) |
+| `player.entered`, `player.left` | A player came into a world, or left it (`world`, `player`, `role`, `first`) |
+| `refused` | Something was refused (`reason`: `key`, `code`, `bad-request`..., and `world` where it was a world's) |
+| `key.issued`, `key.revoked`, `key.replaced`, `code.made`, `code.redeemed`, `codes.burned` | A world's keys and short codes (`keyId`, `codeId`, `by`, `count`) |
+| `player.banned`, `player.unbanned` | A ban, or one lifted (`world`, `player`, `by`) |
+| `listing.announced`, `listing.withdrawn` | A player's own world listed on the broker, or taken off it |
+| `world.life` | A world started loading, is running, went empty, is stopping or is stored (`life`) |
+| `world.save-failed`, `world.fell-behind` | A world's save didn't reach the disk (`count`), or it let time go (`ms`) |
+| `journal` | A line of the server's own journal (`text`): settings, creator keys, certificates, updates, archives |
+
+**No line ever carries a key, a short code, a ticket, a session, a token or a key's label, nor a
+whole address.** A key or code is named by its id (what the management page lists it by). An
+address is given as the network it's on (`net`: `203.0.113.x`, `2001:db8:85a3::x`), enough to see
+the same visitor trying again, not to find them. A line has only the fields in the table, and
+every sentence is scrubbed of anything shaped like a key, a token or an address before it's
+written. A player is named by their player id, as in the journals. A world's own journal (its
+saves and backups, who was sent out) isn't in the log yet: read it in Activity.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above

@@ -175,7 +175,9 @@ export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SO
 
 /**
  * Soak a world server for `minutes` with `players` in Node: resolves to the report ({ seed,
- * minutes, players: [...core/bot.js report], samples: [{ minute, world, server }], judged, failures }).
+ * minutes, players: [...core/bot.js report], samples: [{ minute, world, server }], histograms (the
+ * world's steps, ticks, their parts and its saves, as the server's metrics count them:
+ * server/server-metrics.js histogramsOf), judged, failures }).
  */
 export async function soakServer({ seed = 2, minutes = 120, players: count = 8, log = console.log } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-server-soak-"));
@@ -242,7 +244,9 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         failures.push(...judged.failures);
 
-        return { seed, minutes, players: reports, samples, judged, failures };
+        // (And every step, tick and save of the run counted into the buckets the server's own
+        // metrics keep: what its /metrics would say, so a run and a live server are read alike)
+        return { seed, minutes, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), judged, failures };
     } finally {
         for (const one of players) {
             one.stop();
