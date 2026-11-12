@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MeshoptEncoder } from "meshoptimizer";
-import { loadGltf } from "../client/js/world/art/engine/models.js";
+import { loadGltf, readGltf, restingAfter } from "../client/js/world/art/engine/models.js";
 
 // (Three.js's file loader tells of its progress as a browser does)
 globalThis.ProgressEvent ??= class ProgressEvent extends Event {
@@ -69,7 +69,9 @@ async function compressedGlb() {
             { bufferView: 2, componentType: 5126, count: 2, type: "SCALAR", min: [0], max: [1] },
             { bufferView: 3, componentType: 5126, count: 2, type: "VEC4" },
         ],
-        meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1 }] }],
+        // (Two materials: one its mesh wears, one nothing wears, as a skin's file has them)
+        materials: [{ name: "Hide" }, { name: "Spare" }],
+        meshes: [{ primitives: [{ attributes: { POSITION: 0 }, indices: 1, material: 0 }] }],
         nodes: [{ name: "Triangle", mesh: 0 }],
         scenes: [{ nodes: [0] }],
         scene: 0,
@@ -111,6 +113,90 @@ describe("models compressed with meshoptimizer", () => {
             [["Turn", 1]],
         );
         assert.deepEqual([...animations[0].tracks[0].values], [...TURNS]);
+    });
+
+    it("are kept without what three.js's loader read them with (its parser: the file's bytes and its map again); a skin's file gives every material in it first, those nothing wears too", async () => {
+        const { glb } = await compressedGlb();
+        const url = `data:model/gltf-binary;base64,${Buffer.from(glb).toString("base64")}`;
+        const kept = await loadGltf(url);
+        const afresh = await readGltf(url);
+        const skin = await readGltf(url, { materials: true });
+
+        for (const gltf of [kept, afresh, skin]) {
+            assert.equal(gltf.parser, null);
+            assert.ok(gltf.scene.getObjectByName("Triangle").geometry.getAttribute("position"));
+        }
+
+        assert.equal(afresh.materials, undefined);
+        assert.deepEqual(
+            skin.materials.map((material) => material.name),
+            ["Hide", "Spare"],
+        );
+        assert.equal(skin.scene.getObjectByName("Triangle").material.name, "Hide");
+
+        // (Kept by its address, once: with its materials and without, each its own)
+        assert.equal(await loadGltf(url), kept);
+        assert.notEqual(await loadGltf(url, { materials: true }), kept);
+        assert.equal((await loadGltf(url, { materials: true })).materials.length, 2);
+    });
+
+    it("have the workers that turn their pictures let go of once nothing's been read for a while (restingAfter): never while anything is, once for each quiet spell, and made again by the next read", () => {
+        // (Timers by hand: each { call, ms }, till it's cleared or run)
+        const timers = new Set();
+        const set = (call, ms) => {
+            const timer = { call, ms };
+
+            timers.add(timer);
+
+            return timer;
+        };
+        const run = () => {
+            for (const timer of [...timers]) {
+                timers.delete(timer);
+                timer.call();
+            }
+        };
+        let rested = 0;
+        const resting = restingAfter(60000, () => rested++, { set, clear: (timer) => timers.delete(timer) });
+
+        // (Two files read at once: nothing waited for till both are done)
+        resting.began();
+        resting.began();
+        resting.ended();
+        assert.equal(timers.size, 0);
+        resting.ended();
+        assert.deepEqual(
+            [...timers].map(({ ms }) => ms),
+            [60000],
+        );
+        assert.equal(rested, 0);
+
+        // (Another read before the while's up: not rested, and waited for afresh after it)
+        resting.began();
+        assert.equal(timers.size, 0);
+        run();
+        assert.equal(rested, 0);
+        resting.ended();
+        run();
+        assert.equal(rested, 1);
+        run();
+        assert.equal(rested, 1, "once for the quiet spell");
+
+        // (Read again: made again by whoever reads, and let go of again after; sooner, told so)
+        resting.after = 500;
+        resting.began();
+        resting.ended();
+        assert.deepEqual(
+            [...timers].map(({ ms }) => ms),
+            [500],
+        );
+        run();
+        assert.equal(rested, 2);
+
+        // (An end with no beginning: nothing below none)
+        resting.ended();
+        resting.began();
+        assert.equal(timers.size, 0, "one read's enough to keep them");
     });
 
     it("are decoded by the copy of meshoptimizer's decoder the game loads in the browser", async () => {

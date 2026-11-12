@@ -5,7 +5,8 @@
 // and past a mark it holds less: fewer bodies in full (the rest drawn in their crowds, the furthest
 // first: game.js #rationing, #folkRoom, #marshal), less of the sound kept decoded (audio/sound.js
 // squeeze), and the beasts' bodies and models none's drawn from let go of at once, not after a
-// while. Once it's well under the mark again for a while, it holds as much as before.
+// while. Once it's well under the mark again for a while, it holds as much as before; a while that
+// doubles each time holding as much as before takes it straight back past the mark.
 //
 // Safari on an iPhone closes a page that holds too much with no warning, and tells it nothing of
 // its memory: two players' crash reports of 2026-11-11 had it let the game's tab go at 541 MB
@@ -19,6 +20,12 @@
  *    each (1, then 2);
  *  - `ease`, `hold`: back down a level once it's this much (MB) under that level's mark, and has
  *    been at it this long (seconds), so it isn't let go and taken up again and again;
+ *  - `again`, `forget`: holding less itself takes what's held well under the mark (the sound alone
+ *    goes from 82 MB to 24, a body's 10 to 15), so it came down, built and decoded it all again,
+ *    passed the mark and went up, every 40 to 90 seconds in a busy place. So a level come to within
+ *    `again` seconds of coming down doubles the wait before it comes down from then on (30
+ *    seconds, a minute, two... `forget` at most), forgotten once it's held as much as ever for
+ *    `forget` seconds;
  *  - `bodies`: how many bodies held in full at each level at most (as QUALITY's `bodies`, never
  *    more than it);
  *  - `sound`: how much of the recorded sounds kept decoded at each level at most (bytes: sound.js
@@ -29,26 +36,81 @@ export const MEMORY_GUARD = Object.freeze({
     marks: Object.freeze([400, 460]),
     ease: 40,
     hold: 30,
+    again: 120,
+    forget: 600,
     bodies: Object.freeze([Infinity, 20, 12]),
     sound: Object.freeze([null, 24 * 1024 * 1024, 12 * 1024 * 1024]),
 });
 
 /**
  * The memory guard's level after looking at what's held (`totalMB`), from where it was (`level`,
- * since `since`, seconds), `now` (seconds): up at once to the highest whose mark it's past; down a
- * level once it's `ease` under that level's mark and has been at it `hold` seconds. Returns
- * { level, since } (since: when it came to it).
+ * since `since`, seconds; `wait`: how long it stays at a level before coming down, seconds; `left`:
+ * when it last came down, or null), `now` (seconds): up at once to the highest whose mark it's
+ * past, the wait doubled if it came down less than `again` seconds ago; down a level once it's
+ * `ease` under that level's mark and has been at it `wait` seconds; the wait as it began once it's
+ * been at no level for `forget` seconds. Returns { level, since, wait, left } (since: when it came
+ * to the level).
  */
-export function guardLevel(totalMB, { level = 0, since = 0, now = 0, guard = MEMORY_GUARD } = {}) {
+export function guardLevel(totalMB, { level = 0, since = 0, now = 0, guard = MEMORY_GUARD, wait = guard.hold, left = null } = {}) {
     const up = guard.marks.filter((mark) => totalMB >= mark).length;
 
     if (up > level) {
-        return { level: up, since: now };
+        const soon = left !== null && now - left < guard.again;
+
+        return { level: up, since: now, wait: soon ? Math.min(wait * 2, guard.forget) : wait, left };
     }
 
-    if (level > 0 && totalMB < guard.marks[level - 1] - guard.ease && now - since >= guard.hold) {
-        return { level: level - 1, since: now };
+    if (level > 0 && totalMB < guard.marks[level - 1] - guard.ease && now - since >= wait) {
+        return { level: level - 1, since: now, wait, left: now };
     }
 
-    return { level, since };
+    if (level === 0 && wait !== guard.hold && now - since >= guard.forget) {
+        return { level, since, wait: guard.hold, left: null };
+    }
+
+    return { level, since, wait, left };
+}
+
+/**
+ * The guard itself: its level, kept from look to look, and what's done as it changes.
+ *  - `onLevel(level, was)`: the level's changed (the game: the sound squeezed or let be, the
+ *    bodies' budget as the level has it);
+ *  - `letGo(level)`: it's gone up a level, so everything held that nothing's using is to be let go
+ *    of at once, not after a while (the game: the beasts' bodies and models none's drawn from, and
+ *    the character kit's idle caches).
+ */
+export class MemoryGuard {
+    /** Its level (0: holding as much as ever), since when (seconds), the wait before it comes down, and when it last did. */
+    level = 0;
+    since = 0;
+    wait;
+    left = null;
+
+    constructor({ guard = MEMORY_GUARD, onLevel = () => {}, letGo = () => {} } = {}) {
+        this.guard = guard;
+        this.wait = guard.hold;
+        this.onLevel = onLevel;
+        this.letGo = letGo;
+    }
+
+    /** What's held (`totalMB`) looked at, `now` (seconds): the level it's at from now, whoever's to act on a change told. */
+    look(totalMB, now) {
+        const was = this.level;
+        const { level, since, wait, left } = guardLevel(totalMB, { level: was, since: this.since, now, guard: this.guard, wait: this.wait, left: this.left });
+
+        this.level = level;
+        this.since = since;
+        this.wait = wait;
+        this.left = left;
+
+        if (level !== was) {
+            this.onLevel(level, was);
+        }
+
+        if (level > was) {
+            this.letGo(level);
+        }
+
+        return level;
+    }
 }

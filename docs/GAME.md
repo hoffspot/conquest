@@ -1546,6 +1546,16 @@ drawn back or looks towards the horizon. Their soft edge (about 5 cm on medium a
 about the sun's own: the half-degree sun blurs a 2 m figure's shadow by 2 cm, a house's eaves' by
 7 cm.
 
+**The shadow maps the view's own** (world/shadows.js `shadowMapOf`). three.js makes a light's
+shadow map the first time it's drawn into, if its shadow has none: a depth picture, which the
+lit shaders read (compared and filtered by the graphics card), and with it a colour picture of
+four bytes a texel that's drawn into every time and never read, 4 MB for the sun's map on Low and
+16 MB on Medium and High. The view makes each map first (the sun's whenever its size is set, a
+lamp's cube with it), the same in every way but that colour picture, a byte a texel, the least a
+render target can have: 1 MB and 4 MB. It's set up as three.js r186 sets its own up
+(`WebGLShadowMap`), so `test/light.test.js` has three.js make its own beside it and fails if
+they're alike no longer: a newer three.js that sets its maps up otherwise is noticed there.
+
 **Shadow maps drawn with only what they need** (world/shadowpasses.js; the terrain plan's M7k).
 three.js asks each mesh whether it's in a shadow camera's view, with that light's own frustum;
 the view answers for the sun and the lamps (`watchShadows`):
@@ -2046,7 +2056,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   brighter to read so small). Drawn into a picture of its own, each of its materials wants a
   shader of its own: they're made first, in the background where the browser can
   (KHR_parallel_shader_compile, Safari and Chrome), and it's drawn once they're ready (made as it
-  was drawn, they held a fight's frame up, each new kind of attacker's); one of a
+  was drawn, they held a fight's frame up, each new kind of attacker's). It's lit by the scene's
+  lights, kept in a list (view.js `sceneLights`: found by walking the scene once, and again only
+  once the scene's been given or lost something of its own; each likeness walked a town's two
+  thousand nodes for them twice, hidden floors and all, and the picture behind the pack once
+  more); one of a
   crowd shows their name's first letter till they're drawn in full. Tapped, an icon sets the
   player on them where they stand (an `engage` order with `stand`, as tapping them does);
   tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
@@ -2307,17 +2321,46 @@ world was left drawn stretched or squashed. The world map's canvas is watched th
 the 3D view drawn at the screen's pixels again if they change (`matchMedia` on the resolution).
 
 **Quality levels** trade looks for speed. Game options' **Visual quality** slider chooses one, Low
-to High (suggested for the device until it's moved: older phones low, phones medium, computers
-high); debug mode can change it too. The game aims at 60 frames a second at every level:
+to High (suggested for the device until it's moved, view.js `detectQuality`: an iPhone and a
+phone or tablet with 4 GB of memory or 4 cores or fewer low, other phones and tablets medium,
+computers high); debug mode can change it too. An iPhone is Low for its memory, and said so
+outright: Safari tells a page neither what the device has nor what the page holds, and closes
+it at about 550 MB of what the game can count (*Crash reports*). It came out Low before only
+because Safari tells no memory and says 4 cores for any device with fewer than 8, which every
+iPhone's chip has; with 8, or a Safari that said otherwise, it would have gone to Medium by
+itself, 2.25 times the pixels and four times the shadow map. The game aims at 60 frames a second at every level:
 (Signs are the buildings' name boards and hanging signs and the roads' fingerboards, painted half
 size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
-`signDetail`.)
+`signDetail`. At every level a sign's painted so only while it's within 40 metres of the player
+(chunks3d.js `DETAIL_NEAR`, where a chunk's buildings change detail), and a quarter of its full
+size each way further off, from when it's built: *Signs painted as they're seen*, below.)
 
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
+| Low (iPhones, older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features | half size |
 | Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it | full size |
 | High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel | full size |
+
+**Signs painted as they're seen** (world/chunks3d.js `#signs`, kits/signs.js `signAt`). A name
+board's picture is 2048 by 330 at full size, 3.4 MB on the graphics card with its mipmaps, and
+every sign of every chunk drawn held its own however far off: a capital's 30, 62 MB on Medium and
+15.6 MB on Low. Now each is painted as the level has them only while it's within 40 metres of
+the player (`DETAIL_NEAR`), and a quarter of its full size each way further off, a sixteenth of
+the pixels, from when it's built (`signsAhead`): never painted big first. Coming within 40
+metres it's painted again as the level has them, and going off again it's kept so till it's 16
+metres further (`SIGNS_KEPT`), so walking to and fro there paints nothing; no more than one's
+painted again a frame. What's drawn is the same: the camera's with the player, and whatever it
+sees that's 40 metres from them is further from it still, where the graphics card draws from a
+smaller copy of the picture than the quarter-size one anyway. That holds while the widest board
+there is (the guild's, 7 metres) has a pixel of its picture or more to each of the screen's
+there, at the screen's corners, where it's drawn biggest for how far off it is
+(`signsFar`, from view.js `pixelsAcross`, set as the view's sized): on a phone, or a screen 1080
+pixels tall, a quarter; on one 1440 or 2160 tall, a half; wider or taller than that, as near.
+Walking into the human capital (seed 1, in Node, a 1080 screen), its signs' pictures held, with
+mipmaps: 120 metres out 30.0 MB on Medium before and 1.9 MB now (7.5 and 1.9 on Low); 60 metres
+out 55.2 and 6.7 (13.8 and 4.1); in the middle of its market, half of them within 40 metres, 62.4
+and 38.5 (15.6 and 10.8). A lab's are all painted as near ones are (`farSigns: false`: its
+camera goes where it likes), and the start town's too (town3d.js).
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -2347,6 +2390,45 @@ the pixels"), and debug mode shows it on the quality line. Not under automation
 (`navigator.webdriver`): a test's frames, drawn in software, are always slow, and what it measures
 mustn't change.
 
+**Against the frames the browser asks for** (`app/frames.js` `Beat`, kept by `Pacing.beat`). A
+phone saving its battery asks for 30 frames a second, not 60 (an iPhone's Low Power Mode; a
+browser's energy saver and a 30 Hz screen do the same), and 30 drawn is then all there is to draw.
+Fed a steady 30, the crowded fight below used to be left with 6 bodies in full for good, and the
+steps above could go down to Low at half the pixels, for nothing. So "too slow" and "near 60" are
+judged against the beat:
+
+- **The beat** is the shortest time between two frames drawn over the last 10 seconds (`BEAT.span`),
+  never shorter than 60 a second's, which it's taken to be till it's shown otherwise. Only a frame
+  the game's own work left room for shows it (its work before it no more than half the time it
+  came after, `BEAT.room`): one the game itself made late says nothing of what the browser asked
+  for, so a device too slow for 60 is still judged against 60, however long it lasts.
+- **Too slow** is slower than 30 a second and more than 1.3 beats a frame (`GOVERNOR.over`: 23 a
+  second on a beat of 30); **near enough** is within a tenth of the beat. The crowded fight's 48
+  a second is of 60: 24 on a beat of 30.
+- **Frames that went to building aren't judged by** (`frames.js` `BUILDING`): one that came after
+  more than half a beat of building (`#visit`: the buildings' insides and their folk, the crowds'
+  figures, the soldiers and creatures dressed a step at a time) is kept as one that says nothing,
+  and a window most of whose frames are such isn't judged at all. Drawing less cures none of it:
+  an iPhone's slow stretches (2026-11-11, its debug log) were all building, 18.5 to 31.6 ms a
+  frame of it for three seconds at 20 to 28 frames a second, and it was drawn at 0.85 and 0.7 of
+  Low's pixels for them.
+- **Steps that bought nothing are put back.** Each step down is judged against how the frames
+  came before it: 5% quicker (`gain`) and it's bought something. Down at the last step with
+  nothing bought, what's slow isn't what's drawn: every step is put back at once, and it's held
+  there, not stepping down again till the beat changes, the frames come a fifth slower than they
+  did (`worse`), or a minute's gone by (then two, four...). Not judged a step at a time: on a
+  screen that shows a frame late or not at all, the frames come no quicker till enough's been
+  taken away. Steps taken on a beat that's since slowed (the phone set to save its battery as it
+  played) are put back as soon as the new beat's known.
+- Game options says so on a phone or a tablet ("Your device is saving its battery and asking for
+  30 frames a second, so the game draws 30, and takes nothing away for it": `app/graphicsnotes.js`
+  `powerNote`, on a beat of 25 to 36 a second), and the debug log's `frame.beat` carries the beat.
+
+The frames are kept in typed rings (`FrameWindow`) and their middle looked for four times a
+second, sorted in a scratch array: a list of frames mapped, copied and sorted every frame made
+149 KB of garbage a frame for the governor, the throng and the invasion budget together (about
+290 µs a frame in Node; 5 µs now).
+
 **A crowded fight first** (Adaptive too; `app/throng.js`). With more than 10 about who can be drawn
 in their kind's crowd (hired adventurers, and the wild's people-shaped creatures and beasts, within
 80 metres),
@@ -2355,14 +2437,22 @@ their crowds, and so on every 3 seconds or so while it stays slow, never fewer t
 (*Standing in*, below). Meanwhile the steps above wait (`Governor.hold`), so those far off are
 drawn for less before everything is. After 6 seconds near 60 again, 2 are drawn in full again at
 a time; 2 drawn in full again that made it too slow go back to their crowds, and aren't tried again
-for 20 seconds, then 40, 80..., so it doesn't see-saw.
+for 20 seconds, then 40, 80..., so it doesn't see-saw. Judged against the beat and not by frames
+of building, as the steps above are; and with as many in the crowds as can be and the frames no
+quicker than before any were, they're all drawn in full again and left so (for 20 seconds, then
+40..., or till the beat changes or the frames come a fifth slower).
 
 **How big an invasion** (`app/budget.js`, with Adaptive on or off). While there's no invasion on,
 the game measures how long its frames take to update and draw (after 5 seconds of play, the middle
-of the last 10 seconds'), works out how many soldiers it has room for at 30 frames a second
-(core/invasions.js `sizeFor`: at most 360 on a computer, 160 on a phone, 120 on a smaller one,
-never fewer than 60) and tells the host whenever that changes by a tenth (its `budget` command):
-an invasion's as big as the smallest told by the players in its town (docs/WAR.md *Invasions*).
+of the last 10 seconds', looked at twice a second), works out how many soldiers it has room for at
+30 frames a second (core/invasions.js `sizeFor`: at most 360 on a computer, 160 on a phone, 120 on
+a smaller one, never fewer than 60) and tells the host whenever that changes by a tenth (its
+`budget` command): an invasion's as big as the smallest told by the players in its town
+(docs/WAR.md *Invasions*). A frame's work is the processor's alone (it ends when the drawing's
+handed over, not when the picture's made), so a device kept back by its graphics tells the least,
+60, whatever its work says: while Adaptive's drawing less than the quality chosen (any step down),
+or while the middle frame comes more than a fifth behind the beat (`BUDGET.behind`). A bigger
+invasion would only take more of the picture away.
 
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
@@ -2835,8 +2925,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
 - **Trees** (`Woodland`, kits/trees.js): every variant kept once and drawn wherever it's planted
   (Three.js's BatchedMesh), all the world's wood in one draw call and its leaves in another, only
   the trees in view (and, into the sun's shadows, only those in its); the crowns' shells and the
-  patches round the feet merged a chunk at a time. Merged a chunk at a time as the town's are, a
-  wood of 25 chunks would take 100 megabytes or more.
+  patches round the feet merged a chunk at a time. Merged a chunk at a time, as the start
+  town's were (they're planted here with the rest now: *The town*), a wood of 25 chunks would
+  take 100 megabytes or more.
 
 - **The settlements' buildings, props and trees**: each piece whose middle is in the chunk,
   built by the art kits as the town's are and merged with the one material (the atlas, above);
@@ -3339,7 +3430,10 @@ townsfolk, the crier, guards and barracks soldiers drawn in full as the player w
 door), 537 MB in all (a player's crash report, 2026-10-27). In seed 2's start town on Low, its
 smithy held 10 rather than 19 (the bodies' own copies 24 MB, not 65), and five seconds out again
 the townsfolk were all but all dressed. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
-furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
+furniture laid out, made into meshes, made ready to merge, merged; its builders, every corner
+they laid merged, are let go of then, and nothing the floor keeps, its `update`, its `drive`
+or its furnishing, reads what was built: they read it once, and two floors held 4.2 MB of
+builders for as long as they were held). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
 in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
@@ -3372,9 +3466,15 @@ dressed and let go of at its door as any building's.
 **The memory guard** (app/memoryguard.js `MEMORY_GUARD`, app/game.js `#memoryGuarding`): on a
 touch screen (a phone or a tablet), what the game holds is looked at every 2 seconds, as Safari's
 debug log tells it whatever the browser (`memoryNow`: the graphics card's, the sound's, the
-way-finding's, and the bodies' and the floors' copies on the page; not the page's heap, which only
+way-finding's, and the bodies', the floors', the models' and the character kit's copies on the
+page; not the page's heap, which only
 Chromium's tell of: with it, a city on an emulated phone in headless Chromium came to 443 MB with
-nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2):
+nothing short), and past 400 MB it holds less (level 1), past 460 MB less again (level 2; the
+marks were set on 2026-11-10 against a count that told a compressed picture as four bytes a pixel
+and left the models' and the kit's page copies out, and against a tab an iPhone closed at 541 to
+548 MB so counted. Counted as it is now the same town reads about as much or a little less, the
+pictures' over-count gone and the kit and the models come in, while what's held and counted
+nowhere fell much further, so the marks leave more room than they did and are kept):
 no more than 20 bodies in full, then 12 (the rest drawn in their crowds, the furthest first, by the
 bodies' budget: `#bodiesBudget`, never fewer than a battle's nearest soldiers; the room those drawn
 from a bought model have of their own, `QUALITY.models`, isn't cut, a copy sharing its model's
@@ -3382,9 +3482,22 @@ shapes and pictures with every other of its kind), the recorded sounds
 kept decoded to 24 MB, then 12 (audio/sound.js `squeeze`: past it, those played least lately let go
 of at once, and the made sounds let go of after a minute unplayed, not five), and, coming to a
 higher level, the beasts' bodies and models none's drawn from let go of at once, not after a while
-(`#forgetting`). It comes back down a level once it's 40 MB under that level's mark and has been at
-it 30 seconds (`guardLevel`), so it isn't let go of and taken up again and again. The debug overlay
-says so ("holding less (memory guard 1)"), and the debug log carries its level (`memory.guard`).
+(`#forgetting`; `MemoryGuard`'s `letGo`, which is where anything else held idle is let go of). It
+comes back down a level once it's 40 MB under that level's mark and has been at it 30 seconds
+(`guardLevel`), so it isn't let go of and taken up again and again. But holding less itself takes
+what's held well under the mark (the sound alone goes from 82 MB to 24, a body's 10 to 15), so in
+a busy place it came down, built its bodies and decoded its sound again, passed the mark and went
+back up: every 38 seconds in the city of the report below at 15 MB a body, 88 bodies built again
+in ten minutes; every 78 in a town just over the mark (the real `guardLevel`, on a model of what its
+levels save). So a level come to within 2 minutes of coming down (`again`) doubles the wait before it
+next comes down: 30 seconds, a minute, two, four, eight, then ten, forgotten once it's held as
+much as ever for 10 minutes (`forget`). The same city: 10 changes of level in its first ten
+minutes, not 32, and 29 bodies built again, not 88; over an hour 20 changes, not 189, and 56
+bodies, not 508. What's held is read once every 2
+seconds for the guard and the debug log's notes both (`memoryLately`), in a task just after the
+frame, not in it: reading it walks every body about. The debug overlay
+says so ("holding less (memory guard 1)"), and the debug log carries its level (`memory.guard`,
+and at each of the notes' readings, `trend`).
 Safari on an iPhone closes a page that holds too much with no warning, and tells it nothing of its
 memory: two players' crash reports of 2026-11-11 had it let the game's tab go at 541 MB (in a human
 city, 30 bodies about, the sound 82 MB, the graphics card 312) and at 551 MB (out in the cat folk's
@@ -4005,10 +4118,17 @@ facing south; each is turned about its middle to face the way the layout says:
   side by side on one picture), so every tree shares three materials. The leaves stir in a
   breeze (`TREE_WIND`: each part of a crown in its own time, more the higher up), and anything
   of a tree within 3 to 7 metres of the camera fades out in a dithered pattern, so the camera
-  never looks through a wall of leaves. Planted (`plantTrees`), the trees are merged a tile of
-  the map 24 metres square at a time, so the camera and the sun's shadows draw only the tiles in
-  view (about 250,000 to 300,000 triangles a frame, shadows included, on the market square or at
-  the forest's edge); the crowns' shells and the patches round the feet are one mesh each.
+  never looks through a wall of leaves. The start town's trees are planted with the world's
+  (`buildTown`'s `woodland`, the chunks' `Woodland`: each variant kept once and drawn wherever
+  it stands, each tree culled on its own), its crowns' shells and the patches round its feet one
+  mesh each. They were merged, a copy of its variant's wood and leaves for every tree, a tile of
+  the map 24 metres square at a time (`plantTrees`, which the labs, having no chunks, still
+  use): for a town's 124 trees (seed 2) 14.3 MB of corners on the page, and as much again on the
+  graphics card as its tiles came into view. Planted either way a tree's the same: the same
+  materials, every corner where its merged copy had it (to a fifth of a millimetre: the batch's
+  matrices are 32-bit floats), lit and tinted the same, and its box, which says how high it
+  stands on each square for the camera's cut-away, the same to the bit (`Woodland.plant`'s
+  `fitted`).
 
 The world round the town, its trees too, is drawn a chunk at a time (world/chunks3d.js, above).
 
@@ -4037,7 +4157,11 @@ longer in software rendering, for the same picture.) Glass (windows, leaded ones
 well or a pool; obsidian), iron, gold and silver, and slate shine (`SHINES`): a highlight where
 the sun or a lamp catches them, and the sky reflected in them, more of it at a glancing look
 (Fresnel, less so the rougher the surface: Karis's fit for phones), and that much less of the
-sky's light taken in beneath. Glass mirrors the sky sharply; iron has a broad dull sheen; gold
+sky's light taken in beneath. (The sky's there to reflect only where three.js says the light
+from all round is the baked kind, by a name of its own: `ENVMAP_TYPE_CUBE_UV` in r186,
+`ENVMAP_TYPE_PMREM` in r187. The atlas and still water, world/water.js, ask for either, and a
+test fails if three.js has neither: without it what shines would mirror nothing, and nothing
+would say so.) Glass mirrors the sky sharply; iron has a broad dull sheen; gold
 and silver reflect in their own colour, their own paint half as bright; slate has a soft sheen,
 mostly at a glancing look. What's painted, dyed or woven in gold or silver has a colour of its
 own that doesn't shine (`paint-gold`, `cloth-gold`, `cloth-saffron`, `cloth-silver`; golden
@@ -4061,7 +4185,33 @@ is kept apart as it's built (Solid's near faces) and merged last (town3d.js `joi
 userData.far says where it begins), and a chunk more than 40 metres from the player draws only
 what comes before it (chunks3d.js `DETAIL_NEAR`, `drawFar`): a third fewer triangles in the
 humans' buildings from there, and nothing to see missing, those sides being thinner than a
-pixel at that distance even on a phone. While it's built, `buildTown` also records how tall whatever stands on
+pixel at that distance even on a phone.
+
+What the atlas draws is given to the graphics card in about half the bytes it was
+(engine/corners.js `sharedCorners`, as each piece is made ready to merge: town3d.js `partsOf`).
+A corner was 48 bytes, five 32-bit floats' worth of attributes, and every triangle had three of
+its own. Now corners alike in everything, to the bit, are kept once and the triangles say which
+they're drawn from (an index: the same triangles in the same order, so `userData.far` and the
+shadow passes' runs count the triangles' corners as before), and which way a corner faces is
+three signed bytes, not three floats. At the human capital (seed 1) 871,000 corners drawn are
+480,000 kept, 55%, each mesh's index 16 bits: 39.9 MB before and 20.0 MB now, 24 bytes a
+corner drawn; a quarter of making a piece ready is sharing its corners (71 ms of 248 over 120 of
+the capital's pieces, in Node). Nothing seen changes:
+- **The normal.** The lit shaders make it a unit long again, so only its direction counts, and
+  of the directions three bytes can say a near one's looked for, not only each side rounded on
+  its own (`byteNormal`): over a hundred thousand ways to face, a thirtieth of a degree off on
+  average and never a third (rounded, a sixth on average); a wall's, a floor's and a 45 degree
+  roof's exact. A third of a degree is half a percent of the sun's light on a face at most.
+- **The colour stays in floats.** Some are over 1 (a tint's: 1.02 at the capital), which a byte
+  can't say, and the darkest are 0.003, where a byte's steps are as big as the colour: soot, iron
+  and slate would come out in blotches. (Half floats would do, four to a corner, but that's
+  another shader for the one material, and a sixth of what's saved.)
+- **The layer stays a float.** With its shine and its window's seed it's up to 33,000, so it
+  doesn't fit the normal's fourth byte, and it's four bytes however it's kept.
+A licensed kit's houses, indexed as they come, and what's drawn with a material of its own (a
+sign, ivy, a light) are as they were.
+
+While it's built, `buildTown` also records how tall whatever stands on
 each of the town's squares is (a
 `heightMap`, read anywhere with `at(x, z)`; a building over the squares under it and its eaves,
 as it's turned, not its turned box), for the cutaway.
@@ -4193,7 +4343,12 @@ timed so its blow lands when the battle's does (a kick with a weapon in hand lea
 guard); a `draw` event draws the weapon from where it's put away with its flourish, or puts it back,
 with its sound as the hand takes it or lets it go (a blade's ring leaving its scabbard and the click
 of its hilt going home, something slung off the back or taken from the belt, knuckles cracking);
-a character only stands on guard with its weapon out; a
+a character only stands on guard with its weapon out, while it's fighting: striking, having struck
+in the last 2.5 seconds, or with an enemy it can see within its weapon's reach and 2 metres
+(`#fighting`; each one's answer to that last kept, and worked out again every quarter second of the
+battle's time, each at its own: app/fight.js `foeNear`, `guardDue`. Asked of everyone for everyone
+every frame, it took 0.4 to 0.8 ms of each in an invasion of 173, measured in Node, and 0.03 to
+0.06 kept); a
 `hit` makes the target flinch in the way the attack's `reaction` says, from the side the blow came
 from, flushes their skin red for a moment and shows the damage; a `death` makes them fall as a
 body does (back from a blow in front, or down onto the knees and over; forward from one behind:
@@ -4237,22 +4392,98 @@ Each emote shows its face (smiling for a wave, a cheer, a fist pump and a beckon
 the rest). They're for the eyes only: nothing in the battle waits on them but the player's own
 stopping.
 
-**Everyone but a player** has their garments drawn all at once, one mesh with one picture of
-the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's uniform is 12
-to 17 draw calls rather than 21 to 26. A player's own are drawn one by one: they change what
-they wear.
+**Everyone but the player's own hero** has their garments drawn all at once, one mesh with one
+picture of the whole outfit (docs/CHARACTERS.md, "Equipment"), so a soldier in their people's
+uniform is 12 to 17 draw calls rather than 21 to 26. The player's own are drawn one by one: they
+change what they wear, and are seen closest.
+
+**The other players** are drawn all at once too (app/game.js `OUTFITTING`, `#outfitting`; the
+scaling plan's slice `5-5`, [generated/crowd_rendering_plan.md](../generated/crowd_rendering_plan.md)),
+but never while it would keep a change from showing:
+
+- **What they put on shows at once**, drawn one by one in the frame the host says so (`#regear`:
+  `setEquipment(ids, { merge: false })`), as it always was. Once it's been as it is 5 seconds of
+  the game's time (`after`), their outfit's picture is put together a step at a time, 2 ms of a
+  frame (`budget`: a step at least, one player's at a time, the first changed first), the
+  garments drawn one by one meanwhile; then, in one frame, their meshes are one mesh drawn with
+  it (`Character.merging`), and each garment's own material is let go of. A second change while
+  it waits or while it's put together starts the 5 seconds over, and nothing's kept of what was
+  begun: the picture half made for the outfit they wore is let go of (`#giveUpOutfit`), unless
+  someone else is making the same one.
+- **Come into the world as it's played**, a player's dressed at once (`#mirror`), so one by one,
+  their outfit put together from the next frame; one built a step at a time (as the game loads,
+  or made again after a polymorph) is built all at once from the first.
+- **The way back** (`drawApart(id)`, `piecewise`): any one of them put back to one by one, at
+  once and for as long as they're in the world, and all at once again (`drawApart(id, false)`).
+  `OUTFITTING.others` off, they're all one by one, as they were.
+- Whatever's on them is as it was: what they carry, a shield on the back and a helm are things
+  of their own, not garments; wounds are on the one mesh from the frame it's made
+  (world/wounds.js patches whatever a body's drawn with); one unseen by Invisibility stays so,
+  its one mesh made as faint as the meshes it's made from, and so does what they put on
+  meanwhile (it showed plain till the spell ended). A likeness for a party icon is drawn from
+  whichever they are then.
+
+Measured in headless Chromium (software, 1000 × 600, the start town of seed 1), the player and
+seven others before them, each in gear of their own (the starting gear; the humans', the elves'
+and the orcs' uniforms; a jerkin and travel cloak; plate; a gambeson and cloak):
+
+| The seven others | One by one | All at once |
+|---|---|---|
+| Meshes (skinned) | 105 (79) | 56 (30) |
+| The frame's own draws of them | 105 | 56 |
+| The frame's own draws of all eight heroes | 119 | 70 (41% fewer) |
+| ...and with the sun's shadow maps' draws of them (47 near the camera, 88 far, the same either way) | 166 near, 207 far | 117 near (30% fewer), 158 far (24% fewer) |
+| Pictures their garments are drawn with, on the graphics card, 131 to 184 pixels tall | 33.3 MB (20 garments' pictures at 512, each shared by all who wear it) | 18.7 MB (seven outfits' at 512) |
+| ...43 to 60 pixels tall | 33.3 MB | 4.7 MB (at 256) |
+| Held on the page by the seven | 45.8 MB | 34.8 MB near, 23.9 MB far |
+
+A garment's picture is shared by everyone who wears it and an outfit's is its wearers' alone, so
+what's saved in pictures depends on who wears what: six of those twenty garments are the
+player's own hero's too, kept whatever the others wear, and with the seven near the camera the
+whole card held as much either way (282.1 MB all at once, 281.9 MB one by one, the kit's idle
+pictures let go of). Seen small, an outfit's pictures are a quarter the size and it's all
+saving. Putting the seven's outfits together took 4.0 seconds of the game's time between them.
+
+**How it looks.** In full, the same: the same garments in the same places (the one mesh is the
+meshes it wore), with the outfit's one picture where each garment had its own, which differs
+only along the garments' edges, a texel wide, where the picture says which of two is on top.
+Each of the seven was pictured alone, lit as on a fair day, one by one and then all at once in
+the same pose (put together in place, the game stopped), and the two pictures compared by the
+measure the levels of detail are held to (CHARACTERS.md *Performance*, about 2%: the share of
+the figure's own pixels that change by more than 48 levels of 255):
+
+| Wearing | In full, 835 to 887 px tall | At the quarter level, 277 to 294 px tall | Full against the quarter, one by one (all at once) |
+|---|---|---|---|
+| The starting gear | 0.00% | 0.2% | 0.3% (0.1%) |
+| A jerkin, gloves and travel cloak | 0.01% | 0.6% | 0.9% (0.2%) |
+| A gambeson, bracers and cloak | 0.01% | 0.4% | 2.6% (2.2%) |
+| The orcs' uniform (a breastplate) | 0.02% | 1.0% | 1.3% (0.8%) |
+| The humans' uniform (mail under a surcoat) | 0.09% | 2.0% | 3.1% (2.0%) |
+| The elves' uniform | 0.21% | 2.4% | 3.4% (2.6%) |
+| Plate (mail, a breastplate, gauntlets, greaves, sabatons) | 0.06% | 3.2% | 5.9% (4.2%) |
+
+Under 360 pixels tall a body's drawn with a quarter of its garments' triangles (*Fewer triangles
+as they're smaller*, above), and there the two differ more, not by their pictures but by their
+triangles: an outfit's lowered as one mesh, the same for all who wear it, as every soldier's is,
+where one by one each garment's lowered by itself. The last column is what the level itself
+changes, seen as close as the first: the one mesh is nearer its own full detail than the
+garments one by one are to theirs, in every outfit. (The same picture taken twice differed in no
+pixel. Pictured without waiting for the lower levels to come from their worker, one just put
+together is in full beside one at the quarter, and plate differed by 6%: what's compared has to
+be at one level.)
 
 ### Soldiers in their crowds (world/crowd.js)
 
 A field battle of a hundred a side couldn't be drawn character by character: each soldier is a
 dozen meshes and a skin of its own, posed every frame, and built a few a second (a hundred took
 about a minute to come). So with a battle's soldiers about the player (more than 24, which a town's
-own guards never are: `MARSHAL.from`), those nearest the camera, and whoever's fighting the player,
+own guards never are: `MARSHAL.from`), the first of them in the order of precedence (*Who comes
+first*, below: whoever's fighting the player or their party, then the biggest on the screen)
 are drawn in full, as many as the Visual quality draws so (`QUALITY.soldiers.full`: 4, 6 or 10),
 and the rest in their **crowds** (app/game.js `#marshal`, twice a second; one in full let go to the
 crowd only once it's 3 places past the last drawn in full). However few there are, those more than
-45 metres from the camera are drawn in their crowds too (`DETAIL.reach`; but whoever's fighting the
-player), their bodies in full let go, and built in full again as they come within it: that far
+45 metres from the camera are drawn in their crowds too (`DETAIL.reach`; but whoever the order
+puts before those who merely stand about), their bodies in full let go, and built in full again as they come within it: that far
 off, a body's drawn at its lowest detail anyway (a person's under 50 pixels tall on a phone held
 upright). One drawn in full goes to its crowd only once it's 10 metres further than that
 (`DETAIL.slack`), so none goes back and forth at the edge. Fewer soldiers than a battle's are drawn in
@@ -4265,8 +4496,8 @@ room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on 
 their crowds, their bodies in full let go. The debug log says how many soldiers were about and
 how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
 crier in his square, a stranger by the road) are held in full only as far as the budget leaves
-room too (`#folkRoom`, twice a second): whoever the player's talking or trading with first, then
-the nearest the camera, those on another map last. The townsfolk past the room, and those more
+room too (`#folkRoom`, twice a second), in the same order: whoever the player's talking or
+trading with first, then the biggest on the screen, those on another map last. The townsfolk past the room, and those more
 than 45 metres from the camera, are drawn in crowds of their own (*The townsfolk in their
 crowds*, below). The rest past the room (a crier, a stranger, or one of the townsfolk while their
 crowd's figure is made) aren't drawn: undressed, the furthest first (one held only just past it,
@@ -4333,6 +4564,28 @@ now in their crowd):
   - **Half floats.** Kept as half floats (`templateFrom`, three.js HalfFloatType): a millimetre or
     so out at most on a body two metres tall, half the memory. A kind's moves are 440 KB so, where
     its fewer moves were 365 KB as floats.
+- **Kept as what it's drawn with** (`packedFigure`, once both lists of fewer triangles have come).
+  The figure as merged holds every corner of the far level of detail, and what it carries twice
+  over: a human swordsman's 28,973, of which its triangles near and far use 9,080, under a third.
+  Only those are kept, numbered anew, and each attribute as what it is, not floats: where it is
+  as floats still; which way it faces a signed byte each way (half a degree out at most); where
+  its picture is and its colour sixteen bits each (its colour's in linear light, where a byte's
+  steps would show in its darks); the bones it's bound to and how much to each a byte each, as a
+  body's own are, the weights still adding up to what they did; its shine, its set and its part
+  bytes. 37 bytes a corner where each was 92, and posed it's where it was (`test/crowd.test.js`:
+  within two millimetres of the soldier's own, as before). Then the page's copies of its corners,
+  its triangles and its moves are let go of once the graphics card has them (world/release.js):
+  nothing reads them once it's made. Measured in Node (`size` 256): a human swordsman's figure
+  3.91 MB on the graphics card before and 1.66 MB after (its corners 2.54 MB to 0.32), and on the
+  page 3.70 MB before and 0.63 MB once it's sent (its picture's canvas); an elf archer's 3.44 to
+  1.47 MB on the card; one of the townsfolk's 1.39 to 1.05. With a list still to come after the
+  longest wait (`CROWD.wait`), every corner's kept as it's numbered, packed the same, and the
+  list drawn as it comes.
+- **Given more room as a crowd grows** (`Batch`), what draws a kind is made again twice as big, and
+  the old one's own (each instance's moment and state) let go of off the graphics card, the
+  figure's corners and triangles taken off it first: three.js lets go of every attribute a
+  geometry has when it's let go of. Till 2026-11-11 its own were taken off instead, so each time
+  a crowd doubled its figure was let go of and sent again (2.5 MB), and its own never were.
 - **Drawn all at once.** Everyone of a kind is an instance of its figure, drawn in one go near and
   one far: a draw or two a kind, whatever how many. Each is posed on the graphics card from the
   picture of moves, between the two moments it's between (`crowdFrame`), nothing of it posed on the
@@ -4374,6 +4627,20 @@ now in their crowd):
   that falls while it waits is forgotten, never seen, and one that goes out of reach waits on: not
   built in full, as they were till 2026-10-25 (a joined game in the midst of an invasion had 38 of
   its dead in line to be, far off).
+- **Not begun in full till the marshal's looked** (`#unlooked`, `#nextEnlistee`). The marshal
+  looks a couple of times a second, and between its looks whoever's next of those waiting to be
+  dressed is begun as soon as the one before is done, or let go. So a soldier brought out since
+  it last looked, or looked at with other room than there is now (the bodies' budget cut by the
+  memory guard, the quality changed: `#roomSaid`), isn't begun: the marshal's asked to look in
+  the next frame (its clock set to 0), and only what it leaves to be dressed is. One of the
+  wild's people-shaped creatures waits on the rationing the same way. Till 2026-11-11 such a one
+  could be begun in that while with no room for it: a second of the processor and ten megabytes
+  on a phone just as its budget was cut, and, built, left in full, as one only just past the room
+  is (`MARSHAL.margin`). With each of the frame's jobs on its own clock (*The frame's own jobs*,
+  under *Performance*), the folk's room is looked at a quarter of a second before the marshal
+  next looks, and whoever it stopped dressing left the next soldier to be begun: seed 2's start
+  town's nearest guard, its budget cut to no room at all, was built in full and stayed so
+  (`e2e/pellagos.spec.js`, "a guard in its crowd").
 - **Sooner while they're unseen** (`FIGURES`). While any soldier near waits so, unseen, the figures
   are made with 10 ms of each frame (`FIGURES.budget`) rather than that share, the kinds of those
   nearest the player first (whoever's fighting them before anyone: `Crowd.first`, `#marshal`),
@@ -4387,9 +4654,33 @@ now in their crowd):
   seconds longer (the most), it sees 64 to 69 of the 126 from the first frame, 10 or 11 kinds made
   while it loaded: 46 of the 53 within 60 metres, and all of them 6 seconds on; and 21 kinds are
   made a minute and a half in.
+- **Kept between sessions** (world/figurestore.js; `Crowd`'s `store`). A kind's figure comes out
+  the same for the same kind, picture size and code, and making it is one to seven seconds of the
+  processor (measured in Node: 1.3 s for one of the townsfolk, 3.1 for an elf archer, 6.6 for a
+  human swordsman, the first, its garments painted too), a step at a time while its soldiers wait
+  unseen. So once made, as it's packed, it's kept in the browser's Cache storage (the cache
+  `pellagos-figures-v1`, listed in client/sw.js so the service worker leaves it alone; nothing's
+  ever served from it) as one run of bytes: its corners, its triangles near and far, its picture's
+  pixels and its moves, about 1.5 MB for a soldier. The next session's crowd looks there first
+  (`keptOrMade`: a frame or two, waited on as work done elsewhere is) and draws from what it
+  finds, its numbers read where they are in the bytes and let go of off the page once sent; the
+  picture's pixels are what the canvas had, drawn the same way.
+  - **Under the code's version** (app/version.js `codeVersion`: the commit the site was put
+    together from), so a figure made by other code is never read, and is let go of the first
+    time the store's opened. A copy run from the repository ("dev": `npm start`, the tests) keeps
+    none and makes each as ever.
+  - **By what it's made from** (`figureId`): its kind, its picture's size, the kit's skin size and
+    all its maker's told (its look, its weapon's ways), hashed. A kind made its own way (a
+    beast's: beasts/herd.js) isn't kept.
+  - **The 40 most recent** (`FIGURES_KEPT.most`), by when each was last made or read (written
+    down beside them, `figures/used.json`), the rest let go of: 60 MB at the very most.
+  - **Never needed.** Where the storage can't be had, refuses, or gives back what isn't a figure
+    as this code lays one out (`FIGURES_KEPT.format`), or there's no waiting on it (a figure
+    wanted at once), the figure's made as it always was; one whose fewer triangles hadn't both
+    come isn't kept.
 - **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
   minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
-  graphics card (6 MB or so on Low), made again should one of its kind come. Kept for good, as
+  graphics card (under 2 MB on Low; 4 or so till 2026-11-11), made again should one of its kind come. Kept for good, as
   they were till 2026-10-25, an iPhone that let the game's tab go held 18 kinds.
 
 Drawn so, a frame's work hardly grows with the crowd: in headless Chromium on "medium", out on open
@@ -4467,7 +4758,8 @@ reach only; all of them without Adaptive): so a quicker machine, or a phone of a
 draws more of them in full. Looked at a couple of times a second (`MARSHAL.every`), and at once
 when the throng changes:
 
-- **Who stays in full.** Whoever's fighting the player or the player's fighting (however far
+- **Who stays in full.** Whoever the order of precedence puts before those who merely stand
+  about (*Who comes first*, below: whoever's fighting the player or their party, however far
   off), the four of the players' allies nearest them (`MANY.full`), one thrown by a blast, then
   the biggest on the screen (the nearest the camera, as big as they are; those out of view last);
   never a dungeon's boss or mini-boss, nor an elite. One drawn in full goes to its crowd only once
@@ -4493,7 +4785,8 @@ when the throng changes:
   (`QUALITY.bodies`, *Soldiers in their crowds*, above; app/game.js `#rationing`, twice a second).
   - The budget counts everyone else held in full or about to be, but the beasts built in code, whose
     bodies are shared and small.
-  - Whoever's fighting the player first, then the nearest the camera; those on another map last.
+  - In the order of precedence (*Who comes first*, below): whoever's fighting the player or
+    their party first, then the biggest on the screen where it stands; those on another map last.
   - Those past the room are drawn in their kind's crowd as a soldier is (`CrowdAvatar`, not a
     stand-in), their body in full let go; one not built yet isn't built at all. One in full only
     just past the room (`MARSHAL.margin`) is left as it is.
@@ -4544,6 +4837,75 @@ draws do. Memory (Chromium's JS heap, and what the scene's geometry and pictures
 84 MB and 104 MB before any of them; 685, 226 and 318 MB with forty built; 756, 261 and 378 MB with
 eighty. Most of what the first forty add is the first of each kind (its skin, garments, a crowd's
 figure); each one more takes about 4 MB.
+
+### Who comes first (app/precedence.js)
+
+Where not everyone can be had as they'd best be, one order says who's before whom: who's held in
+full where a phone's memory holds only so many bodies (`#marshal`, `#rationing`, `#folkRoom`),
+who's drawn in full in a crowded fight that comes too slowly (`#thronging`), and whose bar is
+shown where bars over heads overlap (*The screens*, below). It's the "full-tier order" of the
+scaling plan's Stage 5 ([generated/multiplayer_scaling_plan.md](../generated/multiplayer_scaling_plan.md);
+the research behind it and what's built of it so far are in
+[generated/crowd_rendering_plan.md](../generated/crowd_rendering_plan.md)):
+
+1. the player themself;
+2. the other players in their party;
+3. whoever they're set on: the battle's target, the one they've chosen to fight (its bar lit),
+   or whoever their blow under way is at;
+4. whoever's attacking them (set on them, or a blow at them under way);
+5. whoever's fighting their party (set on one of them, or one of them set on it);
+6. whoever they're talking to, buying from or trading with;
+7. then the biggest on the screen, the nearer first of two as big;
+8. and those on another map after everyone on the player's, in the same order among themselves.
+
+`standingOf(viewer, actor)` says which of 1 to 6 someone is (`STANDING`), `Order.rank` ranks any
+of the battle's actors by it, and `first(entry)` says whether one comes before those who merely
+stand about. The module knows nothing of the game (plain actors and numbers: it runs under
+Node), and makes nothing new once it's ranked as many: each place keeps its own `Order`, whose
+entries are filled in again every look, a couple of times a second for who's held and every
+frame for the bars. The player as it needs them (`#viewer`) is one object filled in again: who
+they're set on and striking as they are that frame, their party and its foes and whoever
+they're trading with looked up twice a second.
+
+Each place had an order of its own before (three copies of "fighting the player", the folk's
+"kept" for whoever the player talked to, and four sorts). What changed with the one order:
+
+- Whoever's fighting the player was ranked a fixed 160 metres nearer the camera than they were;
+  now they're before everyone who isn't, whatever the distances.
+- Whoever's fighting the player's **party**, and whoever they're talking or trading with, count
+  everywhere: only the folk knew of the talk before, and nothing knew of the party.
+- The soldiers, the creatures and the folk were ranked by how near the camera they were; now by
+  how big on the screen, which is the same thing for bodies of one height, and puts a troll
+  before a goblin as near.
+- Past 45 metres from the camera, whoever the order puts first is kept in full (in a crowd else):
+  that was whoever was fighting the player, and for the folk whoever they talked to.
+
+Who's held in full when there's room for everyone is as it was. What each place keeps of its
+own, and why:
+
+- **Held or let go, by how big they'd be seen, in view or not** (`#stature`: the soldiers, the
+  creatures, the folk). One out of view isn't ranked last, as one who only stands in is: a body
+  let go of as the camera turns from it would be built again as it turns back, seconds of work.
+  Each is taken to be as tall as its kind is (a person's height; a creature as big as its seed
+  makes it), however it's drawn now, never as tall as its own body where it has one: its place
+  must not change as it's built in full or let go. Measured by its own body's height (as it was
+  for a day, 2026-11-11), a soldier is as tall as its kind's figure in its crowd and as tall as
+  itself in full, so one ranked within the room in its crowd and more than the margin past it in
+  full was built, let go and built again for as long as it stood there: two of a field battle's
+  eighty were, some twenty times each in two minutes, a body built every few seconds for nothing
+  and a soldier forever fading between its crowd's figure and itself (`e2e/pellagos.spec.js`,
+  the debug overlay's field battle, waits for them all to be drawn and sorted).
+- **Standing in** (`#crowdable`): the four allies nearest the players and one thrown by a blast
+  come before the rest (`STANDING.kept`, after everyone the order names): the nearest allies
+  cast shadows and are drawn in more detail, which a stand-in can't, and a crowd's figure has no
+  move for being flung. Those out of view are last: only a stand-in is swapped, in a moment.
+- **Which kinds' figures are made first** (`#marshal`, `FIGURES`): by how near the player, not
+  how big on the screen. The figures are first made while the game loads, before the camera's
+  behind the player, and a kind's is made for everyone of it wherever the camera looks.
+
+The scaling plan's slices that let the other players into the bodies' budget and the crowds
+(`5-2`), choose how many of them are in full (`5-4`) and queue a crowd arriving at once (`5-6`)
+are to rank by this order.
 
 ### The paperdoll (app/pack.js, world/view.js)
 
@@ -4693,9 +5055,33 @@ shows, smaller, at its edge the way it is, as the wild's elites are), the player
 view (*The world map*), the other players in their party (*Each in their own colour*, below), and
 the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
-(0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
+(a long press: half a second, without moving, app/press.js `HOLD_MS`) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
 the doorway; only those on the same floor as the player are shown.
+
+**Only what's changed is gathered and drawn.** It asked for everything thirty times a second and
+drew the same picture each time the player stood still. Now:
+
+- **The same picture isn't drawn again.** What it's asked to draw is made one number (`#stamp`:
+  where each thing would be to a pixel of the screen's, which way the player faces and looks, the
+  icons' kinds and rims); the same as the last, it isn't drawn, but four times a second whatever
+  (`STILL_EVERY`). Anything that pulses or fades by the clock keeps it drawn every time: whoever
+  the player's set on (ringed), an elite, a hell rift, a ping, the next patch being painted.
+- **Its size is kept** till the browser says it's changed (a `ResizeObserver`; without one, asked
+  each time): asked every drawing, after the frame's written to the HUD, it made the browser lay
+  the page out again to answer.
+- **Everyone on it is gathered in one pass** over those about (app/game.js `#drawMinimap`), into
+  lists kept from one drawing to the next, and out in the world only those within what it shows
+  (and 12 m past it): three passes made a list and an object for each of them every time.
+- **Its icons are those near the player** (`#iconsNear`), gathered four times a second or once
+  they've gone 4 metres (every drawing, played on by hand), from lists that are kept: the works',
+  the fortifications' and who holds each place till the war's turn, how many there are, how much
+  of the world's set down or who holds any of them changes (`#marksKept`: looked at each time it's
+  asked, as one number of them all), one's taken or cleared (`#marksStale`), or a second's gone by
+  (`MARKS_KEPT`: two peoples' standing with each other changed between turns); a dungeon's words
+  written only when it's cleared. Each of a world's two hundred and more was listed, sentence and
+  all, for every drawing: 56 to 70 µs of each before, 3 to 5 now (Node; a world three hours into
+  its war, 36 works, 60 forts, 237 places, 53 dungeons).
 
 **Each in their own colour** (app/mapicons.js `PARTY_COLOURS`, `partyColour`; app/game.js
 `partyView`). The other players in a party (not followers, hired adventurers nor creatures called:
@@ -5073,7 +5459,7 @@ same button holds the war's key.
   it, and whether it was tracked home; a marker by its kind and words; a request's star by the
   request (game.js `worldMapView`'s icons' `about`, else mapicons.js `ICON_NAMES`, the key's
   names too).
-- **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
+- **The pin** (the terrain plan's M7g): held still somewhere (a long press, half a second, moving less than 8 pixels),
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself
   won't take one there, `setPin`), shown with the
@@ -5692,22 +6078,39 @@ Web Audio (which this is) while the ring switch is on silent. While the game
 is paused, the music and the wind play on (the birds and leaves wait). Everything is silent
 while the page is hidden, and off (suspended) when turned off in Game options; turned off from
 the start, the browser's sound isn't started at all (taps don't start it), so it isn't kept
-working on silence, until it's turned on.
+working on silence, until it's turned on. Nor is anything made, downloaded or decoded while it's
+off: what the game asks for meanwhile (the sounds made and the first recordings downloaded as it
+loads, `prepare`; a spell's or a creature's recordings, `want`; a sound made ahead, `makeAhead`)
+is only noted (`held`), and begun when the switch is turned on. A player who never turns it on
+keeps none of it: some 8 MB of made sounds and 4 MB of recordings as the game starts, a 2.3 MB
+download, before this.
 
 **Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
-browser's decoded copy, 32-bit samples, 20 to 30 times its MP3: all the recorded sounds decoded
-come to about 236 MB (their MP3s to about 10), a bed's 3 to 5 MB, and an iPhone's debug log saw
-them climb from 63 to 120 MB before Safari closed the page. Each is decoded at the rate it was
-recorded at where that's below the browser's own (`#decodeData`, `mp3Rate`; through an
-`OfflineAudioContext` at that rate): the music's and the beds' at 32 kHz, the rest at the
-browser's (48 kHz on an iPhone). Decoded at 48 kHz, as they were till 2026-10-25, the 32 kHz ones
-held half as much again for nothing heard (everything's played at a rate of its own anyway: a
-note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where the browser's is
-44.1): all the recorded sounds 276 MB, a bed 4.5 to 7.3, the music started with 27 MB rather
-than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1 kHz) the
-sound held at the start came from 100 MB to 90. Where it can't be (no `OfflineAudioContext`, or
-one that won't make or decode at that rate), it's decoded at the browser's rate, as before.
-So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else (less, a
+browser's decoded copy, 32-bit samples, 15 to 25 times its MP3: all the recorded sounds decoded
+come to about 177 MB (their MP3s to about 10), a bed's 2 to 4 MB, and an iPhone's debug log saw
+them climb from 63 to 120 MB before Safari closed the page. Each is decoded at the rate its
+sound needs, where that's below the browser's own (`#decodeData`, `mp3Rate`; through an
+`OfflineAudioContext` at that rate): the music's at the 32 kHz they were recorded at, a bed
+at 24 kHz and any other recorded sound at 36 (`recorded.js` `RECORDED_RATES`), the browser's
+being 48 kHz on an iPhone. A recorded sound's rate is lower than its MP3's own because the MP3
+encoder cuts the top off what it's given: the beds' MP3s (48 kb/s, which the encoder makes 32
+kHz) have nothing above 12 kHz, −104 dB of them in every one, and the rest (64 kb/s, 48 kHz)
+nothing above 18 kHz, −71 dB at most. (32 kHz would do for most of those, but mail hits and
+snakes' hisses have real sound between 16 and 17 kHz.) So each holds a quarter less decoded and
+sounds the same; `npm run build:sounds` checks every sound it makes, or keeps, against its rate
+and stops at one with more up there than goes unheard (`DECODED`, `UNHEARD`: −60 dB). The
+music's notes are left at their own rate: some are bright to the top of it, and only two of the
+152 have nothing at all above 8 kHz. Before 2026-11, each was decoded at its MP3's own rate (all
+of them 236 MB, a bed 3 to 5); before 2026-10-25, at the browser's, 48 kHz on an iPhone, where
+the 32 kHz ones held half as much again for nothing heard (everything's played at a rate of its
+own anyway: a note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where the
+browser's is 44.1): all the recorded sounds 276 MB, a bed 4.5 to 7.3, the music started with 27
+MB rather than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1
+kHz) the sound held at the start came from 100 MB to 90. Where it can't be (no
+`OfflineAudioContext`, or one that won't make or decode at that rate), it's decoded at the
+browser's rate, as before.
+So no more than 36 MB of them is kept decoded on a touch screen (48 MB while each held a third
+more: the same sounds stay decoded), 96 MB anywhere else (less, a
 phone short of memory: the memory guard's `squeeze`, *The memory guard* above). Past it,
 as each sound's decoded, those played least lately (or decoded, not played since) are let go of
 first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
@@ -5715,7 +6118,7 @@ out; a sound played and not done), one being decoded, or the one just decoded. T
 kept (and counted in what the sounds hold), so one let go of is decoded again from it the next
 time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
 its made sound, what stands in for it, or nothing. What's sounding at once can come to more
-than the budget (a busy place's beds are 14 to 20 MB, the sounds downloaded at the start 22):
+than the budget (a busy place's beds are 11 to 15 MB, the sounds downloaded at the start 16):
 the rest are let go of once they're done. The music's recordings for the town's, the tavern's
 and a fight's (about 18 MB decoded) are kept as they are; another score's own are let go of once
 it's not been heard for a minute (`MUSIC_KEPT`), their MP3s kept, decoded again (never
@@ -5745,7 +6148,7 @@ never says have ended can't use them up.
 
 ### The action wheel (app/wheel.js)
 
-Press and hold (0.4 s, without moving) on the player or an enemy, and a see-through wheel
+Press and hold (half a second, without moving: a long press is the same everywhere, on the world, an icon, the maps, the pack and the Action Bar, app/press.js `HOLD_MS`; a tap may move 12 pixels, `TAP_SLOP`) on the player or an enemy, and a see-through wheel
 (SVG, 264 pixels across) opens with its middle right under where the finger went down, cut into
 eight slices like a compass: N, NE, E, SE, S, SW, W and NW (`DIRECTIONS`). Keep holding and
 flick: as soon as the finger is 30 pixels from where it went down, the slice it's in is tried,
@@ -6163,7 +6566,13 @@ the Bindings page till one's chosen.
    the files it changed, and a reload downloads nothing (generated/game_delivery_plan.md). The page
    names its own release's code by those addresses (the import map in `index.html`, written by
    `npm run build:manifest`, and `main.js`'s own script), so a page is only ever its own release's
-   files. What's asked for by name (a worker's modules, which an import map doesn't reach; the
+   files. The 68 modules `main.js` imports itself, nine levels of imports deep, are preloaded by
+   the page (`<link rel="modulepreload">`, written after the import map by `npm run
+   build:manifest`: before it, Safari 16 and 17 ignore the map), so a first visit asks for them
+   all at once, not a level at a time, a round trip each, before the loading bar moves. The style
+   sheet is asked for by its hash too (and named in the import map, so the page's release lists
+   it): it holds up the first paint, and from what's kept it comes with no word to the server.
+   What's asked for by name (a worker's modules, which an import map doesn't reach; the
    font; the WebAssembly Recast's glue fetches) the service worker gives from the same copies, by
    the release of the page asking (or the newest: a worker, the game's page before it's said).
    Never to the site's other pages (the model viewer, the labs, the admin's page), which never say
@@ -6174,17 +6583,25 @@ the Bindings page till one's chosen.
    the network first, as everything else is. It keeps a copy only once its bytes match the
    hash, fetches a file the loader's fetching once (the page importing it straight after waits for
    it), and lets go of what no release in use lists: the newest's, and that of each page still
-   open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
-   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded,
-   and the page then asks it to keep `main.js` and what it imports, which came before it took
-   over, from the browser's own copies.
+   open on an older one (generated/asset_streaming_plan.md, section 5). The service worker is
+   registered by the page's own script as the page is read, so on a first visit it installs while
+   `main.js` and what it imports download. The loader waits for it to take over (3 s at most; not
+   at all once it's known it can't be registered, or that the one registered can never start,
+   where every load used to wait out the 3 s), so it keeps what's downloaded, and the page
+   asks it to keep the style sheet, `main.js` and what it imports, which came before it took over,
+   from the browser's own copies.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are
    checked with the server on each load, by the service worker's own copy's tag (`If-None-Match`),
    so "not modified" doesn't hang on the browser's HTTP cache, which it may have let go. The
    loading screen says "Loading" for a file from this device (a copy the service worker keeps,
    which says so: `X-Pellagos-Kept`) and "Downloading" for one that's downloaded, and how much of
    it all was downloaded ("13.9 MB in 0.4 s: 0.1 MB downloaded, the rest from this device"), so a
-   load that downloads nothing doesn't look like one that downloads everything. Installed (on the
+   load that downloads nothing doesn't look like one that downloads everything. On a visit after
+   the first the loader asks the service worker which of its files it keeps, before it starts, and
+   doesn't ask for those it only downloads (the code, the fonts, the WebAssembly): they're counted
+   as loaded, from this device, and first asked for when the page imports them. (It used to ask
+   for all 400 code files and read through their 13 MB only to count them.) The data it keeps in
+   memory it still reads, from what's kept. Installed (on the
    Home Screen, or as an app), the game asks the browser to keep what it's downloaded for good
    (`navigator.storage.persist`: `device.js keepDownloads`), where browsers grant it without
    asking; on an iPhone in Safari, Game options says it's kept for good on the Home Screen, as
@@ -6192,7 +6609,11 @@ the Bindings page till one's chosen.
    browser says it has left, 1 GiB at most (recent Chrome says 10 GiB more than it's using,
    whatever the disk). The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
-   date a release gave it, and sends code and pages compressed (brotli or gzip).
+   date a release gave it, and sends code and pages compressed (brotli or gzip). The game's website
+   (GitHub Pages) serves the game's own code with its comments and indentation taken out
+   (`scripts/build-site.js`, as the site's put together: 3.69 MB of it to download becomes 2.14
+   MB), each file still its own module, by the hash of the file as it's served, a source map
+   beside it.
    An update's downloaded in the background while the game's open (`app/updater.js`): every 15
    minutes (and as the title screen's shown, after that), the page asks for itself afresh and
    reads its import map; a release with another name is newer. Its manifest and catalog (named
@@ -6522,7 +6943,16 @@ the Bindings page till one's chosen.
    go of the one got ready; back at the title, another's got ready.
 4. **Playing** (app/game.js): building the world, with a progress bar for each part (the ground,
    each piece of the town, the characters, compiling every shader before the first frame), then
-   the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the
+   the game. First its plan (docs/WORLD.md), which isn't laid out on the page: laying one out is
+   a second and a half or more of the page standing still, 60% of building the world, the same
+   every time for a seed. A worker lays it out (`app/plans.js`, `plan-worker.js`) and hands it
+   over, its typed arrays moved, with the land its waters are worked out from; the page takes it
+   as its own (`adoptPlan`), and builds the rest. It's kept between visits (IndexedDB), by the
+   commit the code was built from (`version.js`) and the seed, so a load after the first reads
+   it back in milliseconds and a new release never gets an old one's plan (theirs are let go of);
+   a copy run from the repository, with no version of its own, keeps none. A joined game's the
+   same, what the host says meanwhile waiting as it does while the world's built. With no worker
+   to be had, the page lays it out, as it used to. Its count ("120 of 202") is of steps known before it starts: each chunk round the
    player (counted as it's drawn, however many goes it takes), each piece of the town and its
    trees, each floor of the tavern, everyone dressed before the first frame (the orc, anyone else
    playing), each kind of soldier's figure made (below) and five more; it never passes its total, and ends on it. The soldiers, wagons and the
@@ -6641,8 +7071,27 @@ the Bindings page till one's chosen.
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
    player sees there (light.js `sightAt` and `playerSight`, as the battle has it: 36 to 48 m at
    night;
-   `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
-   the nearer the camera are drawn over the farther, and all of them under the buttons. Each bar
+   `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is.
+   They're placed in the order of precedence (*Who comes first*, above; game.js
+   `#barsOverHeads`), the first over the rest and all of them under the buttons, and **one that
+   would lie under those before it isn't shown** (hud.js `Covering`): once more than half of it
+   is under them (`PLATE_COVER.covered`; each bar's taken to be as big as its kind's drawn,
+   `PLATE_BOX`, not measured on the page), so a file of soldiers seen end-on has a few bars, not
+   a stack of them. Never hidden: the bar of the one the player's set on, those of the other
+   players in their party, those of their own (a hired adventurer, a creature tamed, called or
+   raised) and their party's own, and that of whoever's attacking them. One hidden comes back only once less than three tenths of
+   it is covered (`clear`), and nothing changes twice within half a second (`hold`), so none
+   flickers as two change places. It's everyone's bar that's hidden so, not only a soldier's: a
+   wild creature's, a townsperson's, another player's, a fortification's. The party's icons
+   are as they were. A soldier has a bar only
+   within 60 m of the player (and 6 m further once it has one; the one the player's set on
+   wherever it is): a hundred in an invasion each had one in the page, most of them past where
+   a bar's drawn at all. And no one has a bar on the frame they're put down (drawn that frame, or
+   come through a door: game.js `#place`, `#plated`): a body's stood on its ground as the frame's
+   bodies are gone through, and one put down after that is at no height yet, so its bar was
+   drawn for a frame wherever that put its head (hundreds of pixels down the screen, out on high
+   ground), and, lying there under someone else's, would be kept hidden for the half second
+   after. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's
    placed (view.js `#place`, and again as the greater spells shake it), not only as it's drawn, so
    a bar no longer trails its character by a frame as the camera turns (it shook, the more the
@@ -6702,7 +7151,11 @@ the Bindings page till one's chosen.
      and Bar""): the Action wheels page (the player's own, a foe's and their followers': *The
      action wheel*) and the Action Bar page (*The Action Bar*).
    - **Graphics:** the Visual quality slider (Low, Medium, High) and the Adaptive switch
-     (Keeping up, above), full screen while playing (below), screen shake, and with a mouse the
+     (Keeping up, above; under it, what it's drawing while it keeps up, that a phone's saving
+     its battery and asking for 30 frames a second, and that the quality chosen smooths edges, or
+     doesn't, only once the game's next loaded: the picture's drawing surface is made smoothed or
+     not when the game loads, world/view.js, so the rest of a level changes at once and its edges
+     then; `app/graphicsnotes.js`), full screen while playing (below), screen shake, and with a mouse the
      sword pointer and under it, while it's on, the large pointer (*The mouse pointer*, above).
    - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
      bus: sound effects, environment and music (a sound plays as the first two are moved, to
@@ -6801,6 +7254,17 @@ it's where they'll get up. The next time, they carry on there (game.js `place`; 
 round it as it loads), facing as they were, or on the nearest square that can be stood on within
 eight; if none can, where the world puts them. They still get up at home if they fall. A world
 joined to someone else's keeps nothing of this here: that world remembers it, by their own id.
+
+**The war's turn is kept just after its frame** (main.js `saveSoon`): each minute's saves (the
+world's snapshot taken, encoded and written, the legends, and where and how the player is: five
+things written to the browser's storage, 1 to 2.5 ms up to three hours into a world and 2.6 to 8.6
+after, measured in Node) are done in a task of their own after the frame the turn came in, which
+has the turn's own work in it, not inside it; at once when the game stops, the page is hidden or
+closed (`keepPlace` does whatever's waiting first), so nothing's lost for the wait. **A save the
+browser refuses** (its storage full, or taken away as the game's played) is said once, plainly:
+"This browser has stopped keeping your game: its storage may be full. What happens from here may
+not be saved." (save.js `hearRefusal`). Every save after a character's first went unlooked at
+before, and a game could stop being kept with nothing said.
 
 **How they were** is kept with where they were, at the same moments, in `<id>.vitals` (host.js
 `vitalsOf`, save.js `saveVitals`): their hit points and stamina; what lingers on them after blows
@@ -6926,8 +7390,11 @@ and the Debug log page, above the events ("This copy: code 9c6a608eb2, put toget
   the game fell over (a phone's browser loads the page again when it runs out of memory): kept as
   a crash, with those notes, what the game held then among them. With them, how what was held went
   over the minute before (`trend`: at each of the last 30 notes, what was held all told, the
-  graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, and how many
-  bodies and actors: rising as more are dressed, or jumping at the end), and the work begun lately
+  graphics card's, the sounds', the bodies', the floors', the models' and the character kit's own
+  copies, the heap where it's told, how many
+  bodies and actors, and the memory guard's level, `guard`: rising as more are dressed, or jumping
+  at the end; the guard coming and going every minute or so would be it undoing its own work,
+  *The memory guard*), and the work begun lately
   (`begun`: the last six, each written down as it takes its first step, `pellagos.working`, core/
   steps.js `Steps.begun`; one begun after the last notes, `afterNotes`, was likely under way as the
   page fell, as a step of it taking half a second can be, the page never back from it to say so).
@@ -6966,7 +7433,16 @@ every material: in a town of 13 bodies, 0.34 ms where it took 0.88.
 nothing), what the graphics card's been given (world/gpumemory.js: buffers, pictures with their
 levels and faces, and render targets with their samples, in bytes, told at the WebGL calls that
 give it them and take them back, wrapped on the context; never a frame's draws, so it costs
-nothing a frame), the sounds' decoded copies and the samples and recordings kept to make them
+nothing a frame. A compressed picture, a bought model's or a prop's, is counted by its blocks,
+16 bytes or 8 for each 4 by 4 texels or more, as three.js r186 gives it: storage for every level
+with the compressed format, then each level's blocks. It was counted at four bytes a texel, a
+format the counter didn't know, so a 1024 by 1024 picture with its mipmaps came to 5.33 MB
+where it holds 1.33 (0.67 in ETC2 without alpha), and the crash reports' graphics card totals
+were that much too high wherever bought models and kits were in view: the memory guard's marks
+were set against those. And a buffer that's gone with nothing said is counted out once the
+browser collects it (a `FinalizationRegistry`): three.js gives one back only when its geometry's
+disposed of, and a body's index, made again as what it wears changes, is simply let go, so the
+count only grew, 3.5 MB over 24 bodies), the sounds' decoded copies and the samples and recordings kept to make them
 (audio/sound.js `memory`: the browser holds decoded sound outside the heap it tells of; the
 recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a budget*, under
 *Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
@@ -6974,11 +7450,22 @@ tiles are baked and gives nothing back), the bodies' own copies on the page (`bo
 kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), the
 buildings' floors' (`interiorsMB`: theirs the same way, the hidden ones never given to the
 graphics card, counted again only when one's built or let go of or its wares come in, game.js
-`#interiorsHeld`; "floors'" in the overlay), all of them
+`#interiorsHeld`; "floors'" in the overlay), the models' and the scenes' as they're read
+(`modelsMB`, beasts/model.js `modelsHeld`: their shapes, their clips' keys, and their pictures
+and their skins' till the graphics card has them, each file once; what the bodies drawn from a
+model share with it is counted with the bodies, not again; "models'" in the overlay: one read
+near its lair and never drawn from was counted nowhere till 2026-11-11), the character kit's
+(`kitMB`, characters/kit.js `heldByKit`: its wardrobe's pictures, each garment's and each
+outfit's, its looks of eye, and the body's and the skin atlas's own data; "character kit's" in the
+overlay; let go of, all that's idle, as the memory guard goes up a level: `letGoOfIdle`), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept, and the beasts' looks
 kept (how many, their sculpted bodies' and folded pieces' size, and how many none is drawn on:
-beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). Where the heap isn't
-told, the bodies' and the floors' copies stand in for it in the total, the least of it: in Chromium, playing on
+beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). A compressed picture (a
+model's, a scene's, a kit's: KTX2) is counted as its levels' bytes, as compressed as the page
+holds them, and as nothing once it's let go of: counted as four bytes a pixel till 2026-11-11, a
+1024-pixel ETC2 picture of 0.67 MB was 4 MB, so one knight of the Bell in view added some 60 MB
+to the bodies' that wasn't there, and a floor's bought furniture as much to the floors'. Where the heap isn't
+told, the bodies', the floors' and the models' copies stand in for it in the total, the least of it: in Chromium, playing on
 in a town while 30 bodies were dressed took the heap from 325 to 485 MB and the page's own
 resident memory to 1.2 GB, the bodies' copies growing about 4.5 MB a body, three-quarters of the
 heap's growth, over a fixed 300 MB or so of the world's own. On a phone the graphics card shares
@@ -6989,22 +7476,51 @@ the browser tells nothing of the heap, it and the bodies' copies are most of wha
 its copy, and the page's copy would only be read to give it the same again. For what nothing on
 the page reads once it's made, the page's copy is let go of once it's there (world/release.js, on
 three.js's `onUpload` and `onUpdate`): each chunk's undergrowth meshes (kits/wilds.js) and hedges
-(kits/hedges.js), with their bounds worked out first (culling's done by them); the ground's splat
-pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
-copy kept to hand it to the next atlas made; the buildings' name boards and hanging signs and the
+(kits/hedges.js), with their bounds worked out first (culling's done by them); everything merged
+into the art's one material (town3d.js `joined`: the start town's blocks, each chunk's
+settlement's buildings, a stone bridge, an aqueduct, each building's inside once it's shown; a
+capital's buildings were 40 MB of corners over its chunks, and the start town's blocks and kit
+houses 13 MB, held twice over), each merged mesh's box worked out first too, for whatever asks
+how high it stands, and `kept` asked of `joined` for anything that would read one after it's
+drawn (nothing does: what's built again, a house burnt or the house kit read, is built from its
+pieces); a chunk's land's own features (kits/wilds.js `featureMesh`), its trees' crowns' shells
+(kits/trees.js `Woodland.plant`) and its ground's corners (ground.js `chunkGeometry`: made again
+from the chunk's heights when it's drawn coarser or finer), with the ground's triangles where
+they're the chunk's own, but not those every chunk drawn a metre apart shares, which three.js
+takes off the graphics card with any chunk thrown away that drew with them and gives it again
+from the page's copy; the ground's splat pictures (ground.js); the buildings' and props' picture atlas (art/engine/atlas.js), with the
+copy kept to hand it to the next atlas made (`prepareAtlas` resolves with nothing: a promise
+keeps what it resolved with, and the game's build kept its promise of the layers in a closure
+for the whole game, 15 MB the graphics card had long had); the buildings' name boards and hanging signs and the
 roads' fingerboards (kits/signs.js `textureOf`: each its canvas, left a pixel square; a board was
 2048 by 330, 2.6 MB on the page; a capital's 38, all sent, were 63 MB on the page, besides 63 MB
 more of them on the graphics card at full size than at Low's half, a player's iPhone let go of in a
-cat folk's capital, 2026-11-10); and each of the game's characters' own skin, 4 MB of
+cat folk's capital, 2026-11-10); every picture of a bought model, a scene and a kit, as its file's
+read (art/engine/models.js `releasePictures`, `releaseCompressed`: a KTX2 picture's levels, as
+compressed as the graphics card keeps them, so the page's copy was as big again: 2 to 10 MB for a
+creature's kind on a phone, about 21 for an ants' nest's nine kinds and 22 for Bellhaven; one
+nothing's drawn with yet keeps them, its only copy; its levels are left as new, empty ones, and
+marked to be sent again it isn't, as a keep's wall and floor are for each of its levels,
+world/dungeons3d.js `setKitPicture`; the labs keep theirs, the castle lab sending them again at
+other sizes); and each of the game's characters' own skin, 4 MB of
 colour and 1 MB of bumps at High (`Character`'s `release`, for those the game dresses: painted
-again, as a disguise or a change of look does, it's sent and let go of again). Not the pictures of
-what characters wear (composited from each garment's, and painted into a crowd's figure:
-characters/character.js, world/crowd.js; a crowd's figure is made from a character of its own,
-before it's ever sent, and one whose skin's been let go of is coloured by its material there),
-nor the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged, cloned, posed or
-bent. What each body keeps that's the same for every body of its build is kept once for them all:
-its skin's bones and weights as drawn (`skinningOf`, by the body's data, as its texture
-coordinates are), and the moves' compiled tracks only once a move's first played (characters/
+again, as a disguise or a change of look does, it's sent and let go of again; and held a quarter
+the size while the body's small on the screen, as its outfit's pictures are: CHARACTERS.md,
+*Pictures at the size they're seen*); and an outfit's two pictures, but its colour at the least
+size, which a crowd's figure is made from (world/crowd.js: from a character of its own, given
+that; one whose skin's been let go of is coloured by its material there). A garment's own
+picture, which outfits are put together from, is kept on the page till it's been unused half a
+minute, then painted again when it's wanted (characters/wardrobe.js; CHARACTERS.md, *What the kit
+lets go of*). Not the lab's (saved as a template: `skinCanvas`), nor a mesh that's merged,
+cloned, posed or bent. The two workers that turn KTX2 pictures into what the graphics card takes
+are let go of too, once nothing's been read for a minute (art/engine/models.js `KTX2_REST`,
+`restingAfter`): each holds the transcoder's WebAssembly, whose memory grows to the biggest
+picture it's turned and never shrinks, counted by nothing, and three.js kept them for good; the
+next model read has them made again, a few hundredths of a second (`e2e/models.spec.js`). What each body keeps that's the same for every body of its build is kept once for them all:
+its skin's bones and weights as drawn, where its picture is and where its face's moves are kept
+(`skinningOf`, by the body's data: one attribute of each for every body, so the graphics card's
+given each once, 0.33 MB a body before; taken off a body's geometry before that's let go of, as
+three.js lets go of the graphics card's copy of every attribute a geometry has), and the moves' compiled tracks only once a move's first played (characters/
 actions.js `tracksOf`: all of them were compiled as the page loaded before), each track's numbers
 in one run, key after key (`compile`, `width` of them a key), not an array for each key: tens of
 thousands of little arrays, 12.4 MB for every attack, rest, emote, draw and put-away, 3.3 MB so,
@@ -7023,6 +7539,42 @@ way round where the game starts (Chromium, High), the page's array buffers held 
 overlay's *Memory* line 572 MB, 487 MB after), and the navigation worker 48 MB less again; the
 JavaScript heap's objects, about 58 MB, and what the graphics card holds, about 165 MB, are the
 same.
+
+**Sent as it's built, not when it's first looked at** (world/sending.js). three.js sends a mesh's
+corners and pictures the first time it draws it, and draws only what the camera sees. So what
+was built behind and beside the camera waited: a quarter of a minute into the start town, 9.1 MB
+of undergrowth, 1.7 MB of hedges and eleven chunks' ground pictures (2.9 MB) were still to send,
+all of them in the frame the camera first turned round, and what the page lets go of once it's
+sent it kept till then. Now what's newly built is drawn once wherever the camera looks
+(`sendSoon`: each chunk's meshes as it's shown, each tile of its undergrowth, its buildings as
+they're merged, its rocks and its ground drawn again, a sign painted again; the start town's
+blocks, trees' shells and smoke, banners and lights), in a pass of its own after the frame's
+(`sendSome`, which the view calls each frame once it's drawn): the next of what's waiting put on
+a layer of its own with the lights the frame's camera sees (all of them, so three.js draws each
+with the shader it has for it and makes no other), culled by nothing, and drawn into no pixel at
+all (a scissor round none of them), so the picture's as the frame left it; the shadows aren't
+drawn again for it, and the renderer, the scene and the meshes are left as they were. It's a
+pass of its own, and not a frame in which they're simply not culled, so that none of it counts
+among what the frame draws (`renderer.info.render`, put back as the frame left it: the labs' and
+the browser tests' counts of draw calls and triangles are the frame's alone) and none of it is
+drawn into the sun's shadows. And it comes after the frame, not before: the frame has drawn the
+shadow maps its lit shaders read, and a map just made (the first frame's, a lamp's just set to
+cast) has nothing in it till then, which the graphics card refuses to draw with
+(`GL_INVALID_OPERATION`, the sampler's kind and the picture's at odds). No more than 2 MB of
+corners go a frame (`SEND_SOON`, a mesh with fewer counted a quarter of a megabyte for its
+pictures), so the land round the start, all built before the first frame, goes over the first
+second or so of play; what the camera does see meanwhile is sent as it always was and takes no
+turn, what's hidden (a tile of undergrowth not yet near, a chunk still being drawn) waits till
+it's shown, and `view.sentAhead` counts what's gone this way. In the start town (headless
+Chromium, High, seed 2) 157 meshes go in the first 9 frames, 8 a frame, the frame's own draw
+calls and shaders the same through them. And with what else was done with it (every merged mesh
+let go of, the town's trees the woodland's, the buildings' corners shared, the shadow maps'
+colour a byte): the page's copies of the town's, the chunks' and the insides' meshes and
+pictures (`heldOnPage`) were 142 MB as play began and 95 MB once the camera had turned all the
+way round, and are 57 MB from the first second, the camera turned or not; and the graphics card,
+the camera turned all the way round, held 300 MB by the counter and holds 243 MB (corners 76 MB
+and 59 MB; pictures 222 MB and 182 MB, by a counter that no longer takes a compressed picture
+for four times its size, gpumemory.js).
 
 **The undergrowth, built only as it's wanted.** A tile of undergrowth that's never drawn never
 reaches the graphics card, so the page keeps its copy: grown for every chunk within 64 metres,
@@ -7139,11 +7691,62 @@ hidden till they're gone into: 1,300 of a town's 2,200 nodes, 0.52 ms a frame do
 headless Chromium. The bars over the others' heads are placed only for those who have one, from
 where the canvas is on the page, kept till it's resized (`View.toScreen`): reading it after a
 bar's been moved made the browser lay the page out again, once for everyone in sight, every frame
-(5–6% of a steady frame's JavaScript; now under 1%). Characters are posed only as often as
+(5–6% of a steady frame's JavaScript; now under 1%). How big a bar is where its character stands
+is worked out first, and one with none there (past sight, dead, on another map) has its head
+neither found nor put on the screen, where every one was, every frame; a bar's shown or hidden
+on the page only when that changes. Characters are posed only as often as
 they're seen, each pose cheaper (see *Characters in the world*): a frame's JavaScript in headless
 Chromium at 1280 × 720, the median and the 90th percentile, went from 2.3 and 4.1 ms to 1.3 and
 2.1 in the town, 2.6 and 4.7 to 1.9 and 3.0 in the taproom (nearly everyone there's big on the
 screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of the town.
+
+**The frame's own jobs** (app/game.js `#update`; the performance review of 2026-11). What a frame
+does besides moving and drawing everyone is spread so that no one frame carries much of it:
+
+- **The jobs done a couple of times a second** (the fortifications near drawn, the soldiers
+  marshalled, the boss's bar, the bodies' budget, who's shut in, the folk's room, the throng,
+  what's heard, the criers, sizing up, the doors; the models looked for every 2 seconds) each
+  have their own share of each half second (`PACED`, a twentieth of a second apart; app/clocks.js
+  `nextSlot`), kept to whenever each is done, and one that comes due on a frame that stepped the
+  battle waits for the next (`clockTurn`; never one asked for now, its clock set to 0). They all
+  began at 0 and were set back to the same half second by the same arithmetic, so one frame in
+  thirty did all of them, for ever, and a third of the time that frame stepped the battle too.
+- **Whether an enemy's close by**, for the guard stance, is kept for each character and worked
+  out again every quarter second (*Characters in the world*, above), not asked of everyone for
+  everyone every frame.
+- **What's held is read once every 2 seconds, after the frame** (*The memory guard*, above).
+- **What follows the battle is looked at as the battle steps**, not every frame (`fresh`,
+  app/clocks.js `followsNow`): the allies near, whether the player's in a fight (for its music),
+  the party's icons, the Action Bar's state, the enemies list, and what lingers on anyone while
+  nothing does. They change twenty times a second and were worked out sixty. Looked at on the
+  frame after one that stepped (so a step's own frame is the lighter), at once after anything the
+  player tells the battle (`#command`: a tap answers in the next frame), every tenth of a second
+  whatever (a joined game waiting on its host), and every frame while the game's played on by
+  hand (`advance`, as the browser tests play it). **Those after the player** (alive, on their map,
+  set on them or striking at them, their enemies) are found once then and kept (`#afterMe`) for
+  all who ask every frame: the arrows at the screen's edge, the message kept clear of the fight,
+  who the camera frames, the Action Bar, the enemies list; each used to look through everyone for
+  them, and who the camera frames asked everyone's standing before anything cheaper. Measured in
+  headless Chromium, a field battle and an invasion with the player in the fight, played as
+  frames play it: 161 looks in 480 frames, the list kept the same as one looked for afresh.
+- **The HUD's lasting pulses move only opacity and transform** (styles.css): the glow round
+  whoever the player's set on (for the whole of every fight), their legendary weapon's charge
+  full, a hell rift's tear. Each animated a shadow or a filter, which a browser paints again on
+  the page's thread every frame; now the glow at its brightest is a layer of its own behind the
+  icon (a pseudo-element), faded in and out, which the browser does by itself. They look as they
+  did: set still at the start, middle and end of a beat, old beside new in headless Chromium, the
+  pictures are 0.5 to 2 of 255 apart on average (`test/pulses.test.js` holds what moves). The
+  party's icon of whoever's chosen to help and a Prismatic chain's Action Bar slot still animate
+  their shadows: both clip what's inside them, so a glow of their own would need another element
+  round them; they pulse only while one's chosen, or a chain's next spell is on the bar.
+- **The HUD keeps what it last showed.** A character's stamina, told for everyone in sight every
+  frame, is compared as numbers with what was last told before anything's looked up in the page,
+  its bar found once and kept with its plate (`#setStamina`); an Action Bar slot filled with the
+  same as last time is left (quickbar.js `fillSlot`). And what a message is kept clear of that
+  doesn't move with the fight (the screen, the message's size, the buttons, the minimap, the
+  Action Bar, the enemies list: six boxes read from the page) is measured again only when what
+  decides it changes, and for a moment after (hud.js `#messageRoom`): read every frame straight
+  after the enemies list was written, it made the browser lay the page out again each time.
 
 ## Testing
 
@@ -7184,7 +7787,14 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   as they come nearer; the splat and the undergrowth's places the same a step at a time; a
   settlement's buildings built a piece at a time, each made ready to merge in a step of its own,
   merged the same as all at once, drawn whole while the player's near and without the timbers'
-  sides from further off); and the
+  sides from further off; the page's copy of what's merged of a chunk let go of once it's sent,
+  its buildings, its land's features, its crowns' shells and its ground's corners, with its
+  ground's triangles where they're its own, not those every chunk drawn a metre apart shares,
+  and its buildings built again from their pieces, whole; each sign painted a quarter each way
+  while it's far from the player, from when it's built, as the quality has them once it's
+  within 40 metres, kept so till it's well off again, one painted again a frame and what it
+  showed let go of, a half on a taller screen, none finer near on Low, and a lab's all as near
+  ones are); and the
   settlements ahead laid out off the page's thread (asked for nearest first and once each, and
   taken as they were laid out; the same laid out in another thread, and one laid out from
   anything else not taken).
@@ -7202,7 +7812,9 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   counter and filing at the shelves, adventurers of every calling at the board and the tables,
   the receptionist in the guild's uniform with twin tails or a bob, adventurers sheathed and
   those drinking holding tankards; every kind of building drawn by its style, and a floor built
-  a step at a time the same as at once; the
+  a step at a time the same as at once, none of its builders kept once it's built (each held
+  weakly and the garbage collector run: none left), its grindstone turning still while it's
+  cranked; the
   settlements' taverns', smithies', temples' and guilds' doors among the world's links as they're laid
   out, their floors and folk
   made once when wanted, each building somewhere of its own; going in through a door not made yet
@@ -7274,17 +7886,41 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/gpumemory.test.js`: what the graphics card's been given to hold: buffers given data or a
   size, given again and given back; pictures by format, levels and faces (given whole, by size, as
   storage, compressed, with their mipmaps), given back; render targets with their samples; each
-  format's bytes a texel; nothing once the drawing's lost.
+  format's bytes a texel; nothing once the drawing's lost; a compressed picture given as three.js
+  gives it (storage for every level, then each level's blocks) counted by its blocks, 1.33 MB
+  for a 1024 one in ASTC, BC7 or ETC2 with alpha and half that without, a cube's faces and an
+  array's layers, a level smaller than a block still a block, and every compressed format
+  three.js can ask WebGL for known (found by its names for them: a newer three.js with one more
+  fails there); and a buffer, a picture and a render buffer gone with nothing said counted out
+  once the garbage collector's run, not one given back since nor one of a drawing lost.
 - `test/release.test.js`: a mesh's attributes and index let go of as each is uploaded, its bounds
   worked out first and how many corners it has still known; a picture's pixels once uploaded, and
   whatever else held them, what it was told before still told, and a picture waiting for its pixels
-  let go of only once it has them; Recast's WebAssembly starting with 16 MB, still a module with
+  let go of only once it has them; the atlas's painted layers handed to nothing that waits for
+  them (`prepareAtlas` resolving with nothing), its texture alone having them till it's sent;
+  Recast's WebAssembly starting with 16 MB, still a module with
   its memory its own, and made to start with 64 again the module as built but for two bytes.
   `test/crowd.test.js` also: a character's skin and bumps let go of once they're sent, if it's one
   of the game's (not otherwise), painted again into the same texture, sent and let go of again,
   and a crowd's figure still made from one whose skin's gone. E2E: the picture lost once the page
   has let go, and given back: the page loaded again, the title carrying on with the same
   character.
+- `test/sending.test.js`: what's newly built drawn once in a pass of its own, 2 MB of it a frame
+  in the order it was built: nothing culled, alone with every light the frame's camera sees, into
+  no pixel, nothing cleared and the shadows not drawn again; the renderer, its count of what the
+  frame drew, the scene and the meshes as they were after, if the drawing throws too; a mesh with
+  few corners, or none left on the page, counted a quarter of a megabyte; no turn for one the
+  camera saw meanwhile, one told what it was told before, one that's hidden or in no scene yet
+  waited for, one in another scene left to it; what's never culled, or seen by no ordinary
+  camera, left alone. `test/chunks.test.js` also: all of a chunk it's drawn sent over the frames
+  after, each mesh once, and its ground again, drawn coarser.
+- `test/corners.test.js`: which way a corner faces in three bytes (a wall's, a floor's and a 45
+  degree roof's exact, any other within a third of a degree and a thirtieth on average, never
+  further than each side rounded on its own, a vector that isn't a unit long too); corners alike
+  kept once (a box's 36 drawn from 24, the same triangles corner for corner in the same order,
+  40 bytes each, a dark colour, one over 1 and a layer of thousands as they were; two in one
+  place that differ in a colour or a layer still two; one indexed already left as it is); and a
+  house merged into the atlas the very triangles its pieces are, in under 0.6 of the bytes.
 - `test/gputimer.test.js`: the GPU's time for a frame read once it's done (never waited for) and
   smoothed, a time the GPU's clock was disturbed for thrown away, no more than four waiting, and
   nothing where the browser has no timer.
@@ -7293,7 +7929,18 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   below 30, a step at a time, not before it's played a while, settled at each; back near 60 a
   while, up again to the quality chosen and no further; a step that let it fall tried again only
   later, longer each time; a hitch now and then and a game stopped a while forgiven; carrying on
-  from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
+  from a game before, and back to the quality chosen when it's chosen again; every step put back
+  once none has bought anything, tried again after a minute, then two; 30 a second on a beat of 30
+  left as it is, and well behind it not; steps taken before the beat was known to have slowed put
+  back; a stretch of building at 25 frames a second leaving the quality alone.
+  `test/frames.test.js`: the window of frames (the same middle as a sorted copy, frames not to be
+  judged by left out, nothing said once they're most); the beat (60 till shown otherwise, 30 for a
+  browser asking for no more, not taken from frames the game itself made late, a game stopped
+  saying nothing); and the frame loop's three fed a steady 30, however the times are rounded:
+  nothing taken away. `test/graphicsnotes.test.js`: what Game options says of a device saving its
+  battery, and of smoother edges waiting on a reload. `test/clocks.test.js`: the frame's jobs done a
+  couple of times a second, never two in one frame at 60 frames a second, none begun on a frame
+  that stepped the battle unless asked for now, all still done when every frame steps. E2E: told it can't
   keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
   quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
 - `test/version.test.js`: which code this is (app/version.js): "dev" as kept in the repository;
@@ -7324,13 +7971,43 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
   spare a while, a few back at a time, all in the end; more drawn in full that made it too slow
   tried again only later, longer each time; a hitch now and then and a game stopped a while
-  forgiven; all in full again with few about. `test/governor.test.js` also: held while the throng
+  forgiven; all in full again with few about; all in full again once as many as can be are in the
+  crowds and it's no quicker; 30 a second on a beat of 30 leaving all in full; a stretch of
+  building leaving them so. `test/governor.test.js` also: held while the throng
   changes what's drawn. `test/crowd.test.js` also: a stand-in drawn where the one it stands for
   is, as big, going as it goes, told what it's told (its own actions put back after, a class's or
   its own), lying if it's down; what's drawn of the one in full kept from being seen and seen again
   as it was. `test/herd.test.js` (WILDS.md *In a crowd*): beasts in their crowds. E2E: a crowded
   fight told it's too slow, those least seen of its bandits, wolves and spiders standing in, kept
   but unseen, and drawn in full again told there's time to spare.
+- `test/precedence.test.js`: the one order of precedence (app/precedence.js): how someone stands
+  with the player, the first that's true of them; the order itself (the player, their party,
+  whoever they're set on, attackers, the party's foes, whoever they're talking or trading with,
+  then the biggest on the screen, the nearer of two as big, other maps last); what a place keeps
+  of its own, after everyone the order names; ranking making nothing new once it's ranked as
+  many; and the game ranking by it in each place, with no order of its own left.
+  `test/plate-cover.test.js`: bars over heads that cover one another (hud.js `Covering`): how
+  much of one lies under those shown before it, one more than half under them hidden and
+  covering no one, a file seen end-on showing a few, the ones always shown never hidden, one
+  hidden back only once it's clear by a margin, nothing changing twice within the hold, and a
+  bar taken to be as wide as the page draws it. E2E: a file of twelve soldiers seen end-on has
+  fewer bars than soldiers, in the order (the biggest on the screen first), the first shown and
+  each over those shown after it, none shown or hidden again within half a second over three
+  seconds of frames; none kept for soldiers 200 m off; two foes brought within sight, one a
+  hand's breadth behind the other, have bars again, the one the player's set on shown, lit and
+  over them all and the other's under it not shown, and the other way about from the next frame
+  once they're set on the other. And, of four slimes drawn before the camera, each one's bar is
+  over its head from the first frame it's put anywhere, none on the frame its body's drawn.
+- `test/outfit-merging.test.js`: a body's garments, drawn one by one, drawn all at once after
+  (`Character.merging`): the same mesh and the very same material as one dressed all at once;
+  one by one till the one step that puts them together; in a step where someone else wears the
+  outfit; dressed again meanwhile, what was begun stops and nothing's left counted for it;
+  given up on, nothing's left half made in the kit, but what someone else is making too; lace
+  and what hangs left as they were; only each garment's triangles in full put together. E2E
+  (`e2e/together.spec.js`): another player come into the world is dressed one by one in that
+  frame and put together from the next; what they put on shows at once, one by one, and is put
+  together again five seconds on, a second change starting over; one put back to one by one
+  (`drawApart`) stays so.
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.
@@ -7340,6 +8017,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   each the size it's said to be and none over 128 pixels, shaken half again as big; its CSS
   value pointing with the sword's tip, both scales where the browser takes them, the system's
   pointer last; and its CSS everywhere but where one types, over the view as the game says.
+- `test/quality.test.js`: the level suggested for a device: an iPhone Low as Safari tells of it
+  (no memory told, 4 cores said for its 6), and still Low with 8 cores or its memory told; any
+  other phone or tablet, an iPad among them, by its memory and cores; a computer High; this
+  device's browser asked, told of no other.
 - `test/camera.test.js`: the camera following from the player's first step, catching up and
   turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way
   round), easing round (three-quarters of a half turn in 0.5 to 1.2 s, never a jump), steady
@@ -7433,7 +8114,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   party's wheel's orders never set nor quick), the party's icons fitted down the side (full size,
   shrunk, then a "+N" chip) and what the party menu says each is, the
   loader's byte counting, the ground's blending, the town's
-  builders, the loading list and the service worker.
+  builders (and its trees planted in the world's woodland where it's given one, none merged a
+  copy each, standing just as high on every square; `test/trees.test.js`: a lot drawn in the
+  woodland just as `plantTrees` merges it, every corner where its merged copy has it, lit and
+  coloured the same, the same triangles, boxes, shells and patches), the loading list and the
+  service worker.
 - `test/audio.test.js`: every sound (clean, as loud as the others, no clicks, swings timed to
   their blows, a sound for every attack, each on its bus, the bow's plucked string in tune), the
   wind's seamless loop, and playing them: from where they happen, on their buses at their
@@ -7457,10 +8142,13 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   only on timber houses, built within their lots in a few hundred to a few thousand triangles,
   weathered; barns boarded; a wall's openings leaving holes and a gable its outline; every
   landmark of six towns and cities built within its lot, each tavern with its own name board and
-  sign, the guild's, each temple's patron's; every emblem painted, one or several; every prop
+  sign, the guild's, each temple's patron's (a sign painted again another size for how far off
+  it's seen from, a quarter each way or as much more as the screen needs: `signsFar`, on a
+  phone, a 1080, 1440 and 2160 screen and wider); every emblem painted, one or several; every prop
   built; a textured material's picture painted only when it's wanted, once for it and its copies
   (none for a house merged into the atlas); the atlas's layers (the same every time, with relief) and a house drawn from it as one
-  mesh; a solid's faces kept as the 32-bit floats they're drawn with, however many there are;
+  mesh, the page's copy of it let go of once it's sent, its box and sphere worked out first (or
+  kept, asked to); a solid's faces kept as the 32-bit floats they're drawn with, however many there are;
   upright faces cut where their tone turns (not narrow ones, level ones, or those it doesn't
   turn across), and houses' walls drawn within a few percent of their weathering (they were a
   tenth darker); round things shaded round (a drum's corners straight out from its axis, a

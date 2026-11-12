@@ -2,8 +2,10 @@
 // swapped for another through a table made from SEED. A scrambled file isn't a GLB to anything
 // that finds it: no 3D tool opens it, and nothing looking for models by their file type knows it
 // for one. Yet it downloads as small: the same byte always becomes the same byte, so what repeats
-// still repeats, and gzip, which GitHub Pages sends files with, packs it as well (to within a few
-// hundred bytes in 3 MB).
+// still repeats, and gzip, which GitHub Pages sends a file asked for whole with, packs it as well
+// (to within a few hundred bytes in 3 MB). A part of a file (a Range request) comes as it is,
+// uncompressed, from any server: the downloader asks for a model whole when the player's waiting
+// for it, and a part at a time otherwise (app/fetcher.js).
 //
 // It isn't a secret, and isn't meant to be: the game has to undo it, so anyone with the game's
 // code can. It keeps a model from being saved, opened or found as one, no more.

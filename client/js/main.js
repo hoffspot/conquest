@@ -28,6 +28,7 @@ import { isInstalledApp, isIOS, isTouchScreen, keepDownloads, keepLoaded, lockLa
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
+import { edgesNote, powerNote } from "./app/graphicsnotes.js";
 import { putOff, suggestHomeScreen } from "./app/homescreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
@@ -38,7 +39,7 @@ import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
 import { PadPlay } from "./app/padplay.js";
 import { actionFor, GROUPS, KEY_ACTIONS, keyMap, keyOf as keyPressed, keysAsCame, keysChanged, keysOf, keyWords, mouseOf, setKey } from "./app/keys.js";
@@ -291,6 +292,9 @@ async function load() {
         onProgress: (label) => step(label, label.startsWith("Unpacking") ? 0.3 : 0.15),
     });
     state.hud = new hud.Hud($("#hud"));
+    // (Whether the picture's edges are smoothed: as the quality it was made at has them, till the
+    // game's loaded again, whatever's chosen since. Game options says so: showQuality)
+    state.edgesMade = Boolean(state.modules.QUALITY[state.session.view.qualityName].antialias);
 
     // (The drawing lost, as phones do when short of memory: the game paused, where the player is
     // kept, and the player told, until it's given back and the shaders made again. What the page
@@ -1210,7 +1214,7 @@ async function playing(save, { world, place, war }) {
 
     // (The world planned while the skin atlas may still be being worked out elsewhere: it's
     // needed only once the game's building its characters)
-    const game = createGame({
+    const game = await createGame({
         view,
         kit,
         sound,
@@ -1233,11 +1237,12 @@ async function playing(save, { world, place, war }) {
         war: loadWorld(war),
         legends: loadLegends(war),
         // (Kept each of the war's turns, a minute of play, and the world's legends with it: and
-        // where the player is with it)
-        onWar: (now, legends) => {
-            saveWorld(war, now.snapshot(), legends?.toJSON() ?? null);
-            keepPlace();
-        },
+        // where the player is with it. Just after the frame the turn came in, not in it: saveSoon)
+        onWar: (now, legends) =>
+            saveSoon(() => {
+                saveWorld(war, now.snapshot(), legends?.toJSON() ?? null);
+                keepPlace();
+            }, game),
         onWorldMap: openWorldMap,
         onPing: pingShown,
         pin: loadPin(place),
@@ -1251,6 +1256,10 @@ async function playing(save, { world, place, war }) {
         told: loadTold(save),
         onTold: (told) => saveTold(save, told),
     });
+
+    // (The browser refusing to keep the game from here on, its storage full or taken away: said
+    // once, plainly. Every save after a character's first went unlooked at: save.js hearRefusal)
+    hearRefusal(() => state.hud?.message(SAVE_REFUSED, 12));
 
     state.stay = { world, place, war };
     state.keepPlace = () => {
@@ -1316,13 +1325,41 @@ function hostIfAsked(game, save) {
     });
 }
 
+// What the player's told, once, when the browser won't keep the game any more (save.js hearRefusal)
+const SAVE_REFUSED = "This browser has stopped keeping your game: its storage may be full. What happens from here may not be saved.";
+
 // Where the player is and how, kept to carry on so next time (save.js savePlace, saveVitals):
 // whenever the game stops, paused or quit, the page hidden (another app, on a phone) or closed,
 // and each of the war's turns besides
 function keepPlace() {
+    saveNow();
+
     if (state.game && !state.game.remote) {
         state.keepPlace?.();
     }
+}
+
+// The war's turn kept (`save`: the world's snapshot taken, encoded and written, and where the
+// player is: five things written, 2 to 9 ms three hours into a world) just after the frame its
+// turn came in, in a task of its own, not in that frame, which has the turn's own work in it.
+// At once if the game's being played on by hand (Game.advance: nothing waits). And at once
+// whenever the game stops, the page is hidden or closed (keepPlace: saveNow), so nothing's lost
+// for the wait.
+function saveSoon(save, game) {
+    state.unsaved = save;
+
+    if (game.waits) {
+        setTimeout(saveNow, 0);
+    } else {
+        saveNow();
+    }
+}
+
+function saveNow() {
+    const save = state.unsaved;
+
+    state.unsaved = null;
+    save?.();
 }
 
 function pause() {
@@ -1454,6 +1491,9 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
         showMortal();
     } else if (page === "chat" || page === "blocked") {
         showBlocked();
+    } else if (page === "graphics") {
+        // (What it's drawing, and how the device is asking for it, as they are now)
+        showQuality();
     }
 }
 
@@ -3049,7 +3089,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     await painted();
 
     // (As playing's: the skin atlas waited for once it's needed)
-    const game = createJoinedGame({
+    const game = await createJoinedGame({
         view,
         kit,
         sound,
@@ -6492,6 +6532,19 @@ function showQuality() {
     $("#qualityname").textContent = `${state.modules.QUALITY[chosen].label}${settings.quality === "auto" ? " (suggested)" : ""}`;
     $("#adaptiveswitch").checked = settings.adaptive;
     showAdapted();
+
+    // (And, under it: that the device is saving its power, so 30 frames a second is all there is
+    // to draw; and that the quality chosen smooths edges, or doesn't, only once the game's next
+    // loaded, the picture's drawing surface being made one way or the other for good: app/graphicsnotes.js)
+    const notes = {
+        "#savingpower": powerNote({ beat: state.game?.pacing.beat.value ?? 0, touch: isTouchScreen() }),
+        "#edgesnote": edgesNote({ wanted: state.modules.QUALITY[chosen].antialias, made: state.edgesMade }),
+    };
+
+    for (const [selector, words] of Object.entries(notes)) {
+        $(selector).hidden = !words;
+        $(selector).textContent = words ?? "";
+    }
 }
 
 function showAdapted() {

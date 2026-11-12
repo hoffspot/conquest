@@ -26,13 +26,14 @@ import { ATTACKS, DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js"
 import { Character } from "../characters/character.js";
 import { folkLook, followerLook } from "../characters/folk.js";
 import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/folkcrowd.js";
+import { heldByKit, letGoOfIdle } from "../characters/kit.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
+import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, readyModels, readyScenery, sceneryOf, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
-import { guardLevel, MEMORY_GUARD } from "./memoryguard.js";
+import { MEMORY_GUARD, MemoryGuard } from "./memoryguard.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
@@ -164,7 +165,7 @@ import { Silhouettes } from "../world/far/silhouettes.js";
 import { Volcano } from "../world/far/volcano.js";
 import { Landmarks } from "../world/landmark3d.js";
 import { Look } from "../world/look.js";
-import { allAtOnce, allWaiting, Steps } from "../core/steps.js";
+import { allAtOnce, allWaiting, NOW, Steps, WAITING } from "../core/steps.js";
 import { buildGround } from "../world/ground.js";
 import { buildTown } from "../world/town3d.js";
 import { HOUSE_KIT, kitBuilt } from "../world/art/kits/kithouse.js";
@@ -184,7 +185,7 @@ import { Doors } from "./doors.js";
 import { VaultDoors } from "../world/vault3d.js";
 import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
-import { plateScale } from "./hud.js";
+import { PLATE_SIZE, plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
 import { ReaderPanel } from "./reader.js";
@@ -196,11 +197,14 @@ import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
 import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
+import { first, Order, STANDING, standingOf, viewerOf } from "./precedence.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
-import { FIGHT_LINGERS, inFight } from "./fight.js";
+import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF } from "./clocks.js";
+import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { Sigil } from "./sigil.js";
 import { Charge } from "./charge.js";
@@ -365,9 +369,6 @@ const FOCUS_LAG = 0.2;
 // How long the shadow under someone takes to fade once they've hit the ground (s): they lie flat
 const CONTACT_FADES = 0.6;
 
-// A tap that moves less than this (pixels) is a tap, not a drag
-const TAP_SLOP = 12;
-
 // A second tap this soon after one (ms), and this close to it (pixels; on the minimap, less),
 // makes a double tap: run
 const DOUBLE_TAP_MS = 350;
@@ -379,10 +380,6 @@ const PICK_RADIUS = 46;
 // How often what's under the mouse is looked at again for the pointer to show (ms): what's under a
 // still mouse moves too (#aim)
 const AIM_MS = 100;
-
-// Holding this long (ms) on the player or an enemy opens the action wheel; a finger this far
-// (pixels) from where it opened is in one of its slices
-const HOLD_MS = 400;
 
 // What the player does themselves that lets Buff all's buffs still to come go (#command): walking,
 // stopping, casting or using anything else, setting on a foe, making camp
@@ -649,6 +646,35 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 
+// The frame's jobs done a couple of times a second, each at its own share of the time (seconds
+// into each half second: app/clocks.js nextSlot), so no two are due in the same frame at 60 frames
+// a second; the models looked for every couple of seconds too
+// The maps' icons made from the war (the works, the fortifications, who holds each place) are kept
+// this long (seconds) at most before they're made again, whatever's changed or not; and those
+// near the player gathered for the minimap again this often, or once they've gone `moved` metres,
+// from as far past what it shows as `past` (metres: more than they go meanwhile)
+const MARKS_KEPT = 1;
+
+// A people's name mixed into a number of who holds what (#marksKept): another people, another number
+function realmMixed(mix, realm) {
+    const name = String(realm);
+    let mixed = (Math.imul(mix, 31) + name.length) | 0;
+
+    for (let k = 0; k < name.length; k++) {
+        mixed = (Math.imul(mixed, 31) + name.charCodeAt(k)) | 0;
+    }
+
+    return mixed;
+}
+
+// What follows the battle (who's after the player, the enemies list, the party's icons, the
+// Action Bar's state) is looked at again this often (seconds) at least, though no step's come
+// (a joined game waiting on its host) nor anything been told it: #update's `fresh`
+const FOLLOWED = 0.1;
+const ICONS_NEAR = Object.freeze({ every: 0.25, moved: 4, past: 12 });
+
+const PACED = Object.freeze({ forts: 0, doors: 0.025, marshal: 0.05, models: 0.075, boss: 0.1, ration: 0.15, shut: 0.2, folk: 0.25, throng: 0.3, heard: 0.35, criers: 0.4, sizeUp: 0.45 });
+
 // Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
 // they can't see from there (#walledOff, #onlySeenAbout) held in full only for `after` seconds of
 // it, then let go (#shutIn): the soldiers to their crowds, the folk and the wild's people-shaped
@@ -675,6 +701,18 @@ const FORGET_EVERY = 5;
 // be kept, none drawn from them (beasts/model.js forgetModels): further than they're asked for
 // from (modelsNear's 1500)
 const KEEP_MODELS = 2000;
+
+// On a touch screen (a phone or a tablet, short of memory), a kind only predicted (within
+// modelsNear's 1500 metres of one of its lairs, or one that may be met where the player is) has
+// its model fetched and kept, not read: read, it's 10 to 20 MB on the page with none drawn from
+// it, held for as long as the player stays within KEEP_MODELS of the lair. It's read once the
+// player's within `read` metres of the lair, or one of its kind's put into the battle, and a kind
+// read near its lair is kept, none drawn from it, while they're within `keep` (further, so it
+// isn't let go of and read again to and fro at the edge). Read from what the downloader's kept
+// it's a moment, so the first of a kind put into the battle waits on it to be drawn, `patience`
+// ms at most (#addingBeast): drawn up to a second later, from its model; past that, as its
+// stand-in till it's out of view, as ever
+const SPARING_MODELS = Object.freeze({ read: 400, keep: 600, patience: 1000 });
 
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
@@ -725,6 +763,15 @@ const CULT_KNOWN = 2;
 // wherever they are
 const DETAIL = Object.freeze({ reach: 45, slack: 10 });
 
+// How far past where a bar over a head is gone (hud.js PLATE_SIZE.far, metres from the player) a
+// soldier that has one keeps it, hidden: taken up again only once it's back within sight of one
+// (#barsOverHeads)
+const PLATE_KEPT = 6;
+
+// How tall a person is taken to be where it isn't known yet (metres: one not drawn, ranked with
+// those who are, #stature)
+const PERSON = 1.75;
+
 // The many near a fight drawn for less (docs/WILDS.md *A ceiling*): a creature too small on the
 // screen for its shadow to show casts none (under `shadow` drawing buffer pixels tall; again over
 // `again`), and is posed as seldom as a character that size would be (avatar.js posingEvery); of
@@ -732,6 +779,15 @@ const DETAIL = Object.freeze({ reach: 45, slack: 10 });
 // `full` nearest the player drawn in full and casting their shadows, the rest at the middle level
 // of detail (lod.js) with only their contact shadows, and posed seldom out of view
 const MANY = Object.freeze({ shadow: 40, again: 48, full: 4 });
+
+// Another player's garments drawn all at once (one mesh, one picture of the whole outfit, as
+// everyone's but the player's own hero are: characters/character.js `merge`), but one by one
+// from the moment they change what they wear, so the change shows without a wait, till it's been
+// as it is `after` seconds (the game's clock); then the outfit's picture is put together with
+// `budget` ms of each frame, one body's at a time, and its garments drawn with it from the frame
+// it's made (#outfitting, Character.merging). `others`: whether they are at all (not, every
+// player's are drawn one by one, as they were; any one of them is by Game.drawApart)
+const OUTFITTING = Object.freeze({ others: true, after: 5, budget: 2 });
 
 // Who can be drawn in their kind's crowd (#thronging): past DETAIL.reach from the camera, or when a
 // crowded fight comes too slowly (app/throng.js): the players' hired adventurers and the wild's
@@ -1481,8 +1537,46 @@ export class Game {
         this.accumulator = 0;
         this.lastFrame = 0;
 
-        /** When to draw the world: no oftener than the quality level does (app/pacing.js). */
+        /**
+         * When to draw the world: no oftener than the quality level does (app/pacing.js); and the
+         * beat, how often the browser's asking for frames (`pacing.beat`), which keeping up is
+         * judged against.
+         */
         this.pacing = new Pacing();
+
+        // (How long the last frame's own work took, and how long it spent building (#visit): the
+        // next frame comes the later for them, and is judged knowing it, #frame)
+        this.worked = 0;
+        this.built = 0;
+        this.budgetAbout = { beat: 0, step: 0 };
+
+        // (The battle's two questions of a pair, as functions to hand on, made once; and how many
+        // have been asked whether an enemy's close by, to spread when each is asked again: #fighting)
+        this.hostileTo = (a, b) => this.battle.hostile(a, b);
+        this.seenBy = (a, b) => this.battle.canSee(a, b);
+        this.waryTurn = 0;
+
+        // (What follows the battle looked at again as it steps, not every frame, #update's
+        // `fresh`: whether it's due, when it was last (the game's clock, s), a count of the times,
+        // and what's kept by that count: those after the player, #afterMe, and who the camera
+        // frames, #foe)
+        this.followDue = true;
+        this.followedAt = -Infinity;
+        this.followStamp = 0;
+        this.fresh = true;
+        this.afterMe = { stamp: -1, list: [] };
+        this.foeFound = { stamp: -1, id: null };
+
+        // (Whether the frame stepped the battle, and the jobs done a couple of times a second
+        // that count their own clocks down, as functions to give their turn to: #inTurn)
+        this.stepped = false;
+        this.jobs = {
+            marshal: (dt) => this.#marshal(dt),
+            rationing: (dt) => this.#rationing(dt),
+            shutIn: (dt) => this.#shutIn(dt),
+            folkRoom: (dt) => this.#folkRoom(dt),
+            thronging: (dt) => this.#thronging(dt),
+        };
 
         /**
          * Keeping up (Game options: Adaptive, app/governor.js): from the quality chosen down, as a
@@ -1496,6 +1590,20 @@ export class Game {
          * (#thronging); and those that are: id -> { avatar, standIn, hidden, unecho }.
          */
         this.throng = new Throng();
+
+        /**
+         * Who comes first where not everyone can be held in full, drawn in full, or have their
+         * bar shown (app/precedence.js): the player as the order needs them (#viewer), and each
+         * place's own ranking, its entries kept from one look to the next.
+         */
+        this.viewer = viewerOf();
+        this.viewerAt = -Infinity;
+        this.viewerTrading = null;
+        this.orders = { soldiers: new Order(), creatures: new Order(), folk: new Order(), throng: new Order(), plates: new Order() };
+
+        // (What the frame's bars over heads are placed by, said once a frame for them all:
+        // #barsOverHeads, #plated)
+        this.plating = { mine: null, own: null, lit: null, reach: 0, pixels: 0 };
 
         /**
          * How big an invasion this device can draw, measured from its frames while there's none
@@ -1534,12 +1642,15 @@ export class Game {
                 actors: this.battle.actors.length,
                 avatars: this.avatars.size,
                 drawn: { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 },
-                frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render) },
+                // (And the beat: how many frames a second the browser's asking for, app/frames.js)
+                frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render), beat: one(1000 / this.pacing.beat.value) },
                 together: this.remote ? "joined" : this.hosting ? "hosting" : null,
                 // (Joined: how often its own hero, drawn ahead, has been put right, and by how much
                 // at most: app/forecast.js)
                 ...(this.forecast ? { forecast: { ...this.forecast.corrections, most: one(this.forecast.corrections.most) } } : {}),
-                memory: this.memoryNow(),
+                // (On a phone, as the memory guard read it within the last couple of seconds: one
+                // walk over every body about, not two: memoryLately)
+                memory: this.memoryGuard.touch ? this.memoryLately(MEMORY_GUARD.every * 1250) : this.memoryNow(),
                 device: { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${view.renderer.domElement.width}x${view.renderer.domElement.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null },
             };
         };
@@ -1739,9 +1850,27 @@ export class Game {
         /**
          * The memory guard (app/memoryguard.js, #memoryGuarding): only on a touch screen (a phone or
          * a tablet: `touch`), its level now (0: holding as much as ever), since when (the game's
-         * clock, s), and how long till what's held is looked at again (s).
+         * clock, s), and how long till what's held is looked at again (s). As its level changes,
+         * the sound's squeezed or let be (the bodies' budget reads the level: #bodiesBudget); and
+         * as it goes up, whatever's held that nothing's using is let go of at once (`letGo`).
          */
-        this.memoryGuard = { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), level: 0, since: 0, clock: MEMORY_GUARD.every };
+        this.memoryGuard = Object.assign(
+            new MemoryGuard({
+                onLevel: (level) => this.sound?.squeeze?.(MEMORY_GUARD.sound[level] ?? null),
+                letGo: () => {
+                    // (The beasts' bodies and models none's drawn from)
+                    this.#forgetting(0, { now: true });
+                    // (And what the character kit keeps that no one's wearing or drawing with:
+                    // outfits' and garments' pictures, looks of eye, all made again when wanted)
+                    letGoOfIdle(this.kit);
+                },
+            }),
+            { touch: Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches), clock: MEMORY_GUARD.every },
+        );
+
+        // (What's held as it was last read, and when (performance.now, ms): one reading every
+        // couple of seconds serves the guard and the debug log's notes both: memoryLately)
+        this.memoryRead = { at: -Infinity, memory: null };
 
         /**
          * Their party's ready check (core/host.js READY, #readyEvent): what each in it has said
@@ -1792,6 +1921,11 @@ export class Game {
         // (#rationing)
         this.rationWaiting = new Set();
 
+        // Whom the marshal and the rationing each last looked at (ids), and with what room in full
+        // (#roomSaid): one of theirs come out since, or looked at with other room than there is
+        // now, isn't begun in full till it's been looked at again (#unlooked, #nextEnlistee)
+        this.looked = { soldiers: new Set(), soldiersRoom: null, creatures: new Set(), creaturesRoom: null };
+
         // The folk out in the world past the bodies' budget, not drawn till there's room for them
         // (#folkRoom)
         this.folkWaiting = new Set();
@@ -1803,6 +1937,19 @@ export class Game {
         // Those put aside, a dungeon's walls between them and the player, or out in the world while
         // the player's inside, till the player comes to them (#walledOff, #shutIn): their ids
         this.aside = new Set();
+
+        // The other players whose garments are drawn one by one for now, dressed at once (they've
+        // changed what they wear, or come into the world), to be drawn all at once after
+        // (#outfitting): id -> { character, since (the game's clock when they were dressed so),
+        // steps (the outfit being put together, once it's begun) }
+        this.outfits = new Map();
+
+        /**
+         * The players whose garments are drawn one by one whatever else (their ids; drawApart):
+         * the way back for any one of them, should their outfit not look right drawn all at
+         * once (generated/multiplayer_scaling_plan.md, slice 5-5: "a per-avatar flag").
+         */
+        this.piecewise = new Set();
 
         // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
         // while playing on at once, advance)
@@ -1906,20 +2053,33 @@ export class Game {
      * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), the
      * way-finding's WebAssembly (core/navigation/recast.js wasmBytes), the bodies' own copies on
      * the page (their meshes and pictures, kept to be posed and painted again: world/release.js
-     * heldOnPage), the buildings' floors' own copies on the page (#interiorsHeld), all of them
-     * together, and how many of what's kept for the world (the beasts' looks, and the models
-     * read: beasts/model.js keptModels). Where the heap isn't told (Safari), the bodies' and the
-     * floors' copies stand in for it in the total: the least of it, the most of what grows as more
-     * are about (measured in Chromium, a town's 30 bodies took the heap from 325 to 485 MB).
+     * heldOnPage), the buildings' floors' own copies on the page (#interiorsHeld), the models' and
+     * the scenes' as they're read (beasts/model.js modelsHeld: their shapes, their clips, and
+     * their pictures till the graphics card has them; what the bodies drawn from them share is
+     * the bodies', counted there), all of them together, and how many of what's kept for the
+     * world (the beasts' looks, and the models read: beasts/model.js keptModels). Where the heap
+     * isn't told (Safari), the bodies', the floors' and the models' copies stand in for it in the
+     * total: the least of it, the most of what grows as more are about (measured in Chromium, a
+     * town's 30 bodies took the heap from 325 to 485 MB).
      */
     memoryNow() {
         const heap = globalThis.performance?.memory;
         const gpu = this.view.gpuMemory?.report() ?? null;
         const sound = this.sound?.memory?.() ?? 0;
         const wasm = wasmBytes();
-        const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
+        const counted = new Set();
+        const bodies = heldOnPage(
+            [...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object),
+            [],
+            counted,
+        );
         const interiors = this.#interiorsHeld();
-        const total = (heap?.usedJSHeapSize ?? bodies + interiors) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
+        const modelled = modelsHeld(counted);
+        // (What the character kit holds on the page: its wardrobe's pictures, its looks of eye,
+        // the body's and the skin atlas's own data)
+        const kit = heldByKit(this.kit);
+        const page = bodies + interiors + modelled + kit;
+        const total = (heap?.usedJSHeapSize ?? page) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
         const beasts = keptBodies();
         const models = keptModels();
 
@@ -1932,10 +2092,32 @@ export class Game {
             wasmMB: megabytes(wasm),
             bodiesMB: megabytes(bodies),
             interiorsMB: megabytes(interiors),
+            modelsMB: megabytes(modelled),
+            kitMB: megabytes(kit),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
             // (The memory guard's level: 0, holding as much as ever; app/memoryguard.js)
             guard: this.memoryGuard?.level ?? 0,
         };
+    }
+
+    /**
+     * What the game holds (memoryNow) as it was last read, if that was within `within` ms; else
+     * read now, and kept. Reading it walks every body about, so on a phone, where the memory guard
+     * reads it every couple of seconds, the debug log's notes are given the guard's reading and
+     * the guard the notes' (the guard's level as it is now, either way).
+     */
+    memoryLately(within) {
+        const read = this.memoryRead;
+        const now = performance.now();
+
+        if (!read.memory || now - read.at > within) {
+            read.memory = this.memoryNow();
+            read.at = now;
+        }
+
+        read.memory.guard = this.memoryGuard?.level ?? 0;
+
+        return read.memory;
     }
 
     // The buildings' floors' own copies on the page (world/release.js heldOnPage: their meshes and
@@ -2252,6 +2434,8 @@ export class Game {
             landAt: (x, z) => world.maps?.town?.biomeAt?.(x, z) ?? "meadow",
             // (Its houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
             burntOf: (index) => this.#burntStage(world.start?.id, index),
+            // (Its trees planted with the world's, each variant kept once: trees.js Woodland)
+            woodland: this.chunks?.woodland ?? null,
             onProgress: (count) => {
                 done = built + count;
                 report(count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`);
@@ -2613,12 +2797,13 @@ export class Game {
     // Someone in the battle, drawn (once): a player as they made themselves, the orc, one of the
     // folk. Returns their avatar
     #dress(actor) {
-        return allAtOnce(this.#dressing(actor));
+        return allAtOnce(this.#dressing(actor, { atOnce: true }));
     }
 
     // The same, a step at a time (each a yield: Character.building's), so that drawing someone new
-    // is spread over frames. Returns their avatar (none if they've gone meanwhile)
-    *#dressing(actor) {
+    // is spread over frames. Returns their avatar (none if they've gone meanwhile). `atOnce`: every
+    // step's being taken in one frame (#dress)
+    *#dressing(actor, { atOnce = false } = {}) {
         // (Drawn already: but one of a crowd's built in full, to take its place)
         if (this.#drawnInFull(actor.id)) {
             return this.avatars.get(actor.id);
@@ -2670,10 +2855,21 @@ export class Game {
 
         if (actor.kind === "player") {
             const { hero: { shape, look, weapon }, progress } = this.host.players.get(actor.id);
-            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail });
+            // (Another player's garments drawn all at once, as everyone's are but the player's own
+            // hero's, who's seen closest and changes what they wear: 8 meshes for 15, measured
+            // on seven of them in mixed gear. But one dressed here in one frame, come into the
+            // world as it's played: one by one, as they were, their outfit's picture not put
+            // together in that frame too, but a step at a time from the next: #outfitting)
+            const apart = actor.id === this.me || !OUTFITTING.others || this.piecewise.has(actor.id);
+            const merge = !apart && !atOnce;
+            const character = yield* this.#built(actor, { shape, look, equipment: heroEquipment(weapon, progress.worn(), this.host.players.get(actor.id).hero.parts ?? [], progress.wielded()), hairDetail, merge });
 
             if (!character) {
                 return this.avatars.get(actor.id) ?? null;
+            }
+
+            if (!apart && !merge) {
+                this.outfits.set(actor.id, { character, since: -Infinity, steps: null });
             }
 
             // (Weapons put away to start with: drawn for a fight)
@@ -2722,7 +2918,7 @@ export class Game {
     // A character for someone, built a step at a time (Character.building); null (and thrown away)
     // if they've gone from the battle meanwhile, or been drawn some other way
     *#built(actor, options) {
-        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), release: true, ...options });
+        const character = yield* Character.building(this.kit, { far: Boolean(this.kit.lods), release: true, tall: this.#tallWhereBuilt(actor), ...options });
 
         if (this.#drawnInFull(actor.id) || !this.battle.actor(actor.id)) {
             character.dispose();
@@ -2737,6 +2933,37 @@ export class Game {
         }
 
         return character;
+    }
+
+    // How tall someone about to be built will be on the screen where they stand (drawing buffer
+    // pixels, a body as tall as most): their pictures are made the size that's seen at
+    // (characters/pictures.js), most of them a quarter of what they're painted. Null where it
+    // can't be told, and their pictures are made whole, then held as they're seen (#posing): the
+    // player's own (whole always: the pack's paperdoll draws them big at once), anyone on another
+    // map (a building's folk, got ready before the player goes in, seen close there), and, before
+    // the camera's been put behind the player (the game loading), anyone it could come near
+    #tallWhereBuilt(actor) {
+        const me = this.battle.actor(this.me);
+
+        if (!me || actor.id === this.me || actor.map !== me.map) {
+            return null;
+        }
+
+        const pixels = this.view.pixelsPerMetre();
+        // (As tall as most: metres)
+        const height = 1.75;
+
+        if (!this.cameraFollow) {
+            const back = startDistance(this.view.heldUpright);
+            const away = Math.hypot(actor.x - me.x, actor.y - me.y) - back;
+
+            return away > back ? (height * pixels) / away : null;
+        }
+
+        const [ox, oz] = this.originOf(actor.map);
+        const [x, z] = [ox + actor.x, oz + actor.y];
+
+        return this.view.heightOnScreen(new THREE.Vector3(x, this.#groundOn(actor.map, x, z), z), height, pixels, { anywhere: true });
     }
 
     // Everyone in the battle drawn, and no one who isn't: a player come or gone, the folk of a
@@ -2955,8 +3182,24 @@ export class Game {
         const seed = this.#seedOf(actor);
 
         // (Its model asked for now, if it's drawn from one and it isn't read yet: its stand-in's
-        // drawn till it is, #modelling)
-        wantModel(actor.wild.creature, "now");
+        // drawn till it is, #modelling. On a touch screen, where a kind only predicted has its
+        // model fetched and kept, not read, till one's put into the battle (SPARING_MODELS), its
+        // reading's waited for first, a second at most: read from what's kept it's a moment, and
+        // its stand-in would be a whole body built to be let go of, drawn till it's out of view)
+        const reading = wantModel(actor.wild.creature, "now");
+
+        if (reading && this.memoryGuard.touch && !modelOf(actor.wild.creature)) {
+            const until = performance.now() + SPARING_MODELS.patience;
+            let read = false;
+
+            reading.then(() => (read = true));
+
+            while (!read && performance.now() < until) {
+                if ((yield WAITING) === NOW) {
+                    break;
+                }
+            }
+        }
 
         // (Its weapon a player's or its kind's own: a knight of the Bell's morning star, an orc's axe)
         const weapon = weaponOf(actor.weapon);
@@ -3628,6 +3871,11 @@ export class Game {
         const frameStart = performance.now();
         const elapsed = Math.max(0, (now - this.lastFrame) / 1000);
         const dt = Math.min(0.1, elapsed);
+        // (How often the browser's asking for frames, by how long after the last this one came
+        // and how long the game's own work took before it; and how long the frame before spent
+        // building, which this one came the later for: what keeping up is judged by, below)
+        const beat = this.pacing.beat.observe(now, elapsed * 1000, this.worked);
+        const built = this.built;
 
         this.lastFrame = now;
         telemetry.begin(frameStart);
@@ -3668,15 +3916,21 @@ export class Game {
 
         // (Less drawn while it can't keep up, more again when it can, if that's left to it:
         // Adaptive. In a crowded fight, those least seen drawn in their kind's crowd first,
-        // app/throng.js; then fewer pixels and a lower level, app/governor.js)
+        // app/throng.js; then fewer pixels and a lower level, app/governor.js. Both judged against
+        // the beat, and not by a frame that came late for the building before it)
         if (this.view.adaptive) {
-            const full = this.throng.observe(now, elapsed * 1000, this.throngCount);
+            const about = this.throngCount;
+
+            about.beat = beat;
+            about.built = built;
+
+            const full = this.throng.observe(now, elapsed * 1000, about);
 
             if (full !== null) {
                 this.throngClock = 0;
                 this.governor.hold(now);
             } else {
-                const rung = this.governor.observe(now, elapsed * 1000);
+                const rung = this.governor.observe(now, elapsed * 1000, about);
 
                 if (rung) {
                     this.adapt(rung);
@@ -3691,7 +3945,7 @@ export class Game {
         smooth("update", updated - frameStart);
         smooth("render", rendered - updated);
         this.stats.steps = steps;
-        this.#budget(now, elapsed * 1000, rendered - frameStart);
+        this.#budget(now, elapsed * 1000, rendered - frameStart, beat);
 
         if (steps) {
             this.#begin?.();
@@ -3712,13 +3966,15 @@ export class Game {
         // written down now and then, for a crash to be found by: just after the frame, not in it)
         telemetry.end(elapsed * 1000, this.telemetryState);
         telemetry.aliveSoon(this.telemetryState);
+        this.worked = performance.now() - frameStart;
     }
 
     // How big an invasion this device can draw (app/budget.js), from a frame's work (ms: updated
     // and drawn), told the host whenever it's changed enough: not while one's on (its frames
     // aren't what's measured), and not as the player's own doing (#command: nothing they were
-    // about, a journey or the way to a portal, given up for it)
-    #budget(now, interval, work) {
+    // about, a journey or the way to a portal, given up for it). The least, while the game's
+    // drawing less than the quality chosen to keep up, or its frames come well behind the `beat`
+    #budget(now, interval, work, beat) {
         if (this.host.invasions.length) {
             this.invasionBudget.hold();
 
@@ -3726,8 +3982,10 @@ export class Game {
         }
 
         this.device ??= detectQuality();
+        this.budgetAbout.beat = beat;
+        this.budgetAbout.step = this.view.adaptive ? this.governor.step : 0;
 
-        const size = this.invasionBudget.observe(now, interval, work, this.device);
+        const size = this.invasionBudget.observe(now, interval, work, this.device, this.budgetAbout);
 
         if (size !== null) {
             const command = { type: "budget", invasion: size };
@@ -3892,10 +4150,46 @@ export class Game {
             this.remote.ping();
         }
 
+        // (Whether this frame stepped the battle: the jobs done a couple of times a second wait
+        // for the next if they're due on it, #due)
+        this.stepped = steps > 0;
         this.#update(dt, (this.remote ? this.accumulator : this.runner.lag) / STEP_MS);
         telemetry.mark(PHASE.bars);
 
         return steps;
+    }
+
+    // Is a job of the frame's that's done every `every` seconds due (its clock the field `field`:
+    // seconds till then, 0 or less now)? Not on a frame that stepped the battle, unless it's been
+    // asked for now: the next. Done, it's next due at its own share of the time (`offset`,
+    // PACED), so the jobs don't all land in one frame: app/clocks.js
+    #due(field, dt, every, offset) {
+        const left = this[field] ?? 0;
+        const turn = clockTurn(left, dt, this.stepped);
+
+        this[field] = turn === DUE ? nextSlot(this.clock, every, offset) : turn === PUT_OFF ? 0 : left - dt;
+
+        return turn === DUE;
+    }
+
+    // One of those jobs that counts its own clock down (`field`, set back to MARSHAL.every by the
+    // job as it's done: #marshal, #rationing, #shutIn, #folkRoom, #thronging), given its turn the
+    // same way: not begun on a frame that stepped the battle, and next due at its own share of
+    // the time
+    #inTurn(field, offset, dt, job) {
+        const left = this[field] ?? 0;
+
+        if (clockTurn(left, dt, this.stepped) === PUT_OFF) {
+            this[field] = 0;
+
+            return;
+        }
+
+        job(dt);
+
+        if (this[field] > left) {
+            this[field] = nextSlot(this.clock, MARSHAL.every, offset);
+        }
     }
 
     // Why nothing's happening, while playing together: this game's link dropped (it's coming back),
@@ -3959,6 +4253,22 @@ export class Game {
         const pixels = view.pixelsPerMetre();
 
         this.clock += dt;
+
+        // (What follows the battle, not the frame (who's after the player, the enemies list,
+        // the party's icons, the Action Bar's state, the allies near), is looked at again on the
+        // frame after one that stepped it, when the player's told it something (#command), every
+        // FOLLOWED seconds whatever, and every frame while the game's played on by hand
+        // (advance): not sixty times a second for what changes twenty. `fresh` says which this is.)
+        const fresh = followsNow(!this.waits, this.followDue, this.clock, this.followedAt, FOLLOWED);
+
+        this.followDue = this.stepped;
+        this.fresh = fresh;
+
+        if (fresh) {
+            this.followedAt = this.clock;
+            this.followStamp++;
+        }
+
         TREE_WIND.time.value = this.clock;
 
         // (On another map than the one shown, with no crossing seen taking them there: shown the one
@@ -3981,10 +4291,9 @@ export class Game {
         // (The fortifications and the camps' stockades standing near the player drawn, a couple of
         // times a second, named in the debug log if that's slow; a stockade's mended stakes rising
         // every frame)
-        if ((this.fortsClock -= dt) <= 0) {
+        if (this.#due("fortsClock", dt, MARSHAL.every, PACED.forts)) {
             const started = performance.now();
 
-            this.fortsClock = 0.5;
             this.#syncForts();
             this.#syncStockades();
             this.#syncBurnt();
@@ -3999,13 +4308,18 @@ export class Game {
 
         this.stockades?.update(dt);
         this.contacts?.begin();
-        this.#marshal(dt);
+        // (Each of these a couple of times a second, at its own time and not on a frame that
+        // stepped the battle: #inTurn)
+        this.#inTurn("marshalClock", PACED.marshal, dt, this.jobs.marshal);
         this.#bossBar(dt);
-        this.#allying();
-        this.#rationing(dt);
-        this.#shutIn(dt);
-        this.#folkRoom(dt);
-        this.#thronging(dt);
+        if (fresh) {
+            this.#allying();
+        }
+        this.#inTurn("rationClock", PACED.ration, dt, this.jobs.rationing);
+        this.#inTurn("shutClock", PACED.shut, dt, this.jobs.shutIn);
+        this.#inTurn("folkClock", PACED.folk, dt, this.jobs.folkRoom);
+        this.#inTurn("throngClock", PACED.throng, dt, this.jobs.thronging);
+        this.#outfitting();
         this.#crowding();
         this.#forgetting(dt);
         this.#memoryGuarding(dt);
@@ -4081,7 +4395,7 @@ export class Game {
                 continue;
             }
 
-            avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor));
+            avatar.actions.setGuard(!actor.dead && actor.armed && this.#fighting(actor, avatar));
 
             // (One of the folk who sits: up and away in a fright, and back to its seat after)
             if (actor.routine?.seated) {
@@ -4211,7 +4525,7 @@ export class Game {
 
         // (In a fight, or lately: a fight's music; FIGHT_LINGERS after its last moment, what's
         // heard here again: fight.js)
-        if (inFight(battle.actor(this.me), battle.actors, (a, b) => battle.hostile(a, b), battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
+        if (fresh && inFight(battle.actor(this.me), battle.actors, this.hostileTo, battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
             this.foughtAt = battle.time;
         }
 
@@ -4223,10 +4537,7 @@ export class Game {
         this.sound?.setBattle(battle.time - (this.foughtAt ?? -Infinity) < FIGHT_LINGERS);
 
         // (The criers near calling out, as often as what's heard is worked out)
-        this.crying = (this.crying ?? 0) - dt;
-
-        if (this.crying <= 0) {
-            this.crying = HEARD_EVERY;
+        if (this.#due("crying", dt, HEARD_EVERY, PACED.criers)) {
             this.#cryOut();
         }
         this.#castsHeard();
@@ -4244,15 +4555,26 @@ export class Game {
         const helped = ally ? this.avatars.get(ally.id) : null;
 
         this.effects.setAlly(helped?.object ?? null, helped ? Math.max(0.5, helped.character.height * 0.33) : 0.6);
-        this.#partyIcons();
-        this.#quickActions(target);
+
+        // (The party's icons and the Action Bar's state follow the battle: `fresh`, above)
+        if (fresh) {
+            this.#partyIcons();
+            this.#quickActions(target);
+        }
+
         this.#buffOn();
         this.sigil.show(this.#prism(), this.battle.time);
         this.charge.show(this.#charging(), this.battle.time);
         this.#sizeUp(dt);
         this.#wielding(dt);
         this.#bleed(dt);
-        this.#ailing();
+
+        // (What lingers on anyone: every frame while anything does, for what rises off them;
+        // looked for, with none, as the battle steps)
+        if (fresh || this.ailed.size) {
+            this.#ailing();
+        }
+
         this.#radiant();
         this.#grounds();
         this.ailments?.update(dt);
@@ -4354,53 +4676,18 @@ export class Game {
         }
 
         telemetry.mark(PHASE.world);
+
+        // (How long the building took, for whoever judges how the game's keeping up: #frame)
+        const building = performance.now();
+
         this.#visit(dt);
+        this.built = performance.now() - building;
         this.#follow(dt);
         this.#inside(dt);
         telemetry.mark(PHASE.inside);
 
-        // Bars over the soldiers who are enemies (or hurt), none over the rest
-        const player = battle.actor(this.me);
-
-        for (const actor of battle.actors) {
-            if (actor.kind !== "soldier" || !this.avatars.has(actor.id) || !player) {
-                continue;
-            }
-
-            const shown = hud.tracked.has(actor.id);
-            const wanted = !actor.dead && (battle.hostile(actor, player) || actor.hp < actor.maxHp);
-
-            if (wanted && !shown) {
-                hud.track(actor.id, { ...actor, hostile: battle.hostile(actor, player) });
-            } else if (!wanted && shown) {
-                hud.untrack(actor.id);
-            }
-        }
-
-        // Bars over the heads of the others on the player's map (those that have one), smaller
-        // and fainter the farther they are from the player's character, gone where the player
-        // can't see them (less far in the dark, if not as less far as others see: hud.js
-        // PLATE_SIZE, light.js playerSight); the nearer the camera over the farther. A foe within
-        // the player's reach they can't act on (too dark to see that far, or something in the way:
-        // battle.js whyUnseen) dimmed, so it reads as not yet reachable, not as refused for nothing
-        const eye = view.camera.position;
-        const own = this.avatars.get(this.me)?.object.position;
-        const lit = this.mapId === battle.lightMap ? battle.light : null;
-        const reach = mine && !mine.dead ? this.#reachOf(mine) : 0;
-
-        for (const actor of battle.actors) {
-            const avatar = this.avatars.get(actor.id);
-
-            if (actor.id !== this.me && avatar && hud.tracked.has(actor.id)) {
-                const head = avatar.point(1.08, _head);
-                const depth = eye.distanceTo(head);
-                const at = avatar.object.position;
-                const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
-                const dim = reach > 0 && !actor.dead && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && battle.hostile(actor, mine) && !battle.canSee(mine, actor, reach);
-
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId || actor.hidden ? null : view.toScreen(head), { scale, depth, dim });
-            }
-        }
+        // (The bars over heads: the soldiers' taken up and let go of, and everyone's placed)
+        this.#barsOverHeads(mine);
 
         this.#wildWays();
 
@@ -4409,7 +4696,7 @@ export class Game {
             const avatar = this.avatars.get(id);
             const head = avatar && battle.actor(id)?.map === this.mapId ? avatar.point(1.18, _head) : null;
 
-            hud.placeSaid(id, head ? view.toScreen(head) : null, { depth: head ? eye.distanceTo(head) : 0 });
+            hud.placeSaid(id, head ? view.toScreen(head) : null, { depth: head ? view.camera.position.distanceTo(head) : 0 });
         }
 
         // Skin flushing red where hit, and tinged by what lingers on them (green with venom, a
@@ -4450,21 +4737,35 @@ export class Game {
         }
     }
 
-    // Is a character fighting (so standing on guard)? Attacking lately, or an enemy close by
-    #fighting(actor) {
+    // Is a character fighting (so standing on guard)? Attacking lately, or an enemy close by:
+    // which is asked of everyone about, so each one's answer is kept with their avatar and worked
+    // out again a few times a second, not every frame, not all in the same one (app/fight.js
+    // foeNear, guardDue). Asked with no avatar (now and then, of one: going to its crowd, the
+    // crier near), it's worked out there and then
+    #fighting(actor, avatar = null) {
         // (The folk never fight)
         if (actor.neutral) {
             return false;
         }
 
-        if (actor.attack || this.battle.time - (this.lastAttack.get(actor.id) ?? -Infinity) < 2500) {
+        const battle = this.battle;
+
+        if (actor.attack || battle.time - (this.lastAttack.get(actor.id) ?? -Infinity) < 2500) {
             return true;
         }
 
-        const reach = longestReach(actor.weapon) + 2;
+        if (!avatar) {
+            return foeNear(actor, battle.actors, longestReach(actor.weapon) + 2, this.hostileTo, this.seenBy);
+        }
 
-        // (The cheap checks first: how their peoples stand, and what's in the way, only for one near)
-        return this.battle.actors.some((other) => !other.dead && other.map === actor.map && Math.hypot(other.x - actor.x, other.y - actor.y) <= reach && this.battle.hostile(other, actor) && this.battle.canSee(actor, other));
+        const kept = (avatar.wary ??= {});
+
+        if (guardDue(kept, battle.time, this.waryTurn)) {
+            this.waryTurn++;
+            kept.on = foeNear(actor, battle.actors, longestReach(actor.weapon) + 2, this.hostileTo, this.seenBy);
+        }
+
+        return kept.on;
     }
 
     // How high the ground is where someone stands on a map (metres): a bridge's deck (over its
@@ -4504,6 +4805,11 @@ export class Game {
 
         const { position } = avatar.object;
         const { height, mesh } = avatar.character;
+
+        // (Its pictures held at the size it's seen at where it stands, in view or not, so that
+        // they're there as the camera turns to it: Character.fitPictures. The player's own are
+        // whole always)
+        avatar.character.fitPictures(this.view.heightOnScreen(position, height, pixels, { anywhere: true }), dt);
         // (One of the players' allies not among the nearest: casting no shadow, at the middle
         // level at most: MANY)
         const distant = this.allies.has(actor.id) && !this.alliesNear.has(actor.id);
@@ -4732,16 +5038,23 @@ export class Game {
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
         const room = soldiers.length > MARSHAL.from ? full : Math.max(full, this.#bodiesBudget() - this.#heldInFull((id) => !ids.has(id)));
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const inFull = (actor) => this.#drawnInFull(actor.id);
-        // (Past the reach from the camera: in their crowd, whatever room there is; the rest ranked
-        // by how near the camera they are)
-        const away = new Map(soldiers.map((actor) => [actor, this.#awayFromCamera(actor)]));
-        const far = new Set(soldiers.filter((actor) => !fighting(actor) && away.get(actor) > DETAIL.reach + (inFull(actor) ? DETAIL.slack : 0)));
-        const ranked = soldiers
-            .filter((actor) => !far.has(actor))
-            .map((actor) => [away.get(actor) - (fighting(actor) ? DRAW_REACH : 0), actor])
-            .sort((a, b) => a[0] - b[0]);
+        const viewer = this.#viewer(me);
+
+        // (Whom it's looked at now, and with what room: #unlooked)
+        this.looked.soldiers = ids;
+        this.looked.soldiersRoom = this.#roomSaid();
+        // (Past the reach from the camera: in their crowd, whatever room there is, but whoever
+        // the order puts before those who merely stand about; the rest in the order, #stature)
+        const far = new Set();
+        const ranked = [];
+
+        for (const entry of this.orders.soldiers.rank(viewer, soldiers, this.#stature)) {
+            if (!first(entry) && entry.away > DETAIL.reach + (this.#drawnInFull(entry.actor.id) ? DETAIL.slack : 0)) {
+                far.add(entry.actor);
+            } else {
+                ranked.push(entry.actor);
+            }
+        }
 
         this.marshalled = { soldiers: soldiers.length, room, far: far.size };
 
@@ -4775,7 +5088,7 @@ export class Game {
             this.#toCrowd(actor, key);
         };
 
-        ranked.forEach(([, actor], place) => {
+        ranked.forEach((actor, place) => {
             const avatar = this.avatars.get(actor.id);
             const crowded = avatar instanceof CrowdAvatar;
 
@@ -4812,7 +5125,7 @@ export class Game {
         // fallen meanwhile, forgotten, never seen; those out of reach, still waiting; those with
         // room now, come nearer, built in full. Not the fallen and those out of reach built in
         // full, as they were: 38 of an invasion's dead were, far off, waiting their turn)
-        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.some(([, each], place) => each === actor && place >= room);
+        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.indexOf(actor) >= room;
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
@@ -4828,14 +5141,17 @@ export class Game {
             }
         }
 
-        // (The kinds of those still waiting made the nearest the player first, whoever's fighting
-        // them before anyone: FIGURES)
+        // (The kinds of those still waiting made the nearest the player first, whoever the order
+        // puts before those who merely stand about before anyone: FIGURES. By how near the
+        // player, not how tall on the screen, as the order would have it: the figures are first
+        // made as the game loads, #figuresFirst, before the camera's behind the player, and a
+        // kind's made for everyone of it, wherever the camera looks)
         const nearest = new Map();
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
             const { key } = this.#crowdKind(actor);
-            const away = fighting(actor) ? 0 : actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity;
+            const away = standingOf(viewer, actor) < STANDING.rest ? 0 : actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity;
 
             nearest.set(key, Math.min(nearest.get(key) ?? Infinity, away));
         }
@@ -4843,12 +5159,195 @@ export class Game {
         this.crowds.first([...nearest].sort((a, b) => a[1] - b[1]).map(([key]) => key));
     }
 
+    // The player as the order of precedence needs them (app/precedence.js): who they're set on
+    // (and who they've chosen to fight, as #target has it, its bar lit) and striking, and who
+    // they're talking to or buying from, as they are this moment; the
+    // other players in their party, whoever those are set on, and whoever they're trading
+    // with, looked up again a couple of times a second (MARSHAL.every). The same object every
+    // time, filled in again: asked for every frame, for the bars over heads
+    #viewer(me) {
+        const viewer = this.viewer;
+
+        viewer.id = me.id;
+        viewer.map = me.map;
+        viewer.target = me.target ?? null;
+        viewer.locked = (me.order?.type === "engage" ? me.order.target : me.lock) ?? null;
+        viewer.striking = me.attack?.target ?? null;
+
+        if (!(this.clock - this.viewerAt < MARSHAL.every)) {
+            this.viewerAt = this.clock;
+            viewer.party.clear();
+            viewer.partyFoes.clear();
+
+            for (const id of this.host.fellows(me.id)) {
+                const fellow = this.battle.actor(id);
+
+                viewer.party.add(id);
+
+                for (const foe of [fellow?.target, fellow?.attack?.target]) {
+                    if (foe !== null && foe !== undefined) {
+                        viewer.partyFoes.add(foe);
+                    }
+                }
+            }
+
+            const trade = this.#tradeNow();
+
+            this.viewerTrading = trade ? (trade.from === me.id ? trade.to : trade.from) : null;
+        }
+
+        viewer.engaged.clear();
+
+        if (this.talking) {
+            viewer.engaged.add(this.talking.id);
+        }
+
+        if (this.shopping) {
+            viewer.engaged.add(this.shopping.keeper);
+        }
+
+        if (this.viewerTrading !== null) {
+            viewer.engaged.add(this.viewerTrading);
+        }
+
+        return viewer;
+    }
+
+    // How one ranked to be held in full is measured (Order.rank's `measure`: #marshal,
+    // #rationing, #folkRoom): how far from the camera, and how tall it would be on the screen
+    // there, in view or not, as its height over that (the same for everyone but for what a
+    // metre is in pixels, which ranks no one). Not nothing for one out of view, as for those
+    // who only stand in (#crowdable): a body let go of as the camera turns from it would be
+    // built again as it turns back, seconds of work each time. Each is taken to be as tall as
+    // its kind is (a creature as big as its own seed makes it), a person's height else, however
+    // it's drawn now: never its own body's height where it has one. In its crowd it's as tall as
+    // its kind's figure, in full as tall as itself, so its place in the order changed as it was
+    // built in full and as it was let go again: one of a battle's soldiers ranked within the
+    // room in its crowd and more than the margin past it in full was built, let go and built
+    // again for as long as it stood there (two of a field battle's eighty, some twenty times
+    // each in two minutes: a body built every few seconds for nothing, and to the player a
+    // soldier forever fading between its crowd's figure and itself)
+    #stature = (entry) => {
+        const { actor } = entry;
+        const height = PERSON * (actor.kind === "beast" && actor.wild ? sizeOf(actor.wild.creature, this.#seedOf(actor)) : 1);
+
+        entry.away = this.#awayFromCamera(actor);
+        entry.tall = height / Math.max(entry.away, 0.1);
+    };
+
+    // The bars over heads, every frame. First the soldiers': a bar over each who's an enemy (or
+    // hurt) and within sight of a bar (PLATE_SIZE.far metres of the player, PLATE_KEPT further
+    // for one that has its bar, so none comes and goes at the edge; the one the player's set on
+    // wherever it is), none over the rest: a hundred in an invasion each had one in the page,
+    // most of them past where a bar's drawn at all. Then everyone's on the player's map placed
+    // (those that have one), smaller and fainter the farther they are from the player's
+    // character, gone where the player can't see them (less far in the dark, if not as less far
+    // as others see: hud.js PLATE_SIZE, light.js playerSight), in the order of precedence
+    // (app/precedence.js: the first over the rest), and one that would lie under those before it
+    // not shown (hud.js Covering), but the one the player's set on, their party's and their
+    // own, and whoever's attacking them, always. A foe within the player's reach they can't act
+    // on (too dark to see that far, or something in the way: battle.js whyUnseen) dimmed, so it
+    // reads as not yet reachable, not as refused for nothing
+    #barsOverHeads(mine) {
+        const { battle, hud } = this;
+
+        for (const actor of battle.actors) {
+            if (actor.kind !== "soldier" || !this.avatars.has(actor.id) || !mine) {
+                continue;
+            }
+
+            const shown = hud.tracked.has(actor.id);
+            const near = actor.id === mine.target || (actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= PLATE_SIZE.far + (shown ? PLATE_KEPT : 0));
+            const wanted = !actor.dead && near && (battle.hostile(actor, mine) || actor.hp < actor.maxHp);
+
+            if (wanted && !shown) {
+                hud.track(actor.id, { ...actor, hostile: battle.hostile(actor, mine) });
+
+                // (Lit, if it's the one they're set on already: the hud lights the bar there is
+                // when it's told who)
+                if (hud.targeted === actor.id) {
+                    hud.setTarget(null);
+                    hud.setTarget(actor.id);
+                }
+            } else if (!wanted && shown) {
+                hud.untrack(actor.id);
+            }
+        }
+
+        const plating = this.plating;
+
+        plating.mine = mine ?? null;
+        plating.own = this.avatars.get(this.me)?.object.position ?? null;
+        plating.lit = this.mapId === battle.lightMap ? battle.light : null;
+        plating.reach = mine && !mine.dead ? this.#reachOf(mine) : 0;
+        plating.pixels = this.view.pixelsPerMetre();
+
+        const ranked = this.orders.plates.rank(mine ? this.#viewer(mine) : this.viewer, battle.actors, this.#plated);
+
+        hud.placing(this.clock);
+
+        for (let place = 0; place < ranked.length; place++) {
+            const { actor, point, scale, dim, standing } = ranked[place];
+
+            hud.place(actor.id, point, { scale, dim, over: place, always: standing <= STANDING.attacker || Boolean(this.allied?.has(actor.id)) });
+        }
+    }
+
+    // One whose bar's placed this frame, as it's ranked (Order.rank's `measure`, #barsOverHeads):
+    // none for the player's own, or one with no bar; how big its bar is where it stands worked
+    // out first, and one with none there (dead, on another map, hidden, past sight) or behind
+    // the camera has its bar hidden here and now, its head neither found nor put on the screen
+    // (every soldier's was, every frame, wherever it stood); the rest ranked by how tall on the
+    // screen they are, the nearer the camera first of two as tall. One just put down (#place:
+    // drawn this frame, or come through a door) has no bar this once: a body's stood on its
+    // ground as the frame's bodies are gone through, and one put down after that is at no height
+    // yet, so its bar was drawn for a frame wherever that put its head, hundreds of pixels down
+    // the screen out on high ground, and, lying there under someone else's, was then kept hidden
+    // half a second as one covered is (hud.js PLATE_COVER.hold)
+    #plated = (entry) => {
+        const { actor } = entry;
+        const avatar = this.avatars.get(actor.id);
+
+        if (actor.id === this.me || !avatar || !this.hud.tracked.has(actor.id)) {
+            return false;
+        }
+
+        if (avatar.putDown) {
+            avatar.putDown = false;
+            this.hud.place(actor.id, null);
+
+            return false;
+        }
+
+        const { mine, own, lit, reach, pixels } = this.plating;
+        const at = avatar.object.position;
+        const scale = actor.dead || actor.map !== this.mapId || actor.hidden ? 0 : own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
+        const point = scale > 0 ? this.view.toScreen(avatar.point(1.08, _head)) : null;
+
+        if (!point) {
+            this.hud.place(actor.id, null);
+
+            return false;
+        }
+
+        entry.point = point;
+        entry.scale = scale;
+        entry.dim = reach > 0 && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && this.battle.hostile(actor, mine) && !this.battle.canSee(mine, actor, reach);
+        entry.tall = this.view.heightOnScreen(at, avatar.character?.height ?? PERSON, pixels);
+        entry.away = this.view.camera.position.distanceTo(at);
+
+        return true;
+    };
+
     // The soldiers about the player (`me`) the marshal draws, in full or in their crowds: alive, on
     // their map and within DRAW_REACH of them, not a siege engine's (of `among`, if not everyone)
     #soldiersAbout(me, among = this.battle.actors) {
-        const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
+        return among.filter((actor) => this.#soldierAbout(actor, me));
+    }
 
-        return among.filter((actor) => actor?.kind === "soldier" && !actor.engine && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+    // Whether someone's one of those soldiers about the player (`me`)
+    #soldierAbout(actor, me) {
+        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH && this.host.soldiers.has(actor.id);
     }
 
     // How many kinds of soldiers' figures look to be made while the game loads (#figuresFirst): of
@@ -5062,6 +5561,11 @@ export class Game {
 
         const rationed = this.battle.actors.filter((actor) => !actor.dead && this.#rationed(actor));
         const ids = new Set(rationed.map(({ id }) => id));
+
+        // (Whom it's looked at now, and with what room: #unlooked)
+        this.looked.creatures = ids;
+        this.looked.creaturesRoom = this.#roomSaid();
+
         // (Room beside everyone else held in full, but the wild's beasts built in code: their
         // bodies shared, each one small)
         const room = Math.max(this.view.quality.soldiers?.full ?? 0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
@@ -5079,13 +5583,11 @@ export class Game {
             return;
         }
 
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const ranked = rationed
-            .map((actor) => [actor.map === me.map ? this.#awayFromCamera(actor) - (fighting(actor) ? DRAW_REACH : 0) : Infinity, actor])
-            .sort((a, b) => a[0] - b[0]);
+        // (In the order: app/precedence.js, #stature)
+        const ranked = this.orders.creatures.rank(this.#viewer(me), rationed, this.#stature);
         // (Each one's place in the budget's room, in order, but those in the models' own, -1)
         let [models, next] = [0, 0];
-        const placed = ranked.map(([, actor]) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
+        const placed = ranked.map(({ actor }) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
 
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
@@ -5257,7 +5759,10 @@ export class Game {
             }
         }
 
-        const kept = (actor) => actor.id === this.talking?.id || actor.id === this.shopping?.keeper;
+        // (Whoever the order puts before those who merely stand about: the one the player's
+        // talking or trading with, as ever, and anyone set on them or their party)
+        const viewer = this.#viewer(me);
+        const kept = (actor) => standingOf(viewer, actor) < STANDING.rest;
         // (Far from the camera, one the player can see: the townsfolk drawn in their crowd there)
         const far = (actor) => !kept(actor) && actor.map === me.map && !this.#walledOff(actor, me) && this.#awayFromCamera(actor) > DETAIL.reach + (this.#drawnInFull(actor.id) ? DETAIL.slack : 0);
 
@@ -5267,10 +5772,10 @@ export class Game {
             return;
         }
 
-        const ranked = folk.map((actor) => [kept(actor) ? -Infinity : actor.map === me.map ? this.#awayFromCamera(actor) : Infinity, actor]).sort((a, b) => a[0] - b[0]);
+        const ranked = this.orders.folk.rank(viewer, folk, this.#stature);
         const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id) || this.aside.has(id);
 
-        ranked.forEach(([, actor], place) => {
+        ranked.forEach(({ actor }, place) => {
             const { id } = actor;
             const kind = this.#folkKind(actor);
 
@@ -5364,17 +5869,25 @@ export class Game {
 
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
     // near one of its lairs, or where one may be met at that hour (a werewolf: #modelsHere), before
-    // it's met (looked at every MODELLING seconds); and one drawn with its stand-in, its model read
+    // it's met (looked at every MODELLING seconds); on a touch screen, only fetched till the
+    // player's close to the lair or one of its kind's in the battle (SPARING_MODELS, modelsAhead);
+    // and one drawn with its stand-in, its model read
     // since, drawn again from the model once it's out of view (the colossal, at once) and not
     // attacking, falling or coming down out of the sky (let go of, and put back on the list to be
     // drawn)
     #modelling(dt) {
         const me = this.avatars.get(this.me)?.object.position;
 
-        if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
-            this.modelClock = MODELLING;
+        if (this.#due("modelClock", dt, MODELLING, PACED.models) && me) {
+            const sparing = this.memoryGuard.touch;
+            const ahead = modelsAhead({
+                predicted: [...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()],
+                close: [...(sparing ? modelsNear([me.x, me.z], this.#modelLairs(), SPARING_MODELS.read) : []), ...this.#modelsOfRift()],
+                met: sparing ? this.#modelsMet() : [],
+                sparing,
+            });
 
-            for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere(), ...this.#modelsOfRift()])) {
+            for (const kind of ahead.read) {
                 wantModel(kind);
             }
 
@@ -5383,11 +5896,12 @@ export class Game {
                 wantModel(kind, "now");
             }
 
-            // (The places near: their creatures' models fetched, not read; and those of the place
-            // the player's in read, if they went in without waiting for them)
+            // (Those only predicted, on a touch screen, and the places near: their creatures'
+            // models fetched, not read; and those of the place the player's in read, if they went
+            // in without waiting for them)
             this.approached ??= new Set();
 
-            for (const kind of this.#modelsApproached()) {
+            for (const kind of [...ahead.fetch, ...this.#modelsApproached()]) {
                 if (!this.approached.has(kind)) {
                     this.approached.add(kind);
                     fetchModel(kind, "soon").then((kept) => kept || setTimeout(() => this.approached.delete(kind), APPROACH_RETRY));
@@ -5426,6 +5940,21 @@ export class Game {
         }
 
         return Boolean(actor.wild?.worldBoss) || this.view.heightOnScreen(avatar.object.position, avatar.character.height, this.view.pixelsPerMetre()) <= 0;
+    }
+
+    // The kinds drawn from a model of the wild's creatures in the battle now, alive (put into it
+    // about the player): on a touch screen, what's only fetched till then is read (#modelling),
+    // and kept while they are (#forgetting)
+    #modelsMet() {
+        const kinds = new Set();
+
+        for (const actor of this.battle.actors) {
+            if (actor.wild?.creature && !actor.dead && MODELS[actor.wild.creature]) {
+                kinds.add(actor.wild.creature);
+            }
+        }
+
+        return [...kinds];
     }
 
     // The kinds drawn from a model in the places with a way in near the player, out in the world
@@ -5489,7 +6018,11 @@ export class Game {
     // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
     // for from, so one isn't let go and read again going to and fro at the edge), those that may be
     // met where they are (#modelsHere), and those of the place they're in or at the door of
-    // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER)
+    // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER). On
+    // a touch screen, where those only predicted aren't read (#modelling), only those whose lairs
+    // the player's close to (SPARING_MODELS.keep) and those with one of their kind in the battle:
+    // one met out in its woods is let go of a while after the last of them's gone, as any is, not
+    // kept all night
     #forgetting(dt, { now = false } = {}) {
         if (!now && (this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
@@ -5501,8 +6034,10 @@ export class Game {
         forgetBodies(performance.now(), now ? 0 : undefined);
 
         const me = this.avatars.get(this.me)?.object.position;
+        const sparing = this.memoryGuard.touch;
+        const predicted = me ? (sparing ? [...modelsNear([me.x, me.z], this.#modelLairs(), SPARING_MODELS.keep), ...this.#modelsMet()] : [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()]) : [];
 
-        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
+        forgetModels(performance.now(), now ? 0 : MODEL_LINGER, me ? [...predicted, ...this.#modelsAbout(), ...this.#modelsOfRift()] : [], this.#modelsInside());
     }
 
     // How many bodies can be held in full at once: the quality's (QUALITY bodies), and, the memory
@@ -5511,12 +6046,47 @@ export class Game {
         return Math.min(this.view.quality.bodies ?? Infinity, MEMORY_GUARD.bodies[this.memoryGuard.level] ?? Infinity);
     }
 
+    // What says how much room there is in full, whoever's about: the bodies' budget, the few a
+    // battle's soldiers have in full, and the models' own room, as the quality and the memory
+    // guard have them now. A look taken with any of them other than it is now is out of date
+    // (#unlooked)
+    #roomSaid() {
+        return `${this.#bodiesBudget()} ${this.view.quality.soldiers?.full ?? ""} ${this.view.quality.models ?? ""}`;
+    }
+
+    // Whether someone waiting to be dressed in full has still to be looked at by whoever says if
+    // there's room for them so: one of the soldiers about by the marshal, one of the wild's
+    // people-shaped creatures by the rationing. Come out since it last looked, or looked at with
+    // other room than there is now (`said`: #roomSaid; the memory guard's cut the bodies' budget,
+    // the quality's changed), it mustn't be begun: each looks a couple of times a second, each at
+    // its own time (PACED), and anyone's dressing done, or the folk let go, frees the next to be
+    // begun at once. A soldier with no room in full was begun so in that while, a second of the
+    // processor and ten megabytes on a phone the moment its budget was cut, and then left in
+    // full, as one built only just past the room is (MARSHAL.margin). Returns the clock of
+    // whoever's to look, or null: its own to dress now
+    #unlooked(actor, me, said) {
+        if (!me) {
+            return null;
+        }
+
+        if (actor.kind === "soldier") {
+            return this.#soldierAbout(actor, me) && !(this.looked.soldiers.has(actor.id) && this.looked.soldiersRoom === said) ? "marshalClock" : null;
+        }
+
+        return this.#rationed(actor) && !actor.dead && this.#bodiesBudget() !== Infinity && !(this.looked.creatures.has(actor.id) && this.looked.creaturesRoom === said) ? "rationClock" : null;
+    }
+
     // The memory guard (app/memoryguard.js): on a touch screen, what's held looked at every so
     // often (MEMORY_GUARD.every: memoryNow, without the page's heap), and its level (guardLevel) put into effect as it
     // changes: the bodies' budget (#bodiesBudget: those past it in their crowds, by the rationing),
     // the sound squeezed or not (audio/sound.js squeeze), and, coming to a higher level, the beasts'
     // bodies and models none's drawn from let go of at once (#forgetting); told in the debug log
     // (memoryNow `guard`)
+    //
+    // What's held is read in a task of its own just after the frame, as the debug log's notes are
+    // written, not in it: reading it walks every body about (1 to 9 ms for 30 to 100 of them,
+    // measured on stand-ins), and the notes read it again a moment later. One reading serves both
+    // (memoryLately). Played on by hand (advance: `waits` off), it's read there and then.
     #memoryGuarding(dt) {
         const guard = this.memoryGuard;
 
@@ -5526,25 +6096,32 @@ export class Game {
 
         guard.clock = MEMORY_GUARD.every;
 
-        const was = guard.level;
+        if (!this.waits) {
+            this.#memoryLook();
+        } else if (!guard.looking) {
+            guard.looking = true;
+            setTimeout(() => {
+                guard.looking = false;
+
+                // (Not once the game's over: nothing's held to look at)
+                if (this.running) {
+                    this.#memoryLook();
+                }
+            }, 0);
+        }
+    }
+
+    // The memory guard's look at what's held (MemoryGuard.look: its level, and what follows from
+    // it changing)
+    #memoryLook() {
         // (Counted as Safari's crash reports count it, whatever the browser: the graphics card's, the
-        // sound's, the way-finding's, and the bodies' and floors' copies on the page, not a heap
-        // only some browsers tell of, so its marks mean the same everywhere)
-        const memory = this.memoryNow();
-        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB;
-        const { level, since } = guardLevel(held, { level: guard.level, since: guard.since, now: this.clock });
+        // sound's, the way-finding's, and the bodies', floors', models' and character kit's copies
+        // on the page, not a heap only some browsers tell of, so its marks mean the same
+        // everywhere. A reading the notes took within the last second will do)
+        const memory = this.memoryLately(MEMORY_GUARD.every * 500);
+        const held = (memory.gpu?.totalMB ?? 0) + memory.soundMB + memory.wasmMB + memory.bodiesMB + memory.interiorsMB + memory.modelsMB + memory.kitMB;
 
-        Object.assign(guard, { level, since });
-
-        if (level === was) {
-            return;
-        }
-
-        this.sound?.squeeze?.(MEMORY_GUARD.sound[level] ?? null);
-
-        if (level > was) {
-            this.#forgetting(0, { now: true });
-        }
+        this.memoryGuard.look(held, this.clock);
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
@@ -5638,25 +6215,34 @@ export class Game {
     // (those out of view last)
     #crowdable(me) {
         const pixels = this.view.pixelsPerMetre();
-        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
-        const list = [];
 
-        for (const actor of this.battle.actors) {
+        return this.orders.throng.rank(this.#viewer(me), this.battle.actors, (entry) => {
+            const { actor } = entry;
             const avatar = this.avatars.get(actor.id);
             const creature = actor.kind === "beast" && !actor.wild?.champion && !actor.wild?.elite ? actor.wild?.creature : null;
             const people = CREATURE_LOOKS[creature]?.body === "humanoid";
             const crowdable = actor.kind === "follower" || people ? avatar instanceof Avatar : herds(creature) && avatar instanceof BeastAvatar;
 
             if (!crowdable || actor.map !== me.map || Math.hypot(actor.x - me.x, actor.y - me.y) > THRONGING.near) {
-                continue;
+                return false;
             }
 
-            const tall = avatar.object.visible ? this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) : 0;
+            // (Its own, beside the order's: the allies nearest the players cast their shadows
+            // and are drawn in more detail, #allying, which a stand-in can't; and one thrown by
+            // a blast is flung as a body is, which a crowd's figure has no move for)
+            if (entry.standing === STANDING.rest && (this.alliesNear.has(actor.id) || avatar.thrown)) {
+                entry.standing = STANDING.kept;
+            }
 
-            list.push({ actor, avatar, tall, first: fighting(actor) || this.alliesNear.has(actor.id) || avatar.thrown });
-        }
+            // (As it's seen, nothing out of view: one only stands in for it, its body kept, so
+            // it's back in a moment when the camera turns to it; not so one let go of, #stature)
+            entry.avatar = avatar;
+            entry.tall = avatar.object.visible ? this.view.heightOnScreen(avatar.object.position, avatar.character.height, pixels) : 0;
+            entry.away = this.view.camera.position.distanceTo(avatar.object.position);
+            entry.first = first(entry);
 
-        return list.sort((a, b) => Number(b.first) - Number(a.first) || b.tall - a.tall);
+            return true;
+        });
     }
 
     // The crowd one's drawn in for now (#thronging), and what its kind's figure's made from
@@ -6156,7 +6742,12 @@ export class Game {
 
         this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0, viewed?.wild?.colossus ? BIG_FOE.colossal : undefined);
         this.#threats();
-        this.#attackers();
+
+        // (The enemies list follows the battle: `fresh`, #update)
+        if (this.fresh) {
+            this.#attackers();
+        }
+
         this.#clearOfFight(fighting);
 
         // (Level with the ground the player stands on, eased so steps and bumps don't jolt it, but
@@ -6229,26 +6820,82 @@ export class Game {
         // those on the same floor)
         const party = this.partyView().filter((member) => member.map === this.mapId || this.mapId === "town");
         const partied = new Set(party.map(({ id }) => id));
+        // (Where the player's drawn, and how far from them it shows: all of a map inside; out in
+        // the world, half its span, and a little more for what's gone on since it was last drawn)
+        const [px, pz] = [me.object.position.x - ox, me.object.position.z - oz];
+        const reach = minimap.map.chunk ? minimap.shown()[2] / 2 + ICONS_NEAR.past : Infinity;
+        // (Everyone else on it, the wild's elites and the criers, gathered in one pass over
+        // everyone into lists kept from one drawing to the next: three passes made a list and an
+        // object for each of them every time, 56 KB of it with 173 about)
+        const seen = (this.minimapSeen ??= { others: [], elites: [], criers: [], spare: [] });
+        const { others, elites, criers, spare } = seen;
 
-        minimap.draw({
-            player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && !other.hidden && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
-                const position = this.avatars.get(other.id).object.position;
+        others.length = 0;
+        elites.length = 0;
+        criers.length = 0;
 
-                return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
-            }),
-            // (The wild's elites, marked their own way as soon as they're near enough: core/
-            // creatures.js ELITES `marker`, drawn or not)
-            elites: battle.actors.filter((other) => other.wild?.elite && !other.dead && other.map === this.mapId && Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker).map((other) => ({ x: other.x, z: other.y, targeted: other === target })),
+        for (const other of battle.actors) {
+            if (other.map !== this.mapId) {
+                continue;
+            }
+
             // (The criers out, each marked with his bell, at the edge the way he is if he's
             // further than shown: core/townsfolk.js crierOf)
-            criers: battle.actors.filter((other) => CRIER.test(other.id) && other.map === this.mapId).map((other) => ({ x: other.x, z: other.y })),
+            if (CRIER.test(other.id)) {
+                criers.push({ x: other.x, z: other.y });
+
+                continue;
+            }
+
+            if (other.dead) {
+                continue;
+            }
+
+            // (The wild's elites, marked their own way as soon as they're near enough: core/
+            // creatures.js ELITES `marker`, drawn or not)
+            if (other.wild?.elite) {
+                if (Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker) {
+                    elites.push({ x: other.x, z: other.y, targeted: other === target });
+                }
+
+                continue;
+            }
+
+            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
+            const avatar = other === actor || other.lurking || other.hidden || partied.has(other.id) ? null : this.avatars.get(other.id);
+
+            if (!avatar) {
+                continue;
+            }
+
+            const x = avatar.object.position.x - ox;
+            const z = avatar.object.position.z - oz;
+
+            // (Only those it has room to show)
+            if (Math.abs(x - px) > reach || Math.abs(z - pz) > reach) {
+                continue;
+            }
+
+            const one = (spare[others.length] ??= {});
+
+            one.x = x;
+            one.z = z;
+            one.hostile = battle.hostile(other, actor);
+            one.targeted = other === target;
+            one.ally = Boolean(this.allied?.has(other.id));
+            others.push(one);
+        }
+
+        minimap.draw({
+            player: actor.dead ? null : { x: px, z: pz, facing: me.facing },
+            others,
+            elites,
+            criers,
             // (Not while held input steers them: where its order reaches is just a little way
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons(), ...this.rareIcons()] : [],
+            icons: this.mapId === "town" ? this.#iconsNear(px, pz, reach) : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             rift: this.mapId === "town" ? this.riftView() : null,
@@ -6263,6 +6910,48 @@ export class Game {
             // (The battles near: battleView)
             battles: this.mapId === "town" ? this.battleView() : { arrows: [], commanders: [] },
         });
+    }
+
+    // The maps' icons the minimap has room to show: those within `reach` metres (east or south)
+    // of where the player's drawn (`x`, `z`, metres), of all there are in the world (the buildings
+    // gone into, the places, dungeons and dens, the works and fortifications, the caches, finds
+    // and legends seen), gathered again every so often, or once the player's gone a few metres
+    // (ICONS_NEAR), not every time it's drawn: of some two hundred in a world three hours into
+    // its war, a handful are within its 128 metres, and every one was listed for it thirty times
+    // a second (45 KB a drawing).
+    #iconsNear(x, z, reach) {
+        const kept = (this.iconsNear ??= { x: Infinity, z: Infinity, reach: 0, at: -Infinity, icons: [] });
+
+        // (Gathered every time while the game's played on by hand, advance: what a browser test
+        // puts on the map is on the minimap the next time it's drawn)
+        if (this.waits && kept.reach === reach && Math.abs(x - kept.x) < ICONS_NEAR.moved && Math.abs(z - kept.z) < ICONS_NEAR.moved && this.clock >= kept.at && this.clock - kept.at < ICONS_NEAR.every) {
+            return kept.icons;
+        }
+
+        const tracked = this.explored.tracked;
+        const icons = [];
+
+        // (The places, dungeons and dens tracked home by their trails' signs marked so: core/tracks.js)
+        const gather = (all, marking) => {
+            for (const icon of all) {
+                if (Math.abs(icon.x - x) <= reach && Math.abs(icon.z - z) <= reach) {
+                    icons.push(marking && tracked.has(icon.id) ? { ...icon, tracked: true } : icon);
+                }
+            }
+        };
+
+        gather(this.icons(), false);
+        gather(this.placeIcons(), true);
+        gather(this.dungeonIcons(), true);
+        gather(this.denIcons(), true);
+        gather(this.worksIcons(), false);
+        gather(this.fortIcons(), false);
+        gather(this.cacheIcons(), false);
+        gather(this.findIcons(), false);
+        gather(this.rareIcons(), false);
+        Object.assign(kept, { x, z, reach, at: this.clock, icons });
+
+        return icons;
     }
 
     /**
@@ -6775,13 +7464,54 @@ export class Game {
 
         const mine = this.self?.realm;
         const sites = this.world.maps.town?.sites;
+        const kept = (this.worksMarks ??= { icons: [] });
 
-        return war.works.map((works) => {
-            const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
-            const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
+        // (Kept till what they're made from changes, as the places' and the dens' are: the
+        // minimap asks thirty times a second, and each was made afresh, sentence and all:
+        // #marksKept. Who holds each, as one number, cheap to work out each time)
+        let held = 0;
 
-            return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance], about: `The ${works.name} ${works.kind}: ${stance === "held" ? "held by brigands" : this.#whose(works.owner, stance)}` };
-        });
+        for (const works of war.works) {
+            held = realmMixed(held + (works.held ? 1 : 0), works.owner);
+        }
+
+        if (!this.#marksKept(kept, war.turn, war.works.length, sites?.set.size ?? 0, mine, held)) {
+            kept.icons = war.works.map((works) => {
+                const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
+                const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
+
+                return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance], about: `The ${works.name} ${works.kind}: ${stance === "held" ? "held by brigands" : this.#whose(works.owner, stance)}` };
+            });
+        }
+
+        return kept.icons;
+    }
+
+    // Whether a list of the maps' icons kept (`kept`: its own record) still stands: made on this
+    // turn of the war, from as many (`count`) with as many of the world's sites set down
+    // (`placed`), for the same people (`mine`), each held by whom it was (`held`: a number of
+    // them all, realmMixed), and no more than MARKS_KEPT seconds ago, in case something it's made
+    // from changed with none of those (two peoples' standing with each other, between turns; a
+    // works taken or a place cleared says so itself: #marksStale). If not, it's marked as made
+    // now, for the caller to make again.
+    #marksKept(kept, turn, count, placed, mine, held) {
+        if (kept.turn === turn && kept.count === count && kept.placed === placed && kept.mine === mine && kept.held === held && this.clock >= kept.at && this.clock - kept.at < MARKS_KEPT) {
+            return true;
+        }
+
+        Object.assign(kept, { turn, count, placed, mine, held, at: this.clock });
+
+        return false;
+    }
+
+    // The maps' icons kept (#marksKept, and those near the player: #iconsNear) made again the
+    // next time they're asked for: something they show has changed
+    #marksStale() {
+        for (const kept of [this.worksMarks, this.fortMarks, this.placeMarks, this.iconsNear]) {
+            if (kept) {
+                kept.at = -Infinity;
+            }
+        }
     }
 
     /**
@@ -6799,12 +7529,22 @@ export class Game {
         }
 
         const mine = this.self?.realm;
+        const kept = (this.fortMarks ??= { icons: [] });
+        let held = 0;
 
-        return war.forts.map((fort) => {
-            const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
+        for (const fort of war.forts) {
+            held = realmMixed(held, fort.realm);
+        }
 
-            return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own", about: `${ICON_NAMES[FORT_ICONS[fort.kind]]}: ${this.#whose(fort.realm, stance)}` };
-        });
+        if (!this.#marksKept(kept, war.turn, war.forts.length, 0, mine, held)) {
+            kept.icons = war.forts.map((fort) => {
+                const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
+
+                return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own", about: `${ICON_NAMES[FORT_ICONS[fort.kind]]}: ${this.#whose(fort.realm, stance)}` };
+            });
+        }
+
+        return kept.icons;
     }
 
     // Whose a people's works or fortification is, in words, by how they stand with the player's
@@ -6819,6 +7559,9 @@ export class Game {
 
     // A works won near the player, or by their people (host.js #worksFell): said
     #worksWon({ works: id, how, by, owner }) {
+        // (Its icon on the maps as it is now)
+        this.#marksStale();
+
         const works = this.host?.war?.workAt(id);
         const me = this.battle.actor(this.me);
         const ours = by === this.self?.realm;
@@ -6977,6 +7720,9 @@ export class Game {
     // A place's occupiers put to the sword (host.js #placeFell): said, if the player's near it or
     // within it (a cave, the crypt under the ruins, an abbey's temple: its floors)
     #cleared({ place: id, holder }) {
+        // (Its icon on the maps as it is now)
+        this.#marksStale();
+
         const place = placesOf(this.world.plan).find((each) => each.id === id);
         const me = this.battle.actor(this.me);
         const within = me && this.world.interiors?.buildings.get(`site:${id}`)?.maps.includes(me.map);
@@ -7067,11 +7813,15 @@ export class Game {
             known.placed = sites?.set.size ?? 0;
         }
 
+        // (Each one's rim and words written again only when it's cleared, or made again: not a
+        // sentence for every dungeon in the world every time the minimap's drawn)
         for (const icon of known.icons) {
             const cleared = Boolean(this.host?.dungeons?.get(icon.id)?.cleared);
 
-            icon.rim = cleared ? PLACE_RIMS.cleared : null;
-            icon.about = `${icon.about.replace(/: cleared.*$/, "")}${cleared ? ": cleared, till something new stirs in it" : ""}`;
+            if (cleared !== (icon.rim !== null)) {
+                icon.rim = cleared ? PLACE_RIMS.cleared : null;
+                icon.about = `${icon.about.replace(/: cleared.*$/, "")}${cleared ? ": cleared, till something new stirs in it" : ""}`;
+            }
         }
 
         return known.icons;
@@ -7087,8 +7837,24 @@ export class Game {
 
         const overworld = this.world.maps.town;
         const sites = overworld?.sites;
-        const key = `${war.turn}:${sites?.set.size ?? 0}:${overworld?.campSpots?.size ?? 0}:${JSON.stringify(war.places)}`;
         const known = (this.placeMarks ??= { key: null, icons: [], sites: new Map(plan.sites.map((site) => [site.id, site])), camps: new Map(plan.camps.map((camp) => [camp.id, camp])) });
+
+        // (Who holds each place looked at again, all of them written out to compare, only on
+        // another turn of the war, with more of the world set down, one of them cleared (each
+        // time one is, it's counted: war.js clearPlace), or every so often: #marksKept)
+        let cleared = 0;
+
+        for (const id in war.places) {
+            const place = war.places[id];
+
+            cleared += 1 + (place.times ?? 0) * 1009 + (place.cleared ?? 0) * 7;
+        }
+
+        if (this.#marksKept(known, war.turn, overworld?.campSpots?.size ?? 0, sites?.set.size ?? 0, null, cleared)) {
+            return known.icons;
+        }
+
+        const key = `${war.turn}:${sites?.set.size ?? 0}:${overworld?.campSpots?.size ?? 0}:${JSON.stringify(war.places)}`;
 
         if (known.key !== key) {
             known.icons = placesOf(plan).map((place) => {
@@ -7903,18 +8669,27 @@ export class Game {
     // (`ranged`), flashing while a blow or shot at them is drawn back, not yet let go (`winding`)
     #threats() {
         const player = this.battle.actor(this.me);
+        const after = this.#afterMe();
+
+        // (No one after them: no arrows, and nothing to work out)
+        if (!after.length) {
+            this.hud.threats(after);
+
+            return;
+        }
+
         const arrows = [];
 
         if (player && !player.dead) {
             const view = this.view;
             const rect = view.rect ?? view.canvas.getBoundingClientRect();
             const near = (actor) => Math.hypot(actor.x - player.x, actor.y - player.y);
-            const after = this.battle.actors
-                .filter((actor) => !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player) && this.avatars.has(actor.id))
+            const nearest = after
+                .filter((actor) => !actor.dead && this.avatars.has(actor.id))
                 .sort((a, b) => near(a) - near(b))
                 .slice(0, THREATS.most);
 
-            for (const actor of after) {
+            for (const actor of nearest) {
                 const at = this.avatars.get(actor.id).point(0.5);
                 const spot = view.toScreen(at);
 
@@ -7949,8 +8724,13 @@ export class Game {
     #attackers() {
         const player = this.battle.actor(this.me);
         const target = this.#target();
-        const after = player && !player.dead ? this.battle.actors.filter((actor) => actor === target || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const after = player && !player.dead ? this.#afterMe().filter((actor) => !actor.dead && actor !== target) : [];
         const since = this.attackerSince;
+
+        if (target && player && !player.dead) {
+            after.push(target);
+        }
+
 
         for (const id of since.keys()) {
             if (!after.some((actor) => actor.id === id)) {
@@ -8175,8 +8955,13 @@ export class Game {
         }
 
         const player = this.battle.actor(this.me);
-        const fighting = player && !player.dead ? this.battle.actors.filter((actor) => actor === foe || (!actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id) && this.battle.hostile(actor, player))) : [];
+        const fighting = player && !player.dead ? this.#afterMe().filter((actor) => !actor.dead && actor !== foe) : [];
         const rects = [];
+
+        if (foe && player && !player.dead) {
+            fighting.push(foe);
+        }
+
 
         for (const actor of fighting.length ? [player, ...fighting] : []) {
             const avatar = this.avatars.get(actor.id);
@@ -8522,9 +9307,60 @@ export class Game {
             return ordered;
         }
 
-        const after = battle.actors.filter((actor) => this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map && (actor.target === player.id || actor.attack?.target === player.id || player.attack?.target === actor.id));
+        // (Else the nearest of those after them, or the one they're striking at: found again as
+        // the battle steps, #afterMe, and kept meanwhile, the camera asking every frame)
+        const found = this.foeFound;
 
-        return after.sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))[0] ?? null;
+        if (found.stamp !== this.followStamp) {
+            const struck = player.attack ? battle.actor(player.attack.target) : null;
+            let nearest = struck && !struck.dead && struck.map === player.map && battle.hostile(struck, player) ? struck : null;
+            let least = nearest ? Math.hypot(nearest.x - player.x, nearest.y - player.y) : Infinity;
+
+            for (const actor of this.#afterMe()) {
+                const far = Math.hypot(actor.x - player.x, actor.y - player.y);
+
+                if (far < least) {
+                    nearest = actor;
+                    least = far;
+                }
+            }
+
+            found.stamp = this.followStamp;
+            found.id = nearest?.id ?? null;
+        }
+
+        const foe = found.id === null ? null : battle.actor(found.id);
+
+        return foe && !foe.dead && foe.map === player.map ? foe : null;
+    }
+
+    // Those after the player: alive, on their map, set on them or striking at them, and their
+    // enemies (who they're set on first: their standing's asked only of those). Found again as the
+    // battle steps (`followStamp`: #update's `fresh`), and kept meanwhile for all who ask, every
+    // frame: the arrows at the screen's edge, the enemies list, the message kept clear of the
+    // fight, who the camera frames, the Action Bar. Each of them used to look through everyone for
+    // them. One of them may have died since: whoever asks looks.
+    #afterMe() {
+        const kept = this.afterMe;
+
+        if (kept.stamp !== this.followStamp) {
+            const battle = this.battle;
+            const player = battle.actor(this.me);
+            const list = kept.list;
+
+            kept.stamp = this.followStamp;
+            list.length = 0;
+
+            if (player && !player.dead) {
+                for (const actor of battle.actors) {
+                    if ((actor.target === player.id || actor.attack?.target === player.id) && !actor.dead && actor.map === player.map && battle.hostile(actor, player)) {
+                        list.push(actor);
+                    }
+                }
+            }
+        }
+
+        return kept.list;
     }
 
     // --- Talking ---
@@ -9771,13 +10607,11 @@ export class Game {
     #hearAround(dt, { now = false } = {}) {
         const me = this.avatars.get(this.me)?.object.position;
 
-        this.hearing = (this.hearing ?? 0) - dt;
+        const due = this.#due("hearing", dt, HEARD_EVERY, PACED.heard);
 
-        if (!this.sound || !me || (this.hearing > 0 && !now)) {
+        if (!this.sound || !me || (!due && !now)) {
             return;
         }
-
-        this.hearing = HEARD_EVERY;
 
         const time = timeOfDay(elapsedOf(this.host.war));
         const interior = this.interiors.get(this.mapId);
@@ -9985,6 +10819,8 @@ export class Game {
         avatar.place(ox + actor.x, oz + actor.y, actor.facing);
         // (Stood straight on the ground there, not eased to it from wherever they were)
         avatar.standing = undefined;
+        // (And no bar over them till they are: #plated)
+        avatar.putDown = true;
 
         if (actor.id === this.me) {
             this.focusHeight = undefined;
@@ -10246,9 +11082,20 @@ export class Game {
         // (The colossal before anyone: it's seen from far off, and comes for everyone; and a town's
         // siege engines with it, quick to make, each its model at once)
         const colossal = (actor) => Boolean(actor.wild?.colossus || actor.engine);
+        const said = this.#roomSaid();
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {
+                continue;
+            }
+
+            // (One not begun that whoever says if there's room for it in full has still to look
+            // at: not begun till then, and looked at in the next frame, not at its next turn)
+            const looking = this.enlistees.has(actor.id) ? null : this.#unlooked(actor, me, said);
+
+            if (looking) {
+                this[looking] = 0;
+
                 continue;
             }
 
@@ -10399,10 +11246,7 @@ export class Game {
             }
         }
 
-        this.visitClock -= dt;
-
-        if (this.visitClock <= 0) {
-            this.visitClock = VISITS.every;
+        if (this.#due("visitClock", dt, VISITS.every, PACED.doors)) {
             this.doors?.sync();
         }
     }
@@ -10556,9 +11400,111 @@ export class Game {
             return;
         }
 
-        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? [], held));
+        // (One by one, shown at once: another player's put together again once it's been as it is
+        // a while, #outfitting; what was being put together for what they wore before stopped)
+        avatar.character.setEquipment(heroEquipment(weapon, worn, hero.parts ?? [], held), { merge: false });
         avatar.character.sheathe(!this.battle.actor(id)?.armed);
         avatar.actions.setWeapon(guardOf(weapon));
+
+        this.#giveUpOutfit(id);
+
+        if (id !== this.me && OUTFITTING.others && !this.piecewise.has(id)) {
+            this.outfits.set(id, { character: avatar.character, since: this.clock, steps: null });
+        } else {
+            this.outfits.delete(id);
+        }
+
+        // (Unseen, by Invisibility: what they've just put on no plainer than the rest of them)
+        if (avatar.unseen) {
+            this.#unseen(avatar, true);
+        }
+    }
+
+    /**
+     * One player's garments drawn one by one from now on (`on`), as they all were and the
+     * player's own hero's are, or all at once again (not `on`: put together a step at a time,
+     * from the next frame): the way back for any one of them (`piecewise`), kept for as long as
+     * they're in the world, however often they're dressed again. Nothing changes for the
+     * player's own hero, always one by one.
+     */
+    drawApart(id, on = true) {
+        if (on === this.piecewise.has(id)) {
+            return;
+        }
+
+        if (on) {
+            this.piecewise.add(id);
+        } else {
+            this.piecewise.delete(id);
+        }
+
+        const avatar = this.avatars.get(id);
+
+        if (id === this.me || !(avatar instanceof Avatar) || this.battle.actor(id)?.kind !== "player") {
+            return;
+        }
+
+        this.#giveUpOutfit(id);
+        this.outfits.delete(id);
+
+        if (!on) {
+            if (OUTFITTING.others) {
+                this.outfits.set(id, { character: avatar.character, since: -Infinity, steps: null });
+            }
+        } else if (avatar.character.merge) {
+            avatar.character.setEquipment([...avatar.character.equipment.values()], { merge: false });
+
+            if (avatar.unseen) {
+                this.#unseen(avatar, true);
+            }
+        }
+    }
+
+    // What's being put together for someone given up on, if it's begun: its steps closed, so
+    // that an outfit's picture half made for them alone isn't kept by the kit for an outfit that
+    // may never be worn (characters/wardrobe.js `shared`); what someone else is making too goes on
+    #giveUpOutfit(id) {
+        this.outfits.get(id)?.steps?.steps.return();
+    }
+
+    // The other players dressed one by one for now (they've changed what they wear, #regear, or
+    // come into the world as it's played, #dressing) drawn all at once again (OUTFITTING): once
+    // one's been as it is `after` seconds, its outfit's picture is put together a step at a time
+    // (Character.merging: `budget` ms a frame, a step at least, one body's at a time, the first
+    // dressed first), its garments drawn one by one meanwhile and with the one picture from the
+    // frame it's made. Changed again meanwhile, it starts over (#regear); gone, or made again
+    // (polymorphed, #undress), it's forgotten
+    #outfitting() {
+        for (const [id, outfit] of this.outfits) {
+            const avatar = this.avatars.get(id);
+
+            if (avatar?.character !== outfit.character) {
+                this.#giveUpOutfit(id);
+                this.outfits.delete(id);
+
+                continue;
+            }
+
+            if (this.clock - outfit.since < OUTFITTING.after) {
+                continue;
+            }
+
+            outfit.steps ??= new Steps(outfit.character.merging(), `an outfit put together for ${id}`);
+
+            if (outfit.steps.take(performance.now() + OUTFITTING.budget, { wait: false })) {
+                this.outfits.delete(id);
+
+                // (Unseen, by Invisibility: its one mesh as the meshes it's made from were; and
+                // its wounds on it from this frame, not the next: world/wounds.js)
+                if (avatar.unseen) {
+                    this.#unseen(avatar, true);
+                }
+
+                this.wounds.get(id)?.update(0);
+            }
+
+            break;
+        }
     }
 
     // --- Standing in their people (core/standing.js) ---
@@ -11676,6 +12622,10 @@ export class Game {
 
         avatar.object.position.y = y;
         avatar.object.traverse((node) => node.layers.disableAll());
+
+        // (Its outfit's pictures as they're painted, if it was given only what the kit keeps of
+        // them: characters/wardrobe.js)
+        avatar.character.whole?.();
         this.view.scene.add(avatar.object);
         this.view.upload([avatar.object], { hidden: true });
 
@@ -11717,6 +12667,12 @@ export class Game {
             this.view.upload([avatar.object], { hidden: true });
             avatar.sent = true;
             this.likenessSince.set(id, this.clock);
+        }
+
+        // (Its pictures whole first, however small it's seen: drawn close for its likeness, and
+        // kept whole a while after: Character.whole)
+        if (avatar.character.whole?.() === false) {
+            return;
         }
 
         if (!this.likenessSince.has(id)) {
@@ -13890,6 +14846,9 @@ export class Game {
             const at = new THREE.Vector3(x, this.#groundOn("town", x, z) + 0.6, z);
 
             this.#mirror();
+            // (Its stakes drawn down now, as what stood in for them goes: not at the stockades'
+            // next turn, up to half a second on, the wall standing whole meanwhile)
+            this.fortsClock = 0;
             this.sound?.play("treantDeath", { at });
 
             for (let k = 0; k < 3; k++) {
@@ -15401,6 +16360,7 @@ export class Game {
                 this.#mirror();
                 break;
             case "fortDown":
+                this.#marksStale();
                 this.#fortDown(event);
                 break;
             case "parted":
@@ -16200,6 +17160,8 @@ export class Game {
     // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their
     // own the first time, copies of any shared with anyone else's, and made see-through while it lasts)
     #unseen(avatar, on) {
+        // (Kept: what's put on them meanwhile, or their garments put together, made the same)
+        avatar.unseen = on;
         avatar.object.traverse((part) => {
             if (part.material && !part.userData.ownMaterial) {
                 part.material = Array.isArray(part.material) ? part.material.map((each) => each.clone()) : part.material.clone();
@@ -17691,8 +18653,7 @@ export class Game {
     #bossBar(dt) {
         const me = this.battle.actor(this.me);
 
-        if ((this.bossClock = (this.bossClock ?? 0) - dt) <= 0) {
-            this.bossClock = MARSHAL.every;
+        if (this.#due("bossClock", dt, MARSHAL.every, PACED.boss)) {
             this.bossId = me ? (this.battle.actors.find((actor) => (actor.ai === "colossus" || actor.wild?.worldBoss) && !actor.dead && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= BOSS_NEAR)?.id ?? null) : null;
         }
 
@@ -18851,7 +19812,7 @@ export class Game {
 
     // Is anyone after the player: an enemy on their map set to fight them, or striking at them?
     #underAttack(player) {
-        return this.battle.actors.some((other) => (other.target === player.id || other.attack?.target === player.id) && !other.dead && other.map === player.map && this.battle.hostile(other, player));
+        return !player.dead && this.#afterMe().some((other) => !other.dead);
     }
 
     // The Action Bar up in a fight (an enemy the player's set to fight, `target`, or anyone
@@ -18923,13 +19884,9 @@ export class Game {
     // SIZE_UP seconds: its plate coloured by how a fight with it would go for them, and, while
     // Evaluate's on them (spells.js evaluate), its power by its name
     #sizeUp(dt) {
-        this.sizingIn = (this.sizingIn ?? 0) - dt;
-
-        if (this.sizingIn > 0) {
+        if (!this.#due("sizingIn", dt, SIZE_UP, PACED.sizeUp)) {
             return;
         }
-
-        this.sizingIn = SIZE_UP;
 
         const me = this.battle.actor(this.me);
         const evaluating = Boolean(me && this.battle.buffOf(me, "evaluate"));
@@ -19646,6 +20603,10 @@ export class Game {
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
+        // (What follows the battle looked at again in the next frame, whether it steps or not:
+        // a tap answers at once, #update's `fresh`)
+        this.followDue = true;
+
         // (Anything else the player does themselves lets Buff all's buffs still to come go)
         if (!this.buffCasting && BUFF_STOPS.includes(command.type)) {
             this.buffing = null;

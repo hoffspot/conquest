@@ -636,17 +636,19 @@ const SWING = 1;
 const EDGE_ROUND = 0.2;
 
 // How far forward a line from one point to another leans (radians, from straight down; in the
-// pelvis's frame, `back` its turn undone), and how long it is in that plane (into `out`)
-const lean = (from, to, back = null, out = null) => {
+// pelvis's frame, `back` its turn undone); how long it is in that plane is left in `leant`, and
+// the line itself in `_to`. (Nothing's made working a swing out, here or below: it was an object
+// for every length, one for each ring of the cloth looked at and a list for each of the legs'
+// points, some hundreds a skirt a frame)
+let leant = 0;
+const lean = (from, to, back = null) => {
     _to.subVectors(to, from);
 
     if (back) {
         _to.applyQuaternion(back);
     }
 
-    if (out) {
-        out.length = Math.hypot(_to.y, _to.z);
-    }
+    leant = Math.hypot(_to.y, _to.z);
 
     return Math.atan2(_to.z, -_to.y);
 };
@@ -659,7 +661,10 @@ const lean = (from, to, back = null, out = null) => {
  * puts the middle of the knees, hangs straight down unless a leg below the knee (halfway down its
  * shin, its ankle, heel or toes: CLEAR) would come out through the cloth's front (`profile`, from
  * buildDrape: where it is at the legs ring by ring, as it rests), when it's swung forward just as
- * far as keeps it in. Its back's the same, back. `swing()` does it without drawing.
+ * far as keeps it in. Its back's the same, back. `swing()` does it without drawing. How far each
+ * swings is worked out only when the legs have been posed since it last was (`worked`: how many
+ * times it has been): most bodies are posed every second to fourth frame (world/avatar.js
+ * POSING), and till they are again the cloth's put where the pelvis is now, swung as it was.
  */
 export function drapeSkeleton(rig, profile = []) {
     const own = DRAPE_BONES.map((name) => Object.assign(new THREE.Bone(), { name: `drape ${name}` }));
@@ -680,9 +685,12 @@ export function drapeSkeleton(rig, profile = []) {
     // is `far` from it, below it (each ring's round as if it were an ellipse; null if it doesn't
     // reach that far round, or has no front or back there: an apron's)
     const clothAt = (way, aside, far, centre) => {
-        let last = null;
+        // (The ring before: whether there's been one, how far it was and its lean)
+        let [last, lastFar, lastAngle] = [false, 0, 0];
 
-        for (const ring of profile) {
+        for (let r = 0; r < profile.length; r++) {
+            const ring = profile[r];
+
             if (ring.y >= centre.y) {
                 continue;
             }
@@ -694,24 +702,59 @@ export function drapeSkeleton(rig, profile = []) {
             const round = Math.max(EDGE_ROUND, 1 - (aside / ring.wide) ** 2);
 
             if (reach < 0.02) {
-                return last?.angle ?? null;
+                return last ? lastAngle : null;
             }
 
-            const out = {};
-            const angle = lean(centre, _to.set(0, ring.y, ring.middle + way * reach * Math.sqrt(round)), null, out);
+            const angle = lean(centre, _to.set(0, ring.y, ring.middle + way * reach * Math.sqrt(round)));
+            const length = leant;
 
-            if (out.length >= far) {
-                return last ? last.angle + ((angle - last.angle) * (far - last.far)) / (out.length - last.far) : angle;
+            if (length >= far) {
+                return last ? lastAngle + ((angle - lastAngle) * (far - lastFar)) / (length - lastFar) : angle;
             }
 
-            last = { far: out.length, angle };
+            last = true;
+            lastFar = length;
+            lastAngle = angle;
         }
 
-        return last?.angle ?? null;
+        return last ? lastAngle : null;
     };
 
     const update = skeleton.update.bind(skeleton);
-    const measured = {};
+
+    // The legs as they were when the swing was last worked out (each of their bones' own place and
+    // turn, in its parent's frame, and how big the body is: all the swing goes by), and how far
+    // each of its own bones was swung then (its front's thigh and shin, then its back's)
+    const posed = new Float64Array(legs.length * 7 + 1).fill(NaN);
+    const swings = [0, 0, 0, 0];
+
+    // Whether the legs have been posed since (and how they are now kept, to tell the next time).
+    // (How big the body is comes out of where its pelvis is in the world, and a hair different as
+    // that turns: the same within a millionth)
+    const moved = (size) => {
+        let changed = !(Math.abs(posed[posed.length - 1] - size) <= size * 1e-6);
+
+        if (changed) {
+            posed[posed.length - 1] = size;
+        }
+
+        for (let k = 0; k < legs.length; k++) {
+            const { position, quaternion } = rig.bones[legs[k]];
+
+            changed ||= posed[k * 7] !== position.x || posed[k * 7 + 1] !== position.y || posed[k * 7 + 2] !== position.z || posed[k * 7 + 3] !== quaternion.x || posed[k * 7 + 4] !== quaternion.y || posed[k * 7 + 5] !== quaternion.z || posed[k * 7 + 6] !== quaternion.w;
+            posed[k * 7] = position.x;
+            posed[k * 7 + 1] = position.y;
+            posed[k * 7 + 2] = position.z;
+            posed[k * 7 + 3] = quaternion.x;
+            posed[k * 7 + 4] = quaternion.y;
+            posed[k * 7 + 5] = quaternion.z;
+            posed[k * 7 + 6] = quaternion.w;
+        }
+
+        return changed;
+    };
+
+    skeleton.worked = 0;
     const keeping = [0, 1].flatMap((side) => [
         [_feet[side * 3], CLEAR.shin],
         [_at[4 + side], CLEAR.ankle],
@@ -726,17 +769,27 @@ export function drapeSkeleton(rig, profile = []) {
     const keep = (pivot, centre, pick, way, knees) => {
         let swung = null;
 
-        for (const [point, clear] of knees ? [...keeping, [_at[2], CLEAR.knee], [_at[3], CLEAR.knee]] : keeping) {
-            const angle = lean(pivot, point, _back, measured);
-            const at = clothAt(way, Math.abs(_to.x) / _scale.x, measured.length / _scale.x, centre);
+        for (let k = 0; k < keeping.length; k++) {
+            swung = kept(swung, pivot, centre, pick, way, keeping[k][0], keeping[k][1]);
+        }
 
-            // (Not what's above where it swings from, a heel kicked up behind: it hangs below)
-            if (at !== null && measured.length > 1e-3 && Math.abs(angle) < Math.PI / 2) {
-                swung = pick(swung ?? -way * Infinity, angle - at + (way * clear) / measured.length);
-            }
+        if (knees) {
+            swung = kept(swung, pivot, centre, pick, way, _at[2], CLEAR.knee);
+            swung = kept(swung, pivot, centre, pick, way, _at[3], CLEAR.knee);
         }
 
         return swung === null ? null : Math.max(-SWING, Math.min(SWING, swung));
+    };
+
+    // The swing so far (`swung`: keep's), or further if it takes that to keep one of the legs'
+    // points in, `clear` inside the cloth
+    const kept = (swung, pivot, centre, pick, way, point, clear) => {
+        const angle = lean(pivot, point, _back);
+        const length = leant;
+        const at = clothAt(way, Math.abs(_to.x) / _scale.x, length / _scale.x, centre);
+
+        // (Not what's above where it swings from, a heel kicked up behind: it hangs below)
+        return at !== null && length > 1e-3 && Math.abs(angle) < Math.PI / 2 ? pick(swung ?? -way * Infinity, angle - at + (way * clear) / length) : swung;
     };
 
     skeleton.swing = () => {
@@ -749,13 +802,33 @@ export function drapeSkeleton(rig, profile = []) {
         _knees.sub(_hips);
 
         // (Where they are, and which way the pelvis faces)
-        legs.forEach((i, k) => _at[k].setFromMatrixPosition(rig.bones[i].matrixWorld));
+        for (let k = 0; k < legs.length; k++) {
+            _at[k].setFromMatrixPosition(rig.bones[legs[k]].matrixWorld);
+        }
+
         rig.bones[hips].matrixWorld.decompose(_from, _pelvis, _scale);
         _back.copy(_pelvis).invert();
 
+        // (Not posed since its swing was worked out: where the pelvis is now, swung as it was)
+        if (!moved(_scale.x)) {
+            _hips.addVectors(_at[0], _at[1]).multiplyScalar(0.5);
+
+            for (let k = 0; k < 2; k++) {
+                _turn.setFromAxisAngle(_axis, -swings[k * 2]).premultiply(_pelvis);
+                own[k * 2].matrixWorld.compose(_hips, _turn, _scale);
+                _from.copy(_knees).multiply(_scale).applyQuaternion(_turn).add(_hips);
+                _turn.setFromAxisAngle(_axis, -swings[k * 2 + 1]).premultiply(_pelvis);
+                own[k * 2 + 1].matrixWorld.compose(_from, _turn, _scale);
+            }
+
+            return;
+        }
+
+        skeleton.worked++;
+
         // What of the legs below the knees keeps the cloth off: halfway down each shin, its
         // ankle, heel and toes' tips
-        for (const side of [0, 1]) {
+        for (let side = 0; side < 2; side++) {
             const foot = rig.bones[legs[4 + side]].matrixWorld;
 
             _feet[side * 3].lerpVectors(_at[2 + side], _at[4 + side], 0.5);
@@ -764,21 +837,30 @@ export function drapeSkeleton(rig, profile = []) {
         }
 
         // How far each thigh has swung forward from where it rests
-        const thighs = [0, 1].map((side) => lean(_at[side], _at[2 + side], _back) - lean(rest[side], rest[2 + side]));
+        const left = lean(_at[0], _at[2], _back) - lean(rest[0], rest[2]);
+        const right = lean(_at[1], _at[3], _back) - lean(rest[1], rest[3]);
 
         _hips.addVectors(_at[0], _at[1]).multiplyScalar(0.5);
 
-        for (const [thigh, shin, pick, way] of [[own[0], own[1], Math.max, 1], [own[2], own[3], Math.min, -1]]) {
+        // (Its front, forward; then its back, back)
+        for (let k = 0; k < 2; k++) {
+            const pick = k === 0 ? Math.max : Math.min;
+            const way = k === 0 ? 1 : -1;
             // (About the hips, as far as the thigh swung furthest that way, or further if the
             // legs need it to keep them in; then from where that puts the knees, straight down or
             // further if the legs below them need it)
-            const swung = pick(...thighs, keep(_hips, middle.hips, pick, way, true) ?? -way * Infinity);
+            const swung = pick(left, right, keep(_hips, middle.hips, pick, way, true) ?? -way * Infinity);
 
             _turn.setFromAxisAngle(_axis, -swung).premultiply(_pelvis);
-            thigh.matrixWorld.compose(_hips, _turn, _scale);
+            own[k * 2].matrixWorld.compose(_hips, _turn, _scale);
             _from.copy(_knees).multiply(_scale).applyQuaternion(_turn).add(_hips);
-            _turn.setFromAxisAngle(_axis, -pick(0, keep(_from, middle.knees, pick, way, false) ?? 0)).premultiply(_pelvis);
-            shin.matrixWorld.compose(_from, _turn, _scale);
+
+            const below = pick(0, keep(_from, middle.knees, pick, way, false) ?? 0);
+
+            _turn.setFromAxisAngle(_axis, -below).premultiply(_pelvis);
+            own[k * 2 + 1].matrixWorld.compose(_from, _turn, _scale);
+            swings[k * 2] = swung;
+            swings[k * 2 + 1] = below;
         }
     };
 

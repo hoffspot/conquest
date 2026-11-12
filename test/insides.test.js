@@ -665,6 +665,64 @@ describe("the buildings (insides.js Interiors)", () => {
         whole.dispose();
         step.value.dispose();
     });
+
+    it("keeps none of its builders once it's built, every corner they laid merged: nothing the inside keeps (its update, its drive, its furnishing) reads what was built", async () => {
+        const { Solid } = await import("../client/js/world/art/engine/solid.js");
+        const { setFlagsFromString } = await import("node:v8");
+        const { runInNewContext } = await import("node:vm");
+
+        // (The garbage collector, to hand for this)
+        setFlagsFromString("--expose-gc");
+
+        const collect = runInNewContext("gc");
+
+        setFlagsFromString("--no-expose-gc");
+
+        const one = [...interiors.buildings.values()].find((each) => each.kind === "blacksmith");
+
+        interiors.make(one.key);
+
+        // (Every builder that's made into meshes, held only weakly here)
+        const builders = [];
+        const toObject = Solid.prototype.toObject;
+        let interior;
+
+        Solid.prototype.toObject = function (...given) {
+            builders.push(new WeakRef(this));
+
+            return toObject.apply(this, given);
+        };
+
+        try {
+            interior = buildInterior(world.maps[one.maps[0]]);
+        } finally {
+            Solid.prototype.toObject = toObject;
+        }
+
+        assert.ok(builders.length > 0);
+
+        // (What a weak reference is made for is kept till its turn's over; then nothing has them)
+        await new Promise((resolve) => setImmediate(resolve));
+        collect();
+        assert.equal(builders.filter((builder) => builder.deref()).length, 0, "builders still held");
+
+        // (Its moving parts turn still: the grindstone, only while it's cranked)
+        const turns = () => {
+            const all = [];
+
+            interior.object.traverse((node) => all.push(node.rotation.x));
+
+            return all.join();
+        };
+        const still = turns();
+
+        interior.update(0.1, 0.5);
+        assert.equal(turns(), still);
+        interior.drive("grindstone", 0.5, 1);
+        interior.update(0.1, 0.6);
+        assert.notEqual(turns(), still);
+        interior.dispose();
+    });
 });
 
 describe("the places worth finding gone into (insides.js: a cave, the drake's lair, a werewolves' den, the crypt under the ruins, a ruined castle's keep, a broken watchtower, the Tower of Sar Mordal, the humans' abbeys and manors)", () => {

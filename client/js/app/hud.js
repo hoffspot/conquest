@@ -17,6 +17,7 @@
 // help glowing; tapped or held, the game's told.
 
 import { ICONS, useDefs } from "./icons.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { unreadLabel } from "./partypanel.js";
 
 // How a fight can look on a plate (core/might.js fightLook)
@@ -46,9 +47,8 @@ const LOCK_SIGHTS = `<svg viewBox="0 0 60 60">
  */
 export const PLATE_SIZE = Object.freeze({ near: 12, far: 60 });
 
-/** How long the player's card is held (ms), not moving more than HOLD_MOVE pixels, to show all that's on them. */
-export const HOLD_MS = 500;
-const HOLD_MOVE = 10;
+// (The player's card, an icon: held a long press, HOLD_MS, not moving more than TAP_SLOP pixels,
+// as a long press is everywhere: app/press.js)
 
 /**
  * The party's icons down the left side (pixels): as big as `most` while they fit between the
@@ -85,7 +85,7 @@ export function partyFit(count, room) {
 // or "hold", { time: ms, as performance.now(), x, y: where the finger is, pixels (held, where it
 // went down: a wheel opened by the hold goes right under it, or, at the screen's edge, beside it),
 // pointerId, pointerType (a mouse's wheel, slid onto the screen, is clicked: game.js) }):
-// held HOLD_MS, not moving off it (HOLD_MOVE), a hold; let go before then, a tap; pressed from the
+// held HOLD_MS, not moving off it (TAP_SLOP), a hold; let go before then, a tap; pressed from the
 // keyboard, a tap
 function pressable(root, onPress) {
     let held = null;
@@ -107,7 +107,7 @@ function pressable(root, onPress) {
     });
     root.addEventListener("pointermove", (event) => {
         if (held && !held.done) {
-            if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+            if (Math.hypot(event.clientX - held.x, event.clientY - held.y) > TAP_SLOP) {
                 letGo();
             }
         }
@@ -176,6 +176,111 @@ export function plateScale(distance, sight = 1) {
     }
 
     return distance >= far ? 0 : (far - distance) / (far - near);
+}
+
+/**
+ * How big a bar over someone's head is taken to be at full size (CSS pixels: styles.css
+ * `.floater`'s least width, an elite's or a commander's (`elite`) and a fortification's (`fort`),
+ * and what its name and its bar come to in height), for telling which bars cover which
+ * (Covering). Taken, not measured: reading a bar's size back from the page would lay the page
+ * out again for every bar, every frame.
+ */
+export const PLATE_BOX = Object.freeze({ width: 110, elite: 140, fort: 170, height: 38 });
+
+/**
+ * Bars over heads that cover one another (Covering): one is hidden once more than `covered` of
+ * it lies under those placed before it; hidden, it's shown again only once less than `clear` of
+ * it does (so one at the edge doesn't come and go); and either way no sooner than `hold` seconds
+ * after it last changed (so two that keep changing places don't flicker: they change over once
+ * in that long at most).
+ */
+export const PLATE_COVER = Object.freeze({ covered: 0.5, clear: 0.3, hold: 0.5 });
+
+/**
+ * Which of a frame's bars over heads are hidden under the others. They're placed in the order of
+ * precedence (app/precedence.js: whoever comes first has their bar), each a box on the screen;
+ * one that lies under those shown before it by more than PLATE_COVER allows is hidden this
+ * frame, and those hidden cover no one. How much of it lies under them is the shares of it under
+ * each added up (all of it at most): a little more than what's truly covered where those over
+ * it overlap each other, which, shown, they do by less than half. Knows nothing of the page:
+ * boxes and numbers (test/plate-cover.test.js).
+ */
+export class Covering {
+    // (The boxes shown so far this frame, four numbers each: left, top, right, bottom)
+    #boxes = new Float32Array(4 * 64);
+    #count = 0;
+
+    /** A frame begun: nothing placed yet. */
+    begin() {
+        this.#count = 0;
+    }
+
+    /** How many bars are shown so far this frame. */
+    get shown() {
+        return this.#count;
+    }
+
+    /** How much of a box lies under those shown so far (0 to 1). */
+    under(left, top, right, bottom) {
+        const area = (right - left) * (bottom - top);
+        const boxes = this.#boxes;
+        let covered = 0;
+
+        if (!(area > 0)) {
+            return 0;
+        }
+
+        for (let k = 0; k < this.#count * 4; k += 4) {
+            const across = Math.min(right, boxes[k + 2]) - Math.max(left, boxes[k]);
+            const down = Math.min(bottom, boxes[k + 3]) - Math.max(top, boxes[k + 1]);
+
+            if (across > 0 && down > 0) {
+                covered += across * down;
+
+                if (covered >= area) {
+                    return 1;
+                }
+            }
+        }
+
+        return covered / area;
+    }
+
+    /**
+     * A bar placed after those placed before it this frame, its box on the screen (pixels):
+     * whether it's hidden under them. `state` is the bar's own, kept by whoever places it from
+     * frame to frame and changed here: { hidden, since (when it last changed: `now`'s seconds;
+     * -Infinity for one never placed) }. `always`: never hidden (the bar of the one the player's
+     * set on, of one of their party, of whoever's attacking them), and shown at once.
+     */
+    place(state, left, top, right, bottom, now, always = false) {
+        const under = always ? 0 : this.under(left, top, right, bottom);
+        const hidden = !always && under > (state.hidden ? PLATE_COVER.clear : PLATE_COVER.covered);
+
+        if (hidden !== state.hidden && (always || now - state.since >= PLATE_COVER.hold)) {
+            state.hidden = hidden;
+            state.since = now;
+        }
+
+        if (!state.hidden) {
+            if ((this.#count + 1) * 4 > this.#boxes.length) {
+                const more = new Float32Array(this.#boxes.length * 2);
+
+                more.set(this.#boxes);
+                this.#boxes = more;
+            }
+
+            const at = this.#count * 4;
+
+            this.#boxes[at] = left;
+            this.#boxes[at + 1] = top;
+            this.#boxes[at + 2] = right;
+            this.#boxes[at + 3] = bottom;
+            this.#count++;
+        }
+
+        return state.hidden;
+    }
 }
 
 /**
@@ -295,7 +400,7 @@ export class Hud {
             }
         });
         this.plate.addEventListener("pointermove", (event) => {
-            if (held && Math.hypot(event.clientX - held.x, event.clientY - held.y) > HOLD_MOVE) {
+            if (held && Math.hypot(event.clientX - held.x, event.clientY - held.y) > TAP_SLOP) {
                 letGo();
             }
         });
@@ -823,21 +928,51 @@ export class Hud {
     }
 
     /**
+     * A frame's bars about to be placed, in the order of precedence (app/precedence.js: `place`
+     * told each one's place in it, `over`), at `now` seconds of the game's clock: none placed yet
+     * (Covering).
+     */
+    placing(now) {
+        this.covering ??= new Covering();
+        this.covering.begin();
+        this.placingAt = now;
+    }
+
+    /**
      * Move a character's bar to a point on the screen (client pixels), or hide it (null): drawn at
      * `scale` of its size and as faint (plateScale; hidden at none), standing on the point; the
-     * nearer (`depth`: metres from the camera) over the farther, the one the player's set to fight
-     * over them all.
+     * one the player's set to fight over them all. Placed in the order of precedence (`over`: its
+     * place in it this frame, 0 the first, after `placing`), it's over those placed after it, and
+     * hidden where it would lie under those placed before it (Covering, PLATE_COVER), unless it's
+     * never to be (`always`: one of the party's, an attacker's; the target's never is). Placed
+     * with no order said, the nearer (`depth`: metres from the camera) is over the farther, and
+     * none is hidden under another.
      */
-    place(id, point, { scale = 1, depth = 0, dim = false } = {}) {
+    place(id, point, { scale = 1, depth = 0, dim = false, over = null, always = false } = {}) {
         const plate = this.tracked.get(id);
 
         if (!plate) {
             return;
         }
 
-        plate.hidden = !point || scale <= 0;
+        let hidden = !point || scale <= 0;
 
-        if (!plate.hidden) {
+        if (!hidden && over !== null && this.covering) {
+            // (Its box: as big as its kind is taken to be, standing on the point)
+            plate.box ??= plate.classList.contains("fort") ? PLATE_BOX.fort : plate.classList.contains("elite") ? PLATE_BOX.elite : PLATE_BOX.width;
+            plate.cover ??= { hidden: false, since: -Infinity };
+
+            const half = (plate.box * scale) / 2;
+
+            hidden = this.covering.place(plate.cover, point.x - half, point.y - PLATE_BOX.height * scale, point.x + half, point.y, this.placingAt, always || id === this.targeted);
+        }
+
+        // (Only when it changes: showing or hiding one lays the page out again)
+        if (plate.hidden !== hidden) {
+            plate.hidden = hidden;
+        }
+
+        if (!hidden) {
             const faint = scale.toFixed(2);
 
             // (A foe in reach the player can't act on yet, too dark or something in the way: greyed)
@@ -853,7 +988,7 @@ export class Hud {
                 plate.style.opacity = faint;
             }
 
-            const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - Math.round(depth));
+            const layer = id === this.targeted ? 10000 : Math.max(1, 9999 - (over ?? Math.round(depth)));
 
             if (plate.layer !== layer) {
                 plate.layer = layer;
@@ -944,6 +1079,8 @@ export class Hud {
         clearTimeout(this.bannerTimer);
         this.banner.textContent = text;
         this.banner.hidden = !text;
+        // (Another message: as big as it is, for keepClear to measure again)
+        this.bannerSaid = (this.bannerSaid ?? 0) + 1;
 
         if (text) {
             this.banner.append(this.bannerClose);
@@ -974,15 +1111,7 @@ export class Hud {
             return;
         }
 
-        const screen = this.root.getBoundingClientRect();
-        const { offsetWidth: width, offsetHeight: height } = this.banner;
-        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
-        const map = !this.map.hidden && this.map.getBoundingClientRect();
-        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
-        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
-        const quick = this.quick?.classList.contains("up") ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
-        // (Clear of the attackers' icons down the right side, too)
-        const icons = this.attackerColumn && !this.attackerColumn.hidden ? this.attackerColumn.getBoundingClientRect() : null;
+        const { screen, width, height, under, quick, icons } = this.#messageRoom();
         const [middle, usual, aside, low] = [screen.width / 2, screen.height * 0.28, MESSAGE_GAP + width / 2, screen.height * 0.45 - height / 2];
         const places = [
             { x: middle, top: usual },
@@ -1003,6 +1132,41 @@ export class Hud {
             // (Moved from where it goes as a rule, as wide as it is there)
             this.banner.style.translate = `${(places[at].x - middle).toFixed(0)}px ${(places[at].top - usual).toFixed(0)}px`;
         }
+    }
+
+    // What a message is kept clear of that doesn't move with the fight (keepClear): the screen,
+    // how big the message is, how far down the buttons along the top (and the minimap, where it
+    // reaches under the message) come, where the Action Bar's top is (or the bottom), and the
+    // attackers' icons down the right. Six boxes read from the page, straight after the frame's
+    // written to it (the enemies list, the arrows), which made the browser lay the page out again
+    // every frame a message was up in a fight: measured again only when what decides them changes
+    // (the screen, the message, the minimap, the Action Bar up or down, how many icons), and for
+    // a moment after, while things slide into place; as #partyFit is.
+    #messageRoom() {
+        const quickUp = Boolean(this.quick?.classList.contains("up"));
+        const key = `${innerWidth}x${innerHeight} ${this.bannerSaid ?? 0} ${this.map.hidden} ${document.body.dataset.minimap} ${quickUp} ${this.attackerCount ?? 0}`;
+        const now = performance.now();
+
+        if (key !== this.roomKey) {
+            this.roomKey = key;
+            this.roomSettle = now + 400;
+        } else if (now > this.roomSettle && this.room) {
+            return this.room;
+        }
+
+        const screen = this.root.getBoundingClientRect();
+        const { offsetWidth: width, offsetHeight: height } = this.banner;
+        // (Under the buttons, and the minimap too where it reaches under the message: a narrow screen)
+        const map = !this.map.hidden && this.map.getBoundingClientRect();
+        const reaches = map && map.right > screen.left + (screen.width - width) / 2;
+        const under = Math.max(this.top?.getBoundingClientRect().bottom ?? screen.top, reaches ? map.bottom : screen.top) - screen.top + MESSAGE_GAP;
+        const quick = quickUp ? this.quick.getBoundingClientRect().top : screen.bottom - MESSAGE_LOW;
+        // (Clear of the attackers' icons down the right side, too)
+        const icons = this.attackerColumn && !this.attackerColumn.hidden ? this.attackerColumn.getBoundingClientRect() : null;
+
+        this.room = { screen, width, height, under, quick, icons };
+
+        return this.room;
     }
 
     /**
@@ -1086,6 +1250,8 @@ export class Hud {
         });
 
         this.attackerColumn.hidden = list.length === 0;
+        // (How many: what a message is kept clear of is measured again as that changes, #messageRoom)
+        this.attackerCount = list.length;
     }
 
     // An attacker's icon (attackers): a button with their likeness and a line of their health, the
@@ -1336,6 +1502,7 @@ export class Hud {
             onAction();
         });
         this.banner.append(" ", act);
+        this.bannerSaid = (this.bannerSaid ?? 0) + 1;
     }
 
     /**
@@ -1673,7 +1840,20 @@ export class Hud {
 
     // (Every frame, so it changes the page only when what it shows changes)
     #setStamina(plate, stamina, maxStamina) {
-        const bar = plate.querySelector(".bar.stamina");
+        // (As it was last told, most of them full: nothing looked up in the page, nothing written.
+        // It's told for everyone in sight every frame; the bar's found once and kept with its plate.)
+        if (plate.staminaTold === stamina && plate.staminaMost === maxStamina) {
+            return;
+        }
+
+        plate.staminaTold = stamina;
+        plate.staminaMost = maxStamina;
+
+        if (plate.staminaBar === undefined) {
+            plate.staminaBar = plate.querySelector(".bar.stamina");
+        }
+
+        const bar = plate.staminaBar;
         const shown = stamina >= maxStamina ? "full" : `${stamina.toFixed(2)} / ${maxStamina}`;
 
         if (!bar || bar.dataset.shown === shown) {

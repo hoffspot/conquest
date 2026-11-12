@@ -224,6 +224,60 @@ describe("battle damage (wounds.js)", () => {
         assert.equal(wounds.texture, null);
     });
 
+    it("holds its picture at the size its body's are held, each texel the mean of those it's made from, and swaps it in place as that changes", () => {
+        // (As big as the body's pictures are wanted for how it's seen: Character.fitPictures)
+        const seen = figure();
+        const [whole, small] = [new Wounds(figure(), { seed: 5 }), new Wounds(seen, { seed: 5 })];
+        const halved = (data) => {
+            const half = new Uint8Array(256 * 256 * 4);
+
+            for (let i = 0; i < half.length; i++) {
+                const [x, y, c] = [(i >> 2) % 256, (i >> 2) >> 8, i & 3];
+                const at = (dx, dy) => data[((y * 2 + dy) * 512 + x * 2 + dx) * 4 + c];
+
+                half[i] = (at(0, 0) + at(1, 0) + at(0, 1) + at(1, 1) + 2) >> 2;
+            }
+
+            return half;
+        };
+        const same = (a, b) => Buffer.compare(Buffer.from(a.buffer, a.byteOffset, a.byteLength), Buffer.from(b.buffer, b.byteOffset, b.byteLength)) === 0;
+
+        seen.pictures = { wanted: 256 };
+
+        for (const [reaction, hps] of [["slash", [45, 30]], ["fire", [28]], ["crush", [20, 10]]]) {
+            beat(whole, reaction, hps, 0.4);
+            beat(small, reaction, hps, 0.4);
+        }
+
+        assert.equal(whole.texture.image.width, 512);
+        assert.equal(small.texture.image.width, 256);
+        assert.ok(channels(small).blood > 0);
+        assert.ok(same(small.data, halved(whole.data)), "the smaller, the next level of the bigger");
+
+        // (Seen bigger: the same picture, as it's painted; and smaller again)
+        const texture = small.texture;
+        let disposed = 0;
+
+        texture.addEventListener("dispose", () => disposed++);
+        seen.pictures.wanted = 512;
+        small.update(0.016);
+        assert.ok(small.texture === texture && small.uniforms.damageMap.value === texture, "in place");
+        assert.equal(texture.image.width, 512);
+        assert.equal(disposed, 1, "the smaller one's off the graphics card");
+        assert.ok(same(small.data, whole.data), "as one painted at full size");
+
+        // (Struck and healed held small, as held whole)
+        seen.pictures.wanted = 256;
+        small.update(0.016);
+        beat(whole, "hack", [6], -0.6);
+        beat(small, "hack", [6], -0.6);
+        assert.ok(same(small.data, halved(whole.data)), "struck again held small");
+        whole.heal(30, 50);
+        small.heal(30, 50);
+        assert.ok(same(small.data, halved(whole.data)), "healed held small");
+        assert.ok(channels(small).blood > 0 && channels(small).blood < channels(whole).blood);
+    });
+
     it("burns smoulder and arcane veins glow a few seconds, then fade", () => {
         const wounds = new Wounds(figure());
 

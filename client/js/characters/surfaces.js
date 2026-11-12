@@ -30,18 +30,23 @@ export const SKIN_WRAP = Object.freeze([0.3, 0.13, 0.08]);
  */
 export const HAIR_SHINE = Object.freeze({ shift: 0.08, sharp: 260, strength: 0.07, tintShift: -0.1, tintSharp: 60, tintStrength: 0.12, jitter: 1.5 });
 
-const DIFFUSE_LINE = "reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );";
-const SPECULAR_LINE = "reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;";
+// The line of three.js's lighting that gives a surface its diffuse light from each light: as r186
+// has it, and as r187 does (which works its diffuse term out first, for its rough-diffuse option:
+// the same thing for skin); and the one that gives it its highlight, the same in both
+const DIFFUSE_LINES = ["reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );", "reflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );"];
+const SPECULAR_LINES = ["reflectedLight.directSpecular += irradiance * specularBRDF * material.multiScatteringCompensation;"];
 
-// three.js's lighting of a surface from each light, with one line of it changed
-function lighting(line, instead) {
+// three.js's lighting of a surface from each light, with one line of it changed: whichever of
+// `lines` this three.js has, `instead(line)` in its place
+function lighting(lines, instead) {
     const chunk = THREE.ShaderChunk.lights_physical_pars_fragment;
+    const line = lines.find((each) => chunk.includes(each));
 
-    if (!chunk.includes(line)) {
+    if (!line) {
         throw new Error("three.js's lighting has changed: surfaces.js needs looking at");
     }
 
-    return chunk.replace(line, instead);
+    return chunk.replace(line, instead(line));
 }
 
 const vec3 = (values) => `vec3( ${values.map((value) => value.toFixed(3)).join(", ")} )`;
@@ -61,7 +66,8 @@ export class SkinMaterial extends THREE.MeshStandardMaterial {
             // (Its roughness from the picture's alpha, which isn't how see-through it is)
             .replace("#include <map_fragment>", `#include <map_fragment>\n#ifdef USE_MAP\n\tfloat skinRoughness = sampledDiffuseColor.a;\n\tdiffuseColor.a = opacity;\n#else\n\tfloat skinRoughness = ${SKIN_ROUGHNESS.skin.toFixed(2)};\n#endif`)
             .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\n\troughnessFactor *= skinRoughness;")
-            .replace("#include <lights_physical_pars_fragment>", lighting(DIFFUSE_LINE, `vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP ) / ( 1.0 + SKIN_WRAP ) );\n\treflectedLight.directDiffuse += skinLit * directLight.color * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );`))
+            // (three.js's own line, the light wrapped round in place of its `irradiance`)
+            .replace("#include <lights_physical_pars_fragment>", lighting(DIFFUSE_LINES, (line) => `vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP ) / ( 1.0 + SKIN_WRAP ) );\n\t${line.replace("irradiance", "skinLit * directLight.color")}`))
             .replace("#include <common>", `#include <common>\nconst vec3 SKIN_WRAP = ${vec3(SKIN_WRAP)};`);
         fireLit(shader);
     }
@@ -120,8 +126,8 @@ float hairBand( const in vec3 strand, const in vec3 normal, const in vec3 halfwa
             .replace(
                 "#include <lights_physical_pars_fragment>",
                 lighting(
-                    SPECULAR_LINE,
-                    `vec3 hairHalfway = normalize( directLight.direction + geometryViewDir );
+                    SPECULAR_LINES,
+                    () => `vec3 hairHalfway = normalize( directLight.direction + geometryViewDir );
 	float hairFacing = saturate( dot( geometryNormal, directLight.direction ) * 0.5 + 0.5 );
 	reflectedLight.directSpecular += directLight.color * hairFacing * ( ${strength.toFixed(3)} * hairBand( hairStrand, geometryNormal, hairHalfway, ${shift.toFixed(3)} + hairShift, ${sharp.toFixed(1)} ) + ${tintStrength.toFixed(3)} * material.diffuseColor * hairBand( hairStrand, geometryNormal, hairHalfway, ${tintShift.toFixed(3)} + hairShift, ${tintSharp.toFixed(1)} ) );`,
                 ),

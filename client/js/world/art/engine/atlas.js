@@ -192,8 +192,8 @@ let prepared = null;
 
 /**
  * Start painting the layers in workers (a few at once, off the page's thread), for the material
- * (which, asked for before they're done, takes them once they are): resolves with them. Painted
- * here and now if workers can't.
+ * (which, asked for before they're done, takes them once they are): resolves once they're
+ * painted, with nothing. Painted here and now if workers can't.
  */
 export function prepareAtlas(size = LAYER_SIZE) {
     if (prepared) {
@@ -201,7 +201,7 @@ export function prepareAtlas(size = LAYER_SIZE) {
     }
 
     const names = LAYERS.filter((name) => name !== "plain");
-    const promise = (async () => {
+    const painting = (async () => {
         if (typeof Worker === "undefined") {
             return paintLayers(size);
         }
@@ -232,12 +232,16 @@ export function prepareAtlas(size = LAYER_SIZE) {
         return stack(painted, size);
     })();
 
-    prepared = { promise, data: null, size };
-    promise.then((data) => {
+    // (What's handed back holds none of them: a promise keeps what it resolved with for as long
+    // as anything keeps the promise, and the game's build kept this one in a closure for the
+    // whole game, 15 MB of layers the graphics card had long had. Only `prepared` holds them,
+    // till the texture's sent: atlasTexture)
+    prepared = { promise: painting.then(() => {}), painting, data: null, size };
+    painting.then((data) => {
         prepared.data = data;
     });
 
-    return promise;
+    return prepared.promise;
 }
 
 // The relief: how a surface's normal tilts where the height under it changes (after Three.js's
@@ -567,17 +571,17 @@ function atlasTexture() {
         texture.minFilter = THREE.LinearMipmapLinearFilter;
         texture.generateMipmaps = true;
         texture.anisotropy = 4;
-        // (prepareAtlas's promise holds them too, as what it resolved with: whatever waits on it
-        // again only waits for them to be painted, and the texture is made once)
+        // (prepareAtlas's own promise of them holds them too, as what it resolved with: let go
+        // with them. What it handed back never held them, and the texture is made once)
         releaseTexture(texture, () => {
             if (prepared) {
                 prepared.data = null;
-                prepared.promise = Promise.resolve(null);
+                prepared.painting = null;
             }
         });
 
         if (waiting) {
-            prepared.promise.then((data) => {
+            prepared.painting.then((data) => {
                 texture.image.data = data;
                 texture.needsUpdate = true;
             });
@@ -646,9 +650,12 @@ void RE_Direct_Atlas(const in IncidentLight directLight, const in vec3 geometryP
 #define RE_Direct RE_Direct_Atlas`;
 
 // (The sky, or the room, reflected, and that much less of their light taken in and given back
-// from under the surface)
+// from under the surface: where three.js says the light from all round is the kind it is here,
+// ENVMAP_TYPE_CUBE_UV as r186 has it, ENVMAP_TYPE_PMREM as r187 names it. Either: with neither
+// defined nothing would be reflected, and nothing said of it; test/buildings.test.js fails if
+// three.js has neither)
 const SHINE_REFLECTED_GLSL = `
-#if defined(USE_ENVMAP) && defined(ENVMAP_TYPE_CUBE_UV)
+#if defined(USE_ENVMAP) && (defined(ENVMAP_TYPE_CUBE_UV) || defined(ENVMAP_TYPE_PMREM))
 if (atlasGloss > 0.0) {
     vec3 atlasReflected = atlasReflectance(geometryNormal, geometryViewDir);
 

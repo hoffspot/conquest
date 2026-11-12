@@ -5,8 +5,10 @@
 // every finger's off the screen, one begun before then is dropped and one begun after kept; and a
 // hold finding its press gone changes nothing.
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { Press, QUICK_HOLD_MS, STRAY } from "../client/js/app/press.js";
+import { HOLD_MS as PAD_HOLD_MS } from "../client/js/app/gamepad.js";
+import { HOLD_MS, Press, QUICK_HOLD_MS, STRAY, TAP_SLOP } from "../client/js/app/press.js";
 
 // A press heard on a clock of its own (`pass(ms)` moves it on, firing what's due), with what it
 // said kept, in order
@@ -230,5 +232,37 @@ describe("an Action Bar press", () => {
         pass(QUICK_HOLD_MS);
         assert.deepEqual(said, ["use"]);
         assert.equal(press.pressing, false);
+    });
+});
+
+describe("a long press, the same everywhere (app/press.js HOLD_MS, TAP_SLOP)", () => {
+    it("is half a second, on the Action Bar and a controller's buttons as on the rest", () => {
+        assert.equal(HOLD_MS, 500);
+        assert.equal(QUICK_HOLD_MS, HOLD_MS);
+        assert.equal(PAD_HOLD_MS, HOLD_MS);
+        assert.equal(TAP_SLOP, 12);
+        assert.ok(STRAY > TAP_SLOP, "a thumb on the Action Bar may stray further");
+    });
+
+    it("is kept by no part of the game for itself: the world, the HUD's icons, the minimap, the world map and the pack all take it from there", () => {
+        // (It was 0.4 s on the world and in the pack, 0.5 s on an icon and 0.55 s on the maps;
+        // and a tap's slop 12 pixels on the world, 10 on the minimap and the HUD)
+        const folder = new URL("../client/js/app/", import.meta.url);
+        const own = /^(?:export )?const (HOLD_MS|TAP_SLOP|HOLD_MOVE) = (.+);$/gm;
+        const kept = [];
+
+        for (const file of readdirSync(folder).filter((name) => name.endsWith(".js"))) {
+            const code = readFileSync(new URL(file, folder), "utf8");
+
+            for (const [, name, value] of code.matchAll(own)) {
+                kept.push(`${file}: ${name} = ${value}`);
+            }
+
+            if (["game.js", "hud.js", "minimap.js", "worldmap.js", "pack.js"].includes(file)) {
+                assert.match(code, /import \{[^}]*\bHOLD_MS\b[^}]*\} from "\.\/press\.js";/, `${file} takes the long press from press.js`);
+            }
+        }
+
+        assert.deepEqual(kept.sort(), ["gamepad.js: HOLD_MS = QUICK_HOLD_MS", "press.js: HOLD_MS = 500", "press.js: TAP_SLOP = 12"]);
     });
 });

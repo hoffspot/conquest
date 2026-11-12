@@ -9,7 +9,9 @@ import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
 import { RACES } from "../client/js/core/worldplan/races.js";
 import { MATERIALS, paintLayer } from "../client/js/world/art/engine/painters.js";
 import * as THREE from "three";
-import { BUILDERS, grounded, heightMap, PIXEL, standsAt, walkedOf } from "../client/js/world/town3d.js";
+import { BUILDERS, buildTown, grounded, heightMap, PIXEL, standsAt, walkedOf } from "../client/js/world/town3d.js";
+import { VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
+import { canopyTint } from "../client/js/world/canopy.js";
 import { entranceSpecOf } from "../client/js/core/insides.js";
 import { PLOT } from "../client/js/core/world.js";
 import { View } from "../client/js/world/view.js";
@@ -27,6 +29,41 @@ describe("the town in 3D (town3d.js)", () => {
 
     it("builds to the world's measure: five art pixels to a metre", () => {
         assert.equal(PIXEL, 0.2);
+    });
+
+    it("plants its trees in the world's woodland where it's given one, none merged a copy each, standing just as high on every square; merged a tile at a time without (the labs)", async () => {
+        // (A town of nothing but trees: one of its layout's, two in its fields)
+        const world = {
+            seed: 3,
+            origin: [100, 200],
+            stamp: { at: [100, 200], width: 48, height: 48 },
+            town: { kind: "village", pieces: [{ kind: "tree", x: 10, y: 12, variant: 2 }], yards: [] },
+            trees: [{ x: 120, y: 230, variant: 0 }, { x: 131.5, y: 215, variant: 7 }],
+        };
+        const groundAt = (x) => 0.02 * x;
+        const landAt = (x) => (x < 125 ? "meadow" : "taiga");
+        const namesOf = (town) => town.object.getObjectByName("trees").children.map(({ name }) => name.split(" ")[0]);
+        const merged = await buildTown(world, { groundAt, landAt });
+        const woodland = new Woodland();
+        const batched = await buildTown(world, { groundAt, landAt, woodland });
+
+        assert.deepEqual([...new Set(namesOf(merged))].sort(), ["bark", "crown", "leaves", "litter"]);
+        assert.deepEqual(namesOf(batched), ["crown", "litter"], "its shells and patches alone its own");
+        assert.equal(woodland.planted, 3);
+        assert.equal(woodland.wood.material.userData.cutAway, true, "cut through in front of the player, as merged");
+        assert.equal(woodland.leaves.material.userData.cutAway, true);
+
+        // (Each tree's leaves in its land's colour, as merged: canopy.js)
+        const tints = [0, 1, 2].map((id) => woodland.leaves.getColorAt(id, new THREE.Color()).toArray());
+
+        assert.deepEqual(tints, [[110, 212, 2], [120, 230, 0], [131.5, 215, 7]].map(([x, z, variant]) => canopyTint(landAt(x), VARIANTS[variant][0], x, z).map(Math.fround)));
+
+        // (What hides the player from the camera: the same height on every square)
+        const standing = merged.heights.rows.flatMap((row) => [...row]);
+
+        assert.ok(standing.filter((height) => height > 3).length > 50);
+        assert.deepEqual(batched.heights.rows.flatMap((row) => [...row]), standing);
+        woodland.dispose();
     });
 });
 

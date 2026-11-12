@@ -20,6 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
+import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { drawBattleArrow, drawBuildingIcon, drawCommander, drawMarker, drawMissionMark, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
@@ -190,14 +191,36 @@ const BRIDGE = [150, 112, 70];
 // At most this many redraws a second
 const FRAME_RATE = 30;
 
-// A tap that moves less than this (pixels) is a tap, not a drag
-const TAP_SLOP = 10;
+// With nothing on it moved by a pixel of the screen's, nor anything that pulses or fades, it's
+// drawn again only this often (ms): the same picture thirty times a second, standing or talking,
+// was a canvas's worth of drawing each. And a turn's this many to a radian: finer than a pixel at
+// the reach of the wedge that shows which way the player's looking.
+const STILL_EVERY = 250;
+const TURNS = 120;
+
+// (No battles near: Minimap.draw's, when it's given none)
+const NO_BATTLES = Object.freeze({ arrows: Object.freeze([]), commanders: Object.freeze([]) });
+
+// One more number mixed into a stamp of what's drawn (Minimap #stamp); and a word's letters, or
+// whatever else it is as words
+const mixed = (stamp, number) => (Math.imul(stamp, 31) + number) | 0;
+
+function worded(stamp, word) {
+    const text = typeof word === "string" ? word : String(word);
+    let mix = mixed(stamp, text.length);
+
+    for (let k = 0; k < text.length; k++) {
+        mix = mixed(mix, text.charCodeAt(k));
+    }
+
+    return mix;
+}
+
+// (A tap that moves less than TAP_SLOP pixels is a tap, not a drag; held HOLD_MS without moving,
+// it's held, not tapped: as a tap and a long press are everywhere, app/press.js)
 
 // How far from an enemy's dot (pixels) a tap picks it
 const PICK = 12;
-
-// Held this long (ms) without moving, it's held, not tapped
-const HOLD_MS = 550;
 
 // How big the icons over the buildings gone into are (pixels)
 const ICON_SIZE = 22;
@@ -365,6 +388,15 @@ export class Minimap {
         this.drawn = -Infinity;
         this.pointer = null;
 
+        // How big it's shown ([width, height], CSS pixels), kept till the browser says it's
+        // changed (where it can: else asked each time it's drawn); and what was last drawn, as a
+        // number (#stamp), and when (ms)
+        this.size = null;
+        this.stamp = null;
+        this.painted = -Infinity;
+        this.resizes = typeof ResizeObserver === "function" ? new ResizeObserver(() => (this.size = null)) : null;
+        this.resizes?.observe(canvas);
+
         /** The kinds of the icons last drawn (the buildings gone into, in view). */
         this.icons = [];
 
@@ -449,6 +481,8 @@ export class Minimap {
     setMap(map) {
         this.map = map;
         this.drawn = -Infinity;
+        this.size = null;
+        this.stamp = null;
 
         // The world outside: the patch round the player, painted as they go
         if (map.chunk) {
@@ -484,6 +518,8 @@ export class Minimap {
     show(on) {
         this.canvas.hidden = !on;
         this.drawn = -Infinity;
+        this.size = null;
+        this.stamp = null;
     }
 
     /** Is it shown, and time to draw it again (at most FRAME_RATE times a second)? */
@@ -506,23 +542,37 @@ export class Minimap {
      * app/game.js partyView), each a dot in their own colour, or further than shown, a badge with
      * their initial at the edge, its arrow pointing the way they are.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], rift = null, pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] }, missions = [] }, now = performance.now()) {
+    draw(view, now = performance.now()) {
+        const { player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], rift = null, pings = [], markers = [], trails = [], party = [], battles = NO_BATTLES, missions = [] } = view;
         const { canvas, context, map } = this;
 
         this.drawn = now;
 
-        // Keep the drawing buffer the size it's shown at, in device pixels
+        // Keep the drawing buffer the size it's shown at, in device pixels. (How big it's shown
+        // is kept till it changes, where the browser says when it does: asked every time, after
+        // the frame's written to the HUD, it made the browser lay the page out again to answer.)
         const ratio = Math.min(2, globalThis.devicePixelRatio || 1);
-        const width = canvas.clientWidth;
-        const height = canvas.clientHeight;
+
+        if (!this.size) {
+            this.size = [canvas.clientWidth, canvas.clientHeight];
+        }
+
+        const [width, height] = this.size;
+
+        if (!this.resizes) {
+            this.size = null;
+        }
 
         if (!width || !height) {
+            this.size = null;
+
             return;
         }
 
         if (canvas.width !== Math.round(width * ratio) || canvas.height !== Math.round(height * ratio)) {
             canvas.width = Math.round(width * ratio);
             canvas.height = Math.round(height * ratio);
+            this.stamp = null;
         }
 
         // Out in the world: round the player (painted afresh if they've gone far enough)
@@ -536,6 +586,19 @@ export class Minimap {
 
         const [x0, z0, across] = this.shown();
         const scale = width / across;
+
+        // (Nothing on it moved by a pixel of the screen's since it was last drawn, and nothing
+        // on it that pulses or fades: the same picture, not drawn again; but a few times a
+        // second, whatever)
+        const stamp = this.#stamp(view, x0, z0, scale * ratio);
+
+        if (stamp === this.stamp && stamp !== null && now - this.painted < STILL_EVERY) {
+            return;
+        }
+
+        this.stamp = stamp;
+        this.painted = now;
+
         const at = (x, z) => [(x - x0) * scale, (z - z0) * scale];
 
         context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -838,6 +901,59 @@ export class Minimap {
         }
     }
 
+    // What it's asked to draw, as one number that changes when anything on it would be drawn a
+    // pixel of the screen's (`perMetre` of them to a metre) from where it was, turned another way,
+    // or isn't the same things: how the picture's known to be the same as the last, and not drawn
+    // again. Null while anything on it pulses or fades by the clock (whoever the player's set on,
+    // an elite, a hell rift, a ping), or the next patch is being painted: drawn every time.
+    // What it misses (an icon's rim changed where it stands) is drawn within STILL_EVERY anyway.
+    #stamp({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], rift = null, pings = [], markers = [], trails = [], party = [], battles = NO_BATTLES, missions = [] }, x0, z0, perMetre) {
+        if (rift || pings.length || elites.length || this.painting) {
+            return null;
+        }
+
+        const px = (metres) => Math.round(metres * perMetre);
+        let stamp = mixed(mixed(17, this.patch?.x ?? -1), this.patch?.z ?? -1);
+
+        if (player) {
+            stamp = mixed(mixed(mixed(stamp, px(player.x)), px(player.z)), Math.round(player.facing * TURNS));
+        }
+
+        stamp = mixed(stamp, look === null ? -1 : Math.round(look * TURNS));
+        stamp = destination ? mixed(mixed(stamp, px(destination[0] - x0)), px(destination[1] - z0)) : mixed(stamp, -7);
+
+        for (const other of others) {
+            if (other.targeted) {
+                return null;
+            }
+
+            stamp = mixed(mixed(mixed(stamp, px(other.x - x0)), px(other.z - z0)), (other.hostile ? 1 : 0) + (other.ally ? 2 : 0));
+        }
+
+        // (An icon's kind and its rim too: a place cleared where it stands is another picture)
+        for (const icon of icons) {
+            stamp = mixed(mixed(worded(worded(stamp, icon.kind), icon.rim), px(icon.x - x0)), px(icon.z - z0) + (icon.tracked ? 1 : 0));
+        }
+
+        for (const spots of [criers, searches, markers, party, missions, battles.commanders]) {
+            stamp = mixed(stamp, spots.length);
+
+            for (const spot of spots) {
+                stamp = mixed(mixed(stamp, px(spot.x - x0)), px(spot.z - z0));
+            }
+        }
+
+        for (const trail of trails) {
+            stamp = mixed(stamp, trail.points.length);
+        }
+
+        for (const arrow of battles.arrows) {
+            stamp = mixed(mixed(mixed(mixed(stamp, px(arrow.from[0] - x0)), px(arrow.from[1] - z0)), px(arrow.to[0] - x0)), px(arrow.to[1] - z0));
+        }
+
+        return mixed(mixed(stamp, trails.length), battles.arrows.length);
+    }
+
     // Out in the world: the next patch round the player painted a step at a time while they're
     // still well inside this one, ahead of where they're going, and shown once it's painted; or
     // painted at once, if what's shown would otherwise go past this one's edge (the first, or a
@@ -901,6 +1017,7 @@ export class Minimap {
     /** Stop listening for taps. */
     dispose() {
         clearTimeout(this.pointer?.timer);
+        this.resizes?.disconnect();
 
         for (const [type, listener] of this.listeners) {
             this.canvas.removeEventListener(type, listener);

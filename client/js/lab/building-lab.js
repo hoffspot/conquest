@@ -367,7 +367,8 @@ async function build() {
     if (state.show.startsWith("wilds-") || state.show === "home") {
         const world = buildWorld({ seed: state.seed });
         const [x, z] = wildsOf(world.plan, state.show === "home" ? { people: state.people } : state.show.slice(6));
-        const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1), rocks: ["low", "medium", "high"].includes(params.get("rocks")) ? params.get("rocks") : "medium" });
+        // (Its signs all painted as those near are: the lab's camera goes where it likes)
+        const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1), rocks: ["low", "medium", "high"].includes(params.get("rocks")) ? params.get("rocks") : "medium", farSigns: false });
 
         chunks.fill(x, z, 1);
 
@@ -471,7 +472,9 @@ async function build() {
         // (One asked for by its kind, `site`, may be no people's: a cave, a great lair, a den)
         const site = sited ? world.plan.sites.filter(({ race, kind }) => (race === state.people || (wanted && !race)) && (state.show === "castle" ? kind === "castle" : wanted ? kind === wanted : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
         const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
-        const chunks = new Chunks(world);
+        // (Its signs all painted as those near are, however far from its middle: the lab's camera
+        // goes where it likes)
+        const chunks = new Chunks(world, { farSigns: false });
 
         // (Its houses burnt, as they are at that stage, if asked: the place's only)
         chunks.burntOf = (at) => (at === place.id ? state.burnt : null);

@@ -810,6 +810,10 @@ test.describe("drawn at the screen's own pixels", () => {
         await expect(page.locator("#adaptiveswitch")).toBeChecked();
         await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
         await expect(page.locator("#adapted")).toHaveText("Keeping up: drawing medium");
+        // (The picture's edges as the quality chosen has them, and no battery being saved, on a
+        // computer: nothing said of either)
+        await expect(page.locator("#edgesnote")).toBeHidden();
+        await expect(page.locator("#savingpower")).toBeHidden();
 
         // (A quality chosen: drawn at it, every pixel, starting again from there)
         await page.locator("#qualityslider").evaluate((slider) => {
@@ -827,6 +831,40 @@ test.describe("drawn at the screen's own pixels", () => {
 
         expect(chosen).toEqual({ quality: "low", chosen: "low", scale: 1, ratio: 1, step: 0, saved: "low" });
         await expect(page.locator("#adapted")).toBeHidden();
+        // (Low smooths no edges, and the picture was made at High, smoothing them: all of Low
+        // drawn at once but that, which waits on the game being loaded again, and is said so;
+        // back at High, nothing to say. And a phone or a tablet whose browser asks for 30 frames
+        // a second is told the game's drawing 30 and taking nothing away for it)
+        await expect(page.locator("#edgesnote")).toHaveText("Edges stay smoothed, as the quality before drew them, till the game's next loaded.");
+        for (const level of ["2", "0"]) {
+            await page.locator("#qualityslider").evaluate((slider, value) => {
+                slider.value = value;
+                slider.dispatchEvent(new Event("input", { bubbles: true }));
+                slider.dispatchEvent(new Event("change", { bubbles: true }));
+            }, level);
+            await expect(page.locator("#edgesnote")).toBeVisible({ visible: level === "0" });
+        }
+
+        const saving = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const touch = window.matchMedia;
+
+            // (A touch screen; and twelve seconds of a browser asking for 30 frames a second, the
+            // game's own work 5 ms of each: timed well ahead of the page's own frames, drawn in
+            // software a second apart and more, which say nothing of what a browser asks for)
+            window.matchMedia = (query) => (query === "(pointer: coarse)" ? { matches: true, addEventListener: () => {}, removeEventListener: () => {} } : touch.call(window, query));
+
+            for (let now = performance.now() + 3600000, end = now + 12000; now < end; now += 1000 / 30) {
+                game.pacing.beat.observe(now, 1000 / 30, 5);
+            }
+
+            return Math.round(1000 / game.pacing.beat.value);
+        });
+
+        expect(saving).toBe(30);
+        await page.locator("#graphicsback").click();
+        await page.locator("#graphicsbutton").click();
+        await expect(page.locator("#savingpower")).toHaveText("Your device is saving its battery and asking for 30 frames a second, so the game draws 30, and takes nothing away for it.");
 
         // (Adaptive off: remembered, and the game left at the quality chosen)
         await page.locator("label:has(#adaptiveswitch)").click();
@@ -3118,13 +3156,14 @@ test("those attacking the player have an icon each down the right side, a likene
 
             const target = document.querySelector("#attackers .attacker.target");
 
-            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target).animationName : null, lock: player.lock, locked: [...document.querySelectorAll("#attackers .attacker.locked")].map((icon) => icon.dataset.id) };
+            return { order: player.order && { ...player.order }, walking: player.path.length > 0, running: player.running, target: target?.dataset.id ?? null, pulsing: target ? getComputedStyle(target, "::after").animationName : null, lock: player.lock, locked: [...document.querySelectorAll("#attackers .attacker.locked")].map((icon) => icon.dataset.id) };
         }, seconds);
     const orcIcon = page.locator('#attackers .attacker[data-id="orc"]');
     const slimeIcon = page.locator('#attackers .attacker[data-id="slime"]');
     const start = await page.evaluate(() => [...window.pellagos.game.battle.actor("player").square]);
 
-    // Tapped: set on the orc where the player stands, its icon glowing; then on the slime
+    // Tapped: set on the orc where the player stands, its icon glowing (the glow a layer over it,
+    // its ::after, faded in and out: styles.css attacker-pulse); then on the slime
     await orcIcon.click();
 
     const tapped = await state(0.5);
@@ -4479,9 +4518,10 @@ test("the land round the first start town (seed 1), drawn and walked: cliffs up 
             let top = -Infinity;
 
             drawn?.buildings?.updateMatrixWorld(true);
+            // (Each merged mesh's box as it was worked out when it was merged: the page lets go of
+            // its corners once it's drawn, world/release.js)
             drawn?.buildings?.traverse((node) => {
                 if (node.isMesh) {
-                    node.geometry.computeBoundingBox();
                     top = Math.max(top, node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld).max.y);
                 }
             });
@@ -5122,23 +5162,47 @@ test("the bars over others: each stays on the head it's over as the camera turns
     });
 
     await test.step("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async () => {
-        // Four slimes in a line the way the camera looks, 6, 24, 48 and 66 m ahead of the player (by
-        // day: full size within 12 m, gone at 60 m)
+        // Four slimes before the camera, 6, 24, 48 and 66 m from the player (by day: full size
+        // within 12 m, gone at 60 m), 20 degrees to one side of the way the camera looks and the
+        // other, turn about: in a line straight ahead, each one's bar lay over the next one's,
+        // and a bar more than half under another isn't shown (hud.js Covering), where this is of
+        // how big and how faint each is drawn
         await page.evaluate(() => {
             const { game, session } = window.pellagos;
             const me = game.battle.actor(game.me);
             const looking = session.view.camera.getWorldDirection(session.view.camera.position.clone());
             const length = Math.hypot(looking.x, looking.z);
+            const [ahead, across] = [[looking.x / length, looking.z / length], [-looking.z / length, looking.x / length]];
+
+            // (Where so far ahead of the player, the way the camera looks, and so far to its side, is)
+            window.before = (forward, sideways) => [me.x + ahead[0] * forward + across[0] * sideways, me.y + ahead[1] * forward + across[1] * sideways];
 
             game.stop();
             Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-            [6, 24, 48, 66].forEach((ahead, k) => {
-                const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
+            [6, 24, 48, 66].forEach((away, k) => {
+                const aside = ((k % 2 ? -20 : 20) * Math.PI) / 180;
+                const [x, y] = window.before(away * Math.cos(aside), away * Math.sin(aside));
 
                 game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
                 Object.assign(game.battle.actor(`slime${k}`), { x, y });
                 game.enlisting.push(`slime${k}`);
             });
+        });
+
+        // (Where each slime's bar is put on the screen, frame by frame, from the first: what the
+        // game tells the hud)
+        await page.evaluate(() => {
+            const { hud } = window.pellagos.game;
+            const place = hud.place.bind(hud);
+
+            window.barsPut = {};
+            hud.place = (id, point, options) => {
+                if (point && String(id).startsWith("slime")) {
+                    (window.barsPut[id] ??= []).push([point.x, point.y]);
+                }
+
+                return place(id, point, options);
+            };
         });
         expect(await playUntil(page, () => [0, 1, 2, 3].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
 
@@ -5194,16 +5258,33 @@ test("the bars over others: each stays on the head it's over as the camera turns
         expect(near.layer).toBeGreaterThan(middle.layer);
         expect(middle.layer).toBeGreaterThan(far.layer);
 
+        // Each bar was over its slime's head from the first frame it was put anywhere: none
+        // over a body the frame it's drawn, not yet stood on its ground, which put it far down
+        // the screen for a frame (and, there under a nearer one's, hidden for half a second after)
+        const put = await page.evaluate(() => window.barsPut);
+
+        for (const id of ["slime0", "slime1", "slime2"]) {
+            // (The frame after: the camera's still coming to rest behind the player meanwhile, a
+            // pixel or so a frame, where a bar put at no height was hundreds from its place)
+            const [first, next] = put[id];
+
+            expect(put[id].length).toBeGreaterThanOrEqual(2);
+            expect(Math.hypot(first[0] - next[0], first[1] - next[1]), `${id}: ${JSON.stringify(put[id].slice(0, 3))}`).toBeLessThan(10);
+        }
+
         // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
         expect(plates.stacking).toBe("0");
         expect(plates.each.slice(0, 3).map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
 
-        // The farthest seen comes near: its bar grows as it comes, to full size
+        // The farthest seen comes near: its bar grows as it comes, to full size. (To beside the
+        // nearest, 4 m further out to its side, where their two bars, each full size, lie clear
+        // of one another: a metre from it, the one would be under the other, and not shown)
         await page.evaluate(() => {
             const { game } = window.pellagos;
-            const [near, far] = [game.battle.actor("slime0"), game.battle.actor("slime2")];
+            const aside = (20 * Math.PI) / 180;
+            const [x, y] = window.before(6 * Math.cos(aside), 6 * Math.sin(aside) + 4);
 
-            Object.assign(far, { square: [near.square[0] + 1, near.square[1]], x: near.x + 1, y: near.y });
+            Object.assign(game.battle.actor("slime2"), { square: [Math.floor(x), Math.floor(y)], x, y });
         });
 
         // (Frame by frame, as its figure walks up)
@@ -5459,14 +5540,25 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return {
             ids: here.map(({ id }) => id),
             shown: here.every(({ id }) => game.avatars.get(id).object.visible),
-            plates: document.querySelectorAll(".floater").length,
+            // (The bars over heads, and whose: each a plate among what floats over the world.
+            // What's said over a head floats there too, for a few seconds of the page's own
+            // clock, not the game's: the town's crier calls out as the player comes to the
+            // tavern's door (within 25 m of him, 26 seconds in), and his words are still there,
+            // hidden with him out of sight, if this is come to within their seven or so seconds.
+            // Counted with the bars, they made two of the one there is whenever that was quick
+            // enough, as on CI once the guards out of reach went to their crowds, not built)
+            plates: [...document.querySelectorAll(".floater.plate")].map((plate) => plate.dataset.id),
+            said: [...document.querySelectorAll(".floater:not(.plate)")].map((floater) => `${floater.classList.contains("said") ? "said" : floater.className} ${floater.dataset.id}`),
             acted: [...acted].sort(),
             order: game.battle.actor("player").order?.type ?? null,
             madam: game.avatars.get("madam").object.visible,
         };
     });
 
-    expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: 1, madam: false });
+    // (One bar, the orc's, left out in the town: none of the folk's. And nothing else floating
+    // over anyone but a crier's words, while they last)
+    expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: ["orc"], madam: false });
+    expect(folk.said.filter((words) => !/^said crier:/.test(words))).toEqual([]);
     expect(folk.acted).toContain("rest:patron");
     expect(folk.order).not.toBe("engage");
 
@@ -14323,8 +14415,11 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
 
         game.approached = new Set(Object.keys(MODELS).filter((kind) => kind !== "dreadthorn"));
         window.fetchedBefore = fetch;
+        // (A file asked for whole, as one waited for is (app/fetcher.js WHOLE), is one request
+        // where its parts were many: held up as long as those together were, longer than the
+        // card's patience, so Go in now is still seen offered)
         fetcher.fetch = async (...args) => {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, args[1]?.headers?.["X-Pellagos-Whole"] ? 7000 : 1000));
 
             return fetch(...args);
         };
@@ -15018,7 +15113,32 @@ test("on the world map a pin's dropped where it's held: a column of light where 
         const ray = new THREE.Raycaster();
         const over = [];
 
-        session.view.scene.traverse((object) => object.isMesh && object.name === "ground" && grounds.push(object));
+        // (A chunk's ground lets go of its corners once the graphics card has them (world/
+        // release.js), so there's nothing of it on the page to meet a ray: the same ground made
+        // again here, from the chunk's heights with its corners as far apart as it's drawn, as
+        // world/ground.js makes it, and stood where it stands)
+        const { groundGeometry } = await import("/js/world/ground.js");
+        const { CHUNK } = await import("/js/core/terrain/ground.js");
+
+        session.view.scene.traverse((object) => {
+            if (!object.isMesh || object.name !== "ground") {
+                return;
+            }
+
+            if (object.geometry.attributes.position.array) {
+                grounds.push(object);
+
+                return;
+            }
+
+            const chunk = game.chunks.overworld.chunk(Math.round(object.position.x / CHUNK), Math.round(object.position.z / CHUNK));
+            const again = new THREE.Mesh(groundGeometry(chunk.heights, object.userData.step ?? 1));
+
+            again.userData.step = object.userData.step;
+            again.position.copy(object.position);
+            again.updateMatrixWorld(true);
+            grounds.push(again);
+        });
 
         // (Two corners a point, across the line; six indices a piece of it between two points; and
         // how high it is over the ground as it's drawn there, its corners further apart away from
@@ -18237,6 +18357,209 @@ test("soldiers about the player past the bodies the quality's memory can hold in
     expect(seen.crowded).toBeGreaterThanOrEqual(12 - room - 3);
 });
 
+test("bars over a file of soldiers seen end-on: placed in the order of precedence, the first over the rest, one that would lie under those before it not shown, the one the player's set on always; and no bar kept for a soldier past where one's seen", async ({ page }) => {
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=2");
+
+    // (Two armies of twelve: the player's people's, who are no one's to fight here, and their foes)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.fieldBattle(12);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.filter(({ id }) => id.startsWith("field-")).length >= 24, { seconds: 5 })).toBe(true);
+
+    // The player's people's twelve stood in a file going straight away from the camera, 0.8 m
+    // apart, each hurt (so each has a bar); their foes 200 m off. Kept there as the game plays on
+    const file = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor(game.me);
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const friends = fielded.filter((actor) => !game.battle.hostile(actor, player)).slice(0, 12);
+        const foes = fielded.filter((actor) => game.battle.hostile(actor, player));
+        const camera = game.view.camera.position;
+        const mine = game.avatars.get(game.me).object.position;
+        const length = Math.hypot(mine.x - camera.x, mine.z - camera.z);
+        const ahead = [(mine.x - camera.x) / length, (mine.z - camera.z) / length];
+
+        for (const id of Object.keys(game.battle.formations)) {
+            game.battle.formation(id, { to: null, advance: false });
+        }
+
+        window.pinned = new Map([
+            ...friends.map((actor, k) => [actor.id, [player.x + ahead[0] * (6 + k * 0.8), player.y + ahead[1] * (6 + k * 0.8)]]),
+            ...foes.map((actor, k) => [actor.id, [player.x - ahead[0] * 200 + k * 2, player.y - ahead[1] * 200]]),
+        ]);
+        window.pinnedFile = friends.map(({ id }) => id);
+        window.locked = null;
+        window.playPinned = async (seconds) => {
+            for (let time = 0; time < seconds; time += 1 / 30) {
+                for (const [id, [x, y]] of window.pinned) {
+                    const actor = game.battle.actor(id);
+
+                    // (Hurt, and too hale for their healers to make whole between two frames)
+                    Object.assign(actor, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], dead: false, maxHp: 1e6, hp: 5e5 });
+                }
+
+                Object.assign(player, { hp: player.maxHp, lock: window.locked });
+                game.advance(1 / 30, { render: false, wait: true });
+                // (Which of the file's bars are shown, frame by frame)
+                window.barFrames?.push({ clock: game.clock, shown: friends.map(({ id }) => Boolean(game.hud.tracked.get(id)) && !game.hud.tracked.get(id).hidden) });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+
+            game.advance(0, { render: true });
+        };
+
+        return { friends: friends.map(({ id }) => id), foes: foes.map(({ id }) => id) };
+    });
+
+    expect(file.friends).toHaveLength(12);
+    expect(file.foes.length).toBeGreaterThanOrEqual(12);
+
+    // (Till every one of the file is drawn, in full or in its crowd, and stands where it's put)
+    const stood = () =>
+        page.evaluate(async (ids) => {
+            const { game } = window.pellagos;
+
+            await window.playPinned(1);
+
+            return ids.every((id) => {
+                const avatar = game.avatars.get(id);
+                const [x, y] = window.pinned.get(id);
+                const [ox, oz] = game.originOf("town");
+
+                return avatar && Math.hypot(avatar.object.position.x - ox - x, avatar.object.position.z - oz - y) < 0.3;
+            });
+        }, file.friends);
+
+    await expect.poll(stood, { timeout: 240000, intervals: [100] }).toBe(true);
+
+    // What's over their heads now: each one's bar, whether it's shown, and how it's layered
+    const bars = () =>
+        page.evaluate(({ friends, foes }) => {
+            const { game } = window.pellagos;
+            const plate = (id) => game.hud.tracked.get(id) ?? null;
+            const row = (id) => ({ id, tracked: Boolean(plate(id)), shown: Boolean(plate(id)) && !plate(id).hidden, covered: plate(id)?.cover?.hidden ?? null, layer: Number(plate(id)?.style.zIndex ?? 0), targeted: plate(id)?.classList.contains("targeted") ?? false });
+
+            const ranked = game.orders.plates.ranked.filter(({ actor }) => friends.includes(actor.id)).map(({ actor, standing, tall, away }) => ({ id: actor.id, standing, tall, away }));
+
+            return { friends: friends.map(row), foes: foes.map(row), ranked, order: ranked.map(({ id }) => id) };
+        }, file);
+
+    await page.evaluate(() => window.playPinned(1.5));
+
+    const seen = await bars();
+    const shown = seen.friends.filter((each) => each.shown);
+
+    // Every one of the file has a bar, but fewer are shown than there are soldiers: those that
+    // would lie under one before them aren't. They're in the order of precedence, as they stand
+    // with the player and then the biggest on the screen; the first of them is shown, and each
+    // shown is over those shown after it
+    expect(seen.friends.every((each) => each.tracked), JSON.stringify(seen.friends)).toBe(true);
+    expect(shown.length, JSON.stringify(seen.friends)).toBeLessThan(12);
+    expect(shown.length).toBeGreaterThanOrEqual(2);
+    expect(seen.friends.filter((each) => !each.shown).every((each) => each.covered === true)).toBe(true);
+    expect(seen.order).toHaveLength(12);
+
+    for (let k = 1; k < seen.ranked.length; k++) {
+        const [before, after] = [seen.ranked[k - 1], seen.ranked[k]];
+
+        expect(before.standing < after.standing || (before.standing === after.standing && (before.tall > after.tall || (before.tall === after.tall && before.away <= after.away))), JSON.stringify(seen.ranked)).toBe(true);
+    }
+
+    const first = seen.order[0];
+
+    expect(seen.friends.find((each) => each.id === first).shown, JSON.stringify(seen)).toBe(true);
+
+    const layers = seen.order.map((id) => seen.friends.find((each) => each.id === id)).filter((each) => each.shown).map((each) => each.layer);
+
+    expect(layers).toEqual([...layers].sort((a, b) => b - a));
+    expect(new Set(layers).size).toBe(layers.length);
+
+    // None of them flickers: over three seconds of frames, as the soldiers sway where they
+    // stand, no bar's shown or hidden again within half a second of the last time (hud.js
+    // PLATE_COVER.hold), and the first is shown throughout
+    const frames = await page.evaluate(async () => {
+        window.barFrames = [];
+        await window.playPinned(3);
+
+        const frames = window.barFrames;
+
+        window.barFrames = null;
+
+        return frames;
+    });
+
+    expect(frames.length).toBeGreaterThanOrEqual(90);
+
+    for (let k = 0; k < 12; k++) {
+        const changed = frames.filter((frame, at) => at > 0 && frame.shown[k] !== frames[at - 1].shown[k]).map(({ clock }) => clock);
+
+        for (let at = 1; at < changed.length; at++) {
+            expect(changed[at] - changed[at - 1], `${file.friends[k]}: ${JSON.stringify(changed)}`).toBeGreaterThanOrEqual(0.5 - 1e-6);
+        }
+    }
+
+    expect(frames.every((frame) => frame.shown[file.friends.indexOf(first)])).toBe(true);
+    expect(frames.every((frame) => frame.shown.filter(Boolean).length < 12)).toBe(true);
+
+    // Their foes, 200 m off, have none: past where a bar's seen at all (60 m), none is kept
+    expect(seen.foes.some((each) => each.tracked), JSON.stringify(seen.foes)).toBe(false);
+
+    // Two of their foes brought into the file, one a hand's breadth behind the other, and the
+    // player set on the first: both have bars again, within sight of one; the first's is shown,
+    // lit and over them all, and the second's, all but wholly under it, isn't shown
+    const [one, other] = file.foes;
+
+    await page.evaluate(
+        ({ one, other, friend }) => {
+            const [x, y] = window.pinned.get(friend);
+            const [fx, fy] = window.pinned.get(window.pinnedFile[5]);
+
+            // (Level with the sixth of the file, two metres to its side)
+            window.pinned.set(one, [fx + (fy - y) * 0.5, fy - (fx - x) * 0.5]);
+            window.pinned.set(other, [fx + (fy - y) * 0.5 + (fx - x) * 0.05, fy - (fx - x) * 0.5 + (fy - y) * 0.05]);
+            window.locked = one;
+        },
+        { one, other, friend: file.friends[0] },
+    );
+
+    const foes = async () => {
+        await page.evaluate(() => window.playPinned(0.5));
+
+        return (await bars()).foes.slice(0, 2).map(({ tracked, shown, targeted, covered }) => ({ tracked, shown, targeted, covered }));
+    };
+
+    // (Once they're drawn there, in full or in their crowds)
+    await expect.poll(foes, { timeout: 240000, intervals: [100] }).toEqual([
+        { tracked: true, shown: true, targeted: true, covered: false },
+        { tracked: true, shown: false, targeted: false, covered: true },
+    ]);
+
+    const set = await bars();
+
+    expect(set.foes[0].layer).toBeGreaterThan(Math.max(...[...set.friends, ...set.foes.slice(1)].filter((each) => each.shown).map((each) => each.layer)));
+    expect(set.foes.slice(2).some((each) => each.tracked)).toBe(false);
+
+    // Set on the second: its bar's shown, lit and over them all from the next frame, though it
+    // lies under the first's; and the first's, under it now, isn't shown
+    await page.evaluate((id) => {
+        window.locked = id;
+
+        return window.playPinned(0.1);
+    }, other);
+
+    const turned = await bars();
+
+    expect(turned.foes[1]).toMatchObject({ tracked: true, shown: true, targeted: true, covered: false });
+    expect(turned.foes[1].layer).toBeGreaterThan(Math.max(...[...turned.friends, turned.foes[0]].filter((each) => each.shown).map((each) => each.layer)));
+    await expect.poll(async () => (await foes())[0], { timeout: 60000, intervals: [100] }).toEqual({ tracked: true, shown: false, targeted: false, covered: true });
+    expect((await bars()).foes[1]).toMatchObject({ shown: true, targeted: true });
+});
+
 test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {
     test.setTimeout(360000);
     // (Of a guard's crowd figure, pixels of it read: drawn in full, from where the camera starts)
@@ -18894,6 +19217,59 @@ test("a werewolves' den neared: the Moonfang's model and its werewolves' (one fi
     }, den.id);
 
     expect(model).toEqual({ same: true, skins: ["ash", "dusk", "moonfang", "russet"], kept: 1, out: false });
+});
+
+test("on a touch screen, a werewolves' den neared: its models fetched and kept a kilometre off, not read; read once the player's within 400 metres of it", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=1");
+
+    // The player put a kilometre from a den at noon, as the test above, on a phone (a touch
+    // screen, as the game has it: the memory guard's)
+    const den = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host } = game;
+        const model = await import("/js/beasts/model.js");
+        const site = world.plan.sites.find((one) => one.kind === "werewolf's den");
+        const angle = Math.atan2(world.start.at[1] - site.at[1], world.start.at[0] - site.at[0]);
+
+        window.pellagosModels = model;
+        window.denOff = (metres) => host.battle.place(game.me, "town", [Math.floor(site.at[0] + Math.cos(angle) * metres), Math.floor(site.at[1] + Math.sin(angle) * metres)]);
+        game.stop();
+        session.view.adaptive = false;
+        game.memoryGuard.touch = true;
+        Object.assign(host.war, { turn: 70, clock: 30000 });
+        window.denOff(1000);
+
+        return { before: [Boolean(model.modelOf("moonfang")), Boolean(model.modelOf("werewolf"))] };
+    });
+
+    expect(den.before).toEqual([false, false]);
+
+    // (Asked to be fetched, both kinds: one file and their skins; then kept by the downloader,
+    // in real time, as it fetches)
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.approached?.has("moonfang") && window.pellagos.game.approached.has("werewolf")), { seconds: 20 })).toBe(true);
+
+    const fetched = await page.evaluate(async () => {
+        const { fetchModel, modelOf, keptModels } = window.pellagosModels;
+        const kept = await Promise.all([fetchModel("moonfang", "soon"), fetchModel("werewolf", "soon")]);
+
+        return { kept, read: [Boolean(modelOf("moonfang")), Boolean(modelOf("werewolf"))], models: keptModels().models };
+    });
+
+    expect(fetched, fetched.kept.every(Boolean) ? undefined : `the downloader: ${await downloading(page)}`).toEqual({ kept: [true, true], read: [false, false], models: 0 });
+
+    // (Played on there a while: still not read)
+    await playUntil(page, () => false, { seconds: 6 });
+    expect(await page.evaluate(() => window.pellagosModels.keptModels().models)).toBe(0);
+
+    // (Within 400 metres of the den, its creatures still not out, which come out within 100: read)
+    await page.evaluate(() => window.denOff(300));
+
+    const read = await playUntil(page, () => Boolean(window.pellagosModels.modelOf("moonfang") && window.pellagosModels.modelOf("werewolf")), { seconds: 60, realTime: true });
+
+    expect(read, read ? undefined : `the downloader: ${await downloading(page)}`).toBe(true);
+    expect(await page.evaluate(() => ({ kept: window.pellagosModels.keptModels().models, same: window.pellagosModels.modelOf("moonfang") === window.pellagosModels.modelOf("werewolf") }))).toEqual({ kept: 1, same: true });
 });
 
 test("out in the woods far from home by night, where werewolves are met: the werewolf's model read before one is", async ({ page }) => {

@@ -24,7 +24,9 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const { buildWorld, CHUNK, CHUNKS } = await import("../client/js/core/overworld.js");
-const { Chunks, DETAIL_NEAR, REACH, UNDERGROWTH } = await import("../client/js/world/chunks3d.js");
+const { Chunks, DETAIL_NEAR, REACH, SIGNS_KEPT, UNDERGROWTH } = await import("../client/js/world/chunks3d.js");
+const { SIGN_SCREEN, signDetail } = await import("../client/js/world/art/kits/signs.js");
+const { sendSome } = await import("../client/js/world/sending.js");
 const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
 const THREE = await import("three");
@@ -33,7 +35,7 @@ const { splatOf, splatting } = await import("../client/js/world/ground.js");
 const { GARDEN_KINDS, sowing, TILE, undergrowthMesh, undergrowthOf } = await import("../client/js/world/art/kits/wilds.js");
 const { WILDS } = await import("../client/js/world/art/engine/atlas.js");
 const { plantsOf } = await import("../client/js/world/art/kits/yards.js");
-const { QUALITY } = await import("../client/js/world/view.js");
+const { pixelsAcross, QUALITY } = await import("../client/js/world/view.js");
 
 let world;
 
@@ -269,9 +271,12 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
 
         // Drawn whole while the player's near, and from further off without what's only worth
         // drawing near (a timber's sides): those corners last, left undrawn (DETAIL_NEAR)
+        // (Its triangles' corners, as they're drawn: those alike are kept once, corners.js)
         const atlas = drawn.object.getObjectByName("buildings").children.find(({ material }) => material.name === "atlas");
-        const corners = atlas.geometry.attributes.position.count;
+        const corners = atlas.geometry.index.count;
         const drawing = () => Math.min(atlas.geometry.drawRange.count, corners);
+
+        assert.ok(atlas.geometry.attributes.position.count < corners * 0.7, "corners shared between its triangles");
 
         assert.equal(drawing(), corners);
         assert.ok(atlas.userData.far > corners * 0.4 && atlas.userData.far < corners * 0.9, `${atlas.userData.far} of ${corners}`);
@@ -282,6 +287,262 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
         chunks.update(x, z, { budget: 0 });
         assert.equal(drawing(), corners);
         chunks.dispose();
+    });
+
+    it("lets go of the page's copy of what's merged of a chunk once the graphics card has it (release.js): its buildings, its land's features, its crowns' shells and its ground; drawn again from its pieces and its heights, never from those", async () => {
+        const chunks = new Chunks(world, { undergrowth: 0 });
+        const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
+        const [x, z] = place.at;
+        const built = async (drawn) => {
+            for (let frames = 0; drawn.job && frames < 5000; frames++) {
+                chunks.update(x, z, { budget: 1 });
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+        };
+        const buffers = ({ attributes, index }) => [...Object.values(attributes), index].filter(Boolean);
+        // (As three.js's renderer does once each buffer's on the graphics card)
+        const sent = (geometry) => buffers(geometry).forEach((buffer) => buffer.onUploadCallback());
+        const held = (geometry) => buffers(geometry).filter(({ array }) => array).length;
+
+        chunks.fill(x, z, 0);
+
+        const drawn = [...chunks.drawn.values()][0];
+
+        await built(drawn);
+
+        // (And a chunk of the wilds, with trees and the land's own features in it)
+        const overworld = world.maps.town;
+        const [sx, sy] = world.spawns.player.map((v) => Math.floor(v / CHUNK));
+        const wild = [-2, -1, 0, 1, 2].flatMap((dy) => [-2, -1, 0, 1, 2].map((dx) => overworld.chunk(sx + dx, sy + dy))).find(({ trees, features }) => trees.length > 2 && features.some(({ kind }) => kind !== "arch" && kind !== "aqueduct"));
+        const wilds = new Chunks(world, { undergrowth: 0 });
+
+        wilds.fill(wild.x0 + CHUNK / 2, wild.y0 + CHUNK / 2, 0);
+
+        const [land] = wilds.drawn.values();
+        const buildings = drawn.buildings.children.map(({ geometry }) => geometry);
+        const features = land.object.children.find(({ name }) => name === "wilds").geometry;
+        const shells = land.lot.object.children.find(({ name }) => name === "crown shadows").geometry;
+
+        assert.ok(buildings.length > 1 && buildings.some(({ attributes }) => attributes.position.count > 10000));
+
+        for (const geometry of [...buildings, features, shells]) {
+            const corners = geometry.attributes.position.count;
+
+            assert.equal(held(geometry), buffers(geometry).length, "held till it's sent");
+            sent(geometry);
+            assert.equal(held(geometry), 0);
+            assert.ok(geometry.boundingSphere.radius > 0, "its bounds, worked out first: culling's done by them");
+            assert.equal(geometry.attributes.position.count, corners);
+        }
+
+        // (A merged mesh's box too, for whatever asks how high it stands)
+        assert.ok(buildings.every(({ boundingBox }) => boundingBox.max.y > boundingBox.min.y));
+
+        // (Its ground's corners; not its triangles, drawn a metre apart: every such chunk's, the
+        // page's copy given to the graphics card again whenever one of them is thrown away)
+        const ground = drawn.object.children.find(({ name }) => name === "ground");
+        const fine = ground.geometry;
+
+        assert.equal(ground.userData.step, 1);
+        sent(fine);
+        assert.deepEqual([fine.attributes.position.array, fine.attributes.normal.array], [null, null]);
+        assert.ok(fine.index.array.length > CHUNK * CHUNK * 6, "the triangles all share, kept");
+
+        // (Drawn with its corners further apart, made again from the chunk's heights: its triangles
+        // its own then, and let go of with the rest)
+        chunks.setSpacing([2]);
+
+        const coarse = ground.geometry;
+
+        assert.ok(coarse !== fine && ground.userData.step === 2);
+        assert.equal(held(coarse), 3);
+        sent(coarse);
+        assert.equal(held(coarse), 0);
+        assert.equal(coarse.index.count, ((CHUNK / 2) ** 2 + 4 * (CHUNK / 2)) * 6);
+
+        // (Its buildings built again, a house burnt: from its pieces, whole)
+        chunks.rebuild(place.id);
+        assert.ok(drawn.job, "being built again");
+        await built(drawn);
+
+        const again = drawn.buildings.children.map(({ geometry }) => geometry);
+
+        assert.ok(again.every((geometry) => !buildings.includes(geometry) && held(geometry) === buffers(geometry).length));
+        assert.equal(again.reduce((sum, { attributes }) => sum + attributes.position.count, 0), buildings.reduce((sum, { attributes }) => sum + attributes.position.count, 0));
+        chunks.dispose();
+        wilds.dispose();
+    });
+
+    it("has all of a chunk it's drawn given to the graphics card over the frames after, wherever the camera looks (sending.js): each mesh drawn once in a pass of its own though it's out of view, and left culled as it was; and its ground again, drawn coarser", () => {
+        const overworld = world.maps.town;
+        const [sx, sy] = world.spawns.player.map((v) => Math.floor(v / CHUNK));
+        const wild = [-2, -1, 0, 1, 2].flatMap((dy) => [-2, -1, 0, 1, 2].map((dx) => overworld.chunk(sx + dx, sy + dy))).find(({ trees, features }) => trees.length > 2 && features.some(({ kind }) => kind !== "arch" && kind !== "aqueduct"));
+        const chunks = new Chunks(world, { undergrowth: 0 });
+        const scene = new THREE.Scene().add(chunks.object);
+        // (A renderer as three.js's is to it: what's shown that the camera's layers see and isn't
+        // culled away drawn, none of it in view, and told so; what each drawing drew kept)
+        const passes = [];
+        const renderer = {
+            autoClear: true,
+            shadowMap: { autoUpdate: true, needsUpdate: false },
+            info: { render: { frame: 0, calls: 0, triangles: 0, points: 0, lines: 0 } },
+            getViewport: (target) => target.set(0, 0, 800, 600),
+            getScissor: (target) => target.set(0, 0, 800, 600),
+            getScissorTest: () => false,
+            setViewport: noop,
+            setScissor: noop,
+            setScissorTest: noop,
+            render(given, camera) {
+                const drawn = [];
+
+                given.traverseVisible((node) => node.isMesh && node.layers.test(camera.layers) && !node.frustumCulled && drawn.push(node));
+                passes.push(drawn);
+                drawn.forEach((node) => node.onAfterRender(this, given, camera, node.geometry, node.material, null));
+            },
+        };
+
+        // (None of another test's left waiting: those are in no scene, and wait there)
+        sendSome(renderer, scene, undefined, Infinity);
+        assert.equal(passes.length, 0);
+        chunks.fill(wild.x0 + CHUNK / 2, wild.y0 + CHUNK / 2, 0);
+
+        const [drawn] = chunks.drawn.values();
+        const meshes = [];
+
+        drawn.object.traverse((node) => node.isMesh && meshes.push(node));
+
+        const names = new Set(meshes.map(({ name }) => name));
+        const waiting = () => meshes.filter((mesh) => Object.hasOwn(mesh, "onAfterRender")).length;
+
+        assert.ok(["ground", "wilds", "crown shadows", "litter"].every((name) => names.has(name)), [...names].join());
+        assert.equal(waiting(), meshes.length, "every mesh of it waiting its turn");
+        assert.ok(meshes.every((mesh) => mesh.frustumCulled));
+
+        for (let frames = 0; waiting() > 0 && frames < 100; frames++) {
+            const now = sendSome(renderer, scene);
+
+            assert.ok(now >= 1 && now <= 8, `${now} in a frame`);
+            assert.equal(passes.at(-1).length, now, "each drawn, out of view as it is");
+            assert.ok(meshes.every((mesh) => mesh.frustumCulled && mesh.layers.mask === 1), "culled again, each as it was");
+        }
+
+        assert.deepEqual(new Set(passes.flat()), new Set(meshes), "every one");
+        assert.equal(passes.flat().length, meshes.length, "once");
+        assert.equal(sendSome(renderer, scene), 0);
+
+        // (Its ground drawn with its corners further apart: made again, and sent again)
+        const ground = meshes.find(({ name }) => name === "ground");
+
+        chunks.setSpacing([2]);
+        assert.equal(waiting(), 1);
+        assert.equal(sendSome(renderer, scene), 1);
+        assert.deepEqual(passes.at(-1), [ground]);
+        chunks.dispose();
+    });
+
+    it("paints each sign only as finely as it's seen: a quarter each way while it's far from the player, from the start, as the quality has them once it's near, kept so till it's well off again; one painted again a frame", async () => {
+        const place = world.maps.town.settlements.places.find(({ kind, id }) => kind === "village" && id !== world.start.id);
+        const [cx, cy] = place.at.map((v) => Math.floor(v / CHUNK));
+        // (The player in the chunk east of the village's, well past its edge)
+        const outside = [(cx + 1) * CHUNK + DETAIL_NEAR + SIGNS_KEPT + 4, place.at[1]];
+        const built = async (chunks) => {
+            const drawn = chunks.drawn.get(cy * CHUNKS + cx);
+
+            for (let frames = 0; (drawn.job || !drawn.buildings) && frames < 20000; frames++) {
+                chunks.update(...outside, { budget: 1 });
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+
+            return drawn;
+        };
+        const chunks = new Chunks(world, { undergrowth: 0 });
+        const every = () => [...chunks.drawn.values()].flatMap(({ signs }) => signs ?? []);
+        const painted = ({ texture }) => texture.userData.detail;
+        const off = ({ at }, [x, z]) => Math.hypot(at.x - x, at.z - z) - at.radius;
+        // (Those painted more coarsely than they're seen from somewhere, and those more finely than
+        // they need be, well off: [near, far] how finely near ones and far ones are painted)
+        const lacking = (where, [near, far] = [1, 0.25]) => every().filter((sign) => painted(sign) < (off(sign, where) <= DETAIL_NEAR ? near : far)).length;
+        const spare = (where, [, far] = [1, 0.25]) => every().filter((sign) => off(sign, where) > DETAIL_NEAR + SIGNS_KEPT && painted(sign) > far).length;
+        // (Frames with no time to build in: each paints one sign again at most)
+        const frames = (where, count) => {
+            for (let k = 0; k < count; k++) {
+                chunks.update(...where, { budget: 0 });
+            }
+        };
+
+        signDetail(1);
+        SIGN_SCREEN.value = 0;
+        chunks.fill(...outside, 1);
+
+        const drawn = await built(chunks);
+        const signs = drawn.signs.length;
+
+        assert.ok(signs >= 3, `${signs} signs`);
+        assert.deepEqual(drawn.signs.map(painted), drawn.signs.map(() => 0.25), "painted small as they were built");
+        assert.ok(drawn.signs.every((sign) => off(sign, outside) > DETAIL_NEAR + SIGNS_KEPT && sign.mesh.material.map === sign.texture));
+
+        // (The tavern's board: a name no other has)
+        const board = drawn.signs.find(({ mesh }) => mesh.material.name.startsWith("board ") && mesh.material.name !== "board guild");
+        const small = board.texture;
+        let gone = 0;
+
+        assert.deepEqual([small.image.width, small.image.height], [512, 83]);
+        small.addEventListener("dispose", () => gone++);
+
+        // (Walked up to it: every sign within DETAIL_NEAR painted again as the quality has them,
+        // one a frame, what it showed let go of; then, one a frame, those now well off made small)
+        const here = [board.at.x, board.at.z];
+        const near = lacking(here);
+        const far = spare(here);
+
+        assert.ok(near >= 1 && near <= every().length);
+
+        for (let frame = 1; frame <= near; frame++) {
+            frames(here, 1);
+            assert.equal(lacking(here), near - frame, `frame ${frame}`);
+            assert.equal(spare(here), far, "the coarse ones first");
+        }
+
+        assert.equal(painted(board), 1);
+        assert.deepEqual([board.texture.image.width, board.texture.image.height], [2048, 330]);
+        assert.ok(board.mesh.material.map === board.texture && board.texture !== small);
+        assert.equal(gone, 1);
+
+        for (let frame = 1; frame <= far; frame++) {
+            frames(here, 1);
+            assert.equal(spare(here), far - frame);
+        }
+
+        // (A little way off again, kept as it is; well off, painted small again)
+        const fine = board.texture;
+
+        frames([board.at.x + board.at.radius + DETAIL_NEAR + SIGNS_KEPT - 2, board.at.z], every().length);
+        assert.equal(board.texture, fine);
+        frames([board.at.x + board.at.radius + DETAIL_NEAR + SIGNS_KEPT + 2, board.at.z], every().length);
+        assert.equal(painted(board), 0.25);
+        frames(outside, every().length);
+        assert.deepEqual([lacking(outside), spare(outside)], [0, 0]);
+        assert.deepEqual(drawn.signs.map(painted), drawn.signs.map(() => 0.25));
+
+        // (On a taller screen a quarter's coarser than they're seen from there: a half, those well
+        // off painted again; and on Low, where near ones are a half, none finer near)
+        SIGN_SCREEN.value = pixelsAcross(2160, 36, 16 / 9);
+        assert.equal(lacking(outside, [1, 0.5]), every().length - every().filter((sign) => painted(sign) === 1).length);
+        frames(outside, every().length);
+        assert.deepEqual(drawn.signs.map(painted), drawn.signs.map(() => 0.5));
+        signDetail(QUALITY.low.signs);
+        frames(here, every().length);
+        assert.deepEqual(drawn.signs.map(painted), drawn.signs.map(() => 0.5), "as they are: no finer on Low");
+        signDetail(1);
+        SIGN_SCREEN.value = 0;
+        chunks.dispose();
+
+        // (A lab's, whose camera goes where it likes: all as the quality has them)
+        const lab = new Chunks(world, { undergrowth: 0, farSigns: false });
+
+        lab.fill(...outside, 1);
+        assert.deepEqual((await built(lab)).signs.map(painted), drawn.signs.map(() => 1));
+        lab.dispose();
     });
 
     it("draws the yards behind a settlement's houses that are there (core/settlements.js) on the ground as it lies, what's grown in their beds sown with the undergrowth", () => {

@@ -14,9 +14,10 @@
 // every time; each variant once, then copied wherever it stands. Every kind's bark is drawn side
 // by side on one picture, and its leaves on another, so all the trees share two materials; and
 // planted (plantTrees) they're merged a tile of the map at a time, so the camera (and the sun's
-// shadows) draw only the tiles in view. In the world outside, where there are far more of them
-// and they come and go as the player does (world/chunks3d.js), each variant is kept once and
-// drawn wherever it stands (Woodland), only those in view.
+// shadows) draw only the tiles in view: the labs', which have no world round them. In the world
+// outside, where there are far more of them and they come and go as the player does
+// (world/chunks3d.js), each variant is kept once and drawn wherever it stands (Woodland), only
+// those in view; the start town's among them (town3d.js).
 //
 // The leaves don't cast shadows themselves: thousands of overlapping cards, each tested against
 // its picture, would cost more to draw into the sun's shadows than everything else in the view.
@@ -28,6 +29,7 @@ import { fireLit } from "../../firelight.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRandom } from "../../../core/random.js";
 import { TREE_KINDS } from "../../../core/setpieces/pieces.js";
+import { releaseGeometry } from "../../release.js";
 import { WIND_GLSL } from "../../wind.js";
 
 /**
@@ -1601,6 +1603,23 @@ const WHITE = [1, 1, 1];
 const _turned = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _at = new THREE.Vector3();
+const _corner = new THREE.Vector3();
+
+// The box round a variant's wood and leaves where it stands (`matrix`), corner by corner: the
+// very box plantTrees works out from its merged copy, whose corners are kept as 32-bit floats
+function standing(variant, matrix) {
+    const { wood, leaves } = grownGeometry(variant);
+    const box = new THREE.Box3();
+
+    for (const { attributes } of [wood, leaves]) {
+        for (let k = 0; k < attributes.position.count; k++) {
+            _corner.fromBufferAttribute(attributes.position, k).applyMatrix4(matrix);
+            box.expandByPoint(_corner.set(Math.fround(_corner.x), Math.fround(_corner.y), Math.fround(_corner.z)));
+        }
+    }
+
+    return box;
+}
 
 /**
  * Trees planted and felled a lot at a time, as the world outside is drawn round the player
@@ -1645,9 +1664,11 @@ export class Woodland {
      * Plant a lot of trees: [{ x, z (their trunks' feet, metres), variant, size, turn, tint (its
      * leaves' colour: world/canopy.js) }]. Returns the lot: { object (a Group of their shells and
      * the patches round their feet, to add to the scene), boxes (each tree's Box3 above the
-     * ground, in order), ids }.
+     * ground, in order), ids }. Each box is its variant's, turned and sized with it (wider than
+     * the tree, turned); or, `fitted`, round its own corners where it stands, just as plantTrees
+     * has it (the start town's: town3d.js).
      */
-    plant(placements, groundAt = () => 0) {
+    plant(placements, groundAt = () => 0, { fitted = false } = {}) {
         const shells = [];
         const grounds = [];
         const boxes = [];
@@ -1668,7 +1689,7 @@ export class Woodland {
             this.leaves.setColorAt(pair[1], _tint.setRGB(tint[0], tint[1], tint[2], THREE.LinearSRGBColorSpace));
             ids.push(pair);
 
-            const placed = box.clone().applyMatrix4(_matrix);
+            const placed = fitted ? standing(variant, _matrix) : box.clone().applyMatrix4(_matrix);
 
             placed.min.y = Math.max(y, placed.min.y);
             boxes.push(placed);
@@ -1684,7 +1705,8 @@ export class Woodland {
         object.name = "woodland lot";
 
         if (shells.length) {
-            const cast = new THREE.Mesh(mergeGeometries(shells), shadows);
+            // (The lot's shells let go of by the page once the graphics card has them: release.js)
+            const cast = new THREE.Mesh(releaseGeometry(mergeGeometries(shells)), shadows);
 
             cast.name = shadows.name;
             cast.matrixAutoUpdate = false;

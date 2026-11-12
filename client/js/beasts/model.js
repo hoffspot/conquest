@@ -16,6 +16,7 @@ import { candidatesAt, tierAt } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
 import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
+import { heldOnPage } from "../world/release.js";
 import { BEAMS, EnergyBreath } from "./beam.js";
 import { Breath } from "./breath.js";
 
@@ -1019,12 +1020,12 @@ export function fetchModelsWith(downloader) {
 }
 
 // A model fetched (a Blob) read: not kept by the loader (readGltf), as it's let go of here
-// (forgetModels)
-async function readBlob(blob) {
+// (forgetModels); `options` as readGltf takes them (a skin's `materials`)
+async function readBlob(blob, options) {
     const url = URL.createObjectURL(blob);
 
     try {
-        return await readGltf(url);
+        return await readGltf(url, options);
     } finally {
         URL.revokeObjectURL(url);
     }
@@ -1052,10 +1053,11 @@ async function readSkins(id, gltf, { priority, page }) {
                     skin,
                     (async () => {
                         try {
-                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await readGltf(new URL(hashed(file.path, file.hash), page).href);
+                            // (Its materials made as it's read: no mesh of its own need wear them)
+                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob, { materials: true })) : await readGltf(new URL(hashed(file.path, file.hash), page).href, { materials: true });
 
                             if (worn) {
-                                gltf.skins[skin] = await worn.parser.getDependencies("material");
+                                gltf.skins[skin] = worn.materials;
                             }
                         } catch (error) {
                             console.warn(`Couldn't read ${id}'s skin ${skin}`, error);
@@ -1506,6 +1508,56 @@ export function keptModels() {
     return { models: assets.size, unheld: [...unheld.keys()].filter((asset) => assets.has(asset)).length };
 }
 
+// How many bytes a model's clips' keys are (each track's times and values, once however many share
+// them), worked out again only when it has more clips (one lent it: lend)
+const clipsCounted = new WeakMap();
+
+function clipBytes(gltf) {
+    const known = clipsCounted.get(gltf);
+
+    if (known?.clips === gltf.animations.length) {
+        return known.bytes;
+    }
+
+    const arrays = new Set();
+    let bytes = 0;
+
+    for (const clip of gltf.animations) {
+        for (const track of clip.tracks) {
+            for (const array of [track.times, track.values]) {
+                if (array && !arrays.has(array)) {
+                    arrays.add(array);
+                    bytes += array.byteLength;
+                }
+            }
+        }
+    }
+
+    clipsCounted.set(gltf, { clips: gltf.animations.length, bytes });
+
+    return bytes;
+}
+
+/**
+ * How many bytes of the page's own copies the models and the scenes read hold (world/release.js
+ * heldOnPage): their meshes' shapes, their pictures and their skins' till the graphics card has
+ * them (let go of then: releaseCompressed), and their clips' keys; each file once, however many
+ * kinds are drawn from it, whether any is or not. For the game's memoryNow: one read and never
+ * drawn from is held here alone, its pictures and all. `counted`: what's been counted already (a
+ * Set, heldOnPage's: the bodies drawn from them share their shapes and pictures), left out.
+ */
+export function modelsHeld(counted = new Set()) {
+    const gltfs = [...new Set([...read.values(), ...sceneries.values()])];
+    const skins = gltfs.flatMap((gltf) => Object.values(gltf.skins ?? {}).flat());
+    const copies = heldOnPage(
+        gltfs.map((gltf) => gltf.scene),
+        skins,
+        counted,
+    );
+
+    return copies + gltfs.reduce((sum, gltf) => sum + clipBytes(gltf), 0);
+}
+
 /**
  * Which kinds' models to ask for (wantModel), by where the player is (`at`: [x, z], metres) and
  * the great lairs (`lairs`: [{ at, beast }], as game.js #lairsAloft lists them, slain or not):
@@ -1528,6 +1580,21 @@ export function modelsMet(plan, at, home, dark) {
     return candidatesAt(land, tierAt(at, [home], land.biome), dark)
         .filter(({ id }) => MODELS[id])
         .map(({ id }) => id);
+}
+
+/**
+ * Which kinds' models to read now (wantModel) and which only to fetch and keep (fetchModel), of
+ * those `predicted` (near one of their lairs, or that may be met where the player is: modelsNear,
+ * modelsMet), those `close` (whose lair the player's all but at, or an open rift pours out) and
+ * those `met` (one of their kind in the battle). `sparing` (a touch screen, short of memory):
+ * what's only predicted is fetched, not read, so its 10 to 20 MB isn't held on the page with none
+ * drawn from it, and only what's close or met is read; else all of them are read, as they were.
+ * Returns { read, fetch }, each kind once. A pure function.
+ */
+export function modelsAhead({ predicted = [], close = [], met = [], sparing = false }) {
+    const read = new Set(sparing ? [...close, ...met] : [...predicted, ...close, ...met]);
+
+    return { read: [...read], fetch: [...new Set(predicted)].filter((kind) => !read.has(kind)) };
 }
 
 const smoothstep = (u) => {
@@ -1817,6 +1884,52 @@ const shadowShapes = new WeakMap();
  */
 export const SHADOW_DETAIL = Object.freeze({ share: 0.3, error: 0.04 });
 
+// Whether two matrices are the same, to a ten-thousandth of each number
+const alike = (a, b) => a.elements.every((value, n) => Math.abs(value - b.elements[n]) <= 1e-4 * Math.max(1, Math.abs(value)));
+
+// How far a mesh has been moved since it was bound to its skin
+const movedSince = (mesh) => new THREE.Matrix4().multiplyMatrices(mesh.matrixWorld, mesh.bindMatrixInverse);
+
+/**
+ * Where a mesh's skin puts it against where another's does (`first`'s: both of one model, their
+ * world matrices worked out), bone by bone: which of the first's bones each of its own is (`into`:
+ * -1, none of them) and the one matrix that takes its corners to where the first's skin puts them
+ * as its own would (`moved`: the pipeline packs each mesh's positions small, its skin's inverses
+ * making them full size again; the same bones, other inverses). Null if there's no one such
+ * matrix: its skin puts it elsewhere than the first's would, bone by bone, or the two have been
+ * moved differently since they were bound.
+ */
+function skinnedAs(first, mesh) {
+    const bones = first.skeleton.bones;
+    const into = mesh.skeleton.bones.map((bone) => bones.indexOf(bone));
+    const to = new THREE.Matrix4();
+    const from = new THREE.Matrix4();
+    const between = new THREE.Matrix4();
+    let moved = alike(movedSince(mesh), movedSince(first)) ? null : false;
+
+    for (const [k, j] of into.entries()) {
+        if (moved === false) {
+            break;
+        }
+
+        if (j < 0) {
+            continue;
+        }
+
+        to.copy(first.skeleton.boneInverses[j]).multiply(first.bindMatrix).invert();
+        from.copy(mesh.skeleton.boneInverses[k]).multiply(mesh.bindMatrix);
+        between.multiplyMatrices(to, from);
+
+        if (!moved) {
+            moved = between.clone();
+        } else if (!alike(between, moved)) {
+            moved = false;
+        }
+    }
+
+    return moved ? { into, moved } : null;
+}
+
 /**
  * One shape for a model's shadow, joined from the meshes it's cast from (`meshes`: its least
  * detailed level's, each a part of it in one of its materials, in `scene`, one drawn from it): one
@@ -1849,14 +1962,7 @@ function joinedShape(gltf, scene, meshes, drawn) {
     }
 
     const [first] = meshes;
-    const bones = first.skeleton.bones;
     const names = drawn ? Object.keys(first.geometry.attributes).filter((name) => !["position", "skinIndex", "skinWeight"].includes(name)) : [];
-    const to = new THREE.Matrix4();
-    const from = new THREE.Matrix4();
-    const between = new THREE.Matrix4();
-    const alike = (a, b) => a.elements.every((value, n) => Math.abs(value - b.elements[n]) <= 1e-4 * Math.max(1, Math.abs(value)));
-    // (How far a mesh has been moved since it was bound to its skin)
-    const since = (mesh) => new THREE.Matrix4().multiplyMatrices(mesh.matrixWorld, mesh.bindMatrixInverse);
     const each = [];
     const none = () => {
         known.set(key, null);
@@ -1867,40 +1973,19 @@ function joinedShape(gltf, scene, meshes, drawn) {
     scene.updateMatrixWorld(true);
 
     for (const mesh of meshes) {
-        // (Where its skin puts it, bone by bone, against where the first's does: the same for
-        // every bone, or it isn't joined; it and the first moved alike since they were bound)
-        const into = mesh.skeleton.bones.map((bone) => bones.indexOf(bone));
-        let moved = alike(since(mesh), since(first)) ? null : false;
-
         if (names.some((name) => mesh.geometry.attributes[name]?.itemSize !== first.geometry.attributes[name].itemSize)) {
             return none();
         }
 
-        for (const [k, j] of into.entries()) {
-            if (moved === false) {
-                break;
-            }
+        // (Where its skin puts it, bone by bone, against where the first's does: the same for
+        // every bone, or it isn't joined; it and the first moved alike since they were bound)
+        const as = skinnedAs(first, mesh);
 
-            if (j < 0) {
-                continue;
-            }
-
-            to.copy(first.skeleton.boneInverses[j]).multiply(first.bindMatrix).invert();
-            from.copy(mesh.skeleton.boneInverses[k]).multiply(mesh.bindMatrix);
-            between.multiplyMatrices(to, from);
-
-            if (!moved) {
-                moved = between.clone();
-            } else if (!alike(between, moved)) {
-                moved = false;
-            }
-        }
-
-        if (!moved) {
+        if (!as) {
             return none();
         }
 
-        each.push({ mesh, into, moved, turned: new THREE.Matrix3().getNormalMatrix(moved) });
+        each.push({ mesh, into: as.into, moved: as.moved, turned: new THREE.Matrix3().getNormalMatrix(as.moved) });
     }
 
     const corners = each.reduce((sum, { mesh }) => sum + mesh.geometry.attributes.position.count, 0);
@@ -2051,6 +2136,109 @@ export function partOf(node) {
     return (named?.name ?? "").replace(/_\d+$/, "").replace(/\.?lod\d+$/, "").replace(/_\d+$/, "");
 }
 
+// What's worked out once for a model as read and kept for everyone drawn from it, let go of with
+// it (a WeakMap by the model as read, each a Map): whether one of its meshes can be posed by
+// another's skeleton, and with what (posedBy); and the sphere round one drawn from it (modelBody)
+const worked = new WeakMap();
+
+function workedFor(gltf) {
+    if (!worked.has(gltf)) {
+        // (Where each of its meshes is, as it was read: what their skins are compared by)
+        gltf.scene.updateMatrixWorld(true);
+        worked.set(gltf, new Map());
+    }
+
+    return worked.get(gltf);
+}
+
+/**
+ * How a mesh of a model as read (`mesh`, of `gltf`) is bound to be posed by another's skeleton
+ * (`first`'s) in place of its own, drawn just as it was: the matrix it's bound with (three.js's
+ * bindMatrix, the first's times what takes its corners to where the first's skin puts them as its
+ * own would: skinnedAs, the test meshes are joined by). The pipeline gives each mesh of a model of
+ * many parts a skin of its own over the same bones, so one drawn from it worked out and sent the
+ * same bones' places once a mesh. Null if it can't be: its skin has other bones than the first's,
+ * or in another order (its corners say which bone by its number), or puts it elsewhere bone by
+ * bone. Worked out once for each pair.
+ */
+function posedBy(gltf, first, mesh) {
+    const known = workedFor(gltf);
+    const key = `posed ${first.uuid} ${mesh.uuid}`;
+
+    if (!known.has(key)) {
+        const [bones, own] = [first.skeleton.bones, mesh.skeleton.bones];
+        const as = own.length === bones.length && own.every((bone, k) => bone === bones[k]) ? skinnedAs(first, mesh) : null;
+
+        known.set(key, as ? new THREE.Matrix4().multiplyMatrices(first.bindMatrix, as.moved) : null);
+    }
+
+    return known.get(key);
+}
+
+/**
+ * A copy of a model as read to pose and draw on its own (`gltf`'s scene: its nodes and bones its
+ * own, its meshes' shapes and materials the model's, as three.js's SkeletonUtils clone makes
+ * one), but for two things:
+ *  - the meshes `worn` says it doesn't wear are left out of it, not copied and then taken out
+ *    (of the Order's 78, a brother wears 21: each copied had a skeleton of its own made for it);
+ *  - its meshes are posed by one skeleton between them where they can be (posedBy), not one
+ *    each: an Order brother's nearest level worked out and sent its 149 bones' places 8 times a
+ *    frame, a rider's 443 bones' 16 times, 484 KB of it.
+ * Null if it can't be made so (a bone of its skeleton hung from a mesh it doesn't wear): made
+ * the old way then.
+ */
+function copyOf(gltf, worn = () => true) {
+    const copies = new Map();
+    const copy = (node) => {
+        if (node.isMesh && !worn(node)) {
+            return null;
+        }
+
+        const made = node.clone(false);
+
+        copies.set(node, made);
+
+        for (const child of node.children) {
+            const one = copy(child);
+
+            if (one) {
+                made.add(one);
+            }
+        }
+
+        return made;
+    };
+    const scene = copy(gltf.scene);
+    // (Each skeleton made for it, with the mesh of the model's it was first made for)
+    const skeletons = [];
+
+    for (const [from, to] of copies) {
+        if (!from.isSkinnedMesh) {
+            continue;
+        }
+
+        const shared = skeletons.find(({ first }) => posedBy(gltf, first, from));
+
+        if (shared) {
+            to.bind(shared.skeleton, posedBy(gltf, shared.first, from));
+            continue;
+        }
+
+        const skeleton = from.skeleton.clone();
+
+        skeleton.bones = from.skeleton.bones.map((bone) => copies.get(bone));
+
+        if (skeleton.bones.includes(undefined)) {
+            return null;
+        }
+
+        to.bind(skeleton, from.bindMatrix);
+        skeletons.push({ first: from, skeleton });
+    }
+
+    return scene;
+}
+
 /**
  * A body (BeastAvatar's plan) made from a kind's model as read (`gltf`), at the size BeastAvatar
  * scales it by (`scale`: drawn at MODELS' `length` all the same), in one of its skins (`skin`: ""
@@ -2060,7 +2248,11 @@ export function partOf(node) {
  */
 export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", parts = null } = {}) {
     const model = MODELS[id];
-    const scene = clone(gltf.scene);
+    const wearing = parts ? new Set(parts) : null;
+    // (Only the parts it wears of a model whose parts are kept apart (the pipeline's `join`: the
+    // Order of the Bell's one body, its armour, helms and arms each a part), every level of each;
+    // the rest left out of what's drawn, and of the copy)
+    const scene = copyOf(gltf, wearing ? (node) => wearing.has(partOf(node)) : undefined) ?? clone(gltf.scene);
     const inner = new THREE.Group();
     const size = model.length / model.made.long / scale;
     const levels = [];
@@ -2073,15 +2265,12 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
     // (Made standing above where it is: sunk to the ground)
     scene.position.y = -(model.sink ?? 0);
 
-    // (Only the parts it wears of a model whose parts are kept apart (the pipeline's `join`: the
-    // Order of the Bell's one body, its armour, helms and arms each a part), every level of each;
-    // the rest left out of what's drawn)
-    if (parts) {
-        const worn = new Set(parts);
+    // (Copied the old way, all of it: what it doesn't wear taken out)
+    if (wearing) {
         const off = [];
 
         scene.traverse((node) => {
-            if (node.isMesh && !worn.has(partOf(node))) {
+            if (node.isMesh && !wearing.has(partOf(node))) {
                 off.push(node);
             }
         });
@@ -2258,33 +2447,54 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
 
     showLevel(0);
 
+    // Its clips, each made its mixer's to play (an action: its tracks bound to this copy's bones)
+    // when it's first given any weight, not all of them as it's made: an Order brother's 34 were
+    // 1.16 MB a copy, most never played; but its idle, made now, so that every bone it moves is
+    // the mixer's from the start, put back as it was read when no clip moves it, as ever
     const mixer = new THREE.AnimationMixer(scene);
-    const actions = new Map(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
+    const clips = new Map(gltf.animations.map((clip) => [clip.name, clip]));
+    const actions = new Map();
     const lengths = Object.fromEntries(gltf.animations.map((clip) => [clip.name, clip.duration]));
+    const actionOf = (name) => {
+        if (!actions.has(name) && clips.has(name)) {
+            const action = mixer.clipAction(clips.get(name));
 
-    for (const action of actions.values()) {
-        action.play();
-        action.setEffectiveWeight(0);
-    }
+            action.play();
+            action.setEffectiveWeight(0);
+            actions.set(name, action);
+        }
+
+        return actions.get(name) ?? null;
+    };
 
     // (One sphere round it however it moves, for all its levels to be culled by: worked out from
     // its least detailed one as it stands, its skin on (its positions are packed small, made full
-    // size by its skin), made big enough for its wings spread wide)
-    const idle = actions.get(model.clips.idle);
+    // size by its skin), made big enough for its wings spread wide; once for everyone drawn from
+    // the model so, kept with it: every corner of that level is put through its bones to find it)
+    const idle = actionOf(model.clips.idle);
+    const sphered = workedFor(gltf);
+    const round = `sphere ${id} ${least.map(({ geometry }) => geometry.uuid).join(" ")}`;
 
     idle.setEffectiveWeight(1);
     mixer.update(0);
-    scene.updateMatrixWorld(true);
 
-    const sphere = new THREE.Sphere();
+    if (!sphered.has(round)) {
+        const all = new THREE.Sphere();
 
-    for (const mesh of least) {
-        mesh.computeBoundingSphere();
-        sphere.isEmpty() ? sphere.copy(mesh.boundingSphere) : sphere.union(mesh.boundingSphere);
+        scene.updateMatrixWorld(true);
+
+        for (const mesh of least) {
+            mesh.computeBoundingSphere();
+            all.isEmpty() ? all.copy(mesh.boundingSphere) : all.union(mesh.boundingSphere);
+        }
+
+        all.radius *= 1.8;
+        sphered.set(round, all);
     }
 
+    const sphere = sphered.get(round).clone();
+
     idle.setEffectiveWeight(0);
-    sphere.radius *= 1.8;
 
     for (const mesh of [...levels.flat(), ...casters]) {
         mesh.boundingSphere = sphere;
@@ -2391,6 +2601,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         beam,
         lengths,
 
+        /** How many of its clips have been made its mixer's to play so far (each when it's first given any weight). */
+        get clipsBound() {
+            return actions.size;
+        },
+
         /** Its clips as they were last posed ([{ clip, weight, time }]: poseOf's). */
         get posed() {
             return lastPosed;
@@ -2417,7 +2632,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
             }
 
             for (const { clip, weight, time } of posed) {
-                const action = actions.get(clip);
+                // (Made the first time it's given any weight: actionOf)
+                const action = weight > 0 ? actionOf(clip) : (actions.get(clip) ?? null);
 
                 if (action) {
                     action.setEffectiveWeight(weight);
@@ -2496,6 +2712,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
         // One of its clips (by name: `lengths`' keys) alone, `time` seconds into it, as it was
         // made: the model viewer's, to watch each of them (not what the game asks of a body: pose)
         hold(clip, time) {
+            actionOf(clip);
+
             for (const [name, action] of actions) {
                 action.setEffectiveWeight(name === clip ? 1 : 0);
                 action.time = name === clip ? time : action.time;

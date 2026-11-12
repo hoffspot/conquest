@@ -1911,6 +1911,69 @@ describe("skirts, gowns and aprons (drapes.js)", () => {
         }
     });
 
+    it("works out a skirt's swing only when its legs have been posed since: between poses the cloth goes where the body does, swung as it was", () => {
+        // (Most bodies are posed every second to fourth frame, and drawn every frame: world/avatar.js)
+        const body = figure(FOLK.wench.shape);
+        const built = buildDrape(body, "gown", measureBody(body));
+        const skeleton = drapeSkeleton(body.rig, built.profile);
+        const walker = new Walker(body, WALK_STYLES.natural);
+        const own = skeleton.bones.slice(-DRAPE_BONES.length);
+        const places = () => own.flatMap((bone) => [...bone.matrixWorld.elements]);
+        const near = (a, b, within) => a.every((value, k) => Math.abs(value - b[k]) <= within);
+        // (One worked out afresh where the body is now, to tell it by)
+        const afresh = () => {
+            const other = drapeSkeleton(body.rig, built.profile);
+
+            other.swing();
+
+            return other.bones.slice(-DRAPE_BONES.length).flatMap((bone) => [...bone.matrixWorld.elements]);
+        };
+
+        assert.equal(skeleton.worked, 0);
+
+        for (let frame = 0; frame < 20; frame++) {
+            walker.update(1 / 30, { speed: NATURAL_SPEED });
+            body.object.updateMatrixWorld(true);
+            skeleton.swing();
+            assert.equal(skeleton.worked, frame + 1, "posed: worked out");
+            assert.deepEqual(places(), afresh());
+        }
+
+        // Drawn again, not posed: not worked out again, and the same
+        const still = places();
+
+        skeleton.swing();
+        skeleton.swing();
+        assert.equal(skeleton.worked, 20);
+        assert.deepEqual(places(), still);
+
+        // Gone on and turned with its actor between poses: the cloth with it, swung as it was
+        for (let frame = 0; frame < 3; frame++) {
+            body.object.position.x += 0.04;
+            body.object.position.z -= 0.02;
+            body.object.rotation.y += 0.05;
+            body.object.updateMatrixWorld(true);
+            skeleton.swing();
+            assert.equal(skeleton.worked, 20);
+            assert.ok(near(places(), afresh(), 1e-6), "as one worked out afresh where it is now");
+            assert.ok(!near(places(), still, 1e-3), "moved with it");
+        }
+
+        // Posed again: worked out again
+        walker.update(1 / 30, { speed: NATURAL_SPEED });
+        body.object.updateMatrixWorld(true);
+        skeleton.swing();
+        assert.equal(skeleton.worked, 21);
+        assert.deepEqual(places(), afresh());
+
+        // (And if it's made bigger or smaller, a creature's size)
+        body.object.scale.setScalar(1.2);
+        body.object.updateMatrixWorld(true);
+        skeleton.swing();
+        assert.equal(skeleton.worked, 22);
+        assert.deepEqual(places(), afresh());
+    });
+
     it("bands a drape round in colours, sharply at their edges; and lays an apron over the skirt under it, as far out as it flares", () => {
         const { geometry } = buildDrape(f, "catShukaRed", measures);
         const colour = geometry.attributes.color;
@@ -2368,6 +2431,31 @@ describe("faces and skin (face.js, skin.js)", () => {
         assert.equal(new SkinMaterial().clone().customProgramCacheKey(), "skin");
         assert.equal(new HairMaterial().clone().customProgramCacheKey(), "hair");
         assert.equal(new SkinMaterial().roughness, 1, "the picture's roughness as it is");
+
+        // three.js r187's lighting, which works a surface's diffuse term out before the line that
+        // adds it (for its rough-diffuse option): skin wrapped the same in it, hair banded; and
+        // lighting unlike either says so, rather than leaving skin unlit by it
+        const ours = THREE.ShaderChunk.lights_physical_pars_fragment;
+        const r186 = "reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );";
+        const r187 = "vec3 diffuseBRDF = BRDF_Lambert( material.diffuseContribution );\n\n\treflectedLight.directDiffuse += irradiance * diffuseBRDF * ( 1.0 - F );";
+
+        assert.ok(ours.includes(r186) || ours.includes(r187.split("\n\n\t")[1]), "(this three.js's lighting: one or the other)");
+
+        try {
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours.replace(r186, r187);
+
+            const later = compiled(new SkinMaterial());
+
+            assert.ok(later.includes("vec3 skinLit = saturate( ( dot( geometryNormal, directLight.direction ) + SKIN_WRAP )") && later.includes("reflectedLight.directDiffuse += skinLit * directLight.color * diffuseBRDF * ( 1.0 - F );"), "wrapped, in r187's");
+            assert.ok(!later.includes("reflectedLight.directDiffuse += irradiance * diffuseBRDF"), "in place of three.js's");
+            assert.ok(compiled(new HairMaterial()).includes("hairBand( hairStrand, geometryNormal, hairHalfway"));
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours.replace(r186, "reflectedLight.directDiffuse += somethingElse;");
+            assert.throws(() => compiled(new SkinMaterial()), /three\.js's lighting has changed/);
+        } finally {
+            THREE.ShaderChunk.lights_physical_pars_fragment = ours;
+        }
+
+        assert.equal(compiled(new SkinMaterial()), skin, "(as it was)");
     });
 
     it("paints eyes with a dark pupil in the middle", () => {

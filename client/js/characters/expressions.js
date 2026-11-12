@@ -16,6 +16,7 @@
 //     character.expressions.mood = "smiling"      // its face at rest (null: none)
 
 import * as THREE from "three";
+import { releaseTexture } from "../world/release.js";
 
 /** The expressions a face can make, in the order their weights are kept. */
 export const EXPRESSIONS = Object.freeze(["blink", "squint", "smile", "angry", "sad", "frown", "browsUp", "browsKnit", "open", "snarl", "ah", "eh", "ee", "oo", "f"]);
@@ -71,9 +72,9 @@ const shared = new WeakMap();
 
 /**
  * A kit's expressions laid out for the GPU (made once): { names, slotOf (each render vertex's slot,
- * or -1: a character's geometry's `faceSlot`, its own attribute, as a geometry's attributes are let
- * go of with it), texture (each slot's moves for each expression, then each's turns of its
- * normal), slots }, or null for a body with none (MakeHuman's).
+ * or -1: every character's geometry's `faceSlot`, one attribute shared by them all,
+ * character.js skinningOf), texture (each slot's moves for each expression, then each's turns of
+ * its normal), slots }, or null for a body with none (MakeHuman's).
  */
 export function expressionData(human) {
     if (!shared.has(human)) {
@@ -159,6 +160,10 @@ function layOut(human) {
     const texture = new THREE.DataTexture(data, WIDTH, height, THREE.RGBAFormat, THREE.FloatType);
 
     texture.needsUpdate = true;
+
+    // (Read on the graphics card alone, by the shaders: the page's copy, 1.8 MB, let go of once
+    // it's there: world/release.js)
+    releaseTexture(texture);
 
     // (Read as a float in the shader: whole numbers, exactly)
     const Slots = slots <= 0x7fff ? Int16Array : Float32Array;

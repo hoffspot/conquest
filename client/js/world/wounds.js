@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { texelMap } from "../characters/garments.js";
+import { PICTURES } from "../characters/pictures.js";
 
 /** Shares of its hit points below which a character's wounds get worse: stages 1, 2 and 3. */
 export const THRESHOLDS = Object.freeze([0.75, 0.5, 0.25]);
@@ -24,8 +25,17 @@ export const THRESHOLDS = Object.freeze([0.75, 0.5, 0.25]);
 /** How badly wounded a character is: how many thresholds its hit points are below (0 to 3). */
 export const stageOf = (hp, maxHp) => THRESHOLDS.filter((share) => hp < share * maxHp).length;
 
-// The damage texture's size (texels a side): the same map the clothes are painted from
+// The damage texture's size (texels a side): the same map the clothes are painted from. A body
+// seen small has it smaller (characters/pictures.js: `LEAST` a side, each texel the mean of
+// those it's made from, as the graphics card would make its next level), by its wounds as
+// they're painted at SIZE: each keeps the texels it paints and what it paints there
 const SIZE = 512;
+const LEAST = Math.min(SIZE, PICTURES.least);
+
+// Where the wounds of a body seen small are laid out at SIZE to be made smaller from (all noughts
+// between one body's and the next's), and where a wound's texels are gathered as it's painted
+let scratch = null;
+let gathered = { at: new Uint32Array(4096), values: new Uint8Array(4096 * 4) };
 
 // Until its first blow, a character's drawn with this: no damage anywhere, one texel shared by
 // everyone, rather than a picture of its own (1.3 MB of GPU memory and 1 MB of the page's, and
@@ -248,9 +258,14 @@ export class Wounds {
         this.character = character;
         this.map = woundMap(character.kit);
 
-        /** Its damage painted (RGBA: blood, bruising, char, cut), and the picture of it; null, unhurt (UNHURT). */
+        /**
+         * Its damage painted (RGBA: blood, bruising, char, cut), `size` texels a side (as big as
+         * its body's pictures are held: Character.fitPictures), and the picture of it; null,
+         * unhurt (UNHURT).
+         */
         this.data = null;
         this.texture = null;
+        this.size = SIZE;
 
         /** The wounds and marks it has: [{ kind, stage, mark, vertex, centre, normal, turn, seed, arrow }]. */
         this.list = [];
@@ -318,6 +333,11 @@ export class Wounds {
 
         if (kind.glow) {
             this.glow[kind.glow] = GLOW_TIME[kind.glow];
+        }
+
+        // (Smaller than it's painted: made again from all its wounds, the new ones with them)
+        if (this.size < SIZE) {
+            this.#lay();
         }
 
         this.texture.needsUpdate = true;
@@ -433,6 +453,11 @@ export class Wounds {
 
         // Clothes put on since (a new outfit) get the wounds too, and a new skin shows under them
         this.#patch();
+
+        // (Its body seen bigger or smaller than its damage's picture is for: another, that size)
+        if (this.texture && this.size !== this.#sized()) {
+            this.#resize();
+        }
 
         const tone = this.character.look?.skin?.tone;
 
@@ -551,13 +576,31 @@ export class Wounds {
             return;
         }
 
-        this.data = new Uint8Array(SIZE * SIZE * 4);
-        this.texture = new THREE.DataTexture(this.data, SIZE, SIZE, THREE.RGBAFormat);
+        this.size = this.#sized();
+        this.data = new Uint8Array(this.size * this.size * 4);
+        this.texture = new THREE.DataTexture(this.data, this.size, this.size, THREE.RGBAFormat);
         this.texture.colorSpace = THREE.NoColorSpace;
         this.texture.magFilter = THREE.LinearFilter;
         this.texture.minFilter = THREE.LinearMipmapLinearFilter;
         this.texture.generateMipmaps = true;
         this.uniforms.damageMap.value = this.texture;
+    }
+
+    // How big its damage's picture is to be now (texels a side): as big as its body's pictures
+    // are held for how it's seen (as it's painted, for one not told: characters/pictures.js)
+    #sized() {
+        return Math.min(SIZE, Math.max(LEAST, this.character.pictures?.wanted ?? SIZE));
+    }
+
+    // Its damage's picture made again the size it's to be now, in place (the picture's still the
+    // one its materials draw with)
+    #resize() {
+        this.size = this.#sized();
+        this.data = new Uint8Array(this.size * this.size * 4);
+        this.#lay();
+        this.texture.dispose();
+        this.texture.image = { data: this.data, width: this.size, height: this.size };
+        this.texture.needsUpdate = true;
     }
 
     #repaint() {
@@ -570,16 +613,70 @@ export class Wounds {
             return;
         }
 
-        this.data.fill(0);
-
-        for (const wound of this.list) {
-            this.#paint(wound);
-        }
-
+        this.#lay();
         this.texture.needsUpdate = true;
     }
 
-    // Paint a wound onto the texels round it, in 3D on the base body
+    // Its damage's picture from all its wounds, as each was painted (`painted`: the texels it
+    // paints of a picture SIZE a side, and what it paints there): the most of each of blood,
+    // bruising, char and cut at each texel; and, smaller than that, each texel the mean of those
+    // it's made from (laid out at SIZE in `scratch` first, left all noughts after)
+    #lay() {
+        const { data, size } = this;
+
+        data.fill(0);
+
+        if (size === SIZE) {
+            for (const { painted } of this.list) {
+                most(data, painted);
+            }
+
+            return;
+        }
+
+        scratch ??= new Uint8Array(SIZE * SIZE * 4);
+
+        for (const { painted } of this.list) {
+            most(scratch, painted);
+        }
+
+        const by = SIZE / size;
+
+        for (const { painted } of this.list) {
+            const at = painted.at;
+
+            for (let k = 0; k < at.length; k++) {
+                const row = Math.floor(Math.floor(at[k] / SIZE) / by);
+                const column = Math.floor((at[k] % SIZE) / by);
+                const to = (row * size + column) * 4;
+
+                for (let channel = 0; channel < 4; channel++) {
+                    let sum = 0;
+
+                    for (let y = 0; y < by; y++) {
+                        for (let x = 0; x < by; x++) {
+                            sum += scratch[((row * by + y) * SIZE + column * by + x) * 4 + channel];
+                        }
+                    }
+
+                    data[to + channel] = Math.floor((sum + (by * by) / 2) / (by * by));
+                }
+            }
+        }
+
+        for (const { painted } of this.list) {
+            const at = painted.at;
+
+            for (let k = 0; k < at.length; k++) {
+                scratch.fill(0, at[k] * 4, at[k] * 4 + 4);
+            }
+        }
+    }
+
+    // Paint a wound onto the texels round it, in 3D on the base body: kept with it (`painted`:
+    // { at (each texel's place in a picture SIZE a side, rows from the bottom), values (its
+    // blood, bruising, char and cut there, a byte each) }), and laid on its damage's picture if
+    // that's the size it's painted (smaller, it's made again from them all: #lay)
     #paint(wound) {
         const kind = KINDS[wound.kind];
         const { positions, cells, normals } = this.map;
@@ -602,7 +699,7 @@ export class Wounds {
         // The texels within reach
         const [cx, cy, cz] = c.map((value) => Math.floor(value / CELL));
         const span = Math.ceil(reach / CELL);
-        const data = this.data;
+        let count = 0;
 
         for (let ix = cx - span; ix <= cx + span; ix++) {
             for (let iy = cy - span - (kind.drips ? Math.ceil(0.14 / CELL) : 0); iy <= cy + span; iy++) {
@@ -628,15 +725,35 @@ export class Wounds {
                         const level = d[0] * side[0] + d[2] * side[2];
                         const [r, g, b, a] = this.#shape(kind, wound, scale, { u, w, drop, level, r: Math.hypot(u, w) });
                         const row = SIZE - 1 - Math.floor(i / SIZE);
-                        const o = (row * SIZE + (i % SIZE)) * 4;
 
-                        data[o] = Math.min(255, Math.max(data[o], r * 255));
-                        data[o + 1] = Math.min(255, Math.max(data[o + 1], g * 255));
-                        data[o + 2] = Math.min(255, Math.max(data[o + 2], b * 255));
-                        data[o + 3] = Math.min(255, Math.max(data[o + 3], a * 255));
+                        // (None of it there: nothing to keep)
+                        if (!(r * 255 >= 1 || g * 255 >= 1 || b * 255 >= 1 || a * 255 >= 1)) {
+                            continue;
+                        }
+
+                        if (count === gathered.at.length) {
+                            const more = { at: new Uint32Array(count * 2), values: new Uint8Array(count * 8) };
+
+                            more.at.set(gathered.at);
+                            more.values.set(gathered.values);
+                            gathered = more;
+                        }
+
+                        gathered.at[count] = row * SIZE + (i % SIZE);
+                        gathered.values[count * 4] = Math.min(255, Math.max(0, r * 255));
+                        gathered.values[count * 4 + 1] = Math.min(255, Math.max(0, g * 255));
+                        gathered.values[count * 4 + 2] = Math.min(255, Math.max(0, b * 255));
+                        gathered.values[count * 4 + 3] = Math.min(255, Math.max(0, a * 255));
+                        count++;
                     }
                 }
             }
+        }
+
+        wound.painted = { at: gathered.at.slice(0, count), values: gathered.values.slice(0, count * 4) };
+
+        if (this.size === SIZE) {
+            most(this.data, wound.painted);
         }
     }
 
@@ -799,6 +916,19 @@ export class Wounds {
         }
 
         return [blood, bruise, char, cut];
+    }
+}
+
+// A wound as it's painted ({ at, values }: Wounds.#paint) laid on a picture SIZE a side: the most
+// of what's there and its own, at each of its texels
+function most(data, { at, values }) {
+    for (let k = 0; k < at.length; k++) {
+        const o = at[k] * 4;
+
+        data[o] = Math.max(data[o], values[k * 4]);
+        data[o + 1] = Math.max(data[o + 1], values[k * 4 + 1]);
+        data[o + 2] = Math.max(data[o + 2], values[k * 4 + 2]);
+        data[o + 3] = Math.max(data[o + 3], values[k * 4 + 3]);
     }
 }
 

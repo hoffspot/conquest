@@ -23,7 +23,14 @@
 //
 // A file the player's waiting for (at a place's door while its creatures' models come: app/
 // readying.js) is hurried: fetched before the rest, at quiet times too, and, playing alone, as
-// fast as the link goes.
+// fast as the link goes. Playing alone, one that nothing's come of yet is asked for whole, in one
+// request, not a part at a time: a browser asks for a part uncompressed (a script's Range sends
+// Accept-Encoding: identity), and a server that compresses what it sends (GitHub Pages: gzip)
+// sends the whole of a model 17% to 32% smaller than its parts come to, 27% over all the
+// creatures' (measured against the live site: a 1,000,000-byte part arrives as 1,000,000 bytes).
+// What comes is kept as it comes, as parts are; cut off, it's carried on a part at a time from
+// what arrived. Whatever isn't waited for, and everything while playing together, stays in parts:
+// those keep to the rate, and stop at the next part for a file more wanted.
 //
 // No Three.js here.
 
@@ -96,6 +103,13 @@ const BOOT_CACHE = "pellagos-boot-v2";
 const PARTS_CACHE = "pellagos-parts-v1";
 
 const TYPES = { glb: "model/gltf-binary", gltf: "model/gltf+json", bin: "application/octet-stream", png: "image/png", jpg: "image/jpeg", webp: "image/webp", ktx2: "image/ktx2" };
+
+/**
+ * What a request for a whole file says of itself (a header), for the service worker: the
+ * downloader's own, which it checks and keeps itself, so the worker hands it on from the server
+ * as it comes, as it does a part, not keeping a copy of its own (sw.js byHash).
+ */
+export const WHOLE = "X-Pellagos-Whole";
 
 /**
  * The rate to download at (bytes/s), and when each part may go. Given the time (ms) with every
@@ -632,17 +646,29 @@ export class Fetcher {
         }
     }
 
-    // The next part of a file (or, from a server that doesn't serve parts, the whole of it)
+    // Whether a file's asked for whole, in one request, so the server may compress it: one the
+    // player's waiting for, playing alone (as fast as the link goes: nothing to keep to a rate
+    // for), that nothing's come of yet (what's here isn't fetched again: the rest comes in parts)
+    #wholly(entry) {
+        return entry.hurry && !this.together && entry.received === 0;
+    }
+
+    // The next part of a file (or, from a server that doesn't serve parts, the whole of it); or
+    // all of one the player's waiting for (#wholly)
     async #part(entry) {
+        const wholly = this.#wholly(entry);
         const size = Math.min(this.controller.partSize, entry.bytes - entry.received);
         const from = entry.received;
         const asked = this.now();
         let response;
 
-        this.controller.sent(asked, size);
+        // (A whole file's counted against the rate as it comes: #whole)
+        if (!wholly) {
+            this.controller.sent(asked, size);
+        }
 
         try {
-            response = await this.fetch(entry.url, { headers: { Range: `bytes=${from}-${from + size - 1}` }, priority: entry.hurry ? "high" : "low" });
+            response = await this.fetch(entry.url, wholly ? { headers: { [WHOLE]: "1" }, priority: "high" } : { headers: { Range: `bytes=${from}-${from + size - 1}` }, priority: entry.hurry ? "high" : "low" });
 
             if (response.status === 206) {
                 const range = /^bytes (\d+)-\d+\/\d+$/.exec(response.headers.get("Content-Range") ?? "");
@@ -663,7 +689,7 @@ export class Fetcher {
                 }
                 await this.#store(entry, from, bytes);
             } else if (response.ok) {
-                await this.#whole(entry, response);
+                await this.#whole(entry, response, { keep: wholly });
             } else {
                 this.failed++;
                 this.#settle(entry, new Error(`Couldn't download ${entry.path} (${response.status})`));
@@ -706,28 +732,81 @@ export class Fetcher {
         this.controller.delivered({ bytes, ms: responseEnd - startTime });
     }
 
-    // The whole file at once: read slowly, keeping to the rate, and not at all at quiet times
-    async #whole(entry, response) {
+    // The whole file at once: read slowly, keeping to the rate, and not at all at quiet times (one
+    // hurried, alone, as fast as it comes). `keep`: one asked for whole (#wholly), from a server
+    // that may well serve parts: what comes of it is kept as it comes, a part's worth at a time, as
+    // parts are, so that cut off (the link dropped, the page loaded again) it's carried on a part
+    // at a time from what arrived. A reader that fails leaves what it read in hand, for that
+    async #whole(entry, response, { keep = false } = {}) {
         const reader = response.body.getReader();
+        let pieces = [];
+        let from = 0;
+        let size = 0;
+
+        // What's come since the last kept, kept as one part
+        const store = async () => {
+            if (!size) {
+                return;
+            }
+
+            const bytes = new Uint8Array(size);
+            let at = 0;
+
+            for (const piece of pieces) {
+                bytes.set(piece, at);
+                at += piece.length;
+            }
+
+            const starts = from;
+
+            pieces = [];
+            from += size;
+            size = 0;
+            await this.#store(entry, starts, bytes);
+        };
 
         entry.parts = [];
         entry.received = 0;
 
-        for (;;) {
-            while ((this.quiet.length && !entry.hurry) || this.#waitFor(entry) > 0) {
-                await this.sleep(this.quiet.length && !entry.hurry ? LOOK_EVERY : Math.min(this.#waitFor(entry), LOOK_EVERY));
+        try {
+            for (;;) {
+                // (No longer wanted, dropped: no more of it's read. What's come is put by, and
+                // carried on from if it's wanted again)
+                if (keep && this.entries.get(entry.url) !== entry) {
+                    await reader.cancel().catch(() => {});
+                    break;
+                }
+
+                while ((this.quiet.length && !entry.hurry) || this.#waitFor(entry) > 0) {
+                    await this.sleep(this.quiet.length && !entry.hurry ? LOOK_EVERY : Math.min(this.#waitFor(entry), LOOK_EVERY));
+                }
+
+                const { done, value } = await reader.read();
+
+                if (done) {
+                    break;
+                }
+
+                entry.parts.push(value);
+                entry.received += value.length;
+                this.fetched += value.length;
+                this.controller.sent(this.now(), value.length);
+
+                if (keep) {
+                    pieces.push(value);
+                    size += value.length;
+
+                    if (size >= PACING.part.most) {
+                        await store();
+                    }
+                }
             }
-
-            const { done, value } = await reader.read();
-
-            if (done) {
-                break;
+        } finally {
+            // (What's left, the last before it was cut off or dropped: not the last of a file
+            // that's all here, about to be kept whole and its parts let go of)
+            if (entry.received !== entry.bytes) {
+                await store();
             }
-
-            entry.parts.push(value);
-            entry.received += value.length;
-            this.fetched += value.length;
-            this.controller.sent(this.now(), value.length);
         }
     }
 

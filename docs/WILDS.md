@@ -2639,6 +2639,21 @@ what's downloaded before the game starts.
 - **Fetched as it's wanted** (`wantModel`): once the player's within 1.5 km of one of its lairs
   (`modelsNear`, looked at every two seconds: the game's `#modelling`), or one comes into the
   battle. One that couldn't be read is asked for again a minute later.
+- **On a touch screen, only fetched till it's close** (`modelsAhead`, the game's
+  `SPARING_MODELS`): read, a model's 10 to 20 MB on the page with none drawn from it, and a phone
+  within 2 km of a lair it never went to held it all session. So on a phone or a tablet a kind
+  that's only predicted (within 1.5 km of one of its lairs, or one that may be met where the
+  player is at that hour) is fetched and kept by the downloader, not read (`fetchModel`, as a
+  place's creatures are at 150 m), and read once the player's within 400 m of the lair or one of
+  its kind's put into the battle (the game's `#modelsMet`). Read near its lair it's kept, none
+  drawn from it, while they're within 600 m; one met out in the open is let go of three minutes
+  after the last of them's gone, as any is, not kept while it may be met. Read from what's kept
+  already it's a moment, so the first of a kind put into the battle waits on its model to be
+  drawn, a second at most (`SPARING_MODELS.patience`, the game's `#addingBeast`): it's drawn up
+  to a second later, from its model, where its stand-in would be a whole body built only to be
+  let go of, and drawn till it's out of view; past that second (the file still coming, saving
+  data), as its stand-in, as ever. The colossal, a world's boss, an open rift's demons and a
+  place's creatures are read as they were, and everything is on a computer.
 - **Its stand-in meanwhile:** until it's read, its look (`beasts/looks.js`, a greater, darker
   drake) is drawn. Once it's read, a stand-in out of view, and not attacking, falling or coming
   down out of the sky, is let go of and drawn again from the model.
@@ -2658,12 +2673,47 @@ what's downloaded before the game starts.
   as well, under an address made for that read, so every model let go of and read again was
   another copy held. Told in the debug overlay and log, under *Held*: how many models are read,
   and how many of them none is drawn from (`keptModels`).
+- **Kept without what read it** (world/art/engine/models.js `read`): three.js's loader hands back
+  what it read a file with beside the model (its `parser`), and that holds the file's bytes again,
+  each of its pictures' bytes once more, and its map as text and as objects. Nothing reads it once
+  the file's read, so it's let go of at once; a skin's file, which is only its materials, has them
+  made first (`readGltf`'s `materials`: the model viewer's skins too). Kept with the model as it
+  was till 2026-11-11, it was most of what a model none was drawn from held: in Node, without
+  their pictures, the werewolf's as read kept 6.6 MB on the page and keeps 2.2, the Order's 23.8
+  and 10.1, its riders' 34.5 and 15.3. What `loadGltf` and `loadModel` read (the props, what's
+  carried, a dungeon's pieces) they still keep for the session, by its address: its scene, its
+  shapes, its materials and pictures and its clips, and now nothing of the file.
 - **A body like any other** (`modelBody`): `BeastAvatar` takes it as its `plan`, as it does one
   built in code. `MODELS` names which of its clips are what (standing, walking, flying, gliding,
   struck, falling; its bite, claw and tail sweep, its breath; its roar) and which bones are its
   joints. Each frame, `poseOf` turns what the game asks of its body into a weight and a time for
   each clip (`test/model.test.js`), and a mixer poses its bones from them. Its fall plays at its
   own pace (3.6 seconds) and is held at its end.
+- **A copy that's light to make and to pose** (`copyOf`, since 2026-11-11). The pipeline gives each
+  mesh of a model a skin of its own over the same bones (each mesh's positions packed small, its
+  skin's inverses making them full size again), and three.js's copy gave each mesh a skeleton of
+  its own: a knight of the Bell's nearest level worked out its 149 bones' places 8 or 9 times a
+  frame and sent as many bone textures (98 to 110 KB), a rider's 443 bones' 16 times (484 KB), a
+  werewolf's 67 four times.
+  - **One skeleton between its meshes** (`posedBy`): a mesh whose skin has the same bones in the
+    same order, and puts it where the first's would but for one matrix (`skinnedAs`, the test its
+    parts are joined by), is bound to the first's skeleton with that matrix times the first's as
+    its bind matrix, and drawn just as it was: measured in Node against the model's own skins,
+    posed alike standing, walking, running, striking and fallen, no corner of a knight, a rider
+    or a werewolf is more than 0.0002 mm from where it was. One that can't be keeps a skeleton of
+    its own. So one skeleton's worked out and one bone texture sent a frame: 12 KB a knight, 30 a
+    rider, 6 a werewolf, and the skeletons' work a frame 65 to 6 µs for a knight, 300 to 20 for a
+    rider.
+  - **What it doesn't wear isn't copied**: of the Order's 78 meshes a brother wears 21, and the
+    rest were copied, each with a skeleton made for it, then taken out.
+  - **A clip made its mixer's when it's first played** (`actionOf`; its idle as it's made, so
+    every bone it moves is put back as it was read when no clip moves it, as ever): a knight's
+    34 clips' actions were 1.16 MB a copy, most never played.
+  - **Its sphere kept with the model**, worked out once for everyone drawn from it so (every
+    corner of its least detailed level put through its bones), each with a copy of it.
+  - Measured in Node, a copy on the page and the processor's time to make one: a brother 2.04 MB
+    and 38 ms before, 0.72 MB and 22 ms after; a Choir knight 2.39 MB and 41 ms, 0.95 and 30; a
+    rider 5.17 MB and 66 ms, 2.12 and 53; a werewolf 0.70 MB and 21 ms, 0.42 and 15.
 - **Its levels of detail** are the model's own: one mesh each, the one for how big it is on the
   screen shown (`showLevel`, at the same sizes as a body built in code). Its shadow is always cast by
   the least detailed one. When that one isn't shown, it's drawn writing nothing to the screen,
@@ -2997,7 +3047,9 @@ they exist is left, they are unloaded out of memory but of course kept in cache"
 - **Waited for at the door.** Tapping the door of a place whose models aren't all read
   (`#readyAtDoor`), the player waits there while they're got ready (`readyModels`): each file
   fetched, hurried (the downloader's `hurry`: before anything else, at quiet times too, and
-  playing alone as fast as the link goes), then read. Alone, the world stops meanwhile, as it does
+  playing alone as fast as the link goes: a file nothing's come of yet asked for whole, in one
+  request, which GitHub Pages sends gzipped, 17% to 32% smaller than its parts come to; a nest's
+  26.1 MB is 17.8 MB to wait for), then read. Alone, the world stops meanwhile, as it does
   under the menu. Playing with others it can't: they wait at the door outside. A card over the game
   (`app/readying.js`) shows after a quarter of a second (`READYING.grace`: what's kept already is
   read in less, and nothing's seen). It has the place's name, a bar, so many MB of so many, and
@@ -3022,8 +3074,9 @@ they exist is left, they are unloaded out of memory but of course kept in cache"
 - `test/model.test.js`: a place's kinds, made or not; its models kept while the player's in it,
   let go of `AREA_LINGER` after; a place's models got ready, each file kept first, hurried, then
   read, how far it's got, calmed. `test/fetcher.test.js`: a hurried file fetched at a quiet time,
-  before the rest, its parts back to back; calmed, waiting with the rest; kept without being
-  handed over; the service worker told. `test/sw.test.js`: a file the page says was used isn't let
+  before the rest, whole in one request playing alone (in parts playing together, or with some of
+  it here), carried on in parts from what arrived when cut off; calmed, waiting with the rest; kept
+  without being handed over; the service worker told. `test/sw.test.js`: a file the page says was used isn't let
   go of first. `e2e/pellagos.spec.js`, in the game: a dungeon made a den of werewolves (a theme of
   the test's own). At its door, the world stops and the card shows, nothing ready. Not now stays
   out. Tapped again, Go in now is offered after a while, and the player goes in once both models

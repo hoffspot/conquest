@@ -6,9 +6,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
+import { AnimationClip, BoxGeometry, CompressedTexture, Group, Mesh, MeshStandardMaterial, PropertyBinding, QuaternionKeyframeTrack, RGB_ETC2_Format, Texture } from "three";
 
-const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, strideOn, useModel } = await import("../client/js/beasts/model.js");
+const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsAhead, modelsHeld, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, strideOn, useModel } = await import("../client/js/beasts/model.js");
+const { heldOnPage, releaseCompressed } = await import("../client/js/world/release.js");
 const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
@@ -233,6 +234,68 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         releaseModel("werewolf", 0);
         forgetModels(1e9, 1000);
         assert.equal(modelOf("werewolf"), null);
+    });
+
+    it("reads what's predicted ahead of its being met; on a touch screen only fetches it, and reads what the player's close to the lair of or has met", () => {
+        const predicted = ["dreadthorn", "werewolf", "moonfang", "werewolf"];
+
+        // (As it was, everywhere else: all of them read)
+        assert.deepEqual(modelsAhead({ predicted, close: ["riftFiend"], met: [] }), { read: ["dreadthorn", "werewolf", "moonfang", "riftFiend"], fetch: [] });
+
+        // (Short of memory: what's only predicted fetched and kept, not held on the page)
+        assert.deepEqual(modelsAhead({ predicted, close: [], met: [], sparing: true }), { read: [], fetch: ["dreadthorn", "werewolf", "moonfang"] });
+
+        // (Close to the Dreadthorn's lair, and a werewolf come into the battle: those read)
+        assert.deepEqual(modelsAhead({ predicted, close: ["dreadthorn"], met: ["werewolf", "ant"], sparing: true }), { read: ["dreadthorn", "werewolf", "ant"], fetch: ["moonfang"] });
+        assert.deepEqual(modelsAhead({}), { read: [], fetch: [] });
+
+        // (How close is close: within modelsNear's reach, as near as asked)
+        const lairs = [{ at: [1000, 0], beast: "dreadthorn" }];
+
+        assert.deepEqual(modelsNear([0, 0], lairs), ["dreadthorn"]);
+        assert.deepEqual(modelsNear([0, 0], lairs, 400), []);
+        assert.deepEqual(modelsNear([650, 0], lairs, 400), ["dreadthorn"]);
+    });
+
+    it("counts what the models read hold on the page: their shapes, their clips' keys, and their pictures and their skins' till the graphics card has them; each file once, and nothing the bodies drawn from them were counted for", () => {
+        const levels = (size) => [{ data: new Uint8Array((size / 4) ** 2 * 8), width: size, height: size }];
+        const picture = new CompressedTexture(levels(64), 64, 64, RGB_ETC2_Format);
+        const glow = new CompressedTexture(levels(32), 32, 32, RGB_ETC2_Format);
+        const shape = new BoxGeometry();
+        const scene = new Group().add(new Mesh(shape, new MeshStandardMaterial({ map: picture })));
+        const times = new Float32Array(10);
+        const clip = (name) => new AnimationClip(name, 1, [new QuaternionKeyframeTrack("Bone.quaternion", times, new Float32Array(40))]);
+        const gltf = { scene, animations: [clip("Idle"), clip("Walk")], skins: { moonfang: [new MeshStandardMaterial({ emissiveMap: glow })] } };
+        const shapes = [...Object.values(shape.attributes), shape.index].reduce((sum, { array }) => sum + array.byteLength, 0);
+        // (Two clips' turns, and the times they share once)
+        const keys = 2 * 160 + 40;
+
+        assert.equal(modelsHeld(), 0);
+        useModel("werewolf", gltf);
+        useModel("moonfang", gltf);
+        holdModel("werewolf");
+        assert.equal(modelsHeld(), shapes + keys + 2048 + 512);
+
+        // (A body drawn from it shares its shape and its picture: counted with the bodies first,
+        // they aren't again)
+        const counted = new Set();
+        const body = heldOnPage([scene.clone()], [], counted);
+
+        assert.equal(body, shapes + 2048);
+        assert.equal(modelsHeld(counted), keys + 512);
+
+        // (Its picture on the graphics card: let go of off the page, and no longer counted)
+        releaseCompressed(picture);
+        picture.onUpdate(picture);
+        assert.equal(modelsHeld(), shapes + keys + 512);
+
+        // (A clip lent it since: counted)
+        gltf.animations.push(new AnimationClip("Fall", 1, [new QuaternionKeyframeTrack("Bone.quaternion", new Float32Array(5), new Float32Array(20))]));
+        assert.equal(modelsHeld(), shapes + keys + 512 + 20 + 80);
+
+        releaseModel("werewolf", 0);
+        forgetModels(1e9, 1000);
+        assert.equal(modelsHeld(), 0);
     });
 
     it("keeps the models of the place the player's in, or at the door of, while they are, however long; and lets them go AREA_LINGER after they've left", () => {

@@ -38,14 +38,19 @@
 // each other score's (about a megabyte and a half in all) the first time it's wanted, what's
 // heard playing on till they're in, then fading over; and once a score's not been heard for
 // MUSIC_KEPT, the recordings only it plays are let go of, their MP3s kept to decode again.
-// Decoded, a recording's big (32-bit samples, 20 to 30 times its MP3: a bed's 3 to 5 MB, decoded
-// at its own 32 kHz rather than the browser's 48: #decodeData, as the music's are), so no more
+// Decoded, a recording's big (32-bit samples, 15 to 25 times its MP3: a bed's 2 to 4 MB, decoded
+// at 24 kHz, as much as its sound needs, rather than its MP3's 32 or the browser's 48:
+// #decodeData; the music's at their own 32), so no more
 // than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
 // played least lately are let go of (never one sounding), their MP3s kept, each decoded again the
 // next time it's wanted, what's made playing in its place meanwhile, as before it was in.
 // Browsers only let a page make sound once someone has tapped, clicked or pressed a key on it, so
 // it starts on the first one (unlock()). The music plays from then on, on every screen, the pause menu included;
 // everything is silent while the page is hidden.
+//
+// While the Sound switch is off, nothing's made, downloaded or decoded: what's asked for meanwhile
+// (prepare, want, makeAhead) is only noted, and begun when it's turned on (setEnabled, `held`).
+// A player who never turns it on downloads none of it.
 //
 // The browser's sound can stop on its own: suspended or interrupted (a call, an alarm, another
 // app's sound, the screen locking), stuck (Safari on iPhones can say it's playing with its clock
@@ -57,7 +62,7 @@
 import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles, scoreFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
-import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
+import { ON_DEMAND, RECORDED, RECORDED_LEVEL, RECORDED_RATES } from "./recorded.js";
 import { SCORES } from "./scores.js";
 import { BEDS, LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 
@@ -175,15 +180,17 @@ const BED_KEPT = 60;
 /**
  * How much of the recorded sounds is kept decoded at most (bytes): on a touch screen (a phone or a
  * tablet, with least to spare: Safari on an iPhone closes a page holding too much, and the sound's
- * counted against it), and anywhere else. All of them decoded are about 236 MB (276 if the beds
- * were decoded at an iPhone's 48 kHz, not their own 32: #decodeData), their MP3s about 10; the
- * ones downloaded at the start about 22 MB, and the beds heard at once in a busy place 14 to 20.
- * Past it, the sounds played least lately are let go of
+ * counted against it), and anywhere else. All of them decoded are about 177 MB, each at the rate
+ * its sound needs (recorded.js RECORDED_RATES, #decodeData: 236 MB at their MP3s' own rates, as
+ * they were till November 2026, and 276 at an iPhone's 48 kHz, as before that), their MP3s about
+ * 10; the ones downloaded at the start about 16 MB, and the beds heard at once in a busy place 11
+ * to 15. Past it, the sounds played least lately are let go of
  * (never one sounding, a bed heard or a sound not done), their MP3s kept to decode them again.
  * (Travelling through sixteen places in a few minutes, what was decoded climbed past 150 MB; kept
- * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.)
+ * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.) A
+ * phone's was 48 MB while each sound held a third more: 36 MB keeps the same sounds decoded.
  */
-export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96 * 1024 * 1024 });
+export const DECODED_BUDGET = Object.freeze({ touch: 36 * 1024 * 1024, other: 96 * 1024 * 1024 });
 
 /**
  * The made sounds (synth.js SOUNDS) made as the game starts: those heard all the time, the
@@ -223,7 +230,7 @@ const MP3_RATES = [44100, 48000, 32000];
 /**
  * The sample rate an MP3 (its bytes) was recorded at, from its first frame's header (after any
  * ID3 tag), or null if there's no telling: the music's and the ambience's beds' are 32 kHz, the
- * rest 48 kHz (#decode).
+ * rest 48 kHz (#decodeData).
  */
 export function mp3Rate(mp3) {
     const bytes = new Uint8Array(mp3);
@@ -926,6 +933,17 @@ export class Sound {
          */
         this.wanted = new Map();
 
+        /**
+         * What's been asked for while the sound's off, begun once it's turned on (#begin): whether
+         * the sounds were to be made and the first recordings downloaded (prepare), the recorded
+         * sounds wanted (want) and the made ones to be made ahead (makeAhead), by name, and the
+         * ambience's where the player is now (setAmbience: the last asked for, not every place's
+         * they've been through meanwhile, whose beds are the biggest sounds there are). Off,
+         * nothing's made or downloaded: for a player who never turns it on that's some 8 MB of
+         * made sounds and a 2.3 MB download kept for nothing.
+         */
+        this.held = { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] };
+
         /** The variant of each sound played last (name → variant), not to play it twice running. */
         this.played = new Map();
 
@@ -988,9 +1006,16 @@ export class Sound {
     /**
      * Start making the sounds (once), in a worker: those made ahead (MADE_AHEAD), the rest as each
      * is first wanted (#make); and downloading the music's recordings. Resolves when those made
-     * ahead are made (`downloading` when the recordings are downloaded).
+     * ahead are made (`downloading` when the recordings are downloaded). While the sound's off,
+     * nothing's begun (resolved at once): it is when the sound's turned on (setEnabled).
      */
     prepare() {
+        if (!this.enabled) {
+            this.held.prepare = true;
+
+            return Promise.resolve();
+        }
+
         const first = this.#musicFiles(FIRST);
 
         this.downloading ??= this.#download([...first, ...recordedFiles()]);
@@ -1061,7 +1086,7 @@ export class Sound {
      * recordings are in, unless they are) before they're wanted, so the first time each is played
      * it's played on time: the player's spells' as they come to know them, kept (`keep`) as long
      * as the game goes on, while they've no recordings in to play instead; an invasion's horns as
-     * it's told of. Nothing while the sound's off: each is made the first time it's wanted then.
+     * it's told of. Nothing while the sound's off: they're made once it's turned on.
      */
     makeAhead(names, { keep = false } = {}) {
         for (const name of [names].flat()) {
@@ -1075,10 +1100,34 @@ export class Sound {
                 this.kept.add(name);
             }
 
-            if (this.enabled && !this.#made(stand) && !this.recorded.get(name)?.length) {
+            if (!this.enabled) {
+                this.held.ahead.add(name);
+            } else if (!this.#made(stand) && !this.recorded.get(name)?.length) {
                 this.#make(stand);
             }
         }
+    }
+
+    // The sound turned on: what was asked for while it was off, begun now (`held`): the made
+    // sounds to be made ahead (asked of the worker with the rest, as it's started), the sounds
+    // made and the first recordings downloaded, and the recorded sounds wanted since downloaded,
+    // the ambience's where the player is first
+    #begin() {
+        const { prepare, wants, ahead, ambience } = this.held;
+
+        this.held = { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] };
+        this.makeAhead([...ahead]);
+
+        // (Prepared before it was turned off: the music wanted where the player is now, which may
+        // not be where they were)
+        if (prepare) {
+            this.prepare();
+        } else if (this.ready) {
+            this.#wantScore(this.#wanted().score);
+        }
+
+        this.want(ambience);
+        this.want([...wants]);
     }
 
     // A made sound made on the page, a variant at a time; then played, if it was wanted just now
@@ -1359,9 +1408,13 @@ export class Sound {
         this.#revive();
     }
 
-    /** Turn it all on or off. */
+    /** Turn it all on or off. Turned on, what was asked for while it was off is begun (#begin). */
     setEnabled(on) {
         this.enabled = on;
+
+        if (on) {
+            this.#begin();
+        }
 
         // (Not started yet: turned on after a tap (the switch's), started now)
         if (!this.context) {
@@ -1587,9 +1640,15 @@ export class Sound {
      * MURMUR, or null) }. Each downloaded now if it isn't yet (a made bed made once it's heard).
      */
     setAmbience({ beds = {}, rates = {}, calls = {}, wants = [], murmur = null } = {}) {
-        // (The beds first, on their own: not to wait behind the calls' many short recordings)
-        this.want(Object.keys(beds));
-        this.want([...Object.keys(calls), ...wants]);
+        // (The beds first, on their own: not to wait behind the calls' many short recordings. With
+        // the sound off, only noted, in place of the last ambience noted: turned on, it's where the
+        // player then is that's wanted)
+        if (this.enabled) {
+            this.want(Object.keys(beds));
+            this.want([...Object.keys(calls), ...wants]);
+        } else {
+            this.held.ambience = [...Object.keys(beds), ...Object.keys(calls), ...wants];
+        }
 
         for (const [name, bed] of this.beds) {
             if (!(name in beds)) {
@@ -1707,8 +1766,9 @@ export class Sound {
             this.want(name);
         }
 
-        // (Let go of past the budget: decoded again, for next time, what's made playing meanwhile)
-        if (!made && !recorded && this.mp3s.has(name)) {
+        // (Let go of past the budget: decoded again, for next time, what's made playing meanwhile.
+        // Not while the sound's off: nothing's heard, and it's decoded when next wanted, on)
+        if (!made && !recorded && this.enabled && this.mp3s.has(name)) {
             this.#recall(name);
         }
 
@@ -1835,9 +1895,22 @@ export class Sound {
      * (a name, or a list), so they're in for when they're played (what's made playing in their
      * place till then, or nothing); any already asked for, or downloaded at the start, aren't
      * again. Resolves once they're all downloaded (each decoded once the browser's sound starts).
+     * While the sound's off none's downloaded (resolved at once): those wanted are once it's
+     * turned on.
      */
     want(names) {
         const asked = [names].flat().filter((name) => LATER.has(name));
+
+        if (!this.enabled) {
+            for (const name of asked) {
+                if (!this.wanted.has(name)) {
+                    this.held.wants.add(name);
+                }
+            }
+
+            return Promise.resolve();
+        }
+
         const fresh = asked.filter((name) => !this.wanted.has(name));
 
         if (fresh.length) {
@@ -2122,7 +2195,7 @@ export class Sound {
             mp3s[variant] = recording;
             this.mp3s.set(name, mp3s);
             this.decoding.add(id);
-            this.#decodeData(recording).then(
+            this.#decodeData(recording, RECORDED_RATES[RECORDED[name][variant]?.loop ? "bed" : "sound"]).then(
                 (buffer) => {
                     const variants = this.decoded.get(name) ?? [];
 
@@ -2167,10 +2240,15 @@ export class Sound {
     // the browser's sound's: the music's and the beds' are 32 kHz, and decoded at the browser's 48
     // (an iPhone's) they'd hold half as much again for nothing that's heard (each played at a rate
     // of its own anyway, a note's pitch or a sound's lilt, as the made sounds' 48 kHz are where
-    // the browser's 44.1). Where it can't be (no OfflineAudioContext, or one that won't), at the
-    // browser's sound's, as before
-    #decodeData(recording) {
-        const rate = mp3Rate(recording);
+    // the browser's 44.1). Or lower, at `most` (Hz), the rate its sound needs: a recorded sound's
+    // MP3 has nothing in the top of what its rate could carry (the encoder cut it off), so a bed
+    // is decoded at 24 kHz and any other at 36 (recorded.js RECORDED_RATES, measured as they're
+    // made), a quarter less held for the same sound. The music's notes are decoded at their own
+    // rate: some are bright right up to the top of it. Where it can't be (no OfflineAudioContext,
+    // or one that won't make or decode at that rate), at the browser's sound's, as before
+    #decodeData(recording, most = Infinity) {
+        const own = mp3Rate(recording);
+        const rate = own && Math.min(own, most);
         const decode = () => this.context.decodeAudioData(recording.slice(0));
 
         if (!rate || rate >= this.context.sampleRate || !globalThis.OfflineAudioContext) {
@@ -2204,8 +2282,13 @@ export class Sound {
     }
 
     // A score wanted: its recordings downloaded, if they aren't yet (a few at a time, not to hold
-    // up the rest), and any let go of decoded again from their MP3s
+    // up the rest), and any let go of decoded again from their MP3s. Not while the sound's off:
+    // the one wanted then is asked for as it's turned on (prepare, setEnabled)
     #wantScore(name) {
+        if (!this.enabled) {
+            return;
+        }
+
         const files = this.#musicFiles([name]);
 
         if (files.length && this.fetch && !this.scoresWanted.has(name)) {

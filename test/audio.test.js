@@ -10,7 +10,7 @@ import { filter, pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
-import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
+import { ON_DEMAND, RECORDED, RECORDED_LEVEL, RECORDED_RATES, SOURCES } from "../client/js/audio/recorded.js";
 import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, MADE_KEPT, MADE_QUICK, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, SQUEEZED_KEPT, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
@@ -1060,6 +1060,90 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
+    it("makes and downloads nothing while it's turned off: neither the made sounds, the first recordings and the music's, nor anything wanted meanwhile", async () => {
+        fakeAudio();
+
+        const fetched = [];
+        const sound = new Sound({ fetch: noting(fetched), enabled: false, ahead: (name) => name === "slash" });
+
+        // (All the game asks of it as it loads and is played: prepared, where the player is, the
+        // ambience there, a spell's sounds wanted and made ahead, a creature's played, and a tap)
+        await sound.prepare();
+        sound.setLand("elf");
+        sound.setAmbience({ beds: { windOpen: 1 }, calls: {}, wants: ["crackle"] });
+        await sound.want(["fireball", "wolfCall"]);
+        sound.makeAhead(["fireball", "warHorn"], { keep: true });
+        assert.equal(sound.play("wolfHurt"), null);
+        sound.unlock();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
+        assert.deepEqual(fetched, [], "nothing downloaded");
+        assert.equal(sound.context, null, "the browser's sound not started");
+        assert.equal(sound.maker, null);
+        assert.equal(sound.ready, null, "no sound made");
+        assert.deepEqual([sound.samples.size, sound.recordings.size, sound.madeAsked.size, sound.wanted.size, sound.scoresWanted.size], [0, 0, 0, 0, 0]);
+        assert.equal(sound.memory(), 0);
+        sound.close();
+    });
+
+    it("turned on, begins all that was asked of it while it was off: the sounds made, the first recordings and the music heard where the player now is downloaded, and what was wanted meanwhile", async () => {
+        fakeAudio();
+
+        const fetched = [];
+        const sound = new Sound({ fetch: noting(fetched), enabled: false, ahead: (name) => name === "slash" });
+        const urls = (files) => files.map(([, url]) => String(url));
+
+        await sound.prepare();
+        sound.setLand("elf");
+        // (Through a taproom and a cave on the way to where they are now, out in the open)
+        sound.setAmbience({ beds: { tavernLoop: 1, hearthLoop: 0.5 }, calls: {}, wants: ["clink"] });
+        sound.setAmbience({ beds: { caveDrips: 1 } });
+        sound.setAmbience({ beds: { windOpen: 1 }, calls: {}, wants: ["crackle"] });
+        sound.want(["fireball"]);
+        sound.makeAhead(["fireball", "warHorn"], { keep: true });
+        sound.play("wolfHurt");
+        sound.unlock();
+
+        // (The switch: a tap, so the browser's sound starts with it)
+        sound.setEnabled(true);
+        clearInterval(sound.timer);
+        assert.ok(sound.context, "started");
+        await sound.ready;
+        await sound.downloading;
+        await Promise.all([...sound.wanted.values(), ...sound.scoresWanted.values()]);
+
+        // (Made: what's made ahead, the wind, and what was asked to be made ahead meanwhile, a
+        // spell's stand-in and a horn)
+        assert.deepEqual([...sound.buffers.keys()].toSorted(), ["slash", "warHorn", "wind", SOUNDS.fireball ? "fireball" : RECORDED_ONLY.fireball.instead].toSorted());
+
+        // (Downloaded: the recorded sounds and the music the game starts with, the elves' music,
+        // heard where the player is, the ambience there, and what was wanted while it was off;
+        // once each. Not the ambience of where they'd been on the way: a taproom's, a cave's)
+        const wanted = urls([...recordedFiles(), ...musicFiles(), ...musicFiles(["elves"]), ...recordedFiles(["windOpen", "crackle", "fireball", "wolfHurt"])]);
+
+        assert.deepEqual(fetched.toSorted(), [...new Set(wanted)].toSorted());
+        assert.ok(urls(recordedFiles(["tavernLoop", "hearthLoop", "clink", "caveDrips"])).every((url) => !fetched.includes(url)));
+        assert.deepEqual(sound.held, { prepare: false, wants: new Set(), ahead: new Set(), ambience: [] });
+
+        // (Off again, and more asked of it: held off once more, and begun when it's next on)
+        sound.setEnabled(false);
+        fetched.length = 0;
+        sound.setLand("orc");
+        sound.setAmbience({ beds: { caveDrips: 1 } });
+        await sound.want(["wolfCall"]);
+        assert.deepEqual(fetched, []);
+        sound.setEnabled(true);
+        await Promise.all([...sound.wanted.values(), ...sound.scoresWanted.values()]);
+        assert.deepEqual(fetched.toSorted(), [...new Set(urls([...musicFiles(["orcs"]), ...recordedFiles(["wolfCall", "caveDrips"])]))].filter((url) => !wanted.includes(url)).toSorted());
+
+        // (And on, the ambience is asked for as the player comes to it, as ever)
+        fetched.length = 0;
+        sound.setAmbience({ beds: { tavernLoop: 1 } });
+        await Promise.all([...sound.wanted.values()]);
+        assert.deepEqual(fetched.toSorted(), urls(recordedFiles(["tavernLoop"])).toSorted());
+        sound.close();
+    });
+
     it("plays the score a little ahead of time, on the music bus, round again without a gap", async () => {
         const { sound, played } = await started();
         const context = sound.context;
@@ -2056,6 +2140,12 @@ describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)
         assert.ok(DECODED_BUDGET.touch < DECODED_BUDGET.other);
         assert.equal(new Sound().budget, DECODED_BUDGET.other);
 
+        // (A phone's: 36 MB, which keeps the sounds 48 MB kept while each was decoded at its
+        // MP3's own rate, a third more of it: RECORDED_RATES)
+        assert.equal(DECODED_BUDGET.touch, 36 * 1024 * 1024);
+        assert.equal(DECODED_BUDGET.touch / (48 * 1024 * 1024), RECORDED_RATES.sound / 48000);
+        assert.equal(DECODED_BUDGET.touch / (48 * 1024 * 1024), RECORDED_RATES.bed / 32000);
+
         try {
             globalThis.matchMedia = (query) => ({ matches: query === "(pointer: coarse)" });
             assert.equal(new Sound().budget, DECODED_BUDGET.touch, "on a phone");
@@ -2189,7 +2279,7 @@ describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)
     });
 });
 
-describe("the recordings decoded at the rate they were recorded at (sound.js mp3Rate, #decodeData)", () => {
+describe("the recordings decoded at the rate their sound needs (sound.js mp3Rate, #decodeData; recorded.js RECORDED_RATES)", () => {
     const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
     const read = async (url) => {
@@ -2246,20 +2336,71 @@ describe("the recordings decoded at the rate they were recorded at (sound.js mp3
         assert.equal(mp3Rate(new ArrayBuffer(0)), null);
     });
 
-    it("decodes the music's and the beds' at their 32 kHz, not the browser's 48, and the rest at the browser's, with one decoder", async () => {
+    it("decodes the music's at their own 32 kHz, a bed at 24 kHz and any other recorded sound at 36, not the browser's 48, with one decoder for each rate", async () => {
         const made = offline();
 
         try {
             const { sound } = await started();
 
-            await sound.want("caveDrips");
+            await sound.want(["caveDrips", "windOpen", "wolfCall"]);
             await tick();
 
+            assert.deepEqual(RECORDED_RATES, { bed: 24000, sound: 36000 });
             assert.equal(sound.instruments.size, musicFiles().length);
-            assert.ok([...sound.instruments.values()].every((buffer) => buffer.offline && buffer.sampleRate === 32000), "the music's");
-            assert.ok(sound.decoded.get("caveDrips").every((buffer) => buffer.offline && buffer.sampleRate === 32000), "a bed's");
-            assert.ok(sound.decoded.get("stepGrass").every((buffer) => !buffer.offline), "a footstep's 48 kHz, as the browser's");
-            assert.deepEqual(made, [32000]);
+            assert.ok([...sound.instruments.values()].every((buffer) => buffer.offline && buffer.sampleRate === 32000), "the music's, as they were recorded");
+
+            for (const bed of ["caveDrips", "windOpen"]) {
+                assert.ok(sound.decoded.get(bed).every((buffer) => buffer.offline && buffer.sampleRate === 24000), `${bed}: a bed's`);
+            }
+
+            // (A footstep's, downloaded at the start; a creature's, once it's wanted)
+            for (const name of ["stepGrass", "wolfCall", "hitMail"]) {
+                assert.ok(sound.decoded.get(name).length > 0 && sound.decoded.get(name).every((buffer) => buffer.offline && buffer.sampleRate === 36000), name);
+            }
+
+            assert.deepEqual(made.toSorted(), [24000, 32000, 36000]);
+            sound.close();
+        } finally {
+            delete globalThis.OfflineAudioContext;
+        }
+    });
+
+    it("takes a bed for a recorded sound that loops, each of them a 32 kHz MP3, and every other one a 48 kHz MP3: so each is decoded at three quarters of its own rate, a quarter less held", async () => {
+        const beds = Object.entries(RECORDED).filter(([, variants]) => variants.some(({ loop }) => loop));
+
+        assert.equal(beds.length, 21);
+
+        for (const [name, variants] of beds) {
+            assert.ok(variants.every(({ loop }) => loop), `${name}: every one of its recordings`);
+
+            for (const [, url] of recordedFiles([name])) {
+                assert.equal(mp3Rate(await read(url)), 32000, name);
+            }
+        }
+
+        // (The rest, by the first of each: their MP3s' rate is the build's for all of them)
+        for (const [name, [first]] of Object.entries(RECORDED).filter(([, variants]) => !variants.some(({ loop }) => loop))) {
+            assert.equal(mp3Rate(await read(new URL(`../client/sounds/${first.file}`, import.meta.url))), 48000, name);
+        }
+
+        assert.equal(RECORDED_RATES.bed / 32000, 0.75);
+        assert.equal(RECORDED_RATES.sound / 48000, 0.75);
+    });
+
+    it("decodes no higher than the browser's own sound: at the browser's rate where a sound's is as high", async () => {
+        offline();
+
+        try {
+            const { sound } = await started();
+
+            // (A browser whose sound is at 32 kHz: the music's and any other recorded sound's at
+            // that, by the browser itself; a bed's still lower, at its own)
+            sound.context.sampleRate = 32000;
+            await sound.want(["caveDrips", "wolfCall"]);
+            await tick();
+
+            assert.ok(sound.decoded.get("caveDrips").every((buffer) => buffer.offline && buffer.sampleRate === 24000));
+            assert.ok(sound.decoded.get("wolfCall").length > 0 && sound.decoded.get("wolfCall").every((buffer) => !buffer.offline));
             sound.close();
         } finally {
             delete globalThis.OfflineAudioContext;
@@ -2275,6 +2416,8 @@ describe("the recordings decoded at the rate they were recorded at (sound.js mp3
 
                 assert.equal(sound.instruments.size, musicFiles().length, fails);
                 assert.ok([...sound.instruments.values()].every((buffer) => !buffer.offline), fails);
+                // (A recorded sound's too: all of it there, as the browser decodes it)
+                assert.ok(sound.decoded.get("stepGrass").length === RECORDED.stepGrass.length && sound.decoded.get("stepGrass").every((buffer) => !buffer.offline), fails);
                 sound.close();
             } finally {
                 delete globalThis.OfflineAudioContext;

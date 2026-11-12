@@ -468,7 +468,9 @@ whoever holds the town, and whom they fight is as their peoples stand.
   they're at war with.
 
 **On the screen:**
-- A bar over each soldier who's an enemy (or who's hurt); none over the rest.
+- A bar over each soldier who's an enemy (or who's hurt) within 60 m of the player; none over
+  the rest. Where their bars would lie over one another, those behind aren't shown (GAME.md,
+  *Who comes first* and the bars over heads).
 - Soldiers drawn a few at a time as they come out (within the budget buildings are built in).
 
 ### Growing stronger (M3)
@@ -2554,7 +2556,10 @@ many that leaves room for whenever that changes by a tenth (the host's `budget` 
 the player; no sign the player's there, for being marked away). That's as many as fit in a frame of
 28 ms (30 a second, a sixth to spare) over what it's doing already: a computer 0.04 ms a soldier,
 at most 360; a phone 0.09 ms, at most 160; a smaller phone (world/view.js `detectQuality`) 0.1 ms,
-at most 120; never fewer than 60. A computer with room to spare has 360 (151 raiders, 209 of the
+at most 120; never fewer than 60. A device kept back by more than its own work (its graphics: the
+game drawing less than the quality chosen to keep up, or its frames coming more than a fifth behind
+the browser's asking) tells 60 whatever its work says (docs/GAME.md *How big an invasion*). A
+computer with room to spare has 360 (151 raiders, 209 of the
 town's); a phone whose frames take 14 ms has about 150, a smaller one at 16 ms about 115. (A step of
 a battle of 400 takes 7.5 ms on a computer and a phone's about five times as slow; crowds of 200
 add about 4 ms to a frame's update.) In seven worlds at 360, the town held every time, the raiders

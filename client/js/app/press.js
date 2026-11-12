@@ -18,8 +18,27 @@
 //    hidden or loses the player;
 //  - and it's dropped once every finger's off the screen (bare), if it was begun before they were.
 
-/** How long a slot's held before it's to be changed (ms), not tapped. */
-export const QUICK_HOLD_MS = 500;
+/**
+ * A long press, everywhere in the game: a finger or the mouse held this long (ms) without moving
+ * off where it went down. On the player or an enemy it opens the action wheel (app/game.js), on
+ * an icon it does what that icon's hold does (app/hud.js), on the minimap it opens the world map
+ * (app/minimap.js), on the world map it drops a pin (app/worldmap.js), on a thing in the pack it
+ * puts it on or opens its wheel (app/pack.js), on an Action Bar slot it changes it (below), and a
+ * controller's button held as long does its hold (app/gamepad.js). It was 0.4 s on the world and
+ * in the pack, 0.5 s on an icon and the Action Bar, and 0.55 s on the maps: a player learns one.
+ */
+export const HOLD_MS = 500;
+
+/**
+ * How far a finger or the mouse can move from where it went down (pixels) and still be tapping
+ * or holding, not dragging: on the world, the minimap and the HUD's icons (12 on the world and 10
+ * on the others, before). The maps and the pack, where a drag is the commoner thing, begin one
+ * sooner (their own TAP_MOVE and DRAG); the Action Bar lets a thumb stray further (STRAY, below).
+ */
+export const TAP_SLOP = 12;
+
+/** How long a slot's held before it's to be changed (ms), not tapped: a long press, as everywhere. */
+export const QUICK_HOLD_MS = HOLD_MS;
 
 /**
  * How long after every finger's off the screen a press begun before then is dropped as lost (ms):

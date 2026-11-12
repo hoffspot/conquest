@@ -109,6 +109,204 @@ const meshesOf = (plan) => {
     return meshes;
 };
 
+// Its skeletons, each once however many meshes it poses
+const skeletonsOf = (plan) => new Set(meshesOf(plan).map(({ skeleton }) => skeleton));
+
+describe("one drawn from a model of many parts (beasts/model.js modelBody)", () => {
+    // Both posed alike: the model as read, each mesh its own skin, and one drawn from it
+    const bend = (gltf, plan, turn) => {
+        for (const root of [gltf.scene, plan.object]) {
+            root.getObjectByName("spine_03").rotation.set(...turn);
+            root.getObjectByName("pelvis").position.set(0.1, 0.05, -0.2);
+            root.updateMatrixWorld(true);
+        }
+    };
+    // How far any corner of one drawn from a model is from where the model's own mesh of that name
+    // puts it (in the model's own space: what's drawn of it is sized and sunk), at most
+    const apart = (gltf, plan) => {
+        const back = plan.object.children[0].children[0].matrixWorld.clone().invert();
+        let [worst, compared] = [0, 0];
+
+        for (const mesh of meshesOf(plan)) {
+            const own = gltf.scene.getObjectByName(mesh.name);
+
+            if (own?.geometry !== mesh.geometry) {
+                continue;
+            }
+
+            for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+                worst = Math.max(worst, cornerOf(mesh, i).applyMatrix4(back).distanceTo(cornerOf(own, i)));
+                compared++;
+            }
+        }
+
+        return { worst, compared };
+    };
+
+    it("is posed by one skeleton between all its meshes, not one each, every corner where its own skin put it; and what it doesn't wear isn't copied", () => {
+        const gltf = orderModel();
+        const whole = modelBody("choirKnight", gltf);
+        const worn = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+
+        // (The model as read: a skin to every mesh, the same two bones, other inverses)
+        const read = [];
+
+        gltf.scene.traverse((node) => node.isSkinnedMesh && read.push(node.skeleton));
+        assert.equal(new Set(read).size, 18);
+
+        for (const plan of [whole, worn]) {
+            assert.equal(skeletonsOf(plan).size, 1, "one skeleton, its shadow's and its joined parts' too");
+            assert.equal(plan.casters[0].skeleton, plan.levels[0][0].skeleton);
+
+            for (const turn of [[0, 0, 0], [0.4, -0.7, 0.25], [-1.1, 0.3, 0.6]]) {
+                bend(gltf, plan, turn);
+
+                const { worst, compared } = apart(gltf, plan);
+
+                // (Every mesh of it that's the model's own: those joined for it aren't, test below)
+                assert.ok(compared >= (plan === whole ? 150 : 30) && worst < 1e-5, `${worst} apart over ${compared} corners`);
+            }
+        }
+
+        // (Its cloak, packed its own way: bound with what undoes that, not as the first is)
+        const [body, cloak] = ["Body", "Cloak"].map((name) => meshesOf(whole).find((mesh) => mesh.name === name));
+
+        assert.equal(cloak.skeleton, body.skeleton);
+        assert.ok(!cloak.bindMatrix.equals(body.bindMatrix));
+
+        // (Its bones its own, not the model's, nor another's drawn from it)
+        assert.notEqual(whole.object.getObjectByName("spine_03"), gltf.scene.getObjectByName("spine_03"));
+        assert.notEqual(whole.object.getObjectByName("spine_03"), worn.object.getObjectByName("spine_03"));
+        assert.ok([...skeletonsOf(whole)][0].bones.every((bone) => bone === whole.object.getObjectByName(bone.name)));
+
+        // (What it doesn't wear: nowhere in it)
+        assert.ok(whole.object.getObjectByName("Knife") && !worn.object.getObjectByName("Knife") && !worn.object.getObjectByName("Knifelod1"));
+        assert.equal(meshesOf(worn).filter(({ name }) => name.startsWith("Knife")).length, 0);
+    });
+
+    it("leaves a mesh its own skeleton whose skin has the bones in another order, or puts it elsewhere bone by bone: drawn as it was all the same", () => {
+        const gltf = orderModel();
+        const [root, spine] = ["pelvis", "spine_03"].map((name) => gltf.scene.getObjectByName(name));
+        const material = Object.assign(new THREE.MeshStandardMaterial(), { name: "M_Weapon" });
+        // (Its bones the other way round, its corners weighted by their numbers in that order)
+        const swapped = partMesh("Sword", 0, material, [spine, root], { seed: 7 });
+        // (Its skin's inverses not the others' times one packing: one bone's its own)
+        const skewed = partMesh("Shield", 0, material, [root, spine], { seed: 8 });
+
+        skewed.skeleton.boneInverses[1].multiply(new THREE.Matrix4().makeTranslation(0.2, 0, 0));
+        gltf.scene.add(swapped, skewed);
+
+        const plan = modelBody("choirKnight", gltf);
+
+        const skeletonOf = (name) => meshesOf(plan).find((mesh) => mesh.name === name).skeleton;
+
+        assert.equal(skeletonsOf(plan).size, 3);
+        assert.notEqual(skeletonOf("Sword"), skeletonOf("Body"));
+        assert.notEqual(skeletonOf("Shield"), skeletonOf("Sword"));
+        assert.equal(skeletonOf("Cloak"), skeletonOf("Body"));
+        bend(gltf, plan, [0.5, 0.2, -0.4]);
+        assert.ok(apart(gltf, plan).worst < 1e-5);
+    });
+
+    it("makes a clip its mixer's to play when it's first given any weight, its idle as it's made; its bones posed as with all of them made from the start", () => {
+        const model = MODELS.choirKnight;
+        const gltf = orderModel();
+        const turn = (x, y, z) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z)).toArray();
+        const tracks = {
+            [model.clips.idle]: [new THREE.QuaternionKeyframeTrack("spine_03.quaternion", [0, 1], [...turn(0, 0, 0.1), ...turn(0, 0.2, 0.3)])],
+            [model.clips.walk]: [new THREE.QuaternionKeyframeTrack("spine_03.quaternion", [0, 1], [...turn(0.3, 0, 0), ...turn(-0.3, 0, 0)]), new THREE.VectorKeyframeTrack("pelvis.position", [0, 1], [0, 0.1, 0, 0, -0.1, 0.4])],
+            [model.clips.run]: [new THREE.VectorKeyframeTrack("pelvis.position", [0, 1], [0, 0.3, 0, 0.2, 0, 0])],
+            [model.clips.dead]: [new THREE.QuaternionKeyframeTrack("pelvis.quaternion", [0, 1], [...turn(0, 0, 0), ...turn(1.5, 0, 0)])],
+        };
+
+        gltf.animations = gltf.animations.map((clip) => new THREE.AnimationClip(clip.name, 1, tracks[clip.name] ?? []));
+        assert.ok(gltf.animations.length > 8, `${gltf.animations.length} clips`);
+
+        const plan = modelBody("choirKnight", gltf);
+        // (The model itself posed by a mixer with every clip made from the start, as one drawn
+        // from it had: by the clips the body says it posed)
+        const mixer = new THREE.AnimationMixer(gltf.scene);
+        const actions = new Map(gltf.animations.map((clip) => [clip.name, mixer.clipAction(clip)]));
+        const bones = ["pelvis", "spine_03"];
+        const same = (inputs) => {
+            plan.pose(inputs);
+
+            for (const action of actions.values()) {
+                action.play();
+                action.setEffectiveWeight(0);
+            }
+
+            for (const { clip, weight, time } of plan.posed) {
+                actions.get(clip).setEffectiveWeight(weight);
+                actions.get(clip).time = time;
+            }
+
+            mixer.update(0);
+
+            for (const name of bones) {
+                const [mine, theirs] = [plan.object.getObjectByName(name), gltf.scene.getObjectByName(name)];
+
+                assert.ok(mine.position.distanceTo(theirs.position) < 1e-6 && mine.quaternion.angleTo(theirs.quaternion) < 1e-6, `${name} ${JSON.stringify(inputs)}`);
+            }
+        };
+
+        assert.equal(plan.clipsBound, 1, "its idle");
+        same({ dt: 0.1, speed: 0, t: 0.3 });
+        assert.equal(plan.clipsBound, 1);
+
+        // (Walking, then running: each made as it's first played; standing again, what only
+        // they moved put back as it was read, though they're no longer played)
+        same({ dt: 0.1, speed: model.pace, t: 0.7 });
+        assert.ok(plan.posed.some(({ clip, weight }) => clip === model.clips.walk && weight > 0));
+
+        const walking = plan.clipsBound;
+
+        assert.ok(walking >= 2 && walking <= 3, `${walking} made walking`);
+        same({ dt: 0.1, speed: model.runPace * 1.5, t: 1.1 });
+        same({ dt: 0.1, speed: 0, t: 1.4 });
+        assert.equal(plan.clipsBound, 3, "its idle, its walk and its run");
+        assert.ok(plan.object.getObjectByName("pelvis").position.length() < 1e-6, "where it was read");
+        same({ dt: 0.2, speed: 0, t: 2, dead: { t: 0.5 } });
+        assert.equal(plan.clipsBound, 4);
+
+        // (One of its clips held alone, as the model viewer watches each: made then)
+        const rest = Object.values(model.rests)[0];
+
+        plan.hold(rest, 0.5);
+        assert.equal(plan.clipsBound, 5);
+        assert.ok(plan.clipsBound < gltf.animations.length);
+    });
+
+    it("works out the sphere it's culled by once for everyone drawn from the model so, each with its own", () => {
+        const gltf = orderModel();
+        const worked = THREE.SkinnedMesh.prototype.computeBoundingSphere;
+        let times = 0;
+
+        THREE.SkinnedMesh.prototype.computeBoundingSphere = function () {
+            times++;
+
+            return worked.call(this);
+        };
+
+        try {
+            const one = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+            const first = times;
+            const other = modelBody("choirKnight", gltf, { parts: ["Body", "Cloak", "Head"] });
+            const [a, b] = [one, other].map((plan) => plan.levels[0][0].boundingSphere);
+
+            assert.ok(first > 0 && times === first, `${first} then ${times - first}`);
+            assert.ok(a.radius > 0.5 && a.equals(b) && a !== b);
+            assert.ok([...one.levels.flat(), ...one.casters].every((mesh) => mesh.boundingSphere === a), "one for all its levels and its shadow");
+
+            // (Wearing something else, or another kind with its own idle: its own sphere)
+            modelBody("choirKnight", gltf, { parts: ["Body", "Head"] });
+            assert.ok(times > first);
+        } finally {
+            THREE.SkinnedMesh.prototype.computeBoundingSphere = worked;
+        }
+    });
+});
+
 describe("a model's shadow (beasts/model.js)", () => {
     it("is cast from its least detailed level's body and cloak joined into one, each corner where its own skin put it, however the figure's posed", () => {
         // (All its parts worn, none chosen: none of them joined, its least detailed level's own)

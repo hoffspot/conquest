@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -632,6 +632,45 @@ describe("saving (save.js)", () => {
         assert.equal(saveWorld({ seed: 1 }, war), false);
     });
 
+    it("says so, once, the first time the browser refuses to keep something as the game's played: its storage full, or taken away", () => {
+        const items = useStorage();
+        const keep = globalThis.localStorage.setItem;
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const war = { version: 1, seed: 12, turn: 40, towns: [] };
+        const told = [];
+
+        hearRefusal((key) => told.push(key));
+        assert.equal(saveWorld(save, war), true);
+        assert.equal(savePlace(save, { x: 1, y: 2, facing: 0 }), true);
+        assert.deepEqual(told, [], "nothing while it's kept");
+
+        // (Full from here: every save refused, the first said, the rest not)
+        globalThis.localStorage.setItem = () => {
+            throw new Error("QuotaExceededError");
+        };
+        assert.equal(saveWorld(save, { ...war, turn: 41 }), false);
+        assert.equal(savePlace(save, { x: 3, y: 4, facing: 0 }), false);
+        assert.equal(saveVitals(save, { hp: 1 }), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world"]);
+        assert.equal(loadWorld(save).turn, 40, "what was kept before is still there");
+
+        // (A game that isn't saved keeps nothing, and that's no refusal; nor is whoever's told
+        // failing the game's fault; and the next game hears of it afresh)
+        hearRefusal(() => {
+            told.push("again");
+
+            throw new Error("the HUD's gone");
+        });
+        assert.equal(saveWorld({ seed: 1 }, war), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world"]);
+        assert.equal(savePlace(save, { x: 5, y: 6, facing: 0 }), false);
+        assert.deepEqual(told, ["pellagos.abcd1234.world", "again"]);
+
+        globalThis.localStorage.setItem = keep;
+        hearRefusal(null);
+        assert.equal(items.size > 0, true);
+    });
+
     it("keeps a saved game's world's legends with its war (core/rare.js Legends), as they were; none till they're kept, and not for another", () => {
         useStorage();
 
@@ -1206,6 +1245,64 @@ describe("the minimap (minimap.js)", () => {
             }
 
             assert.equal(stood.size, 0, `${stood.size} patches begun standing still`);
+        });
+
+        it("isn't drawn again while nothing on it has moved by a pixel of the screen's: the same picture; but a few times a second whatever, and every time while anything on it pulses", () => {
+            const canvas = recording();
+            const minimap = new Minimap(canvas, world);
+            const folk = [
+                { x: x + 10, z: z + 4, hostile: false, targeted: false, ally: false },
+                { x: x - 20, z: z + 9, hostile: true, targeted: false, ally: false },
+            ];
+            // (No wedge for the way they look: the canvas stood in for here makes no gradients)
+            const scene = { player: { x, z, facing: 0.4 }, others: folk, icons: [{ kind: "tavern", x: x + 30, z: z - 12, rim: null }], criers: [{ x: x + 300, z }] };
+            // (How many things the canvas was told to do by a drawing, at `now` ms)
+            const drawn = (view, now) => {
+                const before = canvas.calls.length;
+
+                minimap.draw(view, now);
+
+                return canvas.calls.length - before;
+            };
+
+            // (An icon's shape is a path of the browser's: stood in for)
+            globalThis.Path2D = class {};
+            after(() => delete globalThis.Path2D);
+
+            // (160 pixels across 128 m, on a screen of one pixel to a pixel: 1.25 to a metre)
+            assert.ok(drawn(scene, 1000) > 20, "drawn the first time");
+            assert.equal(drawn(scene, 1033), 0, "the same again: not drawn");
+            assert.equal(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 0.2 })) }, 1066), 0, "a quarter of a pixel's move: not drawn");
+            assert.ok(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1100) > 20, "moved a pixel: drawn");
+            assert.equal(drawn({ ...scene, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1133), 0);
+            assert.ok(drawn({ ...scene, player: { x, z, facing: 0.45 }, others: folk.map((one) => ({ ...one, x: one.x + 1 })) }, 1166) > 20, "the player turned: drawn");
+            assert.ok(drawn({ ...scene, player: { x: x + 1, z, facing: 0.4 } }, 1200) > 20, "the player a pixel on: drawn");
+            assert.ok(drawn({ ...scene, player: { x: x + 1, z, facing: 0.4 }, icons: [{ ...scene.icons[0], rim: "#888" }] }, 1233) > 20, "an icon's rim changed where it stands: drawn");
+
+            // (Still, it's drawn again a few times a second all the same)
+            const still = { ...scene, player: { x: x + 1, z, facing: 0.4 } };
+            const times = [];
+
+            drawn(still, 2000);
+
+            for (let now = 2033; now < 3000; now += 33) {
+                if (drawn(still, now)) {
+                    times.push(now);
+                }
+            }
+
+            assert.ok(times.length >= 3 && times.length <= 4, `${times.length} times in a second`);
+
+            // (Whoever the player's set on ringed and pulsing, an elite, a ping: every time)
+            for (const lively of [{ others: [{ ...folk[1], targeted: true }] }, { elites: [{ x: x + 5, z, targeted: false }] }, { pings: [{ x: x + 5, z, age: 1 }] }]) {
+                drawn({ ...still, ...lively }, 4000);
+                assert.ok(drawn({ ...still, ...lively }, 4033) > 20, Object.keys(lively)[0]);
+            }
+
+            // (Shown again after being folded away, or another map: drawn whatever was drawn before)
+            drawn(still, 5000);
+            minimap.show(true);
+            assert.ok(drawn(still, 5033) > 20);
         });
     });
 });

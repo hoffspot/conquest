@@ -690,6 +690,37 @@ describe("an invasion as big as the devices in it can draw (core/invasions.js si
         assert.deepEqual(play(90000, BUDGET.warmup + BUDGET.window * 0.8, 10), []);
     });
 
+    it("tells the least for a device kept back by more than its own work: drawing less already to keep up, or its frames coming late", () => {
+        // (A frame's work is the processor's alone. A phone at 25 frames a second for its pixels
+        // and shadows, its work 8 ms, was told the most: a bigger invasion, and less of the picture)
+        const play = (budget, { interval = 1000 / 60, work = 8, seconds = 20, from = 0, ...about }) => {
+            const told = [];
+
+            for (let now = from; now < from + seconds * 1000; now += interval) {
+                const size = budget.observe(now, interval, work, "medium", about);
+
+                if (size !== null) {
+                    told.push(size);
+                }
+            }
+
+            return told;
+        };
+
+        assert.deepEqual(play(new InvasionBudget(), {}), [SIZE.most.medium], "keeping up: as its work has room for");
+        assert.deepEqual(play(new InvasionBudget(), { step: 1 }), [SIZE.least], "a step below the quality chosen");
+        assert.deepEqual(play(new InvasionBudget(), { interval: 1000 / 25 }), [SIZE.least], "its frames late");
+        assert.deepEqual(play(new InvasionBudget(), { interval: 1000 / 55 }), [SIZE.most.medium], "a little late isn't");
+        // (30 a second on a beat of 30, a phone saving its battery: keeping up)
+        assert.deepEqual(play(new InvasionBudget(), { interval: 1000 / 30, beat: 1000 / 30 }), [SIZE.most.medium]);
+        assert.deepEqual(play(new InvasionBudget(), { interval: 1000 / 20, beat: 1000 / 30 }), [SIZE.least]);
+
+        // (And told again as that changes: stepped down, then back at the quality chosen)
+        const budget = new InvasionBudget();
+
+        assert.deepEqual([...play(budget, {}), ...play(budget, { step: 2, from: 20000 }), ...play(budget, { from: 40000 })], [SIZE.most.medium, SIZE.least, SIZE.most.medium]);
+    });
+
     it("keeps how big an invasion each player's device can draw, told it by their game, which is no sign they're there", () => {
         const { host, player } = inTown();
 

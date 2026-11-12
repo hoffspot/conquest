@@ -7276,6 +7276,16 @@ export function* buildingInterior(map) {
         object.add(standing);
     }
 
+    // (Its builders done with, every corner they laid merged: let go of. And what its furnishing,
+    // `update` and `drive` want of what was built is taken here, so none of them reads `built`:
+    // they're kept as long as the inside is, and whatever one of them read, all that was built
+    // would be kept with it, the builders' every corner too, 2 MB a floor)
+    const { moving, kit = null } = built;
+    const props = built.props ?? [];
+
+    built.solid = null;
+    built.standIns = null;
+
     // (The humans' floorboards laid with the house kit's wood floor, once it's read: kithouses3d.js)
     if (boards?.length) {
         const laid = () => {
@@ -7310,11 +7320,11 @@ export function* buildingInterior(map) {
     // (A dungeon's scanned furniture, added once its models are read: dungeons3d.js; Bellhaven's
     // keep's castle's pieces among them, and its walls and floor its castle's once they are; when,
     // `furnished`)
-    if (built.props?.length) {
-        object.userData.props = built.props;
-        object.userData.furnished = furnish(object, built.props)
-            .then(() => built.kit && kitDressed(object))
-            .then(() => standing && kitShown(object, standing, built.props))
+    if (props.length) {
+        object.userData.props = props;
+        object.userData.furnished = furnish(object, props)
+            .then(() => kit && kitDressed(object))
+            .then(() => standing && kitShown(object, standing, props))
             .catch((error) => console.warn("Couldn't furnish", map.id, error));
     }
 
@@ -7322,7 +7332,7 @@ export function* buildingInterior(map) {
 
     animated.scale.setScalar(1 / M);
 
-    for (const { object: part } of built.moving) {
+    for (const { object: part } of moving) {
         mergeInPlace(part);
         animated.add(part);
     }
@@ -7407,7 +7417,7 @@ export function* buildingInterior(map) {
         ceiling: built.ceiling ?? STOREY,
         /** How high over the ground the rock closes over a point (world metres), a dungeon's level's; null for anywhere else. */
         roof: (x, z) => (roof ? roof(x - ox, z - oz) : null),
-        props: built.props ?? [],
+        props,
         /** Where its candles' flames burn (world metres: [x, y, z]), as fire.js draws them. */
         candles: lit.candles.map(([x, y, z]) => [ox + x / M, y / M, oz + z / M]),
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
@@ -7415,7 +7425,7 @@ export function* buildingInterior(map) {
         heart: built.heart ? { x: ox + built.heart.x, z: oz + built.heart.z } : null,
         forge: built.forge ? { x: ox + built.forge.x, z: oz + built.forge.z } : null,
         update(dt, time) {
-            for (const part of built.moving) {
+            for (const part of moving) {
                 // (A named part turns only while it's driven: the grindstone while cranked)
                 if (!part.name || time < (part.until ?? 0)) {
                     part.object.rotation[part.axis ?? "z"] += part.turn * dt;
@@ -7437,7 +7447,7 @@ export function* buildingInterior(map) {
         },
         /** Turn one of its named moving parts (the grindstone) for a while, from `time` (s). */
         drive(name, time, seconds) {
-            for (const part of built.moving.filter((each) => each.name === name)) {
+            for (const part of moving.filter((each) => each.name === name)) {
                 part.until = time + seconds;
             }
         },

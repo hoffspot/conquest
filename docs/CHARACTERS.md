@@ -46,6 +46,8 @@ to them.
 | `pack.js` | The data file's compact encoding (shared by the build and the browser) |
 | `rig.js` | The skeleton: 52 bones with Mixamo names, posed by anatomical joint angles within real ranges of motion, and two-bone IK |
 | `character.js` | A character: the skinned meshes, its look and its equipment |
+| `wardrobe.js` | What a kit keeps of what its characters wear, made once and shared: each garment's picture, each outfit's |
+| `pictures.js` | The size a body's pictures are held at for how big it's seen, and a picture made smaller as the graphics card would |
 | `skin.js`, `face.js`, `noise.js` | Painting the skin and eyes; where the hairline and beard are |
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
@@ -347,7 +349,8 @@ numbered as Microsoft's are), enough for talking:
   the base body), so a closed lid is lit as one, not as the fold it was. Each vertex's slot in it
   is an attribute (`faceSlot`, -1 for none); a character's skin, lashes and mouth's inside add up
   its expressions' moves and turns before skinning, by its own weights (a uniform): one more
-  texture read in their shaders (16 at most, as an iPhone allows, still).
+  texture read in their shaders (16 at most, as an iPhone allows, still). The page's copy of the
+  texture is let go of once it's on the graphics card, where alone it's read.
 - **Where they're shown.** Every character on the game's body with its own skin (a beast's hide
   shows none, nor does MakeHuman's body, which has no expressions): updated as its body's posed
   (`Avatar.update`: less often far off). A shadow isn't moved by them (three.js's depth material
@@ -522,12 +525,15 @@ lab's "Load skin…" and the skins made in MakeHuman or painted by hand.
   green, 0.08 blue), as light scattered under the skin does, so a shadow's edge on a face is soft
   and warm, not a grey line; its highlights are the sharper for being wet or oily where it is. A
   handful of operations a pixel, no more memory; with three people close in the taproom, no
-  difference to the time a frame takes that could be measured.
+  difference to the time a frame takes that could be measured. It's one line of three.js's own
+  lighting changed (hair's another), found by its text: as r186 has it, or as r187 does, which
+  works a surface's diffuse term out first; with neither in it the material says so rather than
+  leave skin lit as anything else is (`surfaces.js` `lighting`).
 
 **Eyes.** Eyes are painted too (iris fibres, limbal ring, pupil or slit, sclera). They are drawn
 on MakeHuman's eye helper mesh with a glossy clear coat. Each look of eye is painted once and its
 picture shared by everyone with it (irises come from each people's few colours), kept a while
-after the last with it has gone.
+after the last with it has gone (the two most recent: `IDLE`).
 
 **Hair.** Hair is thousands of thin strips (hair cards) with a strand texture, grown from roots
 spread over the outside of the head above the style's hairline (never inside the mouth), and
@@ -792,7 +798,7 @@ slots, sockets and hidden skin.
 6. **Hiding.** Skin under a garment isn't drawn, and neither is a garment under another one.
    Layers go 0 underwear, 1 clothing, 2 a mid layer, 3 armour, 4 what's over the armour (a
    surcoat, a mantle), 5 belts and sashes, 6 straps, chains and collars.
-7. **Drawn all at once** (`merge`: everyone but a player). A soldier in uniform wears nine or
+7. **Drawn all at once** (`merge`: everyone but the player's own hero). A soldier in uniform wears nine or
    ten garments, each a draw call. As every garment is painted on the whole body in the body's
    texture layout, one picture can show them all (`compositeGarments`): at each texel, the
    outermost garment whose region takes it in (each texel knows which body triangle it's in and
@@ -810,8 +816,33 @@ slots, sockets and hidden skin.
    place on the body's surface whatever its build. So is a player's, drawn a garment at a time:
    each garment's picture is painted for the usual shape, and cut where a player's own body put
    it, a surcoat's hem ran across its trim, ragged at the hips. The picture is made once per outfit (about 50 ms) and let go when no one's worn it for a
-   while (the eight most recent kept); lace and drapes are drawn as before. Battle damage tells
-   metal from cloth by the metalness picture.
+   while (the two most recent kept: *What the kit lets go of*); lace and drapes are drawn as before. Battle damage tells
+   metal from cloth by the metalness picture. Whoever else comes to wear an outfit while its
+   picture's being made takes steps of the same making (`shared`), and so with each garment's:
+   two in one uniform built turn and turn about make it once between them and are both counted
+   wearing it (each used to make its own; the kit kept one, counted one wearer for the two, and
+   never let go of the other).
+
+   **One by one first, all at once after** (`setEquipment(ids, { merge })`, `merging()`). One
+   whose dress changes as it's watched, another player, is dressed one by one at once
+   (`merge: false`: each garment's own picture is painted or found, nothing put together, so
+   the change shows in that frame), and its garments are put together after, a step at a time
+   (`merging()`, a generator as `building` is): the outfit's picture is made in steps for the
+   kit, no one counted wearing it yet (wardrobe.js `readyingOutfit`: found made, where someone
+   else wears it), the garments drawn one by one meanwhile as they were; then, in one step, the
+   meshes it wore are made one mesh drawn with that picture, and their own materials are let go
+   of (`leaveGarments`: the kit keeps a garment's picture half a minute after no one draws with
+   it). Nothing's fitted again, so it's the same garments in the same places: the one mesh is
+   the same, corner for corner, as one dressed all at once from the first has, and the material
+   the very same (`test/outfit-merging.test.js`). Of each garment only its own triangles are
+   taken: one drawn a while has its lower levels' after them. Dressed again meanwhile, what was
+   begun stops, changing nothing and leaving nothing counted (it's for what was worn before,
+   `dressed`); given up on outright (its steps closed), the outfit's picture half made is let
+   go of with it, unless someone else is making the same one (`shared` counts who's taking a
+   making's steps, and lets go of one its last taker closes; one only left off is kept for the
+   next to carry on, as before). Lace and what
+   hangs are drawn as they were. The game does this for the other players (docs/GAME.md,
+   *Characters in the world*).
 
 **Built a step at a time.** Building someone takes a few hundred milliseconds on a desktop (their
 skin painted, hair grown, each garment fitted, their outfit's picture painted the first time it's
@@ -830,7 +861,9 @@ still dressed at once. `new Character(...)`, `setLook` and `setEquipment` take
 every step at once, as before (the paperdoll, and the character maker as a character's changed;
 its new character's built a step at a time while the title's up: GAME.md, *Making a character*). Its hair is grown once: under a
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
-again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
+again for anyone carrying anything). A body's own measurements (`measureBody`: 13 to 34 ms, and
+5 MB of short-lived objects) are taken only when a skirt, a gown or an apron is built for it,
+which alone hang by them: every body was measured as it was dressed, soldiers too. Tests build soldiers, folk and a hero both ways and check
 they're the same, and each piece the same step by step as at once.
 
 **Skins painted elsewhere.** Painting a skin is about half of building someone (a couple of hundred
@@ -870,6 +903,82 @@ the bytes), and the heights one byte a texel (a red texture: a bump map reads it
 RGBA, a quarter of the size to keep and send to the GPU. The character lab's *Save skin* puts the
 picture on a canvas when it's asked for (`skinCanvas`).
 
+**Pictures at the size they're seen** (`pictures.js`, `Character.fitPictures`). A body's skin is
+painted 512 texels a side (1024 on High) and its outfit's two pictures 512, and each was held that
+size however small the body was drawn: 4.33 MB on the graphics card for a body in an outfit of
+its own, 9.33 MB on High. A body 120 pixels tall on the screen shows about 72 pixels of each metre
+of it, and its skin's picture at 512 has 205 texels a metre or more over 95% of the skin (the
+sparser way across each of the body's triangles), so drawing it the graphics card reads the
+picture's second level, 256 a side, and smaller ones, never its first. Under 2 texels a pixel,
+where some of the first level is mixed in, is 0.5% of the skin at 120 pixels tall, 1.6% at 150
+and 17% at 190. So the game's bodies (`release`) hold them at 256 (`PICTURES.least`) while they're
+small: each texel the mean of the four it's made from, a colour's in linear light, as the
+graphics card makes a picture's next level (`halved`), so the picture drawn is the same, with a
+quarter of it held: 1.08 MB a body.
+
+- **Bigger at once, smaller after a while.** The game tells each body how tall it is on the
+  screen where it stands every frame, in view or not (`#posing`), and builds it with how tall
+  it'll be there (`tall`: `#tallWhereBuilt`), so most are made small from the first. Seen 120
+  pixels tall (`up`), bigger pictures are asked for at once; they're swapped back once it's
+  been under 100 (`down`) for 3 seconds on end (`after`), so one at the edge of it isn't swapped
+  back and forth. On High there are three sizes, each for twice the height: 256 under 120, 512
+  under 240, 1024 over (`pictureSize`).
+- **The skin** is asked of the skins' worker at the size wanted (`Skins.ask`'s `size`: it paints it
+  whole and makes it smaller there), which sends the least size back with a bigger one
+  (`small`): that's kept on the page while the bigger one's drawn (0.31 MB), to go back to
+  without painting anything. Where there's no worker it's painted here, a step each frame.
+- **An outfit's** go by its tallest wearer (`wardrobe.js` `fitOutfit`), and to the least size as
+  its last wearer leaves it. **A wounded body's damage** is the size its body's are
+  (`world/wounds.js`): each wound keeps the texels it paints (a couple of kilobytes), and the
+  smaller picture is made from them all, each texel the mean of the four painted, at every
+  blow and heal.
+- **In place.** A picture's swapped inside the texture it was in (`setPicture`: the one on the
+  graphics card let go of, the new one sent when it's next drawn), so the wounds' own copy of
+  an outfit's material, which shares its pictures, has the new one too.
+- **Whole when it's wanted.** The player's own hero is never made smaller (the pack's paperdoll
+  draws them big the moment it's opened). A likeness for an icon is drawn close, so its body's
+  pictures are asked for whole first (`Character.whole`, kept so 5 seconds), and it's drawn once
+  they are. Anyone not the game's own (the labs', the character maker's, a crowd's figure being
+  made, a bestiary's portrait) has them as they're painted, as before, a material of their own
+  for the outfit.
+
+`test/pictures.test.js` has the size chosen at each height, the smaller picture against the
+bigger, and the swaps; `test/wounds.test.js` the damage's.
+
+**What the kit lets go of** (`wardrobe.js`). The kit kept every garment's own picture it had ever
+painted (1.25 MB each, 26 of them in a quiet town, 103 there are) and both of every outfit's
+pictures (2 MB an outfit) on the page for good: about 60 MB of the 100 MB the kit held in a town
+of 18. Now:
+
+- **An outfit's two pictures** are let go of from the page once they're on the graphics card
+  (`releaseTexture`). What's kept is its colour at the least size (0.25 MB), which is what a
+  crowd's figure is made from (`world/crowd.js` `figureOf` reads its character's pictures on the
+  page), and, while bigger ones are drawn, its heights at the least size, to go back to. Seen
+  bigger again (*Pictures at the size they're seen*), its pictures are made again from its
+  garments' own (`again`), 3 ms a frame (`tendKit`, which the game's bodies call as they're
+  told how they're seen), the smaller ones drawn till then.
+- **Whoever reads them on the page** (anyone not `release`: a crowd's figure's own character, a
+  lab's, a bestiary's portrait) has a material of their own for the outfit: its pictures as
+  they're painted, if they're on the page (always, in a lab), else the colour that's kept, with
+  the game's own picture of its heights. A bestiary's portrait asks for them whole
+  (`Character.whole`: made again there and then). Where a crowd's figures are made from pictures
+  512 a side (High, with skins of 1024), the colour's kept as it's painted, not at the least size
+  (`keeps`).
+- **A garment's own picture** is let go of 30 seconds after it was last used (`PICTURES.garments`:
+  an outfit made from it, or someone no longer drawing with it), by the wardrobe's own clock,
+  which goes on only while it's tended (a page put by and come back to finds them still there);
+  and painted again when it's next wanted (97 ms a garment, in steps). One a player draws with,
+  garment by garment, is kept while they do, and with it the one a people's make of it is tinted
+  from, whose pictures it draws with.
+- **Idle outfits and looks of eye** beyond two (`IDLE`) are let go of, the longest unworn first.
+- **All of it at once, when the page is short of memory**: `letGoOfIdle(kit)` (`kit.js`) lets go
+  of every outfit and look of eye no one's wearing, every garment's picture no one's drawing
+  with, and where each texel is on the body garments are painted for (`forgetPoints`: 4 MB kept
+  for the next garment painted). `heldByKit(kit)` says how many bytes the kit holds on the page.
+
+A body's own outfit seen small is then 0.25 MB on the page where it was 2 MB, and its nine
+garments' 11 MB are gone half a minute after it's dressed. `test/wardrobe.test.js`.
+
 **Drapes** (`drapes.js`) are clothes that hang from the body rather than wrapping it: skirts,
 gowns and aprons. A garment can't hang between the legs, so a drape is built instead, as rings of
 cloth round the body:
@@ -905,7 +1014,9 @@ cloth round the body:
   on them a third of the way to the hem). Its sides go with their own legs; its front and back
   with four bones of its own (`DRAPE_BONES`, after the body's in its own skeleton:
   `drapeSkeleton`, swung each time it's drawn, as three.js updates a skeleton before drawing what
-  it moves):
+  it moves; how far each swings worked out only when the legs have been posed since it last was,
+  30 to 35 µs each time, and between poses, most frames for most bodies, the cloth put where
+  the pelvis is now swung as it was):
   - **Above the knees**, its front swings forward about the middle of the hips as far as the
     thigh swung furthest forward from where it rests (in the pelvis's frame), and its back as far
     back as the one swung furthest back; further if a leg below needs it to keep inside.
@@ -2327,11 +2438,12 @@ similar.
 
 **One character with a full outfit:**
 
-- 22–38 draw calls (plus shadows), drawn one by one; drawn all at once, as everyone but a player
+- 22–38 draw calls (plus shadows), drawn one by one; drawn all at once, as everyone but the player's own hero
   is, its garments are one (a soldier in uniform 12 to 17 in all, about 21 to 26 before)
 - about 80–100 thousand triangles
 - a 1024 × 1024 skin texture with a bump map, and 512 × 512 textures for each garment (shared by
-  everyone wearing it), or two for each outfit drawn all at once
+  everyone wearing it), or two for each outfit drawn all at once; in the game, each 256 × 256
+  while the body's under 120 pixels tall on the screen (*Pictures at the size they're seen*)
 
 **Smaller on the screen** (`lod.js`, `Character.fitDetail`): everyone in the game but the player
 is drawn at one of three levels by how tall they are on the screen (drawing buffer pixels),
@@ -2455,6 +2567,27 @@ resting and sitting. What went:
 - **Sprinting curves walking.** The sprint's curves (made of keys, each read making four small
   arrays) were worked out and multiplied by nothing while walking. Now they're not, and reading
   keys makes no arrays.
+- **Nothing made keeping a scabbard off the leg, swinging a skirt or setting the walk's joints.**
+  A settled town of 18 made about 0.7 MB a frame, 47% of it posing its people. Most of that was
+  three places. `Character.hang` asks how clear a hung blade is of the leg 86 times a frame, and
+  made an arrow function for each blade and another inside it each time it was asked, with a
+  list or a pair for every swing tried; the arm's part of it (`armPush`) the same. A skirt's
+  swing made an object for every length measured, one for each ring of its cloth looked at and
+  a list for each of the legs' points (`keep`, `clothAt`, `lean`). The walk made a name and a
+  set of angles for every joint, sixty of each (`#setJoints`, `closeHand`). Now what they ask
+  is module functions (`hangNearest`, `hiltOff`, `offSegment`: how far a point is from a limb,
+  in the numbers themselves), their names and sets of angles are made once and filled in each
+  time, and what they find is kept in plain numbers. Poses come out the same to the last bit:
+  six bodies' every bone, blade and skirt bone hashed frame by frame through walking, running,
+  guarding, a blow, sheathing and sitting, before and after. Over that run what posing made
+  fell by 28%, and by 80% for the blade, 61% for the skirt and 89% for the walk's joints (the
+  numbers handed between functions are what's left of theirs); a soldier with a sword at the
+  hip and a woman in a skirt, walking, make 20 KB a frame for the blade where it was 110, 16 for
+  49 for the skirt and 0.2 for 21 for the joints (`test/posing-garbage.test.js` samples
+  everything made and holds them between). What makes most now is the
+  arm's reach and the actions' keys (`Rig.evaluate`, `Actions.sample`). Fitting a blade to its
+  hip, once as its body's built, made 10 MB of cells' names and lists; its cells are numbered
+  now.
 
 **How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
 `posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player
@@ -2476,7 +2609,7 @@ picture of its bones' places, and everyone of the kind drawn at once, posed on t
 Posed so, a crowd's corners are where the character's own are, to two millimetres, as it's merged
 and mid-swing (`test/crowd.test.js`). For the few drawn in full, the next steps are:
 
-- merging the rest of a character's parts into one mesh (its garments already are, but a player's)
+- merging the rest of a character's parts into one mesh (its garments already are, but the player's own hero's)
 - a lower-detail body: MakeHuman's proxy meshes use the same rig
 
 ## Research

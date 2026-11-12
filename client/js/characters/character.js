@@ -11,7 +11,7 @@ import * as THREE from "three";
 import { Rig } from "./rig.js";
 import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn, TORCH_HOLD } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES, skirtUnder } from "./drapes.js";
-import { COMPOSITE_BUMP, compositingGarments, fittingOutfit, GARMENTS, measureBody, paintGarment, paintingGarment, stackOrder, texelMap } from "./garments.js";
+import { fittingOutfit, measureBody, stackOrder } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
 import { buildItem, HAND_TORCH_FLAME, HAND_TORCH_GRIP } from "./items.js";
 import { HairMaterial, SkinMaterial } from "./surfaces.js";
@@ -21,6 +21,8 @@ import { expressionData, Expressions, expressive } from "./expressions.js";
 import { Gaze, lookingEyes } from "./gaze.js";
 import { lashTexture, lashUVs } from "./lashes.js";
 import { fitMouth, isMouth, mouthMaterial } from "./mouth.js";
+import { PICTURES, pictureSize, sizingSkin } from "./pictures.js";
+import { dataTexture, drawingGarment, fitOutfit, IDLE, leaveGarments, leaveOutfit, letGo, OUTFIT_SIZE, outfitReady, outfitWhole, readyingOutfit, referenceMeasures, setPicture, take, tendKit, wearingOutfit, wholeOutfit } from "./wardrobe.js";
 import { allAtOnce } from "../core/steps.js";
 import { castCheaply } from "../world/shadowpasses.js";
 import { releaseTexture } from "../world/release.js";
@@ -39,12 +41,12 @@ const DRAWN = ["body", "eyes", "lashes", "mouth"];
 // way round has its wearer running with their heels kept low (Character.robed)
 const ROBED = 0.9;
 
-// How many pictures of outfits (or of eyes) no one is wearing just now are kept, for the next to
-// wear one
-const IDLE_COMPOSITES = 8;
-
-// Each body's bones and weights at each of its drawn vertices (its human's: the same for everyone
-// of it, whatever their shape), worked out once and shared, as its eyelashes' layout is
+// What's the same at each drawn vertex of every body of a human's data, whatever its shape: where
+// its picture is (its eyelashes' laid out for their strands: lashes.js), its bones and weights,
+// and where its face's moves are kept (expressions.js: for a body with them). Worked out once,
+// and one attribute of each for all of them, so the graphics card's given each once: 0.33 MB a
+// body, sent for every body before. { uv, skinIndex, skinWeight, faceSlot }
+const SHARED = ["uv", "skinIndex", "skinWeight", "faceSlot"];
 const skinnings = new WeakMap();
 
 function skinningOf(human) {
@@ -52,17 +54,36 @@ function skinningOf(human) {
         const count = human.renderSource.length;
         const skinIndex = new Uint8Array(count * 4);
         const skinWeight = new Uint8Array(count * 4);
+        const faces = expressionData(human);
 
         human.renderSource.forEach((v, r) => {
             skinIndex.set(human.skinIndices.subarray(v * 4, v * 4 + 4), r * 4);
             skinWeight.set(human.skinWeights.subarray(v * 4, v * 4 + 4), r * 4);
         });
-        skinnings.set(human, { skinIndex, skinWeight });
+        skinnings.set(human, {
+            uv: new THREE.BufferAttribute(lashUVs(human), 2),
+            skinIndex: new THREE.BufferAttribute(skinIndex, 4),
+            skinWeight: new THREE.BufferAttribute(skinWeight, 4, true),
+            faceSlot: faces ? new THREE.BufferAttribute(faces.slotOf, 1) : null,
+        });
     }
 
     return skinnings.get(human);
 }
-const IDLE_EYES = 8;
+
+/**
+ * A body's geometry (Character's `geometry`) let go of: but what it shares with every other body
+ * of its data (SHARED), taken off it first. three.js lets go of the graphics card's copy of every
+ * attribute a geometry has as the geometry's let go of, whoever else has it, and the others'
+ * would be sent again each time one went.
+ */
+function disposeBody(geometry) {
+    for (const name of SHARED) {
+        geometry.deleteAttribute(name);
+    }
+
+    geometry.dispose();
+}
 
 // How a carried torch's shaft lies across the palm (radians from straight across, towards the
 // fingers at the thumb's side: grip.js), as a staff's does
@@ -71,66 +92,12 @@ const TORCH_TURN = 0.25;
 // (Given to the constructor by Character.building: built a step at a time there, not at once)
 const LATER = Symbol("later");
 
-// Something made once for a kit and shared by the characters with it, by key (a cache of them:
-// { value, users }): made by `make` the first time it's wanted, if it isn't there already
-function take(cache, key, make) {
-    if (!cache.has(key)) {
-        cache.set(key, { value: make(), users: 0 });
-    }
-
-    const entry = cache.get(key);
-
-    entry.users++;
-
-    return entry.value;
-}
-
-// A character no longer using one: once no one is, it's kept for a while, then let go (the
-// longest unused first, beyond `idle` of them unused)
-function letGo(cache, key, idle, dispose) {
-    const entry = key !== null && cache?.get(key);
-
-    if (!entry || --entry.users > 0) {
-        return;
-    }
-
-    cache.delete(key);
-    cache.set(key, entry);
-
-    const unused = [...cache].filter(([, other]) => other.users === 0);
-
-    for (const [gone, { value }] of unused.slice(0, Math.max(0, unused.length - idle))) {
-        dispose(value);
-        cache.delete(gone);
-    }
-}
-
 /**
- * A body of the usual shape's measurements (garments.js measureBody), made once per kit: what
- * garments are cut to, and painted on, so each fits the same picture on everyone.
+ * Several skinned geometries as one (their vertices one after another); of each one's triangles,
+ * only its first `counts[k]` indices (all of them, with none given: one drawn a while has its
+ * lower levels' after its own, #lowerGarment).
  */
-function referenceMeasures(kit) {
-    if (!kit.referenceMeasures) {
-        const human = kit.human;
-        const { positions, joints } = human.shape({});
-        const rig = new Rig(human.bones, human.landmarks?.rest);
-        let height = 0;
-
-        for (let v = 0; v < human.vertexCount; v++) {
-            if (human.partOf[v] === 0) {
-                height = Math.max(height, positions[v * 3 + 1]);
-            }
-        }
-
-        rig.fit(joints);
-        kit.referenceMeasures = measureBody({ human, rig, positions, height });
-    }
-
-    return kit.referenceMeasures;
-}
-
-/** Several skinned geometries as one (their vertices one after another). */
-function mergeGeometries(geometries) {
+function mergeGeometries(geometries, counts = null) {
     const names = ["position", "normal", "uv", "skinIndex", "skinWeight"];
     const count = geometries.reduce((sum, geometry) => sum + geometry.attributes.position.count, 0);
     const indices = [];
@@ -150,40 +117,20 @@ function mergeGeometries(geometries) {
         merged.setAttribute(name, new THREE.BufferAttribute(array, first.itemSize, first.normalized));
     }
 
-    for (const geometry of geometries) {
-        for (const index of geometry.index.array) {
-            indices.push(index + offset);
+    geometries.forEach((geometry, k) => {
+        const index = geometry.index.array;
+        const length = counts?.[k] ?? index.length;
+
+        for (let i = 0; i < length; i++) {
+            indices.push(index[i] + offset);
         }
 
         offset += geometry.attributes.position.count;
-    }
+    });
 
     merged.setIndex(count > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
 
     return merged;
-}
-
-/**
- * A texture from a painted picture (rows from the top: RGBA, or a byte a texel for heights, which
- * a bump map reads from its red), mipmapped. Its picture stays in `image.data`.
- */
-function dataTexture(data, size, colour) {
-    const texture = new THREE.DataTexture(bytesOf(data), size, size, data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat);
-
-    texture.flipY = true;
-    texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 4;
-    texture.needsUpdate = true;
-
-    return texture;
-}
-
-// A picture's bytes as a texture takes them
-function bytesOf(data) {
-    return new Uint8Array(data.buffer, data.byteOffset, data.length);
 }
 
 // A look (Character setLook's) with everything it doesn't say as LOOK_DEFAULTS have it, and its
@@ -271,7 +218,7 @@ export function hanging(item, look) {
 
     const box = new THREE.Box3().setFromObject(look);
 
-    return { side: item.sheath.socket.startsWith("left") ? "Left" : "Right", length: box.max.y, pommel: box.min.y, seated: new THREE.Vector3(...(item.sheath.seated ?? [0, 0, 0])), angle: 0, out: 0, time: null, holder: null, radius: null, stand: 0, width: 0, clear: null, hilt: [], arm: null, nearest: null, at: null };
+    return { side: item.sheath.socket.startsWith("left") ? "Left" : "Right", length: box.max.y, pommel: box.min.y, seated: new THREE.Vector3(...(item.sheath.seated ?? [0, 0, 0])), angle: 0, out: 0, time: null, holder: null, radius: null, stand: 0, width: 0, clear: null, hilt: [], arm: null, at: null };
 }
 
 export class Character {
@@ -287,16 +234,24 @@ export class Character {
      * @param {number} [options.hairDetail] - How much of its hair to grow, 0 to 1 (less for
      *   characters seen from afar: hair.js).
      * @param {boolean} [options.merge] - Draw its garments all at once (one mesh, one picture of
-     *   them all: for the many folk and soldiers about, not a player, who changes what they wear).
+     *   them all: for the many folk and soldiers about, and the other players; not the player's
+     *   own, who changes what they wear, nor another's just as they change it: setEquipment,
+     *   merging).
      * @param {boolean} [options.far] - Whether it'll be drawn with fewer triangles from afar or
      *   into shadows (lowerDetail): its hair's grown far thinner too (by default, if it's merged).
      * @param {boolean} [options.release] - Let go of the page's copy of its skin's pictures once
      *   they're on the graphics card (world/release.js): for the game's many, whose skins nothing
-     *   on the page reads again (not the lab's, saved as a template: skinCanvas).
+     *   on the page reads again (not the lab's, saved as a template: skinCanvas). Its pictures
+     *   are then held at the size it's seen at (fitPictures).
+     * @param {number} [options.tall] - How tall it'll be on the screen where it's first seen
+     *   (drawing buffer pixels), if that's known: its pictures are made the size that's seen at
+     *   (one that's `release`: pictures.js), as they're painted else, till it's told (fitPictures).
      */
     constructor(kit, options = {}, later = null) {
-        const { materials = {}, hairDetail = 1, merge = false, far = merge, release = false } = options;
+        const { materials = {}, hairDetail = 1, merge = false, far = merge, release = false, tall = null } = options;
         const human = kit.human;
+        // (The biggest any of its pictures is painted: its skin's, or its outfit's)
+        const full = Math.max(OUTFIT_SIZE, kit.atlas?.size ?? 0);
 
         this.kit = kit;
         this.hairDetail = hairDetail;
@@ -304,8 +259,21 @@ export class Character {
         this.far = far;
         this.release = release;
 
+        /**
+         * How big its pictures are held (pictures.js): `wanted` texels a side, for how tall it's
+         * seen (null: as they're painted, not told yet), of `full` at most; `under` seconds seen
+         * small enough for smaller ones; `held` seconds still to be kept whole (whole); its
+         * skin's `skin` a side now (null: none painted), the smallest it's held at kept by
+         * (`small`) while it's bigger, and what's asked for of another size (`job`).
+         */
+        this.pictures = { full, wanted: release && tall !== null ? pictureSize(tall, PICTURES.least, full) : null, under: 0, held: 0, skin: null, small: null, job: null };
+
         /** The outfit whose picture its garments are drawn with, when they're drawn at once. */
         this.composite = null;
+
+        // (How many times it's been dressed: what's put together for it a step at a time is for
+        // what it wore when that began, merging)
+        this.dressed = 0;
 
         // (The look of eye whose picture its eyes are drawn with: shared)
         this.eyePicture = null;
@@ -425,7 +393,7 @@ export class Character {
     // `skins`: skins.js): asked for first, so it's painted while the rest of it's built, and put on
     // last
     *#building({ shape = {}, look = {}, equipment = [] }, { elsewhere = false } = {}) {
-        const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look))) ?? null : null;
+        const job = elsewhere && this.kit.atlas ? this.kit.skins?.ask(paintedSkin(lookOf(look)), this.#skinSizes()) ?? null : null;
 
         this.setShape(shape);
         yield;
@@ -504,10 +472,92 @@ export class Character {
         this.#dress();
     }
 
-    /** Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out). */
-    setEquipment(ids) {
+    /**
+     * Wear and carry exactly these (EQUIPMENT ids: any it doesn't know left out), its garments
+     * drawn all at once or one by one from now on (`merge`: as they were, if it isn't said). All
+     * at once, their one picture's put together here and now, if no one else wears the outfit:
+     * one by one is shown without that wait, and put together after, a step at a time (merging).
+     */
+    setEquipment(ids, { merge = this.merge } = {}) {
+        this.merge = merge;
         this.#wear(ids);
         this.#dress();
+    }
+
+    /**
+     * Its garments, drawn one by one, drawn all at once from now on (`merge`), as it's dressed: a
+     * step at a time (each a yield), the outfit's one picture made first (wardrobe.js: or found
+     * made, someone else wearing it), the garments drawn one by one meanwhile, as they were;
+     * then, in one step, their meshes made one mesh drawn with it, and their own materials let
+     * go of (the kit keeps a garment's picture a while after no one draws with it). Nothing's
+     * fitted again: the meshes are the ones it wore, so it's the same garments in the same
+     * places. Returns whether they're drawn all at once now: not if it was dressed again
+     * meanwhile (what's begun here is for what it wore before, and stops, changing nothing), nor
+     * with fewer than two garments to put together (lace and drapes are drawn as they are).
+     * Given up on before it's done (the steps closed, a generator's `return`), the outfit's
+     * picture half made is let go of too, unless someone else is making it as well (wardrobe.js
+     * `shared`): only left off, it's kept by the kit for whoever next wants it.
+     */
+    *merging() {
+        const dressed = this.dressed;
+        const apart = this.garments.filter((mesh) => mesh.userData.joins);
+
+        this.merge = true;
+
+        if (apart.length < 2) {
+            return this.garments.some((mesh) => mesh.userData.merged);
+        }
+
+        // (Outermost last, as they're worn)
+        apart.sort((a, b) => stackOrder(a.name, b.name));
+
+        const ids = apart.map(({ name }) => name);
+
+        while (!outfitReady(this.kit, ids)) {
+            yield* readyingOutfit(this.kit, ids);
+
+            if (this.dressed !== dressed || this.disposed) {
+                return false;
+            }
+        }
+
+        // (Its picture's made: worn from here, in this one step)
+        const material = allAtOnce(this.#compositing(ids));
+        // (Each one's own triangles in full: one drawn a while has its lower levels' after them)
+        const counts = apart.map(({ geometry, userData }) => userData.detail?.[0].count ?? geometry.index.count);
+        const mesh = this.#joined(ids, mergeGeometries(apart.map(({ geometry }) => geometry), counts), material);
+
+        for (const each of apart) {
+            each.geometry.dispose();
+            each.removeFromParent();
+        }
+
+        // (Before the lace and the drapes, as one dressed all at once has it)
+        this.garments = [mesh, ...this.garments.filter((each) => !apart.includes(each))];
+        leaveGarments(this, ids);
+
+        if (this.lods) {
+            this.#lowerGarment(mesh);
+        }
+
+        return true;
+    }
+
+    // Garments' meshes as one (`geometry`: mergeGeometries'), drawn with their outfit's picture
+    // (`material`: #compositing's, for `ids`, outermost last), on its body
+    #joined(ids, geometry, material) {
+        const mesh = new THREE.SkinnedMesh(geometry, material);
+
+        mesh.name = "garments";
+        mesh.userData.merged = ids;
+        // (Fitted over the body: its shadow the body's, #updateIndex)
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        mesh.bind(this.rig.skeleton, new THREE.Matrix4());
+        mesh.boundingSphere = this.mesh.boundingSphere;
+        this.object.add(mesh);
+
+        return mesh;
     }
 
     // What it's to wear and carry (EQUIPMENT ids), not yet dressed in
@@ -563,6 +613,7 @@ export class Character {
         this.garments = [];
         this.items = [];
         this.holds = {};
+        this.dressed++;
         this.#release();
 
         const garmentIds = [];
@@ -593,7 +644,10 @@ export class Character {
         // the usual shape, as its picture is painted, so its trims are along its edges
         yield;
 
-        const measures = measureBody(this);
+        // (Its own measurements: only what hangs from it goes by them, a skirt, a gown or an
+        // apron, so it's measured when the first of those is built: 13 to 34 ms and 5 MB of
+        // short-lived objects, for every soldier that never wore one)
+        let measures = null;
         const built = yield* fittingOutfit(this, garmentIds, referenceMeasures(this.kit));
 
         yield;
@@ -639,20 +693,12 @@ export class Character {
 
             yield;
 
-            const mesh = new THREE.SkinnedMesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material);
+            const mesh = this.#joined(merged.map(({ id }) => id), mergeGeometries(merged.map(({ geometry }) => geometry)), material);
 
             for (const { geometry } of merged) {
                 geometry.dispose();
             }
 
-            mesh.name = "garments";
-            mesh.userData.merged = merged.map(({ id }) => id);
-            // (Fitted over the body: its shadow the body's, #updateIndex)
-            mesh.castShadow = false;
-            mesh.receiveShadow = true;
-            mesh.bind(this.rig.skeleton, new THREE.Matrix4());
-            mesh.boundingSphere = this.mesh.boundingSphere;
-            this.object.add(mesh);
             this.garments.push(mesh);
 
             // (Dressed again: its new outfit's lower detail too)
@@ -661,10 +707,12 @@ export class Character {
             }
         }
 
-        for (const { id, geometry } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
+        for (const { id, geometry, garment } of merged.length > 1 ? parts.filter((part) => !merged.includes(part)) : parts) {
             const mesh = new THREE.SkinnedMesh(geometry, this.#garmentMaterial(id));
 
             mesh.name = id;
+            // (One that can be drawn with the rest all at once: not lace, see-through; merging)
+            mesh.userData.joins = !garment.design;
             // (Fitted over the body: its shadow the body's, #updateIndex)
             mesh.castShadow = false;
             mesh.receiveShadow = true;
@@ -700,7 +748,7 @@ export class Character {
         for (const id of [...drapeIds].sort((a, b) => Number(skirtUnder(a, drapeIds) !== null) - Number(skirtUnder(b, drapeIds) !== null))) {
             yield;
 
-            const { geometry, profile, shown, levels } = buildDrape(this, id, measures, drapeIds, worn);
+            const { geometry, profile, shown, levels } = buildDrape(this, id, (measures ??= measureBody(this)), drapeIds, worn);
             const mesh = new THREE.SkinnedMesh(geometry, this.#drapeMaterial(id));
 
             mesh.name = id;
@@ -1090,8 +1138,15 @@ export class Character {
      * `seated`, where the seat pushes it. With the legs posed for the frame (Actions.place), at
      * `time` (seconds, any clock).
      */
-    hang(time, seated = false, { arms = false } = {}) {
-        for (const model of this.items) {
+    hang(time, seated = false, options = null) {
+        const arms = options?.arms ?? false;
+
+        // (Nothing's made here, nor in what it calls (hangNearest, armPush): it's done twice a
+        // frame for every body with a blade at its hip, and asks how clear the blade is of the
+        // leg 86 times each: an arrow function made for each, and one inside it each time it was
+        // asked, were an eighth of everything posing made)
+        for (let m = 0; m < this.items.length; m++) {
+            const model = this.items[m];
             const hangs = model.userData.hangs;
 
             if (!hangs || (arms && (hangs.clear === null || (hangs.side === "Left" && (this.held ?? 0) > 0.5)))) {
@@ -1114,51 +1169,22 @@ export class Character {
             // (The thigh thicker at the hip than the knee, the calf than the ankle)
             hangs.radius ??= [`${hangs.side}UpLeg`, `${hangs.side}Leg`].map((bone, k) => HANG_THICK.map((between) => limbThickness(this, bone, k ? `${hangs.side}Foot` : `${hangs.side}Leg`, between)));
 
-            const names = [`${hangs.side}UpLeg`, `${hangs.side}Leg`, `${hangs.side}Foot`];
+            const names = HANG_LEG[hangs.side];
             // (Out from the body: the left hip's to the left)
             const outward = hangs.side === "Left" ? 1 : -1;
-
-            // How much clearer of the leg (its joints `leg`; metres, less the limb's thickness) than
-            // it's kept (`hangs.clear`) the blade hung from `pivot` along `down`, its edge `edge`,
-            // swung `back` and `out`, is all the way down, its back and its edge (below 0, the leg's
-            // pushing it); and, given `each`, how near it comes to the leg at each place
-            const nearest = (back, out, { pivot, down, edge, leg, across, forward }, each = null) => {
-                const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
-                const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
-                let least = Infinity;
-
-                HANG_SAMPLES.forEach((share, i) => {
-                    for (let j = 0; j < 2; j++) {
-                        const point = _hangPoint.copy(pivot).addScaledVector(along, hangs.length * share - HANG_PIVOT).addScaledVector(sideways, j * hangs.width);
-                        let near = Infinity;
-
-                        for (let k = 0; k < 2; k++) {
-                            const [top, bottom] = hangs.radius[k];
-                            const on = _segment.set(leg[k], leg[k + 1]).closestPointToPointParameter(point, true);
-
-                            near = Math.min(near, _segment.at(on, _hangOn).distanceTo(point) - (top + (bottom - top) * on));
-                        }
-
-                        least = Math.min(least, near - (hangs.clear?.[2 * i + j] ?? 0));
-
-                        if (each) {
-                            each[2 * i + j] = near;
-                        }
-                    }
-                });
-
-                return least;
-            };
-
-            hangs.nearest = nearest;
 
             // (Where its frog hangs it, as tight to the body as it can be, and how clear of the
             // leg that keeps it: fitHanging)
             if (hangs.clear === null) {
-                fitHanging(this, model, hangs, place, names, nearest);
+                fitHanging(this, model, hangs, place, names);
             }
 
-            const leg = names.map((name, i) => this.rig.bone(name).getWorldPosition(_legJoints[i]));
+            const leg = _legJoints;
+
+            for (let i = 0; i < 3; i++) {
+                this.rig.bone(names[i]).getWorldPosition(leg[i]);
+            }
+
             const across = this.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(this.rig.bone("RightUpLeg").getWorldPosition(_hangFrom)).normalize();
             const at = _hangAt.copy(place.position).addScaledVector(hangs.seated, seated ? 1 : 0);
             const down = _hangDown.set(0, 1, 0).applyQuaternion(hips.getWorldQuaternion(_hangTurn).multiply(place.quaternion));
@@ -1171,50 +1197,79 @@ export class Character {
             const turn = hips.getWorldQuaternion(_hangBack);
             const raised = Math.atan2(thigh.dot(_hangAxis.set(0, 0, 1).applyQuaternion(turn)), -thigh.dot(_hangAxis.set(0, 1, 0).applyQuaternion(turn)));
             const shoved = smoothstep(HANG_LIFT.from, HANG_LIFT.to, raised) * HANG_LIFT.off;
-            const [backHeld, outHeld, off] = [held * HANG_HELD.back, held * HANG_HELD.out, place.out ? Math.max(held * HANG_HELD.off, shoved) : 0];
+            const backHeld = held * HANG_HELD.back;
+            const outHeld = held * HANG_HELD.out;
+            const off = place.out ? Math.max(held * HANG_HELD.off, shoved) : 0;
+
             // (It swings about the frog, at the scabbard's mouth)
             // (Where it hangs from, as the seat and a hand on it have it: armPush too)
             hangs.at = (hangs.at ?? new THREE.Vector3()).copy(at).addScaledVector(place.out ?? _hangPoint.set(0, 0, 0), off);
 
             const pivot = hips.localToWorld(_hangFrom.copy(hangs.at)).addScaledVector(down, HANG_PIVOT);
             const forward = _hangForward.crossVectors(across, _up);
-            const posed = { pivot, down, edge, leg, across, forward };
+            const posed = _hangPosed;
+
+            posed.pivot = pivot;
+            posed.down = down;
+            posed.edge = edge;
+            posed.leg = leg;
+            posed.across = across;
+            posed.forward = forward;
 
             // The swing clear of the leg nearest how it hangs now (pushed no further than it must
             // be), and the one nearest hanging as it's left (where it falls back to); or, if none
             // is clear, the most clear
-            let [pushed, resting, best, most] = [null, null, null, -Infinity];
+            let [pushed, pushedBack, pushedOut, pushedMoved] = [false, 0, 0, 0];
+            let [resting, restingBack, restingOut, restingHanging] = [false, 0, 0, 0];
+            let [bestBack, bestOut, most] = [0, 0, -Infinity];
 
-            for (const out of HANG_OUT) {
-                for (const back of HANG_ANGLES) {
-                    const clear = nearest(back, out, posed);
+            for (let o = 0; o < HANG_OUT.length; o++) {
+                const out = HANG_OUT[o];
+
+                for (let b = 0; b < HANG_ANGLES.length; b++) {
+                    const back = HANG_ANGLES[b];
+                    const clear = hangNearest(hangs, back, out, posed);
                     const moved = Math.abs(back - hangs.angle) + Math.abs(out - hangs.out);
                     const hanging = Math.abs(back - backHeld) + Math.abs(out - outHeld) * 1.5;
 
                     if (clear > most) {
-                        [best, most] = [[back, out], clear];
+                        bestBack = back;
+                        bestOut = out;
+                        most = clear;
                     }
 
-                    if (clear >= HANG_PUSH) {
-                        pushed = !pushed || moved < pushed[2] ? [back, out, moved] : pushed;
+                    if (clear >= HANG_PUSH && (!pushed || moved < pushedMoved)) {
+                        pushed = true;
+                        pushedBack = back;
+                        pushedOut = out;
+                        pushedMoved = moved;
                     }
 
-                    if (clear >= 0) {
-                        resting = !resting || hanging < resting[2] ? [back, out, hanging] : resting;
+                    if (clear >= 0 && (!resting || hanging < restingHanging)) {
+                        resting = true;
+                        restingBack = back;
+                        restingOut = out;
+                        restingHanging = hanging;
                     }
                 }
             }
 
             // Pushed at once by the leg it's in; falling back slowly (or taken there by the hand
             // holding it), never into it
-            if (nearest(hangs.angle, hangs.out, posed) < 0 || dt === 0) {
-                [hangs.angle, hangs.out] = pushed ?? best;
+            if (hangNearest(hangs, hangs.angle, hangs.out, posed) < 0 || dt === 0) {
+                hangs.angle = pushed ? pushedBack : bestBack;
+                hangs.out = pushed ? pushedOut : bestOut;
             } else {
-                const [back, out] = resting ?? [backHeld, outHeld];
+                const back = resting ? restingBack : backHeld;
+                const out = resting ? restingOut : outHeld;
                 const step = HANG_FALL * dt;
-                const next = [hangs.angle + Math.sign(back - hangs.angle) * Math.min(Math.abs(back - hangs.angle), step), hangs.out + Math.sign(out - hangs.out) * Math.min(Math.abs(out - hangs.out), step)];
+                const nextBack = hangs.angle + Math.sign(back - hangs.angle) * Math.min(Math.abs(back - hangs.angle), step);
+                const nextOut = hangs.out + Math.sign(out - hangs.out) * Math.min(Math.abs(out - hangs.out), step);
 
-                [hangs.angle, hangs.out] = nearest(...next, posed) >= 0 ? next : [hangs.angle, hangs.out];
+                if (hangNearest(hangs, nextBack, nextOut, posed) >= 0) {
+                    hangs.angle = nextBack;
+                    hangs.out = nextOut;
+                }
             }
 
             // (Turned about the hip's own across, then its forward, in the hip's frame, about the
@@ -1223,13 +1278,12 @@ export class Character {
             const swing = _hangTurn.setFromAxisAngle(forward.transformDirection(local), hangs.out * outward).multiply(_hangBack.setFromAxisAngle(across.transformDirection(local), hangs.angle));
             const frog = _hangDown.set(0, HANG_PIVOT, 0).applyQuaternion(place.quaternion);
 
-            for (const hung of [sheathed ? model : null, hangs.holder]) {
-                hung?.position.copy(at).add(frog).sub(_hangPoint.copy(frog).applyQuaternion(swing));
+            if (sheathed) {
+                swingHung(model, at, frog, swing, place, off);
+            }
 
-                if (off > 0) {
-                    hung?.position.addScaledVector(place.out, off);
-                }
-                hung?.quaternion.copy(swing).multiply(place.quaternion);
+            if (hangs.holder) {
+                swingHung(hangs.holder, at, frog, swing, place, off);
             }
         }
     }
@@ -1295,159 +1349,28 @@ export class Character {
 
     /**
      * A garment's material, its texture painted once per kit; a people's make of one that only
-     * differs in colour (`base`: liveries.js), its picture tinted to its colour.
+     * differs in colour (`base`: liveries.js), its picture tinted to its colour (wardrobe.js):
+     * its own to draw with, kept by the kit while it does.
      */
     #garmentMaterial(id) {
-        return allAtOnce(this.#readying(id));
-    }
-
-    // The same, a step at a time (each a yield: its picture painted a few rows at a time, the
-    // first time), returning it
-    *#readying(id) {
-        const kit = this.kit;
-        const garment = GARMENTS[id];
-
-        kit.garmentMaterials ??= new Map();
-
-        if (garment.base && !kit.garmentMaterials.has(id)) {
-            const material = (yield* this.#readying(garment.base)).clone();
-            const [from, to] = [new THREE.Color(GARMENTS[garment.base].colour), new THREE.Color(garment.colour)];
-
-            material.color.setRGB(to.r / Math.max(0.03, from.r), to.g / Math.max(0.03, from.g), to.b / Math.max(0.03, from.b));
-            kit.garmentMaterials.set(id, material);
-        }
-
-        if (garment.design && !kit.garmentMaterials.has(id)) {
-            kit.garmentMaterials.set(id, this.#designMaterial(garment));
-        }
-
-        if (!kit.garmentMaterials.has(id)) {
-            if (!kit.texelMap) {
-                kit.texelMap = texelMap(this.human, 512);
-                yield;
-            }
-
-            // (Painted on the body of the usual shape, as it's cut)
-            const painted = yield* paintingGarment(kit.texelMap, garment, referenceMeasures(kit));
-            const material = new THREE.MeshStandardMaterial({
-                map: dataTexture(painted.data, painted.size, true),
-                bumpMap: dataTexture(painted.bump, painted.size, false),
-                bumpScale: garment.metalness ? 0.6 : 1.5,
-                roughness: garment.roughness ?? 0.8,
-                metalness: garment.metalness ?? 0,
-                side: THREE.DoubleSide,
-            });
-
-            kit.garmentMaterials.set(id, material);
-        }
-
-        return kit.garmentMaterials.get(id);
+        return drawingGarment(this, id);
     }
 
     /**
      * The material of an outfit's garments drawn all at once (ids, outermost last): one picture of
      * them all (garments.js compositeGarments), its heights, roughness and metalness in another.
-     * Made once per kit for each outfit, and let go when no one's worn it for a while.
+     * Made once per kit for each outfit, and let go when no one's worn it for a while; its
+     * pictures as big as its wearers are seen (wardrobe.js).
      */
     *#compositing(ids) {
-        const kit = this.kit;
-        const key = ids.join(" ");
-
-        kit.composites ??= new Map();
-
-        if (!kit.composites.has(key)) {
-            kit.texelMap ??= texelMap(this.human, 512);
-
-            // (Each garment's own picture painted, in steps the first time: then them all)
-            for (const id of ids) {
-                yield* this.#readying(id);
-                yield;
-            }
-
-            const layers = ids.map((id) => {
-                const garment = GARMENTS[id];
-                const material = this.#garmentMaterial(id);
-
-                return {
-                    data: material.map.image.data,
-                    bump: material.bumpMap.image.data,
-                    tint: garment.base ? material.color.toArray() : null,
-                    bumpScale: material.bumpScale,
-                    roughness: material.roughness,
-                    metalness: material.metalness,
-                    garment,
-                };
-            });
-            const { size, data, surface } = yield* compositingGarments(kit.texelMap, layers, referenceMeasures(kit));
-            const surfaceMap = dataTexture(surface, size, false);
-            const material = new THREE.MeshStandardMaterial({
-                map: dataTexture(data, size, true),
-                bumpMap: surfaceMap,
-                bumpScale: COMPOSITE_BUMP,
-                roughnessMap: surfaceMap,
-                roughness: 1,
-                metalnessMap: surfaceMap,
-                metalness: 1,
-                side: THREE.DoubleSide,
-            });
-
-            // (Metal and cloth both: wounds.js tells which is where)
-            material.userData.mixed = true;
-            kit.composites.set(key, { value: material, users: 0 });
-            yield;
-        }
-
-        this.composite = key;
-
-        return take(kit.composites, key);
+        return yield* wearingOutfit(this, ids);
     }
 
-    // No longer wearing the outfit whose picture it was drawn with: kept a while, for the next
-    // to wear it
+    // No longer wearing the outfit whose picture it was drawn with (kept a while, for the next
+    // to wear it), nor drawing with any garment's own
     #release() {
-        letGo(this.kit.composites, this.composite, IDLE_COMPOSITES, (material) => {
-            material.map.dispose();
-            material.bumpMap.dispose();
-            material.dispose();
-        });
-        this.composite = null;
-    }
-
-    /**
-     * Lingerie's material: its design's texture (painted once per kit, white, shared by every
-     * colour) tinted, and see-through where the texture is. The texture keeps its colour where
-     * it's clear, so the edges of what's there don't darken as it's minified.
-     */
-    #designMaterial(garment) {
-        const kit = this.kit;
-
-        kit.designTextures ??= new Map();
-
-        if (!kit.designTextures.has(garment.design)) {
-            kit.texelMap ??= texelMap(this.human, 512);
-
-            const { data, size } = paintGarment(kit.texelMap, garment);
-            const texture = new THREE.DataTexture(new Uint8Array(data.buffer), size, size);
-
-            // (painted rows from the top, as a canvas would be)
-            texture.flipY = true;
-            texture.colorSpace = THREE.SRGBColorSpace;
-            texture.magFilter = THREE.LinearFilter;
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            texture.generateMipmaps = true;
-            texture.anisotropy = 4;
-            texture.needsUpdate = true;
-            kit.designTextures.set(garment.design, texture);
-        }
-
-        return new THREE.MeshStandardMaterial({
-            color: garment.colour,
-            map: kit.designTextures.get(garment.design),
-            roughness: garment.roughness ?? 0.6,
-            transparent: true,
-            alphaTest: 0.03,
-            side: THREE.DoubleSide,
-        });
+        leaveOutfit(this);
+        leaveGarments(this);
     }
 
     /** Change how the character looks: { skin, eyes, hair } (see LOOK_DEFAULTS). */
@@ -1489,11 +1412,32 @@ export class Character {
             return;
         }
 
-        const { data, bump, width } = job ? yield* this.kit.skins.painting(job) : yield* paintingSkin(this.kit.atlas, settings);
+        const sizes = this.#skinSizes();
 
+        // (Asked for anew meanwhile, at another size: this one's the skin it has now)
+        this.#forget();
+        this.#wearSkin(job ? yield* this.kit.skins.painting(job) : yield* sizingSkin(yield* paintingSkin(this.kit.atlas, settings), sizes.size, sizes.small));
+    }
+
+    // The size its skin's wanted at now (texels a side: as it's painted, or smaller for one of
+    // the game's seen small, fitPictures), and the size it's also kept at on the page while it's
+    // bigger than that, to go back to (0: not kept): { size, small }
+    #skinSizes() {
+        const full = this.kit.atlas?.size ?? 0;
+        const size = Math.min(full, this.pictures.wanted ?? full);
+        const least = Math.min(full, PICTURES.least);
+
+        return { size, small: this.release && least < size ? least : 0 };
+    }
+
+    // A painted skin put on (paintingSkin's, at whatever size: sizingSkin's): its colour and its
+    // bumps, each in the picture it had if it had one
+    #wearSkin({ data, bump, width, small = null }) {
         this.#setTexture(this.materials.body, "map", data, width, true);
         this.#setTexture(this.materials.body, "bumpMap", bump, width, false);
         this.materials.body.bumpScale = 1.2;
+        this.pictures.skin = width;
+        this.pictures.small = small;
 
         // (Its 4 MB of colour and 1 MB of bumps let go of once they're sent, if it's one of the
         // game's: painted again, they're sent and let go of again)
@@ -1503,6 +1447,143 @@ export class Character {
                 releaseTexture(texture);
             }
         }
+    }
+
+    /**
+     * Its pictures held at the size it's seen at: `tall` pixels tall on the screen (drawing buffer
+     * pixels; where it stands, in view or not), `dt` seconds on. Seen bigger than its pictures are
+     * for (pictures.js PICTURES), bigger ones are asked for at once: its skin painted again
+     * elsewhere (skins.js: or here, a step each time this is called, where it can't be), its
+     * outfit's by its tallest wearer (wardrobe.js), its wounds' (world/wounds.js). Seen smaller a
+     * while, they're swapped back. Only one of the game's (`release`): anyone else's are as
+     * they're painted. Called every frame it may be drawn (`now`: the frame's time, ms): the
+     * kit's wardrobe is tended as it is (wardrobe.js tendKit: once a frame, whoever calls).
+     */
+    fitPictures(tall, dt = 0, now = performance.now()) {
+        const pictures = this.pictures;
+
+        if (!this.release) {
+            return;
+        }
+
+        tendKit(this.kit, now);
+
+        pictures.held = Math.max(0, pictures.held - dt);
+
+        const has = pictures.wanted ?? pictures.full;
+        let size = pictures.held > 0 ? pictures.full : pictureSize(tall, has, pictures.full);
+
+        // (Smaller only once it's been seen that small a while)
+        pictures.under = size < has ? pictures.under + dt : 0;
+
+        if (size < has && pictures.under < PICTURES.after) {
+            size = has;
+        }
+
+        if (size !== pictures.wanted) {
+            pictures.wanted = size;
+            pictures.under = 0;
+            fitOutfit(this);
+        }
+
+        this.#fitSkin();
+    }
+
+    /**
+     * Its pictures as big as they're painted, however small it's seen, for a while from now
+     * (PICTURES.held seconds: drawn close for a likeness of it; asked again, a while longer):
+     * whether they are yet. Anyone else's are as they're painted: but for an outfit's, if it
+     * was given only the colour kept of them (wardrobe.js: let go of since the game's own bodies
+     * were given theirs), which is made whole here, at once.
+     */
+    whole(now = performance.now()) {
+        if (!this.release) {
+            wholeOutfit(this);
+
+            return true;
+        }
+
+        this.pictures.held = PICTURES.held;
+        this.fitPictures(Infinity, 0, now);
+
+        return outfitWhole(this) && (this.pictures.skin === null || this.pictures.skin >= this.kit.atlas.size);
+    }
+
+    // Its skin the size wanted now, if it isn't: the smaller one kept put back on, or one asked
+    // for (painted elsewhere, or here a step a call), and put on when it's painted
+    #fitSkin() {
+        const pictures = this.pictures;
+
+        // (No skin of its own painted, or not yet: its building puts it on at the size wanted)
+        if (pictures.skin === null || !this.kit.atlas) {
+            return;
+        }
+
+        // (As it is, most frames: nothing made to find that out)
+        if (!pictures.job && pictures.skin === Math.min(this.kit.atlas.size, pictures.wanted ?? this.kit.atlas.size)) {
+            return;
+        }
+
+        const { size, small } = this.#skinSizes();
+
+        if (pictures.job && pictures.job.size !== size) {
+            this.#forget();
+        }
+
+        if (size === pictures.skin) {
+            return;
+        }
+
+        if (pictures.small?.width === size) {
+            this.#wearSkin(pictures.small);
+
+            return;
+        }
+
+        if (!pictures.job) {
+            const settings = paintedSkin(this.look);
+            const asked = this.kit.skins?.ask(settings, { size, small }) ?? null;
+
+            pictures.job = { size, asked, steps: asked ? null : this.#resizing(settings, size, small) };
+        }
+
+        const { asked } = pictures.job;
+
+        // (Painted elsewhere, and back; or the worker's gone, and it's painted here after all)
+        if (asked?.skin) {
+            pictures.job = null;
+            this.#wearSkin(asked.skin);
+
+            return;
+        }
+
+        if (asked && !this.kit.skins.worker) {
+            pictures.job.asked = null;
+            pictures.job.steps = this.#resizing(paintedSkin(this.look), size, small);
+        }
+
+        const step = pictures.job.steps?.next();
+
+        if (step?.done) {
+            pictures.job = null;
+            this.#wearSkin(step.value);
+        }
+    }
+
+    // Its skin painted here at another size, a step at a time, returning it
+    *#resizing(settings, size, small) {
+        return yield* sizingSkin(yield* paintingSkin(this.kit.atlas, settings), size, small);
+    }
+
+    // A skin of another size asked for and not yet come no longer wanted
+    #forget() {
+        const job = this.pictures.job;
+
+        if (job?.asked) {
+            this.kit.skins?.forget(job.asked);
+        }
+
+        this.pictures.job = null;
     }
 
     // Its eyes' picture: painted once for each look of eye, and shared by everyone with it
@@ -1534,7 +1615,7 @@ export class Character {
 
     // No longer drawing its eyes with the picture it did: kept a while, for the next with them
     #releaseEyes() {
-        letGo(this.kit.eyes, this.eyePicture, IDLE_EYES, (texture) => texture.dispose());
+        letGo(this.kit.eyes, this.eyePicture, IDLE, (texture) => texture.dispose());
         this.materials.eyes.map = null;
         this.eyePicture = null;
     }
@@ -1606,16 +1687,16 @@ export class Character {
 
     /**
      * Put a painted picture (rows from the top: RGBA, or a byte a texel for heights) into a
-     * material's texture, reusing it if it's the same size (and kind: its pixels may have been
-     * let go of, once sent).
+     * material's texture, reusing it if it's the same kind (its pixels may have been let go of,
+     * once sent), whatever its size.
      */
     #setTexture(material, slot, data, size, colour) {
         const texture = material[slot];
 
-        // (Not one given it on a canvas: materials, the constructor's option)
-        if (texture?.isDataTexture && texture.image.width === size && texture.format === (data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat)) {
-            texture.image.data = bytesOf(data);
-            texture.needsUpdate = true;
+        // (Not one given it on a canvas: materials, the constructor's option. Another size, in
+        // the same picture all the same: whatever it's been told to do once it's sent, it still does)
+        if (texture?.isDataTexture && texture.format === (data.length === size * size ? THREE.RedFormat : THREE.RGBAFormat)) {
+            setPicture(texture, data, size);
 
             return;
         }
@@ -1699,20 +1780,16 @@ export class Character {
         const human = this.human;
         const count = human.renderSource.length;
         const geometry = new THREE.BufferGeometry();
-        const { skinIndex, skinWeight } = skinningOf(human);
+        const shared = skinningOf(human);
 
         geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
         geometry.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(count * 3), 3));
-        // (Its eyelashes' laid out for their strands: lashes.js)
-        geometry.setAttribute("uv", new THREE.BufferAttribute(lashUVs(human), 2));
-        geometry.setAttribute("skinIndex", new THREE.BufferAttribute(skinIndex, 4));
-        geometry.setAttribute("skinWeight", new THREE.BufferAttribute(skinWeight, 4, true));
 
-        // (Where each vertex's moves are kept for its face's expressions: the kit's, shared)
-        const faces = expressionData(human);
-
-        if (faces) {
-            geometry.setAttribute("faceSlot", new THREE.BufferAttribute(faces.slotOf, 1));
+        // (The same for every body of its data: theirs too, not its own. disposeBody)
+        for (const name of SHARED) {
+            if (shared[name]) {
+                geometry.setAttribute(name, shared[name]);
+            }
         }
 
         this.geometry = geometry;
@@ -2002,7 +2079,9 @@ export class Character {
 
     dispose() {
         this.disposed = true;
-        this.geometry.dispose();
+        this.#forget();
+        this.pictures.small = null;
+        disposeBody(this.geometry);
 
         // (The skeleton's bone texture, made when it was first drawn)
         this.rig.skeleton.dispose();
@@ -2126,35 +2205,20 @@ function armPush(character, model, hangs) {
     const down = _hangDown.set(0, 1, 0).applyQuaternion(turn);
     const edge = _hangEdge.set(0, 0, 1).applyQuaternion(turn);
     const pivot = hips.localToWorld(_hangFrom.copy(hangs.at)).addScaledVector(down, HANG_PIVOT);
-    const start = pivot.clone();
+    const start = _armStart.copy(pivot);
     // (Out from the hip, in the world: the frog shoved that way along the belt, if need be)
-    const away = (place.out ?? _armOut.set(outward, 0, 0)).clone().transformDirection(hips.matrixWorld);
+    const away = _armAway.copy(place.out ?? _armOut.set(outward, 0, 0)).transformDirection(hips.matrixWorld);
     const across = character.rig.bone("LeftUpLeg").getWorldPosition(_across).sub(character.rig.bone("RightUpLeg").getWorldPosition(_hangAt)).normalize();
     const forward = _hangForward.crossVectors(across, _up);
-    const arm = [`${Side}ForeArm`, `${Side}Hand`, `${Side}HandMiddle1`].map((name, i) => character.rig.bone(name).getWorldPosition(_armJoints[i]));
+    const arm = _armJoints;
+
+    for (let i = 0; i < 3; i++) {
+        character.rig.bone(HANG_ARM[Side][i]).getWorldPosition(arm[i]);
+    }
 
     hangs.arm ??= limbThickness(character, `${Side}ForeArm`, `${Side}Hand`);
 
-    // How far (metres, less the arm's thickness) the hilt, swung `back` and `out`, keeps off the arm
-    const off = (back, out) => {
-        const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
-        const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
-        let least = Infinity;
-
-        for (const [y, z] of hangs.hilt) {
-            const point = _hangPoint.copy(pivot).addScaledVector(along, y - HANG_PIVOT).addScaledVector(sideways, z);
-
-            for (let k = 0; k < 2; k++) {
-                const on = _segment.set(arm[k], arm[k + 1]).closestPointToPointParameter(point, true);
-
-                least = Math.min(least, _segment.at(on, _hangOn).distanceTo(point) - hangs.arm);
-            }
-        }
-
-        return least;
-    };
-
-    const now = off(hangs.angle, hangs.out);
+    const now = hiltOff(hangs, hangs.angle, hangs.out, pivot, down, edge, across, forward, arm);
 
     if (now >= HANG_ARM_CLEAR) {
         return;
@@ -2162,30 +2226,47 @@ function armPush(character, model, hangs) {
 
     // (The swing that clears it nearest how it hangs, not into the leg, as hang measures it; the
     // frog shoved out along the belt as little as lets one. If none clears it so far and the arm's
-    // in it, the nearest that takes it out of the arm, or failing that the furthest out of it)
-    const legs = [`${Side}UpLeg`, `${Side}Leg`, `${Side}Foot`].map((name, i) => character.rig.bone(name).getWorldPosition(_legJoints[i]));
+    // in it, the nearest that takes it out of the arm, or failing that the furthest out of it.
+    // Each of them [back, out, how far it's moved, the shove, how clear])
+    const posed = _hangPosed;
     let [best, freed, most] = [null, null, null];
 
-    for (const shove of HANG_ARM_SHOVE) {
+    for (let i = 0; i < 3; i++) {
+        character.rig.bone(HANG_LEG[Side][i]).getWorldPosition(_legJoints[i]);
+    }
+
+    posed.pivot = pivot;
+    posed.down = down;
+    posed.edge = edge;
+    posed.leg = _legJoints;
+    posed.across = across;
+    posed.forward = forward;
+
+    for (let n = 0; n < HANG_ARM_SHOVE.length; n++) {
+        const shove = HANG_ARM_SHOVE[n];
+
         pivot.copy(start).addScaledVector(away, shove);
 
-        for (const out of HANG_OUT) {
-            for (const back of HANG_ANGLES) {
+        for (let o = 0; o < HANG_OUT.length; o++) {
+            const out = HANG_OUT[o];
+
+            for (let b = 0; b < HANG_ANGLES.length; b++) {
+                const back = HANG_ANGLES[b];
                 const moved = Math.abs(back - hangs.angle) + Math.abs(out - hangs.out);
-                const clear = off(back, out);
+                const clear = hiltOff(hangs, back, out, pivot, down, edge, across, forward, arm);
                 const kept = clear >= HANG_ARM_CLEAR ? best : clear >= 0 ? freed : null;
 
-                if ((kept ? moved >= kept[2] : clear < 0 && most && clear <= most[4]) || hangs.nearest(back, out, { pivot, down, edge, leg: legs, across, forward }) < 0) {
+                if ((kept ? moved >= kept[2] : clear < 0 && most && clear <= most[4]) || hangNearest(hangs, back, out, posed) < 0) {
                     continue;
                 }
 
-                if (clear >= HANG_ARM_CLEAR) {
-                    best = [back, out, moved, shove];
-                } else if (clear >= 0) {
-                    freed = [back, out, moved, shove];
-                } else {
-                    most = [back, out, moved, shove, clear];
-                }
+                const found = clear >= HANG_ARM_CLEAR ? (best = _armBest) : clear >= 0 ? (freed = _armFreed) : (most = _armMost);
+
+                found[0] = back;
+                found[1] = out;
+                found[2] = moved;
+                found[3] = shove;
+                found[4] = clear;
             }
         }
 
@@ -2200,19 +2281,106 @@ function armPush(character, model, hangs) {
         return;
     }
 
-    [hangs.angle, hangs.out] = best;
+    hangs.angle = best[0];
+    hangs.out = best[1];
     hangs.at.addScaledVector(place.out ?? _armOut.set(outward, 0, 0), best[3]);
 
     const local = _hangInverse.copy(hips.matrixWorld).invert();
     const swing = _hangTurn.setFromAxisAngle(forward.transformDirection(local), hangs.out * outward).multiply(_hangBack.setFromAxisAngle(across.transformDirection(local), hangs.angle));
     const frog = _hangDown.set(0, HANG_PIVOT, 0).applyQuaternion(place.quaternion);
-    const sheathed = character.sheathed && !model.userData.settling;
 
-    for (const hung of [sheathed ? model : null, hangs.holder]) {
-        hung?.position.copy(hangs.at).add(frog).sub(_hangPoint.copy(frog).applyQuaternion(swing));
-        hung?.quaternion.copy(swing).multiply(place.quaternion);
-        hung?.updateMatrixWorld(true);
+    if (character.sheathed && !model.userData.settling) {
+        swingHung(model, hangs.at, frog, swing, place, 0);
+        model.updateMatrixWorld(true);
     }
+
+    if (hangs.holder) {
+        swingHung(hangs.holder, hangs.at, frog, swing, place, 0);
+        hangs.holder.updateMatrixWorld(true);
+    }
+}
+
+// How far (metres, less the arm's thickness) the hilt of a blade hung at the hip (its `hangs`),
+// swung `back` and `out` about `pivot` (hung along `down`, its edge `edge`), keeps off the arm
+// (its joints, `arm`: armPush)
+function hiltOff(hangs, back, out, pivot, down, edge, across, forward, arm) {
+    const outward = hangs.side === "Left" ? 1 : -1;
+    const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+    const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+    let least = Infinity;
+
+    for (let h = 0; h < hangs.hilt.length; h++) {
+        const point = _hangPoint.copy(pivot).addScaledVector(along, hangs.hilt[h][0] - HANG_PIVOT).addScaledVector(sideways, hangs.hilt[h][1]);
+
+        for (let k = 0; k < 2; k++) {
+            least = Math.min(least, offSegment(point, arm[k], arm[k + 1], 0, 0) - hangs.arm);
+        }
+    }
+
+    return least;
+}
+
+// How far a point is from a limb between two of its joints (`start`, `end`), less how thick the
+// limb is where the point's nearest it (`top` at `start`, `bottom` at `end`). (In the numbers
+// themselves, as three.js's Line3 works its nearest point out and how far off that is, to the
+// last bit: asked of a line, each number it hands back is made anew, and this is asked forty
+// times each time a blade's asked how clear it is, 86 times a frame)
+function offSegment(point, start, end, top, bottom) {
+    const ex = end.x - start.x;
+    const ey = end.y - start.y;
+    const ez = end.z - start.z;
+    const length = ex * ex + ey * ey + ez * ez;
+    const on = length === 0 ? 0 : Math.max(0, Math.min(1, (ex * (point.x - start.x) + ey * (point.y - start.y) + ez * (point.z - start.z)) / length));
+    const dx = ex * on + start.x - point.x;
+    const dy = ey * on + start.y - point.y;
+    const dz = ez * on + start.z - point.z;
+
+    return Math.sqrt(dx * dx + dy * dy + dz * dz) - (top + (bottom - top) * on);
+}
+
+// How much clearer of the leg (its joints `leg`; metres, less the limb's thickness) than it's
+// kept (`hangs.clear`) a blade hung at the hip (its `hangs`: Character.hang) from `pivot` along
+// `down`, its edge `edge`, swung `back` and `out`, is all the way down, its back and its edge
+// (below 0, the leg's pushing it); and, given `each`, how near it comes to the leg at each place.
+// As it's posed: `posed`, { pivot, down, edge, leg, across, forward }
+function hangNearest(hangs, back, out, posed, each = null) {
+    const { pivot, down, edge, leg, across, forward } = posed;
+    // (Out from the body: the left hip's to the left)
+    const outward = hangs.side === "Left" ? 1 : -1;
+    const along = _hangAlong.copy(down).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+    const sideways = _hangSide.copy(edge).applyAxisAngle(across, back).applyAxisAngle(forward, out * outward);
+    let least = Infinity;
+
+    for (let i = 0; i < HANG_SAMPLES.length; i++) {
+        for (let j = 0; j < 2; j++) {
+            const point = _hangPoint.copy(pivot).addScaledVector(along, hangs.length * HANG_SAMPLES[i] - HANG_PIVOT).addScaledVector(sideways, j * hangs.width);
+            let near = Infinity;
+
+            for (let k = 0; k < 2; k++) {
+                near = Math.min(near, offSegment(point, leg[k], leg[k + 1], hangs.radius[k][0], hangs.radius[k][1]));
+            }
+
+            least = Math.min(least, near - (hangs.clear?.[2 * i + j] ?? 0));
+
+            if (each) {
+                each[2 * i + j] = near;
+            }
+        }
+    }
+
+    return least;
+}
+
+// What hangs at the hip (the blade, or what it hangs in) put where it hangs from (`at`), swung
+// (`swing`) about its frog, and shoved `off` out along the belt
+function swingHung(hung, at, frog, swing, place, off) {
+    hung.position.copy(at).add(frog).sub(_hangPoint.copy(frog).applyQuaternion(swing));
+
+    if (off > 0) {
+        hung.position.addScaledVector(place.out, off);
+    }
+
+    hung.quaternion.copy(swing).multiply(place.quaternion);
 }
 
 /**
@@ -2222,11 +2390,11 @@ function armPush(character, model, hangs) {
  * standing as it's made (facing +z, its joints `rig.heads`), pommel to tip, the hilt HANG_HILT_SKIN;
  * the frog where its sheath says round the front of the hip, or, if that's further off the belt
  * than HANG_SNUG (a belly in the way of the hilt), back towards the side until it isn't (or as
- * near as any); and how clear of the leg (`names`: its joints; `nearest`, as hang measures it)
+ * near as any); and how clear of the leg (`names`: its joints; as hang measures it, hangNearest)
  * that keeps it at each place down it, which the leg's pushing it further than is kept there (or
  * HANG_CLEAR, if that's less).
  */
-function fitHanging(character, model, hangs, place, names, nearest) {
+function fitHanging(character, model, hangs, place, names) {
     const { human, positions, rig } = character;
     const rest = (name) => rig.heads[rig.index.get(name)];
     const hips = rest("Hips");
@@ -2274,27 +2442,40 @@ function fitHanging(character, model, hangs, place, names, nearest) {
         box.max.x += out.x > 0 ? HANG_STAND : 0;
         box.min.x -= out.x < 0 ? HANG_STAND : 0;
 
+        // (Each cell by a number, its place each way within 512 cells of the middle: a body's
+        // within 70. By a name written out for it, the 27 cells round every mark each step were
+        // megabytes of names for each blade fitted)
         const cells = new Map();
-        const cellOf = (x, y, z) => `${Math.floor(x / HANG_CELL)} ${Math.floor(y / HANG_CELL)} ${Math.floor(z / HANG_CELL)}`;
+        const cellOf = (i, j, k) => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
 
         for (let v = 0; v < human.vertexCount; v++) {
             if (human.partOf[v] === 0 && box.containsPoint(vertex.fromArray(positions, v * 3))) {
-                const key = cellOf(vertex.x, vertex.y, vertex.z);
+                const key = cellOf(Math.floor(vertex.x / HANG_CELL), Math.floor(vertex.y / HANG_CELL), Math.floor(vertex.z / HANG_CELL));
 
-                cells.set(key, [...(cells.get(key) ?? []), vertex.clone()]);
+                // (Added to its cell's own list: a new list of them all for each, a blade's
+                // fitting made megabytes of them)
+                if (!cells.has(key)) {
+                    cells.set(key, []);
+                }
+
+                cells.get(key).push(vertex.clone());
             }
         }
 
         const clearOf = (points, near, off) =>
             points.every((mark) => {
                 const point = vertex.copy(mark).addScaledVector(out, off);
-                const [i, j, k] = [point.x, point.y, point.z].map((c) => Math.floor(c / HANG_CELL));
+                const i = Math.floor(point.x / HANG_CELL);
+                const j = Math.floor(point.y / HANG_CELL);
+                const k = Math.floor(point.z / HANG_CELL);
 
                 for (let di = -1; di <= 1; di++) {
                     for (let dj = -1; dj <= 1; dj++) {
                         for (let dk = -1; dk <= 1; dk++) {
-                            for (const there of cells.get(`${i + di} ${j + dj} ${k + dk}`) ?? []) {
-                                if (there.distanceToSquared(point) < near * near) {
+                            const there = cells.get(cellOf(i + di, j + dj, k + dk));
+
+                            for (let n = 0; there && n < there.length; n++) {
+                                if (there[n].distanceToSquared(point) < near * near) {
                                     return false;
                                 }
                             }
@@ -2344,7 +2525,7 @@ function fitHanging(character, model, hangs, place, names, nearest) {
         ...[1.6, 2.4, 3.2, 4].flatMap((below) => [[HANG_PIVOT * below, width], [HANG_PIVOT * below, -width]]),
     ];
     hangs.width = width;
-    nearest(0, 0, { pivot, down, edge: new THREE.Vector3(0, 0, 1).applyQuaternion(place.quaternion), leg: names.map(rest), across, forward: new THREE.Vector3().crossVectors(across, _up) }, each);
+    hangNearest(hangs, 0, 0, { pivot, down, edge: new THREE.Vector3(0, 0, 1).applyQuaternion(place.quaternion), leg: names.map(rest), across, forward: new THREE.Vector3().crossVectors(across, _up) }, each);
     hangs.stand = best.stand;
     hangs.clear = each.map((near) => Math.min(HANG_CLEAR, near - HANG_GIVE));
 }
@@ -2402,7 +2583,6 @@ const _hangAt = new THREE.Vector3();
 const _hangDown = new THREE.Vector3();
 const _hangAlong = new THREE.Vector3();
 const _hangPoint = new THREE.Vector3();
-const _hangOn = new THREE.Vector3();
 const _hangTurn = new THREE.Quaternion();
 const _hangBack = new THREE.Quaternion();
 const _hangForward = new THREE.Vector3();
@@ -2412,9 +2592,19 @@ const _hangEdge = new THREE.Vector3();
 const _hangSide = new THREE.Vector3();
 const _armJoints = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
 const _armOut = new THREE.Vector3();
+const _armStart = new THREE.Vector3();
+const _armAway = new THREE.Vector3();
+// (The swings armPush has found so far: [back, out, how far it's moved, the shove, how clear])
+const _armBest = [0, 0, 0, 0, 0];
+const _armFreed = [0, 0, 0, 0, 0];
+const _armMost = [0, 0, 0, 0, 0];
+// (How a blade hung at the hip is posed, as hangNearest takes it)
+const _hangPosed = { pivot: null, down: null, edge: null, leg: null, across: null, forward: null };
+// (The joints of the leg a blade hangs by, and of the arm its hilt's kept off, by side)
+const HANG_LEG = { Left: ["LeftUpLeg", "LeftLeg", "LeftFoot"], Right: ["RightUpLeg", "RightLeg", "RightFoot"] };
+const HANG_ARM = { Left: ["LeftForeArm", "LeftHand", "LeftHandMiddle1"], Right: ["RightForeArm", "RightHand", "RightHandMiddle1"] };
 const _up = new THREE.Vector3(0, 1, 0);
 const _hangInverse = new THREE.Matrix4();
-const _segment = new THREE.Line3();
 
 // How far out (degrees) an arm swinging free is held to clear what hangs at its hip (and further
 // past a blade's hilt, hung from the belt, forward of the hip: a sword's, a cleaver's)

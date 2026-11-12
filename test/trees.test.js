@@ -1,6 +1,7 @@
 // The trees (client/js/world/art/kits/trees.js): grown from rules for each kind, from a seed
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import * as THREE from "three";
 import { HOME_TREES, homeTree, TREE_KINDS, TREE_VARIANTS } from "../client/js/core/setpieces/pieces.js";
 import { growTree, KINDS, PATCH_SIDE, plantTrees, SPECIES, treeMaterials, VARIANTS, Woodland } from "../client/js/world/art/kits/trees.js";
 
@@ -237,6 +238,87 @@ describe("the trees (trees.js)", () => {
         woodland.fell(second);
         woodland.fell(more);
         assert.equal(woodland.planted, 0);
+        woodland.dispose();
+    });
+
+    it("draws a lot in the woodland just as plantTrees merges it (the start town's trees, planted either way: town3d.js): every corner where its merged copy has it, lit and coloured the same, the same triangles, boxes, shells and patches", () => {
+        const placements = [
+            { x: 5, z: 5, variant: 0, tint: [0.9, 1.1, 0.8] },
+            { x: 8.25, z: 6.5, variant: 3, size: 1.3, turn: 1, tint: [1, 1, 1] },
+            { x: 12, z: 3, variant: 3, size: 0.92, turn: 4.2, tint: [0.7, 0.95, 1.05] },
+            { x: 217.5, z: 99.5, variant: 5, size: 0.9 * 1.07, turn: 2.5, tint: [1.2, 0.85, 0.6] },
+        ];
+        const groundAt = (x, z) => 0.1 * x + 0.05 * z;
+        // (All in one tile, so in the order planted)
+        const merged = plantTrees(placements, { tile: 100000, groundAt });
+        const woodland = new Woodland();
+        const lot = woodland.plant(placements, groundAt, { fitted: true });
+        const mergedPart = (name) => merged.object.children.find((mesh) => mesh.name.startsWith(name));
+        const [matrix, turn, point, tint] = [new THREE.Matrix4(), new THREE.Matrix3(), new THREE.Vector3(), new THREE.Color()];
+        const near = (a, b, within, what) => assert.ok(Math.abs(a - b) <= within, `${what}: ${a} and ${b}`);
+
+        for (const [which, batch, name] of [[0, woodland.wood, "bark"], [1, woodland.leaves, "leaves"]]) {
+            const all = mergedPart(name).geometry;
+            const own = batch.geometry;
+            let [corner, index] = [0, 0];
+
+            assert.equal(batch.material, mergedPart(name).material, "the one material, either way");
+            assert.deepEqual([batch.castShadow, batch.receiveShadow], [mergedPart(name).castShadow, mergedPart(name).receiveShadow]);
+
+            lot.ids.forEach((pair, k) => {
+                const range = batch.getGeometryRangeAt(batch.getGeometryIdAt(pair[which]));
+
+                // (Where the graphics card puts each corner of its variant, which way it faces, and
+                // its colour times the tree's: the batch's matrices and colours are 32-bit floats)
+                batch.getMatrixAt(pair[which], matrix);
+                batch.getColorAt(pair[which], tint);
+                turn.getNormalMatrix(matrix);
+
+                for (let v = 0; v < range.vertexCount; v++) {
+                    const [from, to] = [range.vertexStart + v, corner + v];
+
+                    point.fromBufferAttribute(own.attributes.position, from).applyMatrix4(matrix);
+                    ["x", "y", "z"].forEach((axis, n) => near(point[axis], all.attributes.position.array[to * 3 + n], 2e-4, `tree ${k}'s ${name}, corner ${v}`));
+                    point.fromBufferAttribute(own.attributes.normal, from).applyMatrix3(turn).normalize();
+                    ["x", "y", "z"].forEach((axis, n) => near(point[axis], all.attributes.normal.array[to * 3 + n], 1e-5, `tree ${k}'s ${name}, corner ${v}'s normal`));
+                    ["r", "g", "b"].forEach((channel, n) => near(own.attributes.color.array[from * 3 + n] * tint[channel], all.attributes.color.array[to * 3 + n], 1e-6, `tree ${k}'s ${name}, corner ${v}'s colour`));
+                    assert.deepEqual([own.attributes.uv.getX(from), own.attributes.uv.getY(from)], [all.attributes.uv.getX(to), all.attributes.uv.getY(to)]);
+                }
+
+                for (let i = 0; i < range.indexCount; i++) {
+                    assert.equal(own.index.getX(range.indexStart + i) - range.vertexStart, all.index.getX(index + i) - corner, `tree ${k}'s ${name}, its triangles`);
+                }
+
+                corner += range.vertexCount;
+                index += range.indexCount;
+            });
+
+            assert.deepEqual([corner, index], [all.attributes.position.count, all.index.count], `all of the ${name}, and no more`);
+        }
+
+        // (Its leaves tinted, its wood not)
+        assert.deepEqual(lot.ids.map(([, leaves]) => woodland.leaves.getColorAt(leaves, new THREE.Color()).toArray()), placements.map(({ tint: each }) => each.map(Math.fround)));
+        assert.equal(woodland.wood._colorsTexture, null);
+
+        // (How high each stands on the squares under it: the very same boxes, to the bit)
+        assert.deepEqual(lot.boxes.map(({ min, max }) => [...min.toArray(), ...max.toArray()]), merged.boxes.map(({ min, max }) => [...min.toArray(), ...max.toArray()]));
+        assert.ok(woodland.plant(placements.slice(1, 2), groundAt).boxes[0].max.x > lot.boxes[1].max.x, "not its variant's box turned with it, which is wider");
+
+        // (Its crowns' shells and the patches round its feet, the same corners and triangles)
+        for (const name of ["crown shadows", "litter"]) {
+            const [one, other] = [mergedPart(name), lot.object.children.find((mesh) => mesh.name === name)];
+
+            assert.equal(one.material, other.material);
+            assert.deepEqual(Object.keys(one.geometry.attributes), Object.keys(other.geometry.attributes));
+
+            for (const key of Object.keys(one.geometry.attributes)) {
+                assert.deepEqual(other.geometry.attributes[key].array, one.geometry.attributes[key].array, `${name}: ${key}`);
+            }
+
+            assert.deepEqual(other.geometry.index.array, one.geometry.index.array);
+            assert.deepEqual([other.castShadow, other.receiveShadow, other.renderOrder, other.userData.onGround], [one.castShadow, one.receiveShadow, one.renderOrder, one.userData.onGround]);
+        }
+
         woodland.dispose();
     });
 });

@@ -1,7 +1,8 @@
 // The town in 3D: every piece of the town's layout (houses, the tavern, church and blacksmith,
 // props, trees: core/setpieces/town.js) built by the art kits (art/kits), each turned about its
 // middle to face its street, with the trees in the fields round it, merged into as few meshes as
-// possible (the trees a tile of the map at a time, so those out of view aren't drawn: trees.js).
+// possible (the trees planted in the world's woodland, each variant kept once; or, with no world
+// round it, in the labs, merged a tile of the map at a time: trees.js).
 // The world round it is drawn a chunk at a time (chunks3d.js).
 //
 // The kits build facing south, in the art's world pixels (a plot is 20, x east, y up and z south),
@@ -17,6 +18,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { atlasMaterial, glowMaterial, LIT_ALL_NIGHT, toAtlas, toGlow } from "./art/engine/atlas.js";
+import { sharedCorners } from "./art/engine/corners.js";
 import { material } from "./art/engine/materials.js";
 import { Solid } from "./art/engine/solid.js";
 import { createRandom } from "../core/random.js";
@@ -35,10 +37,13 @@ import { burntOf } from "./art/kits/burnt.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { lieOf, yard } from "./art/kits/yards.js";
+import { signsNearIn } from "./art/kits/signs.js";
 import { plantTrees, VARIANTS } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
 import { lightsMesh, lightsOf } from "./lights.js";
 import { poolsMesh } from "./windowpools.js";
+import { releaseGeometry } from "./release.js";
+import { sendSoon } from "./sending.js";
 import { castByRuns, runsOf } from "./shadowpasses.js";
 import { chimneysOf, smokeMesh } from "./smoke.js";
 import { clothMesh, clothOf } from "./cloth.js";
@@ -127,9 +132,10 @@ export function heightMap([x0, z0, width, height]) {
  * own. `onProgress(done, total)` hears as each piece is built; `landAt(x, z)` says what land
  * (BIOMES id) a tree stands in, its leaves coloured as the land colours them (canopy.js);
  * `burntOf(index)` how far on a house of its layout's is from being burnt (core/burnt.js stageOf's),
- * or null.
+ * or null; `woodland` the world's trees' batches (trees.js Woodland: chunks3d.js's), its trees
+ * planted in them with the world's, or (without one: the labs) merged a tile at a time.
  */
-export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow", burntOf = () => null } = {}) {
+export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow", burntOf = () => null, woodland = null } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     // (The yards behind its houses too, standing on the ground as it lies under each: kits/yards.js)
@@ -188,10 +194,14 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     await breathe();
 
-    const trees = plantTrees(
-        planted.map((tree) => ({ ...tree, tint: canopyTint(landAt(tree.x, tree.z), VARIANTS[tree.variant % VARIANTS.length][0], tree.x, tree.z) })),
-        { groundAt },
-    );
+    // (In the world's woodland where there is one: each variant kept once and drawn wherever it
+    // stands, the same wood, leaves and tint, each tree culled on its own, and its box just as it
+    // was. Merged, every tree was a copy of its variant's corners: 14 MB for a town's 124 trees,
+    // on the page and again on the graphics card)
+    const placements = planted.map((tree) => ({ ...tree, tint: canopyTint(landAt(tree.x, tree.z), VARIANTS[tree.variant % VARIANTS.length][0], tree.x, tree.z) }));
+    const trees = woodland ? woodland.plant(placements, groundAt, { fitted: true }) : plantTrees(placements, { groundAt });
+
+    trees.object.name = "trees";
 
     art.updateMatrixWorld(true);
 
@@ -268,11 +278,13 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     object.name = "town";
 
-    for (const mesh of trees.object.children.filter(({ userData }) => !userData.onGround)) {
+    // (Cut through where they hide the player: the woodland's own wood and leaves too, the same
+    // materials, as chunks3d.js has them already)
+    for (const mesh of [...trees.object.children.filter(({ userData }) => !userData.onGround), ...(woodland ? [woodland.wood, woodland.leaves] : [])]) {
         cutAway(mesh.material);
     }
 
-    object.add(trees.object);
+    object.add(sendSoon(trees.object));
 
     const town = { object, heights, buildings, props, lights: [], extras: [] };
 
@@ -291,7 +303,7 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         town.extras = [smokeMesh(all("smoke")), clothMesh(all("cloth")), lightsMesh(town.lights), poolsMesh(all("panes"), groundAt)].filter(Boolean);
 
         for (const made of town.extras) {
-            object.add(made);
+            object.add(sendSoon(made));
         }
     };
 
@@ -376,6 +388,10 @@ async function townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf, se
         return null;
     }
 
+    // (Its signs as finely painted as those near are, whatever a chunk far off's are being
+    // painted at meanwhile: the town's are walked up to)
+    signsNearIn(built);
+
     const object = new THREE.Group();
     const y = grounded(built, piece, groundAt, [ox, oz]);
 
@@ -405,10 +421,12 @@ function mergeBlock(block, group, key, object) {
     block.panes = parts.flatMap((part) => part.panes);
     block.meshes = [...merged.children];
 
+    // (Each given to the graphics card over the next frames it's shown in, wherever the camera
+    // looks: sending.js)
     for (const mesh of block.meshes) {
         mesh.name = `${mesh.name} ${key}`;
         cutAway(mesh.material);
-        object.add(mesh);
+        object.add(sendSoon(mesh));
     }
 }
 
@@ -640,10 +658,10 @@ function materialKey(material) {
 
 /**
  * Merge every mesh under `root` (baked to its place) into one mesh per material; with `atlas`,
- * everything the art's one material can draw into one mesh of it (atlas.js).
+ * everything the art's one material can draw into one mesh of it (atlas.js); `kept` as joined's.
  */
-export function merge(root, { atlas = false } = {}) {
-    return joined(partsOf(root, { atlas }));
+export function merge(root, { atlas = false, kept = false } = {}) {
+    return joined(partsOf(root, { atlas }), { kept });
 }
 
 /**
@@ -651,10 +669,11 @@ export function merge(root, { atlas = false } = {}) {
  * ready to be merged: a part for each material group, drawn into the art's one material if it can
  * be, with `atlas` (and every light into the one glowing material); or, `atlas` a function of what
  * a part was made in, into the material it gives, drawn from the atlas as that one is (the
- * insides': interiors3d.js), lights left as they are. [{ key, material, geometry, near (only worth
- * drawing near: Solid's), panes (its upright windows: atlas.js windowSeeds', for windowpools.js),
- * building (which building it's part of, if any: for drawing only those near into the lamps'
- * shadows, shadowpasses.js) }],
+ * insides': interiors3d.js), lights left as they are. [{ key, material, geometry (what the atlas
+ * draws, its corners shared between its triangles and its normals in bytes: corners.js; anything
+ * else as it was), near (only worth drawing near: Solid's), panes (its upright windows: atlas.js
+ * windowSeeds', for windowpools.js), building (which building it's part of, if any: for drawing
+ * only those near into the lamps' shadows, shadowpasses.js) }],
  * for `joined` (merge's first half, so that the parts of what's built a piece at a time can be
  * made a piece at a time: chunks3d.js).
  */
@@ -717,7 +736,9 @@ export function partsOf(root, { atlas = false } = {}) {
                 geometry.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(geometry.attributes.position.count * 2), 2));
             }
 
-            parts.push({ key, material, geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [], building: building?.id ?? null });
+            // (What the atlas draws, in fewer bytes: its normals in bytes, its corners shared
+            // between its triangles, corners.js; here, a piece at a time, not when they're merged)
+            parts.push({ key, material, geometry: drawn ? sharedCorners(geometry) : geometry, near: Boolean(node.userData.near), panes: drawn?.userData.panes ?? [], building: building?.id ?? null });
         }
     });
 
@@ -728,9 +749,12 @@ export function partsOf(root, { atlas = false } = {}) {
  * Parts (partsOf's, in order) merged: one mesh per material (merge's second half). What's only
  * worth drawing near comes last in each, after as many corners as its userData.far says: draw
  * only that many from further off (drawFar). Each building's corners in it kept, so a shadow map
- * draws only those in its view (shadowpasses.js runsOf).
+ * draws only those in its view (shadowpasses.js runsOf). The page lets go of each mesh's corners
+ * once the graphics card has them (release.js: nothing reads them again, and what's built again
+ * is built from its pieces), its box and sphere worked out first; unless they're `kept`, for
+ * whatever reads a merged mesh after it's drawn.
  */
-export function joined(parts) {
+export function joined(parts, { kept = false } = {}) {
     const groups = new Map();
 
     for (const { key, material, geometry, near, building = null } of parts) {
@@ -746,7 +770,17 @@ export function joined(parts) {
     for (const { material, geometries: far, near } of groups.values()) {
         const merged = [...far, ...near];
         const geometries = far.map(({ geometry }) => geometry);
-        const mesh = castByRuns(new THREE.Mesh(mergeGeometries(merged.map(({ geometry }) => geometry)), material), runsOf(merged));
+        const whole = mergeGeometries(merged.map(({ geometry }) => geometry));
+
+        // (A capital's buildings are 20 MB of corners over its chunks, and were 40: held twice
+        // over till they're let go of, on the page and on the graphics card, which on a phone are
+        // the same memory)
+        if (!kept) {
+            whole.computeBoundingBox();
+            releaseGeometry(whole);
+        }
+
+        const mesh = castByRuns(new THREE.Mesh(whole, material), runsOf(merged));
 
         mesh.name = material.name || "part";
         // (All but what says it casts none: cards of leaves cut out of their pictures, whose

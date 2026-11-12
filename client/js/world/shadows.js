@@ -26,6 +26,34 @@ const IN_MAP = "bool frustumTest = inFrustum && shadowCoord.z <= 1.0;";
 const UP = new THREE.Vector3(0, 1, 0);
 const _across = new THREE.Vector3();
 const _upward = new THREE.Vector3();
+const _mapSize = new THREE.Vector2();
+
+/**
+ * A light's shadow map (the sun's, or a lamp's cube), made here before three.js makes its own
+ * (WebGLShadowMap's render makes one only for a shadow that has none), and given to the light's
+ * shadow. three.js's own comes with a colour picture of four bytes a texel that's drawn into
+ * every time the shadows are and never read: the lit shaders read its depth picture, compared and
+ * filtered by the graphics card (PCFShadowMap). This one's colour is a byte a texel, the least a
+ * render target can have: 1 MB for the sun's 1024 map, not 4, and 4 MB for its 2048, not 16. All
+ * else is as three.js r186 sets its own up, its depth picture too; test/light.test.js makes
+ * three.js's own beside it and fails if they're alike no longer, so a newer three.js is noticed.
+ */
+export function shadowMapOf(light) {
+    const { shadow } = light;
+    const size = _mapSize.copy(shadow.mapSize).multiply(shadow.getFrameExtents());
+    const map = light.isPointLight ? new THREE.WebGLCubeRenderTarget(size.x, { format: THREE.RedFormat }) : new THREE.WebGLRenderTarget(size.x, size.y, { format: THREE.RedFormat });
+
+    map.depthTexture = light.isPointLight ? new THREE.CubeDepthTexture(size.x, THREE.UnsignedIntType) : new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType);
+    map.depthTexture.name = `${light.name}.shadowMap`;
+    map.depthTexture.format = THREE.DepthFormat;
+    map.depthTexture.compareFunction = THREE.LessEqualCompare;
+    map.depthTexture.minFilter = THREE.LinearFilter;
+    map.depthTexture.magFilter = THREE.LinearFilter;
+    shadow.map = map;
+    shadow.camera.updateProjectionMatrix();
+
+    return map;
+}
 
 /**
  * Move a point (the middle of the sun's shadow map, in place) to the nearest whole `texel`

@@ -49,6 +49,43 @@ export const WALK_STYLES = Object.freeze({
 
 const SIDES = ["Left", "Right"];
 
+// Each side's joints' names, as the walk sets them (#setJoints), and the trunk's with how much of
+// its lean each takes; and the angles each is told, put in these each time (the rig keeps none of
+// them: rig.js jointRotation). All made once: a name and a set of angles were made for every
+// joint of every body each time it was posed, some sixty of each
+const LIMBS = SIDES.map((side) => ({
+    upLeg: `${side}UpLeg`,
+    leg: `${side}Leg`,
+    foot: `${side}Foot`,
+    shoulder: `${side}Shoulder`,
+    arm: `${side}Arm`,
+    foreArm: `${side}ForeArm`,
+    hand: `${side}Hand`,
+    fingers: ["Index", "Middle", "Ring", "Pinky"].map((finger) => [1, 2, 3].map((joint) => `${side}Hand${finger}${joint}`)),
+    thumb: [1, 2, 3].map((joint) => `${side}HandThumb${joint}`),
+}));
+const TRUNK = [["Spine", 0.25], ["Spine1", 0.35], ["Spine2", 0.4]];
+const _pelvis = { tilt: 0, obliquity: 0, turn: 0 };
+const _trunk = { flex: 0, turn: 0, bend: 0 };
+const _thigh = { flex: 0, abduct: 0, rotate: 0 };
+const _shank = { flex: 0 };
+const _foot = { flex: 0, rotate: 0, invert: 0 };
+const _shoulder = { elevate: 0, protract: 0 };
+const _upperArm = { flex: 0, abduct: 0, rotate: 0 };
+const _foreArm = { flex: 0, pronate: 0 };
+const _wrist = { flex: 0, deviate: 0 };
+const _finger = { flex: 0, spread: 0 };
+const _thumb = { flex: 0 };
+const EMPTY = Object.freeze({});
+// (The thumb resting by the index: its first and last joints)
+const THUMB_RESTING = [Object.freeze({ flex: 10, oppose: 10 }), Object.freeze({ flex: 6 })];
+
+// `a` walking and `b` running, by how much it's doing of each
+const mixed = (a, b, walk, r) => a * walk + b * r;
+
+// A sprinting curve at a phase (not worked out when it's not running at all)
+const sprinting = (curve, phase, r) => (r > 0 ? curveAt(curve, phase) : 0);
+
 // The thumb round a grip: closed over the curled fingers (rig.js JOINTS.thumb)
 const GRIP_THUMB = [{ flex: 55, oppose: -10 }, { flex: 35 }, { flex: 25 }];
 const ACCELERATION = 2.5; // metres a second, each second
@@ -112,6 +149,7 @@ const RUN_RISE = 0.035;
 const RUN_LOWEST = RUN_STANCE * 0.45;
 
 const _point = new THREE.Vector3();
+const _contact = new THREE.Vector3();
 const _target = new THREE.Vector3();
 const _knee = new THREE.Vector3();
 const _shin = new THREE.Vector3();
@@ -439,27 +477,31 @@ export class Walker {
         const style = this.style;
         const p = phases[0];
         const walk = 1 - r;
-        const mix = (a, b) => a * walk + b * r;
-        // (A sprinting curve, not worked out when it's not running at all)
-        const running = (curve, phase) => (r > 0 ? curveAt(curve, phase) : 0);
 
         rig.reset();
 
         // Pelvis: tilt, obliquity (drops on the swinging side) and rotation (forward with the leg),
         // turning further running
-        const obliquity = mix(s, 1.2) * style.swagger * curveAt(CURVES.pelvicObliquity, p);
-        const rotation = mix(s, 1.5) * style.swagger * curveAt(CURVES.pelvicRotation, p);
+        const obliquity = mixed(s, 1.2, walk, r) * style.swagger * curveAt(CURVES.pelvicObliquity, p);
+        const rotation = mixed(s, 1.5, walk, r) * style.swagger * curveAt(CURVES.pelvicRotation, p);
 
-        rig.setAngles("Hips", { tilt: 0, obliquity, turn: rotation });
+        _pelvis.tilt = 0;
+        _pelvis.obliquity = obliquity;
+        _pelvis.turn = rotation;
+        rig.setAngles("Hips", _pelvis);
 
         // Trunk: leans (further running), counter-rotates against the pelvis and stays upright
-        const lean = style.lean + mix(s * 2 + breathe * 0.6 * (1 - s), RUN_LEAN);
+        const lean = style.lean + mixed(s * 2 + breathe * 0.6 * (1 - s), RUN_LEAN, walk, r);
         const turn = 1.3 * rotation;
         const bend = 0.9 * obliquity;
-        const shares = { Spine: 0.25, Spine1: 0.35, Spine2: 0.4 };
 
-        for (const [name, share] of Object.entries(shares)) {
-            rig.setAngles(name, { flex: lean * share, turn: turn * share, bend: bend * share });
+        for (let k = 0; k < TRUNK.length; k++) {
+            const share = TRUNK[k][1];
+
+            _trunk.flex = lean * share;
+            _trunk.turn = turn * share;
+            _trunk.bend = bend * share;
+            rig.setAngles(TRUNK[k][0], _trunk);
         }
 
         // Head: level and looking where the body goes
@@ -467,52 +509,74 @@ export class Walker {
         const headBend = obliquity - bend;
         const headFlex = -lean * 0.9 + style.headForward;
 
-        rig.setAngles("Neck", { flex: style.headForward, turn: headTurn * 0.4, bend: headBend * 0.5 });
-        rig.setAngles("Head", { flex: headFlex - style.headForward * 1.6, turn: headTurn * 0.6, bend: headBend * 0.5 });
+        _trunk.flex = style.headForward;
+        _trunk.turn = headTurn * 0.4;
+        _trunk.bend = headBend * 0.5;
+        rig.setAngles("Neck", _trunk);
+        _trunk.flex = headFlex - style.headForward * 1.6;
+        _trunk.turn = headTurn * 0.6;
+        _trunk.bend = headBend * 0.5;
+        rig.setAngles("Head", _trunk);
 
         // Legs, from the gait curves (stance width sets how far the thighs come in; running, the
         // feet land nearly in a line; in a robe to the ankles, its heels not kicked up behind as
         // high: Character.robed)
-        const robed = (knee) => (this.character.robed && knee > ROBED_KNEE.from ? ROBED_KNEE.from + (knee - ROBED_KNEE.from) * ROBED_KNEE.share : knee);
-        const inward = Math.atan2((this.hipWidth - mix(style.stanceWidth, RUN_STANCE_WIDTH)) / 2, this.legLength) * (180 / Math.PI);
+        const inward = Math.atan2((this.hipWidth - mixed(style.stanceWidth, RUN_STANCE_WIDTH, walk, r)) / 2, this.legLength) * (180 / Math.PI);
 
-        SIDES.forEach((side, i) => {
+        for (let i = 0; i < SIDES.length; i++) {
+            const side = SIDES[i];
+            const names = LIMBS[i];
             const phase = phases[i];
             const crouch = style.crouch * walk;
+            const kicked = sprinting(RUN_CURVES.kneeFlexion, phase, r);
 
-            rig.setAngles(`${side}UpLeg`, {
-                flex: mix(s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT), running(RUN_CURVES.thigh, phase)) + crouch + lean * 0.3,
-                abduct: -mix(s, 1.2) * curveAt(CURVES.hipAdduction, phase) - inward,
-                rotate: -style.toeOut * 0.5 * walk,
-            });
-            rig.setAngles(`${side}Leg`, { flex: mix(s * curveAt(CURVES.kneeFlexion, phase), robed(running(RUN_CURVES.kneeFlexion, phase))) + crouch * 1.6 });
-            rig.setAngles(`${side}Foot`, { flex: mix(s * curveAt(CURVES.ankleDorsiflexion, phase), running(RUN_CURVES.ankleDorsiflexion, phase)) + crouch * 0.6, rotate: style.toeOut * 0.5 * walk, invert: inward * 0.6 });
+            _thigh.flex = mixed(s * (curveAt(CURVES.hipFlexion, phase) - PELVIC_TILT), sprinting(RUN_CURVES.thigh, phase, r), walk, r) + crouch + lean * 0.3;
+            _thigh.abduct = -mixed(s, 1.2, walk, r) * curveAt(CURVES.hipAdduction, phase) - inward;
+            _thigh.rotate = -style.toeOut * 0.5 * walk;
+            rig.setAngles(names.upLeg, _thigh);
+            _shank.flex = mixed(s * curveAt(CURVES.kneeFlexion, phase), this.character.robed && kicked > ROBED_KNEE.from ? ROBED_KNEE.from + (kicked - ROBED_KNEE.from) * ROBED_KNEE.share : kicked, walk, r) + crouch * 1.6;
+            rig.setAngles(names.leg, _shank);
+            _foot.flex = mixed(s * curveAt(CURVES.ankleDorsiflexion, phase), sprinting(RUN_CURVES.ankleDorsiflexion, phase, r), walk, r) + crouch * 0.6;
+            _foot.rotate = style.toeOut * 0.5 * walk;
+            _foot.invert = inward * 0.6;
+            rig.setAngles(names.foot, _foot);
 
             // Arms swing against the legs (pumping, running), or carry what's in the hand
             const hold = this.character.holds[side];
             const swing = s * curveAt(CURVES.shoulderFlexion, phase);
             const elbowSwing = s * (curveAt(CURVES.elbowFlexion, phase) - 10);
-            const pump = running(RUN_CURVES.shoulderFlexion, phase);
-            const bend = running(RUN_CURVES.elbowFlexion, phase);
+            const pump = sprinting(RUN_CURVES.shoulderFlexion, phase, r);
+            const bend = sprinting(RUN_CURVES.elbowFlexion, phase, r);
 
-            rig.setAngles(`${side}Shoulder`, { elevate: 0, protract: mix(swing, pump) * 0.15 });
+            _shoulder.elevate = 0;
+            _shoulder.protract = mixed(swing, pump, walk, r) * 0.15;
+            rig.setAngles(names.shoulder, _shoulder);
 
             if (hold?.Arm) {
                 // Carrying something, the arm pumps less, the elbow bending towards a sprinter's (and
-                // held out a little from what hangs at that hip: Character.hung)
+                // held out a little from what hangs at that hip: Character.hung). (Whatever else
+                // the hold says of each joint, with it: all a joint's told, rig.js JOINTS)
                 const amount = hold.swing ?? 0.3;
 
-                rig.setAngles(`${side}Arm`, { ...hold.Arm, flex: hold.Arm.flex + mix(amount * (swing + style.armForward * s) + breathe * 0.5, (0.35 + amount * 0.6) * pump), abduct: (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 + (this.character.hung?.[side] ?? 0) * 0.5 });
-                rig.setAngles(`${side}ForeArm`, { ...hold.ForeArm, flex: mix(hold.ForeArm.flex + amount * elbowSwing * 0.5, hold.ForeArm.flex + (bend - hold.ForeArm.flex) * 0.6) });
-                rig.setAngles(`${side}Hand`, hold.Hand ?? {});
+                _upperArm.rotate = hold.Arm.rotate;
+                _upperArm.flex = hold.Arm.flex + mixed(amount * (swing + style.armForward * s) + breathe * 0.5, (0.35 + amount * 0.6) * pump, walk, r);
+                _upperArm.abduct = (hold.Arm.abduct ?? 0) + style.armSpread * 0.5 + (this.character.hung?.[side] ?? 0) * 0.5;
+                rig.setAngles(names.arm, _upperArm);
+                _foreArm.pronate = hold.ForeArm.pronate;
+                _foreArm.flex = mixed(hold.ForeArm.flex + amount * elbowSwing * 0.5, hold.ForeArm.flex + (bend - hold.ForeArm.flex) * 0.6, walk, r);
+                rig.setAngles(names.foreArm, _foreArm);
+                rig.setAngles(names.hand, hold.Hand ?? EMPTY);
             } else {
-                rig.setAngles(`${side}Arm`, {
-                    flex: mix(swing + s * style.armForward + breathe * 0.5, pump),
-                    abduct: mix(style.armSpread + s * 2, 10) + (this.character.clearing?.[side] ?? 0),
-                    rotate: mix(5, 15),
-                });
-                rig.setAngles(`${side}ForeArm`, { flex: mix(10 + style.elbow + elbowSwing, bend), pronate: mix(25, 45) });
-                rig.setAngles(`${side}Hand`, { flex: mix(8, 0), deviate: -5 });
+                _upperArm.flex = mixed(swing + s * style.armForward + breathe * 0.5, pump, walk, r);
+                _upperArm.abduct = mixed(style.armSpread + s * 2, 10, walk, r) + (this.character.clearing?.[side] ?? 0);
+                _upperArm.rotate = mixed(5, 15, walk, r);
+                rig.setAngles(names.arm, _upperArm);
+                _foreArm.flex = mixed(10 + style.elbow + elbowSwing, bend, walk, r);
+                _foreArm.pronate = mixed(25, 45, walk, r);
+                rig.setAngles(names.foreArm, _foreArm);
+                _wrist.flex = mixed(8, 0, walk, r);
+                _wrist.deviate = -5;
+                rig.setAngles(names.hand, _wrist);
             }
 
             // Fingers: relaxed, or closed round a grip (round a haft or a hilt as the hand closes
@@ -524,26 +588,35 @@ export class Walker {
             if (round) {
                 closeHand(rig, side, round);
 
-                return;
+                continue;
             }
 
-            ["Index", "Middle", "Ring", "Pinky"].forEach((finger, k) => {
-                const curl = grip ? hold.curl?.[k] ?? 78 : style.fingers * (finger === "Index" ? 0.7 : finger === "Pinky" ? 1.25 : 1);
+            // (The index a little straighter, the little finger a little more curled)
+            for (let k = 0; k < names.fingers.length; k++) {
+                const curl = grip ? hold.curl?.[k] ?? 78 : style.fingers * (k === 0 ? 0.7 : k === 3 ? 1.25 : 1);
 
-                for (const joint of [1, 2, 3]) {
+                for (let joint = 1; joint <= 3; joint++) {
                     // (A fist's fingers as it has them, equipment.js FIST_HAND: each joint's curl, the knuckles turned together)
-                    const flex = grip && hold.fingers ? hold.fingers[joint - 1] : curl * (joint === 1 ? (grip ? 0.95 : 0.8) : grip ? 1.05 : 1);
-
-                    rig.setAngles(`${side}Hand${finger}${joint}`, { flex, spread: grip && joint === 1 ? (hold.spread?.[k] ?? 0) : 0 });
+                    _finger.flex = grip && hold.fingers ? hold.fingers[joint - 1] : curl * (joint === 1 ? (grip ? 0.95 : 0.8) : grip ? 1.05 : 1);
+                    _finger.spread = grip && joint === 1 ? (hold.spread?.[k] ?? 0) : 0;
+                    rig.setAngles(names.fingers[k][joint - 1], _finger);
                 }
-            });
+            }
 
             // The thumb closed over the fingers round a grip (or as the hold says: a wand's pinched), or resting by the index
-            const thumb = grip ? hold.thumb ?? GRIP_THUMB : [{ flex: 10, oppose: 10 }, { flex: style.fingers * 0.5 }, { flex: 6 }];
+            if (grip) {
+                const thumb = hold.thumb ?? GRIP_THUMB;
 
-            thumb.forEach((angles, k) => rig.setAngles(`${side}HandThumb${k + 1}`, angles));
-        });
-
+                for (let k = 0; k < thumb.length; k++) {
+                    rig.setAngles(names.thumb[k], thumb[k]);
+                }
+            } else {
+                _thumb.flex = style.fingers * 0.5;
+                rig.setAngles(names.thumb[0], THUMB_RESTING[0]);
+                rig.setAngles(names.thumb[1], _thumb);
+                rig.setAngles(names.thumb[2], THUMB_RESTING[1]);
+            }
+        }
     }
 
     /** How high a foot's lowest point (heel, ball or toe tip) is off the ground: 0 left, 1 right. */
@@ -585,7 +658,8 @@ export class Walker {
     #lowest(i) {
         const ground = this.character.object.getWorldPosition(_point).y;
 
-        return Math.min(...["heel", "ball", "tip"].map((which) => this.#contact(i, which).y)) - ground;
+        // (Nothing made finding it: it's asked of each foot every time its body's posed)
+        return Math.min(this.#contact(i, "heel", _contact).y, this.#contact(i, "ball", _contact).y, this.#contact(i, "tip", _contact).y) - ground;
     }
 
     // Lower the pelvis as far as lets each planted foot (not let go of the ground) stay where it

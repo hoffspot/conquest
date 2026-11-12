@@ -7,16 +7,26 @@ The world is built from it in chunks as the player comes near (*The world in chu
 Built again, the same seed gives the same chunk.
 
 The plan is pure data: typed arrays and plain objects, with no DOM or Three.js. So it runs in
-Node for the tests, and later in a worker. Laying one out takes about a second, so it's laid out
-once for a seed (`planWorld`): the few most recently asked for are kept and shared, frozen so
-nothing can change one for everyone else (`layOutWorld` lays one out afresh). Going back into a
-world, or a test building it again, it's there at once. The unit tests, each file in a process of
-its own, keep them on disk between processes as well (`keepPlans`; `test/plan-cache.js`, each
-plan by its seed and a hash of the planner's code, so none outlives a change to it). What's kept
-is the plan and the land its waters are worked out from (`landOf`): its rivers' surfaces are
-those of the land as it was settled, before Bellhaven's crag was set into it, and a plan handed
-on is taken with that land (`adoptPlan`), or it would make another world (seed 7's rivers stand
-elsewhere in 32 cells, by up to 16 m, worked out from the plan alone).
+Node for the tests, and in a worker for the game. Laying one out takes a second and a half or
+more, so it's laid out once for a seed (`planWorld`): the few most recently asked for are kept
+and shared, frozen so nothing can change one for everyone else (`layOutWorld` lays one out
+afresh). Going back into a world, or a test building it again, it's there at once.
+
+The game doesn't lay it out on the page (`client/js/app/plans.js`): a worker does, and hands it
+over, and it's kept between visits by the code's version and the seed (docs/GAME.md, *The
+screens*, Playing). A plan handed on, or kept, is the plan laid out here, byte for byte, and is
+taken as the page's own with `adoptPlan`: frozen, and `planWorld`'s for its seed from then on.
+One thing goes with it, `landOf(plan)`: the land its waters are worked out from. That's the land
+alone, as it was while the world was settled (`settle.js`'s view of it), not the plan with what
+was set into it after. A river's surface keeps under the land's own height, which a scene set
+into the land changes: worked out from the plan itself, some seeds' rivers come out elsewhere
+(seed 7's surfaces differ in 32 cells, by up to 16 m), a world unlike everyone else's. So the
+land's handed over in the same piece as the plan, still the plan's own arrays, and `adoptPlan`
+refuses a plan without it (`test/plans.test.js`).
+
+The unit tests, each file in a process of its own, keep plans the same way, on disk between
+processes (`keepPlans`; `test/plan-cache.js`, each plan by its seed and a hash of the planner's
+code, so none outlives a change to it).
 
 See it at <https://hoffspot.github.io/conquest/world-map.html> (or `npm start` and open
 <http://localhost:8080/world-map.html>). Try `?seed=12&race=orc` to choose the world and the start.

@@ -2561,6 +2561,9 @@ const _skinning = Array.from({ length: 64 }, () => new THREE.Matrix4());
 const SECTORS = 16;
 const sectorOf = ({ y, z }) => Math.floor(((Math.atan2(y, z) / (Math.PI * 2) + 1) % 1) * SECTORS) % SECTORS;
 
+// (What Character.hang is told once the arms are placed: made once, not each frame)
+const HANG_ARMS = Object.freeze({ arms: true });
+
 /**
  * An empty hand's anatomical frame (world) with its palm facing `palm` and its fingers pointing
  * `towards`. In the anatomical frame the fingers point down its y axis and the palm faces across
@@ -3576,7 +3579,7 @@ export class Actions {
         }
 
         // (And what hangs at the hips pushed aside by the arms, as they've been reached)
-        this.character.hang?.(this.time, this.seated, { arms: true });
+        this.character.hang?.(this.time, this.seated, HANG_ARMS);
     }
 
     // Blend the joints towards an action's pose at a key time, by `weight`; hands' places are

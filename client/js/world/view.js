@@ -22,6 +22,7 @@ import { daylight } from "../core/daytime.js";
 import { Steps } from "../core/steps.js";
 import { SKY_GLOW, skyAt } from "./daytime.js";
 import { WINDOW_LIGHT } from "./art/engine/atlas.js";
+import { SIGN_SCREEN } from "./art/kits/signs.js";
 import { bakeEnvironments, SkyLight } from "./environment.js";
 import { FAR, FAR_LEVELS, farReach } from "./far/levels.js";
 import { farHaze, GRADE, MIST } from "./fog.js";
@@ -31,8 +32,9 @@ import { FAR_FIELDS } from "./ground.js";
 import { hollowed } from "./landmarkdress.js";
 import { FIRE_LIGHT, FIRE_LIGHTS, LIGHTS, lightNow } from "./lights.js";
 import { fillNear, fillOf, nearestOf, pickLamps, ROOM_LIGHT, ROOM_LIGHTS, strengthOf } from "./roomlight.js";
+import { sendSome } from "./sending.js";
 import { setShadowView, watchShadows } from "./shadowpasses.js";
-import { fadeShadowEdges, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
+import { fadeShadowEdges, shadowMapOf, SHADOWS_ONLY, snapToTexels, stepShadows } from "./shadows.js";
 import { Sky, SKY_COLOURS } from "./sky.js";
 import { SUN_FROM } from "./sun.js";
 import { CUTAWAY } from "./town3d.js";
@@ -53,7 +55,8 @@ import { WATER_DETAIL } from "./water.js";
  * chunk the player's in and round it; "high": finely everywhere, their lichen painted pixel by
  * pixel); `signs`: how finely the buildings' signs and boards and the roads' fingerboards are
  * painted (of their full size, each way: kits/signs.js signDetail; a capital's boards and signs
- * at full size were 78 MB on the graphics card); `crowd`: how many of those in view, the biggest on the
+ * at full size were 78 MB on the graphics card), those within 40 m of the player, the rest as
+ * little as a quarter (chunks3d.js SIGNS_KEPT); `crowd`: how many of those in view, the biggest on the
  * screen, can be drawn in full at once, the rest with fewer triangles: app/game.js,
  * characters/lod.js; `soldiers`: with a battle's soldiers about the player, its `full` nearest
  * are drawn in full and the rest in their crowds, each kind's figure with pictures `picture`
@@ -74,17 +77,61 @@ export const QUALITY = Object.freeze({
     high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40, distant: 62 }, motes: 300, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, rocks: "high", signs: 1, crowd: 6, soldiers: { full: 10, picture: 512 }, bodies: 24, models: 40, frameRate: 60 },
 });
 
-/** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */
-export function detectQuality() {
-    const touch = matchMedia("(pointer: coarse)").matches;
-    const memory = navigator.deviceMemory ?? 8;
-    const cores = navigator.hardwareConcurrency ?? 8;
+/**
+ * How many pixels a metre's drawn across at most, a metre from the camera, anywhere on a screen
+ * `pixels` tall that sees `fov` degrees from top to bottom and is `aspect` times as wide: at its
+ * corners, where what faces the camera is drawn biggest for how far off it is (a metre `d` metres
+ * away is this many pixels over `d`, or fewer).
+ */
+export function pixelsAcross(pixels, fov, aspect) {
+    const tan = Math.tan((fov * Math.PI) / 360);
 
-    if (touch && (memory <= 4 || cores <= 4)) {
-        return "low";
+    return (pixels / (2 * tan)) * (1 + tan * tan * (1 + aspect * aspect));
+}
+
+/**
+ * A scene's lights, kept from one asking to the next: `kept` (what this gave before, if anything)
+ * again while the scene has as many things of its own in it as it had then; else found by walking
+ * all of it, what's hidden too, and kept anew ({ lights, children }). (None is added or taken
+ * away in play: three.js makes every lit shader again when one is. A likeness walked a town's
+ * two thousand nodes for them twice, and the picture behind the pack once more.)
+ */
+export function sceneLights(scene, kept = null) {
+    if (kept?.children === scene.children.length) {
+        return kept;
     }
 
-    return touch ? "medium" : "high";
+    const lights = [];
+
+    scene.traverse((node) => node.isLight && lights.push(node));
+
+    return { lights, children: scene.children.length };
+}
+
+// This device, as its browser tells of it: whether it's pointed at with a finger, its memory (GB:
+// Chromium's alone tells) and cores, and what the browser says it is
+const thisDevice = () => ({ touch: matchMedia("(pointer: coarse)").matches, memory: navigator.deviceMemory, cores: navigator.hardwareConcurrency, agent: navigator.userAgent });
+
+/**
+ * A quality level for a device (this one, unless another's told: `touch`, `memory`, `cores`,
+ * `agent` as thisDevice has them): high for a computer; for a phone or a tablet, medium, or low
+ * if it's an iPhone or has 4 GB of memory or 4 cores or fewer.
+ *
+ * An iPhone is Low because of its memory, and for nothing it says of itself: Safari tells a page
+ * neither how much the device has nor how much the page holds, and closes the page at about 550
+ * MB of what the game can count (docs/GAME.md, *Crash reports*). Low's pixels, shadow map, signs
+ * and bodies are what keep the game under that. It came out Low before too, but by accident:
+ * Safari tells no memory at all, and says 4 cores for any device with fewer than 8, which every
+ * iPhone's chip has, so the cores caught it. The day an iPhone has 8, or Safari says otherwise,
+ * it would have gone to Medium by itself: 2.25 times the pixels and four times the shadow map.
+ * (An iPad, which says it's a Mac, goes by its cores as any tablet does, as it did.)
+ */
+export function detectQuality({ touch, memory = 8, cores = 8, agent = "" } = thisDevice()) {
+    if (!touch) {
+        return "high";
+    }
+
+    return /\biP(hone|od)\b/.test(agent) || memory <= 4 || cores <= 4 ? "low" : "medium";
 }
 
 // How far down from the horizon a phone held upright's framing is measured against (degrees:
@@ -571,6 +618,9 @@ export class View {
         this.gpuTimer = new GpuTimer(this.renderer.getContext());
         this.timingGpu = false;
 
+        /** How many newly built meshes have been given to the graphics card before they were seen (sending.js). */
+        this.sentAhead = 0;
+
         this.scene = new THREE.Scene();
 
         // (Only what's shown has its place in the world worked out before it's drawn (#updateShown),
@@ -760,8 +810,7 @@ export class View {
         this.gpuTimer.clear();
         this.#light();
         this.#outdoors();
-        this.sun.shadow.map?.dispose();
-        this.sun.shadow.map = null;
+        this.#shadowMap(this.sun);
         this.#thaw();
         this.size = null;
         this.resize();
@@ -1062,10 +1111,17 @@ export class View {
         this.#haze();
         this.#pixelRatio();
         this.sun.shadow.mapSize.set(this.quality.shadows, this.quality.shadows);
-        this.sun.shadow.map?.dispose();
-        this.sun.shadow.map = null;
+        this.#shadowMap(this.sun);
         this.#lampShadowing();
         this.resize();
+    }
+
+    // A light's shadow map made anew, as big as its shadow's now set (or the drawing lost and
+    // given back): the one before let go of, and the view's own made in its place before three.js
+    // makes its (shadows.js shadowMapOf: a quarter of the colour bytes, which nothing reads)
+    #shadowMap(light) {
+        light.shadow.map?.dispose();
+        shadowMapOf(light);
     }
 
     // Which of the lamps cast shadows (QUALITY lampShadows: how many, their maps' size, how often
@@ -1079,8 +1135,7 @@ export class View {
         this.lamps.forEach(({ light }, k) => {
             light.castShadow = (this.shadowsOn ?? true) && k < lamps;
             light.shadow.mapSize.set(size, size);
-            light.shadow.map?.dispose();
-            light.shadow.map = null;
+            this.#shadowMap(light);
             light.shadow.needsUpdate = true;
         });
     }
@@ -1128,6 +1183,12 @@ export class View {
         const height = this.canvas.clientHeight || 1;
         const ratio = this.renderer.getPixelRatio();
         const size = `${width}x${height}@${ratio}`;
+
+        // (How many pixels a metre's drawn across at most, a metre from the camera, anywhere on a
+        // screen this size, with all the pixels the quality chosen draws, whatever share of them
+        // it's keeping up with now: signs far off are painted no finer than they're seen by it,
+        // kits/signs.js signsFar)
+        SIGN_SCREEN.value = pixelsAcross(height * Math.min(window.devicePixelRatio || 1, (QUALITY[this.chosenQuality] ?? this.quality).pixelRatio) * (this.renderScale ?? 1), width < height ? PORTRAIT.fov : LANDSCAPE_FOV, width / height);
 
         // Setting a canvas's size, even to the same, makes WebGL start its drawing afresh
         if (size === this.size) {
@@ -1999,7 +2060,7 @@ export class View {
         // middle of a fight, for each new kind of attacker. Drawn once they're ready, as it is
         // then, if it's still there)
         subject.traverse((node) => node.layers.enable(layer));
-        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+        this.#lights().forEach((light) => light.layers.enable(layer));
         renderer.setRenderTarget(target);
 
         const making = [...renderer.compile(subject, camera, this.scene)].map((material) => renderer.properties.get(material).currentProgram);
@@ -2082,7 +2143,7 @@ export class View {
         }
 
         subject.traverse((node) => node.layers.enable(layer));
-        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+        this.#lights().forEach((light) => light.layers.enable(layer));
 
         const background = this.scene.background;
         const shadows = renderer.shadowMap.autoUpdate;
@@ -2153,7 +2214,6 @@ export class View {
         const picture = new THREE.FramebufferTexture(size.x, size.y);
         const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { picture: { value: picture }, dim: { value: FROZEN_DIM } }, vertexShader: FROZEN_VERTEX, fragmentShader: FROZEN_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false }));
         const scene = new THREE.Scene();
-        const lights = [];
 
         this.#cutAway(0);
         this.sky.update(this.camera, performance.now() / 1000);
@@ -2162,8 +2222,14 @@ export class View {
         this.#draw(this.camera);
         this.renderer.copyFramebufferToTexture(picture);
         scene.add(quad);
-        this.scene.traverse((node) => node.isLight && lights.push(node));
-        this.frozen = { picture, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights };
+        this.frozen = { picture, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights: this.#lights() };
+    }
+
+    // The scene's lights (the sun, the lamps, any another hand's put in it), kept: sceneLights
+    #lights() {
+        this.lightsKept = sceneLights(this.scene, this.lightsKept);
+
+        return this.lightsKept.lights;
     }
 
     // The picture of the world let go (the pack closed)
@@ -2211,6 +2277,10 @@ export class View {
 
         if (scene === this.scene) {
             this.#draw(camera);
+            // (The next of what's newly built given to the graphics card, wherever the camera
+            // looks: drawn once in a pass of its own, sending.js, which is none of what the frame
+            // draws and no pixel of its picture)
+            this.sentAhead += sendSome(this.renderer, scene, () => this.#lights());
         } else {
             this.renderer.render(scene, camera);
         }

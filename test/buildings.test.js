@@ -431,6 +431,55 @@ describe("landmarks (kits/landmarks.js)", () => {
         released.any = was || released.any;
     });
 
+    it("paints a sign again another size for how far off it's seen from, a chunk far off's small from the start; a quarter each way, or as much more as it takes for the widest board to have a pixel of its picture or more to each of the screen's", async () => {
+        const { nameBoardTexture, SIGN_SCREEN, signAt, signDetail, signsAhead, signsFar, signsNear } = await import("../client/js/world/art/kits/signs.js");
+        const { LANDSCAPE_FOV, pixelsAcross, PORTRAIT } = await import("../client/js/world/view.js");
+        const size = (texture) => [texture.image.width, texture.image.height];
+        const full = nameBoardTexture({ name: "The Far Sign" });
+        const quarter = signAt(full, 0.25);
+
+        // (The same sign, by what it shows and how finely; each kept while it's wanted)
+        assert.deepEqual([size(full), size(quarter)], [[2048, 330], [512, 83]]);
+        assert.deepEqual([full.userData.sign, quarter.userData.sign], ["board|The Far Sign|#5c1a16", "board|The Far Sign|#5c1a16|0.25"]);
+        assert.deepEqual([full.userData.detail, quarter.userData.detail], [1, 0.25]);
+        assert.deepEqual([signAt(full, 0.25), signAt(quarter, 1), signAt(full, 1), signAt(quarter, 0.25)], [quarter, full, full, quarter]);
+        assert.deepEqual(size(signAt(quarter, 0.5)), [1024, 165]);
+
+        // (Those painted next painted small, as a chunk far off's are built; then as the quality
+        // has them again)
+        signsAhead(0.25);
+        assert.equal(nameBoardTexture({ name: "The Far Sign" }), quarter);
+        assert.deepEqual(size(nameBoardTexture({ name: "The Farther Sign" })), [512, 83]);
+        signsAhead(null);
+        assert.equal(nameBoardTexture({ name: "The Far Sign" }), full);
+        assert.deepEqual(size(nameBoardTexture({ name: "The Farther Sign" })), [2048, 330]);
+
+        // How finely those 40 m off or more need be painted, by the screen: the widest board, 7 m
+        // and 2048 pixels of picture across, with a pixel of it or more to each of the screen's
+        // at its corners, where it's drawn biggest
+        const screens = { phone: [393, LANDSCAPE_FOV, 852 / 393], "phone, pixels ×1.5": [590, LANDSCAPE_FOV, 852 / 393], "phone upright": [852, PORTRAIT.fov, 393 / 852], 1080: [1080, LANDSCAPE_FOV, 16 / 9], 1440: [1440, LANDSCAPE_FOV, 16 / 9], 2160: [2160, LANDSCAPE_FOV, 16 / 9], "2160 wide": [2160, LANDSCAPE_FOV, 32 / 9], 4320: [4320, LANDSCAPE_FOV, 16 / 9] };
+        const far = () => Object.fromEntries(Object.entries(screens).map(([name, screen]) => [name, ((SIGN_SCREEN.value = pixelsAcross(...screen)), signsFar(40))]));
+
+        try {
+            assert.equal(Math.round(pixelsAcross(1080, 36, 16 / 9)), 2392, "(the screen taken, none told)");
+            assert.deepEqual(far(), { phone: 0.25, "phone, pixels ×1.5": 0.25, "phone upright": 0.25, 1080: 0.25, 1440: 0.5, 2160: 0.5, "2160 wide": 1, 4320: 1 });
+
+            for (const screen of Object.values(screens)) {
+                SIGN_SCREEN.value = pixelsAcross(...screen);
+                assert.ok(signsFar(40) === signsNear() || (2048 * signsFar(40)) / 7 >= SIGN_SCREEN.value / 40, `${screen}: no coarser than it's seen`);
+            }
+
+            // (Never finer than those near: on Low, a half at most)
+            signDetail(0.5);
+            assert.deepEqual(far(), { phone: 0.25, "phone, pixels ×1.5": 0.25, "phone upright": 0.25, 1080: 0.25, 1440: 0.5, 2160: 0.5, "2160 wide": 0.5, 4320: 0.5 });
+        } finally {
+            signDetail(1);
+            SIGN_SCREEN.value = 0;
+        }
+
+        assert.equal(signsFar(40), 0.25);
+    });
+
     it("hangs each tavern's own name and sign, the guild's, and each church's patron's", async () => {
         for (const piece of landmarks.filter(({ name }) => name === "tavern" || name === "guild" || name === "church")) {
             const names = materialsOf(await landmark(piece));
@@ -1166,9 +1215,13 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.equal(texture.version, 0, "not to be drawn yet");
         assert.equal(wildsMaterial({ value: 0 }).userData.uniforms.atlasMap.value, texture);
 
-        const painted = await painting;
+        // (What waits for them is given nothing to keep: a promise keeps what it resolved with, and
+        // the game's build keeps this one for the whole game)
+        assert.equal(await painting, undefined);
 
-        assert.equal(texture.image.data, painted);
+        // (Those painted for it, at its size: not painted again here, at the atlas's own)
+        const painted = texture.image.data;
+
         assert.deepEqual([texture.image.width, texture.image.depth, painted.length], [16, LAYERS.length, 16 * 16 * 4 * LAYERS.length]);
         assert.equal(texture.version, 1);
     });
@@ -1198,6 +1251,33 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.ok(plain.attributes.color.array[0] < 0.1);
         assert.deepEqual([...textured.attributes.uv.array], [0, 0, 2, 0, 0, 1]);
         assert.equal(textured.attributes.layer.array[0], LAYERS.indexOf("planks"));
+    });
+
+    it("lets go of the page's copy of what's merged once the graphics card has it, its box and sphere worked out first; or keeps it, asked to", () => {
+        const house = () => {
+            const group = new THREE.Group();
+
+            group.add(buildHouse(planHouse({ w: 2, h: 2.5, style: "timber", storeys: 2, x: 5, y: 5 })).toObject());
+            group.updateMatrixWorld(true);
+
+            return group;
+        };
+        const buffers = ({ geometry }) => [...Object.values(geometry.attributes), geometry.index].filter(Boolean);
+        // (As three.js's renderer does once each buffer's on the graphics card)
+        const sent = (mesh) => buffers(mesh).forEach((buffer) => buffer.onUploadCallback());
+        const [mesh] = merge(house(), { atlas: true }).children;
+        const corners = mesh.geometry.attributes.position.count;
+
+        assert.ok(buffers(mesh).every(({ array }) => array.length > 0), "held till it's sent");
+        sent(mesh);
+        assert.ok(buffers(mesh).every(({ array }) => array === null));
+        assert.ok(mesh.geometry.boundingSphere.radius > 0 && mesh.geometry.boundingBox.max.y > mesh.geometry.boundingBox.min.y);
+        assert.equal(mesh.geometry.attributes.position.count, corners, "how many corners it draws, still known");
+
+        const [kept] = merge(house(), { atlas: true, kept: true }).children;
+
+        sent(kept);
+        assert.ok(buffers(kept).every(({ array }) => array.length > 0));
     });
 
     it("draws a tinted material from the layer it's tinted from, in its tint, and every light with the one glowing material", () => {
@@ -1282,6 +1362,17 @@ describe("the atlas (engine/atlas.js)", () => {
         assert.match(atlas.fragmentShader, /#define RE_Direct RE_Direct_Atlas/);
         assert.match(atlas.fragmentShader, /atlasShine\(diffuseColor\);\n#include <lights_lambert_fragment>/);
         assert.match(atlas.fragmentShader, /#include <lights_fragment_end>\n[^]*getIBLRadiance\(geometryViewDir, geometryNormal, atlasRoughness\)/);
+
+        // (The sky's reflected only where three.js says the light from all round is the kind it
+        // is here, by a name of its own: ENVMAP_TYPE_CUBE_UV in r186, ENVMAP_TYPE_PMREM in r187.
+        // The atlas asks for either. If this three.js has neither, what shines would reflect
+        // nothing and say nothing of it: its name's changed again, and atlas.js and water.js
+        // must follow)
+        const named = ["ENVMAP_TYPE_CUBE_UV", "ENVMAP_TYPE_PMREM"].filter((name) => THREE.ShaderChunk.lights_fragment_maps.includes(`defined( ${name} )`) && THREE.ShaderChunk.envmap_physical_pars_fragment.includes(`#ifdef ${name}`));
+
+        assert.equal(named.length, 1, "three.js's name for the light from all round, baked");
+        assert.match(THREE.ShaderChunk.envmap_physical_pars_fragment, /vec3 getIBLRadiance\( const in vec3 viewDir, const in vec3 normal, const in float roughness \)/);
+        assert.ok(atlas.fragmentShader.includes("#if defined(USE_ENVMAP) && (defined(ENVMAP_TYPE_CUBE_UV) || defined(ENVMAP_TYPE_PMREM))\nif (atlasGloss > 0.0) {"), "either name");
         assert.match(atlas.fragmentShader, /outgoingLight = [^;]*reflectedLight\.directSpecular \+ reflectedLight\.indirectSpecular/);
         assert.doesNotMatch(wilds.fragmentShader, /atlasShine|RE_Direct_Atlas/);
         assert.match(wilds.vertexShader, /vLayer = mod\(layer/);

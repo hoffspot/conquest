@@ -22,7 +22,7 @@ import { RACES } from "../core/worldplan/races.js";
 import { paintLayer, SIZE } from "./art/engine/painters.js";
 import { textureCanvas } from "./art/engine/materials.js";
 import { blurred } from "./fields.js";
-import { releaseTexture } from "./release.js";
+import { releaseGeometry, releaseTexture } from "./release.js";
 import { splitAlong } from "./far/levels.js";
 import { FAR_FOG } from "./fog.js";
 import { causticTexture, FIELD, SHORE, STILL_WATER, WATER_DETAIL } from "./water.js";
@@ -1767,7 +1767,10 @@ export function drawnHeight(heights, step, u, v) {
     return fx + fz < 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
 }
 
-// A chunk's ground's geometry, lit into its neighbours where their heights are kept
+// A chunk's ground's geometry, lit into its neighbours where their heights are kept. The page
+// lets go of its corners once the graphics card has them (release.js: drawn with its corners
+// further apart or nearer, it's made again from the chunk's heights, and what stands on it reads
+// those), and of its triangles where they're its own
 function chunkGeometry(overworld, chunk, step) {
     const { cx, cy } = chunk;
     const heightOf = (i, j) => {
@@ -1776,8 +1779,20 @@ function chunkGeometry(overworld, chunk, step) {
 
         return other ? other.heights[(j - (ny - cy) * CHUNK) * (CHUNK + 1) + (i - (nx - cx) * CHUNK)] : null;
     };
+    const geometry = groundGeometry(chunk.heights, step, heightOf);
+    const index = geometry.index;
 
-    return groundGeometry(chunk.heights, step, heightOf);
+    if (INDICES.get(CHUNK / step) !== index) {
+        return releaseGeometry(geometry);
+    }
+
+    // (Not the triangles every chunk drawn a metre apart shares, indicesOf: three.js takes them
+    // off the graphics card with any chunk thrown away that drew with them, and gives them to it
+    // again from the page's copy for the next that does)
+    geometry.setIndex(null);
+    releaseGeometry(geometry);
+
+    return geometry.setIndex(index);
 }
 
 /**

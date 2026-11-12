@@ -52,14 +52,44 @@ test("reads a model's KTX2 textures, kept compressed on the GPU, with the transc
 
         camera.position.set(0, 2, 8);
         camera.lookAt(0, 0.5, 0);
-        renderer.render(scene, camera);
+        scene.add(new THREE.AmbientLight(0xffffff, 3));
 
         const gl = renderer.getContext();
+        // (What the page holds of its pictures: their levels' bytes)
+        const held = () => [...textures].reduce((sum, texture) => sum + texture.mipmaps.reduce((bytes, level) => bytes + (level.data?.byteLength ?? 0), 0), 0);
+        const drawn = () => {
+            const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+            gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+            return pixels;
+        };
+        const before = held();
+        const first = drawn();
+        const after = held();
+        const colours = new Set();
+
+        for (let k = 0; k < first.length; k += 4) {
+            colours.add((first[k] << 16) | (first[k + 1] << 8) | first[k + 2]);
+        }
+
+        // (Marked to be sent again, as what sets a picture up for another use does: nothing to
+        // send, and drawn as it was)
+        for (const texture of textures) {
+            texture.needsUpdate = true;
+        }
+
+        const second = drawn();
 
         return {
             levels: [...levels].sort(),
             textures: [...textures].map((texture) => ({ mimeType: texture.userData.mimeType, compressed: Boolean(texture.isCompressedTexture), mipmaps: texture.mipmaps.length })),
             error: gl.getError(),
+            held: { before, after },
+            colours: colours.size,
+            same: first.every((value, k) => value === second[k]),
         };
     }, [...(await readFile(DRAGON))]);
 
@@ -73,10 +103,94 @@ test("reads a model's KTX2 textures, kept compressed on the GPU, with the transc
 
     expect(read.error).toBe(0);
 
+    // (Its pictures let go of off the page once the graphics card has them, world/release.js
+    // releaseCompressed: drawn from the card's copy, the same again, in its picture's colours)
+    expect(read.held.before).toBeGreaterThan(100000);
+    expect(read.held.after).toBe(0);
+    expect(read.colours).toBeGreaterThan(50);
+    expect(read.same).toBe(true);
+
     // (Its two files, each at its address with its hash, as the catalog has them)
     const transcoder = fetched.filter((url) => url.includes("/libs/basis/"));
 
     expect(transcoder.map((url) => url.replace(/^.*\/basis\//, "").replace(/=[0-9a-f]{10}$/, "=")).sort()).toEqual(["basis_transcoder.js?h=", "basis_transcoder.wasm?h="]);
+});
+
+test("lets the workers that turn KTX2 pictures go once nothing's been read for a while, and makes them again for the next model read", async ({ page }) => {
+    // (Each worker made from a script put together on the page, as the transcoder's are, and each
+    // ended: counted)
+    await page.addInitScript(() => {
+        const Real = window.Worker;
+
+        window.transcoders = { made: 0, ended: 0 };
+        window.Worker = class extends Real {
+            constructor(url, ...rest) {
+                super(url, ...rest);
+                this.counted = String(url).startsWith("blob:");
+                window.transcoders.made += this.counted ? 1 : 0;
+            }
+
+            terminate() {
+                window.transcoders.ended += this.counted ? 1 : 0;
+                super.terminate();
+            }
+        };
+    });
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const workers = await page.evaluate(async (bytes) => {
+        const THREE = await import("three");
+        const { loadGltf, readKtx2With } = await import("./js/world/art/engine/models.js");
+        const { ASSETS } = await import("./js/app/assets.js");
+        const { filesOf } = await import("./js/app/catalog.js");
+        const { renderer } = window.pellagos.session.view;
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+        const quiet = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const count = () => ({ ...window.transcoders });
+        // (The same model read afresh, by another address: the loader keeps each by its own)
+        const read = async () => {
+            const { scene } = await loadGltf(URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "model/gltf-binary" })));
+
+            renderer.render(scene, camera);
+
+            return renderer.getContext().getError();
+        };
+
+        // (As the game's are read, but rested after a third of a second, not a minute)
+        readKtx2With(renderer, filesOf(ASSETS, "basis-transcoder", document.baseURI), { release: true, rest: 300 });
+        camera.position.set(0, 2, 8);
+
+        const before = count();
+        const errors = [await read()];
+        const reading = count();
+
+        await quiet(1200);
+
+        const rested = count();
+
+        errors.push(await read());
+
+        const again = count();
+
+        await quiet(1200);
+
+        return { before, reading, rested, again, after: count(), errors };
+    }, [...(await readFile(DRAGON))]);
+
+    // (Made for the first model's pictures, two at most, and none ended while it's read)
+    const made = workers.reading.made - workers.before.made;
+
+    expect(made).toBeGreaterThanOrEqual(1);
+    expect(made).toBeLessThanOrEqual(2);
+    expect(workers.reading.ended).toBe(workers.before.ended);
+
+    // (Nothing read for a while: all of them ended; the next model read, made again, and its
+    // pictures turned and drawn as the first's were; and ended again after)
+    expect(workers.rested.ended - workers.before.ended).toBe(made);
+    expect(workers.again.made).toBeGreaterThan(workers.rested.made);
+    expect(workers.after.ended - workers.before.ended).toBe(workers.after.made - workers.before.made);
+    expect(workers.errors).toEqual([0, 0]);
 });
 
 test("draws the Dreadthorn from its model once it's read, in place of its stand-in: a level of detail at a time, its fire out of its mouth", async ({ page }) => {

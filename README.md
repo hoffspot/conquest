@@ -643,6 +643,15 @@ section 2). To set it up, in the
 repository's **Settings > Pages**, set **Source** to **GitHub Actions**. The workflow can also be
 run by hand from the **Actions** tab.
 
+The site's copy of the game's own code has its comments and indentation taken out as it's put
+together (`scripts/build-site.js`: esbuild's whitespace-only minify, so no name changes and no
+code's rewritten). Each file is still a module of its own at its own address, with a source map
+beside it (`game.js.map`), and the copy's manifest and import map are made again, so every hash
+is of the file as the site serves it. The game's 450 modules go from 3.69 MB to 2.14 MB as the
+site sends them (gzipped). Only the site's copy: the repository, `npm start`, the tests and the
+Mac app run the code as it's written. To make one here:
+`cp -R client _site && node scripts/build-site.js _site`.
+
 ## Development
 
 Contributing, with Claude Code or without it: [contribution.md](contribution.md) explains how to set up,
@@ -770,8 +779,11 @@ client/                 The game (static files served to the browser)
                         service worker doesn't keep, then started from the title screen
     fetcher.js          The downloader: the catalog's models in the background, a part at a time,
                         paced to keep out of the way of playing together, checked and kept; a
-                        model cut off by a reload carried on from the parts it kept
+                        model cut off by a reload carried on from the parts it kept; one the
+                        player's waiting for asked for whole, so the server compresses it
     session.js          The 3D view and the character kit, and starting games
+    plans.js            A world's plan laid out off the page's thread (plan-worker.js) and kept
+                        between visits, by the code's version and the seed
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
     camera.js           How the camera follows the player from behind, and turns and tilts by drag
@@ -1009,7 +1021,8 @@ server/                 A static file server for playing locally (npm start: par
                         together talk through (relay.js)
 test/                   Unit tests
 e2e/                    Playwright browser tests, and how long each took (durations.json)
-scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-music.js,
+scripts/                vendor-three.js, build-characters.js, build-manifest.js, build-site.js (the
+                        website's copy, its code stripped: the Pages deploy's), build-music.js,
                         build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js (with
                         wasm-memory.js: how much memory a WebAssembly module starts with),
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests),

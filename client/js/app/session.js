@@ -11,6 +11,7 @@ import { View } from "../world/view.js";
 import { ASSETS } from "./assets.js";
 import { filesOf } from "./catalog.js";
 import { Game } from "./game.js";
+import { Plans } from "./plans.js";
 
 export { fetchModelsWith } from "../beasts/model.js";
 export { readModelsFrom } from "../world/art/engine/models.js";
@@ -30,7 +31,9 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 
     const view = new View(canvas, { quality, far: true });
 
-    readKtx2With(view.renderer, filesOf(ASSETS, TRANSCODER, document.baseURI));
+    // (Each model's, scene's and kit's pictures let go of off the page once the graphics card has
+    // them: world/release.js releaseCompressed)
+    readKtx2With(view.renderer, filesOf(ASSETS, TRANSCODER, document.baseURI), { release: true });
 
     onProgress("Unpacking the body and mapping its skin");
 
@@ -41,10 +44,23 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
 
     const audio = new Sound({ enabled: sound, volumes });
 
-    // The music and sounds are made while the game loads (and after: nothing waits for them)
+    // The music and sounds are made while the game loads (and after: nothing waits for them).
+    // With Sound off, nothing's made or downloaded till it's turned on (Sound.prepare)
     audio.prepare();
 
     return { view, kit, sound: audio };
+}
+
+// The worlds' plans: each laid out off the page's thread, and kept between visits (app/plans.js)
+const plans = new Plans();
+
+/**
+ * Start getting the plan of the world of `seed` ready, as soon as the seed's known: laid out in a
+ * worker (or read back from an earlier visit) while the page does what else it has to. createGame
+ * and createJoinedGame wait for it, asked for ahead or not.
+ */
+export function planAhead(seed = 1) {
+    plans.of(seed).catch(() => {});
 }
 
 /**
@@ -55,10 +71,12 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * and who's told when the party shows them somewhere on it; where they've pinned on it and the markers they've put
  * on it, and who hears of those; where they were and how, when the game last stopped; the last
  * messages they were told, and who hears of them; and what they've been told once and needn't
- * be again, and who hears of that).
+ * be again, and who hears of that). Resolves with the game, once the world's plan is ready: laid
+ * out off the page's thread (app/plans.js), so the page isn't held still for it, the rest of the
+ * world built here.
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, legends = null, progress, onProgress, standing, onStanding, followers, roll = [], onFollowers, wheels, onWheels, pin, onPin, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
-    const world = buildWorld({ seed, race: hero.race ?? "human" });
+export async function createGame({ view, kit, sound, hud, hero, seed = 1, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, legends = null, progress, onProgress, standing, onStanding, followers, roll = [], onFollowers, wheels, onWheels, pin, onPin, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+    const world = buildWorld({ seed, race: hero.race ?? "human", plan: await plans.of(seed) });
 
     return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, legends, progress, onProgress, standing, onStanding, followers, roll, onFollowers, wheels, onWheels, pin, onPin, markers, onMarkers, place, vitals, messages, onMessages, told, onTold });
 }
@@ -67,10 +85,13 @@ export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, e
  * A game joined to a world someone else hosts (docs/WAR.md M11), from their welcome (core/netplay.js
  * Joining's: the world's seed and whose people's town it's set in, and a snapshot of it): the world
  * made again from its seed, the host's copy of it restored, and played on as `joining` hears the
- * host play it. The rest as createGame (what's kept of the character, and who hears of it).
+ * host play it. The rest as createGame (what's kept of the character, and who hears of it; its
+ * plan laid out off the page's thread: what the host says meanwhile waits in `joining`, as it
+ * does while the world's built).
  */
-export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels = () => {}, messages = [], onMessages = () => {}, told = [], onTold = () => {}, kept = false }) {
-    const world = buildWorld({ seed: welcome.seed, race: welcome.race });
+export async function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels = () => {}, messages = [], onMessages = () => {}, told = [], onTold = () => {}, kept = false }) {
+    const { seed = 1, race } = welcome;
+    const world = buildWorld({ seed, race, plan: await plans.of(seed) });
     const host = Host.restore(world, welcome.snapshot);
     const own = host.players.get(welcome.id)?.own ?? {};
 

@@ -1,10 +1,12 @@
 // Paints skins off the page's thread (skins.js): sent the skin atlas's fields once (and any made
-// later), then a skin's settings, it sends back its picture (skin.js paintSkin), one at a time, in
-// the order asked, leaving out any no longer wanted. Or sent the body's files and masks, it works
-// the atlas out itself (a second or more on a phone, off the page's thread while the title's up)
-// and sends back what it found for the page's own.
+// later), then a skin's settings, it sends back its picture (skin.js paintSkin; at the size
+// asked for: pictures.js), one at a time, in the order asked, leaving out any no longer wanted.
+// Or sent the body's files and masks, it works the atlas out itself (a second or more on a
+// phone, off the page's thread while the title's up) and sends back what it found for the
+// page's own.
 
 import { HumanData } from "./body.js";
+import { sizedSkin } from "./pictures.js";
 import { paintSkin, SkinAtlas } from "./skin.js";
 
 let atlas = { fields: {}, furAndScales() {} };
@@ -21,9 +23,10 @@ function work() {
         return;
     }
 
-    const skin = paintSkin(atlas, job.settings);
+    // (At the size asked for, and a smaller one with it if that's asked for: pictures.js)
+    const skin = sizedSkin(paintSkin(atlas, job.settings), job.size, job.small);
 
-    self.postMessage({ id: job.id, skin }, [skin.data.buffer, skin.bump.buffer]);
+    self.postMessage({ id: job.id, skin }, [skin.data.buffer, skin.bump.buffer, ...(skin.small ? [skin.small.data.buffer, skin.small.bump.buffer] : [])]);
     later();
 }
 

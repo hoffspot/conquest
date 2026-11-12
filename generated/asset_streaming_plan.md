@@ -138,11 +138,26 @@ player's link faster, and help nothing that's waited for.
 - **Where ranges aren't served** (a 200 instead of a 206), it reads the response stream slowly. A
   reader paused between reads stops TCP's receive window opening, and the sender slows to match.
   It's less exact, since the browser buffers some ahead, but still bounded. `server/static.js`
-  serves ranges since A2. GitHub Pages (Fastly) serves them for files it doesn't compress, models
-  among them; the slow read covers any that don't.
+  serves ranges since A2. GitHub Pages (Fastly) serves them too, each part as it is, uncompressed:
+  a browser asks for a part with `Accept-Encoding: identity`. Asked for whole, Pages sends a model
+  gzipped like any other file (measured on the live site in November 2026: a 1,000,000-byte part
+  arrives as 1,000,000 bytes; the same file whole arrives 17% smaller, and the creatures' models
+  27% smaller over all, 147.7 MB as 108.1 MB). The slow read covers any server that serves no
+  ranges.
+- **Whole, when the player's waiting.** A file the player's waiting for at a door (`hurry`),
+  playing alone, that nothing's come of yet, is asked for whole in one request with no `Range`,
+  so the server compresses it: an ants' nest's 26.1 MB is 17.8 MB to wait for. It's read as fast as
+  it comes; what comes is kept a part's worth at a time, as parts are, so cut off (the link
+  dropped, the page loaded again) it carries on a part at a time from what arrived. Everything not
+  waited for, and everything while playing together, stays in parts: those keep to the rate and
+  stop at the next part for a file more wanted. Nothing's encoded again and no file's address
+  changes. (`server/static.js` compresses text alone, so from a world server a model comes whole
+  as it is.)
 - `fetch(url, { priority: "low" })` where the browser honours it: a hint, not relied on.
-- The service worker passes a request with a `Range` header straight to the server. The downloader
-  looks in the caches first, so it never asks for a part of a file that's kept.
+- The service worker passes a request with a `Range` header straight to the server, and one the
+  downloader says is its own for a whole file (`X-Pellagos-Whole`): the downloader checks and keeps
+  the file itself. The downloader looks in the caches first, so it never asks for a file that's
+  kept, or a part of one.
 
 ### 3.3 The controller: backing off when the game's messages slow
 

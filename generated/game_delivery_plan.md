@@ -128,7 +128,35 @@ release's code, and a game under way keeps its own release's modules even if an 
   kept. (First it was handed over as kept, for Chrome to keep its compiled code with it; but Chrome
   then sometimes failed an import on a first visit, about one load in 25 on a busy machine: "Failed
   to fetch dynamically imported module".)
-- Registered before the loader starts, so on a first visit it's there to keep what's downloaded.
+- Registered before the loader starts, so on a first visit it's there to keep what's downloaded:
+  by the page's own script, as the page is read (from November 2026; before, by `main.js` once it
+  and its 68 imports had loaded, the loader then waiting for it).
+
+- What it did on every load that nothing used is gone (November 2026). As a page starts it goes
+  through what it keeps for what no release lists: it sized every file with a look-up of its own,
+  some 480 of them, though only the catalog's sizes are counted (against their room). Now only
+  the catalog's are sized, each once, its size kept with what the worker knows. Each cache is
+  opened once while the worker runs, not by name on every request. And the loader asks which of
+  its files are kept before it starts (one message, answered from each cache's list): it used to
+  ask for every one, 400 of them code, and read 13 MB through only to count it, the page then
+  asking for each again to import it.
+
+### 3.3a The page's first requests
+
+`main.js` imports 68 modules itself, found nine levels of imports deep (27, 8, 6, 6, 8, 5, 5 and 3
+a level), 0.58 MB gzipped. Left to find them, a browser asks for each level only once the one
+before has come: nine round trips in a row before the loading bar moves (measured on a slowed
+link: 1.9 s, against 0.6 s on a fast one). The page preloads them all
+(`<link rel="modulepreload">`, one for each, at the address the import map gives it), written by
+`build:manifest` after the import map: a preload before the map makes Safari 16 and 17 ignore the
+map.
+
+The style sheet (42 KB gzipped, and it holds up the first paint) is asked for as
+`styles.css?h=hash`, and named in the import map with the modules: what the map names by hash is
+what a page tells the service worker its release keeps, and what an update downloads before it's
+ready, so the style sheet is kept and updated with the code it goes with, and comes from what's
+kept without a word to the server. (The crest's lettering, a 62 KB TTF the style sheet names, is
+still asked for by name and checked on each load: no tool here makes a WOFF2 of it.)
 
 ### 3.4 The server (`server/static.js`)
 
@@ -172,6 +200,32 @@ release's code, and a game under way keeps its own release's modules even if an 
 The loading screen says how much came from this device and how much was downloaded ("13.9 MB:
 0.4 MB downloaded"), and the debug overlay the same, so a reload that downloads everything again
 shows at once.
+
+### 3.8 The website's code, stripped
+
+The game's own code is a quarter comments and a fifth indentation: 12.86 MB in 450 modules, 3.69
+MB as GitHub Pages sends it (gzip). The Pages deploy takes both out of the site's copy
+(`scripts/build-site.js`, esbuild's `minifyWhitespace` alone, a file at a time): 6.93 MB, 2.14 MB
+gzipped, 42% less to download on a first visit and after every update (`game.js`, 245 KB gzipped,
+becomes 130 KB).
+
+- Whitespace only: no name's changed and no code's rewritten, so the site runs the code the tests
+  ran, and a stack trace still names its functions. A source map beside each file
+  (`game.js.map`) names it as the repository has it and carries its text.
+- Every file's still a module of its own, at its own address. The copy's manifest, catalog and
+  import map are made again after the strip (`scripts/build-manifest.js --root`), so every hash is
+  of the file as the site serves it: the service worker keeps a file only if its bytes match its
+  hash, and gives a worker its modules, asked for by name, from the same copies. An update still
+  downloads only the files it changed.
+- `version.js` is left as written, and stamped with the commit after, as before.
+- Only the site's copy. The repository, `npm start`, the world server, the tests and the Mac app
+  run the code as it's written.
+
+Not a bundle. Measured: one bundle with splitting, minified, is 2.13 MB gzipped in 94 files with
+the engine (48% less against 42%), but its main chunk is 1.0 MB and changes with nearly every
+merge, where the median update is 0.37 MB of changed files (§1); it would need nine worker entry
+points built and the fifteen `import.meta.url` addresses kept right; and the loader already
+fetches everything sixteen at a time before importing, so it would save no round trips.
 
 ## 4. Stages
 

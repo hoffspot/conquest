@@ -29,7 +29,9 @@ import { Avatar } from "./avatar.js";
 import { REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { LODS } from "../characters/lod.js";
-import { Steps, WAITING } from "../core/steps.js";
+import { NOW, Steps, WAITING } from "../core/steps.js";
+import { figureBytes, figureFrom, figureId, FIGURES_KEPT, figureStore } from "./figurestore.js";
+import { releaseAttribute, releaseGeometry, releaseTexture } from "./release.js";
 
 /**
  * - `fps`: how many times a second each move is recorded (played between them).
@@ -93,7 +95,7 @@ export const OFFSTAGE = 31;
 
 /**
  * How long a kind's figure is kept with nobody of its kind in the crowds (ms): then let go of, its
- * picture, its moves and its figure off the graphics card (6 MB or so on Low), and made again if
+ * picture, its moves and its figure off the graphics card (under 2 MB on Low), and made again if
  * one's wanted. Kept for good, an iPhone that let the game's tab go held 18 kinds of soldier.
  */
 export const CROWD_KEEP = 60000;
@@ -1067,6 +1069,11 @@ class Batch {
             }
 
             geometry.setIndex(this.template[`${name}Index`] ?? source.index);
+            // (Its bounds the figure's, worked out while its corners were on the page: three.js
+            // asks for them to sort what it draws, and would work them out from corners let go
+            // of since, world/release.js)
+            geometry.boundingBox = source.boundingBox;
+            geometry.boundingSphere = source.boundingSphere;
             geometry.setAttribute("crowdFrame", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 3), 3).setUsage(THREE.DynamicDrawUsage));
             geometry.setAttribute("crowdState", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 3), 3).setUsage(THREE.DynamicDrawUsage));
 
@@ -1080,10 +1087,20 @@ class Batch {
             mesh.name = `crowd ${this.template.key} ${name}`;
             this.scene.add(mesh);
 
+            // (The one it was, let go of off the graphics card: what's its own, each instance's
+            // moment and state. The figure's corners and triangles, which the new one draws too,
+            // are taken off it first: three.js lets go of the graphics card's copy of every
+            // attribute a geometry has when it's let go of. Till 2026-11-11 its own were taken
+            // off instead, so each time a crowd doubled its figure was let go of and sent again,
+            // 2.5 MB of it, and its own were never let go of)
             if (old) {
                 old.removeFromParent();
-                old.geometry.deleteAttribute("crowdFrame");
-                old.geometry.deleteAttribute("crowdState");
+
+                for (const key of Object.keys(source.attributes)) {
+                    old.geometry.deleteAttribute(key);
+                }
+
+                old.geometry.setIndex(null);
                 old.geometry.dispose();
                 old.dispose();
             }
@@ -1144,12 +1161,13 @@ class Batch {
         }
     }
 
+    // Its kind let go of (letGoOf): all it draws with off the graphics card, its own and its
+    // figure's corners and triangles with them (three.js lets go of every attribute of a geometry
+    // that's been drawn, and the figure's own geometry never is: only these are)
     dispose() {
         for (const mesh of [this.near, this.far]) {
             if (mesh) {
                 mesh.removeFromParent();
-                mesh.geometry.deleteAttribute("crowdFrame");
-                mesh.geometry.deleteAttribute("crowdState");
                 mesh.geometry.dispose();
                 mesh.dispose();
             }
@@ -1165,8 +1183,9 @@ class Batch {
  * `look` has it ({ shape, look, equipment, walk }: soldiers.js soldierLook), carrying `weapon`
  * (weapons.js: its first blow `attack`, `reaction` how a blow of it makes one flinch), fighting
  * as `guard` has it, casting as `cast` has it (CROWD_CASTS, or not at all), its pictures `size`
- * pixels square; or `calm`, never fighting (recordingMoves'): returns { key, geometry, farIndex,
- * picture, moves (a texture), table (MOVES' rows and lengths), height }.
+ * pixels square; or `calm`, never fighting (recordingMoves'): returns { key, geometry, nearIndex,
+ * farIndex, picture, moves (a texture), table (MOVES' rows and lengths), flags, height, packed:
+ * whether it's only the corners its fewer triangles use (templateFrom) }.
  */
 export function* makingTemplate(kit, key, { look, guard = null, attack = null, reaction = "slash", cast = null, size = 256, calm = false }) {
     const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: CROWD.hair, merge: true, far: true });
@@ -1211,10 +1230,129 @@ export function* makingTemplate(kit, key, { look, guard = null, attack = null, r
     }
 }
 
+// What each of a figure's attributes is kept as (packedFigure): the array its numbers go in, and
+// whether they're shares of the most it holds (three.js's `normalized`: 0 to 1, or -1 to 1, on
+// the graphics card as they were). Where it is stays as floats; which way it faces, a byte each
+// way (half a degree out at most, and made a length of one again as it's posed); where its
+// picture is, sixteen bits each way (its picture's 512 across); its colour sixteen bits a channel
+// (it's in linear light: a byte's steps would show in its darks); the bones it's bound to and how
+// much to each a byte each (what a body's and its clothes' own are; the weights still adding up
+// to what they did, so no corner's drawn bigger or smaller); how it shines a byte each; which
+// set and part it's of, a byte. 37 bytes a corner, where each was 92 as floats
+const PACKED = Object.freeze({
+    normal: [Int8Array, true],
+    uv: [Uint16Array, true],
+    color: [Uint16Array, true],
+    crowdBones: [Uint8Array, false],
+    crowdWeights: [Uint8Array, true],
+    crowdSet: [Uint8Array, false],
+    crowdSurface: [Uint8Array, true],
+    crowdPart: [Uint8Array, false],
+});
+
+// The most a number kept in an array of a kind can be
+const MOST = new Map([
+    [Int8Array, 127],
+    [Uint8Array, 255],
+    [Uint16Array, 65535],
+]);
+
+// One attribute of a figure, of the corners `kept` (their numbers, in the order they're kept in;
+// null for all of them as they are), as PACKED has it; as floats, as it was, if any of its numbers
+// can't be kept so (a colour brighter than one, more bones than a byte counts)
+function packedAttribute(name, { array, itemSize, count }, kept) {
+    const [Kind, shares] = PACKED[name] ?? [Float32Array, false];
+    const corners = kept ? kept.length : count;
+    const most = MOST.get(Kind) ?? Infinity;
+    const least = Kind === Int8Array ? -1 : 0;
+    let fits = Kind !== Float32Array;
+
+    for (let k = 0; fits && k < corners; k++) {
+        const from = (kept ? kept[k] : k) * itemSize;
+
+        for (let c = 0; c < itemSize; c++) {
+            const value = array[from + c];
+
+            fits = shares ? value >= least && value <= 1 : value >= 0 && value <= most && Number.isInteger(value);
+
+            if (!fits) {
+                break;
+            }
+        }
+    }
+
+    const values = new (fits ? Kind : Float32Array)(corners * itemSize);
+    const scale = fits && shares ? most : 1;
+
+    for (let k = 0; k < corners; k++) {
+        const from = (kept ? kept[k] : k) * itemSize;
+        let [sum, total, biggest] = [0, 0, 0];
+
+        for (let c = 0; c < itemSize; c++) {
+            const value = array[from + c];
+
+            values[k * itemSize + c] = scale === 1 ? value : Math.round(value * scale);
+            sum += value;
+            total += values[k * itemSize + c];
+            biggest = values[k * itemSize + c] > values[k * itemSize + biggest] ? c : biggest;
+        }
+
+        // (How much it's bound to its bones, all told, as it was: what rounding each left over
+        // put on the one it's most bound to)
+        if (name === "crowdWeights" && scale !== 1) {
+            values[k * itemSize + biggest] += Math.min(most, Math.round(sum * scale)) - total;
+        }
+    }
+
+    return new THREE.BufferAttribute(values, itemSize, fits && shares);
+}
+
+/**
+ * A figure as it's kept and drawn (figureOf's `geometry`): only the corners its triangles use
+ * (`lists`: the lists of corners it's drawn with, its fewer triangles near and far, most of its
+ * corners in neither: a soldier's 29,000 corners are 9,000 so; null, all of them, as they are),
+ * each attribute as what it is, not floats (PACKED). Returns { geometry, indices: `lists` as
+ * they're numbered now, or null }; the geometry's own index the first of them, or as it was.
+ */
+export function packedFigure(geometry, lists = null) {
+    const count = geometry.attributes.position.count;
+    const into = lists ? new Int32Array(count).fill(-1) : null;
+    const kept = lists ? [] : null;
+
+    // (Numbered as they're first drawn, near then far: what a triangle uses near each other)
+    for (const list of lists ?? []) {
+        for (const corner of list) {
+            if (into[corner] < 0) {
+                into[corner] = kept.length;
+                kept.push(corner);
+            }
+        }
+    }
+
+    const packed = new THREE.BufferGeometry();
+    const corners = kept ? kept.length : count;
+    const indexOf = (list) => new THREE.BufferAttribute((corners > 65535 ? Uint32Array : Uint16Array).from(list, (corner) => (into ? into[corner] : corner)), 1);
+
+    for (const [name, attribute] of Object.entries(geometry.attributes)) {
+        packed.setAttribute(name, packedAttribute(name, attribute, kept));
+    }
+
+    const indices = lists?.map(indexOf) ?? null;
+
+    packed.setIndex(indices?.[0] ?? (geometry.index ? indexOf(geometry.index.array) : null));
+    packed.boundingBox = geometry.boundingBox?.clone() ?? null;
+    packed.boundingSphere = geometry.boundingSphere?.clone() ?? null;
+
+    return { geometry: packed, indices };
+}
+
 /**
  * A kind's figure (figureOf's `geometry`, `picture` and `height`) and its moves as they were
  * recorded (`recorded`: recordingMoves'), made a template to draw (makingTemplate's), its fewer
- * triangles near and far waited for a while (each a yield).
+ * triangles near and far waited for a while (each a yield); then kept as only the corners those
+ * use, each attribute as what it is (packedFigure), and the page's copies of its corners, its
+ * triangles and its moves let go of once the graphics card has them (world/release.js: nothing
+ * reads them once it's made).
  */
 export function* templateFrom(kit, key, { geometry, picture, height, recorded }) {
     // (Its moves as half floats: half the memory, a millimetre or so out at most where a figure's
@@ -1260,6 +1398,66 @@ export function* templateFrom(kit, key, { geometry, picture, height, recorded })
         }
     }
 
+    // (Kept as what it's drawn with: the corners its fewer triangles use, once both lists have
+    // come, numbered anew; with either still to come, or none asked for, every corner as it's
+    // numbered, a list that comes late drawn as it comes. A figure with no corners (a test's) as
+    // it is)
+    if (geometry.attributes.position) {
+        const both = Boolean(template.nearIndex && template.farIndex);
+        const { geometry: packed, indices } = packedFigure(geometry, both ? [template.nearIndex.array, template.farIndex.array] : null);
+
+        if (both) {
+            [template.nearIndex, template.farIndex] = indices;
+        }
+
+        template.packed = both;
+        template.geometry = packed;
+        geometry.dispose();
+
+        yield;
+    }
+
+    releaseGeometry(template.geometry);
+    releaseAttribute(template.nearIndex);
+    releaseAttribute(template.farIndex);
+    releaseTexture(moves);
+
+    return template;
+}
+
+/**
+ * A kind's figure read from where an earlier session kept it (`store`, under `id`:
+ * world/figurestore.js), a step at a time while it's looked for; or, not kept there (or its bytes
+ * no figure's, or there's no waiting on the storage), made as ever (makingTemplate) and then kept
+ * for the next session, if it's as it's meant to be kept (packed: templateFrom).
+ */
+function* keptOrMade(store, id, kit, key, spec) {
+    let found;
+
+    store.find(id).then((bytes) => {
+        found = bytes;
+    });
+
+    // (Looked for elsewhere, a frame or two: waited on a while at most)
+    for (let k = 0; found === undefined && k < FIGURES_KEPT.wait; k++) {
+        if ((yield WAITING) === NOW) {
+            break;
+        }
+    }
+
+    if (found) {
+        try {
+            return figureFrom(found, key);
+        } catch (error) {
+            console.warn(`The crowd's ${key} as it was kept couldn't be read: made again`, error);
+        }
+    }
+
+    const template = yield* makingTemplate(kit, key, spec);
+
+    // (Its bytes read now, before any of it's on the graphics card and let go of off the page)
+    store.keep(id, figureBytes(template));
+
     return template;
 }
 
@@ -1273,11 +1471,13 @@ export class Crowd {
      * @param {object} kit - What characters are made from (characters/kit.js).
      * @param {object} [options]
      * @param {number} [options.size] - Each figure's pictures' size (pixels square).
+     * @param {object} [options.store] - Where figures are kept between sessions (world/figurestore.js FigureStore), or null: each made every session.
      */
-    constructor(scene, kit, { size = 256 } = {}) {
+    constructor(scene, kit, { size = 256, store = figureStore() } = {}) {
         this.scene = scene;
         this.kit = kit;
         this.size = size;
+        this.store = store;
 
         /** Each kind's figure: key -> { template, batch } once made, or { making } (Steps: makingTemplate's), or { failed }. */
         this.kinds = new Map();
@@ -1298,7 +1498,12 @@ export class Crowd {
             return kind.template ?? null;
         }
 
-        this.kinds.set(key, { making: new Steps((spec.make ?? makingTemplate)(this.kit, key, { size: this.size, ...spec }), `crowd figure ${key}`) });
+        // (One kept by an earlier session read, not made: a soldier's or one of the townsfolk's,
+        // not one made its own way)
+        const told = { size: this.size, ...spec };
+        const id = this.store ? figureId(this.kit, key, told) : null;
+
+        this.kinds.set(key, { making: new Steps(id ? keptOrMade(this.store, id, this.kit, key, told) : (spec.make ?? makingTemplate)(this.kit, key, told), `crowd figure ${key}`) });
         this.waiting.push(key);
 
         return null;

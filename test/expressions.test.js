@@ -229,6 +229,11 @@ describe("the face's expressions", () => {
         }
 
         assert.ok(turned > 0.5 && turned < 2, `the blink turns a normal by ${turned.toFixed(2)}`);
+
+        // (Sent to the graphics card, where alone it's read, the page's copy of it is let go of)
+        assert.ok(data.texture.image.data.byteLength > 1e6);
+        data.texture.onUpdate(data.texture);
+        assert.equal(data.texture.image.data, null);
     });
 });
 
