@@ -4553,7 +4553,9 @@ but never while it would keep a change from showing:
 - **What they put on shows at once**, drawn one by one in the frame the host says so (`#regear`:
   `setEquipment(ids, { merge: false })`), as it always was. Once it's been as it is 5 seconds of
   the game's time (`after`), their outfit's picture is put together a step at a time, 2 ms of a
-  frame (`budget`: a step at least, one player's at a time, the first changed first), the
+  frame (`budget`: a step at least, one player's at a time, the first changed first; in the
+  skins' worker where it can be, waited for a frame at a time: docs/CHARACTERS.md, *Garments'
+  pictures painted elsewhere*), the
   garments drawn one by one meanwhile; then, in one frame, their meshes are one mesh drawn with
   it (`Character.merging`), and each garment's own material is let go of. A second change while
   it waits or while it's put together starts the 5 seconds over, and nothing's kept of what was
@@ -8014,6 +8016,13 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   slime, made molten after); a look shared once made (another of it built at once), and one
   wanted meanwhile taking up the sculpting where the first had got to; a beast dressed in steps
   through its sculpting; any other error let through, and what's wanted made at once after.
+- `test/garment-worker.test.js`: garments' pictures painted in the skins' worker (its code run
+  in the test): nothing a worker can't import; its colours three.js's to the last bit; an
+  outfit's two pictures and a garment's own the page's to the last byte, none of them painted
+  or kept on the page; painted here when the steps can't wait, the worker fails or can't paint
+  one; one making for two wearers built turn and turn about; nothing left behind when a wearer's
+  given up on mid-making, or a body at any step of its building; an outfit made whole again
+  there without a frame waiting on it; and what the worker keeps and lets go of.
 - `test/character-building.test.js`: characters built a step at a time the same as all at once
   (soldiers, folk and a hero); the skin, hair, a boot, a garment's picture and an outfit's the
   same step by step; the hair grown once (none hidden by a tankard; under a helmet only below its

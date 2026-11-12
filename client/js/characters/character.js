@@ -396,7 +396,13 @@ export class Character {
             return character;
         } finally {
             if (!built) {
-                character.dispose();
+                try {
+                    character.dispose();
+                } catch (error) {
+                    // (Half made, and something of it not there to let go of: whatever stopped
+                    // its building is what's to be told, not this)
+                    console.warn(`A body given up on half built couldn't be let go of whole: ${error}`);
+                }
             }
         }
     }

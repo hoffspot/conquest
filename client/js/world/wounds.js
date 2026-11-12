@@ -154,10 +154,17 @@ function woundMap(kit) {
     }
 
     const human = kit.human;
+    // (Where each texel is on the body: the wardrobe's, which it paints garments' pictures by
+    // (characters/wardrobe.js), if it has it, and kept on the kit for it if it paints them
+    // here. Where it's the skins' worker that paints them, with its own, only what's read
+    // here is kept of this one, 3 MB of its 7)
+    const map = kit.texelMap ?? texelMap(human, SIZE);
 
-    kit.texelMap ??= texelMap(human, SIZE);
+    if (!kit.skins?.paints) {
+        kit.texelMap = map;
+    }
 
-    const { covered, positions } = kit.texelMap;
+    const { covered, positions } = map;
     const cells = new Map();
 
     for (let i = 0; i < SIZE * SIZE; i++) {

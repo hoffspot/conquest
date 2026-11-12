@@ -50,6 +50,7 @@ const { Skins } = await import("../client/js/characters/skins.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { garmentMaterial, referenceMeasures, tendKit } = await import("../client/js/characters/wardrobe.js");
 const { allAtOnce, Steps } = await import("../client/js/core/steps.js");
+const { Wounds } = await import("../client/js/world/wounds.js");
 
 const client = fileURLToPath(new URL("../client/", import.meta.url));
 
@@ -248,6 +249,17 @@ describe("garments' pictures painted in the skins' worker", () => {
 
         assert.ok(tinted > 0, "some of them a people's make of a garment, tinted");
         assert.equal(paintedHere(kit), false, "none of it painted on the page, nor any garment's picture kept there");
+
+        // (Nor is where each texel is on the body kept on the kit for the wardrobe when a body's
+        // wounds want it, world/wounds.js: only what they read of it; a kit that paints here
+        // has it kept, for the garments painted after)
+        const wounded = new Character(pageKit(), options(soldier));
+        const wounds = [new Wounds(await waited(Character.building(kit, options(soldier)), worker)), new Wounds(wounded)];
+
+        assert.equal(kit.texelMap, undefined);
+        assert.ok(wounded.kit.texelMap && wounded.kit.woundMap.positions === wounded.kit.texelMap.positions);
+        assert.deepEqual(kit.woundMap.positions, wounded.kit.woundMap.positions);
+        assert.equal(wounds[0].map.cells.size, wounds[1].map.cells.size);
         assert.equal(worker.told.filter((kind) => kind === "measures").length, 1, "the body's measurements sent over once");
         assert.equal(worker.told.filter((kind) => kind === "outfit").length, kit.composites.size, "each outfit asked for once");
     });
@@ -403,7 +415,7 @@ describe("garments' pictures painted in the skins' worker", () => {
             const kit = pageKit();
             let most = Infinity;
 
-            for (let stop = 0; stop < most; stop += 9) {
+            for (let stop = 0; stop < most; stop += 4) {
                 const steps = Character.building(kit, options(soldier, { merge, release: true, tall: 60 }));
                 let taken = 0;
                 let step = null;

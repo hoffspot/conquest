@@ -163,14 +163,22 @@ export class Skins {
     }
 
     /**
+     * Whether the wardrobe's pictures are painted elsewhere (askPicture): where there's a worker
+     * and it has the body, having worked the atlas out itself.
+     */
+    get paints() {
+        return Boolean(this.worker) && this.whole;
+    }
+
+    /**
      * Start painting one of the wardrobe's pictures elsewhere, if it can be (where the worker has
-     * the body: `whole`): a garment's own (`what`: { garment (its id), size }) or an outfit's two
+     * the body: `paints`): a garment's own (`what`: { garment (its id), size }) or an outfit's two
      * ({ outfit (its garments' ids, outermost last), size, least, colour }: garment-pictures.js
      * picturingOutfit). A job for `taking` to take, or null. `measures()` gives the measurements
      * they're painted on (wardrobe.js referenceMeasures), sent over with the first.
      */
     askPicture(what, measures) {
-        if (!this.worker || !this.whole) {
+        if (!this.paints) {
             return null;
         }
 

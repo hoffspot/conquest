@@ -41,7 +41,9 @@ function* making(job) {
         const picture = yield* painter.outfitting(job.outfit, job);
         const { full, small } = picture;
 
-        return { reply: { picture }, transfer: [full.data, full.surface, small.data, small.surface].filter(Boolean).map(({ buffer }) => buffer) };
+        // (Each of its pictures' bytes handed over, once: those at the least size are the
+        // pictures themselves where that's the size they're painted)
+        return { reply: { picture }, transfer: [...new Set([full.data, full.surface, small.data, small.surface].filter(Boolean).map(({ buffer }) => buffer))] };
     }
 
     // (At the size asked for, and a smaller one with it if that's asked for: pictures.js)

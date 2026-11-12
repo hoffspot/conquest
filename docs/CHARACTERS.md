@@ -52,6 +52,7 @@ to them.
 | `hair.js` | Hairstyles and beards, grown as hair cards |
 | `garments.js` | Clothing and armour fitted to the body |
 | `garment-pictures.js` | What each garment is (its region of the body, its colours and pattern) and its picture, and an outfit's: with no three.js, so the skins' worker can paint them |
+| `garment-painter.js` | The wardrobe's painter in the skins' worker: each garment's picture painted and kept there, an outfit's two put together from them and sent back |
 | `items.js` | Rigid equipment: weapons, shields, helmets, packs, tusks |
 | `headwear.js` | The head measured all round, the lines head-wear's rims follow, plates grown over it |
 | `equipment.js` | Slots, sockets and the equipment catalogue |
@@ -889,6 +890,49 @@ fails), or for a whole skin picture loaded in the character lab, it's painted he
 headless Chromium on "high", this took a town's six guards from 10 s of frames to 4, and a
 tavern's eight folk from 9 to 3, at 6 ms a frame.
 
+**Garments' pictures painted elsewhere.** A garment's own picture was 56 ms of the page's
+thread to paint (512 a side; 97 on the machine it was first measured on), and an outfit's two,
+put together from its garments', 260 ms for a soldier's eleven: 30% of dressing a town for the
+first time, in steps of a few milliseconds a frame. The skins' worker has the body (it worked
+the skin atlas out from the body's files), so it paints them too (`garment-painter.js`
+`GarmentPainter`; `skins.js` `askPicture`, `taking`):
+
+- **One design.** The wardrobe's makings are what they were (`wardrobe.js`): an outfit's two
+  pictures are made once for the kit, whoever comes to wear it meanwhile (`shared`: one making,
+  its takers counted), held at the size its wearers are seen at, made whole again for one seen
+  bigger (`again`, `tendKit`), let go of with the kit's idle things. Only where the painting's
+  done changed: the making asks the worker for the outfit's two pictures (as they're painted
+  and at the least size they're held at) and waits on them (`elsewhere`: `WAITING`, a frame at
+  a time), and a garment drawn on its own (a player's, one by one) the same for its one. The
+  page then paints none of it and keeps no garment's picture, nor where each texel is on the
+  body (7 MB, and 4 MB more while garments are painted): those are the worker's.
+- **The same pictures.** The page and the worker paint with the same code
+  (`garment-pictures.js`: `paintingGarment`, `picturingOutfit`, which has no three.js: a module
+  worker has no import map, and `"three"` there would stop it; its colours in linear light are
+  three.js's to the last bit, `linearColour`), on the same body and the same measurements (the
+  page's `referenceMeasures`, sent over once, a millisecond's copy). An outfit's two pictures
+  hash the same painted here and there (twelve outfits, four peoples and townsfolk, men and
+  women, in headless Chromium with a real worker; eight in `test/garment-worker.test.js`, which
+  runs the worker's code in the test).
+- **Here, where it can't be there.** With no worker (Node's tests, the labs, a browser without
+  module workers), a worker that hasn't the body, one that's failed, a picture it couldn't
+  paint (it says so, and goes on), or steps that can't wait (all at once: `NOW`), the page
+  paints as it always did, and nothing else changes.
+- **Given up on.** A making closed while it waits (its last taker gone: a player's outfit
+  changed again, a body no longer wanted) tells the worker, which leaves off between rows; one
+  already painted is thrown away when it comes back. A body given up on while it's built is
+  let go of whole (`Character.building`, its steps closed; app/game.js `#giveUpBuilding`): it
+  was only dropped, and one left waiting on its skin stayed counted among its outfit's wearers
+  for good, holding its pictures whole and on the kit.
+- **What the worker keeps.** Each garment's own picture, 30 seconds after it was last used
+  (`PICTURES.garments`, as the page's wardrobe keeps its own), and all of them let go of when
+  the page says it's short of memory (`letGoOfIdle`). They aren't in `heldByKit`, which counts
+  the page.
+
+The page's thread spends 0.6 ms on a new garment where it spent 56, and 1.6 ms on a new outfit
+where it spent 259 (the thread's own time, in headless Chromium; an outfit is back 0.3 s after
+it's asked for, 0.6 s with every garment of it new there too).
+
 **The skin atlas worked out elsewhere.** Where every texel of the body's texture is on the body
 (`SkinAtlas`) takes about a second to work out at 1024 (more on a phone), and the game used to
 work it out before showing the title. Now the kit (`kit.js`, `elsewhere`) sends the body's files
@@ -974,7 +1018,9 @@ of 18. Now:
   which goes on only while it's tended (a page put by and come back to finds them still there);
   and painted again when it's next wanted (97 ms a garment, in steps). One a player draws with,
   garment by garment, is kept while they do, and with it the one a people's make of it is tinted
-  from, whose pictures it draws with.
+  from, whose pictures it draws with. (Where the skins' worker paints them, *Garments' pictures
+  painted elsewhere*, the page has only those a player draws with: the rest are the worker's,
+  kept there by the same rule.)
 - **Idle outfits and looks of eye** beyond two (`IDLE`) are let go of, the longest unworn first.
 - **All of it at once, when the page is short of memory**: `letGoOfIdle(kit)` (`kit.js`) lets go
   of every outfit and look of eye no one's wearing, every garment's picture no one's drawing
