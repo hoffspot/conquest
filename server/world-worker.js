@@ -37,6 +37,9 @@
 //                          { type: "state", ... }                  how it is (report), with what it's
 //                                                                  counted of itself since it last said
 //                                                                  (`metrics`: world-metrics.js)
+//                          { type: "journal", text }               a line this thread put in the world's
+//                                                                  journal (a save, a backup, time let
+//                                                                  go), for the server's structured log
 //                          { type: "saved", id, ok } / "stopped"
 
 import { performance } from "node:perf_hooks";
@@ -76,6 +79,11 @@ installWorkers();
 
 const started = clock();
 const stored = await StoredWorld.open(workerData.folder);
+
+// (Each line this thread puts in the world's journal told to the supervisor too, for the server's
+// structured log, which scrubs it: log.js)
+stored.onJournal = (text) => post({ type: "journal", text });
+
 const kept = stored.meta.heroes === "kept";
 let settings = { ...stored.meta.settings };
 // The most players it takes at once: its world's setting, and no more than its server's ceiling

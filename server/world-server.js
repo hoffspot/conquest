@@ -211,6 +211,9 @@ export class WorldServer {
                     this.log.event("world.fell-behind", { world, ms: Math.round(state.metrics.dropped) });
                 }
             },
+            // (What a world's own thread puts in its journal, saves and backups among it, in the log
+            // too, scrubbed as every sentence is: log.js)
+            onJournal: (world, text) => this.log.event("world.journal", { world, text }),
         });
 
         this.static = createStaticHandler(clientDirectory);

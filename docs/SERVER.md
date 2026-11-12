@@ -700,14 +700,18 @@ Every line has `t` (when) and `event`:
 | `world.life` | A world started loading, is running, went empty, is stopping or is stored (`life`) |
 | `world.save-failed`, `world.fell-behind` | A world's save didn't reach the disk (`count`), or it let time go (`ms`) |
 | `journal` | A line of the server's own journal (`text`): settings, creator keys, certificates, updates, archives |
+| `world.journal` | A line a running world's own thread put in its journal (`world`, `text`): a save (not each turn's, one a minute), a backup, a save that failed or couldn't be read, time let go, a hero brought to this version of the game |
 
 **No line ever carries a key, a short code, a ticket, a session, a token or a key's label, nor a
 whole address.** A key or code is named by its id (what the management page lists it by). An
 address is given as the network it's on (`net`: `203.0.113.x`, `2001:db8:85a3::x`), enough to see
 the same visitor trying again, not to find them. A line has only the fields in the table, and
 every sentence is scrubbed of anything shaped like a key, a token or an address before it's
-written. A player is named by their player id, as in the journals. A world's own journal (its
-saves and backups, who was sent out) isn't in the log yet: read it in Activity.
+written. A player is named by their player id, as in the journals. Of a world's journal, the log
+has what the world's own thread wrote while it ran (`world.journal`), scrubbed the same way, and
+who came in, left or was refused as events of their own. What the server wrote there for someone
+(a setting changed, a player sent out or given a part, a restore, a key by its label) is in the
+journal alone: read it in Activity.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above

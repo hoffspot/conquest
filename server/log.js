@@ -1,7 +1,7 @@
 // The world server's structured log (generated/multiplayer_scaling_plan.md 6A-5): one line of JSON
 // for each thing that happens, beside the journals people read (manage.js, storage/worlds.js),
 // for whatever gathers logs to read (journald, Console, a shipper): { t (when, ISO), event (what:
-// "player.entered", "refused", "world.life", "journal"...), and that event's fields }. The server
+// "player.entered", "refused", "world.life", "journal", "world.journal"...), and that event's fields }. The server
 // run from the command line or the Mac app writes them to its output, among what it says there
 // (serve.js); a WorldServer made any other way writes none unless it's given somewhere to.
 //
@@ -35,7 +35,7 @@ export const FIELDS = Object.freeze({
     version: "the server's version",
     worlds: "how many worlds it keeps",
     first: "whether it's the player's first time in",
-    text: "a sentence, as the server's journal has it",
+    text: "a sentence, as the server's journal has it, or a world's",
 });
 
 /** What the access hooks tell of (access/policy.js on), as the log names it. */
