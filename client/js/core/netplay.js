@@ -47,13 +47,15 @@
 //
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
-//   joiner -> host   { kind: "hello", version, character, hero }   (character: who they are
+//   joiner -> host   { kind: "hello", version, character, hero, speaks }   (character: who they are
 //                                                    and what they carry, { hero, progress },
 //                                                    as Host.join takes them: the world they
 //                                                    come into keeps the rest of them; hero, on
 //                                                    the world server: which of the player's
 //                                                    kept heroes, a slot, "new", or "copy":
-//                                                    the character copied in)
+//                                                    the character copied in; speaks: the
+//                                                    netcodes its game can play, SPEAKS: one
+//                                                    that doesn't say speaks lockstep alone)
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again: Hosting
 //                                                    `hidden`)
@@ -121,8 +123,34 @@ import { RACE, startFor } from "./worldplan/plan.js";
 import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
 
-/** Bumped whenever what's said changes: a game of another version can't join. */
+/**
+ * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
+ * added and opted into: contribution.md, section 3.)
+ */
 export const NET_VERSION = 224;
+
+/**
+ * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
+ * holding a whole copy of the world and playing the host's steps, is the only one there is. A
+ * name here is never used again for anything else (contribution.md, section 3).
+ */
+export const NETCODES = Object.freeze(["lockstep"]);
+
+/**
+ * The netcodes this game can play, as it says them (`speaks`) when it asks to join a world
+ * (Joining.hello) or to enter one on a world server (app/servers.js): a world played another
+ * way refuses it in words (NET_REFUSALS.netcode), where it would otherwise fail to understand.
+ */
+export const SPEAKS = NETCODES;
+
+/**
+ * What a game speaks, from what it said (`said`, its hello's or its /enter's `speaks`): the
+ * names it gave (it may know ones this doesn't), or lockstep alone for one that said nothing,
+ * as every game did before any said.
+ */
+export function speaksOf(said) {
+    return Array.isArray(said) ? said.filter((name) => typeof name === "string" && name.length <= 32).slice(0, 16) : ["lockstep"];
+}
 
 /**
  * How many steps the host plays between telling how the world should stand (a fifth of a second:
@@ -223,6 +251,7 @@ export const NET_REFUSALS = Object.freeze({
     character: "Your character couldn't be brought into that world.",
     copied: "That character's been copied into this world already: play their copy there, or bring another.",
     here: "You're in that world already, on another device.",
+    netcode: "That world's played in a way this version of the game can't join. Reload this page for the newest version.",
 });
 
 /**
@@ -465,6 +494,9 @@ export class Hosting {
          * 1-3, 3-19): it costs nothing unsent.
          */
         this.sendsPlaces = false;
+
+        /** How its world's played with those who join (NETCODES): one who doesn't speak it is refused (#hello). */
+        this.netcode = "lockstep";
 
         /**
          * Those who've asked for the world again and not been sent it yet (by peer), and how many
@@ -899,7 +931,7 @@ export class Hosting {
 
     // Someone joining, with their character: into the world (by their people's town, if it isn't
     // the host's people's), and sent it as it is
-    #hello(peer, { version, character }) {
+    #hello(peer, { version, character, speaks }) {
         if (this.players.has(peer)) {
             return;
         }
@@ -910,6 +942,13 @@ export class Hosting {
         // words are read by games of every version, so they only ever gain what can be left out)
         if (version !== NET_VERSION) {
             refuse("version", { net: NET_VERSION });
+
+            return;
+        }
+
+        // (A game that can't play the world the way it's played: told so, and which way that is)
+        if (!speaksOf(speaks).includes(this.netcode)) {
+            refuse("netcode", { netcode: this.netcode });
 
             return;
         }
@@ -1354,7 +1393,7 @@ export class Joining {
      * looks taken alone: server/world-worker.js).
      */
     hello(character, { hero } = {}) {
-        this.send(encode({ kind: "hello", version: NET_VERSION, character, ...(hero !== undefined ? { hero } : {}) }));
+        this.send(encode({ kind: "hello", version: NET_VERSION, character, ...(hero !== undefined ? { hero } : {}), speaks: SPEAKS }));
     }
 
     /** What the host said. */

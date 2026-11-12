@@ -14,7 +14,10 @@
 //          player?}                         /status lists it), player, identity, heroes, life,
 //                                           position }; an open world's with no key at all (by its
 //                                           door: access/world.js); `player`, their own identity's
-//                                           proof (client/js/core/player.js), known by it from then on
+//                                           proof (client/js/core/player.js), known by it from then on;
+//                                           `net`, the game's NET_VERSION, and `speaks`, the netcodes it
+//                                           can play (core/netplay.js SPEAKS: lockstep alone, unsaid):
+//                                           refused "version" or "netcode" if the world's is another
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key; or, the server's
@@ -90,7 +93,7 @@
 // computer's own listener (admin.js), it's the server's admin.
 
 import { randomInt } from "node:crypto";
-import { NET_VERSION } from "../client/js/core/netplay.js";
+import { NET_VERSION, speaksOf } from "../client/js/core/netplay.js";
 import { playerOfProof, PROOF_MINUTES } from "../client/js/core/player.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { plainAddress } from "./access/addresses.js";
@@ -104,7 +107,7 @@ import { CRASHES } from "./storage/crashes.js";
 import { MEASURES } from "./storage/measures.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
-import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
+import { isOffline, netcodeOf, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
@@ -130,7 +133,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
+const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, netcode: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -280,6 +283,12 @@ export function apiHandler(server, { mac = false } = {}) {
         if (body.net !== undefined && body.net !== NET_VERSION) {
             // (With its version, for the game to say which is the newer: netplay.js versionWords)
             throw refuse("version", { message: "That server plays another version of the game than yours: open the game from the server itself.", net: NET_VERSION, version: SERVER_VERSION });
+        }
+
+        // (A game that can't play the world the way it's played: one that doesn't say what it speaks
+        // speaks lockstep alone. The words are for a game older than the reason)
+        if (!speaksOf(body.speaks).includes(netcodeOf(meta))) {
+            throw refuse("netcode", { message: "That world's played in a way your version of the game can't join: reload the game for the newest version, or open it from the server itself.", netcode: netcodeOf(meta) });
         }
 
         const { state } = registry.lifeOf(world);

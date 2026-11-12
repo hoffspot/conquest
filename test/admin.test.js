@@ -393,6 +393,14 @@ describe("a world's management (server/manage.js)", () => {
         assert.equal(other.status, 409);
         assert.deepEqual({ error: other.json.error, net: other.json.net, version: other.json.version }, { error: "version", net: NET_VERSION, version: SERVER_VERSION });
 
+        // (And one that can't play the world the way it's played, lockstep: refused in words, told
+        // which way that is. One that doesn't say what it speaks, as below, speaks lockstep)
+        const mute = await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION, speaks: ["views.1"] } });
+
+        assert.equal(mute.status, 409);
+        assert.deepEqual({ error: mute.json.error, netcode: mute.json.netcode }, { error: "netcode", netcode: "lockstep" });
+        assert.match(mute.json.message, /reload the game for the newest version/);
+
         const entered = await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION } });
 
         assert.equal(entered.status, 200);

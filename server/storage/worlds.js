@@ -102,6 +102,12 @@ export const ruleOf = ({ heroes, firstHero }) => (heroes === "brought" ? "visiti
  */
 export const isOffline = (meta) => meta?.state === "offline";
 
+/**
+ * How a world's played with those who come into it (core/netplay.js NETCODES): lockstep, for a
+ * world that doesn't say (every world, before any said).
+ */
+export const netcodeOf = (meta) => (typeof meta?.settings?.netcode === "string" ? meta.settings.netcode : "lockstep");
+
 /** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
