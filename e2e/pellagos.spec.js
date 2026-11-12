@@ -18535,6 +18535,15 @@ test("bars over a file of soldiers seen end-on: placed in the order of precedenc
                 }
 
                 Object.assign(player, { hp: player.maxHp, lock: window.locked });
+
+                // (And the field battle kept from running out (core/host.js FIELD_BATTLE.lasts:
+                // five minutes of the game's time, then everyone left in it goes): bodies are
+                // built by the machine's own time, so a slow one plays many more of the game's
+                // seconds getting here, and its soldiers were gone from under the test)
+                for (const field of game.host.fields) {
+                    field.at = game.battle.time;
+                }
+
                 game.advance(1 / 30, { render: false, wait: true });
                 // (Which of the file's bars are shown, frame by frame)
                 window.barFrames?.push({ clock: game.clock, shown: friends.map(({ id }) => Boolean(game.hud.tracked.get(id)) && !game.hud.tracked.get(id).hidden) });
@@ -18743,6 +18752,15 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
                 }
 
                 player.hp = player.maxHp;
+
+                // (And the field battle kept from running out (core/host.js FIELD_BATTLE.lasts:
+                // five minutes of the game's time, then everyone left in it goes): bodies are
+                // built by the machine's own time, so a slow one plays many more of the game's
+                // seconds getting here, and its soldiers were gone from under the test)
+                for (const field of game.host.fields) {
+                    field.at = game.battle.time;
+                }
+
                 game.advance(1 / 30, { render: false, wait: true });
                 // (Frame by frame: whether each one's bar is shown, and whether it's drawn in its crowd)
                 window.barFrames?.push({
