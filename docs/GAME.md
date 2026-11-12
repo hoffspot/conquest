@@ -1143,7 +1143,10 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   its way over its map's navigation mesh (`core/navigation.js` `navigatorOf`, below, and
   [WORLD.md](WORLD.md#navigation-meshes)): the corners of the shortest way round walls and
   furniture, over bridges, along roads (which count for less), off cliffs and out of deep
-  water, kept to the centimetre. It walks straight from corner to corner, a fifth of a metre at
+  water, kept to the centimetre. (No way is looked for across more than 256 of the mesh's
+  32 m tiles, a box 512 m a side: sent further at once, by whatever order, a character has no
+  way, as before a wall with none round it, and nothing's made for one. A hero stands, a
+  `move` let go after its few tries; WORLD.md, *Navigation meshes*.) It walks straight from corner to corner, a fifth of a metre at
   a time, facing the way it's going, so it turns only at corners. It never walks into anyone:
   where someone's in the way it steps aside round them, turning 30°, 60°, 90° or 120° (away from
   them first, and on round them the way it first went: with them all but straight ahead it

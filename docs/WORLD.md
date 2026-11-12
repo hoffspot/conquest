@@ -1286,6 +1286,25 @@ found the same 2,012 ways over them to the last bit).
   where nothing's drawn, so never holds a step up while the world under its way is made (seen
   replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
   several times that on a phone), and stands where it is, unseen, till it can go.
+  **No way is looked for across more than 256 tiles** (`MOST_ASKED`: the box between its two
+  ends, 4 m round it; a line walked over the mesh, `raycast`, the same). Asked across more,
+  there's no way, and nothing's baked, sent to be baked or made for it, whoever asks: a hero
+  stands where they are and a creature's or a soldier's errand is let go, as before a wall
+  with no way round. A player's way never waits for its tiles, so with no most a hero sent
+  somewhere far had every tile in that box baked, and every chunk under them made, as the
+  command was heard: a door 2 km off, 702 tiles and 225 chunks, 8 s on a busy
+  container, and one 7.5 km off stopped a world for more than six minutes (the scaling plan's
+  1-25). 256 is sixteen tiles by sixteen, 512 m a side: all a scene's mesh keeps, and a quarter
+  of what the overworld's keeps at the least, so one way never lets go of more than a quarter
+  of the tiles round the players. The most the game asks across is 110 (an `ahead` order's
+  400 m, on a slant); a tap in the view sends a hero 192 m at the most (under 50 tiles), the small
+  map 90 m, and a pin on the world map a leg of 72 m at a time. Of the 141,098 ways the tests
+  of the host, the battle and the navigation look for, the longest is across 40 tiles (234 m);
+  of the 27,296 in eight runs of the load, across 30 (217 m). It goes by the two ends and the
+  map's size, never by what's baked, so every copy gives up on the same ways: a rule changed
+  for every game alike, which came with `NET_VERSION` 226. `Navigation.bounded` off looks for
+  a way however far, as it was, only for the tests that set the two side by side
+  (`test/farway.test.js`, which counts tiles baked and chunks made, never time).
   At most 1,024 tiles are kept (a kilometre square), the longest unused let go first; a world
   server keeps as many as its players want round them, up to the 4,096 the mesh takes (docs/WAR.md,
   *As many navigation tiles as its players need*).
