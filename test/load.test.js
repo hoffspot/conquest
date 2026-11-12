@@ -5,11 +5,12 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { DAY } from "../client/js/core/daytime.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
-import { checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
+import { ACTIVITY_SCHEMAS, checkReport, failuresOf, layoutOf, load, LOAD, REPORT_SCHEMA, tilesWanted, wordsOf } from "../scripts/load.js";
 import { AHEAD } from "../server/ahead.js";
 
 describe("the load's layouts (scripts/load.js layoutOf)", () => {
@@ -147,9 +148,51 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
     });
 });
 
+describe("the load at night (scripts/load.js load, activity night)", () => {
+    let report;
+
+    before(async () => {
+        report = await load({ seed: 2, players: 4, layout: "one-town", activity: "night", seconds: 5 });
+    });
+
+    it("plays the world to nightfall with no one in it, by its own steps, then times a run that's dark all through", () => {
+        assert.deepEqual(checkReport(report), []);
+        assert.deepEqual(report.problems, []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+
+        // (A new world starts at minute 18, and night falls at minute 53: 35 turns of its war)
+        assert.equal(report.night.waited, DAY.night - DAY.start);
+        assert.equal(report.night.turn, 35);
+        assert.ok(report.night.from >= DAY.night / 60000 && report.night.from < DAY.night / 60000 + 1, `began at minute ${report.night.from}`);
+        assert.ok(report.night.to > report.night.from && report.night.to < report.night.from + 0.1, `ended at minute ${report.night.to}`);
+        assert.equal(report.night.dark, true);
+        assert.equal(report.joined.players, 4);
+    });
+
+    it("has the light to see by in every step: everyone gone through for torches, and lights measured against the players", () => {
+        const steps = (5 * 1000) / STEP_MS;
+
+        assert.equal(report.steps.count, steps);
+        assert.equal(report.passes.light.calls, steps);
+        assert.ok(report.counts["light.actors"] >= steps * report.actors.start, "the battle's roster gone through each step");
+        assert.ok(report.counts["light.pairs"] > 0);
+        assert.ok(wordsOf(report).some((line) => /^At night: minute 53\.\d+ to minute 53\.\d+ of the day's 60, the war's turn 35; the light to see by /.test(line)));
+    });
+
+    it("is held to what a night run reports, and fails if it wasn't dark", () => {
+        const { night, ...without } = report;
+
+        assert.deepEqual(Object.keys(night).sort(), Object.keys(ACTIVITY_SCHEMAS.night).sort());
+        assert.deepEqual(checkReport(without), ["report.night: missing"]);
+        assert.deepEqual(checkReport({ ...report, night: { ...night, dark: "yes" } }), ["report.night.dark: not a boolean"]);
+        assert.deepEqual(failuresOf({ ...report, problems: ["the night run wasn't dark from its first step to its last (minute 53 to minute 8 of the day's 60)"] }), ["the night run wasn't dark from its first step to its last (minute 53 to minute 8 of the day's 60)"]);
+    });
+});
+
 describe("the load's options", () => {
     it("names every activity the plan lists: those built, and those that say they aren't yet", async () => {
         assert.deepEqual([...LOAD.activities, ...Object.keys(LOAD.unbuilt)].sort(), ["battle", "dungeons", "fights", "hellrift", "invasion", "joinstorm", "night", "stick", "walk", "warturn"]);
+        assert.deepEqual(Object.keys(LOAD.unbuilt), ["warturn", "joinstorm", "dungeons"]);
         assert.deepEqual(LOAD.players, [8, 25, 50, 100]);
         assert.deepEqual(LOAD.seeds, [2, 7]);
 

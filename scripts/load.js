@@ -26,8 +26,10 @@
 // in the humans' first). --activity: walk (sent somewhere near every five seconds), stick (a
 // stick held: 16 commands a second each), fights (walking, and 6-a-side field battles begun ten
 // seconds in, one for every twenty players), battle (one of 200 a side), invasion (the first
-// player's town invaded), hellrift (a hell rift torn open by them); and night, warturn, joinstorm
-// and dungeons, which aren't built yet and say so.
+// player's town invaded), hellrift (a hell rift torn open by them), night (walking, in the dark:
+// the world played with no one in it till nightfall first, DAY.night, so the light to see by and
+// the soldiers' torches are in every step); and warturn, joinstorm and dungeons, which aren't built
+// yet and say so.
 //
 // Before it's timed, what's round the players is made ahead until nothing's waiting (Ahead.settled),
 // however long that takes: a step that makes ground is a loading cost, measured by npm run
@@ -51,8 +53,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { DAY, elapsedOf, timeOfDay, untilTime } from "../client/js/core/daytime.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { FIELD_BATTLE, Host } from "../client/js/core/host.js";
+import { torchesLit } from "../client/js/core/light.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -72,9 +76,8 @@ export const LOAD = Object.freeze({
     seeds: [2, 7],
     seconds: 120,
     // What the players do, of what's built; and what isn't yet, with why
-    activities: ["walk", "stick", "fights", "battle", "invasion", "hellrift"],
+    activities: ["walk", "stick", "fights", "battle", "invasion", "hellrift", "night"],
     unbuilt: Object.freeze({
-        night: "not built yet: the world's clock can't be set to night from outside it",
         warturn: "not built yet: a turn of the war can't be called for, only waited for",
         joinstorm: "not built yet: it needs the welcome queue of slice 1-5 to be told from the snapshots",
         dungeons: "not built yet: players sent down a dungeon need a way found to its door and through its levels",
@@ -293,6 +296,21 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const problems = [];
 
     host.populate();
+
+    // --- Night: the world played with no one in it till nightfall, as its own rules play it ---
+
+    // (The time of day is the war's clock, core/daytime.js, and nothing sets it but the world's
+    // steps: so they're played, the war's turns with them, before anyone's in and before anything's
+    // timed. An empty world's step is some 0.05 ms)
+    const night = activity === "night" ? { waited: untilTime(elapsedOf(host.war), DAY.night), turn: 0, from: 0, to: 0, dark: false } : null;
+
+    for (let ms = 0; night && ms < night.waited; ms += STEP_MS) {
+        host.advance(STEP_MS);
+    }
+
+    if (night) {
+        log(`Played to nightfall with no one in: ${night.waited / 60000} minutes of the world's time, ${host.war.turn} turns of its war, ${((clock() - began) / 1000).toFixed(1)} s`);
+    }
 
     // The world's own time (ms), which is the clock Hosting holds the players to (HEARD: 30
     // commands a second each, 60 at once), so the limits bind as they would on a server whatever
@@ -562,6 +580,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const commandsBefore = hosting.dropped;
     const probes = install(new Probes({ clock }));
     const started = clock();
+
+    if (night) {
+        Object.assign(night, { turn: host.war.turn, from: round(timeOfDay(elapsedOf(host.war)) / 60000), dark: torchesLit(elapsedOf(host.war)) });
+    }
     let late = 0;
     let over = 0;
 
@@ -628,6 +650,15 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const named = Object.entries(measured.passes).reduce((sum, [name, { ms }]) => sum + (name === "end" ? 0 : ms), 0) + parts.hear;
 
     actors.end = host.battle.actors.length;
+
+    if (night) {
+        // (Dark from its first step to its last: the night's 14 minutes, DAY.night to DAY.dawn)
+        Object.assign(night, { to: round(timeOfDay(elapsedOf(host.war)) / 60000), dark: night.dark && torchesLit(elapsedOf(host.war)) && seconds * 1000 < DAY.length - DAY.night + DAY.dawn });
+
+        if (!night.dark) {
+            problems.push(`the night run wasn't dark from its first step to its last (minute ${night.from} to minute ${night.to} of the day's ${DAY.length / 60000})`);
+        }
+    }
 
     if (event && !event.ok) {
         problems.push(`the ${activity} asked for at ${LOAD.eventAt / 1000} s didn't begin`);
@@ -703,6 +734,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         },
         actors,
         ...(event ? { event } : {}),
+        ...(night ? { night } : {}),
         problems,
         took: { run: round(took / 1000, 1), all: round((clock() - began) / 1000, 1) },
     };
@@ -738,6 +770,16 @@ export const REPORT_SCHEMA = Object.freeze({
     took: { run: "number", all: "number" },
 });
 
+/**
+ * What a report holds besides, by its activity, under the activity's own name. `night`: how long
+ * the world was played with no one in to get to nightfall (ms of its time), the war's turn as the
+ * timed run began, the time of day it began and ended at (minutes from midnight), and whether it
+ * was dark all through.
+ */
+export const ACTIVITY_SCHEMAS = Object.freeze({
+    night: { waited: "number", turn: "number", from: "number", to: "number", dark: "boolean" },
+});
+
 /** What an unbuilt activity's report holds instead. */
 export const UNBUILT_SCHEMA = Object.freeze({ schema: "number", run: RUN, built: "boolean", reason: "string" });
 
@@ -766,7 +808,10 @@ export function checkReport(report, schema = report?.built === false ? UNBUILT_S
         return [`${at}: not an object`];
     }
 
-    for (const [key, type] of Object.entries(schema)) {
+    // (A whole report of a run: what its activity adds, too)
+    const whole = schema === REPORT_SCHEMA && Object.hasOwn(ACTIVITY_SCHEMAS, report.run?.activity) ? { ...schema, [report.run.activity]: ACTIVITY_SCHEMAS[report.run.activity] } : schema;
+
+    for (const [key, type] of Object.entries(whole)) {
         if (!Object.hasOwn(report, key)) {
             wrong.push(`${at}.${key}: missing`);
         } else {
@@ -781,7 +826,7 @@ export function checkReport(report, schema = report?.built === false ? UNBUILT_S
  * Why a run failed, a line each, judged only by what's the same on any machine, and by a ceiling
  * (`ceiling`, ms) on the mean step in the thread's own processor time that only a catastrophe is
  * over: the report not as its schema says; players sent out of the world; what was asked for at
- * LOAD.eventAt not begun; the mean step over the ceiling. None, if it didn't (nor for an activity
+ * LOAD.eventAt not begun; a night run not dark all through; the mean step over the ceiling. None, if it didn't (nor for an activity
  * that isn't built: there was no run). The navigation's cap isn't a failure: it's reported.
  */
 export function failuresOf(report, { ceiling = Infinity } = {}) {
@@ -793,7 +838,7 @@ export function failuresOf(report, { ceiling = Infinity } = {}) {
 
     return [
         ...(report.joined.players < report.run.players ? [`${report.run.players - report.joined.players} of the players never came in`] : []),
-        ...report.problems.filter((problem) => /sent out of the world|didn't begin|couldn't be stood/.test(problem)),
+        ...report.problems.filter((problem) => /sent out of the world|didn't begin|couldn't be stood|wasn't dark/.test(problem)),
         ...(report.steps.cpu.mean > ceiling ? [`the mean step took ${report.steps.cpu.mean.toFixed(1)} ms of the thread's time, over the ceiling of ${ceiling} ms`] : []),
     ];
 }
@@ -825,6 +870,9 @@ export function wordsOf(report) {
         `Memory: heap ${memory.heap} MB (${memory.heapBefore} before, ${memory.heapMost} at most), external ${memory.external} MB, the process ${memory.rss} MB; ${report.actors.end} in the battle (${report.actors.most} at most)`,
         `Warm-up ${(warm.ms / 1000).toFixed(1)} s${warm.settled ? "" : ", not settled"}; navigation ${navigation.held} of ${navigation.keep} tiles, ${navigation.wanted} wanted round the players${navigation.capped ? `: over its cap, baked ahead ${navigation.reach} m round each, ${navigation.dropped} let go of during the run` : ""}`,
         ...(report.event ? [`The ${report.event.type} at ${report.event.at / 1000} s: ${report.event.ok ? `begun (${report.event.actors} more in the battle)` : "not begun"}`] : []),
+        ...(report.night
+            ? [`At night: minute ${report.night.from} to minute ${report.night.to} of the day's ${DAY.length / 60000}${report.night.dark ? "" : ", not dark all through"}, the war's turn ${report.night.turn}; the light to see by ${(passes.light?.mean ?? 0).toFixed(3)} ms a step, ${Math.round((report.counts["light.actors"] ?? 0) / steps.count)} gone through for torches and ${Math.round((report.counts["light.pairs"] ?? 0) / steps.count)} lights measured against players' places a step`]
+            : []),
         ...report.problems.map((problem) => `Note: ${problem}`),
     ];
 }

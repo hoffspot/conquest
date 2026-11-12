@@ -76,6 +76,11 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 25 --layout spread --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-walk.json
 
+      # (The same in the dark, to read beside it: the plan's 1-11, "a night run within 10% of day")
+      - name: Load, 25 players spread, at night
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 25 --layout spread --activity night --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-night.json
+
       - name: Load, 50 players, four to a town, sticks held
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 50 --layout towns --activity stick --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/50-towns-stick.json
