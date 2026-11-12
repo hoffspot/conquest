@@ -120,6 +120,25 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(["a", "b"].every((team) => indexed.battle.actors.some((actor) => actor.team === team && actor.dead)));
     });
 
+    // Whoever's drawn to a player near (#drawnTo) goes through the players by their places in
+    // their list, where it went through them with `for...of`: the same battle either way, and one
+    // in which the player was gone for
+    it("plays out a battle exactly as going through the players with for...of does", () => {
+        const sparing = fight();
+
+        Battle.sparing = false;
+
+        try {
+            const iterated = fight();
+
+            assert.equal(sparing.hash, iterated.hash);
+        } finally {
+            Battle.sparing = true;
+        }
+
+        assert.ok(sparing.events.some(({ type, id }) => type === "hit" && id === HOST_PLAYER), "(the player was struck)");
+    });
+
     // Everything that asks who's near a point (#standingNear) or who's nearest within reach
     // (#hold, #obey), on an open field: a guard tower shooting from its loops, a player standing
     // among their enemies, the tower's own footprint within a swordsman's reach, casters whose

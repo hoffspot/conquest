@@ -817,6 +817,13 @@ export class Battle {
      */
     static reindexing = true;
 
+    /**
+     * Whether the players are gone through by their places in their list for whoever's drawn to
+     * one (#drawnTo), nothing made for it, as they always are, or with `for...of`, as they were:
+     * only for the tests that check it's the same either way.
+     */
+    static sparing = true;
+
     // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
     // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
     #ids = null;
@@ -5875,17 +5882,39 @@ export class Battle {
     #drawnTo(actor) {
         this.#work.playerAsks++;
 
-        for (const player of this.#players) {
-            if (player.dead || player.map !== actor.map || !this.#near(actor, player, AGGRO.reach) || distanceBetween(actor.square, player.square) > AGGRO.reach || !this.hostile(player, actor) || !this.#noticed(actor, player) || !this.#leashed(actor, player)) {
-                continue;
+        const players = this.#players;
+
+        if (!Battle.sparing) {
+            for (const player of players) {
+                if (this.#draws(actor, player)) {
+                    return player;
+                }
             }
 
-            if (this.#roomOn(actor, player) && this.canSee(actor, player)) {
-                return player;
+            return null;
+        }
+
+        // (By their places in the list: everyone set on no one asks this of every player every
+        // step, and `for...of` made something to throw away for each player gone through, 62,000
+        // a step with 100 players spread and 600 soldiers out: a third of all the battle's step
+        // made, generated/multiplayer_scaling_plan.md 1-16)
+        for (let i = 0; i < players.length; i++) {
+            if (this.#draws(actor, players[i])) {
+                return players[i];
             }
         }
 
         return null;
+    }
+
+    // Whether a player draws a character to them (#drawnTo): near, its enemy, noticed, within its
+    // leash, with room on them, and seen
+    #draws(actor, player) {
+        if (player.dead || player.map !== actor.map || !this.#near(actor, player, AGGRO.reach) || distanceBetween(actor.square, player.square) > AGGRO.reach || !this.hostile(player, actor) || !this.#noticed(actor, player) || !this.#leashed(actor, player)) {
+            return false;
+        }
+
+        return this.#roomOn(actor, player) && this.canSee(actor, player);
     }
 
     // A caster's spell at whom it's set on: the first of its spells that's ready, if they're in its
