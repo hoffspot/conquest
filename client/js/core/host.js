@@ -2251,7 +2251,7 @@ export class Host {
 
                 // (Nor from further off than the game shows a way through: ENTER_REACH. Before
                 // anything's asked of what's behind it, or got ready)
-                if (!here.squares.some(([x, y]) => (x + 0.5 - actor.x) ** 2 + (y + 0.5 - actor.y) ** 2 <= ENTER_REACH ** 2)) {
+                if (!here.squares.some(([x, y]) => (x + 0.5 - actor.x) * (x + 0.5 - actor.x) + (y + 0.5 - actor.y) * (y + 0.5 - actor.y) <= ENTER_REACH * ENTER_REACH)) {
                     return refuse("far");
                 }
 
