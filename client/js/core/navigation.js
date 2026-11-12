@@ -39,6 +39,20 @@ const KEEP_ROOM_TILES = 64;
 const MAX_POLYS = 4096;
 
 /**
+ * How many tiles the overworld's mesh can be told to keep (keepTiles: a world server's, with more
+ * players apart than KEEP_TILES are enough for, server/ahead.js), and how many polygons a tile of
+ * it can have. Detour's references are 32 bits, ten of them kept for telling a tile from the one
+ * that was in its place before, so a mesh's tiles times a tile's polygons can be 4,194,304 at
+ * most: 1,024 tiles of 4,096 polygons, or 4,096 of 1,024. A tile of the overworld's has 40
+ * polygons on average and 335 at most among 15,000 measured, in and round the towns of two
+ * worlds. Which a mesh is made for changes its references alone, which never leave this file:
+ * the tiles' bytes, and every way found over them, are the same (test/navigation.test.js, test/
+ * tilecap.test.js). A tile costs 6.4 KB on average, and only while it's kept.
+ */
+export const MOST_TILES = 4096;
+export const OVERWORLD_POLYS = 1024;
+
+/**
  * How many maps of squares keep their meshes at once (the longest unused let go of first): enough
  * for the buildings round one player in a browser; a world server, with players in several towns
  * at once, keeps more (keepRooms), or their insides' meshes would be let go of and baked again
@@ -69,6 +83,11 @@ const WIDER = [1, 3];
 const MOST_COVERED = 100;
 
 const key = (tx, ty) => ty * 65536 + tx;
+
+/** How many polygons a baked tile has (bakeTile's bytes: Detour's header, its seventh number). */
+export function polygonsOf(data) {
+    return data[24] | (data[25] << 8) | (data[26] << 16) | (data[27] << 24);
+}
 
 /** The tile a ground point is in. */
 export function tileOf(x, y) {
@@ -237,10 +256,19 @@ export class Navigation {
         this.heightAt = heightAt;
         this.size = size;
         this.keep = measures.keep ?? (measures === OVERWORLD ? KEEP_TILES : KEEP_ROOM_TILES);
+
+        // How many tiles it keeps at the least and can be told to keep at the most (keepTiles),
+        // and how many polygons a tile of it can have: the overworld's more tiles of fewer
+        // polygons (MOST_TILES), every other mesh's as many as it keeps
+        const roomy = measures === OVERWORLD && Navigation.roomy;
+
+        this.least = this.keep;
+        this.most = roomy ? Math.max(MOST_TILES, this.keep) : this.keep;
+        this.polys = roomy ? OVERWORLD_POLYS : MAX_POLYS;
         this.mesh = new recast.NavMesh();
 
         // (Detour takes a copy of the mesh's params: they're let go of at once, not left for good)
-        const params = recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.keep, maxPolys: MAX_POLYS });
+        const params = recast.NavMeshParams.create({ orig: { x: 0, y: 0, z: 0 }, tileWidth: tile, tileHeight: tile, maxTiles: this.most, maxPolys: this.polys });
 
         this.mesh.initTiled(params);
         recast.Raw.destroy(params.raw);
@@ -298,9 +326,39 @@ export class Navigation {
         this.widenLater = false;
     }
 
+    /**
+     * Whether the overworld's mesh is made to take MOST_TILES tiles of OVERWORLD_POLYS polygons,
+     * as it always is, or KEEP_TILES of 4,096 as it was: only for the tests that check every way
+     * comes out the same either way.
+     */
+    static roomy = true;
+
     /** Whether a tile is in. */
     has(tx, ty) {
         return this.tiles.has(key(tx, ty));
+    }
+
+    /**
+     * Keep `tiles` tiles at once from now on: never fewer than it kept to begin with, nor more
+     * than its mesh was made to take (most). Told fewer than it has, it lets go of the longest
+     * unused as the next is added.
+     */
+    keepTiles(tiles) {
+        this.keep = Math.max(this.least, Math.min(this.most, Math.floor(tiles)));
+    }
+
+    /**
+     * Count a tile as used just now, if it's in: one someone's standing by, which no way has
+     * crossed for a while, isn't let go of before those no one's near.
+     */
+    hold(tx, ty) {
+        const k = key(tx, ty);
+        const tile = this.tiles.get(k);
+
+        if (tile) {
+            this.tiles.delete(k);
+            this.tiles.set(k, tile);
+        }
     }
 
     /**
@@ -326,6 +384,13 @@ export class Navigation {
         }
 
         let ref = 0;
+
+        // (More polygons than the mesh's references can tell apart: Detour doesn't check, and
+        // would take the tile and answer with other tiles' polygons. The same on every machine,
+        // as the tile's bytes are)
+        if (data && polygonsOf(data) > this.polys) {
+            throw new Error(`Tile ${tx}, ${ty} has ${polygonsOf(data)} polygons, and the mesh takes ${this.polys} a tile`);
+        }
 
         if (data) {
             const raw = new this.recast.UnsignedCharArray();

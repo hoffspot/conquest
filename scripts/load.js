@@ -3,10 +3,10 @@
 // (core/netplay.js Hosting), with as many players as asked for joined over a link that only counts
 // what's sent: they hold no copy of the world, so a hundred of them cost the machine nothing the
 // authority wouldn't spend on a hundred real ones. Everything's in this one process and played in
-// fixed steps, so the same options play the same world every time (while the navigation keeps
-// every tile round the players, below: once it can't, which tiles are in when a way's looked for
-// goes by when its workers finished, and the ways found, and so what's sent, differ a little
-// from run to run).
+// fixed steps, so the same options play the same world every time (while the navigation has
+// room for every tile round the players, below: once it hasn't, which tiles are in when a way's
+// looked for goes by when its workers finished, and the ways found, and so what's sent, differ a
+// little from run to run).
 //
 // It says what a step costs and where: each pass of the step by name (core/probe.js), the step's
 // mean, 99th percentile and worst, by the clock and in the thread's own processor time (the
@@ -31,10 +31,12 @@
 //
 // Before it's timed, what's round the players is made ahead until nothing's waiting (Ahead.settled),
 // however long that takes: a step that makes ground is a loading cost, measured by npm run
-// step-budget. The navigation keeps 1,024 tiles (core/navigation.js KEEP_TILES) and each player
-// out in the world wants some 120 round them baked, so more than eight players spread want more
-// than it keeps: the run says so (`navigation.capped`, and a line in what it prints), and its
-// steps then include the tiles baked again inside them, as a world server's would.
+// step-budget. Each player out in the world wants some 120 of the navigation's tiles baked round
+// them, and the navigation keeps as many as they all want (server/ahead.js) up to the 4,096 its
+// mesh takes (core/navigation.js MOST_TILES): 31 players spread. With more, the tiles are baked
+// ahead less far round each (`navigation.reach`, metres) and the run says so (`navigation.capped`,
+// and a line in what it prints): its steps then include the tiles further out that their ways
+// baked, as a world server's would.
 //
 // Writes the report to test-results/load/report.json (--out for elsewhere). Exits 1 only if the
 // run couldn't be made (an option it doesn't know; one that isn't built yet exits 0, saying so);
@@ -202,9 +204,10 @@ export function layoutOf(plan, players, layout) {
 /**
  * How many of the navigation's tiles players at `places` ([[x, y]], out in the world) want baked
  * round them (server/ahead.js AHEAD.reach each way, as world/navbaker.js around asks for them),
- * beside how many it keeps: { tile (m), keep, wanted, capped (more wanted than kept) }.
+ * beside how many it can keep: { tile (m), keep, wanted, capped (more wanted, with `spare` more
+ * for the steps' own, than can be kept) }.
  */
-export function tilesWanted(places, { tile, keep, reach = AHEAD.reach }) {
+export function tilesWanted(places, { tile, keep, spare = 0, reach = AHEAD.reach }) {
     const wanted = new Set();
 
     for (const [x, y] of places) {
@@ -215,7 +218,7 @@ export function tilesWanted(places, { tile, keep, reach = AHEAD.reach }) {
         }
     }
 
-    return { tile, keep, wanted: wanted.size, capped: wanted.size > keep };
+    return { tile, keep, wanted: wanted.size, capped: wanted.size + spare > keep };
 }
 
 // One who's joined over a link that only counts: what they're sent (bytes, messages, their
@@ -366,7 +369,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     const joined = { players: hosting.players.size, ms: Math.round(welcomes.ms.reduce((sum, ms) => sum + ms, 0)), welcome: { bytes: spreadOf(welcomes.bytes), ms: spreadOf(welcomes.ms) } };
     const standing = () => peers.map((peer) => host.battle.actor(peer.id)).filter((actor) => actor?.map === "town");
-    const tiles = tilesWanted(standing().map(({ x, y }) => [x, y]), { tile: navigation.measures.tile, keep: navigation.keep });
+    const tiles = tilesWanted(standing().map(({ x, y }) => [x, y]), { tile: navigation.measures.tile, keep: navigation.most, spare: AHEAD.spareTiles });
 
     log(`${count} players in (${layout}), ${joined.ms} ms; each welcomed with ${Math.round(joined.welcome.bytes.mean / 1024)} KB`);
 
@@ -382,16 +385,16 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     if (tiles.capped) {
         problems.push(
-            `the navigation keeps ${tiles.keep} tiles (core/navigation.js KEEP_TILES) and these ${count} players want ${tiles.wanted} baked round them: it lets go of some players' to bake others', so the warm-up can't end with every tile in, and the steps timed include tiles baked again inside them`,
+            `the navigation takes ${tiles.keep} tiles at most (core/navigation.js MOST_TILES) and these ${count} players want ${tiles.wanted} baked round them: they're baked ahead less far round each, and the steps timed include the tiles further out that their ways baked`,
         );
-        log(`The navigation's tile cap: ${tiles.wanted} tiles wanted round the players, ${tiles.keep} kept. This run's steps include tiles baked again inside them.`);
+        log(`The navigation's tile cap: ${tiles.wanted} tiles wanted round the players, ${tiles.keep} at most. They're baked ahead less far round each, and this run's steps include those further out.`);
     }
 
     // --- The warm-up: the world's opening step, then all that's round the players made ahead ---
 
     const ahead = new Ahead(world, { host, clock });
     const warmed = clock();
-    let settled = false;
+    let settled;
 
     // What's round the players made between steps until nothing's waiting (true), or until
     // nothing new has been made for LOAD.stall, or, the navigation over its cap, until the chunks
@@ -656,7 +659,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         built: true,
         joined,
         warm,
-        navigation: { ...tiles, held: navigation.tiles.size, dropped: dropped - droppedBefore },
+        navigation: { ...tiles, held: navigation.tiles.size, dropped: dropped - droppedBefore, reach: ahead.reach },
         steps: {
             count: steps,
             wall: spreadOf(wall),
@@ -710,7 +713,7 @@ export const REPORT_SCHEMA = Object.freeze({
     built: "boolean",
     joined: { players: "number", ms: "number", welcome: { bytes: SPREAD, ms: SPREAD } },
     warm: { ms: "number", settled: "boolean", chunks: "number", rooms: "number", tiles: "number" },
-    navigation: { tile: "number", keep: "number", wanted: "number", capped: "boolean", held: "number", dropped: "number" },
+    navigation: { tile: "number", keep: "number", wanted: "number", capped: "boolean", held: "number", dropped: "number", reach: "number" },
     steps: { count: "number", wall: SPREAD, cpu: SPREAD, late: "number", over: "number", speed: "number" },
     parts: { hear: "number", step: "number", ahead: "number" },
     passes: [{ ms: "number", mean: "number", share: "number", calls: "number" }],
@@ -814,7 +817,7 @@ export function wordsOf(report) {
         `Heard: ${bytes.up.messages} messages, ${kb(bytes.up.bytes)}; ${bytes.up.refused} commands let go of for coming faster than ${bytes.up.allowed} a second`,
         `A snapshot: ${kb(snapshot.bytes)}, ${snapshot.take.toFixed(2)} ms to take, ${snapshot.encode.toFixed(2)} ms to write out; a welcome ${kb(report.joined.welcome.bytes.mean)}, ${report.joined.welcome.ms.mean.toFixed(1)} ms`,
         `Memory: heap ${memory.heap} MB (${memory.heapBefore} before, ${memory.heapMost} at most), external ${memory.external} MB, the process ${memory.rss} MB; ${report.actors.end} in the battle (${report.actors.most} at most)`,
-        `Warm-up ${(warm.ms / 1000).toFixed(1)} s${warm.settled ? "" : ", not settled"}; navigation ${navigation.held} of ${navigation.keep} tiles, ${navigation.wanted} wanted round the players${navigation.capped ? `: over its cap, ${navigation.dropped} let go of during the run` : ""}`,
+        `Warm-up ${(warm.ms / 1000).toFixed(1)} s${warm.settled ? "" : ", not settled"}; navigation ${navigation.held} of ${navigation.keep} tiles, ${navigation.wanted} wanted round the players${navigation.capped ? `: over its cap, baked ahead ${navigation.reach} m round each, ${navigation.dropped} let go of during the run` : ""}`,
         ...(report.event ? [`The ${report.event.type} at ${report.event.at / 1000} s: ${report.event.ok ? `begun (${report.event.actors} more in the battle)` : "not begun"}`] : []),
         ...report.problems.map((problem) => `Note: ${problem}`),
     ];

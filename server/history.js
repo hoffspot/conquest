@@ -164,7 +164,7 @@ export class History {
 
     /** The history kept in `file`, or a new one if there's none there that reads (a file cut short or of another format is started afresh: it's only charts). */
     static async open(file) {
-        let kept = null;
+        let kept;
 
         try {
             kept = JSON.parse((await gunzipped(await readFile(file))).toString("utf8"));
