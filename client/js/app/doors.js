@@ -253,8 +253,11 @@ export class Doors {
      * before it (within its box). Not one the ray only passes through on its way to the floor past
      * it, from behind it or from inside its box (the camera over the wall behind a door, or by the
      * stairs, looking into the room: the player turned from it, a tap round them is a step).
+     * Nor one further along the ray than `reach` metres, if given: past where anything's drawn
+     * (the game: as far as the near camera sees), where a tap at the horizon would have found a
+     * door no one could see, and the host takes no `enter` from (core/host.js ENTER_REACH).
      */
-    at(ray, map) {
+    at(ray, map, reach = Infinity) {
         let best = null;
         let bestDistance = Infinity;
 
@@ -266,7 +269,7 @@ export class Doors {
             // (Its face, or the floor before it, whichever the ray comes to first)
             const distance = Math.min(...[target.face, target.floor].map((plane) => (plane && ray.distanceToPlane(plane)) ?? Infinity).filter((along) => along >= 0));
 
-            if (distance < bestDistance && target.box.containsPoint(ray.at(distance, _hit).addScaledVector(ray.direction, -1e-4))) {
+            if (distance < bestDistance && distance <= reach && target.box.containsPoint(ray.at(distance, _hit).addScaledVector(ray.direction, -1e-4))) {
                 best = target;
                 bestDistance = distance;
             }

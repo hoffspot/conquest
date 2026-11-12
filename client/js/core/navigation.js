@@ -82,6 +82,28 @@ export const MARGIN = 4;
 const WIDER = [1, 3];
 const MOST_COVERED = 100;
 
+/**
+ * The most tiles a way may be asked across, or a line walked over the mesh (path, raycast): the
+ * box between its ends, MARGIN round it. Asked across more, there's no way, and nothing's baked
+ * or made for it, whoever asks: a hero stands where they are, as before a wall with no way
+ * round. Every tile in that box is made sure of before the way's looked for, and the world's
+ * chunks under them made first, in the step that asks or as a player's command is heard, so
+ * with no most a way asked for across the world was minutes of one step (the plan's 1-25: one
+ * `enter` for a door 7.5 km off, over six minutes).
+ *
+ * 256: sixteen tiles by sixteen, a box 512 m a side. As many as a scene's whole mesh keeps
+ * (settings.js SCENES.keep), so any way across a scene's map or a building's floor is still
+ * found, and a quarter of what the overworld's keeps at the least (KEEP_TILES), so one way
+ * never lets go of more than a quarter of the tiles round the players. The most the game asks
+ * across today is 110: an `ahead` order's line, 400 m on a slant (core/battle.js AHEAD). Of
+ * the 141,098 ways looked for by the 122 test files of the host, the battle and the navigation,
+ * the longest was across 40 tiles, 234 m, but for 5 tests' `enter`s for doors 660 to 790 m
+ * off (110 to 330 tiles); of the 27,296 looked for by the load's runs (walk, fights, invasion,
+ * battle, dungeons, war turn and night at 8 players; walk at 25), across 30, 217 m. The same
+ * on every copy: it goes by the two ends and the map's size, never by what's baked.
+ */
+export const MOST_ASKED = 256;
+
 const key = (tx, ty) => ty * 65536 + tx;
 
 /** How many polygons a baked tile has (bakeTile's bytes: Detour's header, its seventh number). */
@@ -296,6 +318,9 @@ export class Navigation {
         this.baked = 0;
         this.added = 0;
 
+        /** How many ways and lines it's given up on, asked across more than MOST_ASKED tiles. */
+        this.tooFar = 0;
+
         // How often each tile's been let go of for what stands on it having changed (dropTiles),
         // by key
         this.changes = new Map();
@@ -332,6 +357,13 @@ export class Navigation {
      * comes out the same either way.
      */
     static roomy = true;
+
+    /**
+     * Whether a way or a line asked across more than MOST_ASKED tiles is given up on, as it
+     * always is, or looked for however far it is, as it was: only for the tests that compare
+     * the two.
+     */
+    static bounded = true;
 
     /** Whether a tile is in. */
     has(tx, ty) {
@@ -477,6 +509,18 @@ export class Navigation {
         return Math.max(0, tx1 - tx0 + 1) * Math.max(0, ty1 - ty0 + 1);
     }
 
+    // Whether a box of the ground touches more of the map's tiles than anything's looked for
+    // across (MOST_ASKED), counted if so: nothing's made sure of for it
+    #beyond(x0, y0, x1, y1) {
+        if (!Navigation.bounded || this.#tilesIn(x0, y0, x1, y1) <= MOST_ASKED) {
+            return false;
+        }
+
+        this.tooFar++;
+
+        return true;
+    }
+
     /** The tile a ground point is in. */
     tileOf(x, y) {
         const { tile } = this.measures;
@@ -585,6 +629,7 @@ export class Navigation {
      * made first). To `wait` (with somewhere to send them: later), the tiles not in yet aren't
      * made here but sent on, and there's no way till they're in ([]: looked for again a moment
      * later, core/battle.js REPATH_MS), so it never holds up the frame it's looked for in.
+     * Asked across more tiles than MOST_ASKED, there's none, and nothing's made for it.
      */
     path(from, to, { wait = false } = {}) {
         const [baked, start] = [this.baked, performance.now()];
@@ -606,6 +651,11 @@ export class Navigation {
         const [tx0, ty0] = this.tileOf(x0, y0);
         const [tx1, ty1] = this.tileOf(x1, y1);
         const { tile } = this.measures;
+
+        // (Further than any way's looked for: none, and none of its tiles made or sent on)
+        if (this.#beyond(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN)) {
+            return [];
+        }
 
         const sent = this.#cover(x0 - MARGIN, y0 - MARGIN, x1 + MARGIN, y1 + MARGIN, 0, wait);
 
@@ -731,9 +781,14 @@ export class Navigation {
     /**
      * Walking straight from one point towards another over the mesh: { hit (whether it runs into
      * the mesh's edge first), t (how far along: 1 if it doesn't), point (where it stops) }, or
-     * null if `from` isn't on the mesh.
+     * null if `from` isn't on the mesh, or the line's across more tiles than MOST_ASKED (none
+     * made for it: the longest the battle walks is AHEAD, well within).
      */
     raycast(from, to) {
+        if (this.#beyond(Math.min(from[0], to[0]) - NEAR.across, Math.min(from[1], to[1]) - NEAR.across, Math.max(from[0], to[0]) + NEAR.across, Math.max(from[1], to[1]) + NEAR.across)) {
+            return null;
+        }
+
         this.#cover(from[0] - NEAR.across, from[1] - NEAR.across, to[0], to[1]);
         this.#cover(from[0], from[1], to[0] + NEAR.across, to[1] + NEAR.across);
 

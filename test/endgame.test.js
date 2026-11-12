@@ -322,6 +322,8 @@ describe("a player's people at the war's end (host.js)", () => {
 
         const keep = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "keep" && place === capital.id);
 
+        // (From its door: the host takes `enter` from no further off than a door's shown, host.js ENTER_REACH)
+        put(host.battle.actor(HOST_PLAYER), "town", keep.door.ends[0].squares[0]);
         host.command(HOST_PLAYER, { type: "enter", link: keep.door.id });
         host.command(HOST_PLAYER, { type: "stop" });
 
