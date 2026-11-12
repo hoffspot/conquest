@@ -194,6 +194,11 @@ describe("a world server's log, with players coming in (server/world-server.js)"
         await until(() => heard.some((line) => line.startsWith("entered ")), "a place in the world");
         secrets.push(heard.find((line) => line.startsWith("entered ")).split(" ")[2]);
         socket.send("data\nnot what a game says");
+
+        // (A line its thread put in the world's journal with what mustn't be logged in it, as an
+        // error's words might have: heard from the thread as its own are, and scrubbed as they are)
+        server.registry.entries.get(world.json.world).thread.thread.emit("message", { type: "journal", text: `Couldn't save (turn): ${KEY} at 203.0.113.77, ${TOKEN}` });
+        server.registry.entries.get(world.json.world).thread.thread.emit("message", { type: "journal", text: { not: "a sentence" } });
         socket.close();
         await until(() => server.registry.lifeOf(world.json.world).life === "stored", "the world set aside");
 
@@ -201,7 +206,7 @@ describe("a world server's log, with players coming in (server/world-server.js)"
         secrets.push((await server.manage.newAdminKey()).key);
         await server.manage.journal(`A game tested reaching the server from the internet (203.0.113.77), with ${KEY}.`);
         await server.close();
-        secrets.push(KEY, "203.0.113.77", "127.0.0.1", "::1", server.identity.id);
+        secrets.push(KEY, TOKEN, "203.0.113.77", "127.0.0.1", "::1", server.identity.id);
 
         const written = lines.join("");
         const read = lines.map((line) => JSON.parse(line));
@@ -231,6 +236,16 @@ describe("a world server's log, with players coming in (server/world-server.js)"
         assert.equal(read.filter((line) => line.event === "world.life").at(-1).life, "stored");
         assert.ok(read.some((line) => line.event === "journal" && /new admin key/.test(line.text)));
         assert.ok(read.some((line) => line.event === "journal" && line.text === "A game tested reaching the server from the internet (203.0.113.x), with [key]."));
+
+        // (And what the world's own thread journalled, in its thread: it was saved as its last
+        // player left, each line in the log by its world and in the world's journal as written)
+        const journalled = read.filter((line) => line.event === "world.journal");
+        const journal = await readFile(path.join(folder, "worlds", world.json.world, "journal.log"), "utf8");
+
+        assert.ok(journalled.length >= 2 && journalled.every((line) => line.world === world.json.world && typeof line.text === "string"));
+        assert.ok(journalled.some((line) => /^Saved \(/.test(line.text)), journalled.map((line) => line.text).join(" | "));
+        assert.ok(journalled.filter((line) => /^Saved \(/.test(line.text)).every((line) => journal.includes(` ${line.text}\n`)), "each as the world's journal has it");
+        assert.ok(journalled.some((line) => line.text === "Couldn't save (turn): [key] at 203.0.113.x, [token]"));
 
         // (The journals people read are as they were: the log's beside them, not in their place)
         assert.match(await readFile(path.join(folder, "journal.log"), "utf8"), /A new admin key was made/);

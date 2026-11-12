@@ -226,6 +226,11 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(counted("pellagos_world_players"), 1);
         assert.ok(counted("pellagos_heap_bytes", { thread: "world" }) > 1e6);
         assert.ok(counted("pellagos_world_cpu_seconds_total", { kind: "user" }) > 0);
+        // (Its steps' own parts, timed by the probes its thread installs: the battle's pass begun
+        // once a step, what's sent after each step timed too, and the steps themselves counted)
+        await until(() => counted("pellagos_world_work_total", { kind: "steps" }) >= 20, "its steps' passes to be counted");
+        assert.equal(counted("pellagos_world_pass_calls_total", { kind: "battle" }), counted("pellagos_world_work_total", { kind: "steps" }));
+        assert.ok(counted("pellagos_world_pass_calls_total", { kind: "flush.ops" }) >= 20 && counted("pellagos_world_pass_seconds_total", { kind: "battle" }) > 0);
         // (And the supervisor's own of it: who was let in, and what the world's sent their game
         // and heard from it, as said and as it went on the wire, compressed)
         assert.equal(counted("pellagos_joins_total"), 1);

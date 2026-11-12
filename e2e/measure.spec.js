@@ -77,7 +77,7 @@ test("a measured run: a link's ?measure= counts down twenty seconds of play at o
     expect(row.work[0]).toBeGreaterThanOrEqual(row.draw[0]);
     expect(row.interval[0]).toBeGreaterThanOrEqual(row.work[0] * 0.9);
     // (The steps it played are as many as its frames let it: a frame plays two at the most
-    // catching up (core/runner.js RUNNER.catchUp), and twenty seconds hold 400 of them, so a
+    // catching up (a frame counts a tenth of a second at the most: app/game.js), and twenty seconds hold 400 of them, so a
     // machine that draws few frames plays few steps. Held to the frames it drew, not to a number
     // a slow runner can't reach: the owner's ruling, 12 November 2026)
     expect(report.stepsPlayed).toBeGreaterThan(0);

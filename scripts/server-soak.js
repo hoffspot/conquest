@@ -290,7 +290,8 @@ export function limitsFor(players) {
  * listener (`tunnel`) or not: resolves to the report ({ seed, minutes, options, limits, players:
  * [...core/bot.js report, the thin ones' with `thin`], samples: [{ minute, world, server }],
  * histograms (the world's steps, ticks, their parts and its saves, as the server's metrics count
- * them: server/server-metrics.js histogramsOf), judged, resyncs (the world sent a copy again, in all: `desyncs` of them for a copy a check
+ * them: server/server-metrics.js histogramsOf), passes (each pass of its steps: its time and how often it was begun, with the work counted:
+ * passesOf), judged, resyncs (the world sent a copy again, in all: `desyncs` of them for a copy a check
  * found astray, `skips` for one fallen too far behind to catch up, as one slow to load is as it
  * comes in), failures }).
  */
@@ -381,7 +382,7 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         // metrics keep: what its /metrics would say, so a run and a live server are read alike)
         const sum = (key) => reports.reduce((all, report) => all + (report[key] ?? 0), 0);
 
-        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), passes: server.metrics.passesOf(made.world), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();

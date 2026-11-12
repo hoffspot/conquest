@@ -172,6 +172,9 @@ export class StoredWorld {
 
         /** The last measured runs its players' games sent (a link's ?measure=), for the server's admin. */
         this.measures = new MeasuredRuns(path.join(folder, MEASURES_FILE));
+
+        /** Told each line its journal's given, once it's written (text): a running world's thread tells the server's log of its own (world-worker.js). */
+        this.onJournal = null;
     }
 
     get id() {
@@ -403,6 +406,12 @@ export class StoredWorld {
     async journal(text, when = new Date()) {
         await ensureFolder(this.folder);
         await appendFile(path.join(this.folder, JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+
+        try {
+            this.onJournal?.(text);
+        } catch {
+            // (Whoever's told of it couldn't take it: the journal has it all the same)
+        }
     }
 }
 

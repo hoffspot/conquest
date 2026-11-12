@@ -63,9 +63,10 @@ export class Registry {
      * @param {function} [options.onClose] - A player a world's sent out (world, peer, reason).
      * @param {function} [options.onChange] - Told whenever a world's life, or who's in it, changes (world).
      * @param {function} [options.onState] - Told how a world says it is, each time it says (world, state: world-worker.js report).
+     * @param {function} [options.onJournal] - Told each line a world's thread puts in its journal (world, text).
      */
-    constructor({ store, settings, spawn = (stored, hooks) => new WorldThread(stored, hooks), awake = keepAwake, onSend = () => {}, onClose = () => {}, onChange = () => {}, onState = () => {} }) {
-        Object.assign(this, { store, settings, spawn, awake, onSend, onClose, onChange, onState });
+    constructor({ store, settings, spawn = (stored, hooks) => new WorldThread(stored, hooks), awake = keepAwake, onSend = () => {}, onClose = () => {}, onChange = () => {}, onState = () => {}, onJournal = () => {} }) {
+        Object.assign(this, { store, settings, spawn, awake, onSend, onClose, onChange, onState, onJournal });
 
         /** Each world it's had to do with, by id: { id, stored, life, thread, opening, stopping, timer, waiters }. */
         this.entries = new Map();
@@ -153,6 +154,7 @@ export class Registry {
                 this.#state(entry, state);
                 this.onState(id, state);
             },
+            onJournal: (text) => this.onJournal(id, text),
             onExit: (code, error) => this.#exited(entry, code, error),
         });
 
