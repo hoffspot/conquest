@@ -37,7 +37,7 @@ import { Pointer } from "./app/pointer.js";
 import { forgetInWorld, inWorldOf, keepInWorld, lastInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
 import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
-import { Updater } from "./app/updater.js";
+import { startsUpdate, Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
@@ -435,7 +435,7 @@ async function frontDoor() {
                 worldCard({
                     name: world?.name ?? held?.name ?? id,
                     about: world ? `${world.description ? `${world.description} · ` : ""}${world.players} of ${world.most} playing` : "Yours to come back to",
-                    badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                    badge: world ? badgeOf(world) : "",
                     when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
                     onClick: async () => {
                         await openWorlds();
@@ -3874,12 +3874,14 @@ async function showWorlds() {
                 rowOf(
                     worldCard({
                         name: world?.name ?? held?.name ?? id,
-                        badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                        badge: world ? badgeOf(world) : "",
                         about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
-                        when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Needs a key: ask its owner for an invite link",
+                        when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? (matched ? "Open to anyone: tap to join" : "Open to anyone: tap to open the game from its server") : "Needs a key: ask its owner for an invite link",
                         className: matched ? "" : "unmatched",
-                        disabled: !matched,
-                        onClick: () => (walled ? location.assign(serverPage(record, id)) : joinServerWorld(record, id, world)),
+                        // (A world open to anyone on a server of another version than this page's:
+                        // the game from the server's own page always matches it, so its row goes there)
+                        disabled: !matched && !(world?.open && !world.offline),
+                        onClick: () => (walled || !matched ? location.assign(serverPage(record, id)) : joinServerWorld(record, id, world)),
                     }),
                     { world: id },
                 ),
@@ -4540,7 +4542,9 @@ async function hostServerForm(record, kind = "new") {
     const pairs = loadWorlds().flatMap((world) => kept.filter((save) => world.places[save.id]).map((save) => ({ world, save })));
     const key = textField("hostserverkey", { type: "password", value: record.maker ?? "", placeholder: makers ? "Not needed here" : "A creator key, or its admin key" });
     const keyLabel = makers ? "Creator key (if you have one: the world isn't counted against you)" : "Creator key (or the server's admin key, on its own Wi-Fi)";
-    const most = selectField("hostservermost", [8, 7, 6, 5, 4, 3, 2, 1].map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
+    // (As many at once as that server lets a world take, as it says; one that doesn't say, 8)
+    const ceiling = Number.isInteger(now.card?.server?.mostPlayers) ? Math.max(1, Math.min(8, now.card.server.mostPlayers)) : 8;
+    const most = selectField("hostservermost", Array.from({ length: ceiling }, (_, k) => ceiling - k).map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
     const rules = [switchField("hostserverlisted", "Listed on the server", "Anyone who opens the server sees it among its worlds"), switchField("hostserveropen", "Open to anyone", "Whoever opens the server can join it with a tap, no link needed")];
     let fields;
 
@@ -4860,6 +4864,12 @@ async function enterServerWorld(record, world, { key = null, code = null, ticket
     try {
         entered = code ? await client.redeem(code) : await client.enter({ world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}) });
     } catch (error) {
+        if (error.error === "version" && updatesFor(error.net)) {
+            $("#worldsstatus").textContent = UPDATING_WORDS;
+
+            return;
+        }
+
         $("#worldsstatus").textContent = error.message;
         showWorlds();
 
@@ -4877,6 +4887,9 @@ const ruleOfCard = (card) => card?.characters ?? (card?.heroes !== "kept" ? "vis
 
 /** Each character rule in a few words, as the worlds' lists badge them. */
 const RULE_BADGES = Object.freeze({ visiting: "Visit as your own", copies: "Copies stay here", own: "Made here" });
+
+// A world's badge in a list: its character rule, and that it's experimental if its owner's marked it so (a world server's WORLD_SETTINGS)
+const badgeOf = (card) => `${RULE_BADGES[ruleOfCard(card)]}${card?.experimental === true ? " · Experimental" : ""}`;
 
 // Each character rule, as a world's maker chooses it
 const RULE_CHOICES = Object.freeze([
@@ -5110,7 +5123,7 @@ function bringFromFile(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 
@@ -5176,8 +5189,10 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         joined.close();
         setTogether(null);
         state.onServer = null;
-        tell.problem(reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
+        tell.problem(reason === "version" && updatesFor(said?.net) ? UPDATING_WORDS : reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
     };
+    // (Others coming into the world before them, each sent the whole of it: their place in the line)
+    joined.joining.onQueued = (place) => tell.waiting?.(queuedWords(place));
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
@@ -6711,6 +6726,22 @@ function watchForUpdates(release) {
     setInterval(() => document.hidden || state.updater.check(), UPDATES_ASKED);
     $("#updatebutton").addEventListener("click", () => location.reload());
 }
+
+// A world server's turned the game away for its version (`net`: the server's): if the server's
+// the newer and the update that matches it is downloaded already, the page's loaded again at
+// once, into the update (downloading nothing), and this says so; otherwise the player's told
+// what to do, as ever. Never while a game's being played, which the reload would end
+function updatesFor(net) {
+    if (!startsUpdate({ theirs: net, ours: netOf?.NET_VERSION, ready: state.updater?.ready, playing: Boolean(state.game) })) {
+        return false;
+    }
+
+    location.reload();
+
+    return true;
+}
+
+const UPDATING_WORDS = "That server plays a newer version of the game, and yours has it downloaded: starting it…";
 
 // --- Off we go ---
 

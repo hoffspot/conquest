@@ -1,9 +1,22 @@
 // Keeping a running world (generated/world_server_plan.md §5, "When it saves"): saved on each turn
-// of its war (once a minute of the world's time: its runner tells of each, core/runner.js), and
+// of its war (once a minute of the world's time: its runner tells of each, core/runner.js; a few
+// steps after it, KEEPER.after, the step that turns the war being the world's longest already), and
 // whenever it's asked to be: when the world goes empty, when it's stopped or set aside, when the
 // server shuts down, before a restore or a migration. Each save is the world as it is between two
-// steps (Host.snapshot: taken at once, so the world can go on), written as storage/worlds.js
-// writes it. A save that fails is told in the world's journal, and the next is tried as usual.
+// steps (Host.snapshotText: written out at once, straight from the world's own with nothing
+// copied, so the world can go on), kept as storage/worlds.js keeps it. A save that fails is told in the world's journal, and the next is tried as usual.
+
+import { STEP_MS } from "../client/js/core/battle.js";
+import { elapsedOf } from "../client/js/core/daytime.js";
+import { SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { WAR_VERSION } from "../client/js/core/war/war.js";
+
+/**
+ * How many steps after a turn of the war the world's saved for it (generated/
+ * multiplayer_scaling_plan.md 1-4): the turn's own step moves every realm, so the save's few
+ * milliseconds go to a step that has them to spare.
+ */
+export const KEEPER = Object.freeze({ after: 4 });
 
 export class Keeper {
     /**
@@ -27,7 +40,17 @@ export class Keeper {
         // (Every save asked for, in order)
         this.saving = Promise.resolve();
 
-        runner.onTurn = () => this.save("turn");
+        // The world's time at which the last turn's save is due (null: none waiting)
+        this.turnAt = null;
+
+        runner.onTurn = () => {
+            this.turnAt ??= runner.host.battle.time + KEEPER.after * STEP_MS;
+        };
+        runner.onStep = () => {
+            if (this.turnAt !== null && runner.host.battle.time >= this.turnAt) {
+                this.save("turn");
+            }
+        };
     }
 
     /** How long the world's been played in all (ms): before, and on this runner. */
@@ -39,7 +62,13 @@ export class Keeper {
     save(why) {
         const started = this.runner.clock?.() ?? 0;
         const took = () => (this.runner.clock?.() ?? 0) - started;
-        const saving = this.stored.save(this.runner.host.snapshot(), { why, played: this.played }).then(
+        const { host } = this.runner;
+
+        // (Whatever turn's save was waiting: this is it)
+        this.turnAt = null;
+
+        const about = { worldTime: host.battle.time, elapsed: elapsedOf(host.war), versions: { snapshot: SNAPSHOT_VERSION, war: host.war ? WAR_VERSION : null } };
+        const saving = this.stored.saveText(host.snapshotText(), about, { why, played: this.played }).then(
             () => {
                 this.saved++;
                 this.onSave?.(took(), true);

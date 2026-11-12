@@ -7,6 +7,7 @@
 // refused. A setting added needs no step: it's filled in with its default. Keys it doesn't know
 // are kept, not dropped, so a newer server's settings come through an older one unharmed.
 
+import { LIMITS } from "../access/limits.js";
 import { exists, readJSON, writeJSON } from "./files.js";
 import { checkVersion, forward, SERVER_VERSION } from "./versions.js";
 
@@ -17,7 +18,18 @@ export const CONFIG_VERSION = 1;
 export const SETTINGS_STEPS = Object.freeze({});
 
 /**
- * Every setting: its kind ("text", "boolean", "integer", "number"), its range (a text's most
+ * The most a server takes, which its settings may lower and can't raise (generated/
+ * multiplayer_scaling_plan.md 1-13): players in all its worlds together (access/limits.js
+ * LIMITS.players), and in any one world (the game's own: core/netplay.js MOST_PLAYERS, which a
+ * world's own setting can't pass either, worlds.js WORLD_SETTINGS). A world's players each play a
+ * copy of the whole world, step for step, and that's what 8 is the measure of: no setting here
+ * goes above it until worlds are sent to their players another way (the plan's 3-33).
+ */
+export const CAPS = Object.freeze({ players: LIMITS.players, mostPlayers: 8 });
+
+/**
+ * Every setting: its kind ("text", "boolean", "integer", "number", or "choice": one of its `of`,
+ * each with its words, `words`, as the management page lists them), its range (a text's most
  * characters), its default, and what it's for (as the management page says it).
  */
 export const SETTINGS = Object.freeze({
@@ -25,6 +37,8 @@ export const SETTINGS = Object.freeze({
     port: { kind: "integer", min: 1, max: 65535, default: 8480, about: "The port players reach the server on (and the management page, from the Wi-Fi, at /admin)" },
     adminPort: { kind: "integer", min: 1, max: 65535, default: 8481, about: "The port the management page answers on, on this computer alone, needing no key" },
     worldsAtOnce: { kind: "integer", min: 1, max: 64, default: 2, about: "How many worlds may be running or loading at once" },
+    playersAtOnce: { kind: "integer", min: 1, max: CAPS.players, default: CAPS.players, about: "The most players in all its worlds together at once" },
+    mostPlayersCeiling: { kind: "integer", min: 1, max: CAPS.mostPlayers, default: CAPS.mostPlayers, about: "The most players any one world here may take at once: no world's own setting goes above it" },
     setAsideMinutes: { kind: "number", min: 0, max: 1440, default: 2, about: "How long a world with nobody in it waits before it's saved and set aside (minutes)" },
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },
@@ -40,6 +54,13 @@ export const SETTINGS = Object.freeze({
     madeMost: { kind: "integer", min: 1, max: 500, default: 20, about: "How many worlds players may make here that way in all" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
     autoUpdate: { kind: "boolean", default: true, about: "Install new versions by itself, at night when nobody's in (from the hour below, for two hours)" },
+    replication: {
+        kind: "choice",
+        of: ["off", "dark", "on"],
+        words: { off: "Off: every world's played in lockstep", dark: "Dark: views built and counted, never sent (not built yet: as off)", on: "On: worlds set to views send them (not built yet: as off)" },
+        default: "off",
+        about: "Replicated views, the netcode for worlds of more than 8 (generated/multiplayer_scaling_plan.md): the switch that turns them off for every world at once, with no update. Off, a world set to them lets nobody in, its save kept as it is",
+    },
     updateHour: { kind: "integer", min: 0, max: 23, default: 3, about: "The hour it installs new versions by itself from, this computer's time (3 is 3 in the morning)" },
 });
 
@@ -66,6 +87,8 @@ export function schemaReason(schema, key, value) {
             return textReason(key, value, setting.most);
         case "boolean":
             return typeof value === "boolean" ? null : `${key} must be true or false, not ${JSON.stringify(value)}.`;
+        case "choice":
+            return setting.of.includes(value) ? null : `${key} must be ${setting.of.length > 1 ? "one of " : ""}${setting.of.join(", ")}, not ${JSON.stringify(value)}.`;
         case "integer":
             return Number.isInteger(value) && value >= setting.min && value <= setting.max ? null : `${key} must be a whole number from ${setting.min} to ${setting.max}, not ${JSON.stringify(value)}.`;
         default:

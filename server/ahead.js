@@ -50,6 +50,10 @@ export const AHEAD = Object.freeze({
     // the steps make for themselves besides: a way's far end, an army's road), so that making
     // one of those never lets go of one a player's standing by
     spareChunks: 64,
+    // How many more navigation tiles the mesh keeps than those round its players (those the
+    // steps' ways bake for themselves besides: round a way that falls short, along an army's
+    // road), so that baking one of those never lets go of one a player's standing by
+    spareTiles: 256,
     // How long (ms) a chunk waits for its land's heights, or a settlement by it, to come back
     // from a worker before it's made without them (worked out here, as ever: a worker gone quiet)
     patience: 2000,
@@ -106,6 +110,14 @@ export class Ahead {
         /** How many chunks the players and what's wanted soon take now (with a host: #review). */
         this.wanted = 0;
 
+        /**
+         * How far round each player the navigation's tiles are baked now (m: AHEAD.reach, or
+         * less with more players apart than the mesh has room for at that: #tiles), and how many
+         * tiles that takes.
+         */
+        this.reach = AHEAD.reach;
+        this.tiles = 0;
+
         // When the host was last asked what's wanted (its look round's time: asked again once
         // it's looked round again, or a player's moved), and since when each chunk has waited on
         // a worker (#awaited)
@@ -127,7 +139,7 @@ export class Ahead {
         this.#first(wanted);
         this.layouts?.ahead(cx, cy);
         this.terrains?.ahead(cx, cy);
-        this.navBaker.around(x, y, Math.max(reach, AHEAD.reach));
+        this.navBaker.around(x, y, this.reach < AHEAD.reach ? this.reach : Math.max(reach, AHEAD.reach));
         this.stale = true;
     }
 
@@ -220,13 +232,80 @@ export class Ahead {
             this.layouts?.ahead(cx, cy);
         }
 
+        this.#tiles(around);
+
         // (The navigation's tiles waiting round where no player is any more: let go)
         const { tile } = this.navBaker.navigation.measures;
-        const reach = AHEAD.reach + tile;
+        const reach = this.reach + tile;
 
         this.navBaker.queue = this.navBaker.queue.filter(([tx, ty]) => around.some(([x, y]) => Math.abs((tx + 0.5) * tile - x) <= reach && Math.abs((ty + 0.5) * tile - y) <= reach));
 
         this.layouts?.delve(Ahead.soon ? dungeons : []);
+    }
+
+    // The navigation's tiles round the players (`around`: [[x, y]]): the mesh told to keep as many
+    // as are within AHEAD.reach of them all, and AHEAD.spareTiles more (it kept 1,024 whoever was
+    // in, eight players' at 121 each, and with more apart let go of one's to bake another's, over
+    // and over, in the steps too: 25 apart want 3,025). Its most is Detour's (core/navigation.js
+    // MOST_TILES, 4,096: 31 players' apart), so with more than that the reach is brought in a
+    // tile at a time till they fit, and the tiles further out are baked by the ways that want
+    // them, as ever: nothing a step works out changes, only when the tile's baked. Those in
+    // are counted as used whenever one's been added since (the next let go of is then one no
+    // one's near), and what's newly within reach is asked for
+    #tiles(around) {
+        const { navigation } = this.navBaker;
+
+        if (!navigation.keepTiles) {
+            return;
+        }
+
+        const { tile } = navigation.measures;
+        const round = (reach) => {
+            const tiles = new Map();
+
+            for (const [x, y] of around) {
+                for (let ty = Math.floor((y - reach) / tile); ty <= Math.floor((y + reach) / tile); ty++) {
+                    for (let tx = Math.floor((x - reach) / tile); tx <= Math.floor((x + reach) / tile); tx++) {
+                        tiles.set(ty * 65536 + tx, [tx, ty]);
+                    }
+                }
+            }
+
+            return tiles;
+        };
+
+        // (Only when a player's in another tile, or a tile's been added, since it was last done)
+        const where = `${navigation.added} ${around.map(([x, y]) => `${Math.floor(x / tile)},${Math.floor(y / tile)}`).join(" ")}`;
+
+        if (where === this.tiled) {
+            return;
+        }
+
+        let reach = AHEAD.reach;
+        let tiles = round(reach);
+
+        while (tiles.size + AHEAD.spareTiles > navigation.most && reach > tile) {
+            reach -= tile;
+            tiles = round(reach);
+        }
+
+        const was = this.reach;
+
+        this.tiled = where;
+        this.reach = reach;
+        this.tiles = tiles.size;
+        navigation.keepTiles(tiles.size + AHEAD.spareTiles);
+
+        for (const [tx, ty] of tiles.values()) {
+            navigation.hold(tx, ty);
+        }
+
+        // (Room for more round each than there was, players having left: asked for)
+        if (reach > was) {
+            for (const [x, y] of around) {
+                this.navBaker.around(x, y, reach);
+            }
+        }
     }
 
     // A few chunks among some (keys) that the settlements near all of them are near one of: one

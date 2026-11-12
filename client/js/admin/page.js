@@ -864,6 +864,9 @@ function heroesWords(world) {
     return RULE_WORDS[world.characters] ?? RULE_WORDS.own;
 }
 
+// A world's netcode (server/storage/worlds.js WORLD_SETTINGS netcode), in a word
+const NETCODE_NAMES = Object.freeze({ lockstep: "Lockstep" });
+
 function worldCard(world) {
     const going = world.life !== "stored" && world.life !== "waiting";
 
@@ -880,6 +883,7 @@ function worldCard(world) {
             ["Who can join", world.offline ? "Nobody: it's offline" : world.settings.open ? "Anyone who opens the server: no key needed" : "Those with its invite link or a key"],
             ["Listed", world.settings.listed || world.settings.open ? "Yes: anyone can see it" : "No: those with a key alone"],
             ["Most players", String(world.settings.mostPlayers)],
+            ["How it's played", `${NETCODE_NAMES[world.settings.netcode] ?? world.settings.netcode}${world.settings.experimental ? " (experimental)" : ""}`],
             ["Seed", String(world.seed)],
             ["Made", `${when(world.created)}${world.creator ? `, by ${world.creator}` : ""}`],
             ["Played", duration(world.played)],
@@ -1047,6 +1051,26 @@ function select(name, options, value, disabled = false) {
     );
 }
 
+// A setting that's one of a few (a schema's "choice"): its choices, each by its words
+function choice(key, setting, value, disabled = false) {
+    return field(
+        setting.about,
+        select(
+            key,
+            setting.of.map((option) => [option, setting.words?.[option] ?? option]),
+            value,
+            disabled,
+        ),
+    );
+}
+
+// What a settings form holds for a setting, as its schema's kind has it
+function valueOf(form, key, setting) {
+    const control = form.elements[key];
+
+    return setting.kind === "text" ? control.value.replace(/\s+/g, " ").trim() : setting.kind === "boolean" ? control.checked : setting.kind === "choice" ? control.value : Number(control.value);
+}
+
 function worldSettings(world) {
     const schema = state.server.worldSchema;
     const going = world.life !== "stored" && world.life !== "waiting";
@@ -1069,7 +1093,7 @@ function worldSettings(world) {
             {},
             h("legend", {}, "Rules"),
             Object.entries(schema).map(([key, setting]) =>
-                setting.kind === "boolean" ? check(key, setting.about, world.settings[key]) : field(`${setting.about} (${setting.min} to ${setting.max})`, h("input", { type: "number", name: key, min: String(setting.min), max: String(setting.max), value: String(world.settings[key]) })),
+                setting.kind === "boolean" ? check(key, setting.about, world.settings[key]) : setting.kind === "choice" ? choice(key, setting, world.settings[key], going) : field(`${setting.about} (${setting.min} to ${setting.max})`, h("input", { type: "number", name: key, min: String(setting.min), max: String(setting.max), value: String(world.settings[key]) })),
             ),
             h("p", { class: "muted small" }, "A player away 10 minutes is marked away; after 30 they're sent out. Resting always needs everyone there."),
         ),
@@ -1098,7 +1122,7 @@ function worldSettings(world) {
         }
 
         for (const [key, setting] of Object.entries(schema)) {
-            const value = setting.kind === "text" ? form.elements[key].value.replace(/\s+/g, " ").trim() : setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
+            const value = valueOf(form, key, setting);
 
             if (value !== world.settings[key]) {
                 settings[key] = value;
@@ -1685,6 +1709,12 @@ const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPla
 
 function setUpNewWorld() {
     const form = $("#new");
+    // (As many players as this server lets a world take, and that many unless fewer are asked for)
+    const most = state.server.worldSchema?.mostPlayers;
+
+    if (most) {
+        Object.assign(form.elements.mostPlayers, { min: String(most.min), max: String(most.max), value: String(most.default) });
+    }
 
     $("#newrace").replaceChildren(...state.server.peoples.map(({ id, name }) => h("option", { value: id, selected: id === "human" }, name)));
 
@@ -1778,6 +1808,8 @@ async function renderSettings() {
                 ? field(setting.about, h("input", { type: "text", name: key, maxlength: String(setting.most), placeholder: key === "name" ? overview.ownName : "", value: settings[key] }))
                 : setting.kind === "boolean"
                 ? check(key, setting.about, settings[key])
+                : setting.kind === "choice"
+                ? choice(key, setting, settings[key])
                 : field(
                       `${setting.about} (${setting.min} to ${setting.max})`,
                       h("input", { type: "number", name: key, min: String(setting.min), max: String(setting.max), step: setting.kind === "integer" ? "1" : "0.5", value: String(settings[key]) }),
@@ -1795,7 +1827,7 @@ async function renderSettings() {
         const changes = {};
 
         for (const [key, setting] of Object.entries(schema)) {
-            const value = setting.kind === "text" ? form.elements[key].value.replace(/\s+/g, " ").trim() : setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
+            const value = valueOf(form, key, setting);
 
             if (value !== settings[key]) {
                 changes[key] = value;

@@ -8,6 +8,7 @@
 // Exact maths only (it's the rules').
 
 import { daylight, moonPhase, timeOfDay } from "./daytime.js";
+import { Near } from "./near.js";
 import { SETTLEMENTS } from "./worldplan/plan.js";
 
 /**
@@ -83,7 +84,7 @@ export function carriesTorch(actor, dark) {
  * { x, y, radius }), those carrying torches (`torches`: [x, y]) and those with the Light spell's
  * globe over them (`globes`: [x, y]). By day, nothing's needed.
  */
-export function lighting({ elapsed, plan = null, players = [], camps = [], fires = [], torches = [], globes = [] }) {
+export function lighting({ elapsed, plan = null, players = [], camps = [], fires = [], torches = [], globes = [], tally = null }) {
     const sky = skyLight(elapsed);
     const lit = [];
 
@@ -91,10 +92,27 @@ export function lighting({ elapsed, plan = null, players = [], camps = [], fires
         return { sky, lit };
     }
 
-    const near = ([x, y], beyond) => players.some((player) => (player[0] - x) * (player[0] - x) + (player[1] - y) * (player[1] - y) <= (LIGHT_NEAR + beyond) * (LIGHT_NEAR + beyond));
+    // (Is a light near any player: measured against the players in the cells round it, near.js,
+    // not every player, at night every step; `tally.pairs`, if given, counts the measurings)
+    const about = new Near(players, LIGHT_CELL);
+    let measured = 0;
+    const near = ([x, y], beyond) => about.some(x, y, LIGHT_NEAR + beyond, (player) => (measured++, (player[0] - x) * (player[0] - x) + (player[1] - y) * (player[1] - y) <= (LIGHT_NEAR + beyond) * (LIGHT_NEAR + beyond)));
     const circle = ([x, y], reach) => lit.push([x, y, reach * reach]);
 
-    for (const place of plan?.places ?? []) {
+    // (The settlements: only those in the cells round a player, of all the plan's, in the plan's
+    // order: none further off than the widest's light reaches can be near one)
+    const places = plan?.places ?? [];
+    const settled = places.length ? settledNear(plan) : null;
+    const round = new Set();
+
+    for (const [x, y] of settled ? players : []) {
+        for (const k of settled.within(x, y, LIGHT_NEAR + WIDEST + LIGHT_REACH.settlement)) {
+            round.add(k);
+        }
+    }
+
+    for (const k of [...round].sort((a, b) => a - b)) {
+        const place = places[k];
         const reach = (SETTLEMENTS[place.kind]?.radius ?? 40) + LIGHT_REACH.settlement;
 
         if (near(place.at, reach)) {
@@ -126,7 +144,28 @@ export function lighting({ elapsed, plan = null, players = [], camps = [], fires
         }
     }
 
+    if (tally) {
+        tally.pairs += measured;
+    }
+
     return { sky, lit };
+}
+
+// A plan's settlements by cell (near.js), made once for each plan (and again should its places
+// be others); the widest any is; and the side of a cell of the players' places (metres)
+const settledBy = new WeakMap();
+const WIDEST = Math.max(40, ...Object.values(SETTLEMENTS).map(({ radius }) => radius ?? 0));
+const LIGHT_CELL = 256;
+
+function settledNear(plan) {
+    let kept = settledBy.get(plan);
+
+    if (!kept || kept.places !== plan.places || kept.count !== plan.places.length) {
+        kept = { places: plan.places, count: plan.places.length, near: new Near(plan.places, 512, ({ at }) => at) };
+        settledBy.set(plan, kept);
+    }
+
+    return kept.near;
 }
 
 /** How far one can see someone at a square ([x, y] on the overworld), a share of SIGHT: as by day if it's lit, else as the sky has it. */

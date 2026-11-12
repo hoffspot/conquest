@@ -43,7 +43,7 @@ import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, st
 import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
-import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, NOW, RULE_MODES, ruleOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, netcodeOf, NOW, RULE_MODES, ruleOf, settingsOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
 export { SERVER_JOURNAL };
@@ -200,7 +200,7 @@ export class Management {
             firstHero: meta.firstHero,
             characters: ruleOf(meta),
             offline: isOffline(meta),
-            settings: meta.settings,
+            settings: settingsOf(meta),
             played: state?.played ?? meta.played ?? 0,
             elapsed,
             ...clockOf(elapsed),
@@ -244,6 +244,8 @@ export class Management {
             heroes === undefined || HERO_MODES.includes(heroes) ? null : `Heroes are kept or brought in, not ${JSON.stringify(heroes)}.`,
             firstHero === undefined || FIRST_HEROES.includes(firstHero) ? null : `A first hero is made new or brought in, not ${JSON.stringify(firstHero)}.`,
             ...(settings === undefined ? [] : settings !== null && typeof settings === "object" && !Array.isArray(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
+            // (No more players than the server lets a world take, unless that's what it has already)
+            settings?.mostPlayers === stored.meta.settings.mostPlayers ? null : this.server.overCeiling(settings),
             ...Object.keys(changes)
                 .filter((key) => !["name", "description", "heroes", "firstHero", "settings"].includes(key))
                 .map((key) => `A world has nothing called "${key}" to change.`),
@@ -257,6 +259,11 @@ export class Management {
 
         if (modes && this.#going(id)) {
             throw new Refused(409, "running", "Take the world offline first (or set it aside): what it does with its players' characters changes only while nobody's in it.");
+        }
+
+        // (How it's played, as its characters: its players' games are each playing it the old way)
+        if (settings?.netcode !== undefined && settings.netcode !== netcodeOf(stored.meta) && this.#going(id)) {
+            throw new Refused(409, "running", "Take the world offline first (or set it aside): how it's played changes only while nobody's in it.");
         }
 
         const meta = {

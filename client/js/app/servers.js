@@ -24,7 +24,7 @@
 //   const { joining } = await client.play({ world, session: entered.session, character, hero });
 
 import { newNonce, verifyIdentity } from "../core/identity.js";
-import { Joining, NET_VERSION, versionWords } from "../core/netplay.js";
+import { Joining, NET_VERSION, SPEAKS, versionWords } from "../core/netplay.js";
 import { addressOf, DEFAULT_PORT, inviteLink, inviteOf } from "./invites.js";
 import { LINK_TIMING, RelayLink } from "./together.js";
 
@@ -107,6 +107,8 @@ export const SERVER_REFUSALS = Object.freeze({
     maker: "Making worlds on that server needs a creator key from its owner, or its admin key on its own Wi-Fi.",
     unproved: "That server needs your player identity to make a world, and the game couldn't show it: reload the game and try again.",
     "made-each": "You've made as many worlds on that server as each player may. Ask its owner for a creator key to make more.",
+    netcode: "That world's played in a way this version of the game can't join. Reload this page for the newest version, or open the game from the server itself (it always matches).",
+    replication: "That world's way of playing is turned off on its server for now. It's saved: try again later, or ask the server's owner.",
     "made-most": "Players have made as many worlds on that server as its owner allows. Ask them for a creator key.",
 });
 
@@ -445,7 +447,8 @@ export class ServerClient {
             // (Another version: which is the newer, by the server's version where it says it)
             const message = answer?.error === "version" ? versionWords(answer.net, { server: true }) : (SERVER_REFUSALS[answer?.error] ?? answer?.message);
 
-            throw new ServerRefusal(answer?.error ?? "unreachable", message, answer?.wait ? { wait: answer.wait } : {});
+            // (And its version, where it said: the game may have the update to match it already)
+            throw new ServerRefusal(answer?.error ?? "unreachable", message, { ...(answer?.wait ? { wait: answer.wait } : {}), ...(Number.isInteger(answer?.net) ? { net: answer.net } : {}) });
         }
 
         return answer;
@@ -674,7 +677,7 @@ export class ServerClient {
     async enter({ world, key = this.record.worlds?.[world]?.key ?? null, ticket = this.record.worlds?.[world]?.ticket ?? null }) {
         await this.prove();
 
-        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), ...this.#shown(), net: NET_VERSION } }), key, ticket);
+        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), ...this.#shown(), net: NET_VERSION, speaks: SPEAKS } }), key, ticket);
     }
 
     /**
@@ -711,7 +714,7 @@ export class ServerClient {
     async redeem(code) {
         await this.prove();
 
-        const answer = await this.#call("POST", "/codes/redeem", { body: { code: String(code).toUpperCase().replace(/[^0-9A-Z]/g, ""), ...this.#shown(), net: NET_VERSION } });
+        const answer = await this.#call("POST", "/codes/redeem", { body: { code: String(code).toUpperCase().replace(/[^0-9A-Z]/g, ""), ...this.#shown(), net: NET_VERSION, speaks: SPEAKS } });
 
         return this.#entered(answer.world, answer, answer.key);
     }

@@ -223,6 +223,11 @@ function copied(value) {
  * given is left out: copied whole first, a snapshot of the battle took four times as long.
  */
 export function keptOf(actor) {
+    return keptBy(actor, copied);
+}
+
+// What's kept of a character, each part of it by `copy` (copied; or as it is, sharedOf)
+function keptBy(actor, copy) {
     const kept = {};
 
     for (const key in actor) {
@@ -236,10 +241,10 @@ export function keptOf(actor) {
 
         if (usual === undefined) {
             if (key !== "arms" || !alike(value, armsIn(actor.weapon, actor.boots, actor.formation))) {
-                kept[key] = copied(value);
+                kept[key] = copy(value);
             }
         } else if (value !== usual && (usual === null || typeof usual !== "object" || !unchanged(value, usual))) {
-            kept[key] = copied(value);
+            kept[key] = copy(value);
         }
     }
 
@@ -247,6 +252,18 @@ export function keptOf(actor) {
     kept.restVariety = actor.restVariety.toJSON();
 
     return kept;
+}
+
+// What a character has, as it is: its own, not a copy
+const same = (value) => value;
+
+/**
+ * The same with nothing copied: what's kept of a character is the character's own (a new table of
+ * it, each part the battle's), for a snapshot that's written out at once and let go of
+ * (Battle.snapshot's `keep` with `shared`: core/host.js snapshotText). Written out, the same text.
+ */
+export function sharedOf(actor) {
+    return keptBy(actor, same);
 }
 
 /**

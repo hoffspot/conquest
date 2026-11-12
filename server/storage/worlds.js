@@ -31,6 +31,7 @@ import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, 
 import { KeptHeroes } from "./heroes.js";
 import { MEASURES_FILE, MeasuredRuns } from "./measures.js";
 import { Visitors } from "./visitors.js";
+import { NETCODES } from "../../client/js/core/netplay.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
 
@@ -102,15 +103,30 @@ export const ruleOf = ({ heroes, firstHero }) => (heroes === "brought" ? "visiti
  */
 export const isOffline = (meta) => meta?.state === "offline";
 
+/** Each netcode (core/netplay.js NETCODES) as the management page names it. */
+export const NETCODE_WORDS = Object.freeze({ lockstep: "Lockstep: each game holds a copy of the whole world (8 players at most)" });
+
+/**
+ * How a world's played with those who come into it (core/netplay.js NETCODES): lockstep, for a
+ * world that doesn't say (every world, before any said).
+ */
+export const netcodeOf = (meta) => (typeof meta?.settings?.netcode === "string" ? meta.settings.netcode : "lockstep");
+
 /** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
+    welcomes: { kind: "integer", min: 0, max: 8, default: 2, about: "How many may be coming in at once, each sent the whole world: the rest wait their turn (0: any number)" },
     listed: { kind: "boolean", default: false, about: "Shown to anyone who asks the server what worlds it has" },
     open: { kind: "boolean", default: false, about: "Open to anyone: whoever opens the server may come in, no key or link needed (shown to them too)" },
     pauseWhenHidden: { kind: "boolean", default: true, about: "Stopped while its one player's page is hidden (never while anyone else is in it)" },
     trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
     debugCommands: { kind: "boolean", default: false, about: "Its owners may use the debug commands (a field battle, say)" },
+    netcode: { kind: "choice", of: NETCODES, words: NETCODE_WORDS, default: "lockstep", about: "How it's played with those who come in (changed only while nobody's in it)" },
+    experimental: { kind: "boolean", default: false, about: "Experimental: said so on its card, to whoever sees it. For a world that tries what isn't finished" },
 });
+
+/** A world's settings, each it doesn't keep (one added since it was made) at its default. */
+export const settingsOf = (meta) => ({ ...Object.fromEntries(Object.entries(WORLD_SETTINGS).map(([key, { default: value }]) => [key, value])), ...meta?.settings });
 
 // A world's id: ten letters and digits (made at random); never "server", whose backups are the server's own
 const ID = /^[a-z0-9]{10}$/;
@@ -166,11 +182,18 @@ export class StoredWorld {
         return path.join(this.folder, STATE, name);
     }
 
-    /** A world's folder opened: its world.json brought forward if an older server wrote it, refused if a newer one did. */
+    /**
+     * A world's folder opened: its world.json brought forward if an older server wrote it, refused
+     * if a newer one did, and any setting it hasn't (one added since: WORLD_SETTINGS) at its default.
+     */
     static async open(folder) {
         const { formatVersion, writtenBy = null, ...meta } = await readJSON(path.join(folder, WORLD_FILE));
+        const kept = forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy });
 
-        return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }), writtenBy);
+        // (A setting added since it was last written: its default, as a server's own are filled in)
+        kept.settings = { ...Object.fromEntries(Object.entries(WORLD_SETTINGS).map(([key, { default: value }]) => [key, value])), ...kept.settings };
+
+        return new StoredWorld(folder, kept, writtenBy);
     }
 
     /**
@@ -288,16 +311,24 @@ export class StoredWorld {
      * at a time, in the order they're asked for; it's encoded as it's asked for, so the world
      * can go on at once. Returns when it's on the disk.
      */
-    save(snapshot, { why = "saved", played = null, when = () => new Date() } = {}) {
-        const text = encode(snapshot);
-        const saving = this.#saving.then(() => this.#write(text, snapshot, { why, played, when }));
+    save(snapshot, options = {}) {
+        return this.saveText(encode(snapshot), { worldTime: snapshot.battle?.time ?? 0, elapsed: elapsedOf(snapshot.war), versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null } }, options);
+    }
+
+    /**
+     * The same, of a snapshot written out already (`text`: core/host.js snapshotText, which copies
+     * nothing of the world to write it), with what world.json says of it (`about`: { worldTime,
+     * elapsed, versions: { snapshot, war } }, as the world stood when it was written).
+     */
+    saveText(text, about, { why = "saved", played = null, when = () => new Date() } = {}) {
+        const saving = this.#saving.then(() => this.#write(text, about, { why, played, when }));
 
         this.#saving = saving.catch(() => {});
 
         return saving;
     }
 
-    async #write(text, snapshot, { why, played, when }) {
+    async #write(text, { worldTime, elapsed, versions }, { why, played, when }) {
         await ensureFolder(path.join(this.folder, STATE));
 
         for (let n = AUTOSAVES - 1; n >= 1; n--) {
@@ -315,9 +346,9 @@ export class StoredWorld {
         const at = when();
 
         await this.writeMeta({
-            worldTime: snapshot.battle?.time ?? 0,
-            elapsed: elapsedOf(snapshot.war),
-            versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null },
+            worldTime,
+            elapsed,
+            versions,
             savedAt: at.toISOString(),
             ...(played === null ? {} : { played }),
         });

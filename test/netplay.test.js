@@ -580,8 +580,11 @@ describe("playing together (netplay.js)", () => {
         // load that falls too far behind twice as it comes in isn't left standing)
         post.length = 0;
 
+        // (The world moved on between them: as it stands, nothing done since it was last taken,
+        // it's taken once however often it's sent: test/world-text.test.js)
         for (let k = 1; k <= AGAIN.burst; k++) {
             now += 1000;
+            host.advance(STEP_MS);
             hosting.hear(bryn.peer, encode({ kind: "again" }));
             assert.equal(states(bryn.peer), k);
         }
@@ -610,6 +613,7 @@ describe("playing together (netplay.js)", () => {
         assert.equal(states(bryn.peer), AGAIN.burst);
         hosting.asked.add(cai.peer);
         now += 1;
+        host.advance(STEP_MS);
         hosting.hear(bryn.peer, encode({ kind: "ping", t: 2 }));
         assert.deepEqual([states(bryn.peer), states(cai.peer), taken], [AGAIN.burst + 1, 1, AGAIN.burst + 1]);
         assert.equal(hosting.asked.size, 0);
@@ -971,7 +975,11 @@ describe("playing together (netplay.js)", () => {
         assert.equal(said[0].net, NET_VERSION);
         assert.equal(said[1].net, undefined);
 
-        for (let k = 1; k < MOST_PLAYERS; k++) {
+        // (As many as it takes, `most`: the game's own number, unless whoever runs it sets another,
+        // as a world server does from its world's setting and its own ceiling: test/caps.test.js)
+        assert.equal(hosting.most, MOST_PLAYERS);
+
+        for (let k = 1; k < hosting.most; k++) {
             hosting.hear(`q${k}`, encode({ kind: "hello", version: NET_VERSION, character: guest(`G${k}`) }));
         }
 

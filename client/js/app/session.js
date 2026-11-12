@@ -6,6 +6,7 @@ import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { Host, OWN } from "../core/host.js";
 import { buildWorld } from "../core/overworld.js";
+import { asRemote } from "../core/remote.js";
 import { readKtx2With } from "../world/art/engine/models.js";
 import { View } from "../world/view.js";
 import { ASSETS } from "./assets.js";
@@ -116,6 +117,8 @@ export async function createJoinedGame({ view, kit, sound, hud, hero, welcome, j
         joining.own({ wheels });
     }
 
-    // (Their hero as the world has them: in a world server's world that keeps heroes, the world's, not the device's)
-    return new Game({ view, kit, sound, world, hero: host.players.get(welcome.id)?.hero ?? hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels: mine("wheels", wheels), onWheels: tell("wheels", onWheels), pin: mine("pin", null), onPin: tell("pin"), markers: mine("markers", []), onMarkers: tell("markers"), messages: mine("messages", messages), onMessages: tell("messages", onMessages), told: mine("told", told), onTold: tell("told", onTold) });
+    // (Their hero as the world has them: in a world server's world that keeps heroes, the world's,
+    // not the device's. The game's link to the world is `joining`, through the link seam alone:
+    // core/remote.js)
+    return new Game({ view, kit, sound, world, hero: host.players.get(welcome.id)?.hero ?? hero, hud, host, me: welcome.id, remote: asRemote(joining), talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels: mine("wheels", wheels), onWheels: tell("wheels", onWheels), pin: mine("pin", null), onPin: tell("pin"), markers: mine("markers", []), onMarkers: tell("markers"), messages: mine("messages", messages), onMessages: tell("messages", onMessages), told: mine("told", told), onTold: tell("told", onTold) });
 }
