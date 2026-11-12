@@ -209,14 +209,23 @@ describe("pieces", () => {
 
         return { one, two: two ?? theirs, wire: { a: a.sent, b: b.sent }, heard };
     };
-    const settled = () => new Promise((resolve) => setTimeout(resolve, 50));
+    // (Till what's waited for has come, then a moment more for anything that shouldn't have:
+    // compressing a world and reading it back takes as long as the machine does, 50 ms on a
+    // quick one and more than that on CI's, where a fixed wait looked before the world was heard)
+    const settled = async (come = () => true) => {
+        for (let k = 0; k < 1000 && !come(); k++) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    };
     // (A world as it's sent: JSON, the same few words over and over)
     const WORLD = JSON.stringify({ kind: "welcome", snapshot: { actors: Array.from({ length: 2500 }, (_, k) => ({ id: `townsfolk:human-town-4/${k}`, x: k * 1.37, y: k * 2.11, hp: 100, team: "human", kind: "folk" })) } });
 
     it("compress a long message on its way to a game that's said it reads them, a world a fifth of its size and less on the wire and whole as it's heard; a short one goes as it is; and all of it's heard in the order it was said", async () => {
         const { one, two, wire, heard } = linked();
 
-        await settled();
+        await settled(() => one.packs && two.packs);
         assert.deepEqual([one.packs, two.packs], [true, true], "each has heard the other reads them");
         assert.deepEqual(heard, { a: [], b: [] }, "(that word told to no one)");
 
@@ -229,7 +238,7 @@ describe("pieces", () => {
         one.send(ops(2));
         one.send(ops(3));
         two.send('{"kind":"ready"}');
-        await settled();
+        await settled(() => heard.b.length >= 4 && heard.a.length >= 1);
         assert.deepEqual(heard.b, [ops(1), WORLD, ops(2), ops(3)]);
         assert.deepEqual(heard.a, ['{"kind":"ready"}']);
 
@@ -256,7 +265,7 @@ describe("pieces", () => {
     it("send everything plain to a game from before messages were compressed, which never hears that they can be: its messages are read as ever, and it's told what it's told", async () => {
         const { one, two, wire, heard } = linked({ old: true });
 
-        await settled();
+        await settled(() => heard.b.length >= 1);
         assert.equal(one.packs, false);
         // (What it heard of that: one message that isn't JSON, which such a game lets go of unread)
         assert.deepEqual(heard.b, [PACKED.can]);
@@ -265,7 +274,7 @@ describe("pieces", () => {
         one.send(WORLD);
         one.send('{"kind":"refused","reason":"version","net":224}');
         two.send('{"kind":"hello","version":223}');
-        await settled();
+        await settled(() => heard.b.length >= 3 && heard.a.length >= 1);
         assert.deepEqual(heard.b.slice(1), [WORLD, '{"kind":"refused","reason":"version","net":224}']);
         assert.deepEqual(heard.a, ['{"kind":"hello","version":223}']);
         assert.ok(wire.a.every((piece) => piece[0] === "=" || piece[0] === "+"), "nothing marked compressed");
@@ -274,11 +283,11 @@ describe("pieces", () => {
     it("leave out a compressed message that won't read, and carry on with the next", async () => {
         const { one, two, heard } = linked();
 
-        await settled();
+        await settled(() => one.packs && two.packs);
         // (As a game might send one: its last piece marked compressed, and nothing of the kind in it)
         two.channel.send(`${PACKED.last}bm90IGRlZmxhdGVk`);
         two.send('{"kind":"ping","t":1}');
-        await settled();
+        await settled(() => heard.a.length >= 1);
         assert.deepEqual(heard.a, ['{"kind":"ping","t":1}']);
         assert.equal(one.inbox.length, 0);
     });
