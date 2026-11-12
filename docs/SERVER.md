@@ -42,7 +42,8 @@ answered from the internet. Its tabs:
 - **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved",
   "Offline"), and what can be done with it: start it, set it aside (everyone in it is sent out and
   it's saved), **take it offline** and **bring it online** (below), save it now, its settings,
-  keys, players, backups and **crash reports** (below), export it, delete it (its name typed).
+  keys, players, backups, **crash reports** and **measured runs** (below), export it, delete it
+  (its name typed).
 - **New world.** Its name, seed and home people, what it does with its players' characters
   (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
@@ -55,7 +56,7 @@ answered from the internet. Its tabs:
   servers list it under its new name within a few seconds), this page, and the name of the
   server's archives. A game already open picks it up the next time it asks the server.
 - **Activity** (what's happened, the server's and each world's) and **Health** (each world's
-  steps and memory, and the server's).
+  steps and memory, and the server's, now and charted over the last day or week).
 
 ## Worlds and who comes in
 
@@ -198,6 +199,19 @@ A world with nobody in it waits 2 minutes, then it's saved and **set aside**: it
 until someone comes in. Two worlds run at once by default (the page says how many the computer can
 take); a third waits its turn. While anyone's in a world, the computer is kept awake.
 
+**How many players.** Two of the server's settings say how many it takes: **The most players in
+all its worlds together at once** (`playersAtOnce`, 64) and **The most players any one world here
+may take at once** (`mostPlayersCeiling`, 8). Each can be lowered and neither can be raised: 64
+and 8 are the most they go to, by the page, by the API or by `server.json` written by hand (a
+server whose file asks for more won't start, and says why). Eight is the game's own number, each
+player's game playing a copy of the whole world. A world's own **Most players** goes no higher
+than the server's ceiling when the world's made or changed; a world whose setting is above it
+already (the ceiling lowered since, or the world brought from elsewhere) keeps its setting and
+takes the ceiling. The game is told the ceiling (the status card's `server.mostPlayers`) and
+offers that many to whoever makes a world from it (**Host on a Server**), as the management
+page's **Make a world** does. The ceiling takes hold at once for whoever asks to come in; a
+world's own thread hears of it when it's next started.
+
 Players add the server in the game's **Multiplayer**, **Known Servers** (by its address, from an
 invite link or QR code, or from the servers found nearby on the Wi-Fi), then come into a world in
 **Join a World Hosted on a Server** with its key or short code, or make one in **Host on a Server**
@@ -247,6 +261,17 @@ In the menu, with anyone else in the world: **Pause for everyone**. The world st
 each told who paused it, till you resume; if your link drops meanwhile, it goes on for the others.
 Nothing else stops a world anyone else is in. Alone in it, your menu stops it, and so does your
 page hidden (its rule **Stopped while its one player's page is hidden**, on unless you turn it off).
+
+**Coming in, in turn.** Everyone who comes into a world is sent the whole of it, which is the
+dearest thing its thread does for one player. So a world lets two come in at once (its setting
+`welcomes`, 0 to 8; 0 lets any number, as it was before there was a setting): the rest wait in the
+order they asked, are told their place ("Others are coming into that world: 2 before you."), and
+are let in as places free, together where there's room for more than one, all from one taking of
+the world. A place frees when a player's game says it has finished loading, when they leave or
+their link is gone, or after a minute. The setting is changed with a world's other settings
+(the management page's world, **Settings**, among its rules; or `PATCH /api/v1/worlds/<id>` as its
+owner, `settings: { welcomes }`), and a world kept before there was one has 2. A world a player hosts in their own browser doesn't queue: each is welcomed at
+once.
 
 ### Playing
 
@@ -406,8 +431,10 @@ before everything is taken away ([MAC_APP.md](MAC_APP.md#updating-and-taking-it-
 
 Every world keeps:
 
-- **Its latest save** and the **5 before it** (autosaves), saved each war turn while it runs, when
-  it's set aside, and when the server stops. A save that won't read is passed over for the newest
+- **Its latest save** and the **5 before it** (autosaves), saved each war turn while it runs (four
+  steps after the turn, a fifth of a second: the turn's own step is the world's longest already,
+  and the save is written straight from the world with nothing copied first), when it's set
+  aside, and when the server stops. A save that won't read is passed over for the newest
   that does, and the journal says so.
 - **Backups:** one an hour (the last 12 kept) and one a day (the last 7), and one before anything
   that can't be undone: a restore, a fresh start, an update, a deletion. **Back up now** makes one
@@ -512,9 +539,11 @@ secrets.json             the admin key's and creator keys' hashes (never a key a
 identity.key             the server's identity (the key it proves its id with)
 certificates/            its certificates, and the DNS host's token where there's no Keychain
 journal.log              what's happened to the server
+history.json.gz          how it's been running, for Health's charts (the last day and week)
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
                          access.json (its keys' hashes, players, bans), journal.log,
-                         crashes.json (its last crash reports)
+                         crashes.json (its last crash reports), measures.json (its last
+                         measured runs)
 backups/<id>/            each world's backups; backups/server/ the server's own
 versions/                versions installed by updates (current.json, last.json)
 ```
@@ -528,16 +557,148 @@ Each running world steps 20 times a second in a thread of its own, about 110 MB 
 and more as its players go further. **Health** shows each world's steps (the mean, the 99th
 percentile over the last minute, the worst) and memory, and the server's. A step over 50 ms is
 a step late. Beside the steps it shows the **whole tick**: all the world's thread does each time
-it looks at the world, its steps, what's sent of them, a save begun on a turn of the war and
+it looks at the world, its steps, what's sent of them, a save begun after a turn of the war and
 what's made ahead, which is what a player waits on (a save or a building's inside baked can make
 a tick two or three times its step). And its **pace**: how much of its clock's time the world
 has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
 go, running slow rather than further behind; its journal says when it has.
 
+Taking the whole world for a player (one coming in, or one whose copy went astray or fell too far
+behind and asks for it again) is the dearest thing a world's thread does for one player: 4 ms
+with eight in it, and more with more. So a world on a server takes it once for however many want
+it as it stands, never in the step that turns the war, and for no more than an eightieth of its
+thread's time: after one that took 25 ms none is taken for 2 seconds, after one of 4 ms none for
+a third of a second, and whoever asks meanwhile waits and is answered from the next
+(`WORLDS` in `client/js/core/netplay.js`). A world a player hosts in their browser isn't held
+back so.
+
+Each world's thread also counts what it does, and tells the server a second's worth at a time:
+every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and
+what's made ahead) into fixed buckets from half a millisecond to a second, its saves, how late
+its event loop ran, its garbage collections by kind, its heap, how many are in its battle and in
+the world, and what its players' games have said to it. The server adds them up for as long as
+it runs, a world's carrying on when it's set aside and started again. Counting costs a step
+under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+
+### The last day and week
+
+Under them, Health draws how it's been: for the server, how many players' games were linked,
+what it sent them a second, how late its own event loop ran, how busy its own thread was and its
+memory; for each world, its slowest 1% of steps and of whole ticks (with a dashed line at a
+step's 50 ms), its pace, its players, how many were in its battle and its memory. **Day** is the
+last 24 hours, a point every two minutes; **Week** the last seven days, a point every fifteen.
+A point is the worst of its time for what's judged by its worst (slow steps, memory) and the mean
+for the rest. Point at a chart, or touch it, for what it was at that time. A gap is when nothing
+was measured: the server stopped, a world set aside, or no step played.
+
+The server keeps these itself, with nothing else to install: a point of each every ten seconds
+for a day and every five minutes for a week, about a megabyte of memory for a server with three
+worlds, written to `history.json.gz` in its data folder every five minutes and as it stops. So
+the charts are there after a restart or an update, with a gap as long as it was down (after a
+crash or a power cut, the last five minutes may be missing too). It's this computer's history,
+not its worlds': it isn't put in an archive, and restoring one leaves it as it is. A file that
+can't be read is started afresh. The slowest 1% are worked out from the buckets below, so they're
+as near as the buckets are: between 20 and 35 ms, say, not to the tenth.
+
+### Metrics
+
+All the server counts is read at `http://localhost:8481/metrics`, on the management page's own
+listener: plain text in Prometheus's format, which Prometheus, Grafana Alloy, VictoriaMetrics,
+Netdata and `curl` all read. It needs no key, as the page there needs none, and it's read-only.
+
+```sh
+curl http://localhost:8481/metrics
+```
+
+**It's never answered from the Wi-Fi or the internet.** That listener is on the computer alone
+(127.0.0.1), answers only by its own names (`localhost:8481` and `127.0.0.1:8481`), and refuses
+another site's page in the computer's own browser. The play port, which the Wi-Fi, the internet
+and a tunnel reach, has no such address. To read a rented server's metrics from elsewhere, bring
+the port to you over SSH (`ssh -L 8481:localhost:8481 you@server`), as for its management page,
+or run the scraper on the server itself. For Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: pellagos
+    static_configs:
+      - targets: ["localhost:8481"]
+```
+
+The server needs none of them: it's built on Node alone, and keeps counting whether anything
+reads it or not.
+
+What's there, every name beginning `pellagos_`. Times are seconds, sizes bytes. A series is
+labelled by its world's id (`world`), by which thread it's of (`thread`: `world`, or `supervisor`
+for the server's own, with no world), and by a `kind` or a `reason`: never by a player, an
+address or a key.
+
+| Series | What it is |
+| --- | --- |
+| `world_step_seconds`, `world_tick_seconds` | Histograms of each step's time, and each whole tick's. A step over 0.05 is late |
+| `world_tick_part_seconds` | A tick's parts (`kind`): `advance`, its steps with what's sent of them, and `ahead`, what's made ahead |
+| `world_save_seconds`, `world_save_failures_total` | Each save's time from asked to on the disk, and those that failed |
+| `world_dropped_seconds_total` | The time a world let go, fallen behind its clock (its pace, as a total) |
+| `world_cpu_seconds_total` | Its thread's processor time (`kind`: `user`, `system`) |
+| `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
+| `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
+| `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
+| `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
+| `event_loop_delay_mean_seconds`, `_p99_seconds`, `_max_seconds` | How late each thread's event loop ran, lately |
+| `gc_total`, `gc_seconds_total` | Each thread's garbage collections and their time (`kind`: `minor`, `major`, `incremental`, `weak`) |
+| `play_sockets`, `play_places` | Players' games linked now, and places held in worlds (a dropped link's is kept five minutes) |
+| `play_backlog_bytes`, `play_backlog_max_bytes` | What waits to go to games slow to take it: all of it, and the most for one |
+| `play_sent_bytes_total`, `play_sent_wire_bytes_total`, `play_sent_messages_total`, `play_received_bytes_total` | A world's traffic: sent as said, sent as it went on the wire (compressed), and heard |
+| `joins_total` | Players let into a world |
+| `refusals_total` | What was refused, by `reason` (`key`, `code`, `bad-request`...) |
+| `play_closed_total` | Games sent out or refused at the play socket, by `reason` (`afk`, `full`, `server-stopping`...) |
+| `worlds` | The server's worlds by how they are (`kind`: `stored`, `running`, `empty`...) |
+| `event_loop_utilization` | How busy the server's own thread was, lately (0 to 1) |
+| `rss_bytes`, `start_time_seconds` | The whole server's memory, and when it started |
+
+A world set aside keeps its counters and histograms and lets go of what was only so while it ran;
+a world deleted lets go of all of them. All of them start again from nothing when the server
+does.
+
+### Logs
+
+Beside the journals, which are written for people (Activity shows them), the server prints a
+**structured log** on its output: one line of JSON for each thing that happens, for whatever
+gathers logs to read (`journalctl`, Console, `jq`, a log shipper). Run from a terminal it's among
+what the server says there; the Mac app keeps it in its `server.log`.
+
+```
+{"t":"2026-11-12T19:04:11.512Z","event":"player.entered","world":"mj7dyu057o","player":"K7Q2MXD4RT","role":"player","net":"203.0.113.x","keyId":"k3f9","first":true}
+{"t":"2026-11-12T19:04:12.030Z","event":"world.life","world":"mj7dyu057o","life":"running"}
+{"t":"2026-11-12T19:09:40.870Z","event":"refused","reason":"key","net":"198.51.100.x"}
+```
+
+Every line has `t` (when) and `event`:
+
+| Event | When |
+| --- | --- |
+| `server.listening`, `server.stopped` | The server started answering, or stopped (`port`, `version`, `worlds`) |
+| `player.entered`, `player.left` | A player came into a world, or left it (`world`, `player`, `role`, `first`) |
+| `refused` | Something was refused (`reason`: `key`, `code`, `bad-request`..., and `world` where it was a world's) |
+| `key.issued`, `key.revoked`, `key.replaced`, `code.made`, `code.redeemed`, `codes.burned` | A world's keys and short codes (`keyId`, `codeId`, `by`, `count`) |
+| `player.banned`, `player.unbanned` | A ban, or one lifted (`world`, `player`, `by`) |
+| `listing.announced`, `listing.withdrawn` | A player's own world listed on the broker, or taken off it |
+| `world.life` | A world started loading, is running, went empty, is stopping or is stored (`life`) |
+| `world.save-failed`, `world.fell-behind` | A world's save didn't reach the disk (`count`), or it let time go (`ms`) |
+| `journal` | A line of the server's own journal (`text`): settings, creator keys, certificates, updates, archives |
+
+**No line ever carries a key, a short code, a ticket, a session, a token or a key's label, nor a
+whole address.** A key or code is named by its id (what the management page lists it by). An
+address is given as the network it's on (`net`: `203.0.113.x`, `2001:db8:85a3::x`), enough to see
+the same visitor trying again, not to find them. A line has only the fields in the table, and
+every sentence is scrubbed of anything shaped like a key, a token or an address before it's
+written. A player is named by their player id, as in the journals. A world's own journal (its
+saves and backups, who was sent out) isn't in the log yet: read it in Activity.
+
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
-where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the
-players were all in. Run it with nothing else on the computer: the players' copies of the world
+where it stood then), whether every minute's 99th-percentile step stayed under 50 ms once the
+players were all in, and whether the world kept its pace (it fails a world that played under 99%
+of its clock's time from then on, and says how much it let go). Run it with nothing else on the computer: the players' copies of the world
 share its cores (they're run at a lower priority, as if each were on a device of its own). Each
 minute it says how many are in the world's battle, how busy the world's thread was, and how many
 tiles of buildings' insides it baked ahead (a few as players come near new buildings, none once
@@ -545,6 +706,42 @@ they've stayed). On a 4-core Linux machine, with 8 players each in their own peo
 each starting a field battle every four minutes, the world took 136 MB an hour in and 130 MB at
 the end, its steps 4.4 ms on the mean and 30.4 ms at the worst minute's 99th percentile, its
 thread a fifth of a core.
+
+`--thin 25` adds 25 thin players to the soak (generated/multiplayer_scaling_plan.md 0-3). A thin
+player holds no copy of the world: it speaks what a game speaks on the play socket, reads only its
+welcome and what it's told of its own hero, and sends itself about from where it came in (or, with
+`--hold`, holds a stick: 16 commands a second). They all run in one process, so the world can be
+loaded with more players than the machine could play whole copies for, while the `--players` beside
+them still play theirs and say whether a copy keeps to the world. `--tunnel` brings every player in
+through the tunnel listener, so as the internet's.
+
+A world takes 8 players at the most by its own setting and the server's ceiling
+(`mostPlayersCeiling`), a server 64 in all its worlds (`playersAtOnce`) and 32 play sockets from
+one address (`server/access/limits.js`). The two settings only lower those: 8 and 64 are the most
+they can be set to (`CAPS` in `server/storage/settings.js`; `test/caps.test.js`). A soak with more
+opens its server with them raised, by `limits` among the options of `WorldServer.open`
+(`mostPlayers`, `players`, `socketsPerAddress`). They are options of that call alone: no setting,
+file or request raises them, so a server that's run as one (`npm run world-server`, the Mac app)
+never takes more.
+
+### How a world's played, and the replication switch
+
+Every world is played in **lockstep**: each player's game holds a copy of the whole world and
+plays the server's steps, which is why a world takes 8 at the most. That's a setting of the
+world's own now (**How it's played**, its `netcode`), with the one choice there is; it changes
+only while nobody's in the world (offline, or set aside), as its characters do. A game says which
+ways it can play when it asks to come in (`speaks`), and one that can't play a world's way is told
+so in words, with what to do (reload for the newest version), where it would otherwise have
+failed to understand what it was sent. A world can also be marked **Experimental**
+(`experimental`): its card says so in the game's lists, and nothing else changes.
+
+**Settings › Replicated views** (`replication`: off, dark or on) is the switch for the netcode
+being built for worlds of more than 8 (generated/multiplayer_scaling_plan.md). It's off, and
+today dark and on do nothing more than off does: there are no views yet to build or send. What
+off already means, and will go on meaning: a world set to be played any other way than lockstep
+lets nobody in, its save kept exactly as it is, until the switch is turned on again or the world
+is set back to lockstep. It's changed on the management page and takes effect at once, with no
+update and no restart. Neither setting raises how many a world takes.
 
 ## Crash reports
 
@@ -570,12 +767,92 @@ left as it is by a restore, gone when it's deleted; server/storage/crashes.js), 
   than 10 events, and 256 KB); six a minute from one address at most. The admin's are `GET` and
   `DELETE /api/v1/server/worlds/:id/crashes` (server/api.js).
 
+## Measured runs
+
+A game opened with `measure=<name>` in its link counts every frame for some minutes and makes a
+report of how the device kept up (docs/GAME.md, *Measuring a device*). In a world here, the game
+sends that report to the server as the run ends. Each world keeps the last twenty it's been sent,
+with the world (`measures.json` in its folder: backed up and archived with it, left as it is by a
+restore, gone when it's deleted; server/storage/measures.js), newest first. Nothing's kept of who
+sent one beyond what a crash report keeps: their player id here, the name they go by, and whether
+they came from home or the internet; the report says of the device what a debug log says (its
+browser, screen and cores). No game sends one unless its link asked for the run.
+
+- **Seeing them:** the management page alone: a world's **Measured runs** (on its card, or its
+  dialog's tab) lists each: when it began and when it came, who sent it, the run's name and how
+  long it was ("ended early" for one the browser cut short), and how it went in a line (the
+  frames' middle and 95th percentile, their work, a step of the world, the share of frames more
+  than 50 ms late, the most held), with the quality it was drawn at, the frames a second the
+  browser was asking for, how many were in the world, and what the run found of the device where
+  it could: **heat** (its frames' work in the last twelfth of the run over their work in the
+  second: 1 is no warmer) and whether **the graphics card** was the limit (the frames came quicker
+  for the twenty seconds it drew half the pixels) or not.
+- **Minutes** shows the run minute by minute: the frames, their interval (middle, 95 in 100,
+  worst), their work and a step (95 in 100), the frames over 50 ms, and the most held (MB).
+- **Copy all** and each run's **Copy** copy them as JSON (the world, who and when, and the whole
+  report: every phase's percentiles each minute, the histograms, every reading of what was held),
+  as crash reports are copied; **Clear** (asked first) lets them all go. The world's journal says
+  when one came in, and when they were cleared.
+- **A run cut short** (the phone closed the page for what it held, or the server couldn't be
+  reached as the run ended) isn't lost: the game keeps the report on the device every ten seconds,
+  and sends it, as far as it got, the next time that player's in the world.
+- **Sending one:** `POST /api/v1/worlds/:id/measures {report}` with a player's session in that
+  world: the report as the game makes it (a format number, a row for each minute, 31 rows and
+  64 KB at most; the game's own is under 48 KB for fifteen minutes); six a minute from one address
+  at most. The admin's are `GET` and `DELETE /api/v1/server/worlds/:id/measures` (server/api.js).
+
+### Measuring a phone
+
+The owner's own, by hand (generated/multiplayer_scaling_plan.md, `0-10` and `0-11`). For each
+table wanted (8 players spread, 8 in one town, each with and without a field battle):
+
+1. **The world:** on the Mac, a world running on the server with the other players in it, placed
+   as the table says. Make an invite link for it (the management page, the world's **Invite
+   players**).
+2. **The phone:** off the charger, out of its case, the screen at half brightness, Low Power Mode
+   off (a run at 30 frames a second, the report's `hz`, is thrown away). On plain `http://` (the
+   Wi-Fi address) the browser gives a page no wake lock, so set Auto-Lock to Never for the run;
+   from the server's `https://` address the game keeps the screen awake itself.
+3. **The link:** the invite link with `?measure=<name>&minutes=12` put in before its `#`, a name
+   for each table:
+   `http://<the Mac>:8480/?measure=iphone-8-spread&minutes=12#server=…&world=…&key=…`. Open it in
+   Safari on the phone and go into the world. The countdown starts at the top of the screen once
+   the game's under way ("Measuring iphone-8-spread: 12:00 left").
+4. **For twelve minutes, play:** walk and fight as the table says, and leave the game in front
+   the whole time (put away, the run stops, and goes on when it's back). Twice in the run, for the
+   twenty seconds up to 6:00 and up to 11:00, the picture's a little softer: the game's drawing
+   half the pixels, to tell whether it's the graphics card that holds the frames back. Play
+   through them.
+5. **What comes back:** the words turn to "Measured iphone-8-spread: sent to <the server>". On
+   the Mac, the management page (`http://localhost:8481`), **Worlds**, the world's **Measured
+   runs**: the run's row, its **Minutes**, and **Copy** for the whole report to paste into the
+   baseline. The plan's reading of it: green is a step's 95th percentile at 5 ms or under, the
+   frames' at 20 ms or under, fewer than 1 frame in 100 over 50 ms, heat 1.25 or under and 400 MB
+   or less held; amber is a step's 95th percentile at 12 ms or under; anything else is red.
+   If the words say it couldn't be sent, **Copy results** on the phone copies it (selected to
+   copy by hand, on plain `http://`), and it's sent anyway the next time the phone's in the world.
+
+**Where the phone gives up** (`0-10`, once in Safari and once from the Home Screen: Share, Add to
+Home Screen, from the link with `measure` in it, which the Home Screen app keeps). The phone
+cabled to the Mac; on the Mac, Console.app with the phone chosen and `jetsam` in its search, and
+Safari's Develop menu, the phone, the page's Web Inspector, Timelines, Memory. Open the link with
+`&minutes=30` and play into whatever holds most (a city, a field battle, a dungeon after it) until
+the page is closed and loaded again. Note what Console says of it (which process, its footprint
+and the limit it passed) and what the Memory timeline last showed. Then go back into the world
+(any link will do): the run cut short is sent as the phone comes in, and its **Copy** gives
+`held.mb`, the game's own count every two seconds to within ten seconds of the end. The game's
+count at the end against Console's footprint is the calibration the memory guard's marks
+(`MEMORY_GUARD.marks`, client/js/app/memoryguard.js) are reset from. On the Mac, for the same
+note: how many performance cores it has (`sysctl -n hw.perflevel0.physicalcpu`), and the quality
+of service the menu-bar app runs the server at (`sudo powermetrics --samplers tasks
+--show-process-qos -n 1`, the `node` row).
+
 ## When something's wrong
 
 | What | What to do |
 | --- | --- |
 | Players on the Wi-Fi can't reach it | macOS's firewall: allow "node" (System Settings › Network › Firewall). Use the address on the Overview, not `localhost` |
-| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Multiplayer, Known Servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does |
+| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Multiplayer, Known Servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does, and a game that has the update downloaded already when the server turns it away loads itself again at once, into it. In the game's list of a server's worlds, a world open to anyone on a server of another version stays tappable: it opens the game from the server itself |
 | It's not in the game's Nearby list | Bonjour is off, or macOS refused Local Network (the page says so). Add it by address |
 | "The data folder … is at version N, written by Pellagos server X" | A newer server wrote it. Use that version or later, or restore the backup made before the upgrade |
 | A world "can't be carried on" | None of its saves read, or it was saved by a version of the game older than this one can bring forward. Restore a backup, or **Start it afresh** (its Backups tab): its land made again from its seed, its war and heroes kept |

@@ -9,8 +9,8 @@
 import { STEP_MS } from "../client/js/core/battle.js";
 import { Host } from "../client/js/core/host.js";
 import { Hosting, Joining, PACE } from "../client/js/core/netplay.js";
-import { createRandom } from "../client/js/core/random.js";
 import { Forecast } from "../client/js/app/forecast.js";
+import { BadLink } from "./badlink.js";
 
 // (As app/game.js has them: how many steps a joined game runs on past the last it's had; and the
 // stick, as app/steering.js sends it: its turn, how often again, how far ahead)
@@ -34,29 +34,12 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
     host.join({ id: "host", hero: { name: "Host", shape: {}, look: {}, weapon: "sword", boots: false } });
     host.populate();
 
-    // The link
+    // The link (test/badlink.js: the forecast's is a phone's, each hold-up 300 ms)
     let now = 0;
-    const lanes = { up: [], down: [] };
-    const last = { up: 0, down: 0 };
-    const stalls = { up: [], down: [] };
-
-    for (const [lane, seed] of [["up", 17], ["down", 23]]) {
-        const random = createRandom(seed);
-
-        for (let at = 0; at < ms + 10000; at += 100) {
-            if (random.next() < stall * 2) {
-                stalls[lane].push([at, at + 300]);
-            }
-        }
-    }
-
-    const jittered = (lane, at) => createRandom((Math.floor(at / 25) * 2654435761 + (lane === "up" ? 7 : 11)) >>> 0).next();
+    const link = new BadLink({ rtt, jitter, stall: { chance: stall * 2, least: 300, most: 300 } });
     const send = (lane, text) => {
-        const held = stalls[lane].find(([from, to]) => now >= from && now < to);
-        const at = Math.max(last[lane], (held ? held[1] : now) + rtt / 2 + (jittered(lane, now) - 0.5) * jitter);
-
-        last[lane] = at;
-        lanes[lane].push({ at, text });
+        link.now = now;
+        link.send(lane, text);
     };
     const hosting = new Hosting(host, { send: (peer, text) => send("down", text) });
     const joining = new Joining({ send: (text) => send("up", text), clock: () => now });
@@ -66,12 +49,14 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
     joining.hello(character);
 
     const deliver = () => {
-        while (lanes.up.length && lanes.up[0].at <= now) {
-            hosting.hear("p1", lanes.up.shift().text);
+        link.now = now;
+
+        for (const text of link.take("up")) {
+            hosting.hear("p1", text);
         }
 
-        while (lanes.down.length && lanes.down[0].at <= now) {
-            joining.hear(lanes.down.shift().text);
+        for (const text of link.take("down")) {
+            joining.hear(text);
         }
     };
     const hostTick = () => {

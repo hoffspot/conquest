@@ -30,8 +30,13 @@
 //                          { type: "backup", why, id }             saved, then backed up
 //   worker -> supervisor   { type: "opened", from, forwarded, ms } / { type: "failed", name, message }
 //                          { type: "send", peer, text }            to a player's game
+//                          { type: "send", peers, text }           the same to several of them (what's
+//                                                                  been done, each step: one word for
+//                                                                  them all, not one each)
 //                          { type: "close", peer, reason }         sent out of the world (afk)
-//                          { type: "state", ... }                  how it is (report)
+//                          { type: "state", ... }                  how it is (report), with what it's
+//                                                                  counted of itself since it last said
+//                                                                  (`metrics`: world-metrics.js)
 //                          { type: "saved", id, ok } / "stopped"
 
 import { performance } from "node:perf_hooks";
@@ -41,13 +46,14 @@ import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
-import { RUNNER, StepTimes, WorldRunner } from "../client/js/core/runner.js";
+import { RUNNER, WorldRunner } from "../client/js/core/runner.js";
 import { decode } from "../client/js/core/wire.js";
 import { Ahead } from "./ahead.js";
 import { Keeper } from "./keeper.js";
 import { openWorld } from "./reopen.js";
 import { MOST_HEROES } from "./storage/heroes.js";
-import { StoredWorld } from "./storage/worlds.js";
+import { StoredWorld, WORLD_SETTINGS } from "./storage/worlds.js";
+import { WorldMetrics } from "./world-metrics.js";
 import { installWorkers } from "./workers.js";
 
 /**
@@ -71,6 +77,13 @@ const started = clock();
 const stored = await StoredWorld.open(workerData.folder);
 const kept = stored.meta.heroes === "kept";
 let settings = { ...stored.meta.settings };
+// The most players it takes at once: its world's setting, and no more than its server's ceiling
+// (as it stood when this thread was started: the server's own count of who's in holds whoever
+// comes to the ceiling as it stands now, api.js); unless its server was opened with another in
+// place of both (world-thread.js: only a soak's is)
+const mostPlayers = () => workerData.mostPlayers ?? Math.min(settings.mostPlayers, workerData.ceiling ?? Infinity);
+// How many it lets come in at once (its world's setting: a world kept before there was one, the default)
+const welcomes = () => settings.welcomes ?? WORLD_SETTINGS.welcomes.default;
 let opened;
 
 try {
@@ -103,9 +116,15 @@ await Promise.all(saving);
 const runner = new WorldRunner(host, { clock });
 const keeper = new Keeper(runner, stored);
 const ahead = new Ahead(host.world, { host, clock });
-const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), clock });
+const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", peer, text }), sendAll: (sent, text) => post({ type: "send", peers: sent, text }), clock });
 
 runner.hosting = hosting;
+
+// What the thread counts of itself (world-metrics.js): each look at the world and its parts, its
+// saves, what it hears, its event loop's delay and its collections
+const metrics = new WorldMetrics();
+
+keeper.onSave = (ms, ok) => metrics.saved(ms, ok);
 
 /** Those who've come in, by peer: { player, role, slot, linked, ready, hidden, held, everyone, since, character }. */
 const peers = new Map();
@@ -113,7 +132,12 @@ const peers = new Map();
 // Heroes being kept, one after another
 let keeping = Promise.resolve();
 
-hosting.most = settings.mostPlayers;
+hosting.most = mostPlayers();
+// (Taking the world for its players held to a share of the thread, and never in a turn's step:
+// core/netplay.js WORLDS)
+hosting.sparing = true;
+// (Only so many coming in at once, each sent the whole world: the rest wait their turn)
+hosting.welcomes = welcomes();
 // (Each known by the player their ticket proves, theirs taken over only under the same id: never
 // another player's by a copy of their character)
 hosting.byCharacter = false;
@@ -124,6 +148,19 @@ hosting.idOf = (peer) => {
     return kept ? heroId(one.player, one.slot) : one.player;
 };
 hosting.characterOf = (peer) => peers.get(peer)?.character ?? null;
+// (One let in, in their turn: how long they take loading counted from now; and the world looked
+// at once it's been sent, in tick or as their hello's heard)
+let came = false;
+
+hosting.onJoin = (id, peer) => {
+    const one = peers.get(peer);
+
+    if (one) {
+        one.since = clock();
+    }
+
+    came = true;
+};
 hosting.onReady = (peer) => {
     peers.get(peer).ready = true;
     look();
@@ -264,6 +301,8 @@ async function heard(peer, text) {
         return;
     }
 
+    metrics.heard(message?.kind);
+
     if (message?.kind !== "hello") {
         hosting.hear(peer, text);
 
@@ -283,10 +322,11 @@ async function heard(peer, text) {
         await stored.journal(`Couldn't bring a hero in for ${one.player}: ${error.message}`).catch(() => {});
     }
 
-    // (Still here: in, if their hero's found; else refused, "character")
+    // (Still here: in, if their hero's found, now or in their turn; else refused, "character")
     if (peers.get(peer) === one) {
         hosting.hear(peer, text);
         one.since = clock();
+        came = false;
         look();
     }
 }
@@ -300,9 +340,10 @@ let reported = 0;
 
 // How long each look at the world took, all of it (ms: its steps, what's sent of them, a save
 // begun on a turn of the war, what's made ahead): what a player waits on is the whole of it, not
-// the step alone. And the time the world was given and let go of, as it was at the last report
-// and at the last word of it in the journal
-const ticks = new StepTimes();
+// the step alone (kept with what else the thread counts of itself: world-metrics.js). And the time
+// the world was given and let go of, as it was at the last report and at the last word of it in
+// the journal
+const { ticks } = metrics;
 const behind = { reported: { time: 0, dropped: 0 }, told: -Infinity, untold: 0 };
 
 // Who's present (in, linked, loaded, or loading too long to wait on), whether the world's clock
@@ -345,6 +386,8 @@ function report() {
         return { peer, player, slot, id, name: playing?.hero?.name ?? null, race: playing?.hero?.race ?? null, away: Boolean(playing?.away), linked, ready, hidden };
     });
     const memory = process.memoryUsage();
+    const cpu = process.threadCpuUsage?.() ?? null;
+    const made = { chunks: ahead.made, rooms: ahead.rooms };
 
     post({
         type: "state",
@@ -366,10 +409,12 @@ function report() {
         memory: { heap: memory.heapUsed, external: memory.external },
         // (The CPU time this thread has had, µs, user and system: how busy it is, apart from the
         // rest of the machine)
-        cpu: process.threadCpuUsage?.() ?? null,
+        cpu,
         actors: host.battle.actors.length,
         // (What's been made ahead between steps: chunks, and tiles of buildings' insides)
-        made: { chunks: ahead.made, rooms: ahead.rooms },
+        made,
+        // (What it's counted of itself since it last said: the supervisor adds it up, server-metrics.js)
+        metrics: metrics.take({ steps: runner.times, dropped: runner.dropped, cpu, made }),
     });
     behind.reported = { time: runner.time, dropped: runner.dropped };
 }
@@ -389,10 +434,22 @@ function tick() {
     }
 
     last = now;
+
+    // (Whoever's waiting to come in let in, if there's room now: with its steps, if it's going;
+    // and if anyone came, who's present looked at again)
+    hosting.admit();
+
+    if (came) {
+        came = false;
+        look();
+    }
+
+    const stepped = clock();
+
     runner.bakeAhead(ahead);
 
     if (running) {
-        ticks.add(clock() - now, host.battle.time);
+        metrics.tick(stepped - now, clock() - stepped, host.battle.time);
     }
 
     if (now - reported > WORKER.report) {
@@ -457,7 +514,8 @@ parentPort.on("message", async (message) => {
             Object.assign(stored.meta, rest);
             stored.meta.settings = { ...stored.meta.settings, ...changed };
             settings = { ...settings, ...changed };
-            hosting.most = settings.mostPlayers;
+            hosting.most = mostPlayers();
+            hosting.welcomes = welcomes();
             look();
             break;
         }
@@ -484,6 +542,9 @@ parentPort.on("message", async (message) => {
             await keeping;
             await keeper.save(message.why ?? "set aside");
             ahead.dispose();
+            // (What it's counted since it last said, its last saves among it, told before it ends)
+            report();
+            metrics.stop();
             post({ type: "stopped", id: message.id, ok: !keeper.failed });
             break;
         default:

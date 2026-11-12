@@ -2,6 +2,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { FRAME, Meter } from "../client/js/app/measure.js";
+import { PHASES } from "../client/js/app/telemetry.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
 import { WorldServer } from "../server/world-server.js";
 import { expect, test } from "./fixtures.js";
@@ -11,8 +13,9 @@ import { expect, test } from "./fixtures.js";
 // hand and restored, a player's lost ticket reissued (the old one no longer works, the new one
 // does), exported, deleted with its name typed, and brought in again from its export. And from
 // the Wi-Fi, the page asks for the admin key first. And a world's crash reports, as its players'
-// games sent them: shown, copied and cleared. And its Updates: a newer version found, with its
-// notes, and the commands that update a server run from a copy of the repository. And its
+// games sent them: shown, copied and cleared; and its measured runs, the same, with their minutes
+// as a table. And its Updates: a newer version found, with its notes, and the commands that update
+// a server run from a copy of the repository. And its
 // Archive: the whole server archived, the archive opened, and its worlds brought in as new ones.
 
 test.describe.configure({ mode: "default" });
@@ -324,6 +327,88 @@ test("a world's crash reports: those its players' games sent, the newest first, 
     await expect(rows).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Copy all" })).toBeDisabled();
     expect(await server.worlds.get(made.world).crashes.list()).toEqual([]);
+    await page.locator("#worldclose").click();
+    expect(errors).toEqual([]);
+});
+
+test("a world's measured runs: one a player's game sent, read by the admin with its minutes as a table, copied and cleared", async ({ page }) => {
+    const errors = [];
+
+    page.on("pageerror", (error) => errors.push(error.message));
+
+    // (A run's report as the game makes it, client/js/app/measure.js: a minute and a half of
+    // frames at 60 a second, one in fifty late, sent by a player in the world as the game sends it)
+    const made = await server.createWorld({ name: "Marrowdene", seed: 9, race: "human" });
+    const entered = await enter({ world: made.world, key: made.playerKey });
+    const meter = new Meter({ minutes: 1.5 });
+
+    for (let n = 0; !meter.done; n++) {
+        meter.frame[FRAME.interval] = n % 50 ? 1000 / 60 : 70;
+        meter.frame[FRAME.work] = 9;
+        PHASES.forEach((name, k) => (meter.frame[FRAME.phases + k] = 1 + k / 4));
+        meter.observe(n % 3 ? 0 : 1, 180);
+
+        if (n % 120 === 0) {
+            meter.memory(310 + (n % 7));
+        }
+    }
+
+    const report = meter.report({ name: "kitchen-table", began: "2026-11-12T09:00:00.000Z", code: "abc1234567", build: "b1", quality: "high", hz: 60, world: { map: "town", players: 8 }, device: { agent: "test" } });
+    const sent = await fetch(`http://127.0.0.1:${server.port}/api/v1/worlds/${made.world}/measures`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${entered.json.session}` }, body: JSON.stringify({ report }) });
+
+    expect(sent.status).toBe(200);
+
+    // The world's Measured runs: the run, who sent it, how long it was and how it went
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="worlds"]').click();
+    await page.locator("#worlds .card", { hasText: "Marrowdene" }).getByRole("button", { name: "Measured runs" }).click();
+
+    const dialog = page.locator("#world");
+    const rows = dialog.locator("tbody tr[data-measure]");
+
+    await expect(dialog.locator('[data-world-tab="measures"]')).toHaveAttribute("aria-current", "page");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("kitchen-table");
+    await expect(rows.first()).toContainText("1:30");
+    await expect(rows.first()).toContainText(entered.json.player);
+    await expect(rows.first()).toContainText("abc1234567");
+    await expect(rows.first()).toContainText(`Frames ${report.total.interval.p50} ms (95 in 100 within ${report.total.interval.p95} ms)`);
+    await expect(rows.first()).toContainText(`${Math.round((report.over[50] / report.frames) * 1000) / 10}% over 50 ms; held 316 MB`);
+    await expect(rows.first()).toContainText(`drawn at high; 60 frames a second asked for; 8 in the world; heat ${report.heat}`);
+    expect(report.heat).toBe(1);
+    expect(report.gpuBound).toBe(null);
+
+    // Its minutes, a row each: the whole one, and the half
+    await rows.first().getByRole("button", { name: "Minutes" }).click();
+
+    const minutes = dialog.locator("[data-measure-rows] tbody tr");
+
+    await expect(minutes).toHaveCount(2);
+    await expect(minutes.first().locator("td")).toHaveText(["1", String(report.rows[0].frames), String(report.rows[0].interval[0]), String(report.rows[0].interval[1]), "70", String(report.rows[0].work[1]), String(report.rows[0].perStep[1]), String(report.rows[0].over[1]), "316"]);
+    await expect(minutes.last().locator("td").first()).toHaveText("2 (30 s)");
+
+    // Copied: the report as it was sent, with who sent it and which world
+    await page.evaluate(() => Object.defineProperty(navigator.clipboard, "writeText", { value: async (text) => (window.copied = text) }));
+    await rows.first().getByRole("button", { name: "Copy" }).click();
+    await expect(dialog.locator(".warning")).toHaveText("Copied.");
+
+    const one = JSON.parse(await page.evaluate(() => window.copied));
+
+    expect(one.world).toEqual({ id: made.world, name: "Marrowdene" });
+    expect(one).toMatchObject({ player: entered.json.player, from: "home", run: "kitchen-table", minutes: 1.5, seconds: 90, done: true, code: "abc1234567" });
+    expect(one.report).toEqual(report);
+
+    await dialog.getByRole("button", { name: "Copy all" }).click();
+    await expect(dialog.locator(".warning")).toHaveText("Copied the run.");
+    expect(JSON.parse(await page.evaluate(() => window.copied)).runs.map(({ run }) => run)).toEqual(["kitchen-table"]);
+
+    // Cleared, asked first: none, here and on the server
+    await dialog.getByRole("button", { name: "Clear" }).click();
+    await expect(page.locator("#confirmtitle")).toHaveText("Clear Marrowdene's measured runs");
+    await page.locator("#confirmgo").click();
+    await expect(dialog).toContainText("None: no game has been measured in it.");
+    await expect(rows).toHaveCount(0);
+    expect(await server.worlds.get(made.world).measures.list()).toEqual([]);
     await page.locator("#worldclose").click();
     expect(errors).toEqual([]);
 });

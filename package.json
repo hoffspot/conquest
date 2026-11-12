@@ -20,6 +20,7 @@
     "check:motion": "node scripts/motion-check.js",
     "balance": "node scripts/balance.js",
     "step-budget": "node scripts/step-budget.js",
+    "load": "node scripts/load.js",
     "soak": "node scripts/soak.js",
     "soak:server": "node scripts/server-soak.js",
     "snapshot-fixture": "node scripts/snapshot-fixture.js",

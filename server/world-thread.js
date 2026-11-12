@@ -16,8 +16,12 @@ export class WorldThread {
      * @param {function} [hooks.onClose] - A player it's sent out (peer, reason).
      * @param {function} [hooks.onState] - How it is, as it reports it (state).
      * @param {function} [hooks.onExit] - Its thread ended (code, error: if it failed).
+     * @param {object} [limits] - What bounds how many it takes at once beside its world's own
+     *     setting: { ceiling } (the server's, its mostPlayersCeiling setting: no more than that,
+     *     whatever the world's says), and { mostPlayers }, taken in place of both, from a server
+     *     opened with one (world-server.js open's `limits`); none, on any server that's run as one.
      */
-    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onExit = () => {} } = {}) {
+    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onExit = () => {} } = {}, { mostPlayers = null, ceiling = null } = {}) {
         this.stored = stored;
         this.id = stored.id;
         Object.assign(this, { onSend, onClose, onState, onExit });
@@ -33,7 +37,7 @@ export class WorldThread {
         });
         this.opened.catch(() => {});
 
-        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder } });
+        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder, ...(mostPlayers ? { mostPlayers } : {}), ...(ceiling ? { ceiling } : {}) } });
         this.thread.on("message", (message) => this.#heard(message));
         this.thread.on("error", (error) => {
             this.error = error;
@@ -65,7 +69,11 @@ export class WorldThread {
                 break;
             }
             case "send":
-                this.onSend(message.peer, message.text);
+                // (To one player's game; or the same to several, told of in one word)
+                for (const peer of message.peers ?? [message.peer]) {
+                    this.onSend(peer, message.text);
+                }
+
                 break;
             case "close":
                 this.onClose(message.peer, message.reason);

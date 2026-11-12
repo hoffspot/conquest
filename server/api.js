@@ -14,7 +14,10 @@
 //          player?}                         /status lists it), player, identity, heroes, life,
 //                                           position }; an open world's with no key at all (by its
 //                                           door: access/world.js); `player`, their own identity's
-//                                           proof (client/js/core/player.js), known by it from then on
+//                                           proof (client/js/core/player.js), known by it from then on;
+//                                           `net`, the game's NET_VERSION, and `speaks`, the netcodes it
+//                                           can play (core/netplay.js SPEAKS: lockstep alone, unsaid):
+//                                           refused "version" or "netcode" if the world's is another
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key; or, the server's
@@ -35,6 +38,10 @@
 //   POST   /worlds/:id/crashes {report}     a crash report: the game's debug log as it fell over in the
 //                                           world, sent by a player in it (their session) as they come
 //                                           back in (manage.js addCrash; up to CRASHES.bytes): { id, received }
+//   POST   /worlds/:id/measures {report}    a measured run: the report of one a link's ?measure= asked for
+//                                           (client/js/app/measure.js), sent by a player in the world (their
+//                                           session) as it ends (manage.js addMeasure; up to MEASURES.bytes):
+//                                           { id, received }
 //
 // A world's owner's (or the admin's) management of it (manage.js), the management page's:
 //
@@ -63,7 +70,9 @@
 //   PATCH  /server {settings}               settings changed
 //   GET    /server/worlds                   every world, as GET /worlds/:id
 //   GET, DELETE /server/worlds/:id/crashes   the crash reports a world keeps (its last CRASHES.kept), and cleared
+//   GET, DELETE /server/worlds/:id/measures  the measured runs a world keeps (its last MEASURES.kept), and cleared
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
+//   GET    /server/history/day, /week       how it's been keeping up: what Health charts
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
 //   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
 //   GET    /server/certificate/acme         what a free certificate needs: routes, DNS hosts, the CA's terms
@@ -84,7 +93,7 @@
 // computer's own listener (admin.js), it's the server's admin.
 
 import { randomInt } from "node:crypto";
-import { NET_VERSION } from "../client/js/core/netplay.js";
+import { NETCODES, NET_VERSION, speaksOf } from "../client/js/core/netplay.js";
 import { playerOfProof, PROOF_MINUTES } from "../client/js/core/player.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { plainAddress } from "./access/addresses.js";
@@ -95,17 +104,19 @@ import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./
 import { ARCHIVE_LIMIT, BRING_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { CRASHES } from "./storage/crashes.js";
+import { MEASURES } from "./storage/measures.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
-import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
+import { isOffline, netcodeOf, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
 
-/** How many times a minute one address may ask for the server's card, report how reaching it went, and send crash reports. */
+/** How many times a minute one address may ask for the server's card, report how reaching it went, and send crash reports and measured runs. */
 export const STATUS_PER_MINUTE = 60;
 export const REPORTS_PER_MINUTE = 6;
 export const CRASHES_PER_MINUTE = 6;
+export const MEASURES_PER_MINUTE = 6;
 
 /** How many worlds one address may make an hour with no creator key (the server's anyoneMakes setting). */
 export const MADE_PER_HOUR = 3;
@@ -122,7 +133,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
+const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, netcode: 409, replication: 409, code: 401, wait: 429, busy: 429, maker: 403, unproved: 401, "made-each": 409, "made-most": 409 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -151,6 +162,7 @@ export function apiHandler(server, { mac = false } = {}) {
     const status = new Rate(STATUS_PER_MINUTE);
     const reports = new Rate(REPORTS_PER_MINUTE);
     const crashes = new Rate(CRASHES_PER_MINUTE);
+    const measures = new Rate(MEASURES_PER_MINUTE);
     const made = new Rate(MADE_PER_HOUR, { per: 3600000 });
 
     // A player's own identity, from the proof they showed coming into a world ({ id, name }:
@@ -237,7 +249,8 @@ export function apiHandler(server, { mac = false } = {}) {
     // A world's card, as a listing shows it: its name, home people, what it does with its players'
     // characters (`characters`: storage/worlds.js CHARACTER_RULES; and, as the game once read them,
     // its heroes mode and first-hero rule), players in it now, whether it's open to anyone or needs
-    // a key, and whether it's offline
+    // a key, whether it's offline, how it's played (`netcode`: storage/worlds.js netcodeOf) and
+    // whether it's marked experimental
     const cardOf = (id) => {
         const meta = server.metaOf(id);
         const { life, state } = registry.lifeOf(id);
@@ -250,11 +263,14 @@ export function apiHandler(server, { mac = false } = {}) {
             heroes: meta.heroes,
             firstHero: meta.firstHero,
             characters: ruleOf(meta),
-            most: meta.settings.mostPlayers,
+            // (Its own setting, and no more than the server lets a world take)
+            most: server.mostPlayersOf(meta),
             players: state?.players.filter((one) => one.id).length ?? 0,
             life,
             open: meta.settings.open === true,
             offline: isOffline(meta),
+            netcode: netcodeOf(meta),
+            experimental: meta.settings.experimental === true,
         };
     };
 
@@ -273,11 +289,24 @@ export function apiHandler(server, { mac = false } = {}) {
             throw refuse("version", { message: "That server plays another version of the game than yours: open the game from the server itself.", net: NET_VERSION, version: SERVER_VERSION });
         }
 
+        // (A game that can't play the world the way it's played: one that doesn't say what it speaks
+        // speaks lockstep alone. The words are for a game older than the reason)
+        if (!speaksOf(body.speaks).includes(netcodeOf(meta))) {
+            throw refuse("netcode", { message: "That world's played in a way your version of the game can't join: reload the game for the newest version, or open it from the server itself.", netcode: netcodeOf(meta) });
+        }
+
+        // (The kill switch: a world not played in lockstep lets nobody in while the server's
+        // replication is off, its save kept as it is; nor one played a way this server doesn't
+        // know, a newer server's)
+        if (netcodeOf(meta) !== "lockstep" && (server.settings.get("replication") === "off" || !NETCODES.includes(netcodeOf(meta)))) {
+            throw refuse("replication", { message: "That world's way of playing is turned off on its server for now. It's saved: try again later, or ask the server's owner.", netcode: netcodeOf(meta) });
+        }
+
         const { state } = registry.lifeOf(world);
         // (Their own in it now, on another device or a link gone dead, theirs to take over: not counted)
         const others = state?.players.filter((one) => one.id && one.player !== principal.player?.id) ?? [];
 
-        if (others.length >= meta.settings.mostPlayers) {
+        if (others.length >= (server.limits?.mostPlayers ?? server.mostPlayersOf(meta))) {
             throw refuse("full", { message: "That world's full." });
         }
 
@@ -362,6 +391,8 @@ export function apiHandler(server, { mac = false } = {}) {
                     publicKey: server.identity.publicKey,
                     version: SERVER_VERSION,
                     net: NET_VERSION,
+                    // (The most players a world here may take at once: what a game offers one making a world)
+                    mostPlayers: server.mostPlayersCeiling,
                     play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL },
                     broker: server.broker && server.settings.get("broker") !== false ? { path: BROKER_PATH, protocol: BROKER_PROTOCOL, relaying: server.settings.get("relaying") !== false } : null,
                     // (Players may make worlds here with no creator key: each this many, and how many more in all)
@@ -539,6 +570,24 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.addCrash(world, body.report, { player: principal.player.id, name: principal.player.playerName ?? null, from: request.from }));
         }],
+        // (A measured run, from a player's game in the world as the run its link asked for ends: up to MEASURES.bytes)
+        ["POST", new RegExp(`^/worlds/${WORLD}/measures$`), { game: true, body: MEASURES.bytes }, async (request, body, [, world]) => {
+            if (!server.metaOf(world)) {
+                throw refuse("no-world");
+            }
+
+            if (!measures.allow(request.address)) {
+                throw refuse("wait", { message: "Sent too often: wait a moment." });
+            }
+
+            const principal = principalOf(request, { world });
+
+            if (principal.kind !== "player" || principal.world !== world || !principal.player) {
+                throw refuse(principal.why ?? "key");
+            }
+
+            return doing(() => manage.addMeasure(world, body.report, { player: principal.player.id, name: principal.player.playerName ?? null, from: request.from }));
+        }],
         ["POST", /^\/worlds\/([a-z0-9]{10})\/codes$/, async (request, body, [, world]) => {
             const principal = managing(request, world, "key.issue", { role: access.world(world)?.key(body.key)?.role });
             const made = await access.makeCode(world, { key: body.key, minutes: body.minutes, uses: body.uses }, { by: principal.player?.id ?? "the admin" });
@@ -680,7 +729,8 @@ export function apiHandler(server, { mac = false } = {}) {
                 overview: { ...manage.overview(), adminKey: request.from === "mac" ? (server.adminKey ?? null) : null, mac: request.from === "mac" },
                 settings: manage.settings(),
                 schema: SETTINGS,
-                worldSchema: WORLD_SETTINGS,
+                // (A world's settings as this server takes them: no more players than its ceiling)
+                worldSchema: { ...WORLD_SETTINGS, mostPlayers: { ...WORLD_SETTINGS.mostPlayers, max: server.mostPlayersCeiling, default: Math.min(WORLD_SETTINGS.mostPlayers.default, server.mostPlayersCeiling) } },
                 peoples: Object.entries(RACE).map(([id, { name }]) => ({ id, name })),
             };
         }],
@@ -704,6 +754,16 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.clearCrashes(world, { by: byOf(principal) }));
         }],
+        ["GET", new RegExp(`^/server/worlds/${WORLD}/measures$`), { server: true }, async (request, body, [, world]) => {
+            admin(request);
+
+            return { measures: await doing(() => manage.measures(world)) };
+        }],
+        ["DELETE", new RegExp(`^/server/worlds/${WORLD}/measures$`), { server: true }, async (request, body, [, world]) => {
+            const principal = admin(request);
+
+            return doing(() => manage.clearMeasures(world, { by: byOf(principal) }));
+        }],
         ["GET", /^\/server\/journal$/, { server: true }, async (request) => {
             admin(request);
 
@@ -713,6 +773,11 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return manage.health();
+        }],
+        ["GET", /^\/server\/history\/(day|week)$/, { server: true }, async (request, body, [, span]) => {
+            admin(request);
+
+            return manage.history(span);
         }],
         ["GET", /^\/server\/creators$/, { server: true }, async (request) => {
             admin(request);

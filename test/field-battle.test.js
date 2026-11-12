@@ -195,6 +195,44 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(types("seen") > 0, "the unseen one is seen through");
     });
 
+    it("brings the index up to date by moving those who've changed cell, and plays out exactly as making it afresh every time does", async () => {
+        const { install, Probes, uninstall } = await import("../client/js/core/probe.js");
+        const counted = (play) => {
+            let ticks = 0;
+            const probes = install(new Probes({ clock: () => ticks++ }));
+
+            try {
+                return { ...play(), counts: probes.toJSON().counts };
+            } finally {
+                uninstall();
+            }
+        };
+
+        for (const play of [fight, melee]) {
+            const moved = counted(play);
+
+            Battle.reindexing = false;
+
+            try {
+                const afresh = counted(play);
+
+                assert.equal(moved.hash, afresh.hash);
+
+                // (Afresh, it was made at least once every step, over everyone; brought up to
+                // date, only as someone came, went or fell out of the roster, and the rest of
+                // the time those who'd crossed into another cell were moved)
+                const steps = 30000 / STEP_MS;
+
+                assert.ok(afresh.counts["battle.indexed"] >= steps && !afresh.counts["battle.reindexed"], `${afresh.counts["battle.indexed"]} made afresh`);
+                assert.ok(moved.counts["battle.indexed"] < steps / 4, `${moved.counts["battle.indexed"]} made afresh of ${steps} steps`);
+                assert.ok(moved.counts["battle.indexed"] + moved.counts["battle.reindexed"] === afresh.counts["battle.indexed"], "brought up to date exactly when it was made afresh before");
+                assert.ok(moved.counts["battle.reindexedMoves"] > 50 && moved.counts["battle.reindexedMoves"] < moved.counts["battle.reindexed"] * 4, `${moved.counts["battle.reindexedMoves"]} moved to another cell in ${moved.counts["battle.reindexed"]} times`);
+            } finally {
+                Battle.reindexing = true;
+            }
+        }
+    });
+
     it("finds everyone by id as they come and go, and after it's carried on from a snapshot", () => {
         const { host } = outOfTown();
         const battle = host.battle;

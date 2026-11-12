@@ -43,8 +43,10 @@ export const RESTORING = "restoring";
 // (Written last of all there: an archive staged whole, not one cut short)
 const STAGED = ".staged.json";
 
-// What's left out: the backups, the versions updates installed, an archive being restored; and a DNS host's token
-const LEFT_OUT = new Set([BACKUPS, VERSIONS, RESTORING]);
+// What's left out: the backups, the versions updates installed, an archive being restored, the
+// charts' history (server/history.js HISTORY_FILE: how this machine's been running, not its
+// worlds; a restore leaves it where it is); and a DNS host's token
+const LEFT_OUT = new Set([BACKUPS, VERSIONS, RESTORING, "history.json.gz"]);
 const SECRET = new Set(["certificates/tokens.json"]);
 
 // A path in the data folder, as an archive names it: plain names, "/" between them, never "." or ".."

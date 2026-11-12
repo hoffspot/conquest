@@ -15,12 +15,20 @@
 //
 // It serves the management page (client/admin.html) at /, the game's own files it needs, and
 // /api/v1 (api.js) as the server's admin.
+//
+// And the server's metrics at METRICS_PATH (server-metrics.js), as Prometheus's text format, to
+// whatever scrapes them on the computer itself (or through an SSH tunnel to it): read-only, so it
+// asks for neither the header nor the cookie, which a scraper has no page to get; but from
+// loopback alone, by one of the listener's own names, and to no other site's page, as the rest.
+// It's on this listener and no other: the play port, which the Wi-Fi, the internet and a tunnel
+// reach, has no such route.
 
 import { randomBytes } from "node:crypto";
 import http from "node:http";
 import { plainAddress } from "./access/addresses.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { answer, LIMITS_HTTP, Refusal, urlOf } from "./guards.js";
+import { TEXT_TYPE } from "./metrics.js";
 
 /** The header every management call carries, and what it says. */
 export const ADMIN_HEADER = "x-pellagos";
@@ -31,6 +39,9 @@ export const ADMIN_COOKIE = "pellagos-admin";
 
 /** The management page, among the game's files. */
 export const ADMIN_PAGE = "/admin.html";
+
+/** Where the server's metrics are read, on this listener alone. */
+export const METRICS_PATH = "/metrics";
 
 /** The names the computer's own listener answers to on `port` (as a Host header carries them). */
 export function adminHostsOf(port) {
@@ -88,6 +99,25 @@ export async function listenAdmin(server, port) {
                 }
 
                 api(request, response);
+
+                return;
+            }
+
+            // (Its metrics, to a scraper on the computer: read, never changed)
+            if (pathname === METRICS_PATH) {
+                if (request.method !== "GET" && request.method !== "HEAD") {
+                    throw new Refusal(405, "method", "The metrics are only read.");
+                }
+
+                // (A browser says where a request comes from: never for another site's page, even one that sends no Origin)
+                if (!["same-origin", "none", undefined].includes(request.headers["sec-fetch-site"])) {
+                    throw new Refusal(403, "origin", "Pages from there may not read the server's metrics.");
+                }
+
+                const text = Buffer.from(server.metrics.registry.text(), "utf8");
+
+                response.writeHead(200, { "Content-Type": TEXT_TYPE, "Content-Length": text.length, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+                response.end(request.method === "HEAD" ? undefined : text);
 
                 return;
             }

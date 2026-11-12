@@ -11,7 +11,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Hosting, Joining } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { RUNNER, StepTimes, WorldRunner } from "../client/js/core/runner.js";
+import { RUNNER, StepTimes, TIME_BUCKETS, TimeBuckets, WorldRunner } from "../client/js/core/runner.js";
 import { TURN_MS } from "../client/js/core/war/war.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -202,6 +202,47 @@ describe("the world runner (core/runner.js)", () => {
         assert.equal(times.percentile(0.99), 1);
         assert.equal(times.worst, 50);
         assert.equal(times.count, 6);
+    });
+
+    it("counts every step's time into fixed buckets too, one on a bound in that bound's, and says how many more since it was last asked", () => {
+        const times = new StepTimes(4);
+        const at = (ms) => TIME_BUCKETS.findIndex((bound) => ms <= bound);
+
+        assert.ok(TIME_BUCKETS.includes(STEP_MS), "a step is one of the bounds: over it is late");
+        assert.ok(TIME_BUCKETS.every((bound, k) => k === 0 || bound > TIME_BUCKETS[k - 1]));
+
+        for (const ms of [0.2, 0.5, 3, 50, 50.1, 5000]) {
+            times.add(ms, 0);
+        }
+
+        const { counts, sum } = times.buckets;
+
+        assert.equal(counts.length, TIME_BUCKETS.length + 1);
+        assert.equal(counts[at(0.5)], 2);
+        assert.equal(counts[at(3)], 1);
+        assert.equal(counts[at(50)], 1);
+        assert.equal(counts[at(75)], 1);
+        assert.equal(counts.at(-1), 1, "one over every bound is counted after them all");
+        assert.equal(counts.reduce((total, count) => total + count, 0), times.count, "every step's counted, not the last few alone");
+        assert.ok(Math.abs(sum - times.total) < 1e-9);
+
+        // (What's been counted since it was last asked, for whoever adds it up elsewhere)
+        const first = times.buckets.take();
+
+        assert.deepEqual(first.counts, counts);
+        assert.ok(Math.abs(first.sum - sum) < 1e-9);
+        times.add(3, 0);
+        times.add(4, 0);
+
+        const second = times.buckets.take();
+
+        assert.equal(second.counts[at(3)], 2);
+        assert.equal(second.counts.reduce((total, count) => total + count, 0), 2);
+        assert.equal(second.sum, 7);
+        assert.deepEqual(times.buckets.take(), { counts: new Array(TIME_BUCKETS.length + 1).fill(0), sum: 0 });
+        assert.deepEqual(new TimeBuckets([1, 2]).toJSON(), { bounds: [1, 2], counts: [0, 0, 0], sum: 0 });
+        // (Its summary is as it was: what reads it, the Health page and the soak, needn't change)
+        assert.deepEqual(Object.keys(times.toJSON()), ["count", "mean", "p99", "worst", "worstAt"]);
     });
 
     it("asks for the navigation round each player out in the world, again once they've gone far enough, and sends the next tile off", () => {

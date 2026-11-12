@@ -54,7 +54,10 @@ function split(text) {
  * halves). `server` gives what it needs: { access, registry, identity, and what guards.js asks,
  * metaOf(world) (its world.json, or null) }. `others`: the paths other sockets on the same servers
  * answer (the broker's), left to them. Returns { places, close(), closeWhere(test, reason),
- * send(world, peer, text), kicked(world, peer, reason) }.
+ * send(world, peer, text), kicked(world, peer, reason) }, and what it counts for the server's
+ * metrics (server-metrics.js reads them when it's asked): `sockets` (those open), `closed` (how
+ * many it's sent out or refused, by why) and `traffic` (by world: { messages, bytes, wire } sent
+ * to its players' games, as each socket counts them, and `received`, bytes heard from them).
  */
 export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = Date.now, others = [] } = {}) {
     const { registry, identity } = server;
@@ -63,12 +66,27 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     /** Those in a world, by `${world} ${peer}`: { world, peer, player, role, via, socket, token, address, from ("home" or "internet"), away }. */
     const places = new Map();
     const sockets = new Set();
-    const perAddress = new Counts(LIMITS.socketsPerAddress);
+    // (A server opened with limits of its own in place of these, world-server.js: only a soak's is)
+    const perAddress = new Counts(server.limits?.socketsPerAddress ?? LIMITS.socketsPerAddress);
     const perTicket = new Counts(LIMITS.socketsPerTicket);
     const rate = new Rate(LIMITS.commands, { clock });
+    const closed = new Map();
+    const traffic = new Map();
     let next = 1;
 
     const placeKey = (world, peer) => `${world} ${peer}`;
+
+    // A world's traffic so far (made at nothing, the first time)
+    const trafficOf = (world) => {
+        let counted = traffic.get(world);
+
+        if (!counted) {
+            counted = { messages: 0, bytes: 0, wire: 0, received: 0 };
+            traffic.set(world, counted);
+        }
+
+        return counted;
+    };
 
     // Out of the world for good: the world told, the place let go
     const leave = (place) => {
@@ -87,6 +105,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
     // Sent out (or refused), saying why
     const shut = (socket, reason) => {
+        closed.set(reason, (closed.get(reason) ?? 0) + 1);
         socket.send(`closed ${reason}`);
         socket.close(1000);
     };
@@ -95,11 +114,14 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     const playing = (place) => {
         const { socket } = place;
         const thread = registry.entries.get(place.world)?.thread;
+        const counted = trafficOf(place.world);
 
         socket.onMessage = (text) => {
             const [line, rest] = split(text);
 
             if (line === "data") {
+                counted.received += Buffer.byteLength(text);
+
                 if (rate.allow(place)) {
                     thread?.data(place.peer, rest);
                 }
@@ -148,7 +170,8 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
             return;
         }
 
-        if (places.size >= LIMITS.players) {
+        // (As many in all its worlds as its setting says, playersAtOnce: LIMITS.players at the most)
+        if (places.size >= (server.playersAtOnce ?? server.limits?.players ?? LIMITS.players)) {
             perTicket.give(`${world} ${principal.player.id}`);
             shut(socket, "full");
 
@@ -339,10 +362,28 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
 
     return {
         places,
+        sockets,
+        closed,
+        traffic,
 
-        /** What a world sends a player's game (its place's socket, if it's linked). */
+        /** What a world sends a player's game (its place's socket, if it's linked), counted as its socket counts it. */
         send(world, peer, text) {
-            places.get(placeKey(world, peer))?.socket.send(`data\n${text}`);
+            const socket = places.get(placeKey(world, peer))?.socket;
+
+            if (!socket) {
+                return;
+            }
+
+            const { sent } = socket;
+            const { messages, bytes, wire } = sent;
+
+            socket.send(`data\n${text}`);
+
+            const counted = trafficOf(world);
+
+            counted.messages += sent.messages - messages;
+            counted.bytes += sent.bytes - bytes;
+            counted.wire += sent.wire - wire;
         },
 
         /** A player a world's sent out (afk): their socket closed, saying why. */

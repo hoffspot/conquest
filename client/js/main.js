@@ -37,7 +37,7 @@ import { Pointer } from "./app/pointer.js";
 import { forgetInWorld, inWorldOf, keepInWorld, lastInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
 import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
-import { Updater } from "./app/updater.js";
+import { startsUpdate, Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, hearRefusal, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { ACTIONS as PAD_ACTIONS, asTheyCome, BAR_SLOTS, bindingsOf, bindingWords, rebind, SYMBOL_NAMES, symbolOf, takenFrom } from "./app/gamepad.js";
@@ -57,7 +57,8 @@ const settings = loadSettings();
 
 // (The quick start asked to draw at a level, `?play&quality=low`, `medium` or `high`: drawn so
 // this once, whatever's chosen in Game options, and not kept unless it's chosen there)
-if (params.has("play") && ["low", "medium", "high"].includes(params.get("quality"))) {
+// (A measured run's link may say the level too, whatever else it opens: `?measure=<name>&quality=low`)
+if ((params.has("play") || params.has("measure")) && ["low", "medium", "high"].includes(params.get("quality"))) {
     settings.quality = params.get("quality");
 }
 
@@ -156,6 +157,10 @@ window.pellagos = {
     },
     get inWorld() {
         return state.inWorld;
+    },
+    /** The measured run the page's link asked for (app/measuring.js), once its game's under way; else null. */
+    get measured() {
+        return measured;
     },
     debug,
     backdrop,
@@ -430,7 +435,7 @@ async function frontDoor() {
                 worldCard({
                     name: world?.name ?? held?.name ?? id,
                     about: world ? `${world.description ? `${world.description} · ` : ""}${world.players} of ${world.most} playing` : "Yours to come back to",
-                    badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                    badge: world ? badgeOf(world) : "",
                     when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
                     onClick: async () => {
                         await openWorlds();
@@ -1137,9 +1142,117 @@ function underway(game) {
         if (state.game === game) {
             window.pellagos.playing = true;
             offerHandheld();
+            measure(game);
         }
     });
 }
+
+// A measured run (app/measuring.js; docs/GAME.md *Measuring a device*), only if the page's link
+// asks for one (`?measure=<name>&minutes=12`, beside whatever else it says): the first game under
+// way is measured from then on, every frame counted, how long's left counted down, the report kept
+// on the device as it goes, and the screen kept awake. Its code is read only then; with no
+// `measure` in the link nothing of it is, and no game's given a meter
+let measured = null;
+
+async function measure(game) {
+    if (!params.has("measure")) {
+        return;
+    }
+
+    // (Its code not to be had, the device offline with nothing of it kept: the game's played unmeasured)
+    const { MeasuredRun, measureOf } = await import("./app/measuring.js").catch(() => ({}));
+
+    if (!MeasuredRun) {
+        return;
+    }
+
+    if (!measured) {
+        measured = new MeasuredRun(measureOf(params), { element: $("#measure"), storage: localStorage, wakeLock: navigator.wakeLock ?? null, about: { code: telemetry.code, build: telemetry.build, built: telemetry.built } });
+        measured.onDone = measureDone;
+    }
+
+    // (In a world on a world server: noted, for the report to be sent there)
+    if (state.game === game) {
+        measured.attach(game, state.onServer ? { server: state.onServer.client.record.key, world: state.onServer.entered.world } : null);
+    }
+}
+
+// A measured run ended. In a world on a world server, its report's sent to that server, for its
+// admin to read (the world's Measured runs on the management page: docs/SERVER.md); the words where
+// the countdown was say what became of it. Copy results copies it, wherever it went: the only way
+// to have it where there's no server (the quick start, a friend's world), or it couldn't be sent
+let measuredReport = null;
+
+async function measureDone(report) {
+    const on = state.onServer;
+    const sent = on ? await sendMeasure(on.client, on.entered, report) : false;
+    const server = on?.client.record.name ?? on?.entered.card?.server?.name ?? "the server";
+
+    measuredReport = report;
+    measured.say(sent ? `Measured ${report.name}: sent to ${server}, for its admin to read.` : on ? `Measured ${report.name}: it couldn't be sent to ${server}. Copy it; or it's sent when you're next in this world.` : `Measured ${report.name}: kept on this device. Copy it to send it on.`);
+    $("#measurecopy").hidden = false;
+    $("#measureclose").hidden = false;
+}
+
+// A measured run's report sent to the world it was measured in, by the player's session there:
+// whether it was taken. Taken, or refused for good, it waits on the device no longer
+async function sendMeasure(client, entered, report) {
+    const { measureSent } = await import("./app/measuring.js");
+
+    try {
+        await client.reportMeasure({ world: entered.world, session: entered.session, report });
+    } catch (error) {
+        if (REFUSED_FOR_GOOD.includes(error.error)) {
+            measureSent(localStorage, report);
+        }
+
+        return false;
+    }
+
+    measureSent(localStorage, report);
+
+    return true;
+}
+
+// A measured run kept on this device for this world and never sent there (the browser ended it
+// before it was done, as a phone does to a page that holds too much; or its server couldn't be
+// reached as it ended): sent now the player's back in the world, as far as it got. Looked for
+// whatever the link says, and its code read only if there's one waiting
+async function sendMeasures(client, entered) {
+    try {
+        if (!localStorage.getItem("pellagos.measure.waiting")) {
+            return;
+        }
+
+        const { waitingMeasure } = await import("./app/measuring.js");
+        const report = waitingMeasure(localStorage, client.record.key, entered.world);
+
+        if (report) {
+            await sendMeasure(client, entered, report);
+        }
+    } catch {
+        // (Storage refused, or its code not to be had just now: it waits for the next time)
+    }
+}
+
+// (Copied where the browser lets it; else the report's text selected, to copy by hand)
+$("#measurecopy").addEventListener("click", async () => {
+    const text = JSON.stringify(measuredReport);
+
+    $("#measure textarea")?.remove();
+
+    try {
+        await navigator.clipboard.writeText(text);
+        measured?.say(`Measured ${measuredReport?.name ?? ""}: copied. Paste it wherever you're sending it.`);
+    } catch {
+        const area = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+
+        $("#measure").append(area);
+        area.select();
+        measured?.say("Copying wasn't allowed: it's selected here to copy yourself.");
+    }
+});
+$("#measureclose").addEventListener("click", () => ($("#measure").hidden = true));
 
 // Getting a game ready failed: said on the loading screen, with the ways on from there (back to
 // the title, or loading the page again; what's saved is kept as it goes)
@@ -3761,12 +3874,14 @@ async function showWorlds() {
                 rowOf(
                     worldCard({
                         name: world?.name ?? held?.name ?? id,
-                        badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                        badge: world ? badgeOf(world) : "",
                         about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
-                        when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Needs a key: ask its owner for an invite link",
+                        when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? (matched ? "Open to anyone: tap to join" : "Open to anyone: tap to open the game from its server") : "Needs a key: ask its owner for an invite link",
                         className: matched ? "" : "unmatched",
-                        disabled: !matched,
-                        onClick: () => (walled ? location.assign(serverPage(record, id)) : joinServerWorld(record, id, world)),
+                        // (A world open to anyone on a server of another version than this page's:
+                        // the game from the server's own page always matches it, so its row goes there)
+                        disabled: !matched && !(world?.open && !world.offline),
+                        onClick: () => (walled || !matched ? location.assign(serverPage(record, id)) : joinServerWorld(record, id, world)),
                     }),
                     { world: id },
                 ),
@@ -4427,7 +4542,9 @@ async function hostServerForm(record, kind = "new") {
     const pairs = loadWorlds().flatMap((world) => kept.filter((save) => world.places[save.id]).map((save) => ({ world, save })));
     const key = textField("hostserverkey", { type: "password", value: record.maker ?? "", placeholder: makers ? "Not needed here" : "A creator key, or its admin key" });
     const keyLabel = makers ? "Creator key (if you have one: the world isn't counted against you)" : "Creator key (or the server's admin key, on its own Wi-Fi)";
-    const most = selectField("hostservermost", [8, 7, 6, 5, 4, 3, 2, 1].map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
+    // (As many at once as that server lets a world take, as it says; one that doesn't say, 8)
+    const ceiling = Number.isInteger(now.card?.server?.mostPlayers) ? Math.max(1, Math.min(8, now.card.server.mostPlayers)) : 8;
+    const most = selectField("hostservermost", Array.from({ length: ceiling }, (_, k) => ceiling - k).map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
     const rules = [switchField("hostserverlisted", "Listed on the server", "Anyone who opens the server sees it among its worlds"), switchField("hostserveropen", "Open to anyone", "Whoever opens the server can join it with a tap, no link needed")];
     let fields;
 
@@ -4747,6 +4864,12 @@ async function enterServerWorld(record, world, { key = null, code = null, ticket
     try {
         entered = code ? await client.redeem(code) : await client.enter({ world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}) });
     } catch (error) {
+        if (error.error === "version" && updatesFor(error.net)) {
+            $("#worldsstatus").textContent = UPDATING_WORDS;
+
+            return;
+        }
+
         $("#worldsstatus").textContent = error.message;
         showWorlds();
 
@@ -4764,6 +4887,9 @@ const ruleOfCard = (card) => card?.characters ?? (card?.heroes !== "kept" ? "vis
 
 /** Each character rule in a few words, as the worlds' lists badge them. */
 const RULE_BADGES = Object.freeze({ visiting: "Visit as your own", copies: "Copies stay here", own: "Made here" });
+
+// A world's badge in a list: its character rule, and that it's experimental if its owner's marked it so (a world server's WORLD_SETTINGS)
+const badgeOf = (card) => `${RULE_BADGES[ruleOfCard(card)]}${card?.experimental === true ? " · Experimental" : ""}`;
 
 // Each character rule, as a world's maker chooses it
 const RULE_CHOICES = Object.freeze([
@@ -4997,7 +5123,7 @@ function bringFromFile(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 
@@ -5063,8 +5189,10 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         joined.close();
         setTogether(null);
         state.onServer = null;
-        tell.problem(reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
+        tell.problem(reason === "version" && updatesFor(said?.net) ? UPDATING_WORDS : reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
     };
+    // (Others coming into the world before them, each sent the whole of it: their place in the line)
+    joined.joining.onQueued = (place) => tell.waiting?.(queuedWords(place));
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
@@ -5085,6 +5213,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
             },
         });
         sendCrashes(client, entered);
+        sendMeasures(client, entered);
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
@@ -6336,6 +6465,9 @@ document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
         pause();
         telemetry.closed();
+    } else {
+        // (A measured run's screen asked to stay awake again: the browser lets go of it whenever the page's hidden)
+        measured?.wake();
     }
 });
 
@@ -6494,8 +6626,9 @@ function applyViewSettings() {
     // (Less drawn while the game can't keep up, if that's left to it (Adaptive: app/governor.js),
     // from the quality chosen down; back to it when the quality's chosen again. Not under
     // automation: a test's frames, drawn in software, are always slow, and what it measures
-    // mustn't change)
-    const adaptive = settings.adaptive && !navigator.webdriver;
+    // mustn't change; nor for a measured run, `?measure=`, whose frames must all be drawn alike:
+    // app/measuring.js)
+    const adaptive = settings.adaptive && !navigator.webdriver && !params.has("measure");
     const governor = state.game?.governor;
 
     governor?.setCeiling(chosen);
@@ -6593,6 +6726,22 @@ function watchForUpdates(release) {
     setInterval(() => document.hidden || state.updater.check(), UPDATES_ASKED);
     $("#updatebutton").addEventListener("click", () => location.reload());
 }
+
+// A world server's turned the game away for its version (`net`: the server's): if the server's
+// the newer and the update that matches it is downloaded already, the page's loaded again at
+// once, into the update (downloading nothing), and this says so; otherwise the player's told
+// what to do, as ever. Never while a game's being played, which the reload would end
+function updatesFor(net) {
+    if (!startsUpdate({ theirs: net, ours: netOf?.NET_VERSION, ready: state.updater?.ready, playing: Boolean(state.game) })) {
+        return false;
+    }
+
+    location.reload();
+
+    return true;
+}
+
+const UPDATING_WORDS = "That server plays a newer version of the game, and yours has it downloaded: starting it…";
 
 // --- Off we go ---
 

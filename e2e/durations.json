@@ -1,5 +1,6 @@
 {
     "admin.spec.js › a world's crash reports: those its players' games sent, the newest first, copied all together or one at a time, and cleared": 0.7,
+    "admin.spec.js › a world's measured runs: one a player's game sent, read by the admin with its minutes as a table, copied and cleared": 1,
     "admin.spec.js › an update followed as the server starts again: what it's doing, then, the server back as the new version (and refusing the page loaded before), the page loaded again saying the update's complete, on Updates as usual": 7.1,
     "admin.spec.js › from the Wi-Fi, the page at /admin asks for the admin key first": 0.6,
     "admin.spec.js › its Archive: the whole server archived, the archive opened, its worlds brought in as new ones with keys of their own (restoring's for a server with none)": 0.6,
@@ -44,6 +45,7 @@
     "downloads.spec.js › carries on a file part-downloaded when the page's loaded again from where it got to, and lets go of its parts once it's all here": 9.3,
     "downloads.spec.js › downloads a file a part at a time, checks it and keeps it, has it from there the next time, and says so in debug mode": 11.1,
     "dungeon-map.spec.js › cooks up a dungeon for a seed and theme and draws each level, and another theme or seed": 0.5,
+    "measure.spec.js › a measured run: a link's ?measure= counts down twenty seconds of play at one quality and keeps a report of one row with every phase, copied by its button; without it, nothing's measured": 113.3,
     "missions.spec.js › a messenger from the ruler finds the player near an enemy camp: the mission taken, in the journal and on the map; the camp broken, paid on the spot, and a piece from the armoury picked": 49.8,
     "missions.spec.js › a messenger who stopped to wait before they'd found the player tells them all the same, walked back to: who sends them, what's asked and what it pays": 48.2,
     "model-viewer.spec.js › a creature drawn from a model: every clip in its file played alone, stepped and slid through; its skeleton and wireframe shown and hidden; what there is of it and whose it is": 30.6,

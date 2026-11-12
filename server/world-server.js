@@ -33,8 +33,10 @@ import { Access } from "./access/index.js";
 import { API_PATH, apiHandler } from "./api.js";
 import { Certifier, tokensFileOf } from "./certify.js";
 import { Funnel } from "./funnel.js";
+import { History, HISTORY_FILE, HISTORY_SAVE, samplerOf } from "./history.js";
 import { attachBroker, BROKER_PATH } from "./broker.js";
 import { answer, connectionOf, guard, hostsOf, INTERNET_CLOSED, LIMITS_HTTP, originsOf, Refusal, urlOf } from "./guards.js";
+import { Log } from "./log.js";
 import { Management } from "./manage.js";
 import { Nearby } from "./nearby.js";
 import { Updater } from "./update/updater.js";
@@ -42,13 +44,15 @@ import { ACME_TLS, reverseNameOf } from "./net/acme.js";
 import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
 import { computerName, tokenStore } from "./platform/index.js";
 import { attachPlay } from "./play.js";
+import { WorldThread } from "./world-thread.js";
 import { Registry } from "./registry.js";
 import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
-import { CHARACTER_RULES, RULE_MODES } from "./storage/worlds.js";
+import { CHARACTER_RULES, RULE_MODES, WORLD_SETTINGS } from "./storage/worlds.js";
 import { SERVER_VERSION } from "./storage/versions.js";
+import { ServerMetrics } from "./server-metrics.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
@@ -89,16 +93,27 @@ export class WorldServer {
      * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
      * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
      * (router.js, funnel.js: false for none), `tunnelPort` (the tunnel listener's, 0 for any free
-     * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js).
+     * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js),
+     * and `limits`, for a server opened to be loaded past what any real one takes (scripts/
+     * server-soak.js; generated/multiplayer_scaling_plan.md 0-3): { mostPlayers (the most in each
+     * of its worlds at once, whatever the world's own setting and the server's ceiling say, which
+     * go no higher than 8), players (in all of them together: the server's playersAtOnce setting,
+     * which goes no higher than access/limits.js LIMITS.players), socketsPerAddress
+     * (LIMITS.socketsPerAddress) }, each as it always is unless given. They're options of this
+     * call alone: no setting, file or request sets them (the settings only lower what a server
+     * takes: storage/settings.js CAPS), so no server that's run as one can be given them.
      * `options.onRestart` is what stops it to be started again as a new version, once an update's
      * installed (server/serve.js); `options.update` where it looks for new versions and the key
-     * they're checked with (update/updater.js).
+     * they're checked with (update/updater.js). `options.log` is where its structured log's lines
+     * go (log.js: serve.js gives its output; without one none are written).
      */
     static async open(root, options = {}) {
         const folder = await DataFolder.open(root);
         const { access, adminKey } = await Access.open(root, { ...(options.clock ? { clock: options.clock } : {}), ...(options.cost ? { cost: options.cost } : {}) });
         const { identity } = await ServerIdentity.open(root);
         const server = new WorldServer({ root, folder, access, identity, adminKey, ...options });
+
+        server.history = await History.open(path.join(root, HISTORY_FILE));
 
         for (const id of await folder.worlds.ids()) {
             await server.#add(await folder.worlds.open(id));
@@ -109,8 +124,11 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {} }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {}, log = null, limits = {} }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, onRestart, ice });
+
+        /** The limits it was opened with in place of its own (open's `limits`: none, on any server that's run as one). */
+        this.limits = Object.freeze(Object.fromEntries(["mostPlayers", "players", "socketsPerAddress"].filter((key) => Number.isInteger(limits?.[key]) && limits[key] > 0).map((key) => [key, limits[key]])));
 
         /** Whether an address is at home (the guards ask it). */
         this.isHome = home;
@@ -124,16 +142,73 @@ export class WorldServer {
         /** The worlds kept (by id: storage/worlds.js StoredWorld). */
         this.worlds = new Map();
 
+        /**
+         * Its structured log (log.js): a line of JSON for each thing that happens, beside the
+         * journals. Never a key, a code, a ticket, a session or a whole address. And how each
+         * world was when a line last said so.
+         */
+        this.log = new Log({ write: log });
+        this.lives = new Map();
+
+        /**
+         * How it's running, as numbers (server-metrics.js): what each world's thread counts of
+         * itself, added up, and the supervisor's own. Written out at /metrics on the management
+         * page's own listener, on this computer alone (admin.js): never on the play port.
+         */
+        this.metrics = new ServerMetrics();
+        this.metrics.watch(this);
+
+        /**
+         * The last day and week of what the Health page charts (history.js), kept in the data
+         * folder across restarts: a point of each taken whenever the supervisor's own is sampled
+         * (every ten seconds, once it's listening), and written every HISTORY_SAVE and as it stops.
+         */
+        this.history = new History();
+        this.keeping = null;
+
+        const sampler = samplerOf(this.metrics, this);
+
+        this.metrics.onSample = () => {
+            const samples = sampler();
+
+            if (samples) {
+                this.history.record(Date.now(), samples);
+            }
+        };
+
         this.registry = new Registry({
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
             settings: this.settings,
             ...(awake ? { awake } : {}),
+            // (Its worlds' threads told the most players they take: no more than the server's ceiling
+            // as it stands when they're started; or, opened with one in place of their own setting's, that)
+            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling") }),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
             // (A world stored again with players still in it: its thread ended unasked. They're told)
             onChange: (world) => {
-                if (this.registry?.lifeOf(world).life === "stored") {
+                const life = this.registry?.lifeOf(world).life;
+
+                if (life === "stored") {
                     this.play?.closeWhere((place) => place.world === world, "broken");
+                    this.metrics.setAside(world);
+                }
+
+                if (life && life !== (this.lives.get(world) ?? "stored")) {
+                    this.lives.set(world, life);
+                    this.log.event("world.life", { world, life });
+                }
+            },
+            onState: (world, state) => {
+                this.metrics.heard(world, state);
+
+                // (What its thread says went wrong since it last said: a save that didn't reach the disk, time let go)
+                if (state?.metrics?.failures > 0) {
+                    this.log.event("world.save-failed", { world, count: state.metrics.failures });
+                }
+
+                if (state?.metrics?.dropped > 0) {
+                    this.log.event("world.fell-behind", { world, ms: Math.round(state.metrics.dropped) });
                 }
             },
         });
@@ -144,6 +219,8 @@ export class WorldServer {
         this.manage = new Management(this);
         this.api = apiHandler(this);
         this.access.policy.listeners.push((event, detail) => this.#journal(event, detail));
+        this.access.policy.listeners.push((event, detail) => this.metrics.event(event, detail));
+        this.access.policy.listeners.push((event, detail) => this.log.access(event, detail));
         this.access.isOpen = (id) => this.metaOf(id)?.settings?.open === true;
 
         /**
@@ -297,6 +374,32 @@ export class WorldServer {
         return [`http://${this.hostname.replace(/\.local$/, "")}.local:${this.port}`, ...found.filter((one) => one.family === "IPv4").map((one) => `http://${shown(one.address)}:${this.port}`)];
     }
 
+    /** The most players any one world here may take at once (its setting, mostPlayersCeiling: storage/settings.js CAPS). */
+    get mostPlayersCeiling() {
+        return this.settings.get("mostPlayersCeiling");
+    }
+
+    /** The most players in all its worlds together at once (its setting, playersAtOnce; or what it was opened with in its place, a soak's). */
+    get playersAtOnce() {
+        return this.limits.players ?? this.settings.get("playersAtOnce");
+    }
+
+    /**
+     * The most players a world here takes at once (`meta`: its world.json): its own setting, and
+     * no more than the server's ceiling, whatever its setting says (one made before the ceiling
+     * was lowered, or brought in from elsewhere).
+     */
+    mostPlayersOf(meta) {
+        return Math.min(meta.settings.mostPlayers, this.mostPlayersCeiling);
+    }
+
+    /** Why a world's settings (as they're to be made or changed) can't be, for asking more players than the server's ceiling lets a world take; or null. */
+    overCeiling(settings) {
+        const asked = settings?.mostPlayers;
+
+        return Number.isInteger(asked) && asked > this.mostPlayersCeiling && asked <= WORLD_SETTINGS.mostPlayers.max ? `mostPlayers must be a whole number from ${WORLD_SETTINGS.mostPlayers.min} to ${this.mostPlayersCeiling} on this server, not ${asked}.` : null;
+    }
+
     /**
      * A world made (as the server's admin or a creator asks: `creator` names them, for its
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
@@ -304,6 +407,17 @@ export class WorldServer {
     async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null, maker = null } = {}) {
         if (characters !== null && !CHARACTER_RULES.includes(characters)) {
             throw new Error(`A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
+        }
+
+        const over = this.overCeiling(settings);
+
+        if (over) {
+            throw new Error(over);
+        }
+
+        // (Not said: as many as the server lets a world take, which is as many as a world can)
+        if (settings !== null && typeof settings === "object" && !Array.isArray(settings) && settings.mostPlayers === undefined) {
+            settings = { ...settings, mostPlayers: Math.min(WORLD_SETTINGS.mostPlayers.default, this.mostPlayersCeiling) };
         }
 
         // (Its character rule, if it's given one, as the heroes mode and first-hero rule it stands for)
@@ -391,6 +505,9 @@ export class WorldServer {
         this.broker = attachBroker([this.http, this.https], this, this.ice ? { ice: this.ice } : {});
         this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
         this.looking.unref?.();
+        this.metrics.start();
+        this.keeping = setInterval(() => this.history.save(), HISTORY_SAVE);
+        this.keeping.unref?.();
         this.certifier.start();
         this.certifier.renew().catch(() => {});
         this.followRouter();
@@ -401,6 +518,7 @@ export class WorldServer {
         }
 
         this.nearby.follow(this.settings.get("bonjour"));
+        this.log.event("server.listening", { port: this.port, version: SERVER_VERSION, worlds: this.worlds.size });
 
         return this.port;
     }
@@ -700,6 +818,9 @@ export class WorldServer {
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
         clearInterval(this.looking);
+        clearInterval(this.keeping);
+        this.metrics.stop();
+        await this.history.save();
         this.updater.close();
         this.nearby.stop();
         await this.certifier.close();
@@ -711,6 +832,7 @@ export class WorldServer {
         this.broker?.close();
         await this.registry.shutdown();
         await this.admin?.close();
+        this.log.event("server.stopped", { version: SERVER_VERSION });
 
         if (this.tcp) {
             const closed = new Promise((resolve) => this.tcp.close(() => resolve()));

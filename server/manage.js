@@ -4,7 +4,8 @@
 // - A world: what it is and how it is, in words; its settings changed (its heroes mode too, while
 //   nobody's in it); started, set aside, saved; its players sent out, banned, given another part or
 //   a new ticket; its backups listed, made, restored; exported; deleted (its name typed); the crash
-//   reports its players' games sent, kept, shown to the server's admin and cleared.
+//   reports its players' games sent, kept, shown to the server's admin and cleared; and the
+//   measured runs they sent (a link's ?measure=), the same.
 // - The server: where it can be reached (the Wi-Fi, and the internet with its certificate: one of
 //   the owner's own, or a free one it gets and renews itself, certify.js), its settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
 //   each world's), and how it's keeping up.
@@ -31,16 +32,18 @@ import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
+import { CHART_POINTS } from "./history.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
 import { bringForward, freshStart, importSolo } from "./reopen.js";
 import { ARCHIVE_LIMIT, archiveFolder, ArchiveError, readArchive, stageRestore, worldBundle, worldIds, worldsIn } from "./storage/archive.js";
 import { reportOf } from "./storage/crashes.js";
+import { runOf } from "./storage/measures.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
 import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
-import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, NOW, RULE_MODES, ruleOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, netcodeOf, NOW, RULE_MODES, ruleOf, settingsOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
 export { SERVER_JOURNAL };
@@ -144,6 +147,8 @@ export class Management {
     async journal(text, when = new Date()) {
         await ensureFolder(this.server.root);
         await appendFile(path.join(this.server.root, SERVER_JOURNAL), `${when.toISOString()} ${text}\n`, { mode: FILE_MODE });
+        // (And in the structured log, scrubbed of anything shaped like a key or a whole address: log.js)
+        this.server.log?.event("journal", { text });
     }
 
     // ---- A world
@@ -195,7 +200,7 @@ export class Management {
             firstHero: meta.firstHero,
             characters: ruleOf(meta),
             offline: isOffline(meta),
-            settings: meta.settings,
+            settings: settingsOf(meta),
             played: state?.played ?? meta.played ?? 0,
             elapsed,
             ...clockOf(elapsed),
@@ -239,6 +244,8 @@ export class Management {
             heroes === undefined || HERO_MODES.includes(heroes) ? null : `Heroes are kept or brought in, not ${JSON.stringify(heroes)}.`,
             firstHero === undefined || FIRST_HEROES.includes(firstHero) ? null : `A first hero is made new or brought in, not ${JSON.stringify(firstHero)}.`,
             ...(settings === undefined ? [] : settings !== null && typeof settings === "object" && !Array.isArray(settings) ? Object.entries(settings).map(([key, value]) => schemaReason(WORLD_SETTINGS, key, value)) : ["A world's settings are an object."]),
+            // (No more players than the server lets a world take, unless that's what it has already)
+            settings?.mostPlayers === stored.meta.settings.mostPlayers ? null : this.server.overCeiling(settings),
             ...Object.keys(changes)
                 .filter((key) => !["name", "description", "heroes", "firstHero", "settings"].includes(key))
                 .map((key) => `A world has nothing called "${key}" to change.`),
@@ -252,6 +259,11 @@ export class Management {
 
         if (modes && this.#going(id)) {
             throw new Refused(409, "running", "Take the world offline first (or set it aside): what it does with its players' characters changes only while nobody's in it.");
+        }
+
+        // (How it's played, as its characters: its players' games are each playing it the old way)
+        if (settings?.netcode !== undefined && settings.netcode !== netcodeOf(stored.meta) && this.#going(id)) {
+            throw new Refused(409, "running", "Take the world offline first (or set it aside): how it's played changes only while nobody's in it.");
         }
 
         const meta = {
@@ -402,6 +414,7 @@ export class Management {
         await stored.backUp("before-delete");
         this.server.access.removeWorld(id);
         this.server.worlds.delete(id);
+        this.server.history.forget(id);
         await rm(stored.folder, { recursive: true, force: true });
         await this.journal(`The world "${stored.meta.name}" (${id}) was deleted${by ? ` by ${by}` : ""}: its backups are kept in backups/${id}/.`);
 
@@ -717,6 +730,46 @@ export class Management {
 
         if (cleared) {
             await stored.journal(`Its crash reports (${cleared}) were cleared${by ? ` by ${by}` : ""}.`);
+        }
+
+        return { cleared };
+    }
+
+    // ---- Its measured runs (storage/measures.js)
+
+    /**
+     * A measured run a player's game sent as it ended (`given`: its report, client/js/app/
+     * measure.js Meter.report), kept with the world, the last MEASURES.kept of them; refused if it
+     * isn't one. `player`: who sent it (their id in the world, and the name they go by there);
+     * `from`: "home" or "internet". Returns { id, received }.
+     */
+    async addMeasure(id, given, { player = null, name = null, from = null } = {}) {
+        const stored = this.#world(id);
+        const run = runOf(given);
+
+        if (!run) {
+            throw new Refused(400, "bad-request", "A measured run is the game's report of one, a row for each minute.");
+        }
+
+        const kept = await stored.measures.add(run, { player, name, from });
+
+        await stored.journal(`A measured run${run.run ? ` ("${run.run}")` : ""} came in from ${name ? `${name} (${player})` : player ? `a player (${player})` : "a player"}'s game.`);
+
+        return { id: kept.id, received: kept.received };
+    }
+
+    /** The measured runs a world keeps, newest first (storage/measures.js), for the server's admin. */
+    async measures(id) {
+        return this.#world(id).measures.list();
+    }
+
+    /** Every measured run a world keeps let go of. Returns { cleared: how many there were }. */
+    async clearMeasures(id, { by = null } = {}) {
+        const stored = this.#world(id);
+        const cleared = await stored.measures.clear();
+
+        if (cleared) {
+            await stored.journal(`Its measured runs (${cleared}) were cleared${by ? ` by ${by}` : ""}.`);
         }
 
         return { cleared };
@@ -1547,6 +1600,22 @@ export class Management {
         ];
 
         return all.sort((a, b) => b.when.localeCompare(a.when)).slice(0, lines);
+    }
+
+    /**
+     * How it's been keeping up (history.js): the last day (`span` "day": a point every two
+     * minutes) or week ("week": every fifteen) of what Health charts, each world's with its name,
+     * a deleted world's left out. { span, step, end, series: [{ id, world, name, title, unit,
+     * limit, values }] }.
+     */
+    history(span = "day") {
+        const read = this.server.history.read(span, Date.now(), { most: CHART_POINTS });
+        const short = (value) => (value === null ? null : Number(value.toPrecision(4)));
+
+        return {
+            ...read,
+            series: read.series.filter((one) => one.world === null || this.server.worlds.has(one.world)).map((one) => ({ ...one, name: one.world ? this.server.metaOf(one.world).name : null, values: one.values.map(short) })),
+        };
     }
 
     /**

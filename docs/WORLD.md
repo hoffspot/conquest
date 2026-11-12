@@ -1286,7 +1286,9 @@ found the same 2,012 ways over them to the last bit).
   where nothing's drawn, so never holds a step up while the world under its way is made (seen
   replaying 20 minutes of play: up to 40 tiles for a patrol's 3 m way, 0.6–0.8 s on a desktop,
   several times that on a phone), and stands where it is, unseen, till it can go.
-  At most 1,024 tiles are kept (a kilometre square), the longest unused let go first.
+  At most 1,024 tiles are kept (a kilometre square), the longest unused let go first; a world
+  server keeps as many as its players want round them, up to the 4,096 the mesh takes (docs/WAR.md,
+  *As many navigation tiles as its players need*).
   A copy of a world someone else hosts finds no ways (it takes the host's), but its battle asks
   the mesh where a walker stepping round someone may stand (GAME.md's *Moving*), and it baked no
   tile ahead: each was baked in the step that first asked about it, on the page's thread. Now

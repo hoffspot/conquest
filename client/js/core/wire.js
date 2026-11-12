@@ -17,9 +17,131 @@ for (let k = 0; k < DIGITS.length; k++) {
     WORTH[DIGITS.charCodeAt(k)] = k;
 }
 
-/** `value` (plain data) as text. */
+// A number JSON can't carry, as it goes
+const marked = (value) => ({ [KEEP]: String(value) });
+
+// The slow way: every value handed to a function as it's written (which takes the writer off its
+// quick way for all of them). For what isn't plain data, or can't be changed
+const slowly = (value) => JSON.stringify(value, (key, each) => (typeof each === "number" && !Number.isFinite(each) ? marked(each) : each));
+
+// What isn't plain data (carried's answer)
+const NOT_PLAIN = Symbol("not plain");
+
+// `value` (an array or an object) as JSON's own writer can write it, if it's plain data all
+// through (arrays and plain objects of numbers, strings, true, false, null and undefined, however
+// deep, with nothing that writes itself its own way, a toJSON): itself, where it holds no number
+// JSON can't carry, which is nearly always; else a copy of it with each such number as its mark,
+// only what holds one copied, and the rest shared. Nothing of `value` is changed (it may be a
+// world's own: core/host.js snapshotText). NOT_PLAIN if it isn't plain data
+function carried(value) {
+    let out = value;
+
+    if (Array.isArray(value)) {
+        for (let k = 0; k < value.length; k++) {
+            const each = value[k];
+            let as = each;
+
+            if (typeof each === "number") {
+                if (each - each === 0) {
+                    continue;
+                }
+
+                as = marked(each);
+            } else if (typeof each === "object" && each !== null) {
+                as = carried(each);
+
+                if (as === NOT_PLAIN) {
+                    return NOT_PLAIN;
+                }
+            } else if (typeof each !== "string" && typeof each !== "boolean" && each !== undefined && each !== null) {
+                return NOT_PLAIN;
+            }
+
+            if (as !== each) {
+                if (out === value) {
+                    out = value.slice();
+                }
+
+                out[k] = as;
+            }
+        }
+
+        return out;
+    }
+
+    const proto = Object.getPrototypeOf(value);
+
+    if (proto !== Object.prototype && proto !== null) {
+        return NOT_PLAIN;
+    }
+
+    for (const key in value) {
+        const each = value[key];
+        let as = each;
+
+        if (typeof each === "number") {
+            if (each - each === 0) {
+                continue;
+            }
+
+            as = marked(each);
+        } else if (typeof each === "object" && each !== null) {
+            as = carried(each);
+
+            if (as === NOT_PLAIN) {
+                return NOT_PLAIN;
+            }
+        } else if (typeof each !== "string" && typeof each !== "boolean" && each !== undefined && each !== null) {
+            return NOT_PLAIN;
+        }
+
+        if (as !== each) {
+            // (A key that would set what kind of thing the copy is, not a part of it: the slow way)
+            if (key === "__proto__") {
+                return NOT_PLAIN;
+            }
+
+            if (out === value) {
+                out = { ...value };
+            }
+
+            out[key] = as;
+        }
+    }
+
+    return out;
+}
+
+/**
+ * `value` (plain data) as text, or null if it holds anything that isn't plain data (numbers,
+ * strings, true, false, null, undefined, arrays and plain objects of them): for writing out what's
+ * shared with whoever made it, where a copy would have made plain data of the rest
+ * (core/host.js snapshotText). The same text as encode's.
+ */
+export function encodePlain(value) {
+    if (value === null || typeof value !== "object") {
+        return typeof value === "function" || typeof value === "symbol" || typeof value === "bigint" ? null : slowly(value);
+    }
+
+    const as = carried(value);
+
+    return as === NOT_PLAIN ? null : JSON.stringify(as);
+}
+
+/**
+ * `value` (plain data) as text. Written by JSON's own writer with nothing handed back to this
+ * for each value (a replacer: half as slow again over a world, and off the writer's quickest way
+ * altogether): it's gone through once first for the numbers JSON can't carry, which are few.
+ * Anything that isn't plain data is written the slow way, as it always was.
+ */
 export function encode(value) {
-    return JSON.stringify(value, (key, each) => (typeof each === "number" && !Number.isFinite(each) ? { [KEEP]: String(each) } : each));
+    if (value === null || typeof value !== "object") {
+        return slowly(value);
+    }
+
+    const as = carried(value);
+
+    return as === NOT_PLAIN ? slowly(value) : JSON.stringify(as);
 }
 
 // `value` (an array or an object, as JSON.parse made it) with every mark in it ({ "$": "Infinity" },

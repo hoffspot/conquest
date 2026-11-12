@@ -81,6 +81,7 @@ import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { playerSight, sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
+import { count } from "./probe.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
@@ -717,8 +718,10 @@ const CORNER_SLACK = 0.6;
 
 // Where everyone stands, kept by cell (INDEX_CELL metres a side), so that the nearest enemy, who's
 // in the way and who's on a square are looked for among those near, not everyone: a field battle's
-// hundreds (#indexed). Made again at the start of each step, and as soon as anyone's put somewhere
-// new or has gone further than INDEX_SLACK metres from where it was made (a step's walk is far less)
+// hundreds (#indexed). Brought up to date at the start of each step, and as soon as anyone's put
+// somewhere new or has gone further than INDEX_SLACK metres from where it was made (a step's walk
+// is far less): only those in another cell than they were are moved (#reindexed), and it's as it
+// would be made afresh; made afresh whenever anyone's added, taken out or on another map
 const INDEX_CELL = 8;
 const INDEX_SLACK = 1;
 // Two no more than so many squares apart are no more than that many metres apart and this much
@@ -797,6 +800,13 @@ export class Battle {
      * makes no difference.
      */
     static indexing = true;
+
+    /**
+     * Whether the index of where everyone stands is brought up to date by moving those who've
+     * changed cell (#reindexed), as it always is, or made afresh every time, as it was: only for
+     * the tests that check it's the same index either way.
+     */
+    static reindexing = true;
 
     // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
     // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
@@ -1766,9 +1776,13 @@ export class Battle {
      * made again in the same order: core/host.js). Each character is kept whole, all it's been
      * given (#given); or, with `keep`, as that makes of it, straight from the battle's own (the
      * host's snapshot: core/keptactor.js keptOf, which leaves out what a character has as one
-     * just made has it and copies only the rest). restore reads either.
+     * just made has it and copies only the rest). restore reads either. `shared`: what's in the
+     * air, on the ground and lined up is the battle's own, not a copy (with a `keep` that copies
+     * nothing, keptactor.js sharedOf): for a snapshot written out at once, never kept or changed.
      */
-    snapshot({ keep = null } = {}) {
+    snapshot({ keep = null, shared = false } = {}) {
+        const copy = shared ? (value) => value : structuredClone;
+
         return {
             seed: this.seed,
             time: this.time,
@@ -1786,17 +1800,17 @@ export class Battle {
                         return kept;
                     }),
             ),
-            projectiles: structuredClone(this.projectiles),
-            hazards: structuredClone(this.hazards),
+            projectiles: copy(this.projectiles),
+            hazards: copy(this.hazards),
             nextHazard: this.nextHazard,
-            bombs: structuredClone(this.bombs),
+            bombs: copy(this.bombs),
             nextBomb: this.nextBomb,
-            falls: structuredClone(this.falls),
+            falls: copy(this.falls),
             nextFall: this.nextFall,
-            baits: structuredClone(this.baits),
+            baits: copy(this.baits),
             nextBait: this.nextBait,
-            breaths: structuredClone(this.breaths),
-            formations: structuredClone(this.formations),
+            breaths: copy(this.breaths),
+            formations: copy(this.formations),
         };
     }
 
@@ -5832,35 +5846,49 @@ export class Battle {
         return false;
     }
 
-    // Where everyone stands, kept by cell (INDEX_CELL): made again if it might be out of date. {
-    // cells: map id -> cell -> indices into `actors` (in their order), at: where each was (x, y),
-    // order: each one's index, wide: the indices of those standing over more than their own
-    // square (a `footprint`: struck at its nearest square, however far off its middle is) }
+    // Where everyone stands, kept by cell (INDEX_CELL): brought up to date if it might be out of
+    // date (#reindexed), or made again. { cells: map id -> cell -> indices into `actors` (in their
+    // order), at: where each was (x, y), order: each one's index, wide: the indices of those
+    // standing over more than their own square (a `footprint`: struck at its nearest square,
+    // however far off its middle is); and, to bring it up to date by, who: the actor at each
+    // index, maps: the map each was on, cell: the cell each is in }
     #indexed() {
         const index = this.#index;
 
-        if (index && index.actors === this.actors && index.length === this.actors.length && index.version === this.#version) {
-            return index;
+        if (index && index.actors === this.actors && index.length === this.actors.length) {
+            if (index.version === this.#version || (Battle.reindexing && this.#reindexed(index))) {
+                return index;
+            }
         }
 
+        count("battle.indexed");
+        count("battle.indexedActors", this.actors.length);
+
+        const length = this.actors.length;
         const cells = new Map();
-        const at = new Float64Array(this.actors.length * 2);
+        const at = new Float64Array(length * 2);
+        const cell = new Float64Array(length);
+        const who = new Array(length);
+        const maps = new Array(length);
         const order = new Map();
         const wide = [];
 
         this.actors.forEach((actor, k) => {
             const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
-            const cell = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
-            const list = mine.get(cell);
+            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
+            const list = mine.get(here);
 
             if (list) {
                 list.push(k);
             } else {
-                mine.set(cell, [k]);
+                mine.set(here, [k]);
             }
 
             at[2 * k] = actor.x;
             at[2 * k + 1] = actor.y;
+            cell[k] = here;
+            who[k] = actor;
+            maps[k] = actor.map;
             order.set(actor, k);
 
             if (actor.footprint) {
@@ -5868,7 +5896,75 @@ export class Battle {
             }
         });
 
-        return (this.#index = { actors: this.actors, length: this.actors.length, version: this.#version, cells, at, order, wide });
+        return (this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell });
+    }
+
+    // An index that might be out of date brought up to date, with the same actors in the same
+    // order on the same maps as it was made of: each one's place noted, and whoever's in another
+    // cell than they were taken out of that cell's list and put in the new one's, at their place
+    // in `actors`' order. It's then, list for list, the index made afresh (a cell no one's left
+    // in has no list, as none was made for it), at the cost of looking at everyone and moving a
+    // few, where making it went through everyone building every list: the battle's steps each
+    // begin with it. False (to be made afresh) if anyone's been added, taken out, put elsewhere
+    // in `actors` or on another map
+    #reindexed(index) {
+        const { actors } = this;
+        const { who, maps, cell, at, wide } = index;
+        const length = actors.length;
+
+        for (let k = 0; k < length; k++) {
+            if (who[k] !== actors[k] || maps[k] !== actors[k].map) {
+                return false;
+            }
+        }
+
+        count("battle.reindexed");
+        wide.length = 0;
+
+        for (let k = 0; k < length; k++) {
+            const actor = actors[k];
+            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
+
+            at[2 * k] = actor.x;
+            at[2 * k + 1] = actor.y;
+
+            if (actor.footprint) {
+                wide.push(k);
+            }
+
+            if (here !== cell[k]) {
+                const mine = index.cells.get(actor.map);
+                const from = mine.get(cell[k]);
+
+                if (from.length === 1) {
+                    mine.delete(cell[k]);
+                } else {
+                    from.splice(from.indexOf(k), 1);
+                }
+
+                const to = mine.get(here);
+
+                if (!to) {
+                    mine.set(here, [k]);
+                } else {
+                    // (Kept in `actors`' order: after the last one before it)
+                    let i = to.length;
+
+                    while (i > 0 && to[i - 1] > k) {
+                        i--;
+                    }
+
+                    to.splice(i, 0, k);
+                }
+
+                cell[k] = here;
+                count("battle.reindexedMoves");
+            }
+        }
+
+        index.version = this.#version;
+
+        return true;
     }
 
     // Everyone on a map who might be within `reach` metres either way of a point (x, y): their

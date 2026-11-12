@@ -187,6 +187,17 @@ The engine is built for this from the start. These are its rules:
      that any player is heading into or is in; let go once every player's more than 90 away);
    - later, the war's forces in skirmishes.
 
+   Twice a second (`RELEVANCE.every`) it looks round: buildings, towns' soldiers and townsfolk,
+   works, camps, armies, the wild, what's to be seen from high ground. Each of those is measured
+   against the players in the cells round it (core/near.js: the players' places kept by cell,
+   256 m a side, made afresh each look), not against every player: the grid only leaves out
+   players too far off to pass the test that's made, so each answer is the one measuring
+   everyone gave, and every copy of the world agrees whichever way it's asked. `Host.culling`
+   off measures everyone, as before, and a world of 25 players plays out the same step for step
+   either way (test/culling.test.js). With 50 players apart, ten seconds' looks measured 400,000
+   buildings against players and now measure 6,700; towns and works, 134,000 and 1,300
+   (test/budget.test.js holds them there).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk
@@ -3202,11 +3213,28 @@ settlement and navigation tile the moment someone first walked into it:
   it let one go to make another over and over (eight players remade 1,233 chunks in five
   minutes, 60% of the world thread's time, and never settled). `Ahead` tells the world to keep
   what its players and what's wanted soon take, and 64 more (`spareChunks`), as they come and go;
-  never fewer than 256. About 70 KB a chunk. The navigation's tiles are still 1,024 at most
-  (core/navigation.js `KEEP_TILES`), which eight players' 121 each fit, barely: Detour's
-  references are 32 bits, and at 4,096 polygons a tile (`MAX_POLYS`) it takes no more tiles than
-  that (asked for 2,048, it refuses). More players than eight in a world want fewer polygons a
-  tile, or tiles kept by who's near them.
+  never fewer than 256. About 70 KB a chunk.
+- **As many navigation tiles as its players need, up to 4,096** (core/navigation.js `keepTiles`,
+  `MOST_TILES`). The navigation kept 1,024 tiles whoever was in, which eight players' 121 each
+  fit, barely: 25 apart want 3,025, and it let one's go to bake another's, in the steps too
+  (3,611 let go of in two minutes of 25 players apart). Detour's references are 32 bits, ten of
+  them telling a tile from the one that was in its place before, so a mesh's tiles times a
+  tile's polygons are 4,194,304 at most: it was made for 1,024 tiles of 4,096 polygons, and
+  refuses 2,048 of those. A tile of the overworld's has 40 polygons on average and 335 at the
+  most among 15,000 measured in and round two worlds' towns, so the overworld's mesh is made for
+  4,096 tiles of 1,024 polygons, on every machine (a tile with more is refused, where Detour
+  would have taken it and answered wrongly). Only its references change, which never leave the
+  navigation: the tiles' bytes, the ways over them and the world step for step are the same
+  (test/tilecap.test.js, with `Navigation.roomy` off for the mesh as it was). A browser still
+  keeps 1,024. `Ahead` tells a world server's to keep what's within 160 m of its players, and
+  256 more (`spareTiles`) for what the steps' ways bake besides, and counts those round the
+  players as used, so what's let go is what no one's near. That's room for 31 players apart at
+  121 tiles each (a tile is 6.4 KB on average: 26 MB with all 4,096 kept). With more, the tiles
+  are baked ahead less far round each, a tile's width at a time till they fit (`Ahead.reach`:
+  50 apart 96 m, 100 apart 64 m), and a way that wants one further out bakes it in its step, as
+  ever: slower there, and nothing let go and baked again in a loop. Past that, the next step is
+  8,192 tiles of 512 polygons (65 players at the full reach), which leaves a tile half as much
+  room again as the most measured, and is the owner's call.
 - **Where the players are, from the host.** What's wanted is looked over from where the host says
   its players are (`soon`'s `around`: out in the world, or the door of the building they're in):
   what was waiting round one who's left the world, or gone through a portal to somewhere else,
@@ -3467,6 +3495,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   but no step from the host for 2 seconds, "Waiting for the host…".
 
 **How it's kept the same** (`core/netplay.js`):
+- **The link seam.** A joined game reaches its link to the world (`game.remote`) through one
+  list of members and no others, `REMOTE` in `core/remote.js`: what it calls (`step`, `pace`,
+  `command`, `ping`, `hold`, `chat`, `takeDms`, `clock`), reads (`self`, `behind`, `delay`,
+  `inHand`, `lately`, `paused`, `farBehind`, `received`) and sets to be told (`onSelf`, `onWay`,
+  `onChat`, `onUnsaid`). `Joining`, below, is its one implementation; a game's given its link
+  through `asRemote` (app/session.js), and `test/remote.test.js` fails for a use of `remote`
+  that isn't on the list. It's there so another way of being linked to a world can stand in the
+  same place (generated/multiplayer_scaling_plan.md 3-2).
 - **One authority.** The host's game is the world's one authority. Everything done to its world
   it records as it's done (`host.recorder`), and sends every tenth of a second: each step it's
   moved on, each command anyone gives, each player come or gone.
@@ -3598,11 +3634,37 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   3.0 KB; in a field battle of 15 a side, 4.5 KB (what's done 2.4, their own hero 2.0). The
   world as one comes in is 80 KB of text there, and 120 to 300 KB with a battle or with eight
   players over six towns: a sixth to a fifth of that on its way, compressed (below).
+- **The host's two parts** (`Session` and `OpsFeed` in `core/netplay.js`, which `Hosting` is made
+  of; generated/multiplayer_scaling_plan.md 3-1). The session is who's in and everything between
+  each of them and the host that isn't the world itself: coming in and the line for it, a
+  character taken over on another link, the part each plays, chat, the world's stopping, being
+  sent out, each one's own hero told them, and their commands with their limits (`HEARD`, by
+  the clock). The feed is the world as it's sent them, by lockstep: what's done each step, the
+  checksum, the motion stream where a host sends it, and the whole world for one coming in, one
+  asking again (`AGAIN`, `WORLDS`) or everyone after the host's link drops. `Hosting` carries
+  what both send and sends for both in one order (`flush`), and everything of either is still
+  read and set on it (`hosting.players`, `hosting.asked`, `hosting.pause()`), so whoever runs a
+  world, a browser's game or a world server's thread, uses it as before. Another feed can stand
+  in the lockstep one's place without the session changing.
 - **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
   made point to point passes no server that would hold them to anything):
   - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
     left unused, answered at once; past those, an asking waits till its time's come (answered
     as the game's next heard from), and everyone asking in a step is sent the one snapshot.
+    The world as it stands between two steps, nothing done since, is taken and written out once
+    however many want it, one coming in among them: each is sent the same text but for their
+    own of their hero, which is set into it. A world on a world server also holds all its
+    takings together to an eightieth of its thread (`WORLDS`, the server's `sparing`: none for
+    2 s after one that took 25 ms) and takes none in the step that turns the war; a world
+    hosted in a browser doesn't.
+  - **Coming in:** a host may let only so many come in at once (`Hosting.welcomes`: a world
+    server's world, by its `welcomes` setting, 2; a world hosted in a browser sets none and
+    welcomes each at once). A hello past that waits its turn and is told its place
+    (`{ kind: "queued", place }`, again as it changes); those waiting are let in as the world's
+    next looked at, as many as there's room for, all brought into the world first and then each
+    sent it from one taking, nothing else sent them before their welcome. A place frees when
+    one says it's ready, leaves, or has taken a minute (`WELCOMES.timeout`). `queued` came with
+    `NET_VERSION` 225.
     Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
     asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
     that needs it twice running through no fault of its own: one slow to load that falls too far

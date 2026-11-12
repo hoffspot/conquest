@@ -31,6 +31,7 @@
 
 import { landAt, SETTLEMENTS } from "./worldplan/plan.js";
 import { cos, hypot, pow, sin } from "./exact.js";
+import { Near } from "./near.js";
 
 /** The team the wild's creatures are all on. */
 export const WILD = "beasts";
@@ -944,7 +945,25 @@ export function campFolk(faction, tier) {
     return (CAMP_FOLK[faction] ?? CAMP_FOLK.bandits).find(([, from]) => tier >= from)[0];
 }
 
-/** Is a place clear of every settlement (metres beyond each's edge)? */
+// A plan's settlements by cell (near.js), made once for each plan (and again should its places
+// be others), and the widest any settlement is (metres: none further than that and `beyond` from
+// a point can be within `beyond` of its edge)
+const settled = new WeakMap();
+const SETTLED_CELL = 512;
+const WIDEST = Math.max(40, ...Object.values(SETTLEMENTS).map(({ radius }) => radius ?? 0));
+
+/**
+ * Is a place clear of every settlement (metres beyond each's edge)? Measured against the
+ * settlements in the cells round it, not all the world's (it's asked of every spot a pack, an
+ * elite or a cache might be put out at): the same answer.
+ */
 export function clearOfSettlements(plan, [x, y], beyond) {
-    return plan.places.every((place) => hypot(x - place.at[0], y - place.at[1]) > (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond);
+    let kept = settled.get(plan);
+
+    if (!kept || kept.places !== plan.places || kept.count !== plan.places.length) {
+        kept = { places: plan.places, count: plan.places.length, near: new Near(plan.places, SETTLED_CELL, ({ at }) => at) };
+        settled.set(plan, kept);
+    }
+
+    return !kept.near.some(x, y, WIDEST + beyond, (place) => !(hypot(x - place.at[0], y - place.at[1]) > (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond));
 }

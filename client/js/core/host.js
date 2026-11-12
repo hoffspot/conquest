@@ -16,6 +16,8 @@
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
+import { count, lap, probing } from "./probe.js";
+import { encode, encodePlain } from "./wire.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
@@ -58,7 +60,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
-import { keptOf, spareBattle } from "./keptactor.js";
+import { keptOf, sharedOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -75,6 +77,7 @@ import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } fr
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
+import { Culling, Near } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
@@ -90,6 +93,10 @@ export const HOST_PLAYER = "player";
  * folk about their business inside; those `far` from every player let go.
  */
 export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
+
+// The side of a cell of the players' places (metres), where the passes that measure the world
+// against them look for those near (near.js): about as far as most of them ask
+const NEAR_CELL = 256;
 
 /** The orc's weapon (the town's one enemy, for now). */
 export const ORC_WEAPON = "cleaver";
@@ -1243,6 +1250,19 @@ function cardOf(standing, { knowledge = [] } = {}) {
 }
 
 export class Host {
+    /**
+     * Whether what's near the players is looked for by cell (near.js), as it always is, or by
+     * going through everyone and everything, as it was: only for the tests that check the world
+     * comes out the same either way, step for step.
+     */
+    static get culling() {
+        return Culling.on;
+    }
+
+    static set culling(on) {
+        Culling.on = Boolean(on);
+    }
+
     /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
@@ -2436,16 +2456,40 @@ export class Host {
         const out = (actor) => actor && actor.map === "town" && !actor.dead;
         const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter(out).map(({ x, y }) => [x, y]);
         const dark = torchesLit(elapsed);
+        const torches = [];
+        const globes = [];
+        const tally = { pairs: 0 };
 
-        return lighting({
+        // (Everyone gone through once for both, each list in the battle's order as ever)
+        for (const actor of this.battle.actors) {
+            if (actor.map === "town" && !actor.dead) {
+                if (dark && carriesTorch(actor, dark)) {
+                    torches.push([actor.x, actor.y]);
+                }
+
+                // (Only those with any spell on them asked which: most have none)
+                if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+                    globes.push([actor.x, actor.y]);
+                }
+            }
+        }
+
+        count("light.actors", this.battle.actors.length);
+
+        const light = lighting({
             elapsed,
             plan: this.world.plan,
             players,
             camps: [...[...this.camps.values()].map(({ fire }) => fire), ...this.campfires.map(({ fire }) => fire)],
             fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
-            torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
-            globes: this.battle.actors.filter((actor) => out(actor) && this.battle.buffOf(actor, "light")).map(({ x, y }) => [x, y]),
+            torches,
+            globes,
+            tally,
         });
+
+        count("light.pairs", tally.pairs);
+
+        return light;
     }
 
     /**
@@ -2458,8 +2502,12 @@ export class Host {
      * "sign", a sign on a trail read, and its home tracked: #readSign).
      */
     advance(ms) {
+        lap("light");
+        count("steps");
         this.recorder?.(["a", ms]);
         this.battle.light = this.#light();
+
+        lap("legends");
 
         // (The world's played on: its rare encounters' time, and each player's inside, core/rare.js)
         this.legends.pass(ms);
@@ -2470,7 +2518,11 @@ export class Host {
             }
         }
 
+        lap("battle");
+
         const events = this.battle.advance(ms);
+
+        lap("learn");
 
         // What the players did: their skills grow by it, and they find what's on the fallen; and
         // the wonders their spells work (Zombify, Summon, Teleport...)
@@ -2494,8 +2546,11 @@ export class Host {
             }
         }
 
+        lap("keepUp");
         this.#keepUp();
+        lap("idle");
         this.#idle();
+        lap("lapsed");
 
         // (Asked to a party, and no answer in time: lapsed, the one who asked told)
         for (const [id, asked] of [...this.invites]) {
@@ -2540,7 +2595,9 @@ export class Host {
             }
         }
 
+        lap("scrutiny");
         this.#scrutiny(ms);
+        lap("boons");
 
         // Boons worn off (and said); and a charm come into the pack or gone from it (found on
         // the fallen), counted
@@ -2570,6 +2627,8 @@ export class Host {
                 this.#safety(player, events);
             }
         }
+
+        lap("fallen");
 
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
         // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
@@ -2858,9 +2917,13 @@ export class Host {
             this.#fieldsDone();
         }
 
+        lap("invasions");
         this.#invasions(ms);
+        lap("sheltering");
         this.#sheltering();
+        lap("war");
         this.#warOn(ms);
+        lap("crossings");
 
         // (The players' camps' fires burnt out)
         if (this.campfires.length && this.campfires.some(({ until }) => until <= this.battle.time)) {
@@ -2897,6 +2960,8 @@ export class Host {
             }
         }
 
+        lap("explore");
+
         // Out in the world, the chunk each player's in is visited: the fog lifts off it, for their
         // party too (#share)
         for (const player of this.players.values()) {
@@ -2920,21 +2985,33 @@ export class Host {
 
         if (this.battle.time >= this.lookAt) {
             this.lookAt = this.battle.time + RELEVANCE.every;
+            lap("lookAround");
             this.#lookAround();
+            lap("spotting");
             this.#spotting();
+            lap("muster");
             this.#muster();
+            lap("townsfolk");
             this.#townsfolk();
+            lap("wilds");
             this.#wilds();
+            lap("sighting");
             this.#sighting();
+            lap("requests");
             this.#watchRequests();
+            lap("missions");
             this.#watchMissions();
+            lap("messengers");
             this.#sendMessengers();
             this.#messengersAbout();
         }
 
+        lap("end");
+
         const own = this.events;
 
         this.events = [];
+        lap(null);
 
         return own.length ? [...events, ...own] : events;
     }
@@ -3059,7 +3136,17 @@ export class Host {
             // (Those within a square of that reach first: most of the world's aren't, and needn't
             // be measured)
             const reach = SIGHTING.reach[1];
-            const unfound = this.#findables().filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
+
+            // (Looked for among those in the cells round the player, near.js, in their own order:
+            // the world's are a few thousand, a kilometre's a few dozen)
+            const findables = this.#findables();
+            const about = (this.findablesNear ??= new Near(findables, SIGHTING.reach[1], ({ at: where }) => where)).within(at[0], at[1], reach);
+
+            if (probing()) {
+                count("spotting.pairs", about.length);
+            }
+
+            const unfound = about.map((k) => findables[k]).filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
             const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
 
             if (!seen.length) {
@@ -3156,9 +3243,16 @@ export class Host {
     /**
      * Everything the world is just now, as plain data (core/wire.js carries it): to keep, or send
      * to a player joining, and carry on from (Host.restore). The world itself isn't in it: that's
-     * made again from its seed.
+     * made again from its seed. `shared`: what it holds is the world's own wherever that's plain
+     * data, not a copy of it, so it's only for writing out at once, before the world moves on,
+     * and never to be kept or changed (snapshotText; core/netplay.js, what's sent those who join):
+     * written out, it's the same text.
      */
-    snapshot() {
+    snapshot({ shared = false } = {}) {
+        count("snapshots");
+
+        const copy = shared ? (value) => value : structuredClone;
+
         return {
             version: SNAPSHOT_VERSION,
             seed: this.world.seed ?? null,
@@ -3173,12 +3267,12 @@ export class Host {
             rareLooked: this.rareLooked ?? null,
             courtWarned: [...this.courtWarned.entries()],
             // (Each character without what it has as one just made has it: core/keptactor.js)
-            battle: this.battle.snapshot({ keep: keptOf }),
+            battle: this.battle.snapshot({ keep: shared ? sharedOf : keptOf, shared }),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
             worksOut: [...this.worksOut.entries()],
-            townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
+            townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => copy(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
             storms: [...this.storms.entries()],
@@ -3197,55 +3291,64 @@ export class Host {
             followers: [...this.followers.entries()],
             mending: [...this.mending.entries()],
             nextFollower: this.nextFollower,
-            parties: structuredClone([...this.parties.values()]),
-            invites: structuredClone([...this.invites.entries()]),
+            parties: copy([...this.parties.values()]),
+            invites: copy([...this.invites.entries()]),
             nextParty: this.nextParty,
             hired: [...this.hired],
             wild: [...this.wild.entries()],
-            packs: structuredClone([...this.packs.entries()]),
-            fights: structuredClone([...this.fights.entries()]),
-            cleared: structuredClone(this.cleared),
+            packs: copy([...this.packs.entries()]),
+            fights: copy([...this.fights.entries()]),
+            cleared: copy(this.cleared),
             eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
             dens: [...this.dens.entries()],
-            trials: structuredClone([...this.trials.entries()]),
-            hellRifts: structuredClone(this.hellRifts),
+            trials: copy([...this.trials.entries()]),
+            hellRifts: copy(this.hellRifts),
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
-            caches: structuredClone([...this.caches.entries()]),
-            dungeons: structuredClone([...this.dungeons.entries()]),
+            caches: copy([...this.caches.entries()]),
+            dungeons: copy([...this.dungeons.entries()]),
             nextCache: this.nextCache,
-            treasures: structuredClone([...this.treasures.entries()]),
+            treasures: copy([...this.treasures.entries()]),
             nextTreasure: this.nextTreasure,
-            travel: structuredClone([...this.travel.entries()]),
-            ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
-            ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
-            ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
-            ...(this.nextMessenger > 1 ? { messengers: structuredClone([...this.messengers.entries()]), nextMessenger: this.nextMessenger, messengersHeard: [...this.messengersHeard.entries()] } : {}),
-            ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
-            ...(this.nextAmbush > 1 ? { ambushes: structuredClone([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
-            ground: structuredClone([...this.ground.values()]),
-            campfires: structuredClone(this.campfires),
+            travel: copy([...this.travel.entries()]),
+            ...(this.nextFind > 1 ? { finds: copy([...this.finds.entries()]), nextFind: this.nextFind } : {}),
+            ...(this.nextFresh > 1 ? { fresh: copy([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
+            ...(this.nextStranger > 1 ? { strangers: copy([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
+            ...(this.nextMessenger > 1 ? { messengers: copy([...this.messengers.entries()]), nextMessenger: this.nextMessenger, messengersHeard: [...this.messengersHeard.entries()] } : {}),
+            ...(this.nextObstacle > 1 ? { obstacles: copy([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
+            ...(this.nextAmbush > 1 ? { ambushes: copy([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
+            ground: copy([...this.ground.values()]),
+            campfires: copy(this.campfires),
             nextGround: this.nextGround,
-            trades: structuredClone([...this.trades.values()]),
-            stocks: structuredClone([...this.stocks.entries()]),
+            trades: copy([...this.trades.values()]),
+            stocks: copy([...this.stocks.entries()]),
             nextTrade: this.nextTrade,
-            companions: structuredClone([...this.companions.entries()]),
+            companions: copy([...this.companions.entries()]),
             nextCompanion: this.nextCompanion,
-            summonings: structuredClone([...this.summonings.entries()]),
+            summonings: copy([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
             fielded: this.fielded,
-            fields: structuredClone(this.fields),
+            fields: copy(this.fields),
             invaded: this.invaded,
-            invasions: structuredClone(this.invasions),
-            burnt: structuredClone(this.burnt),
-            fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, mightPeak: structuredClone(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
-            done: structuredClone(this.done),
+            invasions: copy(this.invasions),
+            burnt: copy(this.burnt),
+            fallen: copy(this.fallen),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: copy(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: copy(player.discarded ?? null), safety: copy(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: copy(player.resting), budget: player.budget ?? null, mightPeak: copy(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
+            done: copy(this.done),
             legends: this.legends.toJSON(),
         };
+    }
+
+    /**
+     * The same as text (core/wire.js encode's of snapshot()), written straight from the world's
+     * own with nothing copied first: for keeping it (the world server's saves), where the copies
+     * were a third of the work.
+     */
+    snapshotText() {
+        return encodePlain(this.snapshot({ shared: true })) ?? encode(this.snapshot());
     }
 
     /**
@@ -3494,6 +3597,8 @@ export class Host {
      * in each pack.
      */
     checksum() {
+        count("checksums");
+
         let sum = 2166136261;
 
         const mix = (value) => {
@@ -5893,7 +5998,11 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const near = (middle, edge, within) => places.some(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge < within);
+        // (Against the players in the cells round each, near.js, and how many were measured
+        // counted)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const near = (middle, edge, within) => about.some(middle[0], middle[1], within + edge, ([x, y]) => (measured++, hypot(x - middle[0], y - middle[1]) - edge < within));
 
         // (Those out, far from every player now: home)
         for (const [id, out] of [...this.townsfolk]) {
@@ -5905,30 +6014,34 @@ export class Host {
         }
 
         // (Those a player's come near: out)
-        for (const where of this.#peopledNear(places)) {
+        for (const where of this.#peopledNear(about)) {
             if (!this.townsfolk.has(where.id) && near(where.middle, where.edge, TOWNSFOLK_REACH.near)) {
                 this.#outward(where);
             }
         }
+
+        count("townsfolk.pairs", measured);
     }
 
-    // The settlements and the castles set down within reach of any of `places` (players'
-    // whereabouts): [{ id, kind, people, name, middle, edge }]
-    #peopledNear(places) {
+    // The settlements and the castles set down within reach of any of the players' whereabouts
+    // (`about`: those, by cell, near.js): [{ id, kind, people, name, middle, edge }]
+    #peopledNear(about) {
         const reach = TOWNSFOLK_REACH.near + 120;
         const found = [];
 
         this.settlementPlaces ??= this.world.plan.places.filter(({ kind }) => SETTLEMENT_KINDS[kind]);
 
         for (const place of this.settlementPlaces) {
-            if (places.some(([x, y]) => hypot(x - place.at[0], y - place.at[1]) < SETTLEMENT_KINDS[place.kind].radius + reach)) {
+            const within = SETTLEMENT_KINDS[place.kind].radius + reach;
+
+            if (about.some(place.at[0], place.at[1], within, ([x, y]) => hypot(x - place.at[0], y - place.at[1]) < within)) {
                 found.push(this.#peopledAt(place.id));
             }
         }
 
         // (Not those that couldn't be set down: sites.js keeps them, as null)
         for (const set of this.world.maps.town.sites?.set?.values() ?? []) {
-            if (set && (set.site.kind === "castle" || set.citadel) && places.some(([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
+            if (set && (set.site.kind === "castle" || set.citadel) && about.some(set.x, set.y, set.radius + reach, ([x, y]) => hypot(x - set.x, y - set.y) < set.radius + reach)) {
                 found.push(this.#peopledAt(set.site.id));
             }
         }
@@ -6100,19 +6213,25 @@ export class Host {
         }
 
         const places = this.#whereabouts();
+        // (Each town, works, camp and army against the players in the cells round it, near.js,
+        // and how many were measured counted. Is any player within so far of a point's edge; is
+        // every one of them further than so far from it: as measuring them all answered)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const within = ([mx, my], edge, reach) => about.some(mx, my, reach + edge, ([x, y]) => (measured++, hypot(x - mx, y - my) - edge < reach));
+        const beyond = ([mx, my], edge, reach) => !about.some(mx, my, reach + edge, ([x, y]) => (measured++, !(hypot(x - mx, y - my) - edge > reach)));
 
         for (const town of war.towns) {
             const place = this.#placeOf(town.id);
             const middle = this.#middleOf(place);
             const edge = SETTLEMENT_KINDS[place.kind].radius;
-            const distances = places.map(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge);
             const mustered = this.mustered.get(town.id);
 
-            if (mustered && (mustered.people !== town.owner || distances.every((distance) => distance > MUSTER.far))) {
+            if (mustered && (mustered.people !== town.owner || beyond(middle, edge, MUSTER.far))) {
                 this.#dismiss(town.id);
             }
 
-            if (!this.mustered.has(town.id) && distances.some((distance) => distance < MUSTER.near)) {
+            if (!this.mustered.has(town.id) && within(middle, edge, MUSTER.near)) {
                 this.#raise(town, place, middle);
             } else if (this.mustered.has(town.id)) {
                 this.#relieve(town, place, middle);
@@ -6123,13 +6242,12 @@ export class Host {
         // every player's far, or it's changed hands
         for (const works of war.works) {
             const out = this.worksOut.get(works.id);
-            const distances = places.map(([x, y]) => hypot(x - works.at[0], y - works.at[1]));
 
-            if (out && (out.held !== works.held || (!works.held && out.people !== works.owner) || distances.every((distance) => distance > WORKS_OUT.far))) {
+            if (out && (out.held !== works.held || (!works.held && out.people !== works.owner) || beyond(works.at, 0, WORKS_OUT.far))) {
                 this.#standDown(works.id);
             }
 
-            if (!this.worksOut.has(works.id) && distances.some((distance) => distance < WORKS_OUT.near)) {
+            if (!this.worksOut.has(works.id) && within(works.at, 0, WORKS_OUT.near)) {
                 this.#manWorks(works);
             } else if (this.worksOut.has(works.id) && !works.held) {
                 this.#relieveWorks(works);
@@ -6141,7 +6259,9 @@ export class Host {
         // far from every player (or gone) struck
         this.#stockadesChanged();
 
-        const near = (camp, within) => places.some(([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < within);
+        count("muster.pairs", measured);
+
+        const near = (camp, reach) => about.some(camp.at[0], camp.at[1], reach, ([x, y]) => hypot(x - camp.at[0], y - camp.at[1]) < reach);
 
         for (const id of [...this.camps.keys()]) {
             const camp = war.camp(id) ?? war.depot(id);
@@ -10359,7 +10479,12 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
+        // (Is a creature further than so far from every player? Measured against the players in
+        // the cells round it, near.js, and how many were measured counted: the same answer as
+        // the least of its distances to them all being more than that)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const beyond = (actor, far) => !about.some(actor.x, actor.y, far, ([x, y]) => (measured++, !(hypot(actor.x - x, actor.y - y) > far)));
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
@@ -10379,15 +10504,16 @@ export class Host {
 
             if (!actor) {
                 this.#unwild(id);
-            } else if (roaming && (distanceTo(actor) > (one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
+            } else if (roaming && (beyond(actor, one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && beyond(actor, WILDS.from)))) {
                 this.#release(id);
-            } else if (!actor.dead && actor.mood?.kind === "flee" && distanceTo(actor) > NERVE_GONE.gone) {
+            } else if (!actor.dead && actor.mood?.kind === "flee" && beyond(actor, NERVE_GONE.gone)) {
                 // (A wary beast whose nerve went, limped off well away from everyone: gone, its
                 // spoils with it, core/wary.js MORALE)
                 this.#release(id);
             }
         }
 
+        count("wilds.pairs", measured);
         this.#wildCamps(homes);
         this.#dens(homes);
         this.#moonTrials(homes);
@@ -10605,8 +10731,13 @@ export class Host {
     #groups() {
         const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
         const at = new Map(standing.map((one) => [one.player.id, one]));
+        const tally = { pairs: 0 };
+        const groups = groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y })), STRENGTH.apart, tally);
 
-        return groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y }))).map((members) => {
+        count("groups.calls");
+        count("groups.pairs", tally.pairs);
+
+        return groups.map((members) => {
             const players = members.map(({ id }) => at.get(id).player);
             const led = this.partyFor(players[0].id)?.leader;
             const leader = players.find((player) => player.id === led) ?? players[0];
@@ -11333,7 +11464,10 @@ export class Host {
     // castles and the dragon's lair keep their own masters (#lairs).
     #places(places, homes) {
         const plan = this.world.plan;
-        const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
+        // (Against the players in the cells round each place, near.js: there are hundreds of
+        // places worth finding, and a few of them near anyone)
+        const about = new Near(places, NEAR_CELL);
+        const near = (at, within) => about.some(at[0], at[1], within, ([x, y]) => hypot(x - at[0], y - at[1]) < within);
 
         if (!this.war) {
             return;
@@ -18809,21 +18943,32 @@ export class Host {
             this.buildingsInOrder = { of: interiors, version: interiors.version, list: [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
         }
 
+        // (Each building's door against the players in the cells round it, near.js, and how many
+        // were measured counted: one not open, is anyone out in the world near it; one open, is
+        // everyone far from it, which no one is while a player's whereabouts aren't known. As
+        // measuring every building against every player answered: a thousand buildings and 50
+        // players were 100,000 measurings a look)
+        const known = places.filter(Boolean);
+        const about = new Near(known, NEAR_CELL, (place) => [place.x, place.y]);
+        let measured = 0;
+
         for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {
                 continue;
             }
 
             const { x, z } = building.entrance.door;
-            const near = wanted.has(building.key) || places.some((place) => place?.out && hypot(x - place.x, z - place.y) < RELEVANCE.near);
-            const far = !wanted.has(building.key) && places.every((place) => place && hypot(x - place.x, z - place.y) > RELEVANCE.far);
 
-            if (!this.open.has(building.key) && near) {
-                this.#openBuilding(building.key);
-            } else if (this.open.has(building.key) && far) {
+            if (!this.open.has(building.key)) {
+                if (wanted.has(building.key) || about.some(x, z, RELEVANCE.near, (place) => (measured++, place.out && hypot(x - place.x, z - place.y) < RELEVANCE.near))) {
+                    this.#openBuilding(building.key);
+                }
+            } else if (!wanted.has(building.key) && known.length === places.length && !about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
                 this.#closeBuilding(building.key);
             }
         }
+
+        count("lookAround.pairs", measured);
     }
 
     // A building (by key), added to the world's if it's in a settlement not laid out yet
