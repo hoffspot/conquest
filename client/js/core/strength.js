@@ -24,6 +24,7 @@
 // what's made of it is the same in every browser (exact.js pow, sqrt).
 
 import { pow, sqrt } from "./exact.js";
+import { Near } from "./near.js";
 import { SPELL_COOLDOWN, SPELLS } from "./spells.js";
 import { armsOf, blowEvery } from "./weapons.js";
 
@@ -157,11 +158,16 @@ export function opposition(strength) {
 /**
  * Players in groups ({ id, map, x, y }, in order: the world's own): those on one map `apart`
  * metres or less from one another, one after another, one group. Each group's players in the
- * order given; the groups in the order of their first.
+ * order given; the groups in the order of their first. Each is measured against those in the
+ * cells round them only (near.js), in the order given, which changes nothing: with 50 players
+ * apart, 50 measurings a grouping where there were 2,500. `tally`, if given, has how many were
+ * made added to its `pairs`.
  */
-export function groupsOf(players, apart = STRENGTH.apart) {
+export function groupsOf(players, apart = STRENGTH.apart, tally = null) {
     const groups = [];
     const placed = new Set();
+    const near = new Near(players, Math.max(1, apart), ({ x, y }) => [x, y]);
+    const order = new Map(players.map((player, k) => [player, k]));
 
     for (const first of players) {
         if (placed.has(first.id)) {
@@ -173,18 +179,25 @@ export function groupsOf(players, apart = STRENGTH.apart) {
         placed.add(first.id);
 
         for (let k = 0; k < group.length; k++) {
-            for (const other of players) {
-                const [dx, dy] = [other.x - group[k].x, other.y - group[k].y];
-                const near = other.map === group[k].map && dx * dx + dy * dy <= apart * apart;
+            const about = near.within(group[k].x, group[k].y, apart);
 
-                if (!placed.has(other.id) && near) {
+            if (tally) {
+                tally.pairs += about.length;
+            }
+
+            for (const index of about) {
+                const other = players[index];
+                const [dx, dy] = [other.x - group[k].x, other.y - group[k].y];
+                const close = other.map === group[k].map && dx * dx + dy * dy <= apart * apart;
+
+                if (!placed.has(other.id) && close) {
                     placed.add(other.id);
                     group.push(other);
                 }
             }
         }
 
-        groups.push(group.sort((a, b) => players.indexOf(a) - players.indexOf(b)));
+        groups.push(group.sort((a, b) => order.get(a) - order.get(b)));
     }
 
     return groups;

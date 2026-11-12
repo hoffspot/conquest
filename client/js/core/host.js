@@ -76,6 +76,7 @@ import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } fr
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
+import { Culling } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
@@ -1244,6 +1245,19 @@ function cardOf(standing, { knowledge = [] } = {}) {
 }
 
 export class Host {
+    /**
+     * Whether what's near the players is looked for by cell (near.js), as it always is, or by
+     * going through everyone and everything, as it was: only for the tests that check the world
+     * comes out the same either way, step for step.
+     */
+    static get culling() {
+        return Culling.on;
+    }
+
+    static set culling(on) {
+        Culling.on = Boolean(on);
+    }
+
     /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
@@ -10656,11 +10670,13 @@ export class Host {
     #groups() {
         const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
         const at = new Map(standing.map((one) => [one.player.id, one]));
+        const tally = { pairs: 0 };
+        const groups = groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y })), STRENGTH.apart, tally);
 
         count("groups.calls");
-        count("groups.pairs", standing.length * standing.length);
+        count("groups.pairs", tally.pairs);
 
-        return groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y }))).map((members) => {
+        return groups.map((members) => {
             const players = members.map(({ id }) => at.get(id).player);
             const led = this.partyFor(players[0].id)?.leader;
             const leader = players.find((player) => player.id === led) ?? players[0];

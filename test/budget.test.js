@@ -34,8 +34,9 @@ const LOOKS = (SECONDS * 1000) / RELEVANCE.every;
  * of the wild): then say so where it's changed.
  */
 const BUDGETS = [
-    // (Every player against every player, each time they're grouped: 1-7 makes it linear)
-    ["groups.pairs", 100_000, "pairs of players measured as they're grouped"],
+    // (Each player against those in the cells round them, each time they're grouped: 40
+    // groupings of 50 standing apart. It was every player against every player, 100,000)
+    ["groups.pairs", 2_800, "pairs of players measured as they're grouped"],
     // (Every made building against every player, each look: 1-9 takes it to those near)
     ["lookAround.pairs", 440_000, "buildings measured against players' places"],
     // (Everything to be found against each player out in the world: 1-9)
@@ -92,11 +93,13 @@ describe("the work of a world's steps, by count (core/probe.js), at 50 players s
         assert.equal(host.battle.actors.filter(({ kind, dead }) => kind === "player" && !dead).length, PLAYERS);
     });
 
-    it("measures everything against everyone today: the counts that are sums of products are those products", () => {
+    it("measures everything against everyone where nothing's culled yet: the counts that are sums of products are those products", () => {
         // (Each look, every town and works against every player's place: nothing's culled yet.
         // When 1-9 lands, this is what it stops being, and the budget below is what holds it)
         assert.equal(counts["muster.pairs"], LOOKS * (host.war.towns.length + host.war.works.length) * PLAYERS);
-        assert.equal(counts["groups.pairs"] % (PLAYERS * PLAYERS), 0, "every grouping measured all 50 against all 50");
+        // (Since 1-7 a grouping measures each player against those in the cells round them:
+        // standing apart, against themselves alone, where it was all 50 against all 50)
+        assert.equal(counts["groups.pairs"], counts["groups.calls"] * PLAYERS);
     });
 
     for (const [counter, most, what] of BUDGETS) {

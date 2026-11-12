@@ -260,7 +260,9 @@ near them, as strong as the camp's distance from that player's home (`CAMP_FOLK`
 
 ## Kept about the players
 
-Players together are taken as one group (core/strength.js `groupsOf`): those on one map within 60
+Players together are taken as one group (core/strength.js `groupsOf`: each measured against the
+players in the cells round them, core/near.js, which groups them exactly as measuring each against
+everyone did): those on one map within 60
 m of one another (`STRENGTH.apart`), one after another, so three walking in a line 50 m apart are
 one group. A player on their own is a group of one.
 
