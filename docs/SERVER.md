@@ -661,8 +661,9 @@ saves and backups, who was sent out) isn't in the log yet: read it in Activity.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
-where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the
-players were all in. Run it with nothing else on the computer: the players' copies of the world
+where it stood then), whether every minute's 99th-percentile step stayed under 50 ms once the
+players were all in, and whether the world kept its pace (it fails a world that played under 99%
+of its clock's time from then on, and says how much it let go). Run it with nothing else on the computer: the players' copies of the world
 share its cores (they're run at a lower priority, as if each were on a device of its own). Each
 minute it says how many are in the world's battle, how busy the world's thread was, and how many
 tiles of buildings' insides it baked ahead (a few as players come near new buildings, none once
