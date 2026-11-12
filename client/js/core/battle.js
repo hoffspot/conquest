@@ -844,7 +844,7 @@ export class Battle {
 
     // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
     // #counted): read by nothing else, and begun again from nothing each step
-    #work = { walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0 };
+    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0 };
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -2716,8 +2716,15 @@ export class Battle {
         }
 
         for (const actor of this.actors) {
-            if (probed && part !== (MOVES[actor.ai] ?? MOVES.other)) {
-                timed((part = MOVES[actor.ai] ?? MOVES.other));
+            if (probed) {
+                if (part !== (MOVES[actor.ai] ?? MOVES.other)) {
+                    timed((part = MOVES[actor.ai] ?? MOVES.other));
+                }
+
+                // (Who's in it, counted as each is come to: no going through everyone again for it)
+                this.#work[Object.hasOwn(MOVES, actor.ai) ? actor.ai : "other"]++;
+                this.#work.fallen += actor.dead ? 1 : 0;
+                this.#work.idle += !actor.dead && !actor.path.length && actor.target === null ? 1 : 0;
             }
 
             this.#move(actor);
@@ -2746,28 +2753,19 @@ export class Battle {
         outer(from);
     }
 
-    // The step's work counted (core/probe.js COUNTERS): who was in it, by kind, how many of them
-    // down and how many standing with nowhere to go; and what was tallied as it went (#work),
-    // begun again from nothing
+    // The step's work counted (core/probe.js COUNTERS), as it was tallied while it went (#work):
+    // who was in it, by kind, how many of them down and how many standing with nowhere to go as
+    // their walking began; and what they did
     #counted() {
         const work = this.#work;
-        const kinds = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0 };
-        let fallen = 0;
-        let idle = 0;
 
-        for (const actor of this.actors) {
-            kinds[Object.hasOwn(kinds, actor.ai) ? actor.ai : "other"]++;
-            fallen += actor.dead ? 1 : 0;
-            idle += !actor.dead && !actor.path.length && actor.target === null ? 1 : 0;
-        }
-
-        for (const kind of Object.keys(kinds)) {
-            count(ACTORS[kind], kinds[kind]);
+        for (const kind of Object.keys(ACTORS)) {
+            count(ACTORS[kind], work[kind]);
         }
 
         count("battle.actors", this.actors.length);
-        count("battle.fallen", fallen);
-        count("battle.idle", idle);
+        count("battle.fallen", work.fallen);
+        count("battle.idle", work.idle);
         count("battle.walkers", work.walkers);
         count("battle.strides", work.strides);
         count("battle.searches", work.searches);
