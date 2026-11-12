@@ -586,6 +586,13 @@ always on, with no setting (`npm run step-budget` times every pass of every step
 thousandths on a 4-core container, and fails if it comes to 0.05 ms). Timing the passes changes
 nothing a world does (`test/probe.test.js`).
 
+What it can't say is how much of a step went on the maps inside (dungeons, buildings). The
+passes are the step's parts by what they do, not by where: the battle's step, the largest of
+them, goes through everyone in the world in one order whatever map they're on, three times over,
+so a map's share of it could only be timed by reading the clock for each of them each time
+(hundreds of readings a step, as much as all the counting may cost with a field battle on and
+more with more players) or by playing them map by map, which would change what a world does.
+
 ### The last day and week
 
 Under them, Health draws how it's been: for the server, how many players' games were linked,
