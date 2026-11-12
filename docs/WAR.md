@@ -3606,11 +3606,37 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   3.0 KB; in a field battle of 15 a side, 4.5 KB (what's done 2.4, their own hero 2.0). The
   world as one comes in is 80 KB of text there, and 120 to 300 KB with a battle or with eight
   players over six towns: a sixth to a fifth of that on its way, compressed (below).
+- **The host's two parts** (`Session` and `OpsFeed` in `core/netplay.js`, which `Hosting` is made
+  of; generated/multiplayer_scaling_plan.md 3-1). The session is who's in and everything between
+  each of them and the host that isn't the world itself: coming in and the line for it, a
+  character taken over on another link, the part each plays, chat, the world's stopping, being
+  sent out, each one's own hero told them, and their commands with their limits (`HEARD`, by
+  the clock). The feed is the world as it's sent them, by lockstep: what's done each step, the
+  checksum, the motion stream where a host sends it, and the whole world for one coming in, one
+  asking again (`AGAIN`, `WORLDS`) or everyone after the host's link drops. `Hosting` carries
+  what both send and sends for both in one order (`flush`), and everything of either is still
+  read and set on it (`hosting.players`, `hosting.asked`, `hosting.pause()`), so whoever runs a
+  world, a browser's game or a world server's thread, uses it as before. Another feed can stand
+  in the lockstep one's place without the session changing.
 - **What a joined game may ask of the host** (`HEARD`, `AGAIN`). However they're linked (a link
   made point to point passes no server that would hold them to anything):
   - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
     left unused, answered at once; past those, an asking waits till its time's come (answered
     as the game's next heard from), and everyone asking in a step is sent the one snapshot.
+    The world as it stands between two steps, nothing done since, is taken and written out once
+    however many want it, one coming in among them: each is sent the same text but for their
+    own of their hero, which is set into it. A world on a world server also holds all its
+    takings together to an eightieth of its thread (`WORLDS`, the server's `sparing`: none for
+    2 s after one that took 25 ms) and takes none in the step that turns the war; a world
+    hosted in a browser doesn't.
+  - **Coming in:** a host may let only so many come in at once (`Hosting.welcomes`: a world
+    server's world, by its `welcomes` setting, 2; a world hosted in a browser sets none and
+    welcomes each at once). A hello past that waits its turn and is told its place
+    (`{ kind: "queued", place }`, again as it changes); those waiting are let in as the world's
+    next looked at, as many as there's room for, all brought into the world first and then each
+    sent it from one taking, nothing else sent them before their welcome. A place frees when
+    one says it's ready, leaves, or has taken a minute (`WELCOMES.timeout`). `queued` came with
+    `NET_VERSION` 225.
     Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
     asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
     that needs it twice running through no fault of its own: one slow to load that falls too far

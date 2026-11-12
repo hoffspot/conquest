@@ -7,6 +7,7 @@
 // refused. A setting added needs no step: it's filled in with its default. Keys it doesn't know
 // are kept, not dropped, so a newer server's settings come through an older one unharmed.
 
+import { LIMITS } from "../access/limits.js";
 import { exists, readJSON, writeJSON } from "./files.js";
 import { checkVersion, forward, SERVER_VERSION } from "./versions.js";
 
@@ -15,6 +16,16 @@ export const CONFIG_VERSION = 1;
 
 /** The steps that bring an older server's settings forward: [n] takes them from version n to n + 1 (and returns them). */
 export const SETTINGS_STEPS = Object.freeze({});
+
+/**
+ * The most a server takes, which its settings may lower and can't raise (generated/
+ * multiplayer_scaling_plan.md 1-13): players in all its worlds together (access/limits.js
+ * LIMITS.players), and in any one world (the game's own: core/netplay.js MOST_PLAYERS, which a
+ * world's own setting can't pass either, worlds.js WORLD_SETTINGS). A world's players each play a
+ * copy of the whole world, step for step, and that's what 8 is the measure of: no setting here
+ * goes above it until worlds are sent to their players another way (the plan's 3-33).
+ */
+export const CAPS = Object.freeze({ players: LIMITS.players, mostPlayers: 8 });
 
 /**
  * Every setting: its kind ("text", "boolean", "integer", "number", or "choice": one of its `of`,
@@ -26,6 +37,8 @@ export const SETTINGS = Object.freeze({
     port: { kind: "integer", min: 1, max: 65535, default: 8480, about: "The port players reach the server on (and the management page, from the Wi-Fi, at /admin)" },
     adminPort: { kind: "integer", min: 1, max: 65535, default: 8481, about: "The port the management page answers on, on this computer alone, needing no key" },
     worldsAtOnce: { kind: "integer", min: 1, max: 64, default: 2, about: "How many worlds may be running or loading at once" },
+    playersAtOnce: { kind: "integer", min: 1, max: CAPS.players, default: CAPS.players, about: "The most players in all its worlds together at once" },
+    mostPlayersCeiling: { kind: "integer", min: 1, max: CAPS.mostPlayers, default: CAPS.mostPlayers, about: "The most players any one world here may take at once: no world's own setting goes above it" },
     setAsideMinutes: { kind: "number", min: 0, max: 1440, default: 2, about: "How long a world with nobody in it waits before it's saved and set aside (minutes)" },
     keepAwake: { kind: "boolean", default: true, about: "Keep the computer awake while players are in" },
     bonjour: { kind: "boolean", default: true, about: "Show this server to others on the Wi-Fi, and list the servers near it (Bonjour)" },

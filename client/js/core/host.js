@@ -17,6 +17,7 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
 import { count, lap, probing } from "./probe.js";
+import { encode, encodePlain } from "./wire.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
@@ -59,7 +60,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
-import { keptOf, spareBattle } from "./keptactor.js";
+import { keptOf, sharedOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -3197,10 +3198,15 @@ export class Host {
     /**
      * Everything the world is just now, as plain data (core/wire.js carries it): to keep, or send
      * to a player joining, and carry on from (Host.restore). The world itself isn't in it: that's
-     * made again from its seed.
+     * made again from its seed. `shared`: what it holds is the world's own wherever that's plain
+     * data, not a copy of it, so it's only for writing out at once, before the world moves on,
+     * and never to be kept or changed (snapshotText; core/netplay.js, what's sent those who join):
+     * written out, it's the same text.
      */
-    snapshot() {
+    snapshot({ shared = false } = {}) {
         count("snapshots");
+
+        const copy = shared ? (value) => value : structuredClone;
 
         return {
             version: SNAPSHOT_VERSION,
@@ -3216,12 +3222,12 @@ export class Host {
             rareLooked: this.rareLooked ?? null,
             courtWarned: [...this.courtWarned.entries()],
             // (Each character without what it has as one just made has it: core/keptactor.js)
-            battle: this.battle.snapshot({ keep: keptOf }),
+            battle: this.battle.snapshot({ keep: shared ? sharedOf : keptOf, shared }),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
             worksOut: [...this.worksOut.entries()],
-            townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => structuredClone(this.folk.get(id))).filter(Boolean)]),
+            townsfolk: [...this.townsfolk.entries()].map(([place, ids]) => [place, ids.map((id) => copy(this.folk.get(id))).filter(Boolean)]),
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
             storms: [...this.storms.entries()],
@@ -3240,55 +3246,64 @@ export class Host {
             followers: [...this.followers.entries()],
             mending: [...this.mending.entries()],
             nextFollower: this.nextFollower,
-            parties: structuredClone([...this.parties.values()]),
-            invites: structuredClone([...this.invites.entries()]),
+            parties: copy([...this.parties.values()]),
+            invites: copy([...this.invites.entries()]),
             nextParty: this.nextParty,
             hired: [...this.hired],
             wild: [...this.wild.entries()],
-            packs: structuredClone([...this.packs.entries()]),
-            fights: structuredClone([...this.fights.entries()]),
-            cleared: structuredClone(this.cleared),
+            packs: copy([...this.packs.entries()]),
+            fights: copy([...this.fights.entries()]),
+            cleared: copy(this.cleared),
             eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
             dens: [...this.dens.entries()],
-            trials: structuredClone([...this.trials.entries()]),
-            hellRifts: structuredClone(this.hellRifts),
+            trials: copy([...this.trials.entries()]),
+            hellRifts: copy(this.hellRifts),
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
-            caches: structuredClone([...this.caches.entries()]),
-            dungeons: structuredClone([...this.dungeons.entries()]),
+            caches: copy([...this.caches.entries()]),
+            dungeons: copy([...this.dungeons.entries()]),
             nextCache: this.nextCache,
-            treasures: structuredClone([...this.treasures.entries()]),
+            treasures: copy([...this.treasures.entries()]),
             nextTreasure: this.nextTreasure,
-            travel: structuredClone([...this.travel.entries()]),
-            ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
-            ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
-            ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
-            ...(this.nextMessenger > 1 ? { messengers: structuredClone([...this.messengers.entries()]), nextMessenger: this.nextMessenger, messengersHeard: [...this.messengersHeard.entries()] } : {}),
-            ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
-            ...(this.nextAmbush > 1 ? { ambushes: structuredClone([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
-            ground: structuredClone([...this.ground.values()]),
-            campfires: structuredClone(this.campfires),
+            travel: copy([...this.travel.entries()]),
+            ...(this.nextFind > 1 ? { finds: copy([...this.finds.entries()]), nextFind: this.nextFind } : {}),
+            ...(this.nextFresh > 1 ? { fresh: copy([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
+            ...(this.nextStranger > 1 ? { strangers: copy([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
+            ...(this.nextMessenger > 1 ? { messengers: copy([...this.messengers.entries()]), nextMessenger: this.nextMessenger, messengersHeard: [...this.messengersHeard.entries()] } : {}),
+            ...(this.nextObstacle > 1 ? { obstacles: copy([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
+            ...(this.nextAmbush > 1 ? { ambushes: copy([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
+            ground: copy([...this.ground.values()]),
+            campfires: copy(this.campfires),
             nextGround: this.nextGround,
-            trades: structuredClone([...this.trades.values()]),
-            stocks: structuredClone([...this.stocks.entries()]),
+            trades: copy([...this.trades.values()]),
+            stocks: copy([...this.stocks.entries()]),
             nextTrade: this.nextTrade,
-            companions: structuredClone([...this.companions.entries()]),
+            companions: copy([...this.companions.entries()]),
             nextCompanion: this.nextCompanion,
-            summonings: structuredClone([...this.summonings.entries()]),
+            summonings: copy([...this.summonings.entries()]),
             soldiers: [...this.soldiers.entries()],
             fielded: this.fielded,
-            fields: structuredClone(this.fields),
+            fields: copy(this.fields),
             invaded: this.invaded,
-            invasions: structuredClone(this.invasions),
-            burnt: structuredClone(this.burnt),
-            fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, mightPeak: structuredClone(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
-            done: structuredClone(this.done),
+            invasions: copy(this.invasions),
+            burnt: copy(this.burnt),
+            fallen: copy(this.fallen),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: copy(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: copy(player.discarded ?? null), safety: copy(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: copy(player.resting), budget: player.budget ?? null, mightPeak: copy(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
+            done: copy(this.done),
             legends: this.legends.toJSON(),
         };
+    }
+
+    /**
+     * The same as text (core/wire.js encode's of snapshot()), written straight from the world's
+     * own with nothing copied first: for keeping it (the world server's saves), where the copies
+     * were a third of the work.
+     */
+    snapshotText() {
+        return encodePlain(this.snapshot({ shared: true })) ?? encode(this.snapshot());
     }
 
     /**

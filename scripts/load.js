@@ -642,7 +642,13 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const taken = clock();
         const text = encode(snapshot);
 
-        return { take: taken - before, encode: clock() - taken, bytes: Buffer.byteLength(text) };
+        const encoded = clock();
+
+        // (And written straight from the world's own, as the server's saves are and what's sent
+        // those who join: Host.snapshotText)
+        host.snapshotText();
+
+        return { take: taken - before, encode: encoded - taken, text: clock() - encoded, bytes: Buffer.byteLength(text) };
     });
     const middle = (key) => shots.map((shot) => shot[key]).sort((a, b) => a - b)[shots.length >> 1];
     const after = process.memoryUsage();
@@ -683,7 +689,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             byKind: Object.fromEntries([...kinds].sort(([a], [b]) => (a < b ? -1 : 1))),
             up: { ...up, refused: hosting.dropped - commandsBefore, allowed: HEARD.commands },
         },
-        snapshot: { bytes: middle("bytes"), take: round(middle("take")), encode: round(middle("encode")) },
+        snapshot: { bytes: middle("bytes"), take: round(middle("take")), encode: round(middle("encode")), text: round(middle("text")) },
         memory: {
             // (MB)
             heap: round(after.heapUsed / MB, 1),
@@ -722,7 +728,7 @@ export const REPORT_SCHEMA = Object.freeze({
         byKind: [{ messages: "number", bytes: "number" }],
         up: { messages: "number", bytes: "number", refused: "number", allowed: "number" },
     },
-    snapshot: { bytes: "number", take: "number", encode: "number" },
+    snapshot: { bytes: "number", take: "number", encode: "number", text: "number" },
     memory: { heap: "number", heapBefore: "number", heapMost: "number", external: "number", rss: "number" },
     actors: { start: "number", most: "number", end: "number" },
     problems: "array",
@@ -812,7 +818,7 @@ export function wordsOf(report) {
         `The passes that took most (ms a step): ${top.map(([name, { mean, share }]) => `${name} ${mean.toFixed(3)} (${(share * 100).toFixed(0)}%)`).join(", ")}`,
         `Sent each player: ${kb(bytes.perPeer.mean)}/s (the busiest ${kb(bytes.perPeer.most)}/s, a worst second of ${kb(bytes.perPeer.worstSecond)}); by kind: ${Object.entries(bytes.byKind).map(([kind, sum]) => `${kind} ${kb(sum.bytes)} in ${sum.messages}`).join(", ")}`,
         `Heard: ${bytes.up.messages} messages, ${kb(bytes.up.bytes)}; ${bytes.up.refused} commands let go of for coming faster than ${bytes.up.allowed} a second`,
-        `A snapshot: ${kb(snapshot.bytes)}, ${snapshot.take.toFixed(2)} ms to take, ${snapshot.encode.toFixed(2)} ms to write out; a welcome ${kb(report.joined.welcome.bytes.mean)}, ${report.joined.welcome.ms.mean.toFixed(1)} ms`,
+        `A snapshot: ${kb(snapshot.bytes)}, ${snapshot.take.toFixed(2)} ms to take, ${snapshot.encode.toFixed(2)} ms to write out (${snapshot.text.toFixed(2)} ms both together, written straight from the world); a welcome ${kb(report.joined.welcome.bytes.mean)}, ${report.joined.welcome.ms.mean.toFixed(1)} ms`,
         `Memory: heap ${memory.heap} MB (${memory.heapBefore} before, ${memory.heapMost} at most), external ${memory.external} MB, the process ${memory.rss} MB; ${report.actors.end} in the battle (${report.actors.most} at most)`,
         `Warm-up ${(warm.ms / 1000).toFixed(1)} s${warm.settled ? "" : ", not settled"}; navigation ${navigation.held} of ${navigation.keep} tiles, ${navigation.wanted} wanted round the players${navigation.capped ? `: over its cap, ${navigation.dropped} let go of during the run` : ""}`,
         ...(report.event ? [`The ${report.event.type} at ${report.event.at / 1000} s: ${report.event.ok ? `begun (${report.event.actors} more in the battle)` : "not begun"}`] : []),

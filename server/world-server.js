@@ -50,7 +50,7 @@ import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
-import { CHARACTER_RULES, RULE_MODES } from "./storage/worlds.js";
+import { CHARACTER_RULES, RULE_MODES, WORLD_SETTINGS } from "./storage/worlds.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { ServerMetrics } from "./server-metrics.js";
 
@@ -96,11 +96,12 @@ export class WorldServer {
      * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js),
      * and `limits`, for a server opened to be loaded past what any real one takes (scripts/
      * server-soak.js; generated/multiplayer_scaling_plan.md 0-3): { mostPlayers (the most in each
-     * of its worlds at once, whatever the world's own setting says, which goes no higher than 8),
-     * players (in all of them together: access/limits.js LIMITS.players), socketsPerAddress
+     * of its worlds at once, whatever the world's own setting and the server's ceiling say, which
+     * go no higher than 8), players (in all of them together: the server's playersAtOnce setting,
+     * which goes no higher than access/limits.js LIMITS.players), socketsPerAddress
      * (LIMITS.socketsPerAddress) }, each as it always is unless given. They're options of this
-     * call alone: no setting, file or request sets them, so no server that's run as one can be
-     * given them.
+     * call alone: no setting, file or request sets them (the settings only lower what a server
+     * takes: storage/settings.js CAPS), so no server that's run as one can be given them.
      * `options.onRestart` is what stops it to be started again as a new version, once an update's
      * installed (server/serve.js); `options.update` where it looks for new versions and the key
      * they're checked with (update/updater.js). `options.log` is where its structured log's lines
@@ -179,8 +180,9 @@ export class WorldServer {
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
             settings: this.settings,
             ...(awake ? { awake } : {}),
-            // (Its worlds' threads told the most players they take, opened with one in place of their own setting's)
-            ...(this.limits.mostPlayers ? { spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers }) } : {}),
+            // (Its worlds' threads told the most players they take: no more than the server's ceiling
+            // as it stands when they're started; or, opened with one in place of their own setting's, that)
+            spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers ?? null, ceiling: this.settings.get("mostPlayersCeiling") }),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
             // (A world stored again with players still in it: its thread ended unasked. They're told)
@@ -372,6 +374,32 @@ export class WorldServer {
         return [`http://${this.hostname.replace(/\.local$/, "")}.local:${this.port}`, ...found.filter((one) => one.family === "IPv4").map((one) => `http://${shown(one.address)}:${this.port}`)];
     }
 
+    /** The most players any one world here may take at once (its setting, mostPlayersCeiling: storage/settings.js CAPS). */
+    get mostPlayersCeiling() {
+        return this.settings.get("mostPlayersCeiling");
+    }
+
+    /** The most players in all its worlds together at once (its setting, playersAtOnce; or what it was opened with in its place, a soak's). */
+    get playersAtOnce() {
+        return this.limits.players ?? this.settings.get("playersAtOnce");
+    }
+
+    /**
+     * The most players a world here takes at once (`meta`: its world.json): its own setting, and
+     * no more than the server's ceiling, whatever its setting says (one made before the ceiling
+     * was lowered, or brought in from elsewhere).
+     */
+    mostPlayersOf(meta) {
+        return Math.min(meta.settings.mostPlayers, this.mostPlayersCeiling);
+    }
+
+    /** Why a world's settings (as they're to be made or changed) can't be, for asking more players than the server's ceiling lets a world take; or null. */
+    overCeiling(settings) {
+        const asked = settings?.mostPlayers;
+
+        return Number.isInteger(asked) && asked > this.mostPlayersCeiling && asked <= WORLD_SETTINGS.mostPlayers.max ? `mostPlayers must be a whole number from ${WORLD_SETTINGS.mostPlayers.min} to ${this.mostPlayersCeiling} on this server, not ${asked}.` : null;
+    }
+
     /**
      * A world made (as the server's admin or a creator asks: `creator` names them, for its
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
@@ -379,6 +407,17 @@ export class WorldServer {
     async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null, maker = null } = {}) {
         if (characters !== null && !CHARACTER_RULES.includes(characters)) {
             throw new Error(`A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
+        }
+
+        const over = this.overCeiling(settings);
+
+        if (over) {
+            throw new Error(over);
+        }
+
+        // (Not said: as many as the server lets a world take, which is as many as a world can)
+        if (settings !== null && typeof settings === "object" && !Array.isArray(settings) && settings.mostPlayers === undefined) {
+            settings = { ...settings, mostPlayers: Math.min(WORLD_SETTINGS.mostPlayers.default, this.mostPlayersCeiling) };
         }
 
         // (Its character rule, if it's given one, as the heroes mode and first-hero rule it stands for)

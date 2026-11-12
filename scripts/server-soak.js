@@ -6,7 +6,8 @@
 // and notes the server's own memory. Then it says whether memory kept flat after the first hour
 // (the world's thread no more than SERVER_SOAK.growth above where it stood an hour in), whether
 // the steps' 99th percentile stayed under a step's time (STEP_MS) each minute once they were all
-// in, and whether every player stayed in. Nothing else should be running on the machine: the
+// in, whether the world kept its pace (played SERVER_SOAK.pace of its clock's time or more, letting
+// go of no more than the rest: core/runner.js letGo), and whether every player stayed in. Nothing else should be running on the machine: the
 // players' copies of the world share its cores with the server's, so they're run at a lower
 // priority (as if they were on devices of their own), and the world's thread's own CPU time is
 // noted each minute beside its steps, which are timed by the clock.
@@ -55,6 +56,9 @@ export const SERVER_SOAK = Object.freeze({
     // The first minute whose steps are judged: the first holds the players coming in (each one's
     // copy of the world made from a snapshot, a cost the step-spike budget measures on its own)
     warm: 2,
+    // The least of its clock's time the world may have played from that minute on (its pace: 1,
+    // unless it fell behind and let time go, core/runner.js letGo; generated/multiplayer_scaling_plan.md 1-1)
+    pace: 0.99,
     // The peoples the players come in as, in turn
     peoples: ["human", "elf", "orc", "cat", "lizard", "darkElf"],
     // How often (ms) each player plays a little, and how often the server's asked how it's going
@@ -227,11 +231,13 @@ export function stayed(reports) {
 
 /**
  * Whether a soak's samples ({ minute, world: { heap, external, p99, ... } }) passed: memory flat
- * after `settle` minutes, and every minute's 99th-percentile step from minute `warm` on under a
- * step's time. Returns
- * { flat, settled (bytes, an hour in), latest (bytes, at the end), growth (share), worstP99, slowMinutes, failures }.
+ * after `settle` minutes, every minute's 99th-percentile step from minute `warm` on under a
+ * step's time, and the world's pace over those minutes (the share of its clock's time it played:
+ * each sample's `ms` gone by less the `dropped` it let go of) no less than `pace`. Returns
+ * { flat, settled (bytes, an hour in), latest (bytes, at the end), growth (share), worstP99,
+ * slowMinutes, pace (1 with nothing let go, or none timed), dropped (ms), failures }.
  */
-export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SOAK.growth, warm = SERVER_SOAK.warm, step = STEP_MS } = {}) {
+export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SOAK.growth, warm = SERVER_SOAK.warm, step = STEP_MS, pace = SERVER_SOAK.pace } = {}) {
     const failures = [];
     const used = (sample) => (sample.world?.heap ?? 0) + (sample.world?.external ?? 0);
     const after = samples.filter((sample) => sample.minute >= settle && sample.world);
@@ -242,6 +248,11 @@ export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SO
     const grew = settled ? (latest - settled) / settled : 0;
     const timed = samples.filter((sample) => sample.minute >= warm && sample.world?.p99 !== undefined && sample.world.count > 0);
     const slow = timed.filter((sample) => sample.world.p99 >= step);
+    // (What it let go of in the minutes judged, of the time those minutes were)
+    const paced = timed.filter((sample) => sample.world.ms > 0 && Number.isFinite(sample.world.dropped));
+    const dropped = paced.reduce((sum, sample) => sum + sample.world.dropped, 0);
+    const given = paced.reduce((sum, sample) => sum + sample.world.ms, 0);
+    const kept = given > 0 ? Math.max(0, 1 - dropped / given) : 1;
 
     if (settled && grew > growth) {
         failures.push(`the world's memory grew ${Math.round(grew * 100)}% after the first ${settle} minutes (from ${Math.round(settled / 1048576)} MB to ${Math.round(latest / 1048576)} MB)`);
@@ -251,7 +262,11 @@ export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SO
         failures.push(`the steps' 99th percentile reached ${Math.max(...slow.map((sample) => sample.world.p99)).toFixed(1)} ms in ${slow.length} minute(s) (a step's ${step} ms)`);
     }
 
-    return { flat: !settled || grew <= growth, settled, latest, growth: grew, worstP99: Math.max(0, ...timed.map((sample) => sample.world.p99)), slowMinutes: slow.length, failures };
+    if (kept < pace) {
+        failures.push(`the world played ${(kept * 100).toFixed(1)}% of its clock's time, letting ${(dropped / 1000).toFixed(1)} s go (it's to keep ${pace * 100}%)`);
+    }
+
+    return { flat: !settled || grew <= growth, settled, latest, growth: grew, worstP99: Math.max(0, ...timed.map((sample) => sample.world.p99)), slowMinutes: slow.length, pace: kept, dropped, failures };
 }
 
 /**
@@ -320,29 +335,32 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         }
 
         const end = started + minutes * 60000;
-        let before = { at: performance.now(), cpu: null, rooms: 0 };
+        let before = { at: performance.now(), cpu: null, rooms: 0, dropped: 0 };
 
         for (let minute = 1; Date.now() < end; minute++) {
             await new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_SOAK.every, Math.max(0, end - Date.now()))));
 
             const health = await server.manage.health();
             const world = health.worlds.find((one) => one.id === made.world) ?? null;
-            const now = { at: performance.now(), cpu: world?.cpu ?? null, rooms: world?.made?.rooms ?? 0 };
+            const now = { at: performance.now(), cpu: world?.cpu ?? null, rooms: world?.made?.rooms ?? 0, dropped: world?.dropped ?? 0 };
             // (The share of one core the world's thread had this minute)
             const busy = now.cpu && before.cpu ? (now.cpu.user + now.cpu.system - before.cpu.user - before.cpu.system) / 1000 / (now.at - before.at) : null;
             // (And the tiles of buildings' insides it baked ahead this minute: a few as players come
             // near new buildings, none once they've stayed)
             const rooms = now.rooms - before.rooms;
+            // (And the time it let go of this minute, fallen behind its clock, of the minute's own)
+            const dropped = Math.max(0, now.dropped - before.dropped);
+            const ms = now.at - before.at;
 
             before = now;
             const sample = {
                 minute,
-                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors, busy, rooms },
+                world: world && { heap: world.memory?.heap ?? null, external: world.memory?.external ?? null, count: world.steps?.count ?? 0, mean: world.steps?.mean ?? 0, p99: world.steps?.p99 ?? 0, worst: world.steps?.worst ?? 0, present: world.present, actors: world.actors, busy, rooms, ms, dropped },
                 server: health.server,
             };
 
             samples.push(sample);
-            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, its thread ${busy === null ? "?" : `${Math.round(busy * 100)}%`} busy (${rooms} insides' tiles baked), world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
+            log(`${minute} min: ${world ? `${world.present} in, steps p99 ${sample.world.p99.toFixed(1)} ms (worst ${sample.world.worst.toFixed(1)}), ${world.actors} in the battle, its thread ${busy === null ? "?" : `${Math.round(busy * 100)}%`} busy (${rooms} insides' tiles baked)${dropped > 0 ? `, ${(dropped / 1000).toFixed(1)} s let go` : ""}, world ${Math.round((sample.world.heap + sample.world.external) / 1048576)} MB` : "the world isn't going"}, server ${Math.round(health.server.rss / 1048576)} MB`);
         }
 
         const reports = [];
@@ -431,7 +449,7 @@ if (values.join) {
     }
 
     console.log(`The world sent again to a copy ${report.resyncs} time(s) in all: ${report.desyncs} for a copy found astray, ${report.skips} for one fallen too far behind to catch up`);
-    console.log(`Memory ${judged.settled ? `${Math.round(judged.settled / 1048576)} MB an hour in, ${Math.round(judged.latest / 1048576)} MB at the end (${judged.growth >= 0 ? "+" : ""}${Math.round(judged.growth * 100)}%)` : "not yet an hour in"}; steps' worst minute p99 ${judged.worstP99.toFixed(1)} ms`);
+    console.log(`Memory ${judged.settled ? `${Math.round(judged.settled / 1048576)} MB an hour in, ${Math.round(judged.latest / 1048576)} MB at the end (${judged.growth >= 0 ? "+" : ""}${Math.round(judged.growth * 100)}%)` : "not yet an hour in"}; steps' worst minute p99 ${judged.worstP99.toFixed(1)} ms; pace ${(judged.pace * 100).toFixed(1)}%`);
     console.log(report.failures.length ? `Failed:\n${report.failures.map((why) => `  ${why}`).join("\n")}` : "Passed");
     process.exit(report.failures.length ? 1 : 0);
 }

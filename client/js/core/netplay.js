@@ -93,6 +93,11 @@
 //                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
 //                                                    and by whom; or going again)
 //                    { kind: "refused", reason }
+//                    { kind: "queued", place }                 (their hello heard, others coming in
+//                                                    before them: how many are ahead of them and
+//                                                    themselves, 1 the next; again as it changes,
+//                                                    then their welcome. Only from a host that
+//                                                    lets so many in at once: Hosting `welcomes`)
 //                    { kind: "chat", from, name, text, to, toName, dm }
 //                                                    (a line said in their party; or a direct
 //                                                    message, to them or theirs heard back: `dm`
@@ -118,7 +123,7 @@ import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
-import { decode, encode, fromBase64, toBase64 } from "./wire.js";
+import { decode, encode, encodePlain, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
@@ -127,7 +132,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 224;
+export const NET_VERSION = 225;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -174,6 +179,34 @@ export const CHECK_EVERY = 4;
 export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
 
 /**
+ * How much of the host's one thread taking the world for those who've joined may use, where
+ * that's held to (Hosting `sparing`: the world server's; generated/multiplayer_scaling_plan.md
+ * 1-4): after one that took T ms to take and write out, none for T / `share` ms, `every` ms at
+ * the most. So a world of a hundred, whose snapshot takes 25 ms, takes one every 2 s at most,
+ * whoever asks and however many; a world of eight, 4 ms, one every third of a second. Those
+ * asking meanwhile wait, and are answered together from the next. The world as it stands between
+ * two steps, nothing done since, is taken once however often it's wanted.
+ */
+export const WORLDS = Object.freeze({ share: 1 / 80, every: 2000 });
+
+/**
+ * How long one who's been sent the world may take making their copy of it before they no longer
+ * count among those coming in (ms, by the host's clock: Hosting `welcomes`), as the world server
+ * takes one loading that long to be present anyway. One whose link's gone stops counting at once.
+ */
+export const WELCOMES = Object.freeze({ timeout: 60000 });
+
+/** What one waiting to come into a world is told, by their place in the line (a `queued`'s: 1, the next). */
+export function queuedWords(place) {
+    return place > 1 ? `Others are coming into that world: ${place - 1} before you.` : "Others are coming into that world: you're next.";
+}
+
+// What stands in a text for the world, or for its players, while the rest is written; and as
+// it's written (a text that has it anywhere else is written the slow way)
+const HOLE = "\u0000world\u0000";
+const HOLE_TEXT = JSON.stringify(HOLE);
+
+/**
  * What the host takes from one who's joined: nothing longer than `most` characters (a character
  * coming in is the longest thing said, and the world server's broker holds one it relays to the
  * same), and commands no faster than `commands` a second, `burst` at once (a stick turning sends
@@ -198,7 +231,7 @@ export const MOST_PLAYERS = 8;
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
 
 /**
- * A joined player's own hero told them (Hosting #selves) every `every` flushes while they're not
+ * A joined player's own hero told them (Hosting selves) every `every` flushes while they're not
  * as they were (at once once a command of theirs is done), and every `again` ms anyway.
  */
 export const SELF = Object.freeze({ every: 2, again: 1000 });
@@ -440,23 +473,24 @@ export function spawnFor(world, race) {
 }
 
 /**
- * A world opened to others, by its host: those who join brought in and kept up with what's done.
- * The game playing it calls `hear` with what's come from each (by their `peer`: the relay's), and
- * `gone` when one's left, and `flush` after it's moved the world on; what's to be sent goes by
- * `send(peer, text)`.
+ * Who's in a world opened to others, and what passes between each of them and its host that
+ * isn't the world itself (generated/multiplayer_scaling_plan.md 3-1): their coming in (hello,
+ * the line they wait in, one of theirs taken over on another link), the part each plays, what
+ * they say to each other, the world's stopping, their being sent out, their own hero told them,
+ * and their commands, held to what a joined game may ask (HEARD) by the clock. It stays the same
+ * however the world itself is sent them, which is the feed's business (OpsFeed). One of a
+ * Hosting's two parts: made by it, and reached through it.
  */
-export class Hosting {
+export class Session {
     /**
-     * @param {object} host - The world (core/host.js Host).
-     * @param {object} options
-     * @param {function} options.send - Sends `text` to one who's joined (peer, text).
-     * @param {function} [options.clock] - The time (ms: performance.now, say), to hold those
-     *   who've joined to how much they may ask of the host (AGAIN, HEARD); none, they aren't held
-     *   (the tests' worlds, played faster than any clock).
+     * @param {object} hosting - The Hosting it's part of: its world (`host`), its other part
+     *   (`feed`), and what sends for both (post, postAll, flush).
+     * @param {function} [clock] - The time (ms), to hold those who've joined to how much they may
+     *   ask of the host; none, they aren't held.
      */
-    constructor(host, { send, clock = null }) {
-        this.host = host;
-        this.send = send;
+    constructor(hosting, clock = null) {
+        this.hosting = hosting;
+        this.host = hosting.host;
         this.clock = clock;
 
         /** Those who've joined (by peer): their player's id in the world. */
@@ -465,46 +499,25 @@ export class Hosting {
         /** How long a word to each who's joined and back takes, as they've said (by peer: ms, their pings'). */
         this.rtts = new Map();
 
-        /** The last of each one's commands done (by peer: its seq), told them with their hero (#selves). */
+        /** The last of each one's commands done (by peer: its seq), told them with their hero (selves). */
         this.done = new Map();
 
-        /** What each was last told of their hero (by peer: { seq, hero (as sent), time }: #selves). */
+        /** What each was last told of their hero (by peer: { seq, hero (as sent), time }: selves). */
         this.toldSelf = new Map();
 
         /**
          * When each was last heard from (by peer: the world's time), and those stopped for being
-         * quiet since (#quiet).
+         * quiet since (quiet).
          */
         this.heardAt = new Map();
         this.quieted = new Set();
 
-        /** What's been done since it was last sent, and whether it's time to say how the world stands. */
-        this.ops = [];
-        this.steps = 0;
-        this.checkDue = false;
-        this.motionDue = false;
+        /** Which of a joined player's commands is being done just now (its seq: recorded with it, OpsFeed), and the next guest's number. */
         this.seq = null;
         this.nextGuest = 1;
 
-        /**
-         * Whether where the characters near the players stand is sent too, every MOTION.every
-         * steps (the motion stream, core/motion.js: a joined copy compares them, as it did before
-         * the checksum was sent as often). Off: nothing but that comparison reads them. Kept for
-         * whatever comes to draw others from what's sent (generated/multiplayer_scaling_plan.md
-         * 1-3, 3-19): it costs nothing unsent.
-         */
-        this.sendsPlaces = false;
-
         /** How its world's played with those who join (NETCODES): one who doesn't speak it is refused (#hello). */
         this.netcode = "lockstep";
-
-        /**
-         * Those who've asked for the world again and not been sent it yet (by peer), and how many
-         * times each may still be sent it for the asking just now (by peer: { left, at }: AGAIN,
-         * #worlds).
-         */
-        this.asked = new Set();
-        this.worlds = new Map();
 
         /** How many commands each may still give just now (by peer: { left, at }: HEARD), and how many have been let go of. */
         this.allowance = new Map();
@@ -512,9 +525,6 @@ export class Hosting {
 
         /** Those whose page is hidden, as they've said (by peer): away, their hero as they left it. */
         this.hidden = new Set();
-
-        /** What's been sent (characters of text, to everyone together), by kind. */
-        this.sent = {};
 
         /** Whether the host's world is stopped, and why ({ why: PAUSES, by }), as those who've joined have been told; or null. */
         this.paused = null;
@@ -528,6 +538,25 @@ export class Hosting {
 
         /** The most players in the world at once (on the world server: its owner's setting). */
         this.most = MOST_PLAYERS;
+
+        /**
+         * How many may be coming in at once (sent the world, their copy of it not yet made: till
+         * they say they're ready, leave, or WELCOMES.timeout has gone by): 0, any number, each
+         * welcomed as their hello's heard (a player's own world, always; and the default). More
+         * (the world server's, its world's `welcomes` setting; generated/
+         * multiplayer_scaling_plan.md 1-5): those who say hello wait their turn (`waiting`, by
+         * peer: their hello, in the order they came), are told their place as it changes
+         * (`queued`), and are let in as the world's next sent what's been done (flush) or looked
+         * at (admit), as many as there's room for together, all from one taking of the world.
+         */
+        this.welcomes = 0;
+        this.waiting = new Map();
+
+        /** Those sent the world and still making their copy of it (by peer: when, by the clock), while that's counted. */
+        this.loading = new Map();
+
+        // The place each who's waiting was last told (by peer)
+        this.placed = new Map();
 
         /**
          * The id each who joins plays under (peer): a guest's, unless whoever runs it says
@@ -578,184 +607,22 @@ export class Hosting {
 
         // Which direct messages each player takes, as they've said (DMS_TAKEN till they have)
         this.dms = new Map();
-
-        host.recorder = (op) => this.#record(op);
     }
 
-    #record(op) {
-        // (A joined player's command: which of theirs it was, so they hear what came of it)
-        if (op[0] === "c" && this.seq !== null) {
-            op.push(this.seq);
-        }
-
-        const last = this.ops.at(-1);
-
-        if (op[0] === "a" && last?.[0] === "a" && last[1] === op[1]) {
-            last[2] = (last[2] ?? 1) + 1;
-        } else {
-            this.ops.push(op);
-        }
-
-        if (op[0] === "a") {
-            this.steps++;
-            this.checkDue ||= this.steps % CHECK_EVERY === 0;
-            this.motionDue ||= this.sendsPlaces && this.steps % MOTION.every === 0;
-        }
+    /** What sends the world itself to those who've joined (the Hosting's other part). */
+    get feed() {
+        return this.hosting.feed;
     }
 
-    // The host's step, as its sendings carry it
-    #step() {
-        return Math.floor(this.host.battle.time / STEP_MS);
-    }
+    // Those in the world not yet sent it (by peer: { id, took }), who are sent nothing else till
+    // they are (#enter, #welcomed); and whether those waiting are being let in just now (admit)
+    #entering = new Map();
 
-    #send(peer, kind, text) {
-        this.sent[kind] = (this.sent[kind] ?? 0) + text.length;
-        count("sends");
-        count("sent", text.length);
-        this.send(peer, text);
-    }
+    #admitting = false;
 
-    #sendAll(kind, text) {
-        for (const peer of this.players.keys()) {
-            this.#send(peer, kind, text);
-        }
-    }
-
-    /**
-     * Send what's been done to everyone who's joined, and with it, every CHECK_EVERY steps, how
-     * the world should stand (after what's been done: compared there); where those near the
-     * players are, if that's sent (sendsPlaces); then the world again to whoever's asked for it
-     * and may have it now. With no one joined, nothing's worked out or written.
-     */
-    flush() {
-        lap("flush.quiet");
-        this.#quiet();
-
-        if (!this.players.size) {
-            this.ops = [];
-            this.checkDue = false;
-            this.motionDue = false;
-            lap(null);
-
-            return;
-        }
-
-        lap("flush.checksum");
-
-        if (this.checkDue) {
-            this.ops.push(["k", this.host.checksum()]);
-            this.checkDue = false;
-        }
-
-        const step = this.#step();
-
-        lap("flush.ops");
-
-        if (this.ops.length) {
-            const text = encode({ kind: "ops", step, ops: this.ops });
-
-            this.ops = [];
-            this.#sendAll("ops", text);
-        }
-
-        lap("flush.motion");
-
-        if (this.motionDue) {
-            this.motionDue = false;
-            this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
-        }
-
-        lap("flush.selves");
-        this.#selves(step);
-        lap("flush.worlds");
-        this.#worlds();
-        lap(null);
-    }
-
-    // How many times one who's joined may be sent the world again for the asking just now (AGAIN:
-    // `burst` at most, one more every `every` ms of the clock's; with no clock, always once)
-    #worldsLeft(peer) {
-        if (!this.clock) {
-            return 1;
-        }
-
-        const had = this.worlds.get(peer);
-
-        return had ? Math.min(AGAIN.burst, had.left + (this.clock() - had.at) / AGAIN.every) : AGAIN.burst;
-    }
-
-    // The world again to each who's asked for it and may have it now (AGAIN; after all that's been
-    // done till now: flush's), one snapshot taken for them all: one asking alone has their own of
-    // their hero in it (OWN), several at once no one's, as everyone's sent it when the host's
-    // link comes back (resync)
-    #worlds() {
-        if (!this.asked.size) {
-            return;
-        }
-
-        const due = [...this.asked].filter((peer) => this.#worldsLeft(peer) >= 1);
-
-        if (!due.length) {
-            return;
-        }
-
-        const text = encode({ kind: "state", snapshot: this.#snapshotFor(due.length === 1 ? this.players.get(due[0]) : null), paused: this.paused });
-
-        for (const peer of due) {
-            this.asked.delete(peer);
-
-            if (this.clock) {
-                this.worlds.set(peer, { left: this.#worldsLeft(peer) - 1, at: this.clock() });
-            }
-
-            this.#send(peer, "state", text);
-        }
-    }
-
-    // Each who's joined not heard from for QUIET.ms stopped where they stand (once, till they're
-    // heard from again), if they were going anywhere or after anyone: as a command of theirs, so
-    // every copy stops them in the same step
-    #quiet() {
-        const now = this.host.battle.time;
-
-        for (const [peer, id] of this.players) {
-            const actor = this.host.battle.actor(id);
-
-            if (!this.heardAt.has(peer)) {
-                this.heardAt.set(peer, now);
-            }
-
-            if (this.quieted.has(peer) || now - this.heardAt.get(peer) < QUIET.ms || !actor || actor.dead || !actor.order) {
-                continue;
-            }
-
-            this.quieted.add(peer);
-            this.host.command(id, { type: "stop" });
-        }
-    }
-
-    // Each who's joined told where their own hero is now, as the host has them, and the last of
-    // their commands done (core/selfstate.js): their game looks ahead from it (app/forecast.js).
-    // At once, a command of theirs having been done since; else every SELF.every flushes, if
-    // they're not as they were, or every SELF.again ms anyway
-    #selves(step) {
-        for (const [peer, id] of this.players) {
-            const actor = this.host.battle.actor(id);
-
-            if (!actor) {
-                continue;
-            }
-
-            const seq = this.done.get(peer) ?? 0;
-            const hero = encode(selfOf(actor));
-            const last = this.toldSelf.get(peer);
-            const due = !last || seq !== last.seq || this.host.battle.time - last.time >= SELF.again || (step % SELF.every === 0 && hero !== last.hero);
-
-            if (due) {
-                this.toldSelf.set(peer, { seq, hero, time: this.host.battle.time });
-                this.#send(peer, "self", `{"kind":"self","step":${step},"time":${encode(this.host.battle.time)},"seq":${seq},"hero":${hero}}`);
-            }
-        }
+    /** Those who've joined and may be sent what everyone's sent: all of them but those in the world not yet sent it (#enter). */
+    reached() {
+        return this.#entering.size ? [...this.players.keys()].filter((peer) => !this.#entering.has(peer)) : [...this.players.keys()];
     }
 
     /** What one who's joined (or is joining) said. */
@@ -766,7 +633,7 @@ export class Hosting {
         // as one whose character can't be brought in is)
         if (typeof text !== "string" || text.length > HEARD.most) {
             if (!this.players.has(peer)) {
-                this.#send(peer, "refused", encode({ kind: "refused", reason: "character" }));
+                this.hosting.post(peer, "refused", encode({ kind: "refused", reason: "character" }));
             }
 
             return;
@@ -790,10 +657,11 @@ export class Hosting {
                 this.#command(peer, message);
                 break;
             case "again":
-                this.#again(peer);
+                this.feed.again(peer);
                 break;
             case "ready":
                 if (this.players.has(peer)) {
+                    this.loading.delete(peer);
                     this.onReady(peer);
                 }
 
@@ -815,7 +683,7 @@ export class Hosting {
                 // (At once: how long a word takes to come and go, not how long till the next flush;
                 // and how long it's been taking them, as they say)
                 if (this.players.has(peer) && Number.isFinite(message.t)) {
-                    this.#send(peer, "pong", encode({ kind: "pong", t: message.t, step: this.#step() }));
+                    this.hosting.post(peer, "pong", encode({ kind: "pong", t: message.t, step: this.hosting.step() }));
 
                     if (Number.isFinite(message.rtt) && message.rtt >= 0) {
                         this.rtts.set(peer, message.rtt);
@@ -827,6 +695,7 @@ export class Hosting {
                 // (What their game keeps of their hero, not the world's: kept with them)
                 if (this.players.has(peer)) {
                     this.host.own(this.players.get(peer), message.own);
+                    this.feed.changed();
                 }
 
                 break;
@@ -835,7 +704,7 @@ export class Hosting {
                 const said = id ? this.#say(id, message.text, typeof message.to === "string" ? message.to : null) : null;
 
                 if (said && !said.ok) {
-                    this.#send(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
+                    this.hosting.post(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
                 }
 
                 break;
@@ -853,8 +722,8 @@ export class Hosting {
         // (One who asked for the world again a while ago, and may have it now: sent it as they're
         // next heard from, their game asking how long a word takes every second, even while the
         // world's stopped and nothing else is sent)
-        if (this.asked.has(peer) && this.#worldsLeft(peer) >= 1) {
-            this.flush();
+        if (this.feed.due(peer)) {
+            this.hosting.flush();
         }
     }
 
@@ -921,7 +790,7 @@ export class Hosting {
                 const peer = [...this.players].find(([, player]) => player === member)?.[0];
 
                 if (peer !== undefined) {
-                    this.#send(peer, "chat", sent);
+                    this.hosting.post(peer, "chat", sent);
                 }
             }
         }
@@ -929,29 +798,44 @@ export class Hosting {
         return { ok: true };
     }
 
-    // Someone joining, with their character: into the world (by their people's town, if it isn't
-    // the host's people's), and sent it as it is
-    #hello(peer, { version, character, speaks }) {
-        if (this.players.has(peer)) {
+    // Someone joining, with their character: into the world and sent it as it is, at once; or,
+    // where only so many come in at once (welcomes), in their turn (admit)
+    #hello(peer, hello) {
+        if (this.players.has(peer) || this.waiting.has(peer)) {
             return;
         }
 
-        const refuse = (reason, more = {}) => this.#send(peer, "refused", encode({ kind: "refused", reason, ...more }));
-
         // (With this version, for the joiner to say which is the newer: versionWords. A refusal's
         // words are read by games of every version, so they only ever gain what can be left out)
-        if (version !== NET_VERSION) {
-            refuse("version", { net: NET_VERSION });
+        if (hello.version !== NET_VERSION) {
+            this.hosting.post(peer, "refused", encode({ kind: "refused", reason: "version", net: NET_VERSION }));
 
             return;
         }
 
         // (A game that can't play the world the way it's played: told so, and which way that is)
-        if (!speaksOf(speaks).includes(this.netcode)) {
-            refuse("netcode", { netcode: this.netcode });
+        if (!speaksOf(hello.speaks).includes(this.netcode)) {
+            this.hosting.post(peer, "refused", encode({ kind: "refused", reason: "netcode", netcode: this.netcode }));
 
             return;
         }
+
+        if (this.welcomes > 0) {
+            this.waiting.set(peer, hello);
+
+            return;
+        }
+
+        this.#enter(peer, hello);
+        this.#welcomed();
+    }
+
+    // One who's said hello brought into the world with their character (by their people's town,
+    // if it isn't the host's people's), or onto the link of one of theirs in it already
+    // (#takeOver); not yet sent it (#welcomed), and sent nothing till they are. Returns whether
+    // they're in: else they've been told why not
+    #enter(peer, { character }) {
+        const refuse = (reason, more = {}) => this.hosting.post(peer, "refused", encode({ kind: "refused", reason, ...more }));
 
         // (Or refused saying why, if it can say: a world server's, a character copied in already)
         const brought = this.characterOf(peer, character);
@@ -959,7 +843,7 @@ export class Hosting {
         if (!brought || brought.refused) {
             refuse(NET_REFUSALS[brought?.refused] ? brought.refused : "character");
 
-            return;
+            return false;
         }
 
         // (The same character in the world already, through another link: another device, or one
@@ -971,7 +855,7 @@ export class Hosting {
         if (same) {
             this.#takeOver(peer, same);
 
-            return;
+            return true;
         }
 
         const id = this.idOf(peer);
@@ -981,19 +865,102 @@ export class Hosting {
         } else if (this.host.players.size >= this.most) {
             refuse("full");
 
-            return;
+            return false;
         }
 
         const { world } = this.host;
 
         // (What's been done so far, to those already in; then their coming)
-        this.flush();
+        this.hosting.flush();
         this.host.join({ id, ...brought, ...spawnFor(world, brought.hero.race), role: this.roleOf(peer) });
-        this.flush();
+        this.hosting.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), paused: this.paused }));
-        this.onJoin(id, peer);
+        this.#entering.set(peer, { id, took: false });
+
+        return true;
+    }
+
+    // Each brought into the world and not yet sent it (#enter), sent it as it is: from the one
+    // taking of it, however many they are; and whoever runs the world told they've come
+    #welcomed() {
+        const entering = [...this.#entering];
+        const { world } = this.host;
+
+        this.#entering.clear();
+
+        for (const [peer, { id, took }] of entering) {
+            this.hosting.post(peer, "welcome", this.feed.withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, ...(took ? { took: true } : {}), paused: this.paused }, this.feed.worldFor(id)));
+
+            if (this.welcomes > 0) {
+                this.loading.set(peer, this.clock?.() ?? 0);
+            }
+        }
+
+        for (const [peer, { id }] of entering) {
+            this.onJoin(id, peer);
+        }
+    }
+
+    /**
+     * Those waiting to come in let in, as many as there's room for (`welcomes`, less those still
+     * making their copies), in the order they said hello: all into the world first, then each
+     * sent it from the one taking of it. Not if the world may not be taken just now (sparing):
+     * they wait. Then each still waiting told their place, if it's changed. Called with every
+     * flush; whoever runs a world that isn't going calls it as it looks at the world.
+     */
+    admit() {
+        if (!this.waiting.size || this.#admitting) {
+            return;
+        }
+
+        this.#admitting = true;
+
+        try {
+            let free = this.welcomes > 0 ? this.welcomes - this.#loadingNow() : Infinity;
+
+            if (free > 0 && this.feed.mayTake({ afresh: true })) {
+                for (const [peer, hello] of [...this.waiting]) {
+                    if (free <= 0) {
+                        break;
+                    }
+
+                    this.waiting.delete(peer);
+                    this.placed.delete(peer);
+                    free -= this.#enter(peer, hello) ? 1 : 0;
+                }
+
+                this.#welcomed();
+            }
+
+            let place = 0;
+
+            for (const peer of this.waiting.keys()) {
+                place++;
+
+                if (this.placed.get(peer) !== place) {
+                    this.placed.set(peer, place);
+                    this.hosting.post(peer, "queued", encode({ kind: "queued", place }));
+                }
+            }
+        } finally {
+            this.#admitting = false;
+        }
+    }
+
+    // How many are coming in just now: sent the world, still in it, not yet ready, and not so
+    // long at it that they no longer count (WELCOMES.timeout, by the clock). Counted from who's
+    // here, so one whose link died as the world came holds no place
+    #loadingNow() {
+        const now = this.clock?.() ?? 0;
+
+        for (const [peer, at] of [...this.loading]) {
+            if (!this.players.has(peer) || now - at >= WELCOMES.timeout) {
+                this.loading.delete(peer);
+            }
+        }
+
+        return this.loading.size;
     }
 
     // The player in the world already whose link one joining (`peer`, with the character they
@@ -1017,16 +984,15 @@ export class Hosting {
 
     // One joining taking over their character in the world (`id`), from the link they were on
     // (`peer`'s now): that one told why ("elsewhere") and let go of, its link closed by whoever runs
-    // it (onKick), its character left as it stands, not gone and come again; and this one sent the
-    // world as it is, told it took them over
+    // it (onKick), its character left as it stands, not gone and come again; and this one to be
+    // sent the world as it is, told it took them over (#welcomed)
     #takeOver(peer, id) {
         const old = [...this.players].find(([, player]) => player === id)?.[0];
-        const { world } = this.host;
 
-        this.flush();
+        this.hosting.flush();
 
         if (old !== undefined) {
-            this.#send(old, "kicked", encode({ kind: "kicked", reason: "elsewhere" }));
+            this.hosting.post(old, "kicked", encode({ kind: "kicked", reason: "elsewhere" }));
             this.players.delete(old);
             this.rtts.delete(old);
             this.#fresh(old);
@@ -1035,8 +1001,7 @@ export class Hosting {
 
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), took: true, paused: this.paused }));
-        this.onJoin(id, peer);
+        this.#entering.set(peer, { id, took: true });
     }
 
     // One in the world sent out for another of the same player's coming in (`reason`): told why,
@@ -1044,7 +1009,7 @@ export class Hosting {
     #sendOff(id, reason) {
         const peer = [...this.players].find(([, player]) => player === id)?.[0];
 
-        this.flush();
+        this.hosting.flush();
 
         if (peer === undefined) {
             this.#left(id);
@@ -1052,7 +1017,7 @@ export class Hosting {
             return;
         }
 
-        this.#send(peer, "kicked", encode({ kind: "kicked", reason }));
+        this.hosting.post(peer, "kicked", encode({ kind: "kicked", reason }));
         this.gone(peer);
         this.onKick(peer, reason);
     }
@@ -1099,33 +1064,50 @@ export class Hosting {
         return true;
     }
 
-    // One whose world's gone astray: the world again (after all that's been done till now), at
-    // once if they may have it (AGAIN: a few times running, then one every so often), else once
-    // their time's come (#worlds: asked twice meanwhile, sent it once)
-    #again(peer) {
-        if (!this.players.has(peer)) {
-            return;
-        }
+    // Each who's joined not heard from for QUIET.ms stopped where they stand (once, till they're
+    // heard from again), if they were going anywhere or after anyone: as a command of theirs, so
+    // every copy stops them in the same step
+    quiet() {
+        const now = this.host.battle.time;
 
-        this.asked.add(peer);
-        this.flush();
+        for (const [peer, id] of this.players) {
+            const actor = this.host.battle.actor(id);
+
+            if (!this.heardAt.has(peer)) {
+                this.heardAt.set(peer, now);
+            }
+
+            if (this.quieted.has(peer) || now - this.heardAt.get(peer) < QUIET.ms || !actor || actor.dead || !actor.order) {
+                continue;
+            }
+
+            this.quieted.add(peer);
+            this.host.command(id, { type: "stop" });
+        }
     }
 
-    // The world as it is, for one who's joined (by their id: their own of their hero in it, what
-    // their game keeps of them, core/host.js OWN), or for all of them at once (no one's): no one's
-    // own told anyone else
-    #snapshotFor(id = null) {
-        const snapshot = this.host.snapshot();
+    // Each who's joined told where their own hero is now, as the host has them, and the last of
+    // their commands done (core/selfstate.js): their game looks ahead from it (app/forecast.js).
+    // At once, a command of theirs having been done since; else every SELF.every flushes, if
+    // they're not as they were, or every SELF.again ms anyway
+    selves(step) {
+        for (const [peer, id] of this.players) {
+            const actor = this.host.battle.actor(id);
 
-        for (const player of snapshot.players) {
-            if (player.id !== id) {
-                for (const key of OWN.keys) {
-                    delete player[key];
-                }
+            if (!actor || this.#entering.has(peer)) {
+                continue;
+            }
+
+            const seq = this.done.get(peer) ?? 0;
+            const hero = encode(selfOf(actor));
+            const last = this.toldSelf.get(peer);
+            const due = !last || seq !== last.seq || this.host.battle.time - last.time >= SELF.again || (step % SELF.every === 0 && hero !== last.hero);
+
+            if (due) {
+                this.toldSelf.set(peer, { seq, hero, time: this.host.battle.time });
+                this.hosting.post(peer, "self", `{"kind":"self","step":${step},"time":${encode(this.host.battle.time)},"seq":${seq},"hero":${hero}}`);
             }
         }
-
-        return snapshot;
     }
 
     /**
@@ -1142,36 +1124,14 @@ export class Hosting {
         }
 
         this.paused = paused;
-        this.#sendAll("paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
-    }
-
-    /**
-     * The host's link back after it dropped (what was sent meanwhile lost): everyone who's joined
-     * sent the world as it now is (one snapshot for them all).
-     */
-    resync() {
-        this.flush();
-
-        if (!this.players.size) {
-            return;
-        }
-
-        const text = encode({ kind: "state", snapshot: this.#snapshotFor(), paused: this.paused });
-
-        // (Whoever had asked for it has it now. Not counted as sent for the asking: it was the
-        // host's link that dropped, and theirs may yet)
-        this.asked.clear();
-
-        for (const peer of this.players.keys()) {
-            this.#send(peer, "state", text);
-        }
+        this.hosting.postAll("paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
     }
 
     /** Who's still here (the relay's word, the host's link back): anyone else who'd joined, gone. */
     still(peers) {
         const here = new Set(peers);
 
-        for (const peer of [...this.players.keys()]) {
+        for (const peer of [...this.players.keys(), ...this.waiting.keys()]) {
             if (!here.has(peer)) {
                 this.gone(peer);
             }
@@ -1190,8 +1150,8 @@ export class Hosting {
             return false;
         }
 
-        this.flush();
-        this.#send(peer, "kicked", encode({ kind: "kicked", reason }));
+        this.hosting.flush();
+        this.hosting.post(peer, "kicked", encode({ kind: "kicked", reason }));
         this.gone(peer);
         this.onKick(peer, reason);
 
@@ -1203,6 +1163,10 @@ export class Hosting {
      * as it's to be kept, where they were and as they were (Host.placeOf, vitalsOf: to come back to).
      */
     gone(peer) {
+        // (One who was waiting to come in: no longer)
+        this.waiting.delete(peer);
+        this.placed.delete(peer);
+
         const id = this.players.get(peer);
 
         if (!id) {
@@ -1222,10 +1186,11 @@ export class Hosting {
         this.toldSelf.delete(peer);
         this.heardAt.delete(peer);
         this.quieted.delete(peer);
-        this.asked.delete(peer);
-        this.worlds.delete(peer);
+        this.feed.forget(peer);
         this.allowance.delete(peer);
         this.hidden.delete(peer);
+        this.loading.delete(peer);
+        this.#entering.delete(peer);
     }
 
     /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */
@@ -1244,17 +1209,503 @@ export class Hosting {
         const vitals = this.host.vitalsOf(id);
         const character = this.host.leave(id);
 
-        this.flush();
+        this.hosting.flush();
         this.onLeave(id, peer, character && { ...character, place, vitals });
+    }
+
+    /** Everyone who'd joined, or was waiting to, out of the world. */
+    stop() {
+        for (const peer of [...this.players.keys(), ...this.waiting.keys()]) {
+            this.gone(peer);
+        }
+    }
+}
+
+/**
+ * The world itself as it's sent those who've joined, by lockstep (generated/
+ * multiplayer_scaling_plan.md 3-1): everything done in it, recorded as it's done and sent each
+ * step for their copies to do again (ops); how it should stand, every CHECK_EVERY steps (the
+ * checksum); where those near the players are, from a host that sendsPlaces (the motion stream);
+ * and the whole of it, to one coming in, to one who asks for it again (no oftener than AGAIN
+ * allows each, nor than WORLDS allows them all, where that's held to), and to everyone when the
+ * host's link comes back. Who they are, and everything else that passes between them and the
+ * host, is the session's business (Session), and stays the same whatever feed sends the world.
+ * One of a Hosting's two parts: made by it, and reached through it.
+ */
+export class OpsFeed {
+    /** @param {object} hosting - The Hosting it's part of: its world (`host`), its other part (`session`), and what sends for both (post, postTo, postAll, flush). */
+    constructor(hosting) {
+        this.hosting = hosting;
+        this.host = hosting.host;
+
+        /** What's been done since it was last sent, how many steps have been recorded, and whether it's time to say how the world stands, or where those near the players are. */
+        this.ops = [];
+        this.steps = 0;
+        this.checkDue = false;
+        this.motionDue = false;
+
+        /**
+         * Whether where the characters near the players stand is sent too, every MOTION.every
+         * steps (the motion stream, core/motion.js: a joined copy compares them, as it did before
+         * the checksum was sent as often). Off: nothing but that comparison reads them. Kept for
+         * whatever comes to draw others from what's sent (generated/multiplayer_scaling_plan.md
+         * 1-3, 3-19): it costs nothing unsent.
+         */
+        this.sendsPlaces = false;
+
+        /**
+         * Those who've asked for the world again and not been sent it yet (by peer), and how many
+         * times each may still be sent it for the asking just now (by peer: { left, at }: AGAIN,
+         * answer).
+         */
+        this.asked = new Set();
+        this.worlds = new Map();
+
+        /**
+         * Whether taking the world for those who've joined is held to a share of the thread
+         * (WORLDS: the world server's; a hosting browser's isn't, off), and none taken in the
+         * sending of a step that turned the war (turned). And how many times the world's been
+         * taken for them, in all.
+         */
+        this.sparing = false;
+        this.taken = 0;
+
+        this.host.recorder = (op) => this.#record(op);
+    }
+
+    /** Who's joined, and what else passes between them and the host (the Hosting's other part). */
+    get session() {
+        return this.hosting.session;
+    }
+
+    // The world as it was last taken for those who've joined (#taken), how often anything's been
+    // done to it (what's recorded, and what's kept of a player's own), when it may next be taken
+    // (the clock's, where that's held to: sparing), and whether this step turned the war
+    #world = null;
+    #changes = 0;
+    #worldAfter = -Infinity;
+    #turned = false;
+
+    #record(op) {
+        this.#changes++;
+        this.#world = null;
+
+        // (A joined player's command: which of theirs it was, so they hear what came of it)
+        if (op[0] === "c" && this.session.seq !== null) {
+            op.push(this.session.seq);
+        }
+
+        const last = this.ops.at(-1);
+
+        if (op[0] === "a" && last?.[0] === "a" && last[1] === op[1]) {
+            last[2] = (last[2] ?? 1) + 1;
+        } else {
+            this.ops.push(op);
+        }
+
+        if (op[0] === "a") {
+            this.steps++;
+            this.checkDue ||= this.steps % CHECK_EVERY === 0;
+            this.motionDue ||= this.sendsPlaces && this.steps % MOTION.every === 0;
+        }
+    }
+
+    /**
+     * What's been done sent to everyone who's joined, and with it, every CHECK_EVERY steps, how
+     * the world should stand (after what's been done: compared there); and where those near the
+     * players are, if that's sent (sendsPlaces). Returns the host's step, as they carry it.
+     */
+    flush() {
+        lap("flush.checksum");
+
+        if (this.checkDue) {
+            this.ops.push(["k", this.host.checksum()]);
+            this.checkDue = false;
+        }
+
+        const step = this.hosting.step();
+
+        lap("flush.ops");
+
+        if (this.ops.length) {
+            const text = encode({ kind: "ops", step, ops: this.ops });
+
+            this.ops = [];
+            this.hosting.postAll("ops", text);
+        }
+
+        lap("flush.motion");
+
+        if (this.motionDue) {
+            this.motionDue = false;
+            this.hosting.postAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
+        }
+
+        return step;
+    }
+
+    /** With no one joined: nothing of what's been done kept to send, nothing worked out or written. */
+    idle() {
+        this.ops = [];
+        this.checkDue = false;
+        this.motionDue = false;
+        this.#turned = false;
+    }
+
+    /** A sending done: the next step's is no longer one that turned the war. */
+    settled() {
+        this.#turned = false;
+    }
+
+    /**
+     * The step just played turned the war (core/runner.js): where taking the world is held back
+     * (sparing), none's taken for anyone in its sending, the turn's own work being a step's worth.
+     */
+    turned() {
+        this.#turned = this.sparing;
+    }
+
+    /** Something's been done to the world that isn't recorded (what's kept of a player's own): it's no longer as it was last taken. */
+    changed() {
+        this.#changes++;
+        this.#world = null;
+    }
+
+    // Whether the world may be taken for those who've joined just now: always, unless that's held
+    // to a share of the thread (sparing, by the clock: WORLDS) and it's too soon after the last,
+    // or this step turned the war. The world as it stands, taken already, may always be had again
+    // (unless it's to be taken `afresh`: for those about to come into it, which changes it)
+    mayTake({ afresh = false } = {}) {
+        if (!this.sparing || !this.session.clock || (!afresh && this.#world?.time === this.host.battle.time && this.#world.changes === this.#changes)) {
+            return true;
+        }
+
+        return !this.#turned && this.session.clock() >= this.#worldAfter;
+    }
+
+    // The world as it is, taken and written out once for however many are to be sent it, as it
+    // stands between two steps with nothing done since: all of it but its players, and each of its
+    // players without what's their own (core/host.js OWN). Written straight from the world's own,
+    // nothing copied (Host.snapshot's `shared`); or, if that isn't plain data all through, null
+    // parts: each is written the slow way (worldFor)
+    #taken() {
+        const time = this.host.battle.time;
+
+        if (this.#world?.time === time && this.#world.changes === this.#changes) {
+            return this.#world;
+        }
+
+        const started = this.session.clock?.() ?? 0;
+        const snapshot = this.host.snapshot({ shared: true });
+        const { players } = snapshot;
+
+        snapshot.players = HOLE;
+
+        const around = encodePlain(snapshot)?.split(HOLE_TEXT);
+        const bare = players.map((player) => {
+            const one = { ...player };
+
+            for (const key of OWN.keys) {
+                delete one[key];
+            }
+
+            return encodePlain(one);
+        });
+        const plain = around?.length === 2 && bare.every((text) => text !== null);
+
+        this.taken++;
+        this.#world = { time, changes: this.#changes, texts: new Map(), ...(plain ? { head: around[0], tail: around[1], players, bare } : { players: null }) };
+
+        if (this.session.clock) {
+            const now = this.session.clock();
+
+            this.#worldAfter = now + Math.min(WORLDS.every, (now - started) / WORLDS.share);
+        }
+
+        return this.#world;
+    }
+
+    // The world as it is, as text (core/wire.js encode's of #snapshotFor), for one who's joined
+    // (by their id: their own of their hero in it) or for several at once (null: no one's)
+    worldFor(id = null) {
+        const world = this.#taken();
+
+        if (world.texts.has(id)) {
+            return world.texts.get(id);
+        }
+
+        let text = null;
+
+        if (world.players) {
+            const each = world.players.map((player, k) => (player.id === id ? encodePlain(player) : world.bare[k]));
+
+            text = each.includes(null) ? null : `${world.head}[${each.join(",")}]${world.tail}`;
+        }
+
+        text ??= encode(this.#snapshotFor(id));
+        world.texts.set(id, text);
+
+        return text;
+    }
+
+    // What's said with the world in it (`said`: a welcome, or the world again), as text: encode's
+    // of it with the world's snapshot (`world`: its text) as its `snapshot`
+    withWorld(said, world) {
+        const around = encode({ ...said, snapshot: HOLE }).split(HOLE_TEXT);
+
+        return around.length === 2 ? `${around[0]}${world}${around[1]}` : encode({ ...said, snapshot: decode(world) });
+    }
+
+    // The world as it is, for one who's joined (by their id: their own of their hero in it, what
+    // their game keeps of them, core/host.js OWN), or for all of them at once (no one's): no one's
+    // own told anyone else
+    #snapshotFor(id = null) {
+        const snapshot = this.host.snapshot();
+
+        for (const player of snapshot.players) {
+            if (player.id !== id) {
+                for (const key of OWN.keys) {
+                    delete player[key];
+                }
+            }
+        }
+
+        return snapshot;
+    }
+
+    // How many times one who's joined may be sent the world again for the asking just now (AGAIN:
+    // `burst` at most, one more every `every` ms of the clock's; with no clock, always once)
+    #worldsLeft(peer) {
+        if (!this.session.clock) {
+            return 1;
+        }
+
+        const had = this.worlds.get(peer);
+
+        return had ? Math.min(AGAIN.burst, had.left + (this.session.clock() - had.at) / AGAIN.every) : AGAIN.burst;
+    }
+
+    /**
+     * Whether one who's joined asked for the world again a while ago and may have it now: sent it
+     * as they're next heard from (their game asks how long a word takes every second, even while
+     * the world's stopped and nothing else is sent).
+     */
+    due(peer) {
+        return this.asked.has(peer) && this.#worldsLeft(peer) >= 1 && this.mayTake();
+    }
+
+    /** Nothing kept of what one who's joined asked for, or was sent for the asking: one joining (again) starts afresh. */
+    forget(peer) {
+        this.asked.delete(peer);
+        this.worlds.delete(peer);
+    }
+
+    // One whose world's gone astray: the world again (after all that's been done till now), at
+    // once if they may have it (AGAIN: a few times running, then one every so often), else once
+    // their time's come (answer: asked twice meanwhile, sent it once)
+    again(peer) {
+        if (!this.session.players.has(peer)) {
+            return;
+        }
+
+        this.asked.add(peer);
+        this.hosting.flush();
+    }
+
+    // The world again to each who's asked for it and may have it now (AGAIN; after all that's been
+    // done till now: flush's), one snapshot taken for them all: one asking alone has their own of
+    // their hero in it (OWN), several at once no one's, as everyone's sent it when the host's
+    // link comes back (resync)
+    answer() {
+        if (!this.asked.size) {
+            return;
+        }
+
+        const due = [...this.asked].filter((peer) => this.#worldsLeft(peer) >= 1);
+
+        // (None due; or it's too soon to take the world again, where that's held back: they wait)
+        if (!due.length || !this.mayTake()) {
+            return;
+        }
+
+        const text = this.withWorld({ kind: "state", snapshot: null, paused: this.session.paused }, this.worldFor(due.length === 1 ? this.session.players.get(due[0]) : null));
+
+        for (const peer of due) {
+            this.asked.delete(peer);
+
+            if (this.session.clock) {
+                this.worlds.set(peer, { left: this.#worldsLeft(peer) - 1, at: this.session.clock() });
+            }
+        }
+
+        this.hosting.postTo(due, "state", text);
+    }
+
+    /**
+     * The host's link back after it dropped (what was sent meanwhile lost): everyone who's joined
+     * sent the world as it now is (one snapshot for them all).
+     */
+    resync() {
+        this.hosting.flush();
+
+        if (!this.session.players.size) {
+            return;
+        }
+
+        const text = this.withWorld({ kind: "state", snapshot: null, paused: this.session.paused }, this.worldFor());
+
+        // (Whoever had asked for it has it now. Not counted as sent for the asking: it was the
+        // host's link that dropped, and theirs may yet)
+        this.asked.clear();
+        this.hosting.postAll("state", text);
+    }
+
+    /** Nothing more recorded: the world closed to others again. */
+    stop() {
+        this.host.recorder = null;
+    }
+}
+
+/**
+ * A world opened to others, by its host: those who join brought in and kept up with what's done.
+ * The game playing it calls `hear` with what's come from each (by their `peer`: the relay's), and
+ * `gone` when one's left, and `flush` after it's moved the world on; what's to be sent goes by
+ * `send(peer, text)`.
+ *
+ * It has two parts (generated/multiplayer_scaling_plan.md 3-1): the session (Session: who's in,
+ * their coming and going, their parts, what they say, the world's stopping, their own hero told
+ * them, their commands) and the feed (OpsFeed: the world itself as it's sent them, by lockstep:
+ * what's done, the checksum, the motion stream, and the whole world). Everything of either is
+ * reached here as it always was (`hosting.players`, `hosting.asked`, `hosting.pause()`...), and
+ * this carries what they both send, and sends for both in the order it always did (flush).
+ */
+export class Hosting {
+    /**
+     * @param {object} host - The world (core/host.js Host).
+     * @param {object} options
+     * @param {function} options.send - Sends `text` to one who's joined (peer, text).
+     * @param {function} [options.sendAll] - Sends the same `text` to several who've joined at once
+     *   (peers: an array, in the order they joined; text), for whoever can do that in one go (the
+     *   world server's thread, one word to its supervisor in place of one for each); none, each is
+     *   sent it by `send`. Either way each gets the same text, in the same order.
+     * @param {function} [options.clock] - The time (ms: performance.now, say), to hold those
+     *   who've joined to how much they may ask of the host (AGAIN, HEARD); none, they aren't held
+     *   (the tests' worlds, played faster than any clock).
+     */
+    constructor(host, { send, sendAll = null, clock = null }) {
+        this.host = host;
+        this.send = send;
+        this.sendAll = sendAll;
+
+        /** What's been sent (characters of text, to everyone together), by kind. */
+        this.sent = {};
+
+        /** Its two parts: who's in and what passes between them and the host; and the world as it's sent them. */
+        this.session = new Session(this, clock);
+        this.feed = new OpsFeed(this);
+    }
+
+    /** The host's step, as its sendings carry it. */
+    step() {
+        return Math.floor(this.host.battle.time / STEP_MS);
+    }
+
+    /** `text` (of a `kind`, for the count of what's sent) to one who's joined. */
+    post(peer, kind, text) {
+        this.sent[kind] = (this.sent[kind] ?? 0) + text.length;
+        count("sends");
+        count("sent", text.length);
+        this.send(peer, text);
+    }
+
+    /** The same to everyone who's joined (but those in the world not yet sent it: Session reached). */
+    postAll(kind, text) {
+        this.postTo(this.session.reached(), kind, text);
+    }
+
+    /**
+     * The same text to several who've joined: in one go, if whoever runs it can (sendAll), counted
+     * as it would be sent one by one.
+     */
+    postTo(peers, kind, text) {
+        if (!this.sendAll || peers.length < 2) {
+            for (const peer of peers) {
+                this.post(peer, kind, text);
+            }
+
+            return;
+        }
+
+        this.sent[kind] = (this.sent[kind] ?? 0) + text.length * peers.length;
+        count("sends", peers.length);
+        count("sent", text.length * peers.length);
+        this.sendAll(peers, text);
+    }
+
+    /**
+     * Send what's been done to everyone who's joined, and with it, every CHECK_EVERY steps, how
+     * the world should stand (after what's been done: compared there); where those near the
+     * players are, if that's sent (sendsPlaces); each their own hero; then the world again to
+     * whoever's asked for it and may have it now, and whoever's waiting to come in let in. With
+     * no one joined, nothing's worked out or written.
+     */
+    flush() {
+        lap("flush.quiet");
+        this.session.quiet();
+
+        if (!this.session.players.size) {
+            this.feed.idle();
+            this.session.admit();
+            lap(null);
+
+            return;
+        }
+
+        const step = this.feed.flush();
+
+        lap("flush.selves");
+        this.session.selves(step);
+        lap("flush.worlds");
+        this.feed.answer();
+        this.session.admit();
+        this.feed.settled();
+        lap(null);
     }
 
     /** The world closed to others again: everyone who'd joined out of it, and nothing more recorded. */
     stop() {
-        for (const peer of [...this.players.keys()]) {
-            this.gone(peer);
-        }
+        this.session.stop();
+        this.feed.stop();
+    }
+}
 
-        this.host.recorder = null;
+// Each of a hosting's parts' own, as the hosting's own: read and set there as they always were
+for (const [part, keys] of [
+    ["session", ["clock", "players", "rtts", "done", "toldSelf", "heardAt", "quieted", "seq", "nextGuest", "allowance", "dropped", "hidden", "paused", "onJoin", "onLeave", "onKick", "most", "welcomes", "waiting", "loading", "placed", "idOf", "byCharacter", "characterOf", "onReady", "onAway", "onHold", "roleOf", "netcode", "onChat", "said", "dms"]],
+    ["feed", ["ops", "steps", "checkDue", "motionDue", "sendsPlaces", "asked", "worlds", "sparing", "taken"]],
+]) {
+    for (const key of keys) {
+        Object.defineProperty(Hosting.prototype, key, {
+            get() {
+                return this[part][key];
+            },
+            set(value) {
+                this[part][key] = value;
+            },
+            configurable: true,
+        });
+    }
+}
+
+// And what each does that whoever runs the world asks of it
+for (const [part, names] of [
+    ["session", ["hear", "chat", "takeDms", "admit", "pause", "still", "kick", "gone", "slowest"]],
+    ["feed", ["turned", "resync"]],
+]) {
+    for (const name of names) {
+        Hosting.prototype[name] = function (...given) {
+            return this[part][name](...given);
+        };
     }
 }
 
@@ -1376,6 +1827,13 @@ export class Joining {
         this.onRefused = () => {};
         this.onKicked = () => {};
 
+        /**
+         * Its place among those waiting to come into the world, as the host last said (1, the
+         * next), or null: not waiting; and who's told as it's said (place).
+         */
+        this.queued = null;
+        this.onQueued = () => {};
+
         /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
         this.onPong = () => {};
 
@@ -1414,6 +1872,7 @@ export class Joining {
         switch (message?.kind) {
             case "welcome":
                 this.me = message.id;
+                this.queued = null;
                 // (Their character was in the world already, on another link: taken over, as it stood)
                 this.took = message.took === true;
                 this.paused = pausedOf(message.paused);
@@ -1495,6 +1954,14 @@ export class Joining {
                 break;
             case "refused":
                 this.onRefused(message.reason, message);
+                break;
+            case "queued":
+                // (Others coming in before it: its place in the line, till its welcome comes)
+                if (!this.me && Number.isInteger(message.place) && message.place > 0) {
+                    this.queued = message.place;
+                    this.onQueued(message.place);
+                }
+
                 break;
             case "kicked":
                 this.onKicked(message.reason);

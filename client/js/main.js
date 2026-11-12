@@ -4542,7 +4542,9 @@ async function hostServerForm(record, kind = "new") {
     const pairs = loadWorlds().flatMap((world) => kept.filter((save) => world.places[save.id]).map((save) => ({ world, save })));
     const key = textField("hostserverkey", { type: "password", value: record.maker ?? "", placeholder: makers ? "Not needed here" : "A creator key, or its admin key" });
     const keyLabel = makers ? "Creator key (if you have one: the world isn't counted against you)" : "Creator key (or the server's admin key, on its own Wi-Fi)";
-    const most = selectField("hostservermost", [8, 7, 6, 5, 4, 3, 2, 1].map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
+    // (As many at once as that server lets a world take, as it says; one that doesn't say, 8)
+    const ceiling = Number.isInteger(now.card?.server?.mostPlayers) ? Math.max(1, Math.min(8, now.card.server.mostPlayers)) : 8;
+    const most = selectField("hostservermost", Array.from({ length: ceiling }, (_, k) => ceiling - k).map((count) => [String(count), count === 1 ? "1: you alone" : `${count} at once`]));
     const rules = [switchField("hostserverlisted", "Listed on the server", "Anyone who opens the server sees it among its worlds"), switchField("hostserveropen", "Open to anyone", "Whoever opens the server can join it with a tap, no link needed")];
     let fields;
 
@@ -5121,7 +5123,7 @@ function bringFromFile(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, queuedWords, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 
@@ -5189,6 +5191,8 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         state.onServer = null;
         tell.problem(reason === "version" && updatesFor(said?.net) ? UPDATING_WORDS : reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
     };
+    // (Others coming into the world before them, each sent the whole of it: their place in the line)
+    joined.joining.onQueued = (place) => tell.waiting?.(queuedWords(place));
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");

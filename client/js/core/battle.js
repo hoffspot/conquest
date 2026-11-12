@@ -1767,9 +1767,13 @@ export class Battle {
      * made again in the same order: core/host.js). Each character is kept whole, all it's been
      * given (#given); or, with `keep`, as that makes of it, straight from the battle's own (the
      * host's snapshot: core/keptactor.js keptOf, which leaves out what a character has as one
-     * just made has it and copies only the rest). restore reads either.
+     * just made has it and copies only the rest). restore reads either. `shared`: what's in the
+     * air, on the ground and lined up is the battle's own, not a copy (with a `keep` that copies
+     * nothing, keptactor.js sharedOf): for a snapshot written out at once, never kept or changed.
      */
-    snapshot({ keep = null } = {}) {
+    snapshot({ keep = null, shared = false } = {}) {
+        const copy = shared ? (value) => value : structuredClone;
+
         return {
             seed: this.seed,
             time: this.time,
@@ -1787,17 +1791,17 @@ export class Battle {
                         return kept;
                     }),
             ),
-            projectiles: structuredClone(this.projectiles),
-            hazards: structuredClone(this.hazards),
+            projectiles: copy(this.projectiles),
+            hazards: copy(this.hazards),
             nextHazard: this.nextHazard,
-            bombs: structuredClone(this.bombs),
+            bombs: copy(this.bombs),
             nextBomb: this.nextBomb,
-            falls: structuredClone(this.falls),
+            falls: copy(this.falls),
             nextFall: this.nextFall,
-            baits: structuredClone(this.baits),
+            baits: copy(this.baits),
             nextBait: this.nextBait,
-            breaths: structuredClone(this.breaths),
-            formations: structuredClone(this.formations),
+            breaths: copy(this.breaths),
+            formations: copy(this.formations),
         };
     }
 
