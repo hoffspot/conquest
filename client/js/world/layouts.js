@@ -45,9 +45,10 @@ export class Layouts {
         }
 
         this.worker.onmessage = ({ data: { id, spec, town, dungeon, from } }) => {
-            // (A dungeon's levels: given, if it's still wanted as what they were worked out from)
-            if (dungeon) {
-                if (this.delved.get(from.key) === whatOf(from)) {
+            // (A dungeon's levels: given, if it's still wanted as what they were worked out from.
+            // None, where the worker couldn't work it out: it's made when it's wanted, as ever)
+            if (from) {
+                if (dungeon && this.delved.get(from.key) === whatOf(from)) {
                     this.interiors?.give(from.key, from, dungeon);
                 }
 

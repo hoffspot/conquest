@@ -79,6 +79,24 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
         assert.deepEqual(heard.town, layoutTown(spec));
     });
 
+    it("answers a dungeon it can't work out with none, and carries on: the next thing asked of it is answered", async () => {
+        const worker = new globalThis.Worker(new URL("../client/js/world/layout-worker.js", import.meta.url), { type: "module" });
+        const heard = [];
+        let failed = null;
+
+        worker.onmessage = ({ data }) => heard.push(data);
+        worker.onerror = (event) => (failed = event);
+        // (A theme this thread has never heard of, as a browser test's own is; then one it has)
+        worker.postMessage({ dungeon: { key: "site:1", seed: 5, theme: "noSuchTheme", tier: 1, generation: 0 } });
+        worker.postMessage({ dungeon: { key: "site:2", seed: 5, theme: "caves", tier: 1, generation: 0 } });
+        assert.ok(await until(() => heard.length === 2), "(two answers)");
+        worker.terminate();
+        assert.equal(failed, null, "nothing thrown out of the worker");
+        assert.deepEqual([heard[0].from.key, heard[0].dungeon], ["site:1", null]);
+        assert.equal(heard[1].from.key, "site:2");
+        assert.ok(heard[1].dungeon?.levels?.length > 0, "the one it can work out, worked out");
+    });
+
     it("bakes the navigation's tiles on a worker to the same bytes as baking them here", async () => {
         const world = buildWorld({ seed: 2 });
         const navigation = navigatorOf(world.maps.town);
