@@ -1,7 +1,6 @@
 import { STEP_MS } from "../client/js/core/battle.js";
 import { PARTY_COLOURS } from "../client/js/app/mapicons.js";
 import { SIZE } from "../client/js/core/invasions.js";
-import { MOTION } from "../client/js/core/motion.js";
 import { expect, playing, test, undrawn } from "./fixtures.js";
 
 // Playing together (docs/WAR.md M11), in two browsers at once: one player opens their world to
@@ -1520,7 +1519,8 @@ test("two players walk about a while: the joined copy's checked against the host
     await guest.waitForFunction(() => window.pellagos.game.clock > 0.3, null, { timeout: 60000, polling: 250 });
 
     const sentAtFirst = await host.evaluate(() => ({ at: performance.now(), ...window.pellagos.game.hosting.sent }));
-    const checking = () => guest.evaluate(() => ({ time: window.pellagos.game.battle.time, checks: window.pellagos.game.remote.motionChecks }));
+    const every = await guest.evaluate(async () => (await import("/js/core/netplay.js")).CHECK_EVERY);
+    const checking = () => guest.evaluate(() => ({ time: window.pellagos.game.battle.time, checks: window.pellagos.game.remote.checks }));
     const checkedAtFirst = await checking();
     let checkedLast = checkedAtFirst;
 
@@ -1561,11 +1561,12 @@ test("two players walk about a while: the joined copy's checked against the host
         // somewhere at once: drawn going all the way)
         expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: 0, told: true, snaps: 0 });
 
-        // (Its world gone on, and checked once each MOTION.every steps of it, a fifth of a second:
-        // by its world's time, not the clock's, which two worlds drawn in software leave at a
-        // quarter of it or so, faster or slower with the machine)
+        // (Its world gone on, and checked against how the host said its own stood once each
+        // CHECK_EVERY steps of it, a fifth of a second: by its world's time, not the clock's,
+        // which two worlds drawn in software leave at a quarter of it or so, faster or slower
+        // with the machine)
         const checked = await checking();
-        const due = (checked.time - checkedAtFirst.time) / (STEP_MS * MOTION.every);
+        const due = (checked.time - checkedAtFirst.time) / (STEP_MS * every);
 
         expect(checked.time).toBeGreaterThan(checkedLast.time);
         expect(checked.checks - checkedAtFirst.checks).toBeGreaterThanOrEqual(Math.floor(due) - 1);
@@ -1573,7 +1574,9 @@ test("two players walk about a while: the joined copy's checked against the host
         checkedLast = checked;
     }
 
-    // What the host sent the guest a second, all told, and of that its motion
+    // What the host sent the guest a second, all told, and of that what was done (how the world
+    // should stand among it). Where its characters stood, the motion stream, isn't sent: it was
+    // half of all this, and the sums tell a copy gone astray as soon
     const sent = await host.evaluate((first) => {
         const { sent } = window.pellagos.game.hosting;
         const seconds = (performance.now() - first.at) / 1000;
@@ -1582,8 +1585,9 @@ test("two players walk about a while: the joined copy's checked against the host
         return { all: Object.keys(sent).reduce((sum, kind) => sum + per(kind), 0), motion: per("motion"), ops: per("ops") };
     }, sentAtFirst);
 
-    test.info().annotations.push({ type: "bandwidth", description: `host to one joined: ${(sent.all / 1000).toFixed(2)} KB/s (motion ${(sent.motion / 1000).toFixed(2)}, ops ${(sent.ops / 1000).toFixed(2)})` });
-    expect(sent.motion).toBeGreaterThan(0);
+    test.info().annotations.push({ type: "bandwidth", description: `host to one joined: ${(sent.all / 1000).toFixed(2)} KB/s (ops ${(sent.ops / 1000).toFixed(2)})` });
+    expect(sent.motion).toBe(0);
+    expect(sent.ops).toBeGreaterThan(0);
     expect(sent.all).toBeLessThan(10000);
 
     // The guest's overlay says how the link's going

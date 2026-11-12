@@ -961,6 +961,10 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   half as long (2 seconds for a Taunt, 1.5 for a war cry), and taunted three times within 20
   seconds, it shrugs taunts off for 10 ("It shrugs off taunts for now."). So a warrior holds it
   with its weight in its enmity and a taunt now and then, but four warriors can't chain-lock it.
+- **Stuns wear thin on them** (battle.js `STUNS`; docs/MAGIC.md *Hexes*): on the same ones, a
+  stun of any kind lasts half as long, and each one within 20 seconds of the last half as long
+  again, till it's shrugged off. Hold cast again as it came ready no longer keeps a boss out of
+  its own fight.
 - **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
   however often a level's woken and let go.
 

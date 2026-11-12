@@ -521,7 +521,8 @@ export async function openWorld(game, { address = null, broker = null, onChange 
         code = await link.host();
     }
 
-    const hosting = new Hosting(game.host, { send: (peer, text) => link.to(peer, text) });
+    // (With a clock: what one who's joined may ask of this game's thread is bounded, core/netplay.js HEARD)
+    const hosting = new Hosting(game.host, { send: (peer, text) => link.to(peer, text), clock: () => performance.now() });
 
     hosting.onJoin = () => onChange();
     hosting.onLeave = (id, peer, character) => {

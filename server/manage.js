@@ -1551,7 +1551,9 @@ export class Management {
 
     /**
      * How the server's keeping up (§10 Health): for each world going, its steps (mean, 99th
-     * percentile, worst), its memory, how many are in its battle (actors), its thread's CPU time
+     * percentile, worst), the whole of each look at it (ticks: its steps, what's sent, saved and
+     * made ahead with them), how much of its clock's time it's played lately (pace: 1, unless it
+     * fell behind and let time go; dropped: all it has, ms), its memory, how many are in its battle (actors), its thread's CPU time
      * (cpu: µs, user and system), what it's made ahead between steps (made: chunks, tiles of
      * buildings' insides), its players, its latest save's size, and whether it's slow;
      * and the server's own memory and the machine's load.
@@ -1569,6 +1571,9 @@ export class Management {
                 name: entry.stored.meta.name,
                 life: entry.life,
                 steps,
+                ticks: state?.ticks ?? null,
+                pace: state?.pace ?? 1,
+                dropped: state?.dropped ?? 0,
                 slow: (steps?.p99 ?? 0) > SLOW_STEP,
                 memory: state?.memory ?? null,
                 actors: state?.actors ?? null,

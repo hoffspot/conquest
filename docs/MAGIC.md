@@ -86,7 +86,7 @@ three out of it; it's every 5 now, the user: "Add increasing stun cooldown by tw
 
 ### The elements
 
-Each on an enemy within 8 metres (9 from the third tier, 10 from the sixth) and in sight. "Round
+Each on an enemy within 16 metres (18 from the third tier, 20 from the sixth) and in sight. "Round
 them" is every enemy of the caster's within so many metres of whoever it's cast on; a chain leaps
 on to the next nearest enemy within 3 metres, so many times, each hit weaker.
 
@@ -124,7 +124,9 @@ on to the next nearest enemy within 3 metres, so many times, each hit weaker.
 What they leave on the ground (battle.js `HAZARDS`) hurts every enemy of the caster's standing in
 it, now and then, a share of the spell's damage, and may set on them what it is (fire burning,
 acid poisoning, rot sickening); still only the enemies of the side the caster was on once they've
-gone (a player who's left the game), never their friends or allies. Creatures' spit leaves pools
+gone (a player who's left the game), never their friends or allies. Once its caster's fallen, what
+it does is no one's blow (as a bomb's burst is, its thrower fallen): no one turns on the fallen
+for it or holds it against them, and what it fells isn't counted theirs. Creatures' spit leaves pools
 too: lava, venom.
 
 Nothing round them, leaping on, or left on the ground ever touches the caster, their own people
@@ -135,9 +137,20 @@ strike each other's.
 
 ### Hexes
 
-The Hexes skill's (core/progress.js): **Stun** (an enemy within 9 metres, 400 ms, a 5 s
+The Hexes skill's (core/progress.js): **Stun** (an enemy within 18 metres, 400 ms, a 5 s
 cooldown: it can't move, fight, cast or think for 3 seconds, and turns on whoever did it) and,
 once the skill brings it, **Hold** (600 ms, 6 s cooldown, 6 seconds).
+
+**A boss isn't held for long** (battle.js `STUNS`; the owner: "For hold, halve stuns on bosses and
+shorten each repeat, as Fear already wears thin"). On whatever resists taunts (a dungeon's boss,
+a hell level's own, one of a kind, an elite, the Behemoth), any stun lasts half as long, and each
+one within 20 seconds of the last half as long again: Hold 3 seconds, then 1.5, 0.75, 0.375...
+till it would last less than a twentieth of a second and is shrugged off ("Resisted"). Twenty
+seconds with none, and the next lasts its half again. A stronger stunner's stuns (the Hexes
+skill) are halved from their own length, and a shield bash's and a legendary weapon's count in
+the same run. So Hold on a boss is a breathing space (to heal, to get away, to cut a blow
+short), not a lock: cast again as it came ready, it used to keep a boss stunned through the
+whole fight. Both spells say so where they're described.
 
 ### Prismatic Destruction
 

@@ -355,8 +355,14 @@ player may choose another) can list it there, and others join it point to point 
 for its code on the same server (**Join a World on another Device**). The server takes the game's
 calls from its own pages and the game's website (GitHub Pages) alone: a game opened from another
 server's page plays on it from its own page (Known Servers, **Open the game from this server**). When their games can't
-connect directly, the server relays them, about 2 KB/s for each player who's joined. The
+connect directly, the server relays them, 1 to 5 KB/s for each player who's joined (standing
+about, to fighting: docs/WAR.md, *What's sent, measured*). The
 **broker** and **relaying** settings turn either off.
+
+What the server sends a game is compressed when it's long (the world, as a player comes in or is
+sent it again: 80 to 300 KB of text, a sixth of that on the wire, for a millisecond or two of
+the server's time), for every browser that offers it, which all do. The **compress**
+setting turns it off, for those who connect after it's changed.
 
 A world stays listed while its host's link is open. It's taken down at once when its host closes
 it to others (the game withdraws it). Otherwise it's kept for a while, and those in it told it's
@@ -521,7 +527,12 @@ Back it up with the rest of the computer. The Mac app's log is in
 Each running world steps 20 times a second in a thread of its own, about 110 MB when it's started
 and more as its players go further. **Health** shows each world's steps (the mean, the 99th
 percentile over the last minute, the worst) and memory, and the server's. A step over 50 ms is
-a step late.
+a step late. Beside the steps it shows the **whole tick**: all the world's thread does each time
+it looks at the world, its steps, what's sent of them, a save begun on a turn of the war and
+what's made ahead, which is what a player waits on (a save or a building's inside baked can make
+a tick two or three times its step). And its **pace**: how much of its clock's time the world
+has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
+go, running slow rather than further behind; its journal says when it has.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above

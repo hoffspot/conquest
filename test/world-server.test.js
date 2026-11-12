@@ -199,6 +199,15 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         // not 2 seconds by the clock, in which a world on a busy machine ran 850 ms of its own)
         await until(() => server.registry.lifeOf(world.world).state?.worldTime >= 1000, "a second of the world's time to run");
 
+        // (How it's keeping up, as its thread says for the Health page: its steps; the whole of
+        // each look at it, its steps among it, so never quicker than they; and how much of its
+        // clock's time it's played, all of it unless it fell behind and let time go)
+        const { steps, ticks, pace, dropped } = server.registry.lifeOf(world.world).state;
+
+        assert.ok(steps.count >= 20 && ticks.count >= 10, `${steps.count} steps in ${ticks.count} looks`);
+        assert.ok(ticks.worst >= steps.worst, "a look with a step in it took the step's time and more");
+        assert.ok(pace > 0 && pace <= 1 && dropped >= 0, `pace ${pace}, ${dropped} ms let go`);
+
         // Out: the clock stops, and the world's set aside (setAsideMinutes 0)
         game.close();
         await until(() => server.registry.lifeOf(world.world).life === "stored", "set aside");

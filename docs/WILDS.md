@@ -1965,7 +1965,8 @@ warrior can take it off whoever it's on.
   cleric 1, a ranger 0.7, a rogue 0.5; a creature called 3, one raised 1.5 (followers.js
   `ENMITY_WEIGHTS`); a soldier or a creature 1.
 - **Whom it goes for.** The one with the most that it can see and go for (within its leash, and
-  for a guard, AGGRO's room on a player). But it keeps to the one it's on till another's past them
+  for a guard, AGGRO's room on a player: there's always room on a player for one they've struck
+  in the last 10 seconds, docs/GAME.md *The player first*). But it keeps to the one it's on till another's past them
   by a tenth, if they're within 3 squares of it (`near`, `hand`), or by three tenths from further
   off (`far`), as in World of Warcraft: no one's pulled back and forth across a fight, and a
   creature fighting up close doesn't cross the field after a mage who's edged ahead. Of two with
@@ -2001,7 +2002,9 @@ warrior can take it off whoever it's on.
     `CALLED_CRY_MS`); told to cover its caller, it roars again, every 30 seconds.
 - **Bosses resist** (`TAUNT.resist`): a dungeon's boss, a hell level's own, one of a kind (the
   Behemoth among them) or an elite is made to for half as long, and taunted three times within 20
-  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Their
+  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Stuns
+  wear thin on the same ones (`STUNS`: half as long, and each within 20 seconds of the last half
+  as long again; docs/MAGIC.md *Hexes*). Their
   tables work as anyone's, and some of their specials read them (docs/DUNGEONS.md: the Goblin
   King's volley at whoever's second, the Ant Monster's flock set on her top). The Behemoth weighs
   whom it's most set on as two more of their fellows near them (battle.js `COLOSSAL_ENMITY`).
@@ -2443,7 +2446,10 @@ face to face (`core/host.js`: `trade`, `offer`, `agree`, `cancel`; `TRADE`):
   `heldAlike`, `removeAlike`; before levels, a trade passed on only a thing's kind and make).
 - **Agreeing.** Once both have agreed, everything offered changes hands at once: all of it, or
   (if either hasn't all they offered any more, or hasn't room in their pack for what they're
-  given) none of it, and neither's agreed any more, with why said.
+  given) none of it, and neither's agreed any more, with why said. An agreeing says which offers
+  its player was looking at (the trade's `rev`, one on with every offer made): if the other's
+  changed theirs while it was on its way, it isn't taken for an offer never seen ("The offer
+  changed as you agreed: look again."). Before `NET_VERSION` 224 it was, whichever came first.
 - **Off.** Closing the pack calls it off; so does either walking more than 7 m from the other,
   falling, or leaving the world.
 

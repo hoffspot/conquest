@@ -202,8 +202,9 @@ export class Bot {
     /**
      * How it's gone, as plain data: who it is, how long it's played, how its copy kept to the
      * host's (resyncs: the world sent again; desyncs: its copy found astray by a check; skips: it
-     * fell too far behind to catch up, core/netplay.js PACE.tooFar; checks and motionChecks: how
-     * many it made), what it did, what it saw (`seen`), and if it was sent out.
+     * fell too far behind to catch up, core/netplay.js PACE.tooFar; checks: how many it made of
+     * how the world stood, and motionChecks of where its characters did, of a host that sends
+     * that), what it did, what it saw (`seen`), and if it was sent out.
      */
     report() {
         const { joining } = this;

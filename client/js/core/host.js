@@ -58,6 +58,7 @@ import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from ".
 import { keepSiteOf, SCENERY, squareIn } from "./scenery.js";
 import { patrolRound, placedOf } from "./terrain/scenes.js";
 import { readPlan } from "./interiors.js";
+import { keptOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -733,7 +734,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 52;
+export const SNAPSHOT_VERSION = 53;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -910,6 +911,28 @@ export const SNAPSHOT_STEPS = Object.freeze({
     50: (snapshot) => ({ ...snapshot, version: 51, ...(snapshot.messengers ? { messengers: snapshot.messengers.map(([id, one]) => [id, { ...one, found: one.found ?? one.since, arrived: one.arrived ?? one.state !== "coming" }]) } : {}) }),
     // 52: the hell rifts (core/hellrift.js, Host #hellRifts): none yet
     51: (snapshot) => ({ ...snapshot, version: 52, hellRifts: { last: -1, open: null, next: 1 } }),
+    // 53: three clocks a world carried on from a snapshot began afresh, and so does this one: when
+    // the war's messengers are next looked to (Host #sendMessengers: at once), how far the wilds
+    // director had counted the rare encounters' clock (#caches: from now), and when the Order's
+    // court last warned each player off (#courtsAbout: not yet). Nothing left of players gone:
+    // the way they'd walked (`travel`), and word of a messenger too old to hold the next back.
+    // And each character kept without what it has as one just added has it (core/keptactor.js);
+    // and how far each shot in the air has flown (battle.js SHOT_FLIES: no way yet, so one let go
+    // before shots gave up flies on as far again as it may)
+    52: (snapshot) => {
+        const here = new Set(snapshot.players.map(({ id }) => id));
+
+        return {
+            ...snapshot,
+            version: 53,
+            messengersAt: 0,
+            rareLooked: null,
+            courtWarned: [],
+            travel: (snapshot.travel ?? []).filter(([id]) => here.has(id)),
+            ...(snapshot.messengersHeard ? { messengersHeard: snapshot.messengersHeard.filter(([id, at]) => here.has(id) || snapshot.battle.time - at < MESSENGER_EVERY) } : {}),
+            battle: { ...spareBattle(snapshot.battle), projectiles: (snapshot.battle.projectiles ?? []).map((projectile) => ({ flown: 0, ...projectile })) },
+        };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1068,6 +1091,7 @@ export const REFUSALS = Object.freeze({
     trading: "You're trading with someone already.",
     elsewhere: "They're trading with someone else.",
     changed: "Something offered isn't there any more: look again.",
+    reoffered: "The offer changed as you agreed: look again.",
     theirs: "They haven't room for all that.",
     unafflicted: "There's nothing for that to cure.",
     boosted: "One's still working: only one at a time.",
@@ -1963,6 +1987,20 @@ export class Host {
 
         this.battle.remove(id);
         this.players.delete(id);
+
+        // (Nothing of theirs left behind, in the world or in every snapshot of it after: the way
+        // they'd walked across the wilds, when the Order's court last warned them off, and, of
+        // anyone gone, word of a messenger too old to hold their next back. One newer is kept
+        // till it is, or coming back in would bring them a messenger before their half hour's up)
+        this.travel.delete(id);
+        this.courtWarned.delete(id);
+
+        for (const [one, at] of [...this.messengersHeard]) {
+            if (!this.players.has(one) && this.battle.time - at >= MESSENGER_EVERY) {
+                this.messengersHeard.delete(one);
+            }
+        }
+
         this.#event("leave", { id, name: player.hero.name });
 
         // (Everyone left resting, waiting on them: their time passed now)
@@ -2050,8 +2088,9 @@ export class Host {
      *    { type: "share", request }: share one with the others of their party (#shareRequest);
      *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
      *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
-     *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
-     *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
+     *    give (all of it, each time); { type: "agree", rev }: take the other's offer for theirs,
+     *    as it stood when they looked (`rev`: the trade's, one on with each offer; once both
+     *    have, it's done); { type: "cancel", with }: call off the trade (or say no to a
      *    player's asking, or stop asking).
      *  - { type: "outfit", follower, index }: give one of their hired adventurers (by id) near them
      *    a weapon or body armour from their pack (core/followers.js wearable), what they wore
@@ -2301,7 +2340,7 @@ export class Host {
             case "offer":
                 return this.#offer(player, command);
             case "agree":
-                return this.#agree(player);
+                return this.#agree(player, command.rev);
             case "cancel":
                 return this.#cancel(player, command.with ?? null);
             case "travel":
@@ -3100,7 +3139,14 @@ export class Host {
             made: [...(this.world.interiors?.order ?? [])],
             open: [...this.open.keys()],
             lookAt: this.lookAt,
-            battle: this.battle.snapshot(),
+            // (Its clocks that aren't the battle's: a copy made from this keeps them, or it would
+            // send its messengers, count the rare encounters' time and warn players off the
+            // Order's court at other steps than this world does, and go astray)
+            messengersAt: this.messengersAt ?? 0,
+            rareLooked: this.rareLooked ?? null,
+            courtWarned: [...this.courtWarned.entries()],
+            // (Each character without what it has as one just made has it: core/keptactor.js)
+            battle: this.battle.snapshot({ keep: keptOf }),
             war: this.war?.snapshot() ?? null,
             random: this.random.state,
             mustered: [...this.mustered.entries()],
@@ -3278,6 +3324,11 @@ export class Host {
             }
         }
 
+        // (Its rare encounters as the snapshot has them: a copy set right, adopt, had its own)
+        host.legends = new Legends(snapshot.legends);
+        host.messengersAt = snapshot.messengersAt ?? 0;
+        host.rareLooked = snapshot.rareLooked ?? null;
+        host.courtWarned = new Map(snapshot.courtWarned ?? []);
         host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player), sworn: (actor, enemy) => host.#sworn(actor, enemy) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
@@ -5060,7 +5111,7 @@ export class Host {
                 }
             }
 
-            Object.assign(asked, { open: true, until: null, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
+            Object.assign(asked, { open: true, until: null, rev: 0, offers: { [other.id]: { gold: 0, items: [] }, [player.id]: { gold: 0, items: [] } }, agreed: { [other.id]: false, [player.id]: false } });
             this.#tellTrade(asked, "open");
 
             return { ok: true, trade: asked.id, open: true };
@@ -5082,7 +5133,8 @@ export class Host {
     }
 
     // What a player will give, in place of what they offered before: gold, and things from their
-    // pack (as many as they have of each, of each make). Neither's agreed to it yet.
+    // pack (as many as they have of each, of each make). Neither's agreed to it yet: the trade's
+    // another `rev` on, and only an agreeing that names it counts (#agree).
     #offer(player, { gold = 0, items = [] }) {
         const trade = this.#tradeOf(player.id);
 
@@ -5127,18 +5179,25 @@ export class Host {
         }
 
         trade.offers[player.id] = { gold, items: offered };
+        trade.rev = (trade.rev ?? 0) + 1;
         trade.agreed = { [trade.from]: false, [trade.to]: false };
         this.#tellTrade(trade, "offer", { by: player.id });
 
         return OK;
     }
 
-    // A player takes the other's offer for theirs: once both have, what's offered changes hands
-    #agree(player) {
+    // A player takes the other's offer for theirs: once both have, what's offered changes hands.
+    // They say which offers they saw (`rev`: the trade's, as their game had it): if either's
+    // changed since, while their word was on its way, it isn't taken for what they never saw
+    #agree(player, rev) {
         const trade = this.#tradeOf(player.id);
 
         if (!trade) {
             return refuse("trade");
+        }
+
+        if (rev !== (trade.rev ?? 0)) {
+            return refuse("reoffered");
         }
 
         const other = trade.from === player.id ? trade.to : trade.from;

@@ -117,6 +117,80 @@ describe("the world runner (core/runner.js)", () => {
         assert.equal(new WorldRunner(host).times, null, "(no clock, not timed)");
     });
 
+    it("plays no more steps at once than it's told to, each sent as it's done; and lets go of what it's behind by beyond RUNNER.behind, so a world held up is never further behind than that", () => {
+        const host = counting();
+        const flushed = [];
+        const runner = new WorldRunner(host, { hosting: { flush: () => flushed.push(host.steps) } });
+
+        // Held up 2 s (its thread busy, the machine asleep): two steps played, sent one by one, and
+        // all it's behind by but RUNNER.behind let go of, not played back to back
+        assert.equal(runner.advance(2000, { most: RUNNER.catchUp }), RUNNER.catchUp);
+        assert.deepEqual(flushed, [1, 2]);
+        assert.equal(runner.lag, 2000 - RUNNER.catchUp * STEP_MS);
+        assert.equal(runner.letGo(), 2000 - RUNNER.catchUp * STEP_MS - RUNNER.behind);
+        assert.equal(runner.lag, RUNNER.behind);
+        assert.equal(runner.dropped, 1650);
+        assert.equal(runner.letGo(), 0, "(nothing more to let go)");
+
+        // (What it's still behind by caught up two steps a look, each look as soon as the last is
+        // done; then a step as each comes due)
+        let looks = 0;
+
+        while (runner.lag >= STEP_MS) {
+            const due = Math.floor(runner.lag / STEP_MS);
+
+            assert.equal(runner.advance(0, { most: RUNNER.catchUp }), Math.min(RUNNER.catchUp, due));
+            looks++;
+        }
+
+        assert.equal(looks, Math.ceil(RUNNER.behind / STEP_MS / RUNNER.catchUp));
+        assert.equal(host.steps, RUNNER.catchUp + RUNNER.behind / STEP_MS);
+        assert.equal(runner.advance(STEP_MS, { most: RUNNER.catchUp }), 1);
+        assert.equal(runner.dropped, 1650);
+
+        // (Told to play no more than it's given anyway: as ever, nothing let go)
+        const even = new WorldRunner(counting());
+
+        for (let k = 0; k < 100; k++) {
+            even.advance(25, { most: RUNNER.catchUp });
+            even.letGo();
+        }
+
+        assert.equal(even.host.steps, 50);
+        assert.equal(even.dropped, 0);
+        assert.equal(even.dilation, 1);
+    });
+
+    it("runs a world whose steps take longer than a step slow, by as much as they're over, and no further behind: steps of 70 ms at seven tenths of its clock", () => {
+        const host = counting();
+        let now = 0;
+        const runner = new WorldRunner(host, { clock: () => now });
+
+        // (Each step taking 70 ms of the clock: driven as the world server drives it, a look as
+        // soon as the last is done, given the time gone by since)
+        host.advance = ((advance) => (ms) => {
+            now += 70;
+
+            return advance(ms);
+        })(host.advance);
+
+        let last = 0;
+
+        for (let look = 0; look < 2000; look++) {
+            now += 1;
+
+            const given = now - last;
+
+            last = now;
+            runner.advance(given, { most: RUNNER.catchUp });
+            runner.letGo();
+            assert.ok(runner.lag <= RUNNER.behind);
+        }
+
+        assert.ok(Math.abs(runner.dilation - STEP_MS / 70) < 0.02, `${runner.dilation}`);
+        assert.ok(Math.abs(host.battle.time / now - STEP_MS / 70) < 0.02, `${host.battle.time} ms of the world's time in ${now}`);
+    });
+
     it("keeps only the last steps' times for the percentile, every step for the mean and the worst", () => {
         const times = new StepTimes(4);
 
