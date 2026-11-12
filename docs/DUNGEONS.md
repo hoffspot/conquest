@@ -895,7 +895,10 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   just what it's made from (`dungeonRooms`), and otherwise works it out there as ever (a
   mightier finder come near meanwhile: another tier): the same dungeon either way, so every
   copy of a world agrees whichever of them had it ready (test/soon.test.js, test/ahead.test.js).
-  What was given for one its finders went by is let go.
+  What was given for one its finders went by is let go. Measured over twelve dungeons (the
+  thread's own time, a busy machine): made where it's wanted, 33 to 85 ms of the step, 57 on the
+  mean; its levels given, 5 to 23, 9 on the mean (its floors' plans read, which the step still
+  does).
 - **Each level's foes as many and as tough as the side there** as it wakes (docs/WILDS.md, *A
   side's strength*): the boss and mini-bosses tougher, more of each pack and each a little tougher,
   the more set on free ground beside those the plan has.
