@@ -204,7 +204,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/hurry.js", 7027, "3563c756d4"],
             ["js/core/insides.js", 94582, "f81dc79773"],
             ["js/core/interiors.js", 22297, "49706aff2e"],
-            ["js/core/keptactor.js", 8036, "096750ead6"],
+            ["js/core/keptactor.js", 8273, "ce5c56ecc8"],
             ["js/core/lagoons.js", 4037, "974efa9b62"],
             ["js/core/light.js", 6037, "32c1a082ae"],
             ["js/core/lonetrees.js", 6507, "5923dfe87c"],
