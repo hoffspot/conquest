@@ -332,7 +332,7 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium E2E_PORT=8096 \
   pass at Low: a test that fails there for any other reason than being about High has found
   something.
 - A test that waits on the game's time stops the game and plays it on by hand (`playUntil` in
-  `e2e/fixtures.js`). Do the same in new tests, and never wait on the clock. The one test that
+  `e2e/fixtures.js`). Do the same in new tests, and never wait on the clock. Never ask a number of a browser test that the machine's speed decides (frames drawn, steps played in so many seconds, milliseconds): ask counts and how they stand to each other. The one test that
   must let the clock run is the measured run's (`e2e/measure.spec.js`: a run is as long as its
   frames' own times add up to, so the game can't be played on by hand through it); it asks for
   twenty seconds and waits on the run saying it's done.
