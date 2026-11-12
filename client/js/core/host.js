@@ -2455,18 +2455,40 @@ export class Host {
         const out = (actor) => actor && actor.map === "town" && !actor.dead;
         const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter(out).map(({ x, y }) => [x, y]);
         const dark = torchesLit(elapsed);
+        const torches = [];
+        const globes = [];
+        const tally = { pairs: 0 };
 
-        count("light.actors", (dark ? 2 : 1) * this.battle.actors.length);
+        // (Everyone gone through once for both, each list in the battle's order as ever)
+        for (const actor of this.battle.actors) {
+            if (actor.map === "town" && !actor.dead) {
+                if (dark && carriesTorch(actor, dark)) {
+                    torches.push([actor.x, actor.y]);
+                }
 
-        return lighting({
+                // (Only those with any spell on them asked which: most have none)
+                if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+                    globes.push([actor.x, actor.y]);
+                }
+            }
+        }
+
+        count("light.actors", this.battle.actors.length);
+
+        const light = lighting({
             elapsed,
             plan: this.world.plan,
             players,
             camps: [...[...this.camps.values()].map(({ fire }) => fire), ...this.campfires.map(({ fire }) => fire)],
             fires: this.battle.hazards.filter((hazard) => hazard.kind === "fire" && hazard.map === "town"),
-            torches: dark ? this.battle.actors.filter((actor) => out(actor) && carriesTorch(actor, dark)).map(({ x, y }) => [x, y]) : [],
-            globes: this.battle.actors.filter((actor) => out(actor) && this.battle.buffOf(actor, "light")).map(({ x, y }) => [x, y]),
+            torches,
+            globes,
+            tally,
         });
+
+        count("light.pairs", tally.pairs);
+
+        return light;
     }
 
     /**

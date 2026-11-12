@@ -8,7 +8,9 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { clearOfSettlements } from "../client/js/core/creatures.js";
+import { elapsedOf } from "../client/js/core/daytime.js";
 import { Host } from "../client/js/core/host.js";
+import { LIGHT_NEAR, LIGHT_REACH, lighting, skyLight, torchesLit } from "../client/js/core/light.js";
 import { Culling, Near } from "../client/js/core/near.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -164,6 +166,78 @@ describe("clear of every settlement, measured against those near (core/creatures
     });
 });
 
+// The lights near the players as they were worked out before the grid: every light against every
+// player
+function lightingOld({ elapsed, plan = null, players = [], camps = [], fires = [], torches = [], globes = [] }) {
+    const sky = skyLight(elapsed);
+    const lit = [];
+
+    if (sky >= 1) {
+        return { sky, lit };
+    }
+
+    const near = ([x, y], beyond) => players.some((player) => (player[0] - x) * (player[0] - x) + (player[1] - y) * (player[1] - y) <= (LIGHT_NEAR + beyond) * (LIGHT_NEAR + beyond));
+    const circle = ([x, y], reach) => lit.push([x, y, reach * reach]);
+
+    for (const place of plan?.places ?? []) {
+        const reach = (SETTLEMENTS[place.kind]?.radius ?? 40) + LIGHT_REACH.settlement;
+
+        if (near(place.at, reach)) {
+            circle(place.at, reach);
+        }
+    }
+
+    for (const [list, reach] of [[camps, LIGHT_REACH.camp], [null, 0], [torches, LIGHT_REACH.torch], [globes, LIGHT_REACH.globe]]) {
+        for (const at of list ?? fires.map(({ x, y, radius }) => [x, y, radius])) {
+            const far = list ? reach : at[2] + LIGHT_REACH.fire;
+
+            if (near(at, far)) {
+                circle(at, far);
+            }
+        }
+    }
+
+    return { sky, lit };
+}
+
+describe("the lights near the players at night, measured against those near (core/light.js lighting)", () => {
+    it("lights what measuring every light against every player did, in the same order: two worlds' settlements, camps, fires, torches and globes", () => {
+        let lights = 0;
+
+        for (const seed of [2, 7]) {
+            const { plan } = buildWorld({ seed });
+            const random = createRandom(seed + 40);
+            // (A time of night: the sky's light short of day's)
+            let elapsed = 0;
+
+            while (skyLight(elapsed) >= 1) {
+                elapsed += 60000;
+            }
+
+            for (let round = 0; round < 60; round++) {
+                const players = layoutOf(plan, [0, 1, 8, 25, 50][round % 5], round % 2 ? "spread" : "towns").map(({ at }) => [at[0] + (random.next() - 0.5) * 300, at[1] + (random.next() - 0.5) * 300]);
+                // (Lights round the players, at every distance from well within to well beyond
+                // where they'd count, and right at it)
+                const by = (reach) => players.flatMap(([x, y], k) => [[x + LIGHT_NEAR + reach + [-0.01, 0, 0.01, 40, -60][k % 5], y], [x + (random.next() - 0.5) * 400, y + (random.next() - 0.5) * 400]]);
+                const given = { elapsed, plan, players, camps: by(LIGHT_REACH.camp), fires: by(4 + LIGHT_REACH.fire).map(([x, y]) => ({ x, y, radius: 4 })), torches: by(LIGHT_REACH.torch), globes: by(LIGHT_REACH.globe) };
+                const old = lightingOld(given);
+                const tally = { pairs: 0 };
+
+                assert.deepEqual(lighting({ ...given, tally }), old);
+                assert.deepEqual(throughEveryone(() => lighting(given)), old);
+                lights += old.lit.length;
+
+                // (Each light against the players in the cells round it: far fewer than against all)
+                if (players.length === 50 && round % 2) {
+                    assert.ok(tally.pairs < (plan.places.length + 8 * players.length) * players.length / 10, `${tally.pairs} measurings`);
+                }
+            }
+        }
+
+        assert.ok(lights > 2000, `(${lights} lights lit)`);
+    });
+});
+
 describe("a world of 25 players in fours, with fights, by cell and through everyone (Host.culling)", () => {
     const PLAYERS = 25;
     const STEPS = 1200;
@@ -209,6 +283,39 @@ describe("a world of 25 players in fours, with fights, by cell and through every
 
         return played;
     };
+
+    it("plays a night out the same step for step either way, lit by the same lights", () => {
+        // Eight of them, the world's clock put on to the dark of the night: each step's lights,
+        // events and the world's sum
+        const night = () => {
+            const world = buildWorld({ seed: 2 });
+            const homes = layoutOf(world.plan, 8, "towns");
+            const host = new Host(world, { populate: false, rules: { rest: "everyone" } });
+            const played = [];
+
+            homes.forEach(({ race, at }, k) => host.join({ id: `p${k + 1}`, hero: { name: `P${k + 1}`, race, shape: {}, look: {}, weapon: "sword", boots: false }, square: at, map: "town" }));
+            host.populate();
+
+            while (!(skyLight(elapsedOf(host.war)) < 1 && torchesLit(elapsedOf(host.war)))) {
+                host.war.clock += 1000;
+            }
+
+            for (let step = 0; step < 160; step++) {
+                if (step % 80 === 0) {
+                    homes.forEach(({ at }, k) => host.command(`p${k + 1}`, { type: "move", to: [Math.round(at[0] + ((k * 37 + step) % 60) - 30), Math.round(at[1] + ((k * 17 + step) % 60) - 30)] }));
+                }
+
+                played.push([encode(host.advance(STEP_MS)), host.checksum(), encode(host.battle.light)]);
+            }
+
+            return { played, host };
+        };
+        const [culled, everyone] = [night(), throughEveryone(night)];
+
+        culled.played.forEach((step, k) => assert.deepEqual(step, everyone.played[k], `step ${k}`));
+        assert.ok(culled.host.battle.light.sky < 1 && culled.host.battle.light.lit.length > 4, `(dark, and ${culled.host.battle.light?.lit.length} lights near them)`);
+        assert.ok(culled.host.battle.actors.some((actor) => actor.kind === "soldier" && actor.map === "town" && !actor.dead), "(soldiers out, with torches)");
+    });
 
     it("plays out the same step for step either way, and carried on from a snapshot at 30 s", () => {
         const culled = begin();

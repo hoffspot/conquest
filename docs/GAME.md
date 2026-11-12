@@ -1928,7 +1928,10 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   9 m round a carried torch. It goes by where the one seen stands, so a torch-bearer is seen from
   the dark before they see who's there. The host works it out each step (`Host#light`) from what
   every copy of the world has (the clock, the plan, the camps, the fires, who has a torch), only
-  near the players, so every copy sees alike. Indoors, and talking, as ever.
+  near the players, so every copy sees alike. Each light is measured against the players in the
+  cells round it, and only the settlements in the cells round a player are looked at at all
+  (core/near.js: what's lit, and in what order, is what measuring every light against every
+  player gave, test/culling.test.js). Indoors, and talking, as ever.
   - **A player sees further** at night than the rest (light.js `PLAYER_SIGHT`, `playerSight`;
     battle.js `#lightFor`): 60% of their sight on a moonless night and 80% under a full moon, in
     step between and on to the day's, where the wild and everyone else see 35 to 55%. Their sight
