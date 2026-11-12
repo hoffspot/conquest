@@ -76,7 +76,7 @@ import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } fr
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
-import { Culling } from "./near.js";
+import { Culling, Near } from "./near.js";
 import { FORTS, footprintOf, fortSize } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
@@ -92,6 +92,10 @@ export const HOST_PLAYER = "player";
  * folk about their business inside; those `far` from every player let go.
  */
 export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
+
+// The side of a cell of the players' places (metres), where the passes that measure the world
+// against them look for those near (near.js): about as far as most of them ask
+const NEAR_CELL = 256;
 
 /** The orc's weapon (the town's one enemy, for now). */
 export const ORC_WEAPON = "cleaver";
@@ -10422,9 +10426,12 @@ export class Host {
         }
 
         const places = this.#whereabouts();
-        const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
-
-        count("wilds.pairs", this.wild.size * places.length);
+        // (Is a creature further than so far from every player? Measured against the players in
+        // the cells round it, near.js, and how many were measured counted: the same answer as
+        // the least of its distances to them all being more than that)
+        const about = new Near(places, NEAR_CELL);
+        let measured = 0;
+        const beyond = (actor, far) => !about.some(actor.x, actor.y, far, ([x, y]) => (measured++, !(hypot(actor.x - x, actor.y - y) > far)));
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
@@ -10444,15 +10451,16 @@ export class Host {
 
             if (!actor) {
                 this.#unwild(id);
-            } else if (roaming && (distanceTo(actor) > (one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
+            } else if (roaming && (beyond(actor, one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && beyond(actor, WILDS.from)))) {
                 this.#release(id);
-            } else if (!actor.dead && actor.mood?.kind === "flee" && distanceTo(actor) > NERVE_GONE.gone) {
+            } else if (!actor.dead && actor.mood?.kind === "flee" && beyond(actor, NERVE_GONE.gone)) {
                 // (A wary beast whose nerve went, limped off well away from everyone: gone, its
                 // spoils with it, core/wary.js MORALE)
                 this.#release(id);
             }
         }
 
+        count("wilds.pairs", measured);
         this.#wildCamps(homes);
         this.#dens(homes);
         this.#moonTrials(homes);
@@ -11403,7 +11411,10 @@ export class Host {
     // castles and the dragon's lair keep their own masters (#lairs).
     #places(places, homes) {
         const plan = this.world.plan;
-        const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
+        // (Against the players in the cells round each place, near.js: there are hundreds of
+        // places worth finding, and a few of them near anyone)
+        const about = new Near(places, NEAR_CELL);
+        const near = (at, within) => about.some(at[0], at[1], within, ([x, y]) => hypot(x - at[0], y - at[1]) < within);
 
         if (!this.war) {
             return;

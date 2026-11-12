@@ -45,8 +45,9 @@ const BUDGETS = [
     ["muster.pairs", 150_000, "towns and works measured against players' places"],
     // (Every settlement whose folk are out against every player: 1-9)
     ["townsfolk.pairs", 55_000, "peopled settlements measured against players' places"],
-    // (Every creature of the wild against every player: 1-8)
-    ["wilds.pairs", 7_500, "the wild's creatures measured against players' places"],
+    // (Each creature of the wild against the players in the cells round it, since 1-8: it was
+    // every creature against every player, 5,300)
+    ["wilds.pairs", 150, "the wild's creatures measured against players' places"],
     // (The battle's index of where everyone stands made afresh, and over how many: since 1-10
     // only as someone's added or taken out, those who've changed cell moved between cells the
     // rest of the time. It was 200 times, once a step, over 316,274)

@@ -7,12 +7,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
+import { clearOfSettlements } from "../client/js/core/creatures.js";
 import { Host } from "../client/js/core/host.js";
 import { Culling, Near } from "../client/js/core/near.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { groupsOf, STRENGTH } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { SETTLEMENTS } from "../client/js/core/worldplan/plan.js";
 import { layoutOf } from "../scripts/load.js";
 
 // With the grid off (everyone gone through, as it was), what `look` gives
@@ -127,6 +129,41 @@ describe("the players in groups, each measured against those near (core/strength
     });
 });
 
+describe("clear of every settlement, measured against those near (core/creatures.js clearOfSettlements)", () => {
+    it("answers as measuring against every settlement of the plan did, anywhere in two worlds and right at a town's edge", () => {
+        for (const seed of [2, 7]) {
+            const { plan } = buildWorld({ seed });
+            const random = createRandom(seed);
+            const old = ([x, y], beyond) => plan.places.every((place) => Math.hypot(x - place.at[0], y - place.at[1]) > (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond);
+            let [clear, not] = [0, 0];
+
+            for (let round = 0; round < 4000; round++) {
+                const place = plan.places[Math.floor(random.next() * plan.places.length)];
+                const beyond = [0, 30, 60, 140, 400][round % 5];
+                const edge = (SETTLEMENTS[place.kind]?.radius ?? 40) + beyond;
+                // (Anywhere; or just inside or outside a settlement's edge, or exactly on it)
+                const at = round % 3 === 0 ? [random.next() * 8192, random.next() * 8192] : [place.at[0] + edge + [-0.001, 0, 0.001, 5][round % 4], place.at[1]];
+                const was = old(at, beyond);
+
+                assert.equal(clearOfSettlements(plan, at, beyond), was, `${at}, ${beyond} m beyond`);
+                assert.equal(throughEveryone(() => clearOfSettlements(plan, at, beyond)), was);
+                was ? clear++ : not++;
+            }
+
+            assert.ok(clear > 500 && not > 500, `(${clear} clear, ${not} not)`);
+        }
+
+        // (A plan whose places are others: looked over afresh)
+        const plan = { places: [{ kind: "village", at: [100, 100] }] };
+
+        assert.equal(clearOfSettlements(plan, [100, 100], 0), false);
+        plan.places = [{ kind: "village", at: [5000, 5000] }];
+        assert.equal(clearOfSettlements(plan, [100, 100], 0), true);
+        plan.places.push({ kind: "city", at: [150, 100] });
+        assert.equal(clearOfSettlements(plan, [100, 100], 0), false);
+    });
+});
+
 describe("a world of 25 players in fours, with fights, by cell and through everyone (Host.culling)", () => {
     const PLAYERS = 25;
     const STEPS = 1200;
@@ -192,7 +229,7 @@ describe("a world of 25 players in fours, with fights, by cell and through every
         const events = [...first, ...second].map(([text]) => text).join("");
 
         assert.ok(events.includes('"fieldBattle"') && events.includes('"attack"'), "(fights)");
-        assert.ok(culled.host.wild.size > 0, "(the wild about them)");
+        assert.ok(culled.host.wild.size > 0 && events.includes('"roused"'), "(the wild put out about them)");
         assert.ok(culled.host.mustered.size > 0 && culled.host.townsfolk.size > 0 && culled.host.open.size > 0, "(towns' soldiers and folk out, buildings open)");
 
         // (Carried on from the snapshot, by cell: the second half again)

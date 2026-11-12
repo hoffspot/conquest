@@ -271,7 +271,8 @@ many more as *How the wild answers* has it: twelve for four alike, fifteen after
 the world (of any of its players), each pack as big and as tough as their side has it, put out about its leader (their party's leader, if
 they're with them, or else the first of them into the world), as strong as the land is from that
 leader's home, 30 to 44 m away (out of sight), 60 m or more clear of every settlement
-(`WILDS.clear`, so they don't gather at a town's edge) and 10 m or more from every road, track and
+(`WILDS.clear`, so they don't gather at a town's edge; measured against the settlements in the
+cells round the spot, core/near.js, not all the world's: the same answer, `clearOfSettlements`) and 10 m or more from every road, track and
 trail (`WILDS.road`; they may wander onto one after), and lets them go once every player's 90 m away
 (never one that's fighting). Ground cleared of them stays clear a while: each one killed out in the
 world marks where it fell for two minutes (`WILDS.cleared`, the host's `cleared`, kept in a
