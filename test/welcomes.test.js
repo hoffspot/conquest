@@ -6,12 +6,17 @@
 // taken too long (WELCOMES.timeout); a host that sets no such number (a player's own world)
 // welcomes each at once, as ever; and one waiting hears its place (Joining onQueued)
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Hosting, Joining, NET_VERSION, queuedWords, WELCOMES, WORLDS } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { readJSON, writeJSON } from "../server/storage/files.js";
+import { DataFolder } from "../server/storage/folder.js";
 import { WORLD_SETTINGS } from "../server/storage/worlds.js";
 
 const guest = (name) => ({ hero: { name, shape: {}, look: {}, weapon: "bow", boots: false, race: "human" }, progress: { gold: 50 } });
@@ -271,8 +276,27 @@ describe("coming into a world in turn (Hosting welcomes)", () => {
         assert.equal(hosting.loading.size, 0);
     });
 
-    it("is a world's setting on a world server, two unless its owner says otherwise", () => {
+    it("is a world's setting on a world server, two unless its owner says otherwise; a world kept before there was one has two", async () => {
         assert.deepEqual({ ...WORLD_SETTINGS.welcomes, about: null }, { kind: "integer", min: 0, max: 8, default: 2, about: null });
+
+        const root = await mkdtemp(path.join(os.tmpdir(), "pellagos-welcomes-"));
+
+        try {
+            const folder = await DataFolder.open(root);
+            const made = await folder.worlds.create({ name: "Old Haven", seed: 3, race: "human", settings: { mostPlayers: 4 } });
+            const file = path.join(made.folder, "world.json");
+            const { welcomes, ...settings } = made.meta.settings;
+
+            assert.equal(welcomes, 2);
+            await writeJSON(file, { ...(await readJSON(file)), settings });
+
+            const again = await folder.worlds.open(made.id);
+
+            assert.deepEqual(again.meta.settings, { ...settings, welcomes: 2 });
+            assert.deepEqual(Object.keys(again.meta.settings).sort(), Object.keys(WORLD_SETTINGS).sort());
+        } finally {
+            await rm(root, { recursive: true, force: true });
+        }
     });
 });
 

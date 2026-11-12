@@ -256,8 +256,8 @@ order they asked, are told their place ("Others are coming into that world: 2 be
 are let in as places free, together where there's room for more than one, all from one taking of
 the world. A place frees when a player's game says it has finished loading, when they leave or
 their link is gone, or after a minute. The setting is changed with a world's other settings
-(`PATCH /api/v1/worlds/<id>` as its owner, `settings: { welcomes }`); the management page has no
-field for it yet. A world a player hosts in their own browser doesn't queue: each is welcomed at
+(the management page's world, **Settings**, among its rules; or `PATCH /api/v1/worlds/<id>` as its
+owner, `settings: { welcomes }`), and a world kept before there was one has 2. A world a player hosts in their own browser doesn't queue: each is welcomed at
 once.
 
 ### Playing

@@ -167,11 +167,18 @@ export class StoredWorld {
         return path.join(this.folder, STATE, name);
     }
 
-    /** A world's folder opened: its world.json brought forward if an older server wrote it, refused if a newer one did. */
+    /**
+     * A world's folder opened: its world.json brought forward if an older server wrote it, refused
+     * if a newer one did, and any setting it hasn't (one added since: WORLD_SETTINGS) at its default.
+     */
     static async open(folder) {
         const { formatVersion, writtenBy = null, ...meta } = await readJSON(path.join(folder, WORLD_FILE));
+        const kept = forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy });
 
-        return new StoredWorld(folder, forward(`The world kept in ${folder}`, meta, { found: formatVersion, current: FORMAT_VERSION, steps: FORMAT_STEPS, writtenBy }), writtenBy);
+        // (A setting added since it was last written: its default, as a server's own are filled in)
+        kept.settings = { ...Object.fromEntries(Object.entries(WORLD_SETTINGS).map(([key, { default: value }]) => [key, value])), ...kept.settings };
+
+        return new StoredWorld(folder, kept, writtenBy);
     }
 
     /**
