@@ -7,7 +7,8 @@
 // held a world for more than six minutes (the load's dungeons, 0-2). Now the navigation gives
 // up on a way, or a line, asked across more than MOST_ASKED tiles, whoever asks: no way, and
 // nothing baked or made for it. Navigation.bounded off plays it as it was, for these tests to
-// set the two side by side.
+// set the two side by side. And the host takes `enter` only from within ENTER_REACH of the door,
+// as far off as the game offers one, and refuses it from further ("far").
 //
 // What's counted is the same on any machine: the tiles the mesh baked for the command
 // (Navigation `baked`) and the chunks the world made for it (Overworld `chunksMade`). Never how
@@ -48,12 +49,17 @@
 //   point near it).
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
+import * as THREE from "three";
+import { Doors } from "../client/js/app/doors.js";
 import { AHEAD, STEP_MS } from "../client/js/core/battle.js";
 import { hypot } from "../client/js/core/exact.js";
-import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { ENTER_REACH, HOST_PLAYER, Host, REFUSALS } from "../client/js/core/host.js";
 import { KEEP_TILES, MARGIN, MOST_ASKED, Navigation, navigatorOf, TILE } from "../client/js/core/navigation.js";
 import { SCENES } from "../client/js/core/navigation/settings.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { createRandom } from "../client/js/core/random.js";
+import { FAR } from "../client/js/world/far/levels.js";
+import { DISTANCE } from "../client/js/world/view.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -88,11 +94,11 @@ function delving(seed = 1) {
     return { world, host, me, navigation: navigatorOf(world.maps.town), door: building.door, outside };
 }
 
-// What a command cost the host as it was heard: what it answered, the navigation tiles baked
-// for it and the chunks of the world made for it
-function costOf({ world, host, navigation }, command) {
+// What a command cost the host as it was heard (or the battle, told it by `by`): what it
+// answered, the navigation tiles baked for it and the chunks of the world made for it
+function costOf({ world, host, navigation }, command, by = host) {
     const [baked, made] = [navigation.baked, world.maps.town.chunksMade];
-    const result = host.command(HOST_PLAYER, command);
+    const result = by.command(HOST_PLAYER, command);
 
     return { result, baked: navigation.baked - baked, chunks: world.maps.town.chunksMade - made };
 }
@@ -144,9 +150,11 @@ describe("a way asked for across kilometres (core/navigation.js path, MOST_ASKED
         // (2 km east of the door and 300 m south: a town's distance from its nearest dungeons)
         assert.ok(host.battle.place(HOST_PLAYER, "town", [outside[0] + 2000, outside[1] + 300]));
 
+        // (Told by the battle, as the host told it before it took `enter` only from near by:
+        // what the navigation does for whoever asks)
         const box = tilesBetween([me.x, me.y], outside);
         const gaveUp = navigation.tooFar;
-        const now = costOf(game, { type: "enter", link: game.door.id });
+        const now = costOf(game, { type: "enter", link: game.door.id }, host.battle);
 
         assert.ok(box >= 600 && box > MOST_ASKED, `a box of ${box} tiles`);
         assert.deepEqual([now.baked, now.chunks], [0, 0], "nothing baked, nothing made");
@@ -166,9 +174,8 @@ describe("a way asked for across kilometres (core/navigation.js path, MOST_ASKED
 
         // As it was: all of them but the few round the door, in already; the chunks are 64 m to
         // the tiles' 32, so a quarter as many and those along its edges
-        const was = unbounded(() => costOf(game, { type: "enter", link: game.door.id }));
+        const was = unbounded(() => costOf(game, { type: "enter", link: game.door.id }, host.battle));
 
-        assert.deepEqual(was.result, { ok: true });
         assert.ok(was.baked >= box - 16, `${was.baked} tiles baked for a box of ${box}`);
         assert.ok(was.chunks >= box / 4 - 16, `${was.chunks} chunks made for a box of ${box} tiles`);
         assert.ok(me.path.length > 0, "and a way found over them");
@@ -274,5 +281,138 @@ describe("a way asked for across kilometres (core/navigation.js path, MOST_ASKED
         // (And what its most was chosen by: a scene's whole mesh, a quarter of the overworld's)
         assert.equal(MOST_ASKED, SCENES.keep);
         assert.equal(MOST_ASKED * 4, KEEP_TILES);
+    });
+});
+
+describe("an `enter` from far off (core/host.js ENTER_REACH; the plan's 1-25)", () => {
+    let game;
+
+    // The hero stood just there, to the hundredth of a metre
+    const stand = (me, [x, y]) => Object.assign(me, { map: "town", square: [Math.floor(x), Math.floor(y)], x, y, path: [], order: null, target: null });
+
+    before(() => {
+        game = delving();
+    });
+
+    it("is as far as the game offers a door: what the near camera sees, the camera's furthest behind the hero, and a tile's width for a hero on the move", () => {
+        assert.equal(ENTER_REACH, FAR.nearFar + DISTANCE.most + TILE);
+        assert.equal(ENTER_REACH, 224);
+
+        // A way that far, whichever way it lies and wherever in a tile it starts, is across a
+        // fifth of what's looked for across at once
+        let most = 0;
+
+        for (let degrees = 0; degrees < 360; degrees += 0.25) {
+            const [dx, dy] = [Math.sin((degrees * Math.PI) / 180) * ENTER_REACH, Math.cos((degrees * Math.PI) / 180) * ENTER_REACH];
+
+            for (const x of [0, 3.9, 4.1, 16, 27.9, 28.1, 31.9]) {
+                for (const y of [0, 3.9, 4.1, 16, 27.9, 28.1, 31.9]) {
+                    most = Math.max(most, tilesBetween([1024 + x, 1024 + y], [1024 + x + dx, 1024 + y + dy], MARGIN));
+                }
+            }
+        }
+
+        assert.equal(most, 49);
+        assert.ok(most * 5 <= MOST_ASKED);
+    });
+
+    it("refuses a hero risen in a town far from their dungeon, in words, and does nothing for it: no way asked for, no tile baked, no chunk made, no order given", () => {
+        const { host, me, navigation, outside } = game;
+
+        assert.ok(host.battle.place(HOST_PLAYER, "town", [outside[0] + 2000, outside[1] + 300]));
+
+        const gaveUp = navigation.tooFar;
+        const far = costOf(game, { type: "enter", link: game.door.id });
+
+        assert.deepEqual(far.result, { ok: false, reason: "far" });
+        assert.equal(REFUSALS.far, "Too far away.");
+        assert.deepEqual([far.baked, far.chunks, navigation.tooFar - gaveUp], [0, 0, 0]);
+        assert.equal(me.order, null);
+        assert.deepEqual(me.path, []);
+    });
+
+    it("takes it from ENTER_REACH off and no further, measured from where they stand to the door's square", () => {
+        const { host, me, door, outside } = game;
+        // (Due east of the easternmost of its squares: the nearest of them)
+        const [dx, dy] = door.ends.find(({ map }) => map === "town").squares.reduce((east, square) => (square[0] > east[0] ? square : east));
+
+        stand(me, [dx + 0.5 + ENTER_REACH + 0.01, dy + 0.5]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: door.id }), { ok: false, reason: "far" });
+        assert.equal(me.order, null);
+
+        stand(me, [dx + 0.5 + ENTER_REACH, dy + 0.5]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: door.id }), { ok: true });
+        assert.equal(me.order?.type, "enter");
+        host.command(HOST_PLAYER, { type: "stop" });
+
+        // (And from by it, as ever: on their way)
+        assert.ok(host.battle.place(HOST_PLAYER, "town", [outside[0] + 20, outside[1] + 6]));
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: door.id }), { ok: true });
+        assert.ok(me.path.length > 0);
+        host.command(HOST_PLAYER, { type: "stop" });
+    });
+
+    it("gets no building ready for a hero too far off to go into it", () => {
+        const { host, world, me } = game;
+        const building = [...world.interiors.buildings.values()].find(({ place, door, key }) => place === "home" && door?.ends[0].map === "town" && !host.open.has(key));
+        const [dx, dy] = building.door.ends[0].squares[0];
+
+        assert.ok(building.door.ends[0].squares.every(([x, y]) => hypot(x - dx, y - dy) < 8));
+        stand(me, [dx + 0.5, dy + 0.5 + ENTER_REACH + 40]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }), { ok: false, reason: "far" });
+        assert.equal(host.open.has(building.key), false);
+
+        stand(me, [dx + 0.5, dy + 0.5 + 3]);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: building.door.id }), { ok: true });
+        assert.equal(host.open.has(building.key), true);
+        host.command(HOST_PLAYER, { type: "stop" });
+    });
+
+    it("holds through 100,000 `enter`s for any way through there is, from a hero kilometres from them all: every one refused, and not a tile baked or a chunk made for them", () => {
+        const { host, world, me, navigation, outside } = game;
+        const random = createRandom(125);
+        const links = host.battle.links.map(({ id }) => id);
+        const reasons = new Map();
+
+        // (Out in the wilds 3 km from the dungeon, further from the town: nothing's within reach)
+        assert.ok(host.battle.place(HOST_PLAYER, "town", [outside[0] + 3000, outside[1] + 300]));
+        assert.ok(links.length > 20, `${links.length} ways through`);
+        assert.ok(host.battle.links.every(({ ends }) => ends.every(({ map, squares }) => map !== "town" || squares.every(([x, y]) => hypot(x - me.x, y - me.y) > ENTER_REACH + 100))));
+
+        const [baked, made, gaveUp] = [navigation.baked, world.maps.town.chunksMade, navigation.tooFar];
+
+        for (let k = 0; k < 100000; k++) {
+            // (One in ten for no way through at all)
+            const link = k % 10 === 9 ? `no-such-${k}` : random.pick(links);
+            const { ok, reason } = host.command(HOST_PLAYER, { type: "enter", link, run: k % 2 === 0 });
+
+            assert.equal(ok, false);
+            reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+        }
+
+        // ("link": no such way, or one with no end on the hero's map, a building's stairs)
+        assert.deepEqual([...reasons.keys()].sort(), ["far", "link"]);
+        assert.ok(reasons.get("far") > 1000, `${reasons.get("far")} too far`);
+        assert.deepEqual([navigation.baked - baked, world.maps.town.chunksMade - made, navigation.tooFar - gaveUp], [0, 0, 0]);
+        assert.equal(me.order, null);
+    });
+});
+
+describe("the doors a tap finds (app/doors.js at)", () => {
+    it("finds none further along the ray than it's told to look: as far as the near camera sees, in the game", () => {
+        const doors = new Doors({ links: [], maps: {} }, new THREE.Group());
+        // A door 2 m wide and 2.4 high facing south, its face `z` metres north of the camera
+        const doorAt = (id, z) => ({ link: { id }, map: "town", box: new THREE.Box3(new THREE.Vector3(-1, 0, -z - 0.5), new THREE.Vector3(1, 2.4, -z + 0.5)), face: new THREE.Plane(new THREE.Vector3(0, 0, 1), z), floor: null });
+        const ray = new THREE.Ray(new THREE.Vector3(0, 1.5, 0), new THREE.Vector3(0, 0, -1));
+
+        doors.targets.push(doorAt("far", 200));
+        assert.equal(doors.at(ray, "town")?.link.id, "far", "with no reach, however far");
+        assert.equal(doors.at(ray, "town", FAR.nearFar), null);
+
+        doors.targets.push(doorAt("near", 159));
+        assert.equal(doors.at(ray, "town", FAR.nearFar)?.link.id, "near");
+        assert.equal(doors.at(ray, "elsewhere", FAR.nearFar), null);
+        // (What it finds is within what the host takes, wherever the camera is behind the hero)
+        assert.ok(FAR.nearFar + DISTANCE.most < ENTER_REACH);
     });
 });

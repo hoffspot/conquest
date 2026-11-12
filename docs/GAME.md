@@ -1338,7 +1338,17 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   paths round and fights those on the same one. An `enter` order (`{ type: "enter", link }`)
   walks a character to one of the link's squares on its map; standing on one (or next to one
   someone else is standing on), it goes through, coming out at the other end's `arrive` square
-  (or the nearest free one), facing its way (the `cross` event). A projectile whose target goes
+  (or the nearest free one), facing its way (the `cross` event). A player's `enter` is taken
+  only from within 224 m of the way through (`ENTER_REACH`, from where their hero stands to the
+  nearest of its squares on their map); from further off the host refuses it, "Too far away."
+  (the `far` refusal, said as any other at a door), with nothing asked of the door, no building
+  got ready behind it, no way looked for and no order given. That's as far off as the game
+  offers one: a tap finds a door within the 160 m the near camera sees (`Doors.at`'s reach;
+  before, a tap at the horizon could find one no one could see), the camera is 32 m behind the
+  hero at the most, and 32 m more is for a hero moving while the command's on its way. Before,
+  an `enter` was taken from anywhere on the door's map, and the host looked for the whole way
+  there as it heard it: from 7.5 km off, minutes of one step (WORLD.md, *Navigation meshes*;
+  the scaling plan's 1-25). A projectile whose target goes
   through fizzles. The orc, chasing someone who goes through a door or up the stairs within 3
   seconds of it last seeing them, follows them the same way; left on another map, it finds its
   way back through the links to its patrol. The player, set to fight someone who goes through,
@@ -3695,7 +3705,12 @@ its face or to the floor just before it, within its box (`at`). Not when the ray
 through its box on its way to the floor past it: from over the wall behind a door, with the
 player come in and facing into the room; from by the stairs, inside their box, turned from them;
 over the stairwell upstairs, looking at the floor beyond it; or from over the roof behind the
-player come out of a building. Turned to look at it, a tap on it takes them through.
+player come out of a building. Turned to look at it, a tap on it takes them through. Nor one
+further along the ray than the near camera sees (160 m, `FAR.nearFar`): nothing past that is
+drawn, and the host takes no `enter` from further off than that and the camera's 32 m behind
+the hero come to, with a little over (*Doors and stairs*, `ENTER_REACH`); the tap's a step on
+the ground there instead. One the host won't take all the same is said as any other refusal
+at a door ("Too far away.", with the sound of one).
 
 **The folk in the game.** Wenches and Ale's are built at the start, like the player and the orc
 (their looks and clothes are `presets.js`'s `FOLK`; a start town of another people's tavern's folk

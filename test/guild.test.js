@@ -507,7 +507,8 @@ describe("the guild's board at its counter (host.js, dialogue.js)", () => {
         const actor = host.battle.actor(HOST_PLAYER);
 
         host.command(HOST_PLAYER, { type: "talk", with: null });
-        put(actor, "town", host.world.spawns.player);
+        // (From its door: the host takes `enter` from no further off than a door's shown, host.js ENTER_REACH)
+        put(actor, "town", there.door.ends[0].squares[0]);
         host.command(HOST_PLAYER, { type: "enter", link: there.door.id });
         host.command(HOST_PLAYER, { type: "stop" });
 
@@ -827,7 +828,8 @@ describe("the guilds' ranks at their counters (host.js)", () => {
         const actor = host.battle.actor(HOST_PLAYER);
 
         host.command(HOST_PLAYER, { type: "talk", with: null });
-        put(actor, "town", host.world.spawns.player);
+        // (From its door: the host takes `enter` from no further off than a door's shown, host.js ENTER_REACH)
+        put(actor, "town", guild.door.ends[0].squares[0]);
         host.command(HOST_PLAYER, { type: "enter", link: guild.door.id });
         host.command(HOST_PLAYER, { type: "stop" });
 
