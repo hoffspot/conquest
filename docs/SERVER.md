@@ -534,6 +534,14 @@ a tick two or three times its step). And its **pace**: how much of its clock's t
 has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
 go, running slow rather than further behind; its journal says when it has.
 
+Each world's thread also counts what it does, and tells the server a second's worth at a time:
+every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and
+what's made ahead) into fixed buckets from half a millisecond to a second, its saves, how late
+its event loop ran, its garbage collections by kind, its heap, how many are in its battle and in
+the world, and what its players' games have said to it. The server adds them up for as long as
+it runs, a world's carrying on when it's set aside and started again. Counting costs a step
+under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
+
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
 where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the

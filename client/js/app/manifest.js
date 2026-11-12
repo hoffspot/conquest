@@ -232,7 +232,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/rings.js", 5877, "21b8abe487"],
             ["js/core/roles.js", 19336, "b2ef8feb4a"],
             ["js/core/rumours.js", 17073, "9077fc6618"],
-            ["js/core/runner.js", 9071, "c5de5b4ae0"],
+            ["js/core/runner.js", 11112, "8e005e3ad2"],
             ["js/core/scenery.js", 15199, "2658c258a9"],
             ["js/core/selfstate.js", 3865, "9a39c1c966"],
             ["js/core/setpieces/castle.js", 15029, "3daa8eef5e"],

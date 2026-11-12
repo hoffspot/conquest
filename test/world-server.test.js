@@ -20,6 +20,7 @@ import { verifyIdentity } from "../server/access/identity.js";
 import { MADE_PER_HOUR } from "../server/api.js";
 import { newToken } from "../server/access/tokens.js";
 import { guard, hostsOf, originsOf, Refusal } from "../server/guards.js";
+import { parseText } from "../server/metrics.js";
 import { PLAY_LIMITS, PLAY_PROTOCOL } from "../server/play.js";
 import { RECONNECTING, Socket } from "../server/relay.js";
 import { REMEMBERED } from "../server/storage/visitors.js";
@@ -208,6 +209,24 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.ok(ticks.worst >= steps.worst, "a look with a step in it took the step's time and more");
         assert.ok(pace > 0 && pace <= 1 && dropped >= 0, `pace ${pace}, ${dropped} ms let go`);
 
+        // (And as numbers, added up by the supervisor from what its thread counts of itself and
+        // tells each second: every step in a histogram, labelled by its world; its heap and who's
+        // in it as they are now)
+        const counted = (name, labels = {}) => {
+            const families = parseText(server.metrics.registry.text());
+            const family = families[name.replace(/_(bucket|sum|count)$/, "")] ?? families[name];
+
+            return family?.samples.find((sample) => sample.name === name && sample.labels.world === world.world && Object.entries(labels).every(([label, value]) => sample.labels[label] === value))?.value;
+        };
+
+        await until(() => counted("pellagos_world_step_seconds_count") >= 20, "its steps to be counted");
+        assert.ok(counted("pellagos_world_tick_seconds_count") >= 10 && counted("pellagos_world_tick_part_seconds_count", { kind: "ahead" }) >= 10);
+        assert.ok(counted("pellagos_world_step_seconds_bucket", { le: "+Inf" }) === counted("pellagos_world_step_seconds_count"));
+        assert.ok(counted("pellagos_world_messages_total") >= 1, "what its player's game said to it");
+        assert.equal(counted("pellagos_world_players"), 1);
+        assert.ok(counted("pellagos_heap_bytes", { thread: "world" }) > 1e6);
+        assert.ok(counted("pellagos_world_cpu_seconds_total", { kind: "user" }) > 0);
+
         // Out: the clock stops, and the world's set aside (setAsideMinutes 0)
         game.close();
         await until(() => server.registry.lifeOf(world.world).life === "stored", "set aside");
@@ -216,6 +235,11 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         const stopped = server.worlds.get(world.world).meta.worldTime;
 
         assert.ok(stopped >= 1000, `it ran while they were in (${stopped} ms of the world's time)`);
+        // (Set aside: its saves counted, what it counted kept, what was so of it while it ran let go of)
+        assert.ok(counted("pellagos_world_save_seconds_count") >= 1);
+        assert.ok(counted("pellagos_world_step_seconds_count") >= 20);
+        assert.equal(counted("pellagos_world_players"), undefined);
+        assert.equal(counted("pellagos_heap_bytes", { thread: "world" }), undefined);
         await wait(1000);
         assert.equal(server.worlds.get(world.world).meta.worldTime, stopped, "nothing moved while nobody was in it");
 

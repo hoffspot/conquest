@@ -49,6 +49,7 @@ import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
 import { CHARACTER_RULES, RULE_MODES } from "./storage/worlds.js";
 import { SERVER_VERSION } from "./storage/versions.js";
+import { ServerMetrics } from "./server-metrics.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
 
@@ -124,6 +125,9 @@ export class WorldServer {
         /** The worlds kept (by id: storage/worlds.js StoredWorld). */
         this.worlds = new Map();
 
+        /** How it's running, as numbers (server-metrics.js): what each world's thread counts of itself, added up. */
+        this.metrics = new ServerMetrics();
+
         this.registry = new Registry({
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
             settings: this.settings,
@@ -134,8 +138,10 @@ export class WorldServer {
             onChange: (world) => {
                 if (this.registry?.lifeOf(world).life === "stored") {
                     this.play?.closeWhere((place) => place.world === world, "broken");
+                    this.metrics.setAside(world);
                 }
             },
+            onState: (world, state) => this.metrics.heard(world, state),
         });
 
         this.static = createStaticHandler(clientDirectory);
