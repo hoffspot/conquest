@@ -132,7 +132,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 225;
+export const NET_VERSION = 226;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game

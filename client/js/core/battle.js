@@ -751,8 +751,10 @@ const THRONG = 2 * BODY + 1;
 
 // How long the straight way ahead (an "ahead" order) is looked along (metres; or as far as the
 // order's `reach`, if that's shorter), and how near where it was told to go a character's way can
-// end before it's found again from there (a way too long to find at once), at most how many times
-const AHEAD = 400;
+// end before it's found again from there (a way too long to find at once), at most how many times.
+// (AHEAD's line is across 110 navigation tiles at the most, within what the mesh is asked
+// across: navigation.js MOST_ASKED, test/farway.test.js)
+export const AHEAD = 400;
 const MOVE_ON = 1.5;
 const MOVE_LEGS = 8;
 

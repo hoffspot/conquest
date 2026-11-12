@@ -160,7 +160,7 @@ import { PIN_REACHED, PingBeacons, PinMarks, WAY_LINE } from "../world/pin3d.js"
 import { TreasureGlints } from "../world/treasure3d.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
-import { farReach } from "../world/far/levels.js";
+import { FAR, farReach } from "../world/far/levels.js";
 import { Silhouettes } from "../world/far/silhouettes.js";
 import { Volcano } from "../world/far/volcano.js";
 import { Landmarks } from "../world/landmark3d.js";
@@ -18678,7 +18678,7 @@ export class Game {
         // (A sign on a trail, out in the wilds: core/tracks.js; a shrine, to pray at: core/shrines.js)
         const sign = enemy || lectern ? null : this.#signAt(clientX, clientY);
         const shrine = enemy || lectern || sign ? null : this.#shrineAt(clientX, clientY);
-        const door = enemy || lectern || sign || shrine ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
+        const door = enemy || lectern || sign || shrine ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId, FAR.nearFar) ?? null;
         const portal = enemy || door || lectern || sign || shrine ? null : this.#portalAt(clientX, clientY);
         const table = enemy || door || portal || lectern || sign || shrine ? null : this.#warTableAt(clientX, clientY);
         const ground = enemy || door || portal || table || lectern || sign || shrine || !this.tapToMove ? null : this.view.pickGround(clientX, clientY);
@@ -18961,7 +18961,7 @@ export class Game {
             return "hand";
         }
 
-        if (this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) || this.#portalAt(clientX, clientY)) {
+        if (this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId, FAR.nearFar) || this.#portalAt(clientX, clientY)) {
             return "enter";
         }
 

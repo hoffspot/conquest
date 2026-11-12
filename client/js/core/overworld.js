@@ -372,6 +372,9 @@ export class Overworld {
         /** How many chunks are kept once made (keep): KEEP, or more. */
         this.kept = KEEP;
 
+        /** How many chunks it's made, in all: counted, as a navigation's tiles baked are (navigation.js baked). */
+        this.chunksMade = 0;
+
         // The chunks being made a piece at a time (chunkWithin), by key: each one's making, to be
         // carried on
         this.making = new Map();
@@ -649,6 +652,7 @@ export class Overworld {
             }
 
             chunk = step.value;
+            this.chunksMade++;
             this.#letGo();
         }
 
@@ -698,6 +702,7 @@ export class Overworld {
 
             if (step.done) {
                 this.making.delete(key);
+                this.chunksMade++;
                 this.#letGo();
                 this.chunks.set(key, step.value);
 

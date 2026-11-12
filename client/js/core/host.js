@@ -1000,6 +1000,22 @@ export const SHOPKEEPERS = Object.freeze({ smith: "smith", apprentice: "smith", 
 export const SHOP_REACH = TALK_REACH.across + 3;
 
 /**
+ * How far from a door, stairs or any way through a hero may stand for their `enter` to be taken
+ * (metres, from where they are to the nearest of its squares on their map): from further off
+ * it's refused, "far". The game offers a way through no further off than it's drawn: a tap in
+ * the view finds one within the 160 m the near camera sees (world/far/levels.js FAR.nearFar;
+ * app/doors.js at), the camera at most 32 m behind them (world/view.js DISTANCE.most), so 192 m
+ * from the hero; the controller's and a scene's way in stepped onto are within 5 m. And 32 m
+ * more for a hero going the other way while their command is on its way to the host: four
+ * seconds' sprint. Taken from anywhere on the door's map, as it was, a way was looked for
+ * however far, the building behind the door got ready, and the hero sent across the world
+ * (generated/multiplayer_scaling_plan.md 1-25). A way across 224 m is across 49 navigation
+ * tiles at the most, a fifth of what's looked for across at once (navigation.js MOST_ASKED).
+ * test/farway.test.js holds it to the camera's numbers.
+ */
+export const ENTER_REACH = 224;
+
+/**
  * What the things bought by talking do (their `buy` or `rent`): mend hurts, fill stamina, or a
  * boon for a while (the share more a player's blows, heals and armour are: ms). A boon can be
  * drunk too (progress.js ITEMS `use.boon`: a Stamina Boost, `staminaTimes` the stamina).
@@ -2099,9 +2115,9 @@ export class Host {
      *  - { type: "move", to: [x, y] }, { type: "ahead", facing, reach? }, { type: "engage", target }
      *    (stand: true, set on them where they stand; lock: true, locked on them, their target
      *    wherever they go till they fall or are far off), { type: "approach", target },
-     *    { type: "enter", link }, { type: "stop" }, { type: "unlock" } (let go of whoever they're
-     *    locked on): orders for their character in the battle (battle.js command), with run: true
-     *    to run;
+     *    { type: "enter", link } (from within ENTER_REACH of it), { type: "stop" },
+     *    { type: "unlock" } (let go of whoever they're locked on): orders for their character in
+     *    the battle (battle.js command), with run: true to run;
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
@@ -2231,6 +2247,12 @@ export class Host {
                 // (Not from an end with nothing to go in by: a hell's portal out, outside)
                 if (!here?.squares.length) {
                     return refuse("link");
+                }
+
+                // (Nor from further off than the game shows a way through: ENTER_REACH. Before
+                // anything's asked of what's behind it, or got ready)
+                if (!here.squares.some(([x, y]) => (x + 0.5 - actor.x) * (x + 0.5 - actor.x) + (y + 0.5 - actor.y) * (y + 0.5 - actor.y) <= ENTER_REACH * ENTER_REACH)) {
+                    return refuse("far");
                 }
 
                 // (A hell's portal, sealed from this side till its level's master falls)

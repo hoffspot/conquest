@@ -134,11 +134,11 @@ export const LOAD = Object.freeze({
     // a dungeon's made from, core/dungeons/play.js DELVES.near, and `clear` more), the parties come
     // to their doors `stagger` ms apart (so the steps till the next comes are that door's: its
     // floors made, its first level woken, its party through), whoever's not through yet asks
-    // again every `enterEvery` ms while they're within `byDoor` metres of it, and inside they walk
-    // within `within` squares of where they stand
+    // again every `enterEvery` ms wherever they are (the host takes it from no further off than
+    // a door's shown, core/host.js ENTER_REACH), and inside they walk within `within` squares of
+    // where they stand
     away: 64,
     clear: 8,
-    byDoor: 16,
     stagger: 2000,
     enterEvery: 2000,
     within: 8,
@@ -842,11 +842,13 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                     continue;
                 }
 
-                // (Only from by the door: one fallen inside who's risen in a town far off isn't sent
-                // back. Asked to go in by a door from across the world, the host looks for the way
-                // there as it hears it, baking every tile and making every chunk between: minutes)
+                // (From wherever they are: one fallen inside who's risen in a town far off asks
+                // too, and is refused, "far", at no cost to the host. It was asked only from within
+                // 16 m of the door while the host took it from anywhere on the door's map and
+                // looked for the whole way there as it heard it, baking every tile and making
+                // every chunk between: minutes. The plan's 1-25)
                 if (me.map === "town") {
-                    if (building.made && building.door && step >= (peer.asksAt ?? 0) && Math.hypot(me.x - door.to[0], me.y - door.to[1]) < LOAD.byDoor) {
+                    if (building.made && building.door && step >= (peer.asksAt ?? 0)) {
                         saying.push([peer, peer.command({ type: "enter", link: building.door.id })]);
                         peer.asksAt = step + LOAD.enterEvery / STEP_MS;
                     }
