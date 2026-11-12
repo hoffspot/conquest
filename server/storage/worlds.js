@@ -288,16 +288,24 @@ export class StoredWorld {
      * at a time, in the order they're asked for; it's encoded as it's asked for, so the world
      * can go on at once. Returns when it's on the disk.
      */
-    save(snapshot, { why = "saved", played = null, when = () => new Date() } = {}) {
-        const text = encode(snapshot);
-        const saving = this.#saving.then(() => this.#write(text, snapshot, { why, played, when }));
+    save(snapshot, options = {}) {
+        return this.saveText(encode(snapshot), { worldTime: snapshot.battle?.time ?? 0, elapsed: elapsedOf(snapshot.war), versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null } }, options);
+    }
+
+    /**
+     * The same, of a snapshot written out already (`text`: core/host.js snapshotText, which copies
+     * nothing of the world to write it), with what world.json says of it (`about`: { worldTime,
+     * elapsed, versions: { snapshot, war } }, as the world stood when it was written).
+     */
+    saveText(text, about, { why = "saved", played = null, when = () => new Date() } = {}) {
+        const saving = this.#saving.then(() => this.#write(text, about, { why, played, when }));
 
         this.#saving = saving.catch(() => {});
 
         return saving;
     }
 
-    async #write(text, snapshot, { why, played, when }) {
+    async #write(text, { worldTime, elapsed, versions }, { why, played, when }) {
         await ensureFolder(path.join(this.folder, STATE));
 
         for (let n = AUTOSAVES - 1; n >= 1; n--) {
@@ -315,9 +323,9 @@ export class StoredWorld {
         const at = when();
 
         await this.writeMeta({
-            worldTime: snapshot.battle?.time ?? 0,
-            elapsed: elapsedOf(snapshot.war),
-            versions: { snapshot: snapshot.version, war: snapshot.war?.version ?? null },
+            worldTime,
+            elapsed,
+            versions,
             savedAt: at.toISOString(),
             ...(played === null ? {} : { played }),
         });

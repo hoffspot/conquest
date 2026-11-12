@@ -152,12 +152,15 @@ export class WorldRunner {
      *   be timed (`times`); none, they aren't.
      * @param {function} [options.onTurn] - Told of each turn of the war (with the war), as it comes:
      *   when a world that's kept is saved.
+     * @param {function} [options.onStep] - Told after each step (with what happened in it), before
+     *   it's sent: for what's to be done a few steps after something (a turn's save).
      */
-    constructor(host, { hosting = null, clock = null, onTurn = null } = {}) {
+    constructor(host, { hosting = null, clock = null, onTurn = null, onStep = null } = {}) {
         this.host = host;
         this.hosting = hosting;
         this.clock = clock;
         this.onTurn = onTurn;
+        this.onStep = onStep;
 
         /** Time gone by not yet stepped (ms: under a step, between advances). */
         this.lag = 0;
@@ -246,10 +249,15 @@ export class WorldRunner {
         for (const event of events) {
             if (event.type === "turn") {
                 this.onTurn?.(this.host.war);
+                // (And whoever sends the world told: none taken for anyone in this step's sending,
+                // where that's held back: core/netplay.js Hosting `sparing`)
+                this.hosting?.turned?.();
             } else if (event.type === "afk") {
                 this.hosting?.kick(event.id, "afk");
             }
         }
+
+        this.onStep?.(events);
 
         return events;
     }

@@ -116,7 +116,7 @@ import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { count, lap } from "./probe.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
-import { decode, encode, fromBase64, toBase64 } from "./wire.js";
+import { decode, encode, encodePlain, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
@@ -144,6 +144,22 @@ export const CHECK_EVERY = 4;
  * soak's player did, 10 s, with none in hand), or a link that drops twice in a few seconds.
  */
 export const AGAIN = Object.freeze({ every: 10000, burst: 3 });
+
+/**
+ * How much of the host's one thread taking the world for those who've joined may use, where
+ * that's held to (Hosting `sparing`: the world server's; generated/multiplayer_scaling_plan.md
+ * 1-4): after one that took T ms to take and write out, none for T / `share` ms, `every` ms at
+ * the most. So a world of a hundred, whose snapshot takes 25 ms, takes one every 2 s at most,
+ * whoever asks and however many; a world of eight, 4 ms, one every third of a second. Those
+ * asking meanwhile wait, and are answered together from the next. The world as it stands between
+ * two steps, nothing done since, is taken once however often it's wanted.
+ */
+export const WORLDS = Object.freeze({ share: 1 / 80, every: 2000 });
+
+// What stands in a text for the world, or for its players, while the rest is written; and as
+// it's written (a text that has it anywhere else is written the slow way)
+const HOLE = "\u0000world\u0000";
+const HOLE_TEXT = JSON.stringify(HOLE);
 
 /**
  * What the host takes from one who's joined: nothing longer than `most` characters (a character
@@ -479,6 +495,15 @@ export class Hosting {
         this.asked = new Set();
         this.worlds = new Map();
 
+        /**
+         * Whether taking the world for those who've joined is held to a share of the thread
+         * (WORLDS: the world server's; a hosting browser's isn't, off), and none taken in the
+         * sending of a step that turned the war (turned). And how many times the world's been
+         * taken for them, in all.
+         */
+        this.sparing = false;
+        this.taken = 0;
+
         /** How many commands each may still give just now (by peer: { left, at }: HEARD), and how many have been let go of. */
         this.allowance = new Map();
         this.dropped = 0;
@@ -555,7 +580,18 @@ export class Hosting {
         host.recorder = (op) => this.#record(op);
     }
 
+    // The world as it was last taken for those who've joined (#taken), how often anything's been
+    // done to it (what's recorded, and what's kept of a player's own), when it may next be taken
+    // (the clock's, where that's held to: sparing), and whether this step turned the war
+    #world = null;
+    #changes = 0;
+    #worldAfter = -Infinity;
+    #turned = false;
+
     #record(op) {
+        this.#changes++;
+        this.#world = null;
+
         // (A joined player's command: which of theirs it was, so they hear what came of it)
         if (op[0] === "c" && this.seq !== null) {
             op.push(this.seq);
@@ -657,7 +693,100 @@ export class Hosting {
         this.#selves(step);
         lap("flush.worlds");
         this.#worlds();
+        this.#turned = false;
         lap(null);
+    }
+
+    /**
+     * The step just played turned the war (core/runner.js): where taking the world is held back
+     * (sparing), none's taken for anyone in its sending, the turn's own work being a step's worth.
+     */
+    turned() {
+        this.#turned = this.sparing;
+    }
+
+    // Whether the world may be taken for those who've joined just now: always, unless that's held
+    // to a share of the thread (sparing, by the clock: WORLDS) and it's too soon after the last,
+    // or this step turned the war. The world as it stands, taken already, may always be had again
+    #mayTake() {
+        if (!this.sparing || !this.clock || (this.#world?.time === this.host.battle.time && this.#world.changes === this.#changes)) {
+            return true;
+        }
+
+        return !this.#turned && this.clock() >= this.#worldAfter;
+    }
+
+    // The world as it is, taken and written out once for however many are to be sent it, as it
+    // stands between two steps with nothing done since: all of it but its players, and each of its
+    // players without what's their own (core/host.js OWN). Written straight from the world's own,
+    // nothing copied (Host.snapshot's `shared`); or, if that isn't plain data all through, null
+    // parts: each is written the slow way (#worldFor)
+    #taken() {
+        const time = this.host.battle.time;
+
+        if (this.#world?.time === time && this.#world.changes === this.#changes) {
+            return this.#world;
+        }
+
+        const started = this.clock?.() ?? 0;
+        const snapshot = this.host.snapshot({ shared: true });
+        const { players } = snapshot;
+
+        snapshot.players = HOLE;
+
+        const around = encodePlain(snapshot)?.split(HOLE_TEXT);
+        const bare = players.map((player) => {
+            const one = { ...player };
+
+            for (const key of OWN.keys) {
+                delete one[key];
+            }
+
+            return encodePlain(one);
+        });
+        const plain = around?.length === 2 && bare.every((text) => text !== null);
+
+        this.taken++;
+        this.#world = { time, changes: this.#changes, texts: new Map(), ...(plain ? { head: around[0], tail: around[1], players, bare } : { players: null }) };
+
+        if (this.clock) {
+            const now = this.clock();
+
+            this.#worldAfter = now + Math.min(WORLDS.every, (now - started) / WORLDS.share);
+        }
+
+        return this.#world;
+    }
+
+    // The world as it is, as text (core/wire.js encode's of #snapshotFor), for one who's joined
+    // (by their id: their own of their hero in it) or for several at once (null: no one's)
+    #worldFor(id = null) {
+        const world = this.#taken();
+
+        if (world.texts.has(id)) {
+            return world.texts.get(id);
+        }
+
+        let text = null;
+
+        if (world.players) {
+            const each = world.players.map((player, k) => (player.id === id ? encodePlain(player) : world.bare[k]));
+
+            text = each.includes(null) ? null : `${world.head}[${each.join(",")}]${world.tail}`;
+        }
+
+        text ??= encode(this.#snapshotFor(id));
+        world.texts.set(id, text);
+
+        return text;
+    }
+
+    // What's said with the world in it (`said`: a welcome, or the world again), as text: encode's
+    // of it with the world's snapshot (`world`: its text) as its `snapshot`
+    #withWorld(said, world) {
+        const around = encode({ ...said, snapshot: HOLE }).split(HOLE_TEXT);
+
+        return around.length === 2 ? `${around[0]}${world}${around[1]}` : encode({ ...said, snapshot: decode(world) });
     }
 
     // How many times one who's joined may be sent the world again for the asking just now (AGAIN:
@@ -683,11 +812,12 @@ export class Hosting {
 
         const due = [...this.asked].filter((peer) => this.#worldsLeft(peer) >= 1);
 
-        if (!due.length) {
+        // (None due; or it's too soon to take the world again, where that's held back: they wait)
+        if (!due.length || !this.#mayTake()) {
             return;
         }
 
-        const text = encode({ kind: "state", snapshot: this.#snapshotFor(due.length === 1 ? this.players.get(due[0]) : null), paused: this.paused });
+        const text = this.#withWorld({ kind: "state", snapshot: null, paused: this.paused }, this.#worldFor(due.length === 1 ? this.players.get(due[0]) : null));
 
         for (const peer of due) {
             this.asked.delete(peer);
@@ -815,6 +945,8 @@ export class Hosting {
                 // (What their game keeps of their hero, not the world's: kept with them)
                 if (this.players.has(peer)) {
                     this.host.own(this.players.get(peer), message.own);
+                    this.#changes++;
+                    this.#world = null;
                 }
 
                 break;
@@ -841,7 +973,7 @@ export class Hosting {
         // (One who asked for the world again a while ago, and may have it now: sent it as they're
         // next heard from, their game asking how long a word takes every second, even while the
         // world's stopped and nothing else is sent)
-        if (this.asked.has(peer) && this.#worldsLeft(peer) >= 1) {
+        if (this.asked.has(peer) && this.#worldsLeft(peer) >= 1 && this.#mayTake()) {
             this.flush();
         }
     }
@@ -973,7 +1105,7 @@ export class Hosting {
         this.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), paused: this.paused }));
+        this.#send(peer, "welcome", this.#withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, paused: this.paused }, this.#worldFor(id)));
         this.onJoin(id, peer);
     }
 
@@ -1016,7 +1148,7 @@ export class Hosting {
 
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), took: true, paused: this.paused }));
+        this.#send(peer, "welcome", this.#withWorld({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: null, took: true, paused: this.paused }, this.#worldFor(id)));
         this.onJoin(id, peer);
     }
 
@@ -1137,7 +1269,7 @@ export class Hosting {
             return;
         }
 
-        const text = encode({ kind: "state", snapshot: this.#snapshotFor(), paused: this.paused });
+        const text = this.#withWorld({ kind: "state", snapshot: null, paused: this.paused }, this.#worldFor());
 
         // (Whoever had asked for it has it now. Not counted as sent for the asking: it was the
         // host's link that dropped, and theirs may yet)

@@ -407,8 +407,10 @@ before everything is taken away ([MAC_APP.md](MAC_APP.md#updating-and-taking-it-
 
 Every world keeps:
 
-- **Its latest save** and the **5 before it** (autosaves), saved each war turn while it runs, when
-  it's set aside, and when the server stops. A save that won't read is passed over for the newest
+- **Its latest save** and the **5 before it** (autosaves), saved each war turn while it runs (four
+  steps after the turn, a fifth of a second: the turn's own step is the world's longest already,
+  and the save is written straight from the world with nothing copied first), when it's set
+  aside, and when the server stops. A save that won't read is passed over for the newest
   that does, and the journal says so.
 - **Backups:** one an hour (the last 12 kept) and one a day (the last 7), and one before anything
   that can't be undone: a restore, a fresh start, an update, a deletion. **Back up now** makes one
@@ -531,11 +533,20 @@ Each running world steps 20 times a second in a thread of its own, about 110 MB 
 and more as its players go further. **Health** shows each world's steps (the mean, the 99th
 percentile over the last minute, the worst) and memory, and the server's. A step over 50 ms is
 a step late. Beside the steps it shows the **whole tick**: all the world's thread does each time
-it looks at the world, its steps, what's sent of them, a save begun on a turn of the war and
+it looks at the world, its steps, what's sent of them, a save begun after a turn of the war and
 what's made ahead, which is what a player waits on (a save or a building's inside baked can make
 a tick two or three times its step). And its **pace**: how much of its clock's time the world
 has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
 go, running slow rather than further behind; its journal says when it has.
+
+Taking the whole world for a player (one coming in, or one whose copy went astray or fell too far
+behind and asks for it again) is the dearest thing a world's thread does for one player: 4 ms
+with eight in it, and more with more. So a world on a server takes it once for however many want
+it as it stands, never in the step that turns the war, and for no more than an eightieth of its
+thread's time: after one that took 25 ms none is taken for 2 seconds, after one of 4 ms none for
+a third of a second, and whoever asks meanwhile waits and is answered from the next
+(`WORLDS` in `client/js/core/netplay.js`). A world a player hosts in their browser isn't held
+back so.
 
 Each world's thread also counts what it does, and tells the server a second's worth at a time:
 every step's time and every tick's (and a tick's two parts, its steps with what's sent of them and

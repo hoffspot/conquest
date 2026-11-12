@@ -3603,6 +3603,12 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   - **The world again:** one every 10 seconds, with three in hand to begin with and as they're
     left unused, answered at once; past those, an asking waits till its time's come (answered
     as the game's next heard from), and everyone asking in a step is sent the one snapshot.
+    The world as it stands between two steps, nothing done since, is taken and written out once
+    however many want it, one coming in among them: each is sent the same text but for their
+    own of their hero, which is set into it. A world on a world server also holds all its
+    takings together to an eightieth of its thread (`WORLDS`, the server's `sparing`: none for
+    2 s after one that took 25 ms) and takes none in the step that turns the war; a world
+    hosted in a browser doesn't.
     Taking the world and writing it out is 2 to 10 ms of the host's one thread each time, and
     asked for a hundred times over it was 650 ms and 12 MB. The three in hand are for a game
     that needs it twice running through no fault of its own: one slow to load that falls too far

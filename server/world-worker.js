@@ -129,6 +129,9 @@ const peers = new Map();
 let keeping = Promise.resolve();
 
 hosting.most = mostPlayers();
+// (Taking the world for its players held to a share of the thread, and never in a turn's step:
+// core/netplay.js WORLDS)
+hosting.sparing = true;
 // (Each known by the player their ticket proves, theirs taken over only under the same id: never
 // another player's by a copy of their character)
 hosting.byCharacter = false;
