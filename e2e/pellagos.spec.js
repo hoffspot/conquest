@@ -7375,6 +7375,11 @@ test.describe("drawn at the screen's own pixels", () => {
 
             Object.assign(aside, { x: bx, y: by, square: [Math.floor(bx), Math.floor(by)], path: [], to: null, order: null });
             game.avatars.get(aside.id).place(bx, by, aside.facing);
+            // (Stood on its ground there, as the game stands one it places: Avatar.place leaves it
+            // at height 0 till later in the frame, after how often it's posed is worked out, and
+            // on this hill that's some 22 m under the ground, which a camera lifted steeply over
+            // the hedge behind the player, as it is on some runs, has in view)
+            game.avatars.get(aside.id).object.position.y = ground(bx, by);
             game.previous.set(aside.id, { x: bx, y: by });
 
             const shown = game.battle.actors
