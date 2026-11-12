@@ -23,6 +23,10 @@ describe("the metrics registry (server/metrics.js)", () => {
         assert.equal(all.with().value, 5);
         assert.equal(joins.with({ world: "a" }), joins.with({ world: "a" }), "a series is found once, and is the same after");
         assert.throws(() => joins.with({ world: "a" }).inc(-1), RangeError);
+        // (Or raised to a total that's added up elsewhere: never lowered)
+        all.with().rise(9);
+        all.with().rise(7);
+        assert.equal(all.with().value, 9);
         assert.throws(() => joins.with({ world: "a" }).set(1), TypeError);
         assert.throws(() => joins.with({}), /labelled by world/);
         assert.throws(() => joins.with({ world: "a", reason: "x" }), /labelled by world/);

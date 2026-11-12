@@ -226,6 +226,110 @@ describe("the supervisor adding up what its worlds count (server/server-metrics.
         assert.deepEqual(families.pellagos_world_step_seconds.samples, []);
     });
 
+    it("counts who's let in by world and what's refused by why, keeping nothing else of either", () => {
+        const server = new ServerMetrics();
+
+        server.event("entered", { world: "w1", player: "K7Q2MXD4RT", role: "player", label: "Players' key", address: "203.0.113.7" });
+        server.event("entered", { world: "w1", player: "B3B3B3B3B3", role: "owner", label: "The owner's key", address: "203.0.113.8" });
+        server.event("refused", { why: "key", address: "203.0.113.9" });
+        server.event("refused", { why: "key", world: "w1", address: "203.0.113.9" });
+        server.event("refused", { why: "bad-request", address: "203.0.113.9" });
+        // (A why that isn't one of the server's short codes is no label of its own)
+        server.event("refused", { why: "203.0.113.9 said: hello there", address: "203.0.113.9" });
+        server.event("refused", {});
+        server.event("left", { world: "w1", player: "K7Q2MXD4RT" });
+        server.event("keyIssued", { world: "w1", label: "Sam's key" });
+
+        const text = server.registry.text();
+        const families = parseText(text);
+
+        assert.equal(valueOf(families, "pellagos_joins_total", { world: "w1" }), 2);
+        assert.equal(valueOf(families, "pellagos_refusals_total", { reason: "key" }), 2);
+        assert.equal(valueOf(families, "pellagos_refusals_total", { reason: "bad-request" }), 1);
+        assert.equal(valueOf(families, "pellagos_refusals_total", { reason: "other" }), 2);
+        assert.doesNotMatch(text, /K7Q2MXD4RT|B3B3B3B3B3|203\.0\.113|Sam|owner's key|Players' key/);
+    });
+
+    it("reads the play socket's sockets, backlog and traffic, its worlds' lives and its memory when it's asked, and lets go of a world it no longer has", () => {
+        const server = new ServerMetrics();
+        const socket = (waiting) => ({ socket: { writableLength: waiting } });
+        const watched = {
+            worlds: new Map([["w1", {}], ["w2", {}], ["w3", {}]]),
+            registry: { lifeOf: (id) => ({ life: { w1: "running", w2: "stored", w3: "stored" }[id] }) },
+            play: {
+                sockets: new Set([socket(0), socket(4000), socket(1000)]),
+                places: new Map([["w1 p1", {}], ["w1 p2", {}]]),
+                closed: new Map([["afk", 2], ["server-stopping", 1]]),
+                traffic: new Map([["w1", { messages: 10, bytes: 5000, wire: 1200, received: 300 }], ["gone", { messages: 1, bytes: 1, wire: 1, received: 1 }]]),
+            },
+        };
+
+        server.watch(watched);
+        server.heard("w1", { running: true, present: 2, players: [], actors: 1, memory: { heap: 1, external: 1 } });
+
+        let families = read(server);
+
+        assert.equal(valueOf(families, "pellagos_play_sockets"), 3);
+        assert.equal(valueOf(families, "pellagos_play_places"), 2);
+        assert.equal(valueOf(families, "pellagos_play_backlog_bytes"), 5000);
+        assert.equal(valueOf(families, "pellagos_play_backlog_max_bytes"), 4000);
+        assert.equal(valueOf(families, "pellagos_play_closed_total", { reason: "afk" }), 2);
+        assert.equal(valueOf(families, "pellagos_play_sent_bytes_total", { world: "w1" }), 5000);
+        assert.equal(valueOf(families, "pellagos_play_sent_wire_bytes_total", { world: "w1" }), 1200);
+        assert.equal(valueOf(families, "pellagos_play_sent_messages_total", { world: "w1" }), 10);
+        assert.equal(valueOf(families, "pellagos_play_received_bytes_total", { world: "w1" }), 300);
+        assert.equal(valueOf(families, "pellagos_play_sent_bytes_total", { world: "gone" }), undefined, "no series for a world the server hasn't got");
+        assert.deepEqual(Object.fromEntries(families.pellagos_worlds.samples.map((sample) => [sample.labels.kind, sample.value])), { stored: 2, waiting: 0, loading: 0, running: 1, empty: 0, stopping: 0 });
+        assert.ok(valueOf(families, "pellagos_rss_bytes") > 1e6);
+        assert.ok(valueOf(families, "pellagos_heap_bytes", { thread: "supervisor", world: "" }) > 1e5);
+        assert.ok(valueOf(families, "pellagos_start_time_seconds") > 1.7e9);
+
+        // (More sent, and asked again: its totals are the socket's own, never less than they were)
+        watched.play.traffic.get("w1").bytes = 9000;
+        watched.play.closed.set("afk", 3);
+        watched.play.sockets.clear();
+        families = read(server);
+        assert.equal(valueOf(families, "pellagos_play_sent_bytes_total", { world: "w1" }), 9000);
+        assert.equal(valueOf(families, "pellagos_play_closed_total", { reason: "afk" }), 3);
+        assert.equal(valueOf(families, "pellagos_play_backlog_bytes"), 0);
+
+        // (The world deleted: nothing's said of it again)
+        watched.worlds.delete("w1");
+        families = read(server);
+        assert.doesNotMatch(server.registry.text(), /world="w1"/);
+        assert.equal(valueOf(families, "pellagos_worlds", { kind: "running" }), 0);
+    });
+
+    it("samples the supervisor's own event loop and collections once it's started, and stops", async () => {
+        const server = new ServerMetrics();
+
+        server.sample();
+        assert.deepEqual(read(server).pellagos_event_loop_utilization.samples, [], "nothing till it's started");
+        server.start(60000);
+        server.start(60000);
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        const held = Date.now();
+
+        while (Date.now() - held < 50) {
+            // busy
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        server.sample();
+
+        const families = read(server);
+        const supervisor = { thread: "supervisor", world: "" };
+        const busy = valueOf(families, "pellagos_event_loop_utilization");
+
+        assert.ok(busy > 0.1 && busy <= 1, `${busy}`);
+        assert.ok(valueOf(families, "pellagos_event_loop_delay_max_seconds", supervisor) >= 0.02, "held for 50 ms, whatever was due came late");
+        assert.ok(valueOf(families, "pellagos_event_loop_delay_mean_seconds", supervisor) >= 0);
+        server.stop();
+        server.sample();
+        server.stop();
+    });
+
     it("labels its series by world, thread, kind and reason alone: never by a player, an address or a key", () => {
         const server = new ServerMetrics();
 

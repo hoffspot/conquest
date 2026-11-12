@@ -125,8 +125,13 @@ export class WorldServer {
         /** The worlds kept (by id: storage/worlds.js StoredWorld). */
         this.worlds = new Map();
 
-        /** How it's running, as numbers (server-metrics.js): what each world's thread counts of itself, added up. */
+        /**
+         * How it's running, as numbers (server-metrics.js): what each world's thread counts of
+         * itself, added up, and the supervisor's own. Written out at /metrics on the management
+         * page's own listener, on this computer alone (admin.js): never on the play port.
+         */
         this.metrics = new ServerMetrics();
+        this.metrics.watch(this);
 
         this.registry = new Registry({
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
@@ -150,6 +155,7 @@ export class WorldServer {
         this.manage = new Management(this);
         this.api = apiHandler(this);
         this.access.policy.listeners.push((event, detail) => this.#journal(event, detail));
+        this.access.policy.listeners.push((event, detail) => this.metrics.event(event, detail));
         this.access.isOpen = (id) => this.metaOf(id)?.settings?.open === true;
 
         /**
@@ -397,6 +403,7 @@ export class WorldServer {
         this.broker = attachBroker([this.http, this.https], this, this.ice ? { ice: this.ice } : {});
         this.looking = setInterval(() => this.loadCertificate(), CERTIFICATE_LOOK);
         this.looking.unref?.();
+        this.metrics.start();
         this.certifier.start();
         this.certifier.renew().catch(() => {});
         this.followRouter();
@@ -706,6 +713,7 @@ export class WorldServer {
     /** Stopped: everyone told, every world saved and set aside, the ports closed. */
     async close() {
         clearInterval(this.looking);
+        this.metrics.stop();
         this.updater.close();
         this.nearby.stop();
         await this.certifier.close();

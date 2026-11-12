@@ -8,14 +8,33 @@
 // (which part of a look, which kind of collection) or a `reason`: never by a player, an address
 // or a key, which the registry refuses (LABELS).
 //
+// The supervisor's own are here too (6A-3): the play socket's sockets, places, backlog and
+// traffic by world, read from where the socket keeps them when the registry's asked (play.js);
+// who was let in and what was refused, by why, as the access hooks tell of them; its worlds by
+// how they are; its memory; and its own event loop and collections, sampled every SAMPLE_EVERY
+// (`start`). All of it is written out at /metrics on the management page's own listener, on the
+// computer alone (admin.js).
+//
 // Times are seconds and sizes bytes, as Prometheus has them. A counter or a histogram carries on
 // from where it was when a world's set aside and started again; what's so now of a world (its
 // heap, who's in it) is let go of while it's set aside, and all of it when the world's deleted.
 
+import { performance } from "node:perf_hooks";
 import { Metrics } from "./metrics.js";
+import { LIFE } from "./registry.js";
+import { Collections, LoopDelay } from "./world-metrics.js";
 
 /** The labels a series may have. */
 export const LABELS = Object.freeze(["world", "thread", "kind", "reason"]);
+
+/** How often the supervisor's own event loop and collections are sampled (ms). */
+export const SAMPLE_EVERY = 10000;
+
+// The supervisor's own thread, as its series are labelled
+const SUPERVISOR = Object.freeze({ thread: "supervisor", world: "" });
+
+// A reason as a label carries it: one of the server's own short codes ("full", "bad-request"), or "other"
+const reasonOf = (why) => (typeof why === "string" && /^[a-z][a-z0-9-]{0,39}$/.test(why) ? why : "other");
 
 // A time as the series have them (seconds), from ms; and from µs
 const seconds = (ms) => ms / 1000;
@@ -56,6 +75,142 @@ export class ServerMetrics {
             gc: metrics.counter("pellagos_gc_total", "A thread's garbage collections, by kind (minor, major, incremental, weak).", ["thread", "world", "kind"]),
             gcTime: metrics.counter("pellagos_gc_seconds_total", "The time a thread's garbage collections took, by kind.", ["thread", "world", "kind"]),
         };
+
+        /** The supervisor's own: the play socket, who's let in and refused, its worlds, its memory and its event loop. */
+        this.server = {
+            sockets: metrics.gauge("pellagos_play_sockets", "Play sockets open: players' games linked, in a world or on their way into one."),
+            places: metrics.gauge("pellagos_play_places", "Places held in worlds: players in them, linked or kept a while for a link that dropped."),
+            backlog: metrics.gauge("pellagos_play_backlog_bytes", "What waits to go to players' games slow to take it: all of it."),
+            backlogMax: metrics.gauge("pellagos_play_backlog_max_bytes", "What waits to go to players' games slow to take it: the most for one game."),
+            joins: metrics.counter("pellagos_joins_total", "Players let into a world.", ["world"]),
+            refusals: metrics.counter("pellagos_refusals_total", "What the server refused, by why (a wrong key, too many tries, a bad request).", ["reason"]),
+            closed: metrics.counter("pellagos_play_closed_total", "Players' games sent out of a world or refused at the play socket, by why (afk, kicked, full, server-stopping).", ["reason"]),
+            sent: metrics.counter("pellagos_play_sent_bytes_total", "What a world has sent its players' games, as said (before it's compressed).", ["world"]),
+            wire: metrics.counter("pellagos_play_sent_wire_bytes_total", "What a world has sent its players' games, as it went on the wire (compressed, where it is).", ["world"]),
+            sentMessages: metrics.counter("pellagos_play_sent_messages_total", "The messages a world has sent its players' games.", ["world"]),
+            received: metrics.counter("pellagos_play_received_bytes_total", "What a world's players' games have sent it.", ["world"]),
+            worlds: metrics.gauge("pellagos_worlds", "The server's worlds, by how they are (stored, waiting, loading, running, empty, stopping).", ["kind"]),
+            utilization: metrics.gauge("pellagos_event_loop_utilization", "The share of its time the supervisor's event loop was busy, lately (0 to 1)."),
+            rss: metrics.gauge("pellagos_rss_bytes", "The whole server's memory resident, every world's thread with it."),
+            started: metrics.gauge("pellagos_start_time_seconds", "When the server started (seconds since 1970)."),
+        };
+
+        this.server.started.set(Math.round(Date.now() / 1000));
+
+        // The worlds it has series for; and the supervisor's own sampling, once it's started
+        this.known = new Set();
+        this.sampling = null;
+    }
+
+    /**
+     * What's read only when the registry's asked, read from `server` then (world-server.js
+     * WorldServer: its play socket, its registry, its worlds), and the series of worlds it no
+     * longer has let go of.
+     */
+    watch(server) {
+        this.registry.onCollect(() => this.#collect(server));
+    }
+
+    #collect(server) {
+        const { play, registry, worlds } = server;
+        const counted = this.server;
+        let backlog = 0;
+        let most = 0;
+
+        for (const socket of play?.sockets ?? []) {
+            const waiting = socket.socket?.writableLength ?? 0;
+
+            backlog += waiting;
+            most = Math.max(most, waiting);
+        }
+
+        counted.sockets.set(play?.sockets.size ?? 0);
+        counted.places.set(play?.places.size ?? 0);
+        counted.backlog.set(backlog);
+        counted.backlogMax.set(most);
+
+        for (const [reason, count] of play?.closed ?? []) {
+            counted.closed.with({ reason: reasonOf(reason) }).rise(count);
+        }
+
+        for (const [world, traffic] of play?.traffic ?? []) {
+            if (worlds.has(world)) {
+                this.known.add(world);
+                counted.sent.with({ world }).rise(traffic.bytes);
+                counted.wire.with({ world }).rise(traffic.wire);
+                counted.sentMessages.with({ world }).rise(traffic.messages);
+                counted.received.with({ world }).rise(traffic.received);
+            }
+        }
+
+        const lives = Object.fromEntries(LIFE.map((life) => [life, 0]));
+
+        for (const id of worlds.keys()) {
+            const { life } = registry.lifeOf(id);
+
+            lives[life] = (lives[life] ?? 0) + 1;
+        }
+
+        for (const [kind, count] of Object.entries(lives)) {
+            counted.worlds.with({ kind }).set(count);
+        }
+
+        for (const id of [...this.known]) {
+            if (!worlds.has(id)) {
+                this.forget(id);
+            }
+        }
+
+        const memory = process.memoryUsage();
+
+        counted.rss.set(memory.rss);
+        this.threadIs(SUPERVISOR, { memory: { heap: memory.heapUsed, external: memory.external } });
+    }
+
+    /** What the access hooks tell of (access/policy.js on): a player let into a world counted, and what's refused, by why. Nothing else of it's kept: no player, key or address. */
+    event(event, detail = {}) {
+        if (event === "entered" && detail.world) {
+            this.known.add(detail.world);
+            this.server.joins.with({ world: detail.world }).inc();
+        } else if (event === "refused") {
+            this.server.refusals.with({ reason: reasonOf(detail.why) }).inc();
+        }
+    }
+
+    /** The supervisor's own event loop (how late it ran, how busy it was) and collections sampled from now on, every `every` ms. */
+    start(every = SAMPLE_EVERY) {
+        if (this.sampling) {
+            return;
+        }
+
+        const sampling = { loop: new LoopDelay(), collections: new Collections(), busy: performance.eventLoopUtilization(), timer: null };
+
+        sampling.timer = setInterval(() => this.sample(), every);
+        sampling.timer.unref?.();
+        this.sampling = sampling;
+    }
+
+    /** The supervisor's own, as it's been since it was last sampled, set (start's timer does it; a test may). */
+    sample() {
+        const { sampling } = this;
+
+        if (!sampling) {
+            return;
+        }
+
+        const busy = performance.eventLoopUtilization();
+
+        this.server.utilization.set(performance.eventLoopUtilization(busy, sampling.busy).utilization);
+        sampling.busy = busy;
+        this.threadIs(SUPERVISOR, { loop: sampling.loop.take(), gc: sampling.collections.take() });
+    }
+
+    /** No longer sampling the supervisor's own. */
+    stop() {
+        clearInterval(this.sampling?.timer);
+        this.sampling?.loop.stop();
+        this.sampling?.collections.stop();
+        this.sampling = null;
     }
 
     // What's measured of a thread now, set: its memory ({ heap, external }, bytes) and how late its loop ran ({ mean, p99, max }, ms), where there's either
@@ -89,6 +244,7 @@ export class ServerMetrics {
             return;
         }
 
+        this.known.add(id);
         world.actors.with(labels).set(state.actors ?? 0);
         world.players.with(labels).set(state.players?.filter((one) => one.id).length ?? 0);
         world.present.with(labels).set(state.present ?? 0);
@@ -132,6 +288,7 @@ export class ServerMetrics {
 
     /** A world deleted: every series of it let go of. */
     forget(id) {
+        this.known.delete(id);
         this.registry.forget({ world: id });
     }
 }

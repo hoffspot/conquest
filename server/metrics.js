@@ -70,6 +70,13 @@ class Count extends Value {
     set() {
         throw new TypeError("A counter is counted up (inc), not set.");
     }
+
+    /** Up to `total`, where what it counts is added up elsewhere and read from there (never down: a lower total is left). */
+    rise(total) {
+        if (total > this.value) {
+            this.value = total;
+        }
+    }
 }
 
 // One histogram's series: how many fell in each bucket (the last, over every bound), how many in

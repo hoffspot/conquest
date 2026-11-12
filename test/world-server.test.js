@@ -226,6 +226,14 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(counted("pellagos_world_players"), 1);
         assert.ok(counted("pellagos_heap_bytes", { thread: "world" }) > 1e6);
         assert.ok(counted("pellagos_world_cpu_seconds_total", { kind: "user" }) > 0);
+        // (And the supervisor's own of it: who was let in, and what the world's sent their game
+        // and heard from it, as said and as it went on the wire, compressed)
+        assert.equal(counted("pellagos_joins_total"), 1);
+        assert.ok(counted("pellagos_play_sent_messages_total") >= 2 && counted("pellagos_play_received_bytes_total") > 0);
+        assert.ok(counted("pellagos_play_sent_bytes_total") > 10000, "the world, as a player comes in");
+        assert.ok(counted("pellagos_play_sent_wire_bytes_total") > 0 && counted("pellagos_play_sent_wire_bytes_total") <= counted("pellagos_play_sent_bytes_total"));
+        assert.equal(parseText(server.metrics.registry.text()).pellagos_play_sockets.samples[0].value, 1);
+        assert.equal(parseText(server.metrics.registry.text()).pellagos_worlds.samples.find((sample) => sample.labels.kind === "running").value, 1);
 
         // Out: the clock stops, and the world's set aside (setAsideMinutes 0)
         game.close();

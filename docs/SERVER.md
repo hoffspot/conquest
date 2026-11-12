@@ -542,6 +542,65 @@ the world, and what its players' games have said to it. The server adds them up 
 it runs, a world's carrying on when it's set aside and started again. Counting costs a step
 under a thousandth of a millisecond (`npm run step-budget` fails if it comes to 0.05 ms).
 
+### Metrics
+
+All the server counts is read at `http://localhost:8481/metrics`, on the management page's own
+listener: plain text in Prometheus's format, which Prometheus, Grafana Alloy, VictoriaMetrics,
+Netdata and `curl` all read. It needs no key, as the page there needs none, and it's read-only.
+
+```sh
+curl http://localhost:8481/metrics
+```
+
+**It's never answered from the Wi-Fi or the internet.** That listener is on the computer alone
+(127.0.0.1), answers only by its own names (`localhost:8481` and `127.0.0.1:8481`), and refuses
+another site's page in the computer's own browser. The play port, which the Wi-Fi, the internet
+and a tunnel reach, has no such address. To read a rented server's metrics from elsewhere, bring
+the port to you over SSH (`ssh -L 8481:localhost:8481 you@server`), as for its management page,
+or run the scraper on the server itself. For Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: pellagos
+    static_configs:
+      - targets: ["localhost:8481"]
+```
+
+The server needs none of them: it's built on Node alone, and keeps counting whether anything
+reads it or not.
+
+What's there, every name beginning `pellagos_`. Times are seconds, sizes bytes. A series is
+labelled by its world's id (`world`), by which thread it's of (`thread`: `world`, or `supervisor`
+for the server's own, with no world), and by a `kind` or a `reason`: never by a player, an
+address or a key.
+
+| Series | What it is |
+| --- | --- |
+| `world_step_seconds`, `world_tick_seconds` | Histograms of each step's time, and each whole tick's. A step over 0.05 is late |
+| `world_tick_part_seconds` | A tick's parts (`kind`): `advance`, its steps with what's sent of them, and `ahead`, what's made ahead |
+| `world_save_seconds`, `world_save_failures_total` | Each save's time from asked to on the disk, and those that failed |
+| `world_dropped_seconds_total` | The time a world let go, fallen behind its clock (its pace, as a total) |
+| `world_cpu_seconds_total` | Its thread's processor time (`kind`: `user`, `system`) |
+| `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
+| `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
+| `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
+| `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
+| `event_loop_delay_mean_seconds`, `_p99_seconds`, `_max_seconds` | How late each thread's event loop ran, lately |
+| `gc_total`, `gc_seconds_total` | Each thread's garbage collections and their time (`kind`: `minor`, `major`, `incremental`, `weak`) |
+| `play_sockets`, `play_places` | Players' games linked now, and places held in worlds (a dropped link's is kept five minutes) |
+| `play_backlog_bytes`, `play_backlog_max_bytes` | What waits to go to games slow to take it: all of it, and the most for one |
+| `play_sent_bytes_total`, `play_sent_wire_bytes_total`, `play_sent_messages_total`, `play_received_bytes_total` | A world's traffic: sent as said, sent as it went on the wire (compressed), and heard |
+| `joins_total` | Players let into a world |
+| `refusals_total` | What was refused, by `reason` (`key`, `code`, `bad-request`...) |
+| `play_closed_total` | Games sent out or refused at the play socket, by `reason` (`afk`, `full`, `server-stopping`...) |
+| `worlds` | The server's worlds by how they are (`kind`: `stored`, `running`, `empty`...) |
+| `event_loop_utilization` | How busy the server's own thread was, lately (0 to 1) |
+| `rss_bytes`, `start_time_seconds` | The whole server's memory, and when it started |
+
+A world set aside keeps its counters and histograms and lets go of what was only so while it ran;
+a world deleted lets go of all of them. All of them start again from nothing when the server
+does.
+
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above
 where it stood then) and whether every minute's 99th-percentile step stayed under 50 ms once the
