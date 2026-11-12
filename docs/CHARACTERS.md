@@ -2638,8 +2638,8 @@ resting and sitting. What went:
   everything made and holds them between). Fitting a blade to its
   hip, once as its body's built, made 10 MB of cells' names and lists; its cells are numbered
   now.
-- **Nothing made reading an action's keys or a stride's curves, less searching for an arm's
-  swivel.** What made most after that was the actions' keys and the arm's reach. Reading one
+- **Nothing made reading an action's keys or a stride's curves.** What made most after that
+  was the actions' keys and the arm's reach. Reading one
   channel of one joint's keys (`sample`) made three lists (pairs taken apart) and a function
   (the tangents'): 16 KB a frame for one soldier on guard. A stride's curve took each of its
   pairs apart as a list (`curveAt`: `[a, b]`, which is an iterator made each time), and a held
@@ -2651,12 +2651,14 @@ resting and sitting. What went:
   numbers in two typed arrays of the module's. The same poses to the last bit (the six bodies'
   run again; and 4,000 arms reached every way `reachArm` is asked to, their bones and what it
   returns hashed, before and after). Over the six bodies' run what posing made fell from 84 to
-  70 KB a body a frame; the fighting soldier's keys from 15.7 KB a frame to 0.2, the iterators
-  from 6.2 to 0.3, the arms' search from 20 to 14 (`test/posing-garbage.test.js`). What's left
-  of the search's is numbers handed to the vectors' own methods and the joints' limits
-  (`limitRotation`): whether those are made on the heap is the engine's choice of what it
-  builds into what, and taking the vectors' sums into the search itself made it choose worse
-  (the limits built into the search, and all their numbers made), so they're left as they are.
+  70 KB a body a frame; the fighting soldier's keys from 15.7 KB a frame to 0.2 and the
+  iterators from 6.2 to 0.3 (`test/posing-garbage.test.js` holds those). The arms' search is
+  not held to anything: it made 20 KB a frame for that soldier and makes 12 to 15 most runs,
+  25 in some. What's left of it is numbers handed to the vectors' own methods and the joints'
+  limits (`limitRotation`): whether those are made on the heap is the engine's choice of what
+  it builds into what, which changes from run to run; and taking the vectors' and the joints'
+  sums into the search itself, in plain numbers (tried: the same arms to the last bit), made
+  it choose worse on the six bodies' run, so they're left as they are.
 
 **How often.** In the game, a character's posed only as often as it's seen (`Avatar.every`, from
 `posingEvery`): every frame when it's 150 pixels tall on the screen or taller, and the player
