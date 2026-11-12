@@ -5540,14 +5540,25 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return {
             ids: here.map(({ id }) => id),
             shown: here.every(({ id }) => game.avatars.get(id).object.visible),
-            plates: document.querySelectorAll(".floater").length,
+            // (The bars over heads, and whose: each a plate among what floats over the world.
+            // What's said over a head floats there too, for a few seconds of the page's own
+            // clock, not the game's: the town's crier calls out as the player comes to the
+            // tavern's door (within 25 m of him, 26 seconds in), and his words are still there,
+            // hidden with him out of sight, if this is come to within their seven or so seconds.
+            // Counted with the bars, they made two of the one there is whenever that was quick
+            // enough, as on CI once the guards out of reach went to their crowds, not built)
+            plates: [...document.querySelectorAll(".floater.plate")].map((plate) => plate.dataset.id),
+            said: [...document.querySelectorAll(".floater:not(.plate)")].map((floater) => `${floater.classList.contains("said") ? "said" : floater.className} ${floater.dataset.id}`),
             acted: [...acted].sort(),
             order: game.battle.actor("player").order?.type ?? null,
             madam: game.avatars.get("madam").object.visible,
         };
     });
 
-    expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: 1, madam: false });
+    // (One bar, the orc's, left out in the town: none of the folk's. And nothing else floating
+    // over anyone but a crier's words, while they last)
+    expect(folk).toMatchObject({ ids: ["barkeep", "wench", "wench2", "drinker", "alewife", "farmer", "greybeard"], shown: true, plates: ["orc"], madam: false });
+    expect(folk.said.filter((words) => !/^said crier:/.test(words))).toEqual([]);
     expect(folk.acted).toContain("rest:patron");
     expect(folk.order).not.toBe("engage");
 
