@@ -14,6 +14,7 @@
 //                                players bring their own (visitors.js)
 //     journal.log                what's happened to it, a line each
 //     crashes.json               the last crash reports its players' games sent (crashes.js)
+//     measures.json              the last measured runs its players' games sent (measures.js)
 //
 // Every save first moves the snapshots kept down the ring (the oldest gone), then writes the new
 // one whole (files.js), so there are always five to go back to. If the latest won't read (cut
@@ -28,6 +29,7 @@ import { RACE } from "../../client/js/core/worldplan/plan.js";
 import { CRASHES_FILE, CrashReports } from "./crashes.js";
 import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip, writeJSON } from "./files.js";
 import { KeptHeroes } from "./heroes.js";
+import { MEASURES_FILE, MeasuredRuns } from "./measures.js";
 import { Visitors } from "./visitors.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
@@ -151,6 +153,9 @@ export class StoredWorld {
 
         /** The last crash reports its players' games sent, for the server's admin. */
         this.crashes = new CrashReports(path.join(folder, CRASHES_FILE));
+
+        /** The last measured runs its players' games sent (a link's ?measure=), for the server's admin. */
+        this.measures = new MeasuredRuns(path.join(folder, MEASURES_FILE));
     }
 
     get id() {

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FRAME, MEASURE } from "../client/js/app/measure.js";
-import { keptMeasure, leftWords, MeasuredRun, measureOf, MEASURING } from "../client/js/app/measuring.js";
+import { keptMeasure, leftWords, MeasuredRun, measureOf, measureSent, MEASURING, waitingMeasure } from "../client/js/app/measuring.js";
 import { PHASE, PHASES, Telemetry } from "../client/js/app/telemetry.js";
 
 // A page's storage, in memory
@@ -228,6 +228,51 @@ describe("a measured run on the page (measuring.js MeasuredRun)", () => {
         kept.setItem(MEASURING.key, JSON.stringify({ measure: MEASURE.version, name: "x" }));
         assert.equal(keptMeasure(kept).name, "x");
         assert.equal(keptMeasure(null), null);
+    });
+});
+
+describe("a measured run waiting to be sent to its world's server (measuring.js waitingMeasure, measureSent)", () => {
+    it("waits for the world on a world server it was measured in, as far as it got, till it's sent; a run with no server waits for none", async () => {
+        const { measured, page } = run({ name: "eight-spread", minutes: 2 });
+        const played = game();
+
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000001"), null);
+        measured.attach(played, { server: "server-a", world: "world000001" });
+        await null;
+        assert.deepEqual(JSON.parse(page.storage.getItem(MEASURING.waiting)), { server: "server-a", world: "world000001", began: "2026-11-12T09:00:00.000Z" });
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000001"), null, "nothing kept of it yet");
+
+        // (Half a minute in, the browser ends the page: what was kept is what waits, for that world alone)
+        played.frames(1800);
+        page.turn();
+
+        const waiting = waitingMeasure(page.storage, "server-a", "world000001");
+
+        assert.equal(waiting.name, "eight-spread");
+        assert.equal(waiting.done, false);
+        assert.equal(waiting.frames, 1800);
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000002"), null);
+        assert.equal(waitingMeasure(page.storage, "server-b", "world000001"), null);
+
+        // (Another run's sent meanwhile: this one waits on; its own sent, it waits no longer)
+        measureSent(page.storage, { began: "2026-11-11T09:00:00.000Z" });
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000001").frames, 1800);
+        measureSent(page.storage, waiting);
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000001"), null);
+        assert.equal(keptMeasure(page.storage).frames, 1800, "still kept on the device");
+
+        // (A run begun with no server, the quick start: whatever waited is let go of, its report written over)
+        const alone = run({ name: "alone", minutes: 1 });
+
+        alone.page.storage.setItem(MEASURING.waiting, JSON.stringify({ server: "server-a", world: "world000001", began: "2026-11-12T08:00:00.000Z" }));
+        alone.measured.attach(game());
+        assert.equal(alone.page.storage.getItem(MEASURING.waiting), null);
+
+        // (What's spoilt waits for nothing)
+        page.storage.setItem(MEASURING.waiting, "{ spoilt");
+        assert.equal(waitingMeasure(page.storage, "server-a", "world000001"), null);
+        measureSent(page.storage, waiting);
+        measureSent(null, waiting);
     });
 });
 

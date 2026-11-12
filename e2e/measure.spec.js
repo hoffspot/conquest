@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test("a measured run: a link's ?measure= counts down twenty seconds of play at one quality and keeps a report of one row with every phase; without it, nothing's measured", async ({ page }) => {
+test("a measured run: a link's ?measure= counts down twenty seconds of play at one quality and keeps a report of one row with every phase, copied by its button; without it, nothing's measured", async ({ page }) => {
     // (Two games loaded, and twenty seconds of the second measured as the clock goes: a minute and
     // a half here, so twice that and more on a slow runner)
     test.setTimeout(360000);
@@ -37,9 +37,18 @@ test("a measured run: a link's ?measure= counts down twenty seconds of play at o
     // (Its frames come as the browser gives them, a few a second drawn in software: twenty
     // seconds of them, however many that is)
     await expect.poll(() => page.evaluate(() => window.pellagos.measured.done), { timeout: 90000 }).toBe(true);
-    await expect(page.locator("#measure [data-measure-text]")).toHaveText(/^Measured twenty-seconds: 0:[2-5]\d of play, kept on this device\.$/);
+
+    // (No world server to send it to, the quick start: kept on the device, with a button to copy it)
+    await expect(page.locator("#measure [data-measure-text]")).toHaveText("Measured twenty-seconds: kept on this device. Copy it to send it on.");
 
     const report = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), MEASURING.key);
+
+    await page.evaluate(() => Object.defineProperty(navigator.clipboard, "writeText", { value: async (text) => (window.copied = text) }));
+    await page.locator("#measurecopy").click();
+    await expect(page.locator("#measure [data-measure-text]")).toHaveText("Measured twenty-seconds: copied. Paste it wherever you're sending it.");
+    expect(JSON.parse(await page.evaluate(() => window.copied))).toEqual(report);
+    await page.locator("#measureclose").click();
+    await expect(page.locator("#measure")).toBeHidden();
 
     expect(report).toMatchObject({ measure: MEASURE.version, name: "twenty-seconds", minutes: 0.34, done: true, quality: "low", pixels: 1, world: { map: "town", together: null, players: 1 } });
     expect(report.seconds).toBeGreaterThanOrEqual(20.4);
@@ -73,7 +82,7 @@ test("a measured run: a link's ?measure= counts down twenty seconds of play at o
     // (What's held, read every couple of seconds as the memory guard would)
     expect(report.held.every).toBe(MEASURE.every);
     expect(report.held.mb.length).toBeGreaterThan(2);
-    expect(report.held.mb.length).toBeLessThanOrEqual(Math.ceil(21 / MEASURE.every) + 1);
+    expect(report.held.mb.length).toBeLessThanOrEqual(Math.ceil(report.seconds / MEASURE.every) + 1);
     expect(report.heldMB).toBeGreaterThan(10);
 
     // (Done: the game's no longer measured)

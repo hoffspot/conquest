@@ -7831,6 +7831,27 @@ has a meter (`game.measure` is null, one test of it a frame), and nothing's kept
   (`navigator.wakeLock`, asked for again whenever the page comes back into view; where it's
   refused or there's none, the run goes on, and the screen's the owner's to keep awake). Measured
   through, the report's kept as it ended, the screen let go, and the words say so.
+- **Where the report goes** (main.js `measureDone`): in a world on a world server, to that server
+  as the run ends, by the player's session there (`ServerClient.reportMeasure`, `POST
+  /worlds/:id/measures`), for its admin to read on the management page (docs/SERVER.md, *Measured
+  runs*); the words say "sent to" the server. It's sent whatever **Send crash reports** says: the
+  link asked for it. A run that never got to send it, the browser having closed the page for what
+  it held or the server out of reach, waits on the device (`pellagos.measure.waiting`: which
+  server and world, and when the run began) and is sent, as far as it got, the next time the
+  player's welcomed into that world, whatever link they came by (`sendMeasures`,
+  measuring.js `waitingMeasure`); taken, or refused for good, it waits no longer. A run begun
+  after it takes its place, sent or not. With no server (the quick start, a friend's world), or to
+  have it anyway, **Copy results** beside the words copies the report as JSON (where the browser
+  won't copy, as on a page over plain http, it's shown selected, to copy by hand), and **Close**
+  puts the words away.
+
+**Measuring a phone, and where it gives up.** The steps the owner follows on the iPhone (the link
+to open, for how long, what comes back and where it's read) are in docs/SERVER.md, *Measuring a
+phone*. The same run, left going with `&minutes=30` until Safari closes the page, is how the
+game's own count of what it holds is set against what iOS says it killed the page for (Console's
+`jetsam` lines, Web Inspector's Memory timeline): the report kept every ten seconds carries the
+count read every two (`held.mb`) to within ten seconds of the end, and is sent when the phone's
+next in the world. The memory guard's marks (*The memory guard*) are reset from that.
 
 ## Performance
 
@@ -8206,7 +8227,10 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   let go and the game's meter taken away; running with no wake lock, storage or place to show it;
   and the frame the debug log timed written into a meter's array. E2E (`e2e/measure.spec.js`):
   without the parameter nothing shown, no meter, nothing kept and Adaptive as it's set; with it
-  Adaptive off, twenty seconds counted down, and a report kept of one row with every phase.
+  Adaptive off, twenty seconds counted down, and a report kept of one row with every phase, which
+  **Copy results** copies. A run waiting for its world's server, for that world alone, till it's
+  sent (`test/measuring.test.js`); the server's side, `test/admin.test.js`,
+  `test/world-store.test.js` and `e2e/admin.spec.js` (docs/SERVER.md, *Measured runs*).
 - `test/throng.test.js`: a crowded fight that keeps up, or one with few about however slow, left
   as it is; too slow, a few more in the crowds at a time, settled each time, never all; time to
   spare a while, a few back at a time, all in the end; more drawn in full that made it too slow

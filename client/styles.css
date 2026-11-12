@@ -8091,6 +8091,29 @@ dialog#menu.wide {
     display: none;
 }
 
+/* (Once it's measured: its report copied, or the words put away) */
+#measure button {
+    pointer-events: auto;
+    padding: 4px 10px;
+    border: 1px solid rgba(120, 200, 160, 0.35);
+    border-radius: 6px;
+    background: rgba(120, 200, 160, 0.12);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+#measure textarea {
+    pointer-events: auto;
+    flex-basis: 100%;
+    min-height: 30vh;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid rgba(120, 200, 160, 0.35);
+    border-radius: 6px;
+}
+
 /* --- Debug mode --- */
 
 #debug {

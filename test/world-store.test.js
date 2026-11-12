@@ -14,6 +14,7 @@ import { promisify } from "node:util";
 import { MOST_CHARACTERS, SAVE_VERSION } from "../client/js/app/save.js";
 import { isGuid } from "../client/js/core/guid.js";
 import { CRASHES, CRASHES_FILE, reportOf } from "../server/storage/crashes.js";
+import { MEASURES, MEASURES_FILE, runOf } from "../server/storage/measures.js";
 import { readGzip, readJSON, writeGzip, writeJSON } from "../server/storage/files.js";
 import { DataFolder } from "../server/storage/folder.js";
 import { MOST_HEROES } from "../server/storage/heroes.js";
@@ -268,6 +269,64 @@ describe("the crash reports a world keeps (server/storage/crashes.js)", () => {
         assert.deepEqual(await world.crashes.list(), []);
         await world.crashes.add(reportOf(log(9)), { player: "P9" });
         assert.deepEqual((await world.crashes.list()).map(({ player }) => player), ["P9"]);
+    });
+});
+
+describe("the measured runs a world keeps (server/storage/measures.js)", () => {
+    // A measured run's report as the game sends it (client/js/app/measure.js Meter.report), of `n` minutes
+    const report = (n, extra = {}) => ({ measure: 1, name: `run-${n}`, began: `2026-11-12T09:${String(n).padStart(2, "0")}:00.000Z`, code: "abc1234567", build: "b1", minutes: n, seconds: n * 60, done: true, frames: n * 3600, rows: Array.from({ length: n }, (unused, k) => ({ minute: k + 1, frames: 3600, interval: [16.7, 17.1, 33.4, 51] })), ...extra });
+
+    it("takes a run's report, a row for each minute, and nothing else", () => {
+        assert.deepEqual(runOf(report(2)), { run: "run-2", began: "2026-11-12T09:02:00.000Z", minutes: 2, seconds: 120, done: true, code: "abc1234567", build: "b1", report: report(2) });
+        assert.equal(runOf(null), null);
+        assert.equal(runOf([]), null);
+        assert.equal(runOf({ events: [{ kind: "crash" }] }), null, "a debug log isn't one");
+        assert.equal(runOf({ ...report(1), measure: undefined }), null, "no format number");
+        assert.equal(runOf({ ...report(1), measure: "1" }), null);
+        assert.equal(runOf({ ...report(1), rows: [] }), null, "no rows");
+        assert.equal(runOf({ ...report(1), rows: ["a row"] }), null);
+        assert.equal(runOf(report(MEASURES.rows + 1)), null, "too many rows");
+        assert.equal(runOf(report(MEASURES.rows)).report.rows.length, MEASURES.rows);
+
+        // (What doesn't read is kept without, not refused; a part-run is one)
+        assert.deepEqual({ ...runOf({ measure: 1, rows: [{}], name: 7, began: "never", minutes: -1, seconds: "soon", done: "yes" }), report: null }, { run: null, began: null, minutes: null, seconds: null, done: false, code: null, build: null, report: null });
+        assert.equal(runOf({ ...report(1), name: "x".repeat(200) }).run.length, 64);
+        assert.equal(runOf({ ...report(1), done: false }).done, false);
+    });
+
+    it("keeps the last twenty, newest first, in the world's folder; two sent at once both kept; cleared, none", async () => {
+        const { world } = await kept();
+
+        assert.deepEqual(await world.measures.list(), []);
+
+        const first = await world.measures.add(runOf(report(1)), { player: "P1", name: "Ada", from: "home", when: new Date("2026-11-12T12:00:00Z") });
+
+        assert.match(first.id, /^[0-9a-f]{12}$/);
+        assert.deepEqual({ ...first, id: null }, { id: null, received: "2026-11-12T12:00:00.000Z", player: "P1", name: "Ada", from: "home", run: "run-1", began: "2026-11-12T09:01:00.000Z", minutes: 1, seconds: 60, done: true, code: "abc1234567", build: "b1", report: report(1) });
+
+        await Promise.all(Array.from({ length: MEASURES.kept + 2 }, (unused, k) => world.measures.add(runOf(report(2)), { player: `P${k + 2}` })));
+
+        const runs = await world.measures.list();
+
+        assert.equal(MEASURES.kept, 20);
+        assert.equal(runs.length, MEASURES.kept);
+        assert.deepEqual(runs.map(({ player }) => player), Array.from({ length: MEASURES.kept }, (unused, k) => `P${MEASURES.kept + 3 - k}`), "the newest first, the oldest let go");
+        assert.deepEqual((await readJSON(path.join(world.folder, MEASURES_FILE))).runs, runs, "kept in the world's folder");
+
+        assert.equal(await world.measures.clear(), MEASURES.kept);
+        assert.deepEqual(await world.measures.list(), []);
+        assert.equal(await world.measures.clear(), 0);
+    });
+
+    it("starts again from none if what's kept can't be read, and leaves the crash reports be", async () => {
+        const { world } = await kept();
+
+        await writeFile(path.join(world.folder, MEASURES_FILE), "{ spoilt");
+        assert.deepEqual(await world.measures.list(), []);
+        await world.measures.add(runOf(report(3)), { player: "P9" });
+        assert.deepEqual((await world.measures.list()).map(({ player, run }) => [player, run]), [["P9", "run-3"]]);
+        assert.deepEqual(await world.crashes.list(), []);
+        assert.equal(MEASURES.bytes, 64 * 1024);
     });
 });
 

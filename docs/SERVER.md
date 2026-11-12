@@ -42,7 +42,8 @@ answered from the internet. Its tabs:
 - **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved",
   "Offline"), and what can be done with it: start it, set it aside (everyone in it is sent out and
   it's saved), **take it offline** and **bring it online** (below), save it now, its settings,
-  keys, players, backups and **crash reports** (below), export it, delete it (its name typed).
+  keys, players, backups, **crash reports** and **measured runs** (below), export it, delete it
+  (its name typed).
 - **New world.** Its name, seed and home people, what it does with its players' characters
   (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
@@ -514,7 +515,8 @@ certificates/            its certificates, and the DNS host's token where there'
 journal.log              what's happened to the server
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
                          access.json (its keys' hashes, players, bans), journal.log,
-                         crashes.json (its last crash reports)
+                         crashes.json (its last crash reports), measures.json (its last
+                         measured runs)
 backups/<id>/            each world's backups; backups/server/ the server's own
 versions/                versions installed by updates (current.json, last.json)
 ```
@@ -569,6 +571,80 @@ left as it is by a restore, gone when it's deleted; server/storage/crashes.js), 
   world (from `/enter`): the debug log as the game copies it, a crash among its events (no more
   than 10 events, and 256 KB); six a minute from one address at most. The admin's are `GET` and
   `DELETE /api/v1/server/worlds/:id/crashes` (server/api.js).
+
+## Measured runs
+
+A game opened with `measure=<name>` in its link counts every frame for some minutes and makes a
+report of how the device kept up (docs/GAME.md, *Measuring a device*). In a world here, the game
+sends that report to the server as the run ends. Each world keeps the last twenty it's been sent,
+with the world (`measures.json` in its folder: backed up and archived with it, left as it is by a
+restore, gone when it's deleted; server/storage/measures.js), newest first. Nothing's kept of who
+sent one beyond what a crash report keeps: their player id here, the name they go by, and whether
+they came from home or the internet; the report says of the device what a debug log says (its
+browser, screen and cores). No game sends one unless its link asked for the run.
+
+- **Seeing them:** the management page alone: a world's **Measured runs** (on its card, or its
+  dialog's tab) lists each: when it began and when it came, who sent it, the run's name and how
+  long it was ("ended early" for one the browser cut short), and how it went in a line (the
+  frames' middle and 95th percentile, their work, a step of the world, the share of frames more
+  than 50 ms late, the most held), with the quality it was drawn at, the frames a second the
+  browser was asking for, and how many were in the world.
+- **Minutes** shows the run minute by minute: the frames, their interval (middle, 95 in 100,
+  worst), their work and a step (95 in 100), the frames over 50 ms, and the most held (MB).
+- **Copy all** and each run's **Copy** copy them as JSON (the world, who and when, and the whole
+  report: every phase's percentiles each minute, the histograms, every reading of what was held),
+  as crash reports are copied; **Clear** (asked first) lets them all go. The world's journal says
+  when one came in, and when they were cleared.
+- **A run cut short** (the phone closed the page for what it held, or the server couldn't be
+  reached as the run ended) isn't lost: the game keeps the report on the device every ten seconds,
+  and sends it, as far as it got, the next time that player's in the world.
+- **Sending one:** `POST /api/v1/worlds/:id/measures {report}` with a player's session in that
+  world: the report as the game makes it (a format number, a row for each minute, 31 rows and
+  64 KB at most; the game's own is under 48 KB for fifteen minutes); six a minute from one address
+  at most. The admin's are `GET` and `DELETE /api/v1/server/worlds/:id/measures` (server/api.js).
+
+### Measuring a phone
+
+The owner's own, by hand (generated/multiplayer_scaling_plan.md, `0-10` and `0-11`). For each
+table wanted (8 players spread, 8 in one town, each with and without a field battle):
+
+1. **The world:** on the Mac, a world running on the server with the other players in it, placed
+   as the table says. Make an invite link for it (the management page, the world's **Invite
+   players**).
+2. **The phone:** off the charger, out of its case, the screen at half brightness, Low Power Mode
+   off (a run at 30 frames a second, the report's `hz`, is thrown away). On plain `http://` (the
+   Wi-Fi address) the browser gives a page no wake lock, so set Auto-Lock to Never for the run;
+   from the server's `https://` address the game keeps the screen awake itself.
+3. **The link:** the invite link with `?measure=<name>&minutes=12` put in before its `#`, a name
+   for each table:
+   `http://<the Mac>:8480/?measure=iphone-8-spread&minutes=12#server=…&world=…&key=…`. Open it in
+   Safari on the phone and go into the world. The countdown starts at the top of the screen once
+   the game's under way ("Measuring iphone-8-spread: 12:00 left").
+4. **For twelve minutes, play:** walk and fight as the table says, and leave the game in front
+   the whole time (put away, the run stops, and goes on when it's back).
+5. **What comes back:** the words turn to "Measured iphone-8-spread: sent to <the server>". On
+   the Mac, the management page (`http://localhost:8481`), **Worlds**, the world's **Measured
+   runs**: the run's row, its **Minutes**, and **Copy** for the whole report to paste into the
+   baseline. The plan's reading of it: green is a step's 95th percentile at 5 ms or under, the
+   frames' at 20 ms or under, fewer than 1 frame in 100 over 50 ms and 400 MB or less held; amber
+   is a step's 95th percentile at 12 ms or under; anything else is red.
+   If the words say it couldn't be sent, **Copy results** on the phone copies it (selected to
+   copy by hand, on plain `http://`), and it's sent anyway the next time the phone's in the world.
+
+**Where the phone gives up** (`0-10`, once in Safari and once from the Home Screen: Share, Add to
+Home Screen, from the link with `measure` in it, which the Home Screen app keeps). The phone
+cabled to the Mac; on the Mac, Console.app with the phone chosen and `jetsam` in its search, and
+Safari's Develop menu, the phone, the page's Web Inspector, Timelines, Memory. Open the link with
+`&minutes=30` and play into whatever holds most (a city, a field battle, a dungeon after it) until
+the page is closed and loaded again. Note what Console says of it (which process, its footprint
+and the limit it passed) and what the Memory timeline last showed. Then go back into the world
+(any link will do): the run cut short is sent as the phone comes in, and its **Copy** gives
+`held.mb`, the game's own count every two seconds to within ten seconds of the end. The game's
+count at the end against Console's footprint is the calibration the memory guard's marks
+(`MEMORY_GUARD.marks`, client/js/app/memoryguard.js) are reset from. On the Mac, for the same
+note: how many performance cores it has (`sysctl -n hw.perflevel0.physicalcpu`), and the quality
+of service the menu-bar app runs the server at (`sudo powermetrics --samplers tasks
+--show-process-qos -n 1`, the `node` row).
 
 ## When something's wrong
 

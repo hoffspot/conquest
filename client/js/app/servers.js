@@ -694,6 +694,14 @@ export class ServerClient {
         return this.#call("POST", `/worlds/${world}/crashes`, { session, body: { report } });
     }
 
+    /**
+     * A measured run's report sent to a world, by the player's session in it (app/measuring.js: a
+     * run the page's link asked for, as it ends): { id, received }. Throws ServerRefusal.
+     */
+    async reportMeasure({ world, session, report }) {
+        return this.#call("POST", `/worlds/${world}/measures`, { session, body: { report } });
+    }
+
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
     // The player's own identity's proof, for the server it's proved (made fresh each time: a server takes each once)
     #shown() {

@@ -12,6 +12,11 @@
 //  - the screen's kept awake where the browser lets a page ask (a wake lock), asked for again
 //    whenever the page comes back into view.
 //
+// As it ends, in a world on a world server, the report's sent to that server for its admin
+// (main.js measureDone; docs/SERVER.md *Measured runs*); a run that never got to send it (the
+// browser ended it, the server couldn't be reached) is sent the next time the player's in that
+// world (waitingMeasure). With no server, or to have it anyway, **Copy results** copies it.
+//
 // Without the parameter none of this is made: measureOf answers null, and nothing here runs.
 
 import { MEASURE, Meter } from "./measure.js";
@@ -21,8 +26,10 @@ import { MEASURE, Meter } from "./measure.js";
  * - `keep`: how often it's kept while the run's measured (ms).
  * - `tick`: how often the countdown's looked at (ms).
  * - `name`: the most letters of a run's name.
+ * - `waiting`: where it's kept which world on a world server that run was measured in ({ server,
+ *   world, began }), till it's been sent there.
  */
-export const MEASURING = Object.freeze({ key: "pellagos.measure", keep: 10000, tick: 1000, name: 40 });
+export const MEASURING = Object.freeze({ key: "pellagos.measure", keep: 10000, tick: 1000, name: 40, waiting: "pellagos.measure.waiting" });
 
 /**
  * The run a page's address asks for (`params`: its URLSearchParams): { name, minutes }, or null
@@ -58,6 +65,41 @@ export function keptMeasure(storage) {
         return kept !== null && typeof kept === "object" && kept.measure === MEASURE.version ? kept : null;
     } catch {
         return null;
+    }
+}
+
+// The world on a world server the run kept on the device was measured in, till it's been sent there
+function waitingFor(storage) {
+    try {
+        const waiting = JSON.parse(storage?.getItem(MEASURING.waiting) ?? "null");
+
+        return waiting !== null && typeof waiting === "object" && typeof waiting.server === "string" && typeof waiting.world === "string" ? waiting : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * The run kept on the device, if it was measured in this world on this server (`server`: its key,
+ * app/servers.js KnownServers; `world`: its id) and hasn't been sent there yet: its report, as far
+ * as it got (a run the browser ended early, found the next time the player's in the world, among
+ * them); else null.
+ */
+export function waitingMeasure(storage, server, world) {
+    const waiting = waitingFor(storage);
+    const report = waiting?.server === server && waiting.world === world ? keptMeasure(storage) : null;
+
+    return report && report.began === waiting.began ? report : null;
+}
+
+/** A run's report sent to its world's server (or refused for good): it waits no longer. Another run's, kept since, still does. */
+export function measureSent(storage, report) {
+    if (waitingFor(storage)?.began === report?.began) {
+        try {
+            storage?.removeItem(MEASURING.waiting);
+        } catch {
+            // (Storage refused: it's sent again, and the server keeps both)
+        }
     }
 }
 
@@ -116,9 +158,11 @@ export class MeasuredRun {
     /**
      * A game under way: the first is the one measured, its frames counted from now on (a game
      * come to later, another world gone into, carries the same run on). The countdown's shown,
-     * and the screen asked to stay awake.
+     * and the screen asked to stay awake. `where`: the world on a world server it's in ({ server:
+     * the server's key, world: its id }), if it is: noted on the device, for the report to be
+     * sent there (waitingMeasure) if the run never gets to send it itself.
      */
-    attach(game) {
+    attach(game, where = null) {
         if (this.#finished) {
             return;
         }
@@ -131,6 +175,17 @@ export class MeasuredRun {
         }
 
         this.#began = this.#clock();
+
+        try {
+            if (where) {
+                this.#storage?.setItem(MEASURING.waiting, JSON.stringify({ server: where.server, world: where.world, began: new Date(this.#began).toISOString() }));
+            } else {
+                this.#storage?.removeItem(MEASURING.waiting);
+            }
+        } catch {
+            // (Storage full or refused: the run's sent as it ends, or copied)
+        }
+
         this.#ticking = this.#every(() => this.tick(), MEASURING.tick);
         this.wake();
         this.#show(`Measuring ${this.name}: ${leftWords(this.meter.left)} left`);
