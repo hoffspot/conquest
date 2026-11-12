@@ -1,0 +1,101 @@
+name: Scale
+
+# The world authority measured as its players grow (generated/multiplayer_scaling_plan.md 0-4):
+# the load (scripts/load.js: a world stepped and opened as the world server does it, its players
+# joined over a link that only counts) at 8, 25, 50 and 100 players, and the world server's soak
+# with thin players (scripts/server-soak.js --thin). Every night, by hand (Actions, Scale, Run
+# workflow), and briefly on a pull request that changes what it runs.
+#
+# It isn't one of CI's jobs and isn't a required check (contribution.md, "The repository's
+# settings"): a hosted runner's clock differs by half from one machine to the next, so no time
+# here is a gate. What fails it is what's the same on any machine: a run that couldn't be made,
+# players who didn't stay in, a report that isn't as its schema says, or a mean step over a whole
+# step's time (--ceiling: the world couldn't keep up at all). The times it prints are for reading
+# beside one another's, night by night; the gates are timed by hand on the owner's Mac.
+on:
+  schedule:
+    # (03:17 UTC: off the hour, when scheduled runs queue)
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: The world's seed (the plan's tables use 2 and 7)
+        default: "2"
+      seconds:
+        description: How long each load plays (seconds of the world's time)
+        default: "120"
+      minutes:
+        description: How long the thin players' soak plays (minutes)
+        default: "10"
+  pull_request:
+    paths:
+      - scripts/load.js
+      - scripts/server-soak.js
+      - client/js/core/probe.js
+      - client/js/core/bot.js
+      - .github/workflows/scale.yml
+
+concurrency:
+  group: scale-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SEED: ${{ github.event.inputs.seed || '2' }}
+  # (A pull request's are short: that they run at all is what's being checked)
+  SECONDS_PLAYED: ${{ github.event.inputs.seconds || (github.event_name == 'pull_request' && '30' || '120') }}
+  MINUTES_SOAKED: ${{ github.event.inputs.minutes || (github.event_name == 'pull_request' && '2' || '10') }}
+
+jobs:
+  scale:
+    runs-on: ubuntu-latest
+    # (The loads are a few minutes together and the soak ten: an hour is several times that)
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      # (Node 22, as CI's jobs: contribution.md, "Which Node")
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # (The run the plan times: under a minute, on a pull request too)
+      - name: Load, 8 players spread
+        run: npm run load -- --players 8 --layout spread --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/8-spread-walk.json
+
+      - name: Load, 8 players in one town, fighting
+        run: npm run load -- --players 8 --layout one-town --activity fights --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/8-one-town-fights.json
+
+      - name: Load, 25 players, four to a town
+        run: npm run load -- --players 25 --layout towns --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-towns-walk.json
+
+      # (Not on a pull request, from here to the soak: they're the long ones)
+      - name: Load, 25 players spread
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 25 --layout spread --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-walk.json
+
+      - name: Load, 50 players, four to a town, sticks held
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 50 --layout towns --activity stick --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/50-towns-stick.json
+
+      - name: Load, 100 players in one town
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 100 --layout one-town --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/100-one-town-walk.json
+
+      # (4 players with their copies of the world and 25 thin ones, in a world server opened for
+      # 29: none sent out. On a pull request, fewer and briefly)
+      - name: Soak, thin players
+        run: npm run soak:server -- --minutes "$MINUTES_SOAKED" --players ${{ github.event_name == 'pull_request' && '1' || '4' }} --thin ${{ github.event_name == 'pull_request' && '12' || '25' }} --seed "$SEED"
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scale-reports
+          path: |
+            test-results/load/
+            test-results/server-soak/report.json
+          retention-days: 30
+          if-no-files-found: ignore

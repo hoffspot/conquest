@@ -81,6 +81,7 @@ import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { playerSight, sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
+import { count } from "./probe.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
@@ -5842,6 +5843,9 @@ export class Battle {
         if (index && index.actors === this.actors && index.length === this.actors.length && index.version === this.#version) {
             return index;
         }
+
+        count("battle.indexed");
+        count("battle.indexedActors", this.actors.length);
 
         const cells = new Map();
         const at = new Float64Array(this.actors.length * 2);

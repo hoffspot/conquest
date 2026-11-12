@@ -6,12 +6,22 @@
 // server's soak (scripts/soak.js) plays them in Node and in each browser: the same code in each,
 // so any difference in how the browsers play the rules shows as their copies going astray.
 //
+// And a thin one (ThinBot; generated/multiplayer_scaling_plan.md 0-3), which holds no copy of the
+// world at all: it speaks what a game speaks (core/netplay.js) and reads only what it's told of
+// its own hero (`self`), steering from where it came in. It costs its machine next to nothing, so
+// many of them load a world server without their own play getting in the way of what's measured;
+// it can't tell whether a copy would have kept to the host's, which is what the full ones are for.
+//
 // Pure JavaScript, the same in Node and the browser: whoever plays it says how much time has gone
 // by (tick).
 
 import { STEP_MS } from "./battle.js";
+import { atan2 } from "./exact.js";
 import { Host } from "./host.js";
+import { NET_VERSION } from "./netplay.js";
 import { buildWorld } from "./overworld.js";
+import { placeOf } from "./selfstate.js";
+import { decode, encode } from "./wire.js";
 
 export const BOT = Object.freeze({
     // How often (ms) it sends itself somewhere, and how far from where it came in (m) at most
@@ -226,5 +236,195 @@ export class Bot {
             seen: this.seen,
             kicked: this.kicked,
         };
+    }
+}
+
+/**
+ * What a thin bot does besides what BOT says: how often it asks how long a word takes (ms: as a
+ * game does, every second; one that didn't would be stopped for being quiet, core/netplay.js
+ * QUIET); and, holding a stick, how many commands a second it sends, how far ahead each reaches
+ * (m: app/steering.js HELD_REACH) and how near where it was making for it chooses somewhere else (m).
+ */
+export const THIN = Object.freeze({ ping: 1000, stick: 16, reach: 30, there: 2 });
+
+// The kind of a message, read off its front without reading the rest ({"kind":"ops",...)
+const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.indexOf('"', 9)) : "?");
+
+export class ThinBot {
+    /**
+     * @param {object} options
+     * @param {function} options.send - Sends `text` to the host (its link's).
+     * @param {number} [options.seed] - Where it sends itself, and which way its fights face.
+     * @param {boolean} [options.hold] - Whether it holds a stick (THIN.stick commands a second)
+     *     rather than sending itself somewhere every so often.
+     * @param {boolean} [options.fights] - Whether it starts fights, as a full one does (if it may).
+     * @param {object} [options.timing] - As BOT.
+     * @param {function} [options.clock] - The time (ms), to time its words to the host and back
+     *     by; none, they're timed to its ticks.
+     */
+    constructor({ send, seed = 1, hold = false, fights = false, timing = BOT, clock = null }) {
+        this.send = send;
+        this.clock = clock;
+        this.hold = hold;
+        this.startsFights = fights;
+        this.timing = timing;
+        this.random = seed >>> 0 || 1;
+
+        /** Its player's id in the world, once it's welcomed; where it came in ([x, y]), and where it is now ({ x, y, map }), as it's told. */
+        this.me = null;
+        this.home = null;
+        this.at = null;
+        this.dead = false;
+
+        /** How long it's played (ms), and the host's step it last heard of. */
+        this.time = 0;
+        this.step = -1;
+
+        /** What it's done: sent itself somewhere, held its stick a way (commands), started fights. */
+        this.moves = 0;
+        this.held = 0;
+        this.fights = 0;
+
+        /** What it's heard, by kind ({ messages, chars }), and how many characters it's sent. */
+        this.heard = {};
+        this.sent = 0;
+
+        /** How often it was sent the world again (it never asks: only if the host sends everyone it); how long its last word took (ms, to its tick); if it was sent out or refused. */
+        this.states = 0;
+        this.rtt = null;
+        this.kicked = null;
+        this.refused = null;
+
+        this.seq = 0;
+        this.to = null;
+        this.owed = 0;
+        this.nextMove = 0;
+        this.nextPing = 0;
+        this.nextFight = timing.firstFight;
+    }
+
+    #say(message) {
+        const text = encode(message);
+
+        this.sent += text.length;
+        this.send(text);
+    }
+
+    #command(command) {
+        this.#say({ kind: "command", seq: ++this.seq, command });
+    }
+
+    /** Ask to join, as `character` (as Host.join takes it; `hero`, a kept hero's slot or "new", in a world that keeps them). */
+    hello(character, { hero } = {}) {
+        this.#say({ kind: "hello", version: NET_VERSION, character, ...(hero !== undefined ? { hero } : {}) });
+    }
+
+    /** What the host said: counted, and read only if it's of the bot itself (its welcome, its own hero, an answer to its asking, its being sent out). */
+    hear(text) {
+        const kind = kindOf(text);
+        const sum = (this.heard[kind] ??= { messages: 0, chars: 0 });
+
+        sum.messages++;
+        sum.chars += text.length;
+
+        if (kind === "ops") {
+            // (The step it's of, off its front: {"kind":"ops","step":1234,...)
+            const step = Number.parseInt(text.slice(21, 33), 10);
+
+            this.step = Number.isFinite(step) ? step : this.step;
+        } else if (kind === "self") {
+            const { hero, step } = decode(text);
+            const at = placeOf(hero);
+
+            this.at = at;
+            this.dead = hero.dead === true;
+            this.step = Math.max(this.step, step);
+
+            if (!this.home && at.map === "town") {
+                this.home = [at.x, at.y];
+            }
+        } else if (kind === "welcome") {
+            // (Its id read, and the world it came with let go of: it keeps no copy)
+            this.me = decode(text).id;
+            this.#say({ kind: "ready" });
+        } else if (kind === "pong") {
+            const { t } = decode(text);
+
+            this.rtt = Number.isFinite(t) ? (this.clock?.() ?? this.time) - t : this.rtt;
+        } else if (kind === "state") {
+            this.states++;
+        } else if (kind === "kicked") {
+            this.kicked = { reason: decode(text).reason, step: this.step };
+        } else if (kind === "refused") {
+            this.refused = decode(text).reason;
+        }
+    }
+
+    /** Time gone by (`ms`): it asks how long a word takes, if that's due, and does what it does next. */
+    tick(ms) {
+        if (!this.me || this.kicked) {
+            return;
+        }
+
+        const { timing } = this;
+
+        this.time += ms;
+
+        if (this.time >= this.nextPing) {
+            this.nextPing = this.time + THIN.ping;
+            this.#say({ kind: "ping", t: this.clock?.() ?? this.time, ...(this.rtt === null ? {} : { rtt: Math.round(this.rtt) }) });
+        }
+
+        // (Not till it's been told where its hero is; nor while they're down, or indoors)
+        if (!this.home || this.dead || this.at.map !== "town") {
+            return;
+        }
+
+        if (this.startsFights && this.time >= this.nextFight) {
+            this.nextFight = this.time + timing.fightEvery;
+            this.#command({ type: "fieldBattle", size: timing.fightSize, facing: this.#roll() * Math.PI });
+            this.fights++;
+
+            return;
+        }
+
+        if (this.hold) {
+            // (Towards somewhere near home, another once it's there or every so often)
+            const [dx, dy] = this.to ? [this.to[0] - this.at.x, this.to[1] - this.at.y] : [0, 0];
+
+            if (!this.to || this.time >= this.nextMove || dx * dx + dy * dy < THIN.there * THIN.there) {
+                this.nextMove = this.time + timing.every;
+                this.to = this.#somewhere();
+                this.moves++;
+            }
+
+            this.owed = Math.min(THIN.stick, this.owed + (ms * THIN.stick) / 1000);
+
+            while (this.owed >= 1) {
+                this.owed--;
+                this.held++;
+                this.#command({ type: "ahead", facing: atan2(this.to[0] - this.at.x, this.to[1] - this.at.y), reach: THIN.reach });
+            }
+        } else if (this.time >= this.nextMove) {
+            this.nextMove = this.time + timing.every;
+            this.#command({ type: "move", to: this.#somewhere() });
+            this.moves++;
+        }
+    }
+
+    #somewhere() {
+        return [Math.round(this.home[0] + this.#roll() * this.timing.roam), Math.round(this.home[1] + this.#roll() * this.timing.roam)];
+    }
+
+    // A number from -1 to 1, the next of its own
+    #roll() {
+        this.random = (Math.imul(this.random, 1103515245) + 12345) >>> 0;
+
+        return (this.random / 2 ** 32 - 0.5) * 2;
+    }
+
+    /** How it's gone, as plain data (`thin`: true; no `resyncs` or `desyncs`, having no copy to go astray). */
+    report() {
+        return { me: this.me, thin: true, played: this.time, step: this.step, moves: this.moves, held: this.held, fights: this.fights, heard: this.heard, sent: this.sent, states: this.states, rtt: this.rtt, kicked: this.kicked, refused: this.refused };
     }
 }

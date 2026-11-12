@@ -14,6 +14,23 @@
 //     npm run soak:server                                # 2 hours, 8 players
 //     npm run soak:server -- --minutes 10 --players 4    # a quick look
 //     npm run soak:server -- --seed 7 --json             # another world; the report as JSON
+//     npm run soak:server -- --minutes 10 --players 4 --thin 25   # 4 as above and 25 thin ones
+//
+// Thin players (--thin M; generated/multiplayer_scaling_plan.md 0-3) hold no copy of the world:
+// they speak what a game speaks and steer by what they're told of their own hero (core/bot.js
+// ThinBot), all of them in one process, so there can be many more of them than the machine could
+// play whole copies for. The others (--players N) keep their copies, and say whether a copy still
+// keeps to the host's with that many in the world. With more in a world than a world takes (8), or
+// in a server than a server does, the server is opened with those limits raised: as options of
+// WorldServer.open (`limits`), which no setting or request can give a server that's run as one.
+//
+//     --hold       the thin ones hold a stick (16 commands a second each) rather than tap
+//     --fights     the thin ones start field battles too, as the others do
+//     --spread     everyone by their own people's start town, the peoples in turn (as it is
+//                  without: a server puts a hero in their people's town, so six towns at the most)
+//     --one-town   everyone human, in the humans' town
+//     --tunnel     everyone comes in through the tunnel listener (world-server.js listenTunnel:
+//                  where Tailscale Funnel brings the internet), so as the internet's, not home's
 //
 // Writes the report to test-results/server-soak/report.json. Exits 1 if it fails.
 
@@ -25,7 +42,9 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { addressOf, KnownServers, ServerClient } from "../client/js/app/servers.js";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { Bot } from "../client/js/core/bot.js";
+import { Bot, ThinBot } from "../client/js/core/bot.js";
+import { LIMITS } from "../server/access/limits.js";
+import { WORLD_SETTINGS } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
 
 export const SERVER_SOAK = Object.freeze({
@@ -98,9 +117,58 @@ async function play({ port, world, key, name, race, seed }) {
     process.send("ready");
 }
 
-// A player, in a process of its own: { name, race, report(), stop() }
-async function player(options) {
-    const child = fork(fileURLToPath(import.meta.url), ["--join", JSON.stringify(options)], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
+// --- The thin players, all in one process of their own (--join-thin) ---
+
+async function playThin({ port, world, key, players, hold, fights }) {
+    const bots = [];
+
+    for (const { name, race, seed } of players) {
+        const servers = new KnownServers(memory());
+        const client = new ServerClient(servers.remember(addressOf(`127.0.0.1:${port}`)), { servers, secure: false });
+        const entered = await client.enter({ world, key });
+        const one = { name, race, closed: null, dropped: false, lost: 0, bot: null };
+        // (The link a game's: its hello said by it. What comes back is the thin bot's to hear, not
+        // a copy's to play)
+        const { link } = await client.play({
+            world,
+            session: entered.session,
+            character: { hero: { name, race, weapon: "sword", boots: false, shape: {}, look: {} } },
+            onClosed: (reason) => (one.closed = reason),
+            onDrop: () => (one.dropped = true),
+        });
+
+        one.bot = new ThinBot({ send: (text) => link.data(text), seed, hold, fights, clock: () => performance.now() });
+        link.onData = (text) => one.bot.hear(text);
+        link.onLost = () => one.lost++;
+        link.onFound = () => {};
+        bots.push(one);
+    }
+
+    let last = performance.now();
+
+    setInterval(() => {
+        const now = performance.now();
+
+        for (const { bot } of bots) {
+            bot.tick(now - last);
+        }
+
+        last = now;
+    }, SERVER_SOAK.tick);
+
+    process.on("message", (message) => {
+        if (message === "report") {
+            process.send(bots.map(({ name, race, closed, dropped, lost, bot }) => ({ name, race, ...bot.report(), closed, dropped, lost })));
+        }
+    });
+    process.on("disconnect", () => process.exit(0));
+    process.send("ready");
+}
+
+// A player, in a process of its own: { name, race, report(), stop() }; or, `thin`, all the thin
+// ones in one process ({ report(): each one's, stop() })
+async function player(options, { thin = false } = {}) {
+    const child = fork(fileURLToPath(import.meta.url), [thin ? "--join-thin" : "--join", JSON.stringify(options)], { stdio: ["ignore", "inherit", "inherit", "ipc"] });
     let answer = null;
 
     // (Behind the server for the machine's cores, as a player's own device would be)
@@ -121,7 +189,7 @@ async function player(options) {
 
     await new Promise((resolve, reject) => {
         child.once("message", resolve);
-        child.once("exit", (code) => reject(new Error(`${options.name} left (${code})`)));
+        child.once("exit", (code) => reject(new Error(`${options.name ?? "The thin players"} left (${code})`)));
     });
 
     return {
@@ -129,7 +197,7 @@ async function player(options) {
         race: options.race,
         async report() {
             if (child.exitCode !== null || !child.connected) {
-                return last ? { ...last, gone: true } : { gone: true };
+                return thin ? (last ?? options.players).map((one) => ({ ...one, thin: true, gone: true })) : last ? { ...last, gone: true } : { gone: true };
             }
 
             last = await new Promise((resolve) => {
@@ -142,6 +210,19 @@ async function player(options) {
         },
         stop: () => child.kill(),
     };
+}
+
+/**
+ * Who didn't stay in, of a soak's players (their reports: core/bot.js report, a thin one's with
+ * `thin`), a line each saying why: gone (their process), their link closed or dropped, sent out,
+ * or, a thin one, refused or never welcomed. None, if they all did.
+ */
+export function stayed(reports) {
+    return reports.flatMap((report) => {
+        const why = report.gone ? "gone" : report.closed ? report.closed : report.dropped ? "dropped" : report.kicked ? `sent out: ${report.kicked.reason}` : report.thin && report.refused ? `refused: ${report.refused}` : report.thin && !report.me ? "never welcomed" : null;
+
+        return why ? [`${report.name} didn't stay in (${why})`] : [];
+    });
 }
 
 /**
@@ -174,14 +255,34 @@ export function judge(samples, { settle = SERVER_SOAK.settle, growth = SERVER_SO
 }
 
 /**
- * Soak a world server for `minutes` with `players` in Node: resolves to the report ({ seed,
- * minutes, players: [...core/bot.js report], samples: [{ minute, world, server }], histograms (the
- * world's steps, ticks, their parts and its saves, as the server's metrics count them:
- * server/server-metrics.js histogramsOf), judged, failures }).
+ * The limits a soak's server is opened with in place of its own (world-server.js open's `limits`),
+ * for `players` in one world: only those that many are over (none, for 8 or fewer: the server as
+ * it always is). A world's own setting takes 8 at the most, a server LIMITS.players in all its
+ * worlds and LIMITS.socketsPerAddress from one address, which they all come from here.
  */
-export async function soakServer({ seed = 2, minutes = 120, players: count = 8, log = console.log } = {}) {
+export function limitsFor(players) {
+    return {
+        ...(players > WORLD_SETTINGS.mostPlayers.max ? { mostPlayers: players } : {}),
+        ...(players > LIMITS.players ? { players } : {}),
+        ...(players > LIMITS.socketsPerAddress ? { socketsPerAddress: players } : {}),
+    };
+}
+
+/**
+ * Soak a world server for `minutes` with `players` in Node, each with a copy of the world, and
+ * `thin` more with none (core/bot.js ThinBot: `hold`, holding a stick; `fights`, starting fights
+ * too), all in the humans' town (`oneTown`) or by their own peoples', and through the tunnel
+ * listener (`tunnel`) or not: resolves to the report ({ seed, minutes, options, limits, players:
+ * [...core/bot.js report, the thin ones' with `thin`], samples: [{ minute, world, server }],
+ * histograms (the world's steps, ticks, their parts and its saves, as the server's metrics count
+ * them: server/server-metrics.js histogramsOf), judged, resyncs (the world sent a copy again, in all: `desyncs` of them for a copy a check
+ * found astray, `skips` for one fallen too far behind to catch up, as one slow to load is as it
+ * comes in), failures }).
+ */
+export async function soakServer({ seed = 2, minutes = 120, players: count = 8, thin = 0, hold = false, fights = false, oneTown = false, tunnel = false, log = console.log } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-server-soak-"));
-    const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false });
+    const limits = limitsFor(count + thin);
+    const server = await WorldServer.open(folder, { awake: () => ({ stop() {} }), router: false, funnel: false, ...(Object.keys(limits).length ? { limits } : {}) });
     const players = [];
     const samples = [];
     const failures = [];
@@ -190,16 +291,32 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
     try {
         await server.listen(0, "127.0.0.1");
 
-        const made = await server.createWorld({ name: "The soak", seed, race: "human", heroes: "brought", settings: { debugCommands: true } });
+        // (Through the tunnel listener: the internet answered there, as with Funnel on, on a port
+        // of this machine's own that nothing outside it reaches)
+        if (tunnel) {
+            await server.settings.change({ internet: true, funnel: true });
+            await server.listenTunnel(0);
+        }
 
-        log(`World ${made.world} (seed ${seed}) on 127.0.0.1:${server.port}`);
+        const port = tunnel ? server.tunnelPort : server.port;
+        const made = await server.createWorld({ name: "The soak", seed, race: "human", heroes: "brought", settings: { debugCommands: true } });
+        const raceOf = (k) => (oneTown ? "human" : SERVER_SOAK.peoples[k % SERVER_SOAK.peoples.length]);
+
+        log(`World ${made.world} (seed ${seed}) on 127.0.0.1:${port}${tunnel ? ", its tunnel listener" : ""}${Object.keys(limits).length ? `; opened with ${JSON.stringify(limits)} in place of its limits` : ""}`);
 
         for (let k = 0; k < count; k++) {
-            const race = SERVER_SOAK.peoples[k % SERVER_SOAK.peoples.length];
+            const race = raceOf(k);
 
             // (Owners all: the fights they start are theirs to start, with the debug commands)
-            players.push(await player({ port: server.port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1 }));
+            players.push(await player({ port, world: made.world, key: made.ownerKey, name: `Soak${k + 1}`, race, seed: k + 1 }));
             log(`Soak${k + 1} in, as ${/^[aeiou]/.test(race) ? "an" : "a"} ${race}`);
+        }
+
+        if (thin) {
+            const thins = Array.from({ length: thin }, (_, k) => ({ name: `Thin${k + 1}`, race: raceOf(count + k), seed: count + k + 1 }));
+
+            players.push(await player({ port, world: made.world, key: made.ownerKey, players: thins, hold, fights }, { thin: true }));
+            log(`${thin} thin players in${hold ? ", holding their sticks" : ""}${fights ? ", starting fights" : ""}`);
         }
 
         const end = started + minutes * 60000;
@@ -231,14 +348,12 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
         const reports = [];
 
         for (const one of players) {
-            reports.push({ name: one.name, race: one.race, ...(await one.report()) });
+            const said = await one.report();
+
+            reports.push(...(Array.isArray(said) ? said : [{ name: one.name, race: one.race, ...said }]));
         }
 
-        for (const report of reports) {
-            if (report.gone || report.closed || report.dropped) {
-                failures.push(`${report.name} didn't stay in (${report.closed ?? (report.dropped ? "dropped" : "gone")})`);
-            }
-        }
+        failures.push(...stayed(reports));
 
         const judged = judge(samples);
 
@@ -246,7 +361,9 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
 
         // (And every step, tick and save of the run counted into the buckets the server's own
         // metrics keep: what its /metrics would say, so a run and a live server are read alike)
-        return { seed, minutes, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), judged, failures };
+        const sum = (key) => reports.reduce((all, report) => all + (report[key] ?? 0), 0);
+
+        return { seed, minutes, options: { players: count, thin, hold, fights, layout: oneTown ? "one-town" : "spread", tunnel }, limits, players: reports, samples, histograms: server.metrics.histogramsOf(made.world), judged, resyncs: sum("resyncs"), desyncs: sum("desyncs"), skips: sum("skips"), failures };
     } finally {
         for (const one of players) {
             one.stop();
@@ -257,12 +374,44 @@ export async function soakServer({ seed = 2, minutes = 120, players: count = 8, 
     }
 }
 
-const { values } = parseArgs({ options: { join: { type: "string" }, minutes: { type: "string" }, players: { type: "string" }, seed: { type: "string" }, json: { type: "boolean" } }, strict: false });
+const { values } = parseArgs({
+    options: {
+        join: { type: "string" },
+        "join-thin": { type: "string" },
+        minutes: { type: "string" },
+        players: { type: "string" },
+        thin: { type: "string" },
+        hold: { type: "boolean" },
+        fights: { type: "boolean" },
+        spread: { type: "boolean" },
+        "one-town": { type: "boolean" },
+        tunnel: { type: "boolean" },
+        seed: { type: "string" },
+        json: { type: "boolean" },
+    },
+    strict: false,
+});
 
 if (values.join) {
     await play(JSON.parse(values.join));
+} else if (values["join-thin"]) {
+    await playThin(JSON.parse(values["join-thin"]));
 } else if (process.argv[1] === fileURLToPath(import.meta.url)) {
-    const report = await soakServer({ seed: Number(values.seed ?? 2), minutes: Number(values.minutes ?? 120), players: Number(values.players ?? 8) });
+    if (values.spread && values["one-town"]) {
+        console.error("--spread or --one-town, not both");
+        process.exit(1);
+    }
+
+    const report = await soakServer({
+        seed: Number(values.seed ?? 2),
+        minutes: Number(values.minutes ?? 120),
+        players: Number(values.players ?? 8),
+        thin: Number(values.thin ?? 0),
+        hold: values.hold === true,
+        fights: values.fights === true,
+        oneTown: values["one-town"] === true,
+        tunnel: values.tunnel === true,
+    });
 
     await mkdir(path.dirname(REPORT), { recursive: true });
     await writeFile(REPORT, JSON.stringify(report, null, 2));
@@ -273,6 +422,15 @@ if (values.join) {
 
     const { judged } = report;
 
+    const thins = report.players.filter((one) => one.thin);
+
+    if (thins.length) {
+        const chars = thins.reduce((sum, one) => sum + Object.values(one.heard ?? {}).reduce((all, { chars: each }) => all + each, 0), 0);
+
+        console.log(`${thins.length} thin players: each sent ${(chars / thins.length / (report.minutes * 60) / 1024).toFixed(1)} KB a second on the mean, ${thins.reduce((sum, one) => sum + (one.states ?? 0), 0)} sent the world again`);
+    }
+
+    console.log(`The world sent again to a copy ${report.resyncs} time(s) in all: ${report.desyncs} for a copy found astray, ${report.skips} for one fallen too far behind to catch up`);
     console.log(`Memory ${judged.settled ? `${Math.round(judged.settled / 1048576)} MB an hour in, ${Math.round(judged.latest / 1048576)} MB at the end (${judged.growth >= 0 ? "+" : ""}${Math.round(judged.growth * 100)}%)` : "not yet an hour in"}; steps' worst minute p99 ${judged.worstP99.toFixed(1)} ms`);
     console.log(report.failures.length ? `Failed:\n${report.failures.map((why) => `  ${why}`).join("\n")}` : "Passed");
     process.exit(report.failures.length ? 1 : 0);

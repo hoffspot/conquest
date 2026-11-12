@@ -16,6 +16,7 @@
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
+import { count, lap, probing } from "./probe.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
@@ -2437,6 +2438,8 @@ export class Host {
         const players = [...this.players.values()].map(({ id }) => this.battle.actor(id)).filter(out).map(({ x, y }) => [x, y]);
         const dark = torchesLit(elapsed);
 
+        count("light.actors", (dark ? 2 : 1) * this.battle.actors.length);
+
         return lighting({
             elapsed,
             plan: this.world.plan,
@@ -2458,8 +2461,12 @@ export class Host {
      * "sign", a sign on a trail read, and its home tracked: #readSign).
      */
     advance(ms) {
+        lap("light");
+        count("steps");
         this.recorder?.(["a", ms]);
         this.battle.light = this.#light();
+
+        lap("legends");
 
         // (The world's played on: its rare encounters' time, and each player's inside, core/rare.js)
         this.legends.pass(ms);
@@ -2470,7 +2477,11 @@ export class Host {
             }
         }
 
+        lap("battle");
+
         const events = this.battle.advance(ms);
+
+        lap("learn");
 
         // What the players did: their skills grow by it, and they find what's on the fallen; and
         // the wonders their spells work (Zombify, Summon, Teleport...)
@@ -2494,8 +2505,11 @@ export class Host {
             }
         }
 
+        lap("keepUp");
         this.#keepUp();
+        lap("idle");
         this.#idle();
+        lap("lapsed");
 
         // (Asked to a party, and no answer in time: lapsed, the one who asked told)
         for (const [id, asked] of [...this.invites]) {
@@ -2540,7 +2554,9 @@ export class Host {
             }
         }
 
+        lap("scrutiny");
         this.#scrutiny(ms);
+        lap("boons");
 
         // Boons worn off (and said); and a charm come into the pack or gone from it (found on
         // the fallen), counted
@@ -2570,6 +2586,8 @@ export class Host {
                 this.#safety(player, events);
             }
         }
+
+        lap("fallen");
 
         // The fallen soldiers: their garrison the fewer; taken away a while after (and the wild's
         // creatures, a perilous site's master gone a long while; the orc, felled by no one of the
@@ -2858,9 +2876,13 @@ export class Host {
             this.#fieldsDone();
         }
 
+        lap("invasions");
         this.#invasions(ms);
+        lap("sheltering");
         this.#sheltering();
+        lap("war");
         this.#warOn(ms);
+        lap("crossings");
 
         // (The players' camps' fires burnt out)
         if (this.campfires.length && this.campfires.some(({ until }) => until <= this.battle.time)) {
@@ -2897,6 +2919,8 @@ export class Host {
             }
         }
 
+        lap("explore");
+
         // Out in the world, the chunk each player's in is visited: the fog lifts off it, for their
         // party too (#share)
         for (const player of this.players.values()) {
@@ -2920,21 +2944,33 @@ export class Host {
 
         if (this.battle.time >= this.lookAt) {
             this.lookAt = this.battle.time + RELEVANCE.every;
+            lap("lookAround");
             this.#lookAround();
+            lap("spotting");
             this.#spotting();
+            lap("muster");
             this.#muster();
+            lap("townsfolk");
             this.#townsfolk();
+            lap("wilds");
             this.#wilds();
+            lap("sighting");
             this.#sighting();
+            lap("requests");
             this.#watchRequests();
+            lap("missions");
             this.#watchMissions();
+            lap("messengers");
             this.#sendMessengers();
             this.#messengersAbout();
         }
 
+        lap("end");
+
         const own = this.events;
 
         this.events = [];
+        lap(null);
 
         return own.length ? [...events, ...own] : events;
     }
@@ -3059,6 +3095,11 @@ export class Host {
             // (Those within a square of that reach first: most of the world's aren't, and needn't
             // be measured)
             const reach = SIGHTING.reach[1];
+
+            if (probing()) {
+                count("spotting.pairs", this.#findables().length);
+            }
+
             const unfound = this.#findables().filter(({ id, at: [x, y] }) => Math.abs(x - at[0]) <= reach && Math.abs(y - at[1]) <= reach && hypot(x - at[0], y - at[1]) <= reach && !player.explored.knows(id, x, y));
             const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
 
@@ -3159,6 +3200,8 @@ export class Host {
      * made again from its seed.
      */
     snapshot() {
+        count("snapshots");
+
         return {
             version: SNAPSHOT_VERSION,
             seed: this.world.seed ?? null,
@@ -3494,6 +3537,8 @@ export class Host {
      * in each pack.
      */
     checksum() {
+        count("checksums");
+
         let sum = 2166136261;
 
         const mix = (value) => {
@@ -5895,6 +5940,8 @@ export class Host {
         const places = this.#whereabouts();
         const near = (middle, edge, within) => places.some(([x, y]) => hypot(x - middle[0], y - middle[1]) - edge < within);
 
+        count("townsfolk.pairs", this.townsfolk.size * places.length);
+
         // (Those out, far from every player now: home)
         for (const [id, out] of [...this.townsfolk]) {
             const where = this.#peopledAt(id);
@@ -6100,6 +6147,8 @@ export class Host {
         }
 
         const places = this.#whereabouts();
+
+        count("muster.pairs", (war.towns.length + war.works.length) * places.length);
 
         for (const town of war.towns) {
             const place = this.#placeOf(town.id);
@@ -10360,6 +10409,8 @@ export class Host {
 
         const places = this.#whereabouts();
         const distanceTo = (actor) => Math.min(...places.map(([x, y]) => hypot(actor.x - x, actor.y - y)));
+
+        count("wilds.pairs", this.wild.size * places.length);
         const homes = [...this.players.values()].map((player) => ({ at: this.#whereIs(player), home: this.#homeOf(player) })).filter(({ at }) => at);
         const dark = this.#dark();
 
@@ -10605,6 +10656,9 @@ export class Host {
     #groups() {
         const standing = [...this.players.values()].map((player) => ({ player, actor: this.battle.actor(player.id) })).filter(({ actor }) => actor && !actor.dead);
         const at = new Map(standing.map((one) => [one.player.id, one]));
+
+        count("groups.calls");
+        count("groups.pairs", standing.length * standing.length);
 
         return groupsOf(standing.map(({ player, actor }) => ({ id: player.id, map: actor.map, x: actor.x, y: actor.y }))).map((members) => {
             const players = members.map(({ id }) => at.get(id).player);
@@ -18808,6 +18862,8 @@ export class Host {
         if (this.buildingsInOrder?.of !== interiors || this.buildingsInOrder.version !== interiors.version) {
             this.buildingsInOrder = { of: interiors, version: interiors.version, list: [...interiors.buildings.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)) };
         }
+
+        count("lookAround.pairs", this.buildingsInOrder.list.length * places.length);
 
         for (const building of this.buildingsInOrder.list) {
             if (!building.entrance) {

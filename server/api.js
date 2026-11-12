@@ -278,7 +278,7 @@ export function apiHandler(server, { mac = false } = {}) {
         // (Their own in it now, on another device or a link gone dead, theirs to take over: not counted)
         const others = state?.players.filter((one) => one.id && one.player !== principal.player?.id) ?? [];
 
-        if (others.length >= meta.settings.mostPlayers) {
+        if (others.length >= (server.limits?.mostPlayers ?? meta.settings.mostPlayers)) {
             throw refuse("full", { message: "That world's full." });
         }
 

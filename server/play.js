@@ -66,7 +66,8 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
     /** Those in a world, by `${world} ${peer}`: { world, peer, player, role, via, socket, token, address, from ("home" or "internet"), away }. */
     const places = new Map();
     const sockets = new Set();
-    const perAddress = new Counts(LIMITS.socketsPerAddress);
+    // (A server opened with limits of its own in place of these, world-server.js: only a soak's is)
+    const perAddress = new Counts(server.limits?.socketsPerAddress ?? LIMITS.socketsPerAddress);
     const perTicket = new Counts(LIMITS.socketsPerTicket);
     const rate = new Rate(LIMITS.commands, { clock });
     const closed = new Map();
@@ -169,7 +170,7 @@ export function attachPlay(httpServers, server, { limits = PLAY_LIMITS, clock = 
             return;
         }
 
-        if (places.size >= LIMITS.players) {
+        if (places.size >= (server.limits?.players ?? LIMITS.players)) {
             perTicket.give(`${world} ${principal.player.id}`);
             shut(socket, "full");
 

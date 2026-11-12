@@ -16,8 +16,11 @@ export class WorldThread {
      * @param {function} [hooks.onClose] - A player it's sent out (peer, reason).
      * @param {function} [hooks.onState] - How it is, as it reports it (state).
      * @param {function} [hooks.onExit] - Its thread ended (code, error: if it failed).
+     * @param {object} [limits] - What it takes in place of its world's own settings:
+     *     { mostPlayers }, from a server opened with one (world-server.js open's `limits`); none,
+     *     on any server that's run as one.
      */
-    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onExit = () => {} } = {}) {
+    constructor(stored, { onSend = () => {}, onClose = () => {}, onState = () => {}, onExit = () => {} } = {}, { mostPlayers = null } = {}) {
         this.stored = stored;
         this.id = stored.id;
         Object.assign(this, { onSend, onClose, onState, onExit });
@@ -33,7 +36,7 @@ export class WorldThread {
         });
         this.opened.catch(() => {});
 
-        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder } });
+        this.thread = new Worker(new URL("./world-worker.js", import.meta.url), { workerData: { folder: stored.folder, ...(mostPlayers ? { mostPlayers } : {}) } });
         this.thread.on("message", (message) => this.#heard(message));
         this.thread.on("error", (error) => {
             this.error = error;

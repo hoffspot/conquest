@@ -44,6 +44,7 @@ import { ACME_TLS, reverseNameOf } from "./net/acme.js";
 import { newKey, pem, pemOfKey, selfSigned } from "./net/x509.js";
 import { computerName, tokenStore } from "./platform/index.js";
 import { attachPlay } from "./play.js";
+import { WorldThread } from "./world-thread.js";
 import { Registry } from "./registry.js";
 import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
@@ -92,7 +93,14 @@ export class WorldServer {
      * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
      * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
      * (router.js, funnel.js: false for none), `tunnelPort` (the tunnel listener's, 0 for any free
-     * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js).
+     * one), `clientDirectory`, `ice` (the STUN servers the broker tells games to try: broker.js),
+     * and `limits`, for a server opened to be loaded past what any real one takes (scripts/
+     * server-soak.js; generated/multiplayer_scaling_plan.md 0-3): { mostPlayers (the most in each
+     * of its worlds at once, whatever the world's own setting says, which goes no higher than 8),
+     * players (in all of them together: access/limits.js LIMITS.players), socketsPerAddress
+     * (LIMITS.socketsPerAddress) }, each as it always is unless given. They're options of this
+     * call alone: no setting, file or request sets them, so no server that's run as one can be
+     * given them.
      * `options.onRestart` is what stops it to be started again as a new version, once an update's
      * installed (server/serve.js); `options.update` where it looks for new versions and the key
      * they're checked with (update/updater.js). `options.log` is where its structured log's lines
@@ -115,8 +123,11 @@ export class WorldServer {
         return server;
     }
 
-    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {}, log = null }) {
+    constructor({ root, folder, access, identity, adminKey = null, awake, interfaces = null, hostname = os.hostname(), name = null, bonjour = null, home = isHome, acme = {}, tokens = null, router = {}, funnel = {}, tunnelPort = null, clientDirectory = CLIENT_DIRECTORY, names = [], onStop = null, onRestart = null, ice = null, update = {}, log = null, limits = {} }) {
         Object.assign(this, { root, folder, access, identity, adminKey, interfaces, hostname, names, onStop, onRestart, ice });
+
+        /** The limits it was opened with in place of its own (open's `limits`: none, on any server that's run as one). */
+        this.limits = Object.freeze(Object.fromEntries(["mostPlayers", "players", "socketsPerAddress"].filter((key) => Number.isInteger(limits?.[key]) && limits[key] > 0).map((key) => [key, limits[key]])));
 
         /** Whether an address is at home (the guards ask it). */
         this.isHome = home;
@@ -168,6 +179,8 @@ export class WorldServer {
             store: { open: async (id) => this.worlds.get(id) ?? Promise.reject(new Error(`There's no world ${id}.`)) },
             settings: this.settings,
             ...(awake ? { awake } : {}),
+            // (Its worlds' threads told the most players they take, opened with one in place of their own setting's)
+            ...(this.limits.mostPlayers ? { spawn: (stored, hooks) => new WorldThread(stored, hooks, { mostPlayers: this.limits.mostPlayers }) } : {}),
             onSend: (world, peer, text) => this.play?.send(world, peer, text),
             onClose: (world, peer, reason) => this.play?.kicked(world, peer, reason),
             // (A world stored again with players still in it: its thread ended unasked. They're told)
