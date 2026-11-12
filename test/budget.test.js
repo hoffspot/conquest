@@ -8,7 +8,9 @@
 // Today every such pass measures everything against everyone, so each budget below is what that
 // costs at 50 (counted on 12 November 2026: 100,000 pairs of players, 399,550 buildings, 325,000
 // things to find, 134,000 towns and works, 48,450 peopled settlements, 5,300 of the wild, the
-// battle's index made 200 times over 316,274 actors), with room for the world to change a little. As each pass is put on a grid (Stage
+// battle's index made 200 times over 316,274 actors), with room for the world to change a little.
+// (Since 1-10 the battle's index is brought up to date in place, and made afresh only as someone
+// comes into the battle or leaves it: 19 times over 28,671 actors.) As each pass is put on a grid (Stage
 // 1: 1-7 to 1-11), its count falls to what's near each player, and its budget here is brought
 // down to hold it there: a pass that goes back to measuring everyone fails this, on any machine.
 import assert from "node:assert/strict";
@@ -44,10 +46,11 @@ const BUDGETS = [
     ["townsfolk.pairs", 55_000, "peopled settlements measured against players' places"],
     // (Every creature of the wild against every player: 1-8)
     ["wilds.pairs", 7_500, "the wild's creatures measured against players' places"],
-    // (The battle's index of where everyone stands made again, and over how many: 1-10 has it
-    // move one actor between cells instead)
-    ["battle.indexed", 200, "times the battle's index was made again"],
-    ["battle.indexedActors", 350_000, "actors gone through making it"],
+    // (The battle's index of where everyone stands made afresh, and over how many: since 1-10
+    // only as someone's added or taken out, those who've changed cell moved between cells the
+    // rest of the time. It was 200 times, once a step, over 316,274)
+    ["battle.indexed", 26, "times the battle's index was made afresh"],
+    ["battle.indexedActors", 40_000, "actors gone through making it"],
 ];
 
 describe("the work of a world's steps, by count (core/probe.js), at 50 players spread", () => {

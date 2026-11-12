@@ -64,7 +64,8 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
 
 /**
  * The work counted, by name: `steps` played; the battle's index of where everyone stands made
- * again (`battle.indexed`, and over how many: `battle.indexedActors`); the players grouped
+ * afresh (`battle.indexed`, and over how many: `battle.indexedActors`), or brought up to date in
+ * place (`battle.reindexed`, and how many were moved to another cell: `battle.reindexedMoves`); the players grouped
  * (`groups.calls`, and the pairs of players measured: `groups.pairs`); those gone through for the
  * light at night (`light.actors`); and for each pass that measures the world against the players,
  * how many of the world's things times how many players' places (`lookAround.pairs`, buildings;
@@ -77,6 +78,8 @@ export const COUNTERS = Object.freeze([
     "steps",
     "battle.indexed",
     "battle.indexedActors",
+    "battle.reindexed",
+    "battle.reindexedMoves",
     "groups.calls",
     "groups.pairs",
     "light.actors",

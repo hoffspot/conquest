@@ -976,9 +976,14 @@ draws anything.
 **Among those near** (`#indexed`). A field battle has hundreds in it, and each of them looks for
 the nearest enemy it can see, whoever's after it, whoever's in its way and whoever's on a square
 it might step to, every step. So the battle keeps where everyone stands by cell, 8 metres a side
-(`INDEX_CELL`), made again at the start of each step and whenever anyone's put somewhere new, or
-has walked more than a metre from where it has them (`INDEX_SLACK`: a step's walk is a fifth of
-that at a sprint). Each looks only among those in the cells near enough, the nearest cells first,
+(`INDEX_CELL`), brought up to date at the start of each step and whenever anyone's put somewhere
+new, or has walked more than a metre from where it has them (`INDEX_SLACK`: a step's walk is a
+fifth of that at a sprint). Bringing it up to date notes where everyone is and moves those who've
+crossed into another cell from one cell's list to the other's, at their place in the battle's
+list (`#reindexed`): list for list what making it afresh gives, which it's only done when someone
+comes into the battle, leaves it or changes map (with 918 in it, 25 players apart, making it
+afresh every step was 0.25 ms of each; `Battle.reindexing` off makes it afresh as before, and a
+battle plays out the same either way, `test/field-battle.test.js`). Each looks only among those in the cells near enough, the nearest cells first,
 and stops at cells too far off to hold anyone nearer than the nearest yet found; of two as near,
 the first in the battle's list, as looking through everyone found. It makes no difference to what
 happens: a battle of 24 a side and the player plays out the same, blow for blow, either way
