@@ -1,0 +1,33 @@
+import { chromium } from "/home/user/conquest/node_modules/playwright/index.mjs";
+const port = process.argv[2] ?? "8097";
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--enable-unsafe-swiftshader", "--host-resolver-rules=MAP pellagos.duckdns.org ~NOTFOUND"] });
+const page = await browser.newPage({ viewport: { width: 1000, height: 600 }, deviceScaleFactor: 0.5 });
+await page.goto(`http://localhost:${port}/?play&seed=1`);
+await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
+await page.evaluate(() => {
+    const { game } = window.pellagos;
+    const progress = game.host.players.get(game.me).progress;
+    progress.stow({ id: "potion" }); progress.stow({ id: "potion" });
+    progress.schools.healing = 300; progress.learn("burn");
+    game.battle.actor(game.me).hp = 20;
+});
+const probe = (label) => page.evaluate((label) => {
+    const { game, session } = window.pellagos;
+    const me = session.view.toScreen(game.avatars.get(game.me).point(0.5));
+    const at = document.elementsFromPoint(me.x, me.y).slice(0, 5).map((e) => `${e.tagName.toLowerCase()}${e.id ? "#" + e.id : ""}${e.className && typeof e.className === "string" ? "." + e.className.split(" ").join(".") : ""}`);
+    const banner = document.querySelector("#banner");
+    const r = banner?.getBoundingClientRect();
+    return { label, me: [Math.round(me.x), Math.round(me.y)], at, banner: banner && { text: banner.textContent.slice(0, 80), rect: r && [Math.round(r.top), Math.round(r.bottom), Math.round(r.left), Math.round(r.right)], hidden: banner.hidden } };
+}, label);
+console.log(JSON.stringify(await probe("after setup")));
+await page.locator("#menubutton").click();
+await page.locator("#optionsbutton").click();
+await page.locator("#actionsbutton").click();
+await page.locator("#wheelsbutton").click();
+await page.keyboard.press("Escape"); await page.keyboard.press("Escape");
+await page.locator("#optionsback").click();
+await page.locator("#resumebutton").click();
+console.log(JSON.stringify(await probe("after resume")));
+await page.waitForTimeout(3000);
+console.log(JSON.stringify(await probe("3 s later")));
+await browser.close();

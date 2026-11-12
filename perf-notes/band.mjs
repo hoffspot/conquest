@@ -1,0 +1,23 @@
+import { chromium } from "/home/user/conquest/node_modules/playwright/index.mjs";
+const port = process.argv[2] ?? "8097";
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--enable-unsafe-swiftshader", "--host-resolver-rules=MAP pellagos.duckdns.org ~NOTFOUND"] });
+const page = await browser.newPage({ viewport: { width: 1000, height: 600 }, deviceScaleFactor: 0.5 });
+await page.goto(`http://localhost:${port}/?play&seed=1`);
+await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 120000, polling: 250 });
+await page.waitForTimeout(4000);
+const measure = (pitch, distance, far) => page.evaluate(async ([pitch, distance, far]) => {
+    const { game, session } = window.pellagos;
+    const view = session.view;
+    game.cameraFollow.pitch = pitch; view.distance = distance; view.zoomTo = null;
+    const cam = view.camera;
+    const was = cam.far;
+    const keep = () => { cam.far = far; cam.updateProjectionMatrix(); };
+    let n = 0;
+    await new Promise((r) => { const t = performance.now(); const f = () => { keep(); if (performance.now() - t < 2500) requestAnimationFrame(f); else r(); }; f(); });
+    const t0 = performance.now();
+    await new Promise((res) => { const f = () => { keep(); n++; if (performance.now() - t0 < 5000) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    cam.far = was; cam.updateProjectionMatrix();
+    return +(n / ((performance.now() - t0) / 1000)).toFixed(2);
+}, [pitch, distance, far]);
+for (const far of [160, 100, 60, 30]) console.log("far", far, "new", await measure(12, 10.5, far), "old", await measure(25, 5.5, far));
+await browser.close();

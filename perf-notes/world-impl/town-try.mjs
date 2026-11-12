@@ -1,0 +1,13 @@
+import { load } from "./harness.mjs";
+const { buildTown } = await load("world/town3d.js");
+const { Woodland } = await load("world/art/kits/trees.js");
+const world = { seed: 3, origin: [100, 200], stamp: { at: [100, 200], width: 48, height: 48 }, town: { kind: "village", pieces: [{ kind: "tree", x: 10, y: 12, variant: 2 }], yards: [] }, trees: [{ x: 120, y: 230, variant: 0 }, { x: 131.5, y: 215, variant: 7 }] };
+const groundAt = (x) => 0.02 * x;
+const merged = await buildTown(world, { groundAt });
+const woodland = new Woodland();
+const batched = await buildTown(world, { groundAt, woodland });
+const names = (town) => town.object.children.map((c) => `${c.name}[${c.children.map((m) => m.name).join(",")}]`);
+console.log(names(merged), names(batched), woodland.planted);
+let same = true;
+merged.heights.rows.forEach((row, j) => row.forEach((v, i) => { if (v !== batched.heights.rows[j][i]) same = false; }));
+console.log("heights the same", same, merged.heights.rows.flatMap((r) => [...r]).filter((v) => v > 0).length);

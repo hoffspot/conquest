@@ -1,0 +1,25 @@
+// CPU time (user+system, ms) of the building blocks the unit tests repeat: a world built, a host made and peopled, a snapshot restored, steps played
+import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+const root = "/home/user/conquest/";
+const t0 = process.cpuUsage();
+const { buildWorld } = await import(root + "client/js/core/overworld.js");
+const { Host, HOST_PLAYER } = await import(root + "client/js/core/host.js");
+const { STEP_MS } = await import(root + "client/js/core/battle.js");
+const { decode } = await import(root + "client/js/core/wire.js");
+const cpu = (since) => { const u = process.cpuUsage(since); return (u.user + u.system) / 1000; };
+console.log("importing overworld.js + host.js + battle.js:", cpu(t0).toFixed(0), "ms CPU");
+const HERO = { name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false };
+const time = (label, n, fn) => { const out = []; let last; for (let k = 0; k < n; k++) { const s = process.cpuUsage(); const w = performance.now(); last = fn(k); out.push([cpu(s), performance.now() - w]); } console.log(label.padEnd(46), "CPU ms:", out.map(([c]) => c.toFixed(0)).join(" "), "| wall ms:", out.map(([, w]) => w.toFixed(0)).join(" ")); return last; };
+const world2 = time("buildWorld({seed: 2})", 4, () => buildWorld({ seed: 2 }));
+time("buildWorld({seed: 3})", 3, () => buildWorld({ seed: 3 }));
+time("buildWorld({seed: 1})", 3, () => buildWorld({ seed: 1 }));
+const host = time("new Host(world) (peopled) + join", 3, () => { const w = buildWorld({ seed: 2 }); const s = process.cpuUsage(); const h = new Host(w); h.join({ id: HOST_PLAYER, hero: HERO }); h._made = cpu(s); return h; });
+console.log("   of which Host + join alone (last):", host._made.toFixed(0), "ms CPU");
+time("100 steps of that host (5 s of game)", 3, () => { for (let k = 0; k < 100; k++) host.advance(STEP_MS); });
+time("1200 steps of that host (a minute)", 2, () => { for (let k = 0; k < 1200; k++) host.advance(STEP_MS); });
+const kept = decode(gunzipSync(readFileSync(root + "test/fixtures/snapshots/52.json.gz")).toString("utf8"));
+time("Host.restore(buildWorld(seed 3), fixture 52)", 3, () => Host.restore(buildWorld({ seed: kept.seed }), structuredClone(kept)));
+const old = decode(gunzipSync(readFileSync(root + "test/fixtures/snapshots/26.json.gz")).toString("utf8"));
+time("Host.restore(buildWorld(seed 3), fixture 26)", 2, () => Host.restore(buildWorld({ seed: old.seed }), structuredClone(old)));
+time("Host.forward(fixture 26) alone", 3, () => Host.forward(structuredClone(old)));

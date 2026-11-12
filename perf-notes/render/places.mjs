@@ -1,0 +1,16 @@
+import { load } from "./harness.mjs";
+const { buildWorld, CHUNK, CHUNKS } = await load("core/overworld.js");
+const world = buildWorld({ seed: 1 });
+const ow = world.maps.town;
+console.log(Object.keys(world));
+console.log(Object.keys(ow).slice(0, 80));
+console.log("CHUNK", CHUNK, "CHUNKS", CHUNKS, "spawn", world.spawns.player, "town kind", world.town.kind, "pieces", world.town.pieces.length);
+const s = ow.settlements;
+console.log(Object.keys(s));
+const places = world.plan.places ?? world.plan.settlements ?? [];
+console.log("plan keys", Object.keys(world.plan));
+const ps = [...(s.places?.values?.() ?? s.places)];
+console.log(ps.length, JSON.stringify(ps[0]).slice(0, 400));
+const kinds = {};
+for (const p of ps) (kinds[p.kind] ??= []).push(p);
+for (const [k, list] of Object.entries(kinds)) console.log(k, list.length, list.slice(0, 4).map((p) => `${p.id ?? ""}@${p.x},${p.y}${p.people ? ":" + p.people : p.race ? ":" + p.race : ""}`).join(" "));

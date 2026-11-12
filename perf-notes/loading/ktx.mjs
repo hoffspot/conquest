@@ -1,0 +1,4 @@
+import { readdir, readFile } from "node:fs/promises";
+const dir = "/home/user/conquest/client/textures/dungeons"; let gpu = 0, raw = 0, disk = 0;
+for (const n of (await readdir(dir)).filter((x) => x.endsWith(".ktx2"))) { const b = await readFile(`${dir}/${n}`); const dv = new DataView(b.buffer, b.byteOffset, b.byteLength); const w = dv.getUint32(20, true), h = dv.getUint32(24, true), levels = dv.getUint32(40, true), dfd = dv.getUint32(48, true); const model = dv.getUint8(dfd + 12); const kind = model === 163 ? "ETC1S" : "UASTC"; const px = w * h * (levels > 1 ? 4 / 3 : 1); const g = px * (kind === "ETC1S" ? 0.5 : 1); gpu += g; raw += px * 4; disk += b.length; console.log(n.padEnd(34), kind, `${w}x${h}`, `levels ${levels}`, `${(b.length / 1024).toFixed(0)} KB`, `GPU ${(g / 1048576).toFixed(2)} MB`); }
+console.log(`total: disk ${(disk / 1048576).toFixed(2)} MB, GPU compressed ${(gpu / 1048576).toFixed(1)} MB, as RGBA ${(raw / 1048576).toFixed(1)} MB`);
