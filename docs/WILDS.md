@@ -380,6 +380,9 @@ it's gone.
 
 Every machine in a game draws everyone near a fight, so there's a body budget there
 (`BODIES`): sixty at most of the side's and the wild's within 80 m of where foes are put out.
+They're counted among those the battle's index has near the place while it's up to date, and
+by going through everyone in the battle otherwise (`host.js` `#bodiesNear`, `Host.indexing`:
+the same count either way, test/indexing.test.js).
 
 - **Foes give way first.** Past it, what more of a pack there'd have been goes into the hit
   points of those there are instead (six there for nine wanted, each half as tough again), never

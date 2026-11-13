@@ -2009,7 +2009,17 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   near the players, so every copy sees alike. Each light is measured against the players in the
   cells round it, and only the settlements in the cells round a player are looked at at all
   (core/near.js: what's lit, and in what order, is what measuring every light against every
-  player gave, test/culling.test.js). Indoors, and talking, as ever.
+  player gave, test/culling.test.js). Who has a torch is looked for among the soldiers alone,
+  from a list the battle keeps of them as it keeps its players (battle.js `soldiers`: brought up
+  to date as anyone's added or taken out, and made again whenever it isn't of the battle as it
+  stands); only who is a soldier is kept, and whether each is out, standing and has a hand free
+  is read off it each step, so a fall, a door or a weapon changed can't leave the list behind.
+  The Light spell's globes are looked for, among everyone, only while one may be lasting on
+  someone (battle.js `lightUntil`: a time none lasts beyond, put later as a Light's put on).
+  With `Host.bearing` off everyone's gone through each step, as before, and a night of musters,
+  falls, doors, weapons and Lights is lit the same step for step either way
+  (test/bearing.test.js). The light is still made every step: the torches walk, and made less
+  often it would light other squares than it does. Indoors, and talking, as ever.
   - **A player sees further** at night than the rest (light.js `PLAYER_SIGHT`, `playerSight`;
     battle.js `#lightFor`): 60% of their sight on a moonless night and 80% under a full moon, in
     step between and on to the day's, where the wild and everyone else see 35 to 55%. Their sight

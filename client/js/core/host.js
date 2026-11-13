@@ -1284,6 +1284,29 @@ export class Host {
     }
 
     /**
+     * Whether what's asked of everyone in the battle and of the wild's table is asked of an
+     * index, as it always is, or by going through all of them, as it was: only for the tests that
+     * check the world comes out the same either way, step for step (generated/
+     * multiplayer_scaling_plan.md 1-8). As it is: the bodies about a place (#bodiesNear) counted
+     * among those the battle's own index has near it, while the index is the battle's as it
+     * stands (battle.js within), and the wild's creatures gone through once for all the packs'
+     * members (#packMates), where they were gone through for each pack (#reinforce, #riftTears).
+     */
+    static indexing = true;
+
+    /**
+     * Whether the night's light is made from what the battle keeps of who might carry it, as it
+     * always is, or by going through everyone in the battle each step, as it was: only for the
+     * tests that check the light, and so the world, comes out the same either way (generated/
+     * multiplayer_scaling_plan.md 1-11). As it is (#light): the torches looked for among the
+     * soldiers alone, from the battle's own list of them (battle.js soldiers), each asked as it
+     * stands now whether it's out, standing and has a hand free; and the globes of the Light
+     * spell looked for, among everyone, only while one may be lasting on someone (battle.js
+     * lightUntil).
+     */
+    static bearing = true;
+
+    /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the battle (the world's own seed to start with).
@@ -2511,21 +2534,52 @@ export class Host {
         const globes = [];
         const tally = { pairs: 0 };
 
-        // (Everyone gone through once for both, each list in the battle's order as ever)
-        for (const actor of this.battle.actors) {
-            if (actor.map === "town" && !actor.dead) {
-                if (dark && carriesTorch(actor, dark)) {
+        if (!Host.bearing) {
+            // (Everyone gone through once for both, each list in the battle's order as ever)
+            for (const actor of this.battle.actors) {
+                if (actor.map === "town" && !actor.dead) {
+                    if (dark && carriesTorch(actor, dark)) {
+                        torches.push([actor.x, actor.y]);
+                    }
+
+                    // (Only those with any spell on them asked which: most have none)
+                    if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+                        globes.push([actor.x, actor.y]);
+                    }
+                }
+            }
+
+            count("light.actors", this.battle.actors.length);
+        } else {
+            // (The torches: only a soldier carries one, so only the soldiers gone through, from
+            // the list the battle keeps of them, in its order: battle.js soldiers. The same
+            // test made of each as it stands now, so one fallen, gone indoors or with its hand
+            // filled since is passed over as it always was)
+            const soldiers = dark ? this.battle.soldiers() : [];
+
+            for (let k = 0; k < soldiers.length; k++) {
+                const actor = soldiers[k];
+
+                if (actor.map === "town" && !actor.dead && carriesTorch(actor, dark)) {
                     torches.push([actor.x, actor.y]);
                 }
+            }
 
-                // (Only those with any spell on them asked which: most have none)
-                if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+            // (The globes: anyone may have one, so everyone's gone through, but only while a
+            // Light's lasting on someone: the battle says until when the last of them does,
+            // battle.js lightUntil)
+            const lit = this.battle.lightUntil() > this.battle.time;
+
+            for (let k = 0; lit && k < this.battle.actors.length; k++) {
+                const actor = this.battle.actors[k];
+
+                if (actor.map === "town" && !actor.dead && actor.buffs?.length && this.battle.buffOf(actor, "light")) {
                     globes.push([actor.x, actor.y]);
                 }
             }
-        }
 
-        count("light.actors", this.battle.actors.length);
+            count("light.actors", soldiers.length + (lit ? this.battle.actors.length : 0));
+        }
 
         const light = lighting({
             elapsed,
@@ -4218,6 +4272,8 @@ export class Host {
     // HELL_RIFT.far; while one's within HELL_RIFT.wakes, a pack out of it every HELL_RIFT.every,
     // no more than HELL_RIFT.most of its packs out at once
     #riftTears(open, homes) {
+        let packed = null;
+
         open.tears.forEach((tear, k) => {
             if (tear.sealed) {
                 return;
@@ -4235,7 +4291,15 @@ export class Host {
                 tear.id = null;
             }
 
-            tear.packs = tear.packs.filter((pack) => [...this.wild].some(([id, one]) => one.pack === pack && !this.battle.actor(id)?.dead));
+            // (Its packs with any left: asked of the wild's creatures by pack, #packMates, made at
+            // the first tear with any and again once a pack's poured; or of all the wild for each)
+            if (!Host.indexing) {
+                count("packs.wild", tear.packs.length * this.wild.size);
+                tear.packs = tear.packs.filter((pack) => [...this.wild].some(([id, one]) => one.pack === pack && !this.battle.actor(id)?.dead));
+            } else if (tear.packs.length) {
+                packed ??= this.#packMates();
+                tear.packs = tear.packs.filter((pack) => packed.get(pack)?.some((id) => !this.battle.actor(id)?.dead));
+            }
 
             // (Held to the body budget as every pack is (BODIES): none poured while it's full about
             // the tear, and what more of a pack there'd have been in the hit points of those there are)
@@ -4248,6 +4312,7 @@ export class Host {
                 const ids = this.#pack({ creature, tier, count }, tear.at, { hellRift: open.id, temper: "aggressive", health });
 
                 tear.next = this.battle.time + HELL_RIFT.every;
+                packed = null;
 
                 if (ids.length) {
                     tear.packs.push(this.wild.get(ids[0]).pack);
@@ -10738,8 +10803,18 @@ export class Host {
     // opposition grown has them, each as tough as it has them, held to the body budget; those
     // already there as they were. A pack gone is forgotten
     #reinforce() {
+        // (Each pack's creatures from the wild's gone through once for them all, #packMates: made
+        // at the first pack and again once any more are put out; or all the wild for each pack)
+        let packed = null;
+        const whole = (id) => (count("packs.wild", this.wild.size), [...this.wild].filter(([, one]) => one.pack === id).map(([each]) => each));
+
         for (const [id, pack] of [...this.packs]) {
-            const members = [...this.wild].filter(([, one]) => one.pack === id).map(([each]) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+            if (Host.indexing) {
+                packed ??= this.#packMates();
+            }
+
+            const of = packed ? (packed.get(id) ?? []) : whole(id);
+            const members = of.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
             const lead = members.find((actor) => actor.target !== null && actor.map === "town");
 
             if (!members.length) {
@@ -10762,6 +10837,7 @@ export class Host {
             const ids = [];
 
             pack.strength = side.strength;
+            packed = null;
 
             try {
                 for (let k = 0; k < count; k++) {
@@ -10780,6 +10856,29 @@ export class Host {
                 this.#event("reinforced", { pack: id, ids });
             }
         }
+    }
+
+    // The wild's creatures by the pack each is of (pack -> their ids, in the wild's order: what
+    // going through all the wild for one pack finds, #reinforce, #riftTears), from one going
+    // through them. Made where it's wanted and thrown away with the pass, and made again by
+    // whoever puts any more of the wild out while it has it: nothing is kept that the wild's
+    // comings and goings could leave behind
+    #packMates() {
+        const packed = new Map();
+
+        count("packs.wild", this.wild.size);
+
+        for (const [id, { pack }] of this.wild) {
+            const ids = packed.get(pack);
+
+            if (ids) {
+                ids.push(id);
+            } else {
+                packed.set(pack, [id]);
+            }
+        }
+
+        return packed;
     }
 
     // A creature calling its flock to it (battle.js "call": creatures.js `call`, the Ant Monster;
@@ -10940,16 +11039,28 @@ export class Host {
 
     // How many are about a place (`at`, on `map`) as the body budget counts them (BODIES): the
     // players, those with them, and the wild's creatures, standing, within BODIES.reach
+    // Counted among those the battle's own index has near the place, while it has them (battle.js
+    // within: everyone within reach is among them, and the same test is made of each), or among
+    // everyone, as it was (the index not the battle's as it stands just now, or Host.indexing
+    // off): a count, so the order they're come to in is nothing
     #bodiesNear([x, y], map = "town") {
-        let count = 0;
+        const { actors } = this.battle;
+        const near = Host.indexing ? this.battle.within(map, x, y, BODIES.reach) : null;
+        const most = near ? near.length : actors.length;
+        let bodies = 0;
 
-        for (const actor of this.battle.actors) {
+        count("bodies.asks");
+        count("bodies.actors", most);
+
+        for (let k = 0; k < most; k++) {
+            const actor = near ? actors[near[k]] : actors[k];
+
             if (!actor.dead && actor.map === map && (actor.kind === "player" || actor.kind === "follower" || this.wild.has(actor.id) || this.companions.has(actor.id)) && hypot(actor.x - x, actor.y - y) <= BODIES.reach) {
-                count++;
+                bodies++;
             }
         }
 
-        return count;
+        return bodies;
     }
 
     // How many of a pack, and how tough, against a side (`scale`: strength.js scalingOf) where
