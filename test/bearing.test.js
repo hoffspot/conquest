@@ -74,18 +74,30 @@ const soldiersOut = (host, free) => host.battle.actors.filter((actor) => actor.k
 
 // Played from step `from` to `to`: each step's events, the world's sum after it and the light
 // it was played by. What's done to the world in the middle of it is done by the step it's at,
-// and to whoever the world then has, so it's the same whichever step it's carried on from
-function play({ host, homes, notes }, from, to) {
+// and to whoever the world then has, so it's the same whichever step it's carried on from. With
+// `ways`, each way the battle finds or takes is put there as it's told ([time, id, way]: what a
+// host sends its copies, core/host.js #wire)
+function play({ host, homes, notes }, from, to, ways = null) {
     const steps = [];
     const { battle } = host;
+    const told = battle.onPath;
+
+    if (ways) {
+        battle.onPath = (id, way) => {
+            ways.push([battle.time, id, structuredClone(way)]);
+            told?.(id, way);
+        };
+    }
 
     for (let step = from; step < to; step++) {
         const random = createRandom(step);
 
-        // (Everyone sent somewhere near every five seconds, till the step after the snapshot: a
-        // way found later than that by a world carried on from one isn't always the way the
-        // world it was taken of finds, whichever way the light's made, and isn't the light's)
-        if (step % 100 === 0 && step <= KEPT) {
+        // (Everyone sent somewhere near every five seconds, after the snapshot too. A way found
+        // by a world carried on from a snapshot isn't always the way the world it was taken of
+        // finds: its navigation mesh begins again with no tiles, and a way goes by what tiles
+        // are in (test/spots.test.js). So the one carried on takes the first's ways, as a copy
+        // joined to a host does: `carried`, below)
+        if (step % 100 === 0) {
             homes.forEach(({ at: [x, y] }, k) => host.players.has(`p${k + 1}`) && battle.actor(`p${k + 1}`).map === "town" && !notes.away?.includes(`p${k + 1}`) && host.command(`p${k + 1}`, { type: "move", to: [Math.round(x + (random.next() - 0.5) * 60), Math.round(y + (random.next() - 0.5) * 60)] }));
         }
 
@@ -151,11 +163,13 @@ function play({ host, homes, notes }, from, to) {
         steps.push([encode(host.advance(STEP_MS)), host.checksum(), encode(battle.light), battle.light, host.mustered.size, battle.actors.length]);
     }
 
+    battle.onPath = told;
+
     return steps;
 }
 
-// The whole night, with what the light's pass went through counted, and carried on from a
-// snapshot at KEPT
+// The whole night, with what the light's pass went through counted, a snapshot taken at KEPT and
+// the ways found after it kept (`ways`), for a world carried on from it to take
 function night() {
     const game = begin();
     let ticks = 0;
@@ -165,7 +179,9 @@ function night() {
         const first = play(game, 0, KEPT);
         const kept = encode({ world: game.host.snapshot(), notes: game.notes });
 
-        return { game, steps: [...first, ...play(game, KEPT, STEPS)], kept, snapshot: encode(game.host.snapshot()), counts: probes.toJSON().counts };
+        const ways = [];
+
+        return { game, steps: [...first, ...play(game, KEPT, STEPS, ways)], kept, ways, snapshot: encode(game.host.snapshot()), counts: probes.toJSON().counts };
     } finally {
         uninstall();
     }
@@ -241,16 +257,33 @@ describe("a night of comings and goings, lit from what the battle keeps and by g
         assert.equal(kept.counts["light.pairs"], everyone.counts["light.pairs"], "(the lights measured against players are the same)");
     });
 
-    it("carries on the same from a snapshot taken in the dark with a Light still lasting, either way", () => {
+    it("carries on the same from a snapshot taken in the dark with a Light still lasting, either way, its players sent about as before", () => {
         const second = kept.steps.slice(KEPT);
+
+        // (The world carried on is a copy of the first, as one joined to it is: it takes the
+        // first's ways as they were found, core/netplay.js Joining.attach, and finds none)
         const carried = (snapshot) => {
             const { world, notes } = decode(snapshot);
+            const host = Host.restore(buildWorld({ seed: 2 }), world);
+            const taken = [];
 
-            return play({ host: Host.restore(buildWorld({ seed: 2 }), world), homes: kept.game.homes, notes }, KEPT, STEPS);
+            host.replaying();
+            host.replay.push(...structuredClone(kept.ways));
+
+            const steps = play({ host, homes: kept.game.homes, notes }, KEPT, STEPS, taken);
+
+            assert.equal(host.replay.length, 0, "(every way of the first's taken)");
+            assert.deepEqual(taken, kept.ways, "(and no other)");
+
+            return steps;
         };
 
+        // (Ways there were, the players' among them: the move orders after the snapshot)
+        assert.ok(kept.ways.length > 100, `(${kept.ways.length} ways found after the snapshot)`);
+        assert.ok(new Set(kept.ways.filter(([, id]) => /^p\d$/.test(id)).map(([time]) => time)).size >= 5, "(players sent about after it, five times and more)");
         assertSame(carried(kept.kept), second, KEPT);
         assertSame(throughEveryone(() => carried(kept.kept)), second, KEPT);
+        assert.deepEqual(everyone.ways, kept.ways, "(the same ways found either way)");
     });
 
     it("keeps the battle's list of its soldiers as going through everyone finds them, whatever's kept in place or made again", () => {
