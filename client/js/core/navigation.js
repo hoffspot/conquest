@@ -328,6 +328,15 @@ export class Navigation {
         this.baked = 0;
         this.added = 0;
 
+        /**
+         * How many times a tile's been put in or taken out (add, drop; all of them, dispose),
+         * and what that was as each tile in the mesh went in, by key (`since`): an answer
+         * remembered of the mesh (stands) is good only while every tile round its point went
+         * in before it was given.
+         */
+        this.edits = 0;
+        this.since = new Map();
+
         /** How many ways and lines it's given up on, asked across more than MOST_ASKED tiles. */
         this.tooFar = 0;
 
@@ -487,7 +496,9 @@ export class Navigation {
             ref = added.tileRef;
         }
 
+        this.edits++;
         this.tiles.set(k, { tx, ty, ref });
+        this.since.set(k, this.edits);
         this.added++;
     }
 
@@ -502,6 +513,8 @@ export class Navigation {
             }
 
             this.tiles.delete(k);
+            this.since.delete(k);
+            this.edits++;
         }
     }
 
@@ -857,6 +870,60 @@ export class Navigation {
         return Boolean(found) && Math.abs(found[0] - x) < 0.05 && Math.abs(found[1] - y) < 0.05;
     }
 
+    /**
+     * `walkable`, remembered in `memo` (standing(): whoever asks keeps one for each thing it asks
+     * about): asked again of the same point while none of the tiles round it has been put in
+     * since (the count of tiles put in or taken out, `edits`, is kept for each tile as it was
+     * when it went in, `since`, and by the memo as it was when the mesh answered), the answer
+     * it gave is given again, and neither the ground's height nor Detour is asked
+     * (`memo.asked` says whether they were). The tiles round the point are made sure of either way, in the order
+     * any asking makes sure of them (nearest's: #cover), so each is counted as used just when it
+     * would be, one let go is baked again there and then, and which are let go of later is as it
+     * was; and one put in for it, or since the mesh last answered, has the mesh asked. Looking
+     * over the tiles made already only (madeOnly), nothing's remembered.
+     */
+    stands(x, y, memo) {
+        const { tile: side } = this.measures;
+        const tx1 = Math.floor((x + NEAR.across) / side);
+        const ty1 = Math.floor((y + NEAR.across) / side);
+        let newest = this.#unmade ? Infinity : 0;
+
+        for (let ty = Math.floor((y - NEAR.across) / side); ty <= ty1; ty++) {
+            for (let tx = Math.floor((x - NEAR.across) / side); tx <= tx1; tx++) {
+                const k = key(tx, ty);
+                const tile = this.tiles.get(k);
+
+                if (tile) {
+                    // (In: used just now, as ensure counts it)
+                    this.tiles.delete(k);
+                    this.tiles.set(k, tile);
+                    newest = Math.max(newest, this.since.get(k));
+                } else if (!this.#unmade) {
+                    this.ensure(tx, ty);
+                    newest = Math.max(newest, this.since.get(k) ?? 0);
+                }
+            }
+        }
+
+        if (memo.mesh === this && memo.x === x && memo.y === y && newest <= memo.edits) {
+            memo.asked = false;
+
+            return memo.on;
+        }
+
+        const found = this.nearestIn([x, y]);
+        const on = Boolean(found) && Math.abs(found[0] - x) < 0.05 && Math.abs(found[1] - y) < 0.05;
+
+        memo.mesh = this.#unmade ? null : this;
+        memo.x = x;
+        memo.y = y;
+        memo.edits = this.edits;
+        memo.on = on;
+        memo.asked = true;
+
+        return on;
+    }
+
     /** Let go of the mesh and everything Detour holds for it. */
     dispose() {
         if (this.disposed) {
@@ -875,6 +942,8 @@ export class Navigation {
 
         this.mesh.destroy();
         this.tiles.clear();
+        this.since.clear();
+        this.edits++;
         this.disposed = true;
     }
 
@@ -949,6 +1018,11 @@ export class Navigation {
 
         return { positions: Float32Array.from(positions), areas: Uint8Array.from(areas), edges: Float32Array.from(edges), sides: Uint8Array.from(sides) };
     }
+}
+
+/** An answer of a mesh's to be remembered (Navigation stands), nothing in it yet. */
+export function standing() {
+    return { mesh: null, x: 0, y: 0, edits: 0, on: false, asked: false };
 }
 
 // A tile's key back to its (tx, ty)

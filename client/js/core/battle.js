@@ -80,7 +80,7 @@ import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } f
 import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { playerSight, sightAt } from "./light.js";
-import { navigatorOf } from "./navigation.js";
+import { navigatorOf, standing } from "./navigation.js";
 import { count, inner, lap as timed, outer, timing } from "./probe.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
@@ -773,8 +773,20 @@ export const SLIDE = Object.freeze({ clear: 1.5, turns: Object.freeze([0.35, 0.7
 // To the centimetre (the ways found, as a host sends them)
 const cm = (value) => Math.round(value * 100) / 100;
 
-// A cell of the index of where everyone stands (INDEX_CELL), as a number
-const cellOf = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);
+// A cell of the index of where everyone stands (INDEX_CELL), as a number: under 2^30 (`small`:
+// 32,768 cells each way, 262 km of them, and a world is 8), so the engine keeps it as a small
+// whole number and none is made to ask the index's Map with; or as it was, up to 2^32, each made
+// a number on the heap for every asking (Battle.sparing false)
+const cellOf = (cx, cy, small) => (small ? (cx + 16384) * 32768 + (cy + 16384) : (cx + 32768) * 65536 + (cy + 32768));
+
+// The players among those the index keeps are kept by cell too, of their own and wider (HERO_CELL
+// metres a side: whoever asks after the players near it looks as far as AGGRO.reach or SIGHT, and
+// finds them in two cells each way or three), numbered under 2^30 as the index's own are
+const HERO_CELL = 32;
+const heroCellOf = (x, y) => (Math.floor(x / HERO_CELL) + 16384) * 32768 + (Math.floor(y / HERO_CELL) + 16384);
+
+// The ways one of the folk tries to run, from straight away from what it fears (radians: #afraid)
+const FLEE_TURNS = Object.freeze([0, 0.9, -0.9, 1.8, -1.8]);
 
 // The eight squares round one, and how many squares at most are looked through for a place to
 // talk to someone from
@@ -808,7 +820,10 @@ export class Battle {
     /**
      * Whether the nearest enemy, who's in the way and who's on a square are looked for among those
      * near (#indexed), as they always are, or among everyone: only for the tests that check it
-     * makes no difference.
+     * makes no difference. And whether whoever asks after the players near it (#drawnTo,
+     * #playerSeen, #rest, #beckon, #pathTo) asks the index for them and goes through those in
+     * the roster's order (#heroesNear), or goes through every player in the battle, as it did
+     * (generated/multiplayer_scaling_plan.md 1-19).
      */
     static indexing = true;
 
@@ -820,11 +835,41 @@ export class Battle {
     static reindexing = true;
 
     /**
-     * Whether the players are gone through by their places in their list for whoever's drawn to
-     * one (#drawnTo), nothing made for it, as they always are, or with `for...of`, as they were:
-     * only for the tests that check it's the same either way.
+     * Whether a step makes nothing to throw away where it needn't, as it always does, or plays
+     * the forms that did, as it was: only for the tests that check it's the same battle either
+     * way (generated/multiplayer_scaling_plan.md 1-16). The same sums in the same order: the
+     * players gone through by their places in their list for whoever's drawn to one or looks
+     * for one (#drawnTo, #playerSeen), not with `for...of`; a stride's numbers each by itself,
+     * not in arrays of two (#walked for #travel, and #bumpsAt, #clearAt, #roomAt, #apartAt and
+     * #asideAt for what it asks); a spell lasting on someone and what ails them looked for by
+     * place, no function made to find it (buffOf, #share, #think's fear), and a walker's note of
+     * how near it's got written over, not made again (#move); the folk's waits rolled and their
+     * dangers looked for with functions the battle keeps (#waitOf, #afraid); no list made of
+     * the spells on someone with none (#ail); and the index's cells numbered under 2^30
+     * (cellOf).
      */
     static sparing = true;
+
+    /**
+     * Whether the mesh's answer for where a walker stands is remembered while it stands there
+     * and the mesh has had no tile put in or taken out (#onMesh, navigation.js stands), as it
+     * always is, or the mesh asked again for every step it tries, as it was: only for the tests
+     * that check it's the same walk either way (generated/multiplayer_scaling_plan.md 1-17).
+     */
+    static remembering = true;
+
+    /**
+     * Whether a step goes through everyone as few times as it does now, or as often as it did:
+     * only for the tests that check it's the same battle either way (generated/
+     * multiplayer_scaling_plan.md 1-18). As it is: the players kept as a list brought up to
+     * date as anyone's added or taken out (#cast), not looked for among everyone each step;
+     * who's after whom noted in one going through, nothing made for one after no one
+     * (#mustered); the index brought up to date in one going through, not two (#reindexed);
+     * what ails anyone gone through only when something ails someone (#ail); and each
+     * character's turn begun by reading what it has, where five things were called to find it
+     * has none (#step). Whatever is done to anyone is done in the order it was.
+     */
+    static mustering = true;
 
     /**
      * Whether one taken out (remove) is forgotten at the cost of the one taken out, as it always
@@ -852,6 +897,24 @@ export class Battle {
     #onPlayers = new Map();
     #chasers = new Map();
 
+    // Every player in the battle, in the roster's order, kept as anyone's added or taken out
+    // (#castKnown, #castOf: made again of everyone whenever it might be out of date, as #ids is),
+    // and the ids of those standing as the step began (#mustered)
+    #cast = { actors: null, length: 0, roster: -1, list: [] };
+    #standing = new Set();
+
+    // The players near a point as the index gave them (#heroesNear: their places in `actors`, in
+    // order), in a list of their own that only the askings after players fill, so no other
+    // search fills it under them; `#heroAsking` while one of those is going through it, when
+    // another such asking (none is made now) would go through every player as it did, and fill
+    // nothing. Those of `#players` (standing as the step began), to tell them among the players
+    // the index gives; and the roster as it was when the step's lists were made (#mustered): the
+    // index is asked only while it's still that one, when the players it holds are the lists'
+    #nearHeroes = new Int32Array(16);
+    #heroAsking = false;
+    #upright = new Set();
+    #musterOf = { actors: null, length: 0, roster: -1 };
+
     // Those found near a point by the search just made (#foundNear: their places in `actors`), in
     // the one list every such search fills, so none makes a list of its own: read at once by whoever
     // asked, before anything else can search (nothing a loop over it calls may, or it would be
@@ -861,9 +924,23 @@ export class Battle {
     #marks = [];
     #marking = 0;
 
+    // Where a step aside goes (#asideAt: metres), for whoever asked, read at once; and one of the
+    // folk looking about for what frightens it (#afraid), with what it asks of each it looks at:
+    // made once, where a pair of functions was made for every look
+    #asideX = 0;
+    #asideY = 0;
+    #seer = null;
+    #seesOne = (other) => this.canSee(this.#seer, other);
+    #frightensOne = (other) => this.#frightens(other, this.#seer);
+
+    // What the mesh last answered each walker that asked (#onMesh): of where it stood (`at`), and
+    // of where it would step (`to`), each a navigation.js standing(). Kept by the walker, here
+    // and not on it: nothing of it is the battle's to keep, send or sum
+    #stood = new WeakMap();
+
     // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
     // #counted): read by nothing else, and begun again from nothing each step
-    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0 };
+    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0, meshKept: 0, playerPairs: 0 };
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -977,11 +1054,13 @@ export class Battle {
         const actor = this.#made(given);
 
         const ids = this.#known();
+        const cast = this.#castKnown();
 
         this.actors.push(actor);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, true);
 
         // (Everyone by id, brought up to date: one of an id that's in already is the one found
         // by it from now on, as the last of them is when it's made of everyone; and then it's
@@ -1002,6 +1081,50 @@ export class Battle {
         const ids = this.#ids;
 
         return Battle.forgetting && ids && ids.actors === this.actors && ids.length === this.actors.length && ids.roster === this.#roster ? ids : null;
+    }
+
+    // The players in the battle as they're kept (#cast), if that's up to date and to be brought
+    // up to date in place (Battle.mustering); else null: made again of everyone when next wanted
+    #castKnown() {
+        const cast = this.#cast;
+
+        return Battle.mustering && cast.actors === this.actors && cast.length === this.actors.length && cast.roster === this.#roster ? cast : null;
+    }
+
+    // The players kept (`cast`: #castKnown's, as it was before) brought up to date, one just
+    // added to the battle or taken out of it: a player put last, as it is in the roster, or
+    // taken from its place
+    #recast(cast, actor, added) {
+        if (!cast) {
+            return;
+        }
+
+        if (actor.kind === "player") {
+            const at = added ? -1 : cast.list.indexOf(actor);
+
+            if (added) {
+                cast.list.push(actor);
+            } else if (at >= 0) {
+                cast.list.splice(at, 1);
+            }
+        }
+
+        cast.length = this.actors.length;
+        cast.roster = this.#roster;
+    }
+
+    // Every player in the battle, in the roster's order: as kept, or looked for among everyone
+    #castOf() {
+        const cast = this.#cast;
+
+        if (cast.actors !== this.actors || cast.length !== this.actors.length || cast.roster !== this.#roster) {
+            cast.list = this.actors.filter((actor) => actor.kind === "player");
+            cast.actors = this.actors;
+            cast.length = this.actors.length;
+            cast.roster = this.#roster;
+        }
+
+        return cast.list;
     }
 
     // A character as add makes one, in no battle yet. Every one's made here, add's and those
@@ -2013,11 +2136,13 @@ export class Battle {
         }
 
         const ids = this.#known();
+        const cast = this.#castKnown();
 
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, false);
 
         if (ids && !ids.twice) {
             ids.of.delete(id);
@@ -2074,12 +2199,15 @@ export class Battle {
     #removed(actor) {
         const { id } = actor;
 
+        const cast = this.#castKnown();
+
         count("battle.removed");
         count("battle.forgets");
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, false);
         this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
 
         for (const other of this.actors) {
@@ -2667,7 +2795,40 @@ export class Battle {
 
     /** A spell lasting on someone just now ({ kind, until, by, level }), or null. */
     buffOf(actor, kind) {
-        return actor?.buffs?.find((each) => each.kind === kind && each.until > this.time) ?? null;
+        if (!Battle.sparing) {
+            return actor?.buffs?.find((each) => each.kind === kind && each.until > this.time) ?? null;
+        }
+
+        // (The first of them, as `find` gives it, with no function made to ask each: #noticed asks
+        // this of everyone a search looks at)
+        const buffs = actor?.buffs;
+
+        for (let i = 0; buffs && i < buffs.length; i++) {
+            const each = buffs[i];
+
+            if (each.kind === kind && each.until > this.time) {
+                return each;
+            }
+        }
+
+        return null;
+    }
+
+    // How much a thing about someone is as it is now, as afflictions.js shareOf has it: the same
+    // product in the same order, gone through by place
+    #share(actor, share) {
+        if (!Battle.sparing) {
+            return shareOf(actor, share);
+        }
+
+        const afflictions = actor.afflictions;
+        let kept = 1;
+
+        for (let i = 0; afflictions && i < afflictions.length; i++) {
+            kept *= AFFLICTIONS[afflictions[i].kind]?.[share] ?? 1;
+        }
+
+        return kept;
     }
 
     // Is someone warded against something (a school's spell, an element's blow, an affliction or
@@ -2930,17 +3091,56 @@ export class Battle {
         this.#march();
         this.#mustered();
 
-        for (const actor of this.actors) {
-            if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
-                timed((part = THINKS[actor.ai] ?? THINKS.other));
-            }
+        if (Battle.mustering) {
+            // (Each one's turn begun by what it has, read here: a horse, arms, a creature's way
+            // of hovering, a guard up, a boss's fight. The five things called for each, in this
+            // order, each began by finding most have none of what it's for)
+            const actors = this.actors;
 
-            this.#ride(actor);
-            this.#arm(actor);
-            this.#hover(actor);
-            this.#offGuard(actor);
-            this.#boss(actor);
-            this.#think(actor);
+            for (let a = 0; a < actors.length; a++) {
+                const actor = actors[a];
+
+                if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
+                    timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                const wild = actor.wild;
+
+                if (actor.mount) {
+                    this.#ride(actor);
+                }
+
+                if (actor.arms.length && !actor.dead) {
+                    this.#arm(actor);
+                }
+
+                if (wild?.hover && !actor.dead) {
+                    this.#hover(actor);
+                }
+
+                if (actor.onGuard) {
+                    this.#offGuard(actor);
+                }
+
+                if (wild && (wild.hatch || wild.fight)) {
+                    this.#boss(actor);
+                }
+
+                this.#think(actor);
+            }
+        } else {
+            for (const actor of this.actors) {
+                if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
+                    timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                this.#ride(actor);
+                this.#arm(actor);
+                this.#hover(actor);
+                this.#offGuard(actor);
+                this.#boss(actor);
+                this.#think(actor);
+            }
         }
 
         for (const actor of this.actors) {
@@ -3000,10 +3200,12 @@ export class Battle {
         count("battle.searchLooks", work.looks);
         count("battle.fightAsks", work.fightAsks);
         count("battle.playerAsks", work.playerAsks);
+        count("battle.playerPairs", work.playerPairs);
         count("battle.nears", work.nears);
         count("battle.nearFound", work.nearFound);
         count("battle.sights", work.sights);
         count("battle.meshAsks", work.meshAsks);
+        count("battle.meshKept", work.meshKept);
     }
 
     // --- Drawing weapons and putting them away ---
@@ -3262,7 +3464,7 @@ export class Battle {
         }
 
         // (Frightened: running, and nothing else)
-        const fear = actor.kind !== "player" ? actor.afflictions.find(({ kind }) => AFFLICTIONS[kind]?.flee) : null;
+        const fear = actor.kind === "player" ? null : Battle.sparing ? this.#feared(actor) : actor.afflictions.find(({ kind }) => AFFLICTIONS[kind]?.flee);
 
         if (fear) {
             this.#flee(actor, fear);
@@ -3287,6 +3489,56 @@ export class Battle {
         }
     }
 
+    // The first of what ails someone that has them run (afflictions.js `flee`), as `find` gives
+    // it, or null: gone through by place, no function made to ask each (everyone's asked every step)
+    #feared(actor) {
+        const afflictions = actor.afflictions;
+
+        for (let i = 0; i < afflictions.length; i++) {
+            if (AFFLICTIONS[afflictions[i].kind]?.flee) {
+                return afflictions[i];
+            }
+        }
+
+        return null;
+    }
+
+    // #routine's own function for a wait, as it made one for every call (Battle.sparing false):
+    // made here, so that #routine itself keeps nothing for it when it makes none
+    #betweenOf(actor) {
+        return ([least, most]) => least + actor.chance.next() * (most - least);
+    }
+
+    // The danger one of the folk sees, looked for as it was (Battle.sparing false): the two
+    // functions made for the look, here and not in #afraid, which then keeps nothing for them
+    #dangerTo(actor) {
+        return this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
+    }
+
+    // Whether any player sees one of the folk (#rest), and the first player one sees (#beckon),
+    // every player gone through as they were: apart from those two, which keep nothing for
+    // these functions when the players near are asked of the index
+    #seenByAny(actor) {
+        return this.#heroes.some((other) => {
+            this.#work.playerPairs++;
+
+            return !other.dead && this.canSee(other, actor);
+        });
+    }
+
+    #firstSeen(actor) {
+        return this.#heroes.find((other) => {
+            this.#work.playerPairs++;
+
+            return !other.dead && this.canSee(actor, other);
+        });
+    }
+
+    // A wait of the folk's, rolled between the least and the most of it (ms) with their own dice
+    #waitOf(actor, range) {
+        return range[0] + actor.chance.next() * (range[1] - range[0]);
+    }
+
     /**
      * The folk going about their business (actor.routine): seated ({ seated: true, act, every:
      * [ms, ms] }), doing its act (a toast) every so often; or going from stop to stop ({ stops:
@@ -3297,7 +3549,8 @@ export class Battle {
      */
     #routine(actor) {
         const routine = actor.routine;
-        const between = ([least, most]) => least + actor.chance.next() * (most - least);
+        // (As it was, a function made for every one of the folk every step; #waitOf, none)
+        const between = Battle.sparing ? null : this.#betweenOf(actor);
 
         // (Danger near: running from it, or standing their ground)
         if (this.#afraid(actor)) {
@@ -3326,7 +3579,7 @@ export class Battle {
                     this.#emit("act", { id: actor.id, act: routine.act });
                 }
 
-                actor.waitUntil = this.time + between(routine.every);
+                actor.waitUntil = this.time + (between ? between(routine.every) : this.#waitOf(actor, routine.every));
             }
 
             this.#rest(actor);
@@ -3347,7 +3600,7 @@ export class Battle {
         if (there && !actor.arrived) {
             actor.arrived = true;
             actor.facing = stop.facing;
-            actor.waitUntil = this.time + between(stop.wait ?? routine.wait);
+            actor.waitUntil = this.time + (between ? between(stop.wait ?? routine.wait) : this.#waitOf(actor, stop.wait ?? routine.wait));
 
             if (stop.act) {
                 this.#emit("act", { id: actor.id, act: stop.act });
@@ -3389,7 +3642,15 @@ export class Battle {
             // (Again in its own step of the next FLEE.look: not all the folk in the same one)
             actor.lookAt = this.#nextStep(actor, FLEE.look);
 
-            const danger = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
+            let danger;
+
+            if (Battle.sparing) {
+                this.#seer = actor;
+                danger = this.#nearestEnemy(actor, this.#seesOne, FLEE.sight, this.#frightensOne);
+                this.#seer = null;
+            } else {
+                danger = this.#dangerTo(actor);
+            }
 
             if (danger) {
                 Object.assign(actor, { afraid: danger.id, calmAt: this.time + FLEE.calm });
@@ -3410,7 +3671,12 @@ export class Battle {
         const from = this.actor(actor.afraid);
         const there = from && !from.dead && from.map === actor.map;
 
-        Object.assign(actor, { restingUntil: 0, beckoningUntil: 0 });
+        if (Battle.sparing) {
+            actor.restingUntil = 0;
+            actor.beckoningUntil = 0;
+        } else {
+            Object.assign(actor, { restingUntil: 0, beckoningUntil: 0 });
+        }
 
         // (One whose part is to fight: where it is, facing it)
         if (ROLES[actor.role]?.fights) {
@@ -3434,7 +3700,7 @@ export class Battle {
         const away = there ? atan2(actor.y - from.y, actor.x - from.x) : actor.chance.next() * Math.PI * 2;
         const jitter = (actor.chance.next() - 0.5) * 0.8;
 
-        for (const turn of [0, 0.9, -0.9, 1.8, -1.8]) {
+        for (const turn of Battle.sparing ? FLEE_TURNS : [0, 0.9, -0.9, 1.8, -1.8]) {
             const angle = away + turn + jitter;
             const goal = [Math.floor(actor.x + cos(angle) * FLEE.hop), Math.floor(actor.y + sin(angle) * FLEE.hop)];
 
@@ -3497,8 +3763,30 @@ export class Battle {
             return false;
         }
 
-        // (Among the players only, #heroes: not everyone asked whether they're one)
-        const player = this.#heroes.find((other) => !other.dead && this.canSee(actor, other));
+        // (Among the players only, #heroes: not everyone asked whether they're one; and of those
+        // only the ones the index has near enough to see, in the same order, #heroesNear)
+        let player = null;
+
+        if (this.#heroesIndexed()) {
+            const count = this.#heroesNearSquare(actor, SIGHT);
+            const near = this.#nearHeroes;
+
+            this.#heroAsking = true;
+
+            for (let i = 0; i < count && !player; i++) {
+                const other = this.actors[near[i]];
+
+                this.#work.playerPairs++;
+
+                if (!other.dead && this.canSee(actor, other)) {
+                    player = other;
+                }
+            }
+
+            this.#heroAsking = false;
+        } else {
+            player = this.#firstSeen(actor);
+        }
 
         if (player) {
             // Back in sight after a while out of it
@@ -3532,7 +3820,27 @@ export class Battle {
             return false;
         }
 
-        if (!this.#heroes.some((other) => !other.dead && this.canSee(other, actor))) {
+        let seen = false;
+
+        if (this.#heroesIndexed()) {
+            const count = this.#heroesNearSquare(actor, SIGHT);
+            const near = this.#nearHeroes;
+
+            this.#heroAsking = true;
+
+            for (let i = 0; i < count && !seen; i++) {
+                const other = this.actors[near[i]];
+
+                this.#work.playerPairs++;
+                seen = !other.dead && this.canSee(other, actor);
+            }
+
+            this.#heroAsking = false;
+        } else {
+            seen = this.#seenByAny(actor);
+        }
+
+        if (!seen) {
             actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + actor.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
 
             return false;
@@ -5779,6 +6087,7 @@ export class Battle {
         // they may have gone since the index was made, and a square's rounding)
         const index = this.#indexed();
         const cells = index.cells.get(actor.map);
+        const small = index.small;
 
         // (Those over more than their square, wherever they stand: looked at twice, if they're
         // near too, which changes nothing)
@@ -5809,7 +6118,7 @@ export class Battle {
             for (let ny = Math.max(top, cy - r); ny <= Math.min(bottom, cy + r); ny++) {
                 for (let nx = Math.max(left, cx - r); nx <= Math.min(right, cx + r); nx++) {
                     if (Math.max(Math.abs(nx - cx), Math.abs(ny - cy)) === r) {
-                        const list = cells.get(cellOf(nx, ny));
+                        const list = cells.get(cellOf(nx, ny, small));
 
                         for (let i = 0; list && i < list.length; i++) {
                             look(list[i]);
@@ -5847,7 +6156,62 @@ export class Battle {
         let best = null;
         let bestDistance = Infinity;
 
-        for (const player of this.#players) {
+        // (Those the index has near enough to be seen, of the players standing as the step began,
+        // in their order: the nearest of them, and of two as near the first, as of them all)
+        if (this.#heroesIndexed()) {
+            const count = this.#heroesNearSquare(actor, sight);
+            const near = this.#nearHeroes;
+            const upright = this.#upright;
+
+            this.#heroAsking = true;
+
+            for (let i = 0; i < count; i++) {
+                const player = this.actors[near[i]];
+
+                this.#work.playerPairs++;
+
+                if (!upright.has(player) || player.dead || player.map !== actor.map || !this.#near(actor, player, sight)) {
+                    continue;
+                }
+
+                const distance = distanceBetween(actor.square, player.square);
+
+                if (distance < bestDistance && this.hostile(player, actor) && this.#noticed(actor, player) && this.canSee(actor, player, sight) && test(player)) {
+                    best = player;
+                    bestDistance = distance;
+                }
+            }
+
+            this.#heroAsking = false;
+
+            return best;
+        }
+
+        this.#work.playerPairs += this.#players.length;
+
+        if (!Battle.sparing) {
+            for (const player of this.#players) {
+                if (player.dead || player.map !== actor.map || !this.#near(actor, player, sight)) {
+                    continue;
+                }
+
+                const distance = distanceBetween(actor.square, player.square);
+
+                if (distance < bestDistance && this.hostile(player, actor) && this.#noticed(actor, player) && this.canSee(actor, player, sight) && test(player)) {
+                    best = player;
+                    bestDistance = distance;
+                }
+            }
+
+            return best;
+        }
+
+        // (By their places in the list, as #drawnTo goes through them: nothing made for it)
+        const players = this.#players;
+
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+
             if (player.dead || player.map !== actor.map || !this.#near(actor, player, sight)) {
                 continue;
             }
@@ -6049,10 +6413,98 @@ export class Battle {
     // Who's after whom as the step begins (#inFight); the players in the battle, and how many of
     // their enemies are set on each, up close and from afar (#drawnTo)
     #mustered() {
+        this.#noted();
+        this.#listed();
+    }
+
+    // The step's lists of the players (#noted) kept for whoever asks the index after the players
+    // near it (#heroesNear): which of them stand as the step begins, and the roster they're of
+    #listed() {
+        const upright = this.#upright;
+        const players = this.#players;
+        const muster = this.#musterOf;
+
+        let same = upright.size === players.length;
+
+        this.#heroAsking = false;
+
+        for (let i = 0; same && i < players.length; i++) {
+            same = upright.has(players[i]);
+        }
+
+        // (Made again only when who stands has changed: most steps no one's fallen or risen)
+        if (!same) {
+            upright.clear();
+
+            for (let i = 0; i < players.length; i++) {
+                upright.add(players[i]);
+            }
+        }
+
+        muster.actors = this.actors;
+        muster.length = this.actors.length;
+        muster.roster = this.#roster;
+    }
+
+    // (#mustered's lists)
+    #noted() {
         const chasers = this.#chasers;
         const chasing = (id, by) => id !== null && id !== undefined && (chasers.get(id) ?? chasers.set(id, []).get(id)).push(by);
 
         chasers.clear();
+
+        if (Battle.mustering) {
+            // (The players from the list kept of them, #cast, not looked for among everyone twice
+            // over; into the lists the step keeps, which are its own: who's a player, and who of
+            // them stands, as the step begins)
+            const cast = this.#castOf();
+            const heroes = this.#heroes;
+            const players = this.#players;
+            const standing = this.#standing;
+            const actors = this.actors;
+
+            heroes.length = 0;
+            players.length = 0;
+            standing.clear();
+            this.#onPlayers.clear();
+
+            for (let i = 0; i < cast.length; i++) {
+                heroes.push(cast[i]);
+
+                if (!cast[i].dead) {
+                    players.push(cast[i]);
+                    standing.add(cast[i].id);
+                }
+            }
+
+            for (let a = 0; a < actors.length; a++) {
+                const actor = actors[a];
+
+                if (actor.dead) {
+                    continue;
+                }
+
+                const target = actor.target;
+                const attacking = actor.attack?.target ?? null;
+                const told = actor.order?.type === "engage" ? actor.order.target : null;
+
+                // (After no one, as most are: nothing to note)
+                if (target === null && attacking === null && told === null) {
+                    continue;
+                }
+
+                chasing(target, actor.id);
+                attacking !== target && chasing(attacking, actor.id);
+                told !== target && told !== attacking && chasing(told, actor.id);
+
+                if (actor.target !== null && standing.has(actor.target)) {
+                    this.#onPlayer(this.actor(actor.target))[this.#shoots(actor) ? "ranged" : "melee"]++;
+                }
+            }
+
+            return;
+        }
+
         this.#heroes = this.actors.filter((actor) => actor.kind === "player");
         this.#players = this.#heroes.filter((actor) => !actor.dead);
         this.#onPlayers.clear();
@@ -6105,8 +6557,37 @@ export class Battle {
 
         const players = this.#players;
 
+        // (Those the index has near enough to draw it, of the players standing as the step began,
+        // in their order: the first of them that draws it, as of them all. A soldier set on no
+        // one asked this of every player in the battle every step, 62,000 askings a step with
+        // 100 spread: generated/multiplayer_scaling_plan.md 1-19)
+        if (this.#heroesIndexed()) {
+            const count = this.#heroesNearSquare(actor, AGGRO.reach);
+            const near = this.#nearHeroes;
+            const upright = this.#upright;
+            let drawn = null;
+
+            this.#heroAsking = true;
+
+            for (let i = 0; i < count && !drawn; i++) {
+                const player = this.actors[near[i]];
+
+                this.#work.playerPairs++;
+
+                if (upright.has(player) && this.#draws(actor, player)) {
+                    drawn = player;
+                }
+            }
+
+            this.#heroAsking = false;
+
+            return drawn;
+        }
+
         if (!Battle.sparing) {
             for (const player of players) {
+                this.#work.playerPairs++;
+
                 if (this.#draws(actor, player)) {
                     return player;
                 }
@@ -6120,12 +6601,99 @@ export class Battle {
         // a step with 100 players spread and 600 soldiers out: a third of all the battle's step
         // made, generated/multiplayer_scaling_plan.md 1-16)
         for (let i = 0; i < players.length; i++) {
+            this.#work.playerPairs++;
+
             if (this.#draws(actor, players[i])) {
                 return players[i];
             }
         }
 
         return null;
+    }
+
+    // Whether the players near a point are to be asked of the index (#heroesNear): looking among
+    // those near at all (Battle.indexing), no such asking going through its list just now, and
+    // the roster the one the step's lists of the players were made of (#mustered: no one added or
+    // taken out since, so the players the index holds are those lists', in their order). Else
+    // whoever asks goes through every player in the lists, as it always did
+    #heroesIndexed() {
+        const muster = this.#musterOf;
+
+        return Battle.indexing && !this.#heroAsking && muster.actors === this.actors && muster.length === this.actors.length && muster.roster === this.#roster;
+    }
+
+    // The players on a map who might be within `reach` metres either way of a point, fallen or
+    // not: how many, their places in `actors` in `#nearHeroes`, in the roster's order (so whoever
+    // asked comes on them as going through every player would); none further, though some may be
+    #heroesNear(mapId, x, y, reach) {
+        const index = this.#indexed();
+        const cells = index.heroCells.get(mapId);
+        let near = this.#nearHeroes;
+        let count = 0;
+
+        if (!cells) {
+            return 0;
+        }
+
+        if (near.length < index.heroes.length) {
+            near = this.#nearHeroes = new Int32Array(index.heroes.length * 2);
+        }
+
+        const out = reach + INDEX_SLACK;
+        const x1 = Math.floor((x + out) / HERO_CELL);
+        const y1 = Math.floor((y + out) / HERO_CELL);
+
+        for (let cy = Math.floor((y - out) / HERO_CELL); cy <= y1; cy++) {
+            for (let cx = Math.floor((x - out) / HERO_CELL); cx <= x1; cx++) {
+                const list = cells.get((cx + 16384) * 32768 + (cy + 16384));
+
+                // (Each put in its place among those found already: a handful at the most)
+                for (let i = 0; list && i < list.length; i++) {
+                    let at = count++;
+
+                    while (at > 0 && near[at - 1] > list[i]) {
+                        near[at] = near[at - 1];
+                        at--;
+                    }
+
+                    near[at] = list[i];
+                }
+            }
+        }
+
+        return count;
+    }
+
+    // The players who might be within `reach` squares either way of a character's square (#near)
+    #heroesNearSquare(actor, reach) {
+        return this.#heroesNear(actor.map, actor.square[0] + 0.5, actor.square[1] + 0.5, reach + 1);
+    }
+
+    // Whether any player standing as the step began is on a map within `reach` metres of a point
+    // (#pathTo): asked of the index, or of every one of them
+    #playerWithin(mapId, x, y, reach) {
+        if (!this.#heroesIndexed()) {
+            return this.#players.some((player) => {
+                this.#work.playerPairs++;
+
+                return player.map === mapId && hypot(player.x - x, player.y - y) <= reach;
+            });
+        }
+
+        const count = this.#heroesNear(mapId, x, y, reach);
+        const near = this.#nearHeroes;
+
+        for (let i = 0; i < count; i++) {
+            const player = this.actors[near[i]];
+
+            this.#work.playerPairs++;
+
+            if (this.#upright.has(player) && player.map === mapId && hypot(player.x - x, player.y - y) <= reach) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Whether a player draws a character to them (#drawnTo): near, its enemy, noticed, within its
@@ -6213,7 +6781,8 @@ export class Battle {
     #indexed() {
         const index = this.#index;
 
-        if (index && index.actors === this.actors && index.length === this.actors.length) {
+        // (Its cells numbered as they are now, cellOf: else made again)
+        if (index && index.actors === this.actors && index.length === this.actors.length && index.small === Battle.sparing) {
             if (index.version === this.#version) {
                 return index;
             }
@@ -6228,6 +6797,13 @@ export class Battle {
             }
         }
 
+        return this.#indexedAfresh();
+    }
+
+    // The index made again of everyone (#indexed). Apart from it, so that asking for an index
+    // that's up to date, which every search does, makes nothing: what this keeps for the function
+    // that goes through everyone was made at every asking while the two were one
+    #indexedAfresh() {
         const from = inner("battle.index");
 
         count("battle.indexed");
@@ -6235,16 +6811,19 @@ export class Battle {
 
         const length = this.actors.length;
         const cells = new Map();
+        const small = Battle.sparing;
         const at = new Float64Array(length * 2);
-        const cell = new Float64Array(length);
+        const cell = small ? new Int32Array(length) : new Float64Array(length);
         const who = new Array(length);
         const maps = new Array(length);
         const order = new Map();
         const wide = [];
+        const heroes = [];
+        const heroCells = new Map();
 
         this.actors.forEach((actor, k) => {
             const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
-            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
+            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL), small);
             const list = mine.get(here);
 
             if (list) {
@@ -6263,9 +6842,24 @@ export class Battle {
             if (actor.footprint) {
                 wide.push(k);
             }
+
+            if (actor.kind === "player") {
+                heroes.push(k);
+            }
         });
 
-        this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell };
+        // (The players among them, by cells of their own, HERO_CELL: #heroesNear)
+        const heroCell = new Int32Array(heroes.length);
+
+        for (let i = 0; i < heroes.length; i++) {
+            const actor = this.actors[heroes[i]];
+            const mine = heroCells.get(actor.map) ?? heroCells.set(actor.map, new Map()).get(actor.map);
+
+            heroCell[i] = heroCellOf(actor.x, actor.y);
+            (mine.get(heroCell[i]) ?? mine.set(heroCell[i], []).get(heroCell[i])).push(heroes[i]);
+        }
+
+        this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell, small, heroes, heroCell, heroCells };
         outer(from);
 
         return this.#index;
@@ -6281,8 +6875,70 @@ export class Battle {
     // in `actors` or on another map
     #reindexed(index) {
         const { actors } = this;
-        const { who, maps, cell, at, wide } = index;
+        const { who, maps, cell, at, wide, small } = index;
         const length = actors.length;
+
+        if (Battle.mustering) {
+            // (In one going through everyone: each checked as it's come to and then brought up
+            // to date, where all were checked first and then gone through again. One found
+            // added, taken out or on another map, the index is left half brought up to date,
+            // and made afresh at once by whoever asked, #indexed: no one else has it)
+            let moves = 0;
+
+            wide.length = 0;
+
+            for (let k = 0; k < length; k++) {
+                const actor = actors[k];
+
+                if (who[k] !== actor || maps[k] !== actor.map) {
+                    return false;
+                }
+
+                const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL), small);
+
+                at[2 * k] = actor.x;
+                at[2 * k + 1] = actor.y;
+
+                if (actor.footprint) {
+                    wide.push(k);
+                }
+
+                if (here !== cell[k]) {
+                    const mine = index.cells.get(actor.map);
+                    const from = mine.get(cell[k]);
+
+                    if (from.length === 1) {
+                        mine.delete(cell[k]);
+                    } else {
+                        from.splice(from.indexOf(k), 1);
+                    }
+
+                    const to = mine.get(here);
+
+                    if (!to) {
+                        mine.set(here, [k]);
+                    } else {
+                        let i = to.length;
+
+                        while (i > 0 && to[i - 1] > k) {
+                            i--;
+                        }
+
+                        to.splice(i, 0, k);
+                    }
+
+                    cell[k] = here;
+                    moves++;
+                }
+            }
+
+            count("battle.reindexed");
+            count("battle.reindexedMoves", moves);
+            this.#reheroed(index);
+            index.version = this.#version;
+
+            return true;
+        }
 
         for (let k = 0; k < length; k++) {
             if (who[k] !== actors[k] || maps[k] !== actors[k].map) {
@@ -6295,7 +6951,7 @@ export class Battle {
 
         for (let k = 0; k < length; k++) {
             const actor = actors[k];
-            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL));
+            const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL), small);
 
             at[2 * k] = actor.x;
             at[2 * k + 1] = actor.y;
@@ -6334,9 +6990,50 @@ export class Battle {
             }
         }
 
+        this.#reheroed(index);
         index.version = this.#version;
 
         return true;
+    }
+
+    // The players' own cells of an index (`heroCells`) brought up to date as its cells are
+    // (#reindexed: the same actors on the same maps): whoever's in another than they were moved
+    // to it, at their place in `actors`' order
+    #reheroed(index) {
+        const { heroes, heroCell, heroCells, who } = index;
+
+        for (let i = 0; i < heroes.length; i++) {
+            const k = heroes[i];
+            const actor = who[k];
+            const here = heroCellOf(actor.x, actor.y);
+
+            if (here !== heroCell[i]) {
+                const mine = heroCells.get(actor.map);
+                const from = mine.get(heroCell[i]);
+
+                if (from.length === 1) {
+                    mine.delete(heroCell[i]);
+                } else {
+                    from.splice(from.indexOf(k), 1);
+                }
+
+                const to = mine.get(here);
+
+                if (!to) {
+                    mine.set(here, [k]);
+                } else {
+                    let at = to.length;
+
+                    while (at > 0 && to[at - 1] > k) {
+                        at--;
+                    }
+
+                    to.splice(at, 0, k);
+                }
+
+                heroCell[i] = here;
+            }
+        }
     }
 
     // Everyone on a map who might be within `reach` metres either way of a point (x, y): their
@@ -6358,7 +7055,7 @@ export class Battle {
 
         for (let cy = Math.floor((y - out) / INDEX_CELL); cy <= Math.floor((y + out) / INDEX_CELL); cy++) {
             for (let cx = Math.floor((x - out) / INDEX_CELL); cx <= Math.floor((x + out) / INDEX_CELL); cx++) {
-                for (const k of cells.get(cellOf(cx, cy)) ?? []) {
+                for (const k of cells.get(cellOf(cx, cy, index.small)) ?? []) {
                     found.push(k);
                 }
             }
@@ -6421,10 +7118,11 @@ export class Battle {
 
         const x1 = Math.floor((x + out) / INDEX_CELL);
         const y1 = Math.floor((y + out) / INDEX_CELL);
+        const small = index.small;
 
         for (let cy = Math.floor((y - out) / INDEX_CELL); cy <= y1; cy++) {
             for (let cx = Math.floor((x - out) / INDEX_CELL); cx <= x1; cx++) {
-                const list = cells.get(cellOf(cx, cy));
+                const list = cells.get(cellOf(cx, cy, small));
 
                 for (let i = 0; list && i < list.length; i++) {
                     found[count++] = list[i];
@@ -6542,8 +7240,7 @@ export class Battle {
             actor.progress = null;
         }
 
-        const near = ([x, y]) => this.#players.some((player) => player.map === actor.map && hypot(player.x - x, player.y - y) <= WAIT_BEYOND);
-        const wait = actor.kind !== "player" && !(near([actor.x, actor.y]) && near(point));
+        const wait = actor.kind !== "player" && !(this.#playerWithin(actor.map, actor.x, actor.y, WAIT_BEYOND) && this.#playerWithin(actor.map, point[0], point[1], WAIT_BEYOND));
         const from = inner("battle.paths");
 
         count("battle.paths");
@@ -6665,7 +7362,9 @@ export class Battle {
         // (Nor getting up on a horse or down from it, or waiting on it to rise; ridden, it carries
         // them the faster, at a trot walking and a gallop running: core/mounts.js carried)
         const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking || actor.hidden || actor.lying || this.time < (actor.snaredUntil ?? 0) || holds(actor.mount);
-        const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed") * (riding ? carried(actor.pace, walk, actor.speed * SPRINT) : 1));
+        const sparing = Battle.sparing;
+        const budget = held ? 0 : actor.pace * seconds * this.#share(actor, "speed") * (riding ? carried(actor.pace, walk, actor.speed * SPRINT) : 1);
+        const travelled = held ? 0 : sparing ? this.#walked(actor, budget) : this.#travel(actor, budget);
 
         // Getting nowhere, jostling: squeezing past (#bumps)
         if (!actor.path.length || held) {
@@ -6673,11 +7372,24 @@ export class Battle {
         } else {
             const left = this.#distanceLeft(actor, false);
 
+            // (Its note of how near it's got written over where it has one, the same two numbers
+            // in the same order: a walker getting on made a new one every few steps)
             if (!actor.progress || left < actor.progress.left - PROGRESS) {
-                actor.progress = { left, at: this.time };
+                if (sparing && actor.progress) {
+                    actor.progress.left = left;
+                    actor.progress.at = this.time;
+                } else {
+                    actor.progress = { left, at: this.time };
+                }
             } else if (this.time - actor.progress.at > STUCK_MS) {
                 actor.squeezeUntil = this.time + SQUEEZE_MS;
-                actor.progress = { left, at: this.time };
+
+                if (sparing) {
+                    actor.progress.left = left;
+                    actor.progress.at = this.time;
+                } else {
+                    actor.progress = { left, at: this.time };
+                }
             }
         }
 
@@ -6694,7 +7406,7 @@ export class Battle {
         actor.running = run && travelled > 0;
 
         const drain = STAMINA_DRAIN * (this.buffOf(actor, "swole") ? SPELLS.swole.stamina : 1) * (1 - Math.min(0.5, actor.endurance ?? 0));
-        const stamina = actor.stamina + (actor.running && !riding ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * shareOf(actor, "recovery")) * seconds;
+        const stamina = actor.stamina + (actor.running && !riding ? -drain : STAMINA_RECOVERY * (actor.recovery ?? 1) * this.#share(actor, "recovery")) * seconds;
 
         actor.stamina = Math.min(actor.maxStamina, Math.max(0, Math.round(stamina * 1000) / 1000));
     }
@@ -6821,6 +7533,101 @@ export class Battle {
         return start - budget;
     }
 
+    // #travel with nothing made for a stride (Battle.sparing): the same sums in the same order,
+    // a stride's numbers each by itself where each pair of them was an array made and thrown
+    // away, a dozen a stride for every walker
+    #walked(actor, budget) {
+        const start = budget;
+        const target = actor.backing || actor.wild?.colossus ? null : this.#aim(actor);
+
+        while (budget > 1e-9 && actor.path.length) {
+            this.#work.strides++;
+
+            const corner = actor.path[0];
+            const tx = corner[0];
+            const ty = corner[1];
+            const dx = tx - actor.x;
+            const dy = ty - actor.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= 1e-9) {
+                actor.path.shift();
+                actor.offPath = false;
+                continue;
+            }
+
+            if (actor.offPath && actor.path.length > 1 && distance < CORNER_SLACK) {
+                actor.path.shift();
+                continue;
+            }
+
+            const step = Math.min(budget, distance, STRIDE);
+            const ux = dx / distance;
+            const uy = dy / distance;
+            let nx = step === distance ? tx : actor.x + ux * step;
+            let ny = step === distance ? ty : actor.y + uy * step;
+            let hx = ux;
+            let hy = uy;
+            let along = true;
+            const blocker = this.#bumpsAt(actor, nx, ny);
+
+            if (blocker && !target && this.#standsAt(blocker, actor.path.at(-1))) {
+                actor.path = [];
+
+                return start - budget;
+            }
+
+            if (blocker || (actor.offPath && !this.#clearAt(actor.map, nx, ny, actor, true))) {
+                const round = blocker ?? (actor.aside && this.time - actor.lastPathAt < REPATH_MS ? this.actor(actor.aside.id) : null);
+
+                if (!round || actor.kind === "wagon" || !this.#asideAt(actor, ux, uy, step, round)) {
+                    this.#blocked(actor, blocker);
+
+                    return start - budget;
+                }
+
+                nx = this.#asideX;
+                ny = this.#asideY;
+                hx = (nx - actor.x) / step;
+                hy = (ny - actor.y) / step;
+                along = false;
+            }
+
+            actor.x = nx;
+            actor.y = ny;
+            this.#moved(actor);
+            actor.facing = atan2(hx, hy);
+            actor.blockedSince = null;
+            budget -= step;
+
+            if (!along) {
+                actor.offPath = true;
+            } else {
+                actor.aside = null;
+
+                if (step === distance) {
+                    actor.path.shift();
+                    actor.offPath = false;
+                }
+            }
+
+            const sx = Math.floor(actor.x);
+            const sy = Math.floor(actor.y);
+
+            if (sx !== actor.square[0] || sy !== actor.square[1]) {
+                actor.square = [sx, sy];
+            }
+
+            if (target && this.#stopsHere(actor, target)) {
+                actor.path = [];
+
+                return start - budget;
+            }
+        }
+
+        return start - budget;
+    }
+
     // Whoever a character is walking to fight (told to engage, or after): null if no one
     #aim(actor) {
         const id = actor.order?.type === "engage" ? actor.order.target : actor.target;
@@ -6897,6 +7704,45 @@ export class Battle {
         return nearest;
     }
 
+    // #bumps of a point given as its two numbers (#walked, #asideAt): the same asking
+    #bumpsAt(actor, x, y) {
+        if (actor.wild?.colossus) {
+            return null;
+        }
+
+        const squeezing = this.time < actor.squeezeUntil;
+        const end = squeezing && !this.#aim(actor) ? actor.path.at(-1) : null;
+        let nearest = null;
+        let best = Infinity;
+        let nearestK = Infinity;
+
+        const count = this.#foundNear(actor.map, x, y, 2 * BODY);
+        const near = this.#found;
+
+        for (let i = 0; i < count; i++) {
+            const k = near[i];
+            const other = this.actors[k];
+
+            if (other === actor || other.dead || other.lurking || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
+                continue;
+            }
+
+            if (squeezing && (other.kind !== "player" || actor.kind === "player") && !this.#standsAt(other, end, THRONG)) {
+                continue;
+            }
+
+            const after = hypot(other.x - x, other.y - y);
+
+            if (after < 2 * BODY && after < hypot(other.x - actor.x, other.y - actor.y) && (after < best || (after === best && k < nearestK))) {
+                nearest = other;
+                best = after;
+                nearestK = k;
+            }
+        }
+
+        return nearest;
+    }
+
     // Whether someone is standing still (going nowhere, or held up) with their body over a point
     // (or with their middle within `near` metres of it)
     #standsAt(other, point, near = 2 * BODY) {
@@ -6927,11 +7773,15 @@ export class Battle {
             const asking = inner("battle.mesh");
             let on = true;
 
-            this.#work.meshAsks++;
-
-            if (navigation.walkable(from.x, from.y)) {
+            if (Battle.remembering) {
+                on = this.#onMesh(navigation, from, x, y);
+            } else {
                 this.#work.meshAsks++;
-                on = navigation.walkable(x, y);
+
+                if (navigation.walkable(from.x, from.y)) {
+                    this.#work.meshAsks++;
+                    on = navigation.walkable(x, y);
+                }
             }
 
             outer(asking);
@@ -6940,6 +7790,141 @@ export class Battle {
         }
 
         return true;
+    }
+
+    // #clear of a point given as its two numbers, walking there or not, from where `from` stands
+    // (#walked, #asideAt): the same askings in the same order, no array or bag of options made
+    #clearAt(mapId, x, y, from, walking) {
+        if (this.#roomAt(mapId, x, y) < (walking ? Math.min(BODY, this.#roomAt(mapId, from.x, from.y)) : BODY)) {
+            return false;
+        }
+
+        if (from) {
+            const navigation = navigatorOf(this.maps[mapId]);
+
+            if (this.#apartAt(mapId, from.x, from.y, x, y)) {
+                return false;
+            }
+
+            const asking = inner("battle.mesh");
+            let on = true;
+
+            if (Battle.remembering) {
+                on = this.#onMesh(navigation, from, x, y);
+            } else {
+                this.#work.meshAsks++;
+
+                if (navigation.walkable(from.x, from.y)) {
+                    this.#work.meshAsks++;
+                    on = navigation.walkable(x, y);
+                }
+            }
+
+            outer(asking);
+
+            return on;
+        }
+
+        return true;
+    }
+
+    // #room of a point given as its two numbers
+    #roomAt(mapId, x, y) {
+        const squares = this.#squares(mapId);
+        let room = BODY;
+
+        for (let sy = Math.floor(y - BODY); sy <= Math.floor(y + BODY); sy++) {
+            for (let sx = Math.floor(x - BODY); sx <= Math.floor(x + BODY); sx++) {
+                if (squares.blocked(sx, sy)) {
+                    const nx = Math.min(Math.max(x, sx), sx + 1);
+                    const ny = Math.min(Math.max(y, sy), sy + 1);
+
+                    room = Math.min(room, hypot(nx - x, ny - y));
+                }
+            }
+        }
+
+        return room;
+    }
+
+    // #apart of two points given as their numbers
+    #apartAt(mapId, ax, ay, bx, by) {
+        const squares = this.#squares(mapId);
+
+        if (!squares.raised || !(squares.raised(Math.floor(ax), Math.floor(ay)) || squares.raised(Math.floor(bx), Math.floor(by)))) {
+            return false;
+        }
+
+        const map = this.maps[mapId];
+
+        return Math.abs(map.heightAt(ax, ay) - map.heightAt(bx, by)) > REACH_RISE;
+    }
+
+    // #aside with its way given as its two numbers: whether there's somewhere to step, and where
+    // (#asideX, #asideY), the same steps tried in the same order
+    #asideAt(actor, ux, uy, step, blocker) {
+        const away = actor.aside?.id === blocker.id ? actor.aside.side : ux * (blocker.y - actor.y) - uy * (blocker.x - actor.x) > 0 ? -1 : 1;
+
+        for (let pass = 0; pass < 2; pass++) {
+            const side = pass === 0 ? away : -away;
+
+            for (let turn = 0; turn < ASIDE.length; turn++) {
+                const c = ASIDE[turn][0];
+                const s = ASIDE[turn][1];
+                const vx = ux * c - uy * s * side;
+                const vy = uy * c + ux * s * side;
+                const nx = actor.x + vx * step;
+                const ny = actor.y + vy * step;
+
+                if (!this.#bumpsAt(actor, nx, ny) && this.#clearAt(actor.map, nx, ny, actor, true)) {
+                    actor.aside = { id: blocker.id, side };
+                    this.#asideX = nx;
+                    this.#asideY = ny;
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    // Whether a walker standing on the mesh could stand at a point too (#clear's asking, with
+    // Battle.remembering): the mesh asked where it stands, and then of the point only if it's on
+    // it, as ever; but what it answered of where it stands is remembered while it stands there
+    // (navigation.js stands: till a tile's put in or taken out), so the eight steps aside tried
+    // from one place ask it once, not eight times, and a stride begun where the last one's step
+    // was asked about doesn't ask at all. Each asking made of the mesh is counted, and each
+    // answer it was spared
+    #onMesh(navigation, from, x, y) {
+        let stood = this.#stood.get(from);
+
+        if (!stood) {
+            stood = { at: standing(), to: standing() };
+            this.#stood.set(from, stood);
+        }
+
+        // (Standing where it last asked about stepping: that answer is this one's)
+        if (stood.to.x === from.x && stood.to.y === from.y && stood.to.mesh === navigation) {
+            const was = stood.at;
+
+            stood.at = stood.to;
+            stood.to = was;
+        }
+
+        const work = this.#work;
+        let on = navigation.stands(from.x, from.y, stood.at);
+
+        work.meshAsks += stood.at.asked ? 1 : 0;
+        work.meshKept += stood.at.asked ? 0 : 1;
+
+        if (on) {
+            on = navigation.stands(x, y, stood.to);
+            work.meshAsks += stood.to.asked ? 1 : 0;
+            work.meshKept += stood.to.asked ? 0 : 1;
+        }
+
+        return on;
     }
 
     // How far a point is from the nearest blocked square, up to BODY (metres)
@@ -8193,6 +9178,57 @@ export class Battle {
     // What lingers on those afflicted: hurting them now and then (and bringing down any it's the
     // last of), till it wears off; and the spells lasting on anyone, till they do
     #ail() {
+        if (!Battle.sparing) {
+            this.#ailed();
+
+            return;
+        }
+
+        // (As #ailed, in the same order, nothing made for one with no spell lasting on it, which
+        // is nearly everyone: a list was, for each, every step)
+        const actors = this.actors;
+
+        // (Whether anything ails anyone, noted as everyone's gone through for the spells on them:
+        // nothing here lays an affliction on anyone, so with none found there's no one to go
+        // through again for theirs, and most steps no one is, Battle.mustering)
+        let ailing = !Battle.mustering;
+
+        for (let a = 0; a < actors.length; a++) {
+            const actor = actors[a];
+
+            if (!ailing && actor.afflictions.length) {
+                ailing = true;
+            }
+
+            if (!actor.buffs?.length) {
+                continue;
+            }
+
+            for (const buff of [...actor.buffs]) {
+                if (this.time >= buff.until) {
+                    actor.buffs.splice(actor.buffs.indexOf(buff), 1);
+                    this.#emit("unbuffed", { id: actor.id, kind: buff.kind, over: true });
+                }
+            }
+
+            if (actor.buffs?.length && this.buffOf(actor, "invisibility")) {
+                this.#seeThrough(actor);
+            }
+        }
+
+        for (let a = 0; ailing && a < actors.length; a++) {
+            const actor = actors[a];
+
+            if (actor.dead || !actor.afflictions.length) {
+                continue;
+            }
+
+            this.#ails(actor);
+        }
+    }
+
+    // #ail as it was (Battle.sparing false)
+    #ailed() {
         for (const actor of this.actors) {
             for (const buff of actor.buffs?.length ? [...actor.buffs] : []) {
                 if (this.time >= buff.until) {
@@ -8211,24 +9247,29 @@ export class Battle {
                 continue;
             }
 
-            for (const ailing of [...actor.afflictions]) {
-                if (this.time >= ailing.next) {
-                    ailing.next += AFFLICTIONS[ailing.kind].every;
-                    actor.hp = Math.max(0, actor.hp - ailing.damage);
-                    this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
-                    // (Its enmity for whoever laid it on, a little: ENMITY lingering; never turned by it)
-                    this.#enmity(actor, this.actor(ailing.by), ailing.damage * ENMITY.lingering);
+            this.#ails(actor);
+        }
+    }
 
-                    if (actor.hp === 0) {
-                        this.#die(actor, this.actor(ailing.by));
-                        break;
-                    }
-                }
+    // What ails one still standing, each in turn: its hurt when it's due, and over when it's worn off
+    #ails(actor) {
+        for (const ailing of [...actor.afflictions]) {
+            if (this.time >= ailing.next) {
+                ailing.next += AFFLICTIONS[ailing.kind].every;
+                actor.hp = Math.max(0, actor.hp - ailing.damage);
+                this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
+                // (Its enmity for whoever laid it on, a little: ENMITY lingering; never turned by it)
+                this.#enmity(actor, this.actor(ailing.by), ailing.damage * ENMITY.lingering);
 
-                if (this.time >= ailing.until) {
-                    actor.afflictions.splice(actor.afflictions.indexOf(ailing), 1);
-                    this.#emit("afflicted", { id: actor.id, kind: ailing.kind, change: "over", look: ailing.look });
+                if (actor.hp === 0) {
+                    this.#die(actor, this.actor(ailing.by));
+                    break;
                 }
+            }
+
+            if (this.time >= ailing.until) {
+                actor.afflictions.splice(actor.afflictions.indexOf(ailing), 1);
+                this.#emit("afflicted", { id: actor.id, kind: ailing.kind, change: "over", look: ailing.look });
             }
         }
     }

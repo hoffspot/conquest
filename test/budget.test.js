@@ -10,7 +10,8 @@
 // things to find, 134,000 towns and works, 48,450 peopled settlements, 5,300 of the wild, the
 // battle's index made 200 times over 316,274 actors), with room for the world to change a little.
 // (Since 1-10 the battle's index is brought up to date in place, and made afresh only as someone
-// comes into the battle or leaves it: 19 times over 28,671 actors.) As each pass is put on a grid (Stage
+// comes into the battle or leaves it: 19 times over 28,671 actors.) (Since 1-19 whoever asks after the
+// players near it asks that index: 7,550 players measured, where it was 3,825,888.) As each pass is put on a grid (Stage
 // 1: 1-7 to 1-11), its count falls to what's near each player, and its budget here is brought
 // down to hold it there: a pass that goes back to measuring everyone fails this, on any machine.
 import assert from "node:assert/strict";
@@ -57,6 +58,11 @@ const BUDGETS = [
     // rest of the time. It was 200 times, once a step, over 316,274)
     ["battle.indexed", 26, "times the battle's index was made afresh"],
     ["battle.indexedActors", 40_000, "actors gone through making it"],
+    // (The players measured for whoever asks after those near it: a soldier set on no one, the
+    // folk resting and beckoning, a way to be found. Since 1-19 those the index has within
+    // reach, about one for every eight askings with the players standing apart; it was every
+    // player in the battle for each asking, 3,825,888)
+    ["battle.playerPairs", 10_000, "players measured for whoever asks after those near it"],
 ];
 
 describe("the work of a world's steps, by count (core/probe.js), at 50 players spread", () => {

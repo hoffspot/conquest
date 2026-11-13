@@ -1011,11 +1011,62 @@ It's given them in the battle's list's order, so each blow and each roll of the 
 did when everyone was gone through. A guard tower, and a player standing still, look for the
 nearest enemy only as far off as their weapon reaches, and at anything standing over more than
 its own square (a `footprint`: struck at its nearest square) however far off its middle is. A
-courtesan's beckoning and the folk's resting ask only the players whether they're in sight. A
+courtesan's beckoning and the folk's resting ask only the players whether they're in sight, and
+of those only the ones the index has near enough to see (below). A
 second battle (a tower, a standing player, casters, bombs, a cry, one unseen) plays out the same
 either way too. This is the multiplayer scaling plan's rule for its grids, slice 1-10's
 (`generated/multiplayer_scaling_plan.md`): the cells only cull, the test asked of each is the one
 it always was, in the order it always was.
+
+**The players near** (`#heroesNear`). Whoever asks after the players near it went through every
+player in the battle: a soldier or a beast set on no one, every step, for one to go for
+(`#drawnTo`, `#playerSeen`); the folk, for one to rest or beckon in sight of (`#rest`,
+`#beckon`); a way to be found, for whether a player's near either end of it (`#pathTo`). With a
+hundred players spread over a world that was 62,000 askings a step of players a town away. The
+index keeps the players by cells of their own, 32 metres a side (`HERO_CELL`), brought up to
+date with it, and each asking takes the players within its reach from those and goes through
+them in the battle's list's order: the same players, in the same order, fewer of those too far
+to pass the test always made of them. They're given in a list of their own (`#nearHeroes`),
+which no other search fills, so nothing a loop over it calls can fill it under the loop. Two
+things keep it exact. The index is asked only while the battle's list is the one the step's
+lists of its players were made of (`#mustered`: no one added or taken out since), and otherwise
+every player's gone through as before; and a player who was down as the step began and is up
+again in the middle of it isn't gone for till the next, as before (`#upright`). With
+`Battle.indexing` off every player's gone through: a battle with five players among the
+soldiers plays out the same either way (`test/field-battle.test.js`), and so does a walk
+through a city's crowd with players coming, going and falling (`test/sparing.test.js`).
+`test/budget.test.js` holds the players measured (`battle.playerPairs`): 7,550 in ten seconds of
+50 players spread, where it was 3,825,888.
+
+**Cheaper, with nothing changed** (generated/multiplayer_scaling_plan.md 1-16 to 1-18). Three
+more of the battle's economies are of the same kind, each behind a switch that plays the old
+form, and each proven by the same walk through a city's crowd (three players among its folk and
+soldiers, wolves let loose in it) coming out the same step for step either way, every step's
+events, the world's sum as it goes and all of it at the end (`test/sparing.test.js`), and by
+`test/field-battle.test.js`'s two battles to the same hash:
+
+- **Nothing made to throw away** (`Battle.sparing`). A step made some 4 MB of things it threw
+  away at once with a hundred players spread: an array for each pair of a stride's numbers, a
+  function for each look for a spell lasting on someone or for what ails them, a list of the
+  spells on everyone with none, a number on the heap for each of the index's cells asked for
+  (they were numbered up to 2^32, and are under 2^30 now). The same sums are made in the same
+  order with each number by itself (`#walked` and what it asks: `#bumpsAt`, `#clearAt`,
+  `#asideAt`), looks made by place, and functions the battle keeps.
+- **Where a walker stands, remembered** (`Battle.remembering`, `#onMesh`). Stepping aside, a
+  walker asks the mesh whether it stands on it and whether it would where it steps, for each of
+  up to eight steps it tries, and again at its next stride. What the mesh said of where it
+  stands is kept while it stands there and none of the navigation tiles round it has been put
+  in since (navigation.js `stands`): about half the askings. The tiles are still made sure of
+  and counted as used exactly as an asking does, so the mesh lets go of the same tiles at the
+  same times (the test holds that with the mesh kept to six tiles, so they're let go and baked
+  again in the middle of the walk).
+- **Fewer goings through everyone** (`Battle.mustering`). The players are kept as a list,
+  brought up to date as anyone's added or taken out (`#cast`), where each step looked for them
+  among everyone twice; who's after whom is noted in one going through (`#mustered`); the index
+  is brought up to date in one, not two (`#reindexed`); what ails anyone is gone through only
+  when something ails someone (`#ail`); and each character's turn begins by reading what it
+  has, where five things were called to find it has none. Whatever's done to anyone is done in
+  the order it was.
 
 **One shape** (`OPTIONAL`, `#made`). Every character in a battle has the same properties in the
 same order, whatever it is and whatever it's been given since: `add` makes each with all its own,
@@ -1200,7 +1251,8 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   it's back). The 16 maps of squares last walked keep their meshes. The battle asks the meshes
   two things: its ways, and whether someone stepping aside round another, or back towards their
   way, thrown or leaping somewhere, or getting down from a horse, would still be standing on
-  the mesh there (`#clear`: `walkable`), which keeps them out of what's drawn where the squares
+  the mesh there (`#clear`: `walkable`; what it says of where they stand remembered while they
+  stand there, `#onMesh`), which keeps them out of what's drawn where the squares
   don't reach. What's in the way, and where someone can be put, are still asked of the squares.
   A copy of a world someone else hosts takes the host's ways (below) and finds none, but it
   asks the second for itself, so it needs the tiles under whoever's walking: its game has those
