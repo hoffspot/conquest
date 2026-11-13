@@ -18434,7 +18434,10 @@ test("soldiers about the player past the bodies the quality's memory can hold in
     const most = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const quality = session.view.quality;
-        const others = [...game.avatars.values()].filter((avatar) => avatar.constructor.name !== "CrowdAvatar").length;
+        // (Everyone else held in full, as the budget counts them: not the wild's beasts built in
+        // code, their bodies shared, each one small. The soldiers' room counted those till the
+        // budget was one room, 2026-11-13: app/game.js #seats)
+        const others = [...game.avatars.values()].filter((avatar) => !["CrowdAvatar", "BeastAvatar"].includes(avatar.constructor.name)).length;
 
         session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 5 };
 
