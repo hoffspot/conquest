@@ -365,7 +365,8 @@ export class Navigation {
          * to be made (later), even for a way that's not to wait: a world server's (server/
          * ahead.js), whose players' surroundings are made ahead, and whose steps no one's way
          * should hold up making tiles beyond them. The way as far as it goes is walked meanwhile,
-         * and looked for on from there.
+         * and looked for on from there. Not for a way asked for `now` (path): one every copy of
+         * the world asks for itself and goes by at once, which must come out the same in all.
          */
         this.widenLater = false;
     }
@@ -688,10 +689,14 @@ export class Navigation {
      * made here but sent on, and there's no way till they're in ([]: looked for again a moment
      * later, core/battle.js REPATH_MS), so it never holds up the frame it's looked for in.
      * Asked across more tiles than MOST_ASKED, there's none, and nothing's made for it.
+     * Asked for `now`, the tiles further round are made here whatever widenLater says: for a way
+     * that isn't walked but decides something there and then in every copy of the world, each
+     * asking its own mesh (core/host.js #spots), where a world server's and a browser's must
+     * find the same.
      */
-    path(from, to, { wait = false } = {}) {
+    path(from, to, { wait = false, now = false } = {}) {
         const [baked, start] = [this.baked, performance.now()];
-        const way = this.#path(from, to, wait);
+        const way = this.#path(from, to, wait, now);
         const ms = performance.now() - start;
 
         // (Tiles baked here and now for it, slowly: told to the debug log, as work done a step at
@@ -704,7 +709,7 @@ export class Navigation {
     }
 
     // (path's way, found)
-    #path(from, to, wait) {
+    #path(from, to, wait, now) {
         const [x0, y0, x1, y1] = [Math.min(from[0], to[0]), Math.min(from[1], to[1]), Math.max(from[0], to[0]), Math.max(from[1], to[1])];
         const [tx0, ty0] = this.tileOf(x0, y0);
         const [tx1, ty1] = this.tileOf(x1, y1);
@@ -742,7 +747,7 @@ export class Navigation {
 
             // (Tiles round it still to come: the way as it is, for now, looked for further again
             // once they're in)
-            if (this.#cover(...box, 0, wait || this.widenLater)) {
+            if (this.#cover(...box, 0, wait || (this.widenLater && !now))) {
                 break;
             }
 

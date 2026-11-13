@@ -3,6 +3,7 @@
 // want, and what its report holds (its schema), over a short run of a small world. The numbers
 // themselves are a machine's (npm run load); what's checked here is the same on any.
 import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
 import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DAY } from "../client/js/core/daytime.js";
@@ -11,7 +12,8 @@ import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
 import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
-import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, LEAVE_SCHEMA, load, LOAD, REPORT_SCHEMA, STEP_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
+import { RUNNER } from "../client/js/core/runner.js";
+import { ACTIVITY_SCHEMAS, activitiesOf, checkReport, doorsOf, EVENT_SCHEMA, failuresOf, gate, GATE, gateRuns, gateTable, judgeGate, keptUp, layoutOf, LEAVE_SCHEMA, load, LOAD, REPORT_SCHEMA, STEP_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
 import { AHEAD, Ahead } from "../server/ahead.js";
 import { KEEPER } from "../server/keeper.js";
 
@@ -184,6 +186,12 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
         assert.deepEqual(checkReport({ ...report, late: { ...late, kept: [{ ...late.kept[0], wall: "long" }, late.kept[1]] } }), ["report.late.kept.0.wall: not a number"]);
         assert.deepEqual(checkReport({ ...report, late: { over: 0, count: 0 } }), ["report.late.kept: missing"]);
         assert.ok(wordsOf(report).some((line) => line.startsWith(`Late: ${steps} steps over 0 ms, the first 32 kept: 0.00 s `)), "said in a line");
+
+        // (And the longest of them all, with its parts, wherever it fell: here some step of the 300)
+        assert.deepEqual(checkReport(late.longest, STEP_SCHEMA), []);
+        assert.equal(late.longest.wall, report.steps.wall.worst);
+        assert.equal(late.longest.at, report.steps.wall.worstAt * STEP_MS);
+        assert.deepEqual(checkReport({ ...report, late: { ...late, longest: { ...late.longest, hear: "long" } } }), ["report.late.longest.hear: not a number"]);
     });
 
     it("began the fight it was asked for, ten seconds in", () => {
@@ -590,6 +598,254 @@ describe("the load's dungeons and buildings (scripts/load.js doorsOf, load, acti
         assert.deepEqual(checkReport({ ...report, dungeons: { ...dungeons, inside: { most: 8 } } }).sort(), ["report.dungeons.inside.end: missing", "report.dungeons.inside.fallen: missing"]);
         assert.deepEqual(failuresOf({ ...report, problems: ["no one got in by a door"] }), ["no one got in by a door"]);
         assert.deepEqual(failuresOf({ ...report, problems: ["dungeon-28 wasn't made in the run", "2 of the 8 never got in by their door"] }), ["dungeon-28 wasn't made in the run"]);
+    });
+});
+
+describe("the load's runs of several activities (scripts/load.js load, --activity fights,invasion,night; generated/multiplayer_scaling_plan.md 0-12)", () => {
+    // (The gate's mixed run, small: fights, an invasion and night together, in one town)
+    const options = { seed: 2, players: 8, layout: "one-town", activity: "night,invasion,fights", seconds: 15 };
+    let report;
+
+    before(async () => {
+        report = await load(options);
+    });
+
+    // What of a report is the same on any machine: what the world did, what was counted of it and what was sent
+    const played = (one) => ({
+        counts: one.counts,
+        calls: Object.fromEntries(Object.entries(one.passes).map(([name, { calls }]) => [name, calls])),
+        bytes: one.bytes,
+        actors: one.actors,
+        census: one.census,
+        events: one.events,
+        night: one.night,
+        snapshot: one.snapshot.bytes,
+        welcome: one.joined.welcome.bytes,
+        navigation: { wanted: one.navigation.wanted, held: one.navigation.held, dropped: one.navigation.dropped },
+        problems: one.problems,
+    });
+
+    it("names what's played in the order the load lists them, each once, walking unsaid beside others; and refuses one that's a run of its own", () => {
+        assert.deepEqual(activitiesOf("night,invasion,fights"), ["fights", "invasion", "night"]);
+        assert.deepEqual(activitiesOf(" fights , walk,fights"), ["fights"]);
+        assert.deepEqual(activitiesOf("walk"), ["walk"]);
+        assert.deepEqual(activitiesOf("stick,night"), ["stick", "night"]);
+        assert.deepEqual(LOAD.together, ["walk", "stick", "fights", "battle", "invasion", "hellrift", "night"]);
+        assert.deepEqual(LOAD.events, ["fights", "battle", "invasion", "hellrift"]);
+        assert.ok(LOAD.together.every((one) => LOAD.activities.includes(one)));
+
+        for (const alone of ["warturn", "joinstorm", "dungeons"]) {
+            assert.throws(() => activitiesOf(`fights,${alone}`), new RegExp(`^Error: ${alone} is a run of its own: those that can be played together are walk, stick, fights, battle, invasion, hellrift, night$`));
+            assert.deepEqual(activitiesOf(alone), [alone], "by itself, as ever");
+        }
+
+        assert.throws(() => activitiesOf("fights,dancing"), /No activity called dancing: walk, stick, fights/);
+        assert.throws(() => activitiesOf(","), /No activity called ,: walk/);
+    });
+
+    it("holds everything the schema says of a run of one, and what each of its activities adds, under its own name", () => {
+        assert.deepEqual(checkReport(report), []);
+        assert.deepEqual(checkReport(JSON.parse(JSON.stringify(report))), []);
+        assert.equal(report.schema, LOAD.schema);
+        assert.deepEqual(report.run, { seed: 2, players: 8, layout: "one-town", activity: "fights,invasion,night", seconds: 15, whole: false, leave: "none", sudden: false, node: process.version, platform: process.platform, arch: process.arch, cpus: report.run.cpus });
+        assert.deepEqual(report.problems, []);
+        assert.deepEqual(failuresOf(report, { ceiling: 50 }), []);
+
+        // (Every key a run of one has, and no other but the night's and what was begun)
+        assert.deepEqual(Object.keys(report).filter((key) => !Object.hasOwn(REPORT_SCHEMA, key)).sort(), ["events", "night"]);
+        assert.deepEqual(Object.keys(report.night).sort(), Object.keys(ACTIVITY_SCHEMAS.night).sort());
+        assert.equal(report.night.dark, true);
+        assert.equal(report.event, undefined, "`event` is a run of one's");
+
+        const { night, events, ...without } = report;
+
+        assert.deepEqual(checkReport({ ...without, events }), ["report.night: missing"]);
+        assert.deepEqual(checkReport({ ...without, night }), ["report.events: missing"]);
+        assert.deepEqual(checkReport({ ...report, events: [{ ...events[0], ok: "yes" }, events[1]] }), ["report.events.0.ok: not a boolean"]);
+        assert.deepEqual(checkReport({ ...report, events: {} }), ["report.events: not an array"]);
+
+        // (One thing begun beside the dark is a run of several with one `event`, as a run of one has it)
+        assert.deepEqual(checkReport({ ...without, run: { ...report.run, activity: "fights,night" }, night, event: events[0] }), []);
+    });
+
+    it("begins each thing asked for ten seconds in, each by a player of its own: the invasion in the first player's town, the fight by the next", () => {
+        assert.deepEqual(
+            report.events.map(({ type, at, asked, ok }) => ({ type, at, asked, ok })),
+            [
+                { type: "fights", at: LOAD.eventAt, asked: 1, ok: true },
+                { type: "invasion", at: LOAD.eventAt, asked: 1, ok: true },
+            ],
+        );
+
+        for (const event of report.events) {
+            assert.deepEqual(checkReport(event, EVENT_SCHEMA), []);
+            assert.deepEqual(Object.keys(event), Object.keys(EVENT_SCHEMA));
+            assert.ok(event.actors > 2 * LOAD.fightSize, "both armies and the raiders, together");
+        }
+
+        assert.ok(report.actors.most >= report.actors.start + report.events[0].actors);
+        assert.ok(wordsOf(report).some((line) => /^At 10 s: the fights, asked for by 1, begun; the invasion, asked for by 1, begun \(\d+ more in the battle for them all\)$/.test(line)));
+        assert.match(wordsOf(report)[0], /^8 players, one-town, fights,invasion,night, seed 2: 300 steps/);
+        assert.ok(wordsOf(report).some((line) => line.startsWith("At night: minute 53.")));
+
+        // (One that didn't begin fails the run, by its own name)
+        assert.deepEqual(failuresOf({ ...report, problems: ["the invasion asked for at 10 s didn't begin"] }), ["the invasion asked for at 10 s didn't begin"]);
+    });
+
+    it("plays the same world twice for the same options: all that's counted of it and sent, the same", async () => {
+        const again = await load({ ...options, activity: "fights,invasion,night" });
+
+        assert.deepEqual(played(again), played(report));
+        assert.ok(report.counts["battle.paths"] > 0 && report.bytes.total > 0 && report.navigation.dropped === 0, "with ways found, and the navigation with room for every tile");
+    });
+
+    it("says how the steps were kept up with: the most over a step's time one after another, and the pace a world server would have kept", () => {
+        assert.deepEqual([typeof report.steps.together, report.steps.pace], ["number", 1]);
+        assert.ok(report.steps.together <= report.late.count);
+
+        // (Four over one after another, then two; nothing let go: each made up in the steps after)
+        assert.deepEqual(keptUp([10, 60, 60, 60, 60, 10, 51, 51, 50, 10]), { together: 4, pace: 1, dropped: 0 });
+        assert.deepEqual(keptUp([]), { together: 0, pace: 1, dropped: 0 });
+        // (A step of 400 ms: 350 behind, the 100 beyond RUNNER.behind let go; the looks between count too)
+        assert.equal(RUNNER.behind, 250);
+        assert.deepEqual(keptUp([400, 10, 10, 10]), { together: 1, pace: 0.5, dropped: 100 });
+        assert.deepEqual(keptUp([40, 40, 40, 40], [20, 20, 20, 20]), { together: 0, pace: 1, dropped: 0 });
+        assert.deepEqual(keptUp(new Array(100).fill(40), new Array(100).fill(20)).dropped, 100 * 10 - 250);
+    });
+});
+
+describe("Stage 1's gate as one command (scripts/load.js gate, --gate; generated/multiplayer_scaling_plan.md 0-12)", () => {
+    // A report as a run of the gate's would give it: a real one's shape, with the numbers given
+    let real;
+    const reportOf = (options, { mean = 12, p99 = 34, together = 2, pace = 1, settled = true, problems = [] } = {}) => ({
+        ...real,
+        run: { ...real.run, ...options },
+        joined: { ...real.joined, players: options.players ?? real.run.players },
+        warm: { ...real.warm, settled },
+        steps: { ...real.steps, wall: { ...real.steps.wall, mean, p99 }, together, pace },
+        // (And what the mixed run's activities add to it)
+        ...(options.activity === "fights,invasion,night"
+            ? { night: { waited: 2100000, turn: 35, from: 53.1, to: 55.1, dark: true }, events: ["fights", "invasion"].map((type) => ({ type, at: LOAD.eventAt, asked: type === "fights" ? 5 : 1, ok: true, actors: 120 })) }
+            : {}),
+        problems,
+    });
+
+    before(async () => {
+        real = await load({ seed: 2, players: 4, layout: "one-town", seconds: 2 });
+    });
+
+    it("plays the walk and the mixed run at 100 spread and the regression at 8 spread, each on seeds 2 and 7 for 120 s", () => {
+        assert.deepEqual(
+            gateRuns().map(({ line, options }) => [line.name, options]),
+            [
+                ["walk", { seed: 2, players: 100, layout: "spread", activity: "walk", seconds: 120 }],
+                ["walk", { seed: 7, players: 100, layout: "spread", activity: "walk", seconds: 120 }],
+                ["mixed", { seed: 2, players: 100, layout: "spread", activity: "fights,invasion,night", seconds: 120 }],
+                ["mixed", { seed: 7, players: 100, layout: "spread", activity: "fights,invasion,night", seconds: 120 }],
+                ["regression", { seed: 2, players: 8, layout: "spread", activity: "walk", seconds: 120 }],
+                ["regression", { seed: 7, players: 8, layout: "spread", activity: "walk", seconds: 120 }],
+            ],
+        );
+        // (The gate's numbers, as the plan's Stage 1 has them)
+        assert.deepEqual(
+            GATE.lines.map(({ name, mean, p99, together, pace, worse }) => ({ name, mean, p99, together, pace, worse })),
+            [
+                { name: "walk", mean: 20, p99: 50, together: 3, pace: 0.99, worse: undefined },
+                { name: "mixed", mean: 25, p99: 50, together: 3, pace: 0.99, worse: undefined },
+                { name: "regression", mean: undefined, p99: undefined, together: undefined, pace: undefined, worse: 0.1 },
+            ],
+        );
+        // (Five fights at 100: one for every twenty)
+        assert.equal(Math.round(100 / LOAD.fightPer), 5);
+        assert.equal(LOAD.fightSize, 6);
+        assert.deepEqual(activitiesOf(GATE.lines[1].activity), ["fights", "invasion", "night"]);
+    });
+
+    it("sets a run against its line's numbers: the mean, the 99th percentile, the steps over one after another and the pace; and the regression against a baseline, or not at all", () => {
+        const [walk, mixed, regression] = GATE.lines;
+        const missed = (line, numbers, more) => judgeGate(line, reportOf({ players: line.players }, numbers), more).missed;
+
+        assert.deepEqual(missed(walk, { mean: 20, p99: 50, together: 3, pace: 0.99 }), [], "at each number, met");
+        assert.deepEqual(missed(walk, { mean: 20.5 }), ["mean 20.50 ms, over 20"]);
+        assert.deepEqual(missed(mixed, { mean: 20.5 }), [], "the mixed run's mean may be 25");
+        assert.deepEqual(missed(mixed, { mean: 25.01, p99: 61.5, together: 4, pace: 0.98 }), ["mean 25.01 ms, over 25", "p99 61.50 ms, over 50", "4 steps over 50 ms one after another, more than 3", "pace 0.98, under 0.99"]);
+        assert.deepEqual(missed(walk, { settled: false }), ["what's round the players wasn't all made before the run"]);
+        assert.deepEqual(missed(mixed, { problems: ["the invasion asked for at 10 s didn't begin"] }), ["the invasion asked for at 10 s didn't begin"], "what's wrong on any machine");
+
+        // (The regression: only reported, with no baseline; held to a tenth above one)
+        assert.deepEqual(judgeGate(regression, reportOf({}, { mean: 90 })).judged, false);
+        assert.deepEqual(missed(regression, { mean: 90, p99: 400 }), []);
+        assert.deepEqual(missed(regression, { mean: 1.1 }, { baseline: 1 }), []);
+        assert.deepEqual(missed(regression, { mean: 1.12 }, { baseline: 1 }), ["mean 1.12 ms, more than 10% over the baseline's 1.00"]);
+
+        const row = judgeGate(walk, reportOf({ seed: 7 }, { mean: 13.2, p99: 35.25 }));
+
+        assert.deepEqual(Object.keys(row), ["line", "title", "seed", "mean", "p99", "worst", "late", "together", "pace", "battle", "snapshot", "baseline", "missed", "judged"]);
+        assert.deepEqual([row.line, row.seed, row.mean, row.p99, row.together, row.pace, row.baseline, row.judged], ["walk", 7, 13.2, 35.25, 2, 1, null, true]);
+    });
+
+    it("plays its runs one after another and prints the table the plan commits; met only with every line judged, in runs of the gate's own length", async () => {
+        const asked = [];
+        const play = async (options, name) => {
+            asked.push(name);
+
+            return reportOf(options, { mean: options.players === 100 ? 13 : 1 });
+        };
+        const said = [];
+        const first = await gate({ play, log: (line) => said.push(line) });
+
+        assert.deepEqual(asked, ["100-spread-walk-seed-2", "100-spread-walk-seed-7", "100-spread-fights-invasion-night-seed-2", "100-spread-fights-invasion-night-seed-7", "8-spread-walk-seed-2", "8-spread-walk-seed-7"]);
+        assert.deepEqual([first.schema, first.gate, first.seconds, first.failed, first.met], [LOAD.schema, true, 120, false, false], "not met with the regression held to nothing");
+        assert.deepEqual(first.machine, { node: process.version, platform: process.platform, arch: process.arch, cpus: real.run.cpus });
+        assert.deepEqual(Object.keys(first.late), asked);
+        assert.ok(said.length >= 12 && said.filter((line) => /^\S.*, seed [27]\.\.\.$/.test(line)).length === 6);
+
+        // (The table: a line saying what and where, the heads, a row a run)
+        assert.equal(first.table.length, 4 + 6);
+        assert.match(first.table[0], /^Stage 1's gate, `npm run load -- --gate`: 120 s a run, by the clock, on Node \d+\.\d+\.\d+, \w+ \w+, \d+ cores\.$/);
+        assert.equal(first.table[2], "| The gate's line | Seed | Held to | Mean (ms) | p99 (ms) | Worst (ms) | Steps over 50 ms | Most one after another | Pace | The battle's step (ms) | A snapshot taken (ms) | Verdict |");
+        assert.match(first.table[4], /^\| Walk, 100 spread \| 2 \| mean ≤ 20 ms, p99 ≤ 50 ms, ≤ 3 over 50 ms together, pace ≥ 0\.99 \| 13\.00 \| 34\.00 \| .* \| 2 \| 1 \| .* \| Met \|$/);
+        assert.match(first.table[7], /^\| Mixed, 100 spread: five 6-a-side fights, one invasion and night \| 7 \| mean ≤ 25 ms, .* \| Met \|$/);
+        assert.match(first.table[9], /^\| Regression, 8 spread \| 7 \| no baseline given: reported \| 1\.00 \| .* \| Reported \|$/);
+        assert.ok(first.table.slice(2).every((line) => line.split("|").length === 14));
+        assert.deepEqual(gateTable(first.rows, { machine: first.machine }), first.table);
+
+        // (Held to itself as a baseline kept from before: met. A tenth and more slower at 8: not)
+        const second = await gate({ play, baseline: JSON.parse(JSON.stringify(first)) });
+
+        assert.deepEqual([second.failed, second.met], [false, true]);
+        assert.match(second.table[8], /\| mean ≤ 1\.10 ms \(the baseline's 1\.00 and 10%\) \| 1\.00 \| .* \| Met \|$/);
+
+        const slower = await gate({ play: async (options) => reportOf(options, { mean: options.players === 100 ? 26 : 1.2 }), baseline: first });
+
+        assert.deepEqual([slower.failed, slower.met], [true, false]);
+        assert.deepEqual(slower.rows.map(({ missed }) => missed.length), [1, 1, 1, 1, 1, 1]);
+        assert.match(slower.table[4], /\| Missed: mean 26\.00 ms, over 20 \|$/);
+
+        // (Runs of another length are a look at what it prints, not the gate: none's called met)
+        const short = await gate({ play, baseline: first, seconds: 30 });
+
+        assert.deepEqual([short.gate, short.seconds, short.failed, short.met], [false, 30, false, false]);
+        assert.match(short.table[0], /30 s a run \(not the gate's 120 s: nothing here is the gate's verdict\)/);
+        assert.ok(short.table.slice(4).every((line) => line.endsWith("| Within them, in a run that isn't the gate's |")));
+    });
+
+    it("is run by hand, where it's asked to judge: nothing in CI runs it, and the nightly run has the mixed run at 25, held only to its ceiling", async () => {
+        const folder = new URL("../.github/workflows/", import.meta.url);
+        const workflows = Object.fromEntries(await Promise.all((await readdir(folder)).map(async (name) => [name, await readFile(new URL(name, folder), "utf8")])));
+        const scripts = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")).scripts;
+
+        // (What each runs: a workflow's lines but its comments, which may say where the gate is run)
+        for (const [name, text] of [...Object.entries(workflows), ...Object.entries(scripts)]) {
+            const run = text
+                .split("\n")
+                .filter((line) => !line.trim().startsWith("#"))
+                .join("\n");
+
+            assert.ok(!run.includes("--gate") && !run.includes("--baseline"), `${name} runs the gate`);
+        }
+
+        assert.match(workflows["scale.yml"], /npm run load -- --players 25 --layout spread --activity fights,invasion,night --seed "\$SEED" --seconds "\$SECONDS_PLAYED" --ceiling 50 --out test-results\/load\/25-spread-mixed\.json/);
     });
 });
 

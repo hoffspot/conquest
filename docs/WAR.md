@@ -215,6 +215,22 @@ The engine is built for this from the start. These are its rules:
    a pack reinforced in its fight with the budget reached, a rift's tears pouring, and a world
    of 25 players play out the same step for step either way (test/indexing.test.js).
 
+   The look to the war's messengers, every three seconds, spares two things the same way
+   (`Host.heralding`; generated/multiplayer_scaling_plan.md 1-31). Who's in a fight, so no
+   messenger comes to them, is found by going through the battle once for all the players
+   (`#besetNow`: everyone someone within 40 m on their map is set on), where the battle was gone
+   through for each player a messenger might come to (`#beset`: 3,400 a hundred times over at 100
+   spread); it's made the first time it's wanted in a look and thrown away with it, and no one's
+   set on anyone anew while messengers are put out. And what's on the war's roads (a convoy,
+   supply wagons, reinforcements, an envoy) is asked whether a player could meet it before its
+   road's end (`core/hurry.js` `onTheRoad`, a walk along what's left of its road) only if it's
+   within a mission's reach of them (`missionsNear`'s `sparing`): a mission about it is of where
+   it is, so one beyond 2 km was left out whatever its road, after the asking. With a hundred
+   players spread and a war 35 turns old that asking was most of the look. `Host.heralding` off
+   does both as before; twelve players by an enemy camp with a fight on about one of them play
+   out the same step for step either way, and a war 40 turns old gives each of a hundred places
+   the same missions for every people (test/heralding.test.js).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk
@@ -2629,7 +2645,15 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
   | Orcs (and any other) | Bomb throwers | Goblin bombs | As a goblin bomber's |
 - **Where they stand**: neither line on a square with no way from it to where the lines meet (a
   yard shut in among buildings: the host's `#spots`, `to`), so none of them is left there for the
-  whole of it.
+  whole of it. Its reinforcements the same. Each copy of the world looks for that way over its
+  own navigation mesh, and none of them is sent as a walked way is, so it's looked for the same
+  way everywhere: if it falls short, the tiles further round are made in the step and it's
+  looked for again, on a world server too, whose other ways send those tiles on to be baked
+  (`path`'s `now`; below, *What the server's steps never bake*). Before that the server's fell
+  short where a browser's got there, it passed over squares the games joined to it took, and
+  each was found astray and sent the world again: at 2 of 28 invasions tried (seeds 1 to 14,
+  two towns each), and at none since (test/spots.test.js; `Host.widening` off plays it as it
+  was, for that test, till its date there).
 - **Who fights whom** (the host's `#against`): the raiders are everyone's enemies and everyone
   theirs; a raider's fellows don't take up its grudges (battle.js `lone`), each picks its own fights.
   In a character's **first** invasion the raiders leave them be, and their followers and creatures
@@ -3318,7 +3342,10 @@ settlement and navigation tile the moment someone first walked into it:
   ever: 66 to 173 ms, and 53 to 86 the step after (`--cold`).
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
-  round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
+  round to be baked, and is walked as far as it goes meanwhile (`widenLater`). The one exception
+  is the way looked for to stand an invasion's soldiers (`#spots`, above: `path`'s `now`), which
+  every copy of the world must find the same there and then: its tiles further round are baked
+  in the step, as a browser bakes them.
 - **Measured** (`npm run step-budget`: four players walking about in four peoples' towns, seed 2,
   three minutes): a step takes 1.2 ms on the mean, 3.8 ms at the 99th percentile, and none over a
   step's 50 ms. Without making ahead: 4.7 ms, 44 ms, and several over 50 ms. The dearest left is

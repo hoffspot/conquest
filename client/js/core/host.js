@@ -1295,6 +1295,18 @@ export class Host {
     static indexing = true;
 
     /**
+     * Whether the look to the war's messengers (#sendMessengers) spares what it needn't do, as
+     * it always does, or does it all, as it did: only for the tests that check the world comes
+     * out the same either way, step for step (generated/multiplayer_scaling_plan.md 1-31). As it
+     * is: those in the battle are gone through once for all the players a messenger might come
+     * to, to say who's in a fight (#besetNow), where they were gone through for each of those
+     * players (#beset); and what's on the war's roads is asked whether a player could meet it
+     * only if it's within a mission's reach of them (core/missions.js missionsNear's `sparing`),
+     * where every one on a road was asked for every player.
+     */
+    static heralding = true;
+
+    /**
      * Whether the night's light is made from what the battle keeps of who might carry it, as it
      * always is, or by going through everyone in the battle each step, as it was: only for the
      * tests that check the light, and so the world, comes out the same either way (generated/
@@ -1305,6 +1317,20 @@ export class Host {
      * lightUntil).
      */
     static bearing = true;
+
+    /**
+     * Whether a spot's way (#spots, `to`: an invasion's lines and its reinforcements) is
+     * looked for with the tiles further round made in the step if it falls short, whatever the
+     * mesh is told of other ways (core/navigation.js path's `now`, widenLater), as it always is;
+     * or as any other way is, as it was: only for the test that shows what that did, till its
+     * date there (test/spots.test.js). Every copy of the world asks its own mesh for these ways
+     * and none is sent, so they must come out the same on a world server (server/ahead.js:
+     * widenLater) as in the browsers joined to it. As it was, the server's fell short where
+     * theirs looked further, it passed over squares they took, and each of them was found
+     * astray and sent the world again. A browser's host never had widenLater, and plays the
+     * same either way.
+     */
+    static widening = true;
 
     /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
@@ -8091,7 +8117,9 @@ export class Host {
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken
     // twice, nor anyone's); with `to` (a point, metres), only those with a way there (not a yard
-    // shut in among buildings, nowhere to go from it: within SPOT_WAY of it, the way's end)
+    // shut in among buildings, nowhere to go from it: within SPOT_WAY of it, the way's end). The
+    // way's looked for by each copy of the world over its own mesh, and so `now`: a world
+    // server's widened in the step as a browser's is (Host.widening)
     #spots(map = "town", { to = null } = {}) {
         const squares = squaresOf(this.world.maps[map]);
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
@@ -8099,7 +8127,7 @@ export class Host {
         // (Where they're to go: or the ground nearest it anyone can stand on)
         const there = navigator ? (navigator.nearest(to) ?? to) : null;
         const goes = ([x, y]) => {
-            const end = navigator.path([x + 0.5, y + 0.5], there).at(-1);
+            const end = navigator.path([x + 0.5, y + 0.5], there, { now: Host.widening }).at(-1);
 
             return Boolean(end) && hypot(end[0] - there[0], end[1] - there[1]) <= SPOT_WAY;
         };
@@ -18617,13 +18645,49 @@ export class Host {
         return actor.target !== null || this.battle.actors.some((other) => !other.dead && other.target === actor.id && other.map === actor.map && hypot(other.x - actor.x, other.y - actor.y) <= 40);
     }
 
+    // Everyone in a fight for someone near being set on them (#beset's second test, asked of
+    // them all at once): the ids of those someone alive on their map, within 40 m, is set on.
+    // One going through the battle, where #beset is one for each who's asked after
+    #besetNow() {
+        const beset = new Set();
+
+        count("messengers.actors", this.battle.actors.length);
+
+        for (const other of this.battle.actors) {
+            if (other.dead || other.target === null) {
+                continue;
+            }
+
+            const them = this.battle.actor(other.target);
+
+            if (them && other.map === them.map && hypot(other.x - them.x, other.y - them.y) <= 40) {
+                beset.add(them.id);
+            }
+        }
+
+        return beset;
+    }
+
     // Whether a messenger may come to a player now: alive, out in the world, not in a fight, with
     // room for another mission, their people still standing, and messengers not turned away (Game
-    // options: their own settings, as their game said them)
-    #mayHearMessenger(player) {
+    // options: their own settings, as their game said them). `besetNow` gives those someone near
+    // is set on (#besetNow's, made the first time it's wanted and the same for all who are asked
+    // after in the one look); with none, the battle's gone through for this one (#beset)
+    #mayHearMessenger(player, besetNow = null) {
         const actor = this.battle.actor(player.id);
 
-        return Boolean(actor && !actor.dead && actor.map === "town" && player.own?.settings?.messengers !== false && this.war?.realm(player.realm)?.alive && player.standing.missions.filter((mission) => mission.state !== "won").length < MOST_MISSIONS && !this.#beset(actor));
+        if (!(actor && !actor.dead && actor.map === "town" && player.own?.settings?.messengers !== false && this.war?.realm(player.realm)?.alive && player.standing.missions.filter((mission) => mission.state !== "won").length < MOST_MISSIONS)) {
+            return false;
+        }
+
+        if (besetNow) {
+            return !(actor.target !== null || besetNow().has(actor.id));
+        }
+
+        // (Set on no one themselves: everyone's gone through for whoever's set on them)
+        count("messengers.actors", actor.target === null ? this.battle.actors.length : 0);
+
+        return !this.#beset(actor);
     }
 
     // An army's general as the battle names them when it comes to one (#promote), so a mission's
@@ -18650,16 +18714,22 @@ export class Host {
         this.messengersAt = this.battle.time + MESSENGER.every;
 
         const out = new Set([...this.messengers.values()].flatMap(({ players }) => players));
+        // (Who's in a fight, found once for all of them, the first time it's asked: no one's
+        // set on anyone anew while messengers are put out. It was the battle gone through for
+        // each player, 3,400 a hundred times over at 100 spread, every three seconds:
+        // generated/multiplayer_scaling_plan.md 1-31)
+        let beset = null;
+        const besetNow = Host.heralding ? () => (beset ??= this.#besetNow()) : null;
 
         for (const group of this.#missionGroups()) {
-            const lead = group.find((player) => this.#mayHearMessenger(player));
+            const lead = group.find((player) => this.#mayHearMessenger(player, besetNow));
 
             if (!lead || group.some((player) => out.has(player.id) || this.battle.time - (this.messengersHeard.get(player.id) ?? -Infinity) < MESSENGER_EVERY)) {
                 continue;
             }
 
             const actor = this.battle.actor(lead.id);
-            const [found] = missionsNear({ war, realm: lead.realm, at: [actor.x, actor.y], held: group.flatMap((player) => player.standing.missions) });
+            const [found] = missionsNear({ war, realm: lead.realm, at: [actor.x, actor.y], held: group.flatMap((player) => player.standing.missions), sparing: Host.heralding });
 
             if (!found) {
                 continue;
