@@ -680,7 +680,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         for (;;) {
             runner.bakeAhead(ahead);
 
-            if (ahead.settled) {
+            // (And a dungeon's levels still with the layouts' worker are waited for however long
+            // they take, where the maker's own patience, AHEAD.delve, goes by the clock: or on
+            // a busy machine a run would begin with a dungeon's floors not made)
+            if (ahead.settled && !(Ahead.delving && ahead.layouts?.delving.size)) {
                 return true;
             }
 
@@ -1084,7 +1087,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const [bakedBefore, addedBefore, madeBefore] = [navigation.baked, navigation.added, ahead.made];
         const [chunksBefore, droppedIn] = [overworld.chunks.size, dropped];
         const groundBefore = overworld.chunksMade;
-        const floorsBefore = Navigation.floorTiles;
+        const [floorsBefore, levelsBefore] = [Navigation.floorTiles, Navigation.levelTiles];
         const actorsBefore = host.battle.actors.length;
         const cpuBefore = cpuNow();
         const before = clock();
@@ -1125,7 +1128,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         // (And the tiles of buildings' floors and dungeons' levels it baked for itself)
         const floorsIn = Navigation.floorTiles - floorsBefore;
 
-        delved.floors += floorsIn;
+        // (Of those, the dungeons' levels' alone: a building's floor is baked in a step or
+        // between two by when its folk first walk it, which goes by the machine's speed; a
+        // level's, made ahead, in none)
+        delved.floors += Navigation.levelTiles - levelsBefore;
 
         if (stormy) {
             storm.stepping = false;
@@ -1464,8 +1470,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             made: { dungeons: made("dungeon").length, buildings: made("building").length, levels: made("dungeon").reduce((sum, { key }) => sum + world.interiors.buildings.get(key).maps.length, 0) },
             // (What of the dungeons was made ahead: whether their levels were worked out ahead,
             // and their floors made and baked (--cold neither, --undelved the levels alone); how
-            // many floors were made between steps; and how many tiles of floors' navigation,
-            // the buildings' too, the steps baked for themselves)
+            // many floors were made between steps; and how many tiles of the dungeons' levels'
+            // navigation the steps baked for themselves)
             ahead: { levels: !(cold && activity === "dungeons"), floors: delvedAhead, made: ahead.delved.levels, baked: delved.floors },
             coming: {
                 dungeon: { wall: came("dungeon", wall), cpu: came("dungeon", cpu) },
@@ -1681,7 +1687,7 @@ export const REPORT_SCHEMA = Object.freeze({
  * and buildings, and how many levels the dungeons have); what of the dungeons was made ahead
  * (`ahead`: whether their levels were worked out ahead, `levels`, and their floors made and their
  * navigation baked, `floors`; how many floors were `made` between steps; and how many tiles of
- * floors' navigation the steps `baked` for themselves); the longest step of each door's coming
+ * the dungeons' levels' navigation the steps `baked` for themselves); the longest step of each door's coming
  * (from its party's standing at it till the next party's: its floors made, its first level
  * woken, its party through), a dungeon's and a building's, by the clock and in the thread's time,
  * and the longest of all (when, how long after its party came, whose, and the pass that took most
@@ -1929,7 +1935,7 @@ export function wordsOf(report) {
             ? [
                   `Doors, from ${report.dungeons.at / 1000} s, a party every ${report.dungeons.stagger / 1000} s: ${report.dungeons.parties} parties at ${report.dungeons.doors.dungeons} dungeons and ${report.dungeons.doors.buildings} buildings; ${report.dungeons.entered} got in, ${report.dungeons.inside.most} inside at most, ${report.dungeons.inside.end} at the end, ${report.dungeons.inside.fallen} fallen`,
                   `Made in the run: ${report.dungeons.made.dungeons} dungeons (${report.dungeons.made.levels} levels) and ${report.dungeons.made.buildings} buildings. The longest step of a dungeon's coming: a mean of ${report.dungeons.coming.dungeon.wall.mean.toFixed(1)} ms, worst ${report.dungeons.coming.dungeon.wall.worst.toFixed(1)} (in the thread's time ${report.dungeons.coming.dungeon.cpu.mean.toFixed(1)} and ${report.dungeons.coming.dungeon.cpu.worst.toFixed(1)}); of a building's ${report.dungeons.coming.building.wall.mean.toFixed(1)} and ${report.dungeons.coming.building.wall.worst.toFixed(1)}; the longest of all a ${report.dungeons.coming.longest.door}'s, ${report.dungeons.coming.longest.after / 1000} s after its party came: ${report.dungeons.coming.longest.wall.toFixed(1)} ms, ${report.dungeons.coming.longest.pass} ${report.dungeons.coming.longest.ms.toFixed(1)} of it`,
-                  `${report.dungeons.ahead.floors ? `${report.dungeons.ahead.made} of the dungeons' floors made ahead, between steps` : report.dungeons.ahead.levels ? "The dungeons' levels worked out ahead, their floors made in the steps (--undelved)" : "Nothing of the dungeons made ahead (--cold)"}; ${report.dungeons.ahead.baked} tiles of floors' navigation baked inside steps`,
+                  `${report.dungeons.ahead.floors ? `${report.dungeons.ahead.made} of the dungeons' floors made ahead, between steps` : report.dungeons.ahead.levels ? "The dungeons' levels worked out ahead, their floors made in the steps (--undelved)" : "Nothing of the dungeons made ahead (--cold)"}; ${report.dungeons.ahead.baked} tiles of their levels' navigation baked inside steps`,
                   `The ${report.dungeons.steps.count} steps with anyone inside: mean ${report.dungeons.steps.wall.mean.toFixed(2)} ms, p99 ${report.dungeons.steps.wall.p99.toFixed(2)}, worst ${report.dungeons.steps.wall.worst.toFixed(1)} (in the thread's time ${report.dungeons.steps.cpu.mean.toFixed(2)}, ${report.dungeons.steps.cpu.p99.toFixed(2)} and ${report.dungeons.steps.cpu.worst.toFixed(1)}), ${report.dungeons.steps.over} over ${LOAD.tick} ms, the longest at ${report.dungeons.steps.longest.at / 1000} s, ${report.dungeons.steps.longest.pass} ${report.dungeons.steps.longest.ms.toFixed(1)} of it; the ${report.dungeons.before.count} before anyone came to a door: mean ${report.dungeons.before.wall.mean.toFixed(2)} ms, p99 ${report.dungeons.before.wall.p99.toFixed(2)}`,
               ]
             : []),

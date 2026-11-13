@@ -563,9 +563,11 @@ describe("the load's dungeons and buildings (scripts/load.js doorsOf, load, acti
     it("has the dungeon's floors made and their navigation baked between steps before its party comes, as a world server does; or, undelved, in its steps as they were, the same parties in by the same doors", async () => {
         const { dungeons } = report;
 
-        // (Every level's floor made ahead, and no tile of a floor's navigation baked in a step)
+        // (Every level's floor made ahead, and no tile of a level's navigation baked in a step.
+        // A building's floors aren't counted here: whether one's baked in a step or between two
+        // goes by how much ground the maker had time for, the machine's speed)
         assert.deepEqual(dungeons.ahead, { levels: true, floors: true, made: dungeons.made.levels, baked: 0 });
-        assert.ok(wordsOf(report).some((line) => line.startsWith(`${dungeons.made.levels} of the dungeons' floors made ahead, between steps; 0 tiles of floors' navigation baked inside steps`)));
+        assert.ok(wordsOf(report).some((line) => line.startsWith(`${dungeons.made.levels} of the dungeons' floors made ahead, between steps; 0 tiles of their levels' navigation baked inside steps`)));
 
         const before = await load({ seed: 2, players: 8, activity: "dungeons", seconds: 8, eventAt: 1000, undelved: true });
 

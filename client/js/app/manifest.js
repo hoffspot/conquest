@@ -217,7 +217,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/missions.js", 35515, "752fea1900"],
             ["js/core/motion.js", 5579, "8d9ef62c30"],
             ["js/core/names.js", 3885, "b6e65bca40"],
-            ["js/core/navigation.js", 38221, "c2ff04da98"],
+            ["js/core/navigation.js", 38674, "37eab83f16"],
             ["js/core/navigation/bake.js", 8997, "50db1b83f8"],
             ["js/core/navigation/recast.js", 1704, "03e9022679"],
             ["js/core/navigation/settings.js", 3918, "5140abd58d"],
