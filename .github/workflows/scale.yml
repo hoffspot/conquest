@@ -81,6 +81,13 @@ jobs:
         if: github.event_name != 'pull_request'
         run: npm run load -- --players 25 --layout spread --activity night --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-night.json
 
+      # (Stage 1's mixed run, at 25: fights, an invasion and night together in the one run, the
+      # plan's 0-12. Held to the ceiling alone, as every run here: the gate is `npm run load --
+      # --gate`, by hand, on the owner's Mac)
+      - name: Load, 25 players spread, fighting, invaded, at night
+        if: github.event_name != 'pull_request'
+        run: npm run load -- --players 25 --layout spread --activity fights,invasion,night --seed "$SEED" --seconds "$SECONDS_PLAYED" --ceiling 50 --out test-results/load/25-spread-mixed.json
+
       # (A turn of the war and its save in the run: what those steps cost, in a war 35 turns old)
       - name: Load, 8 players spread, over a turn of the war
         if: github.event_name != 'pull_request'

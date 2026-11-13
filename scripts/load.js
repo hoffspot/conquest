@@ -22,6 +22,8 @@
 //     npm run load -- --ceiling 50                         # and fail if the mean step's over 50 ms
 //     npm run load -- --players 100 --whole                # the battle's passes timed whole
 //     npm run load -- --players 100 --leave half           # every other player gone at once, ten seconds in
+//     npm run load -- --players 25 --activity fights,invasion,night   # several activities in the one run
+//     npm run load -- --gate                               # Stage 1's gate: six runs, a table, and a verdict
 //
 // --players: any number (the plan's: 8, 25, 50, 100). --layout: spread (each in a settlement of
 // their own, as far from one another as the world allows), towns (four to a town), one-town (all
@@ -50,6 +52,32 @@
 // --undelved its levels alone, as it was before generated/multiplayer_scaling_plan.md 1-29, or
 // with --cold nothing of it, as of a dungeon no one waited near).
 //
+// Several can be played in the one run, with commas between (generated/
+// multiplayer_scaling_plan.md 0-12): the ways of walking, what's begun ten seconds in and the dark
+// (LOAD.together: walk, stick, fights, battle, invasion, hellrift, night). Each thing begun has a
+// player of its own to begin it: a battle, an invasion or a hell rift the first in a town who
+// begins nothing else, the fights' the next after any of theirs who does. The report is as a run
+// of one's, its `run.activity` the names with commas between, with what each adds under its own
+// name, and `events` for what was begun where a run of one has `event`. The rest are each a run
+// of their own (a war's turn waited for, a storm's players out and in again, the dungeons'
+// parties). A run of one activity plays as it always did.
+//
+// --gate plays Stage 1's gate (GATE; generated/multiplayer_scaling_plan.md, Stage 1's goal): 100
+// players spread walking, the same with five 6-a-side fights, one invasion and night together,
+// and 8 spread walking, each on seeds 2 and 7 for 120 s, each run in a process of its own, one
+// after another. Each is set against the gate's numbers (judgeGate): the step's mean and 99th
+// percentile by the clock, how many steps over 50 ms came one straight after another
+// (`steps.together`), and the pace a world server would have kept with those steps
+// (`steps.pace`: keptUp); the 8-spread runs against --baseline's, a gate's report kept from
+// before (test-results/load/gate.json, or --out's), no worse than a tenth above it, and with no
+// baseline they're only reported. It prints the table the plan's 0-11 and 1-14 commit (gateTable)
+// and writes it all to test-results/load/gate.json, each run's whole report beside it in
+// test-results/load/gate/. It exits 1 if any line missed its numbers, or a run went wrong in a
+// way that's the same on any machine. Its times are one machine's: it judges only where it's
+// run, by hand, on the machine the gate names (the owner's Mac), and nothing in CI runs it.
+// --seconds, for a look at what it prints, plays each run that long instead: then it says so, and
+// no line is called met.
+//
 // The battle's step is timed by its parts (core/probe.js BATTLE_PASSES): each kind of character's
 // turn and walking, and, apart from those, the searches, the ways found and the mesh asked within
 // them. With --whole those aren't timed apart, so each kind's turn and walking have all that was
@@ -61,7 +89,8 @@
 // with their parts: when, how long, the hearing, each pass's time in that step, what each
 // counter went up by in it, and the ground the step made for itself (`made`: chunks, navigation
 // tiles baked, and `floors`, the tiles of buildings' floors and dungeons' levels baked;
-// generated/multiplayer_scaling_plan.md 0-13).
+// generated/multiplayer_scaling_plan.md 0-13). And `late.longest`, the longest of them all with
+// its parts, wherever in the run it fell (not there, with none late).
 //
 // --leave half, or all: that many of the players (every other one; everyone) gone from the world
 // in the one step, LOAD.eventAt in, the rest playing on (1-27): the report's `leave` says what
@@ -85,9 +114,10 @@
 // or, given --ceiling, if what's the same on any machine went wrong (failuresOf: the report not as
 // its schema says, players sent out, a fight that didn't begin) or the mean step, in the thread's
 // own processor time, was over that many ms: a catastrophe's ceiling, for the nightly run
-// (.github/workflows/scale.yml), not a gate. The gates are timed by hand, on one machine.
+// (.github/workflows/scale.yml), not a gate. The gates are timed by hand, on one machine: --gate.
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -103,7 +133,7 @@ import { Navigation, navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
-import { WorldRunner } from "../client/js/core/runner.js";
+import { RUNNER, WorldRunner } from "../client/js/core/runner.js";
 import { TURN_MS } from "../client/js/core/war/war.js";
 import { encode } from "../client/js/core/wire.js";
 import { RACE, startFor } from "../client/js/core/worldplan/plan.js";
@@ -122,6 +152,12 @@ export const LOAD = Object.freeze({
     // What the players do, of what's built; and what isn't yet, with why
     activities: ["walk", "stick", "fights", "battle", "invasion", "hellrift", "night", "warturn", "joinstorm", "dungeons"],
     unbuilt: Object.freeze({}),
+    // Those that can be played together in one run (--activity fights,invasion,night): the ways
+    // of walking, what's begun `eventAt` in, and the dark. The rest are each a run of their own:
+    // a war's turn waited for, a storm's players out and in again, the dungeons' parties
+    together: ["walk", "stick", "fights", "battle", "invasion", "hellrift", "night"],
+    // (And of those, what's begun `eventAt` in by one of the players, or for the fights by several)
+    events: ["fights", "battle", "invasion", "hellrift"],
     // How many to a town (the `towns` layout), and the kinds of place that are towns for it
     party: 4,
     towns: ["capital", "city", "town"],
@@ -434,6 +470,63 @@ class Peer {
     }
 }
 
+/**
+ * The activities a run plays, from what was asked for (LOAD.activities: one, or several with
+ * commas between, "fights,invasion,night"), in the order LOAD.activities has them, each once.
+ * Walking is what the players do in every run but one with sticks held, so asked for beside
+ * others it adds nothing and isn't named. Throws for one there isn't, or for several that can't
+ * be played together (LOAD.together).
+ */
+export function activitiesOf(activity) {
+    const asked = String(activity)
+        .split(",")
+        .map((one) => one.trim())
+        .filter(Boolean);
+    const known = [...LOAD.activities, ...Object.keys(LOAD.unbuilt)];
+    const unknown = asked.find((one) => !known.includes(one));
+
+    if (unknown !== undefined || !asked.length) {
+        throw new Error(`No activity called ${unknown ?? activity}: ${known.join(", ")}`);
+    }
+
+    const several = LOAD.activities.filter((one) => asked.includes(one));
+    const played = several.length > 1 ? several.filter((one) => one !== "walk") : several;
+    const alone = played.length > 1 ? played.find((one) => !LOAD.together.includes(one)) : undefined;
+
+    if (alone !== undefined) {
+        throw new Error(`${alone} is a run of its own: those that can be played together are ${LOAD.together.join(", ")}`);
+    }
+
+    return played;
+}
+
+/**
+ * How a run's steps would have been kept up with, from each step's time by the clock (`wall`,
+ * ms) and the look between it and the next (`looks`: what's made ahead, ms; none, nothing):
+ * `together`, the most steps over a step's time (`over`) one straight after another; and `pace`,
+ * the share of the clock's time a world server would have played, with `dropped` (ms) what it
+ * would have let go: it plays a step each `step` ms, is behind by whatever a step and its look
+ * took beyond that, catches up as later ones take less, and lets go of what it's behind by
+ * beyond `behind` ms (core/runner.js RUNNER.behind, letGo), so its world's time runs that much
+ * slow. 1, unless it fell that far behind.
+ */
+export function keptUp(wall, looks = null, { over = LOAD.tick, step = STEP_MS, behind = RUNNER.behind } = {}) {
+    let [together, run, late, dropped] = [0, 0, 0, 0];
+
+    for (let k = 0; k < wall.length; k++) {
+        run = wall[k] > over ? run + 1 : 0;
+        together = Math.max(together, run);
+        late = Math.max(0, late + wall[k] + (looks?.[k] ?? 0) - step);
+
+        if (late > behind) {
+            dropped += late - behind;
+            late = behind;
+        }
+    }
+
+    return { together, pace: wall.length ? round(1 - dropped / (wall.length * step), 4) : 1, dropped: round(dropped) };
+}
+
 // The kind of a message, read off its front without reading the rest ({"kind":"ops",...)
 const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.indexOf('"', 9)) : "?");
 
@@ -443,22 +536,27 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * only says so ({ schema, run, built: false, reason }). `lateOver` (ms) is how long a step is
  * late from (LOAD.tick: only a test, which can't make a step slow, asks for another).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, undelved = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity: asked = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, undelved = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+    // (What's played: one activity, or several together, named with commas between as they were asked for)
+    const unbuilt = String(asked)
+        .split(",")
+        .map((one) => one.trim())
+        .find((one) => Object.hasOwn(LOAD.unbuilt, one));
+
+    if (unbuilt !== undefined) {
+        return { schema: LOAD.schema, run: { seed, players: count, layout, activity: asked, seconds, whole, leave, sudden, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length }, built: false, reason: LOAD.unbuilt[unbuilt] };
+    }
+
+    const playing = activitiesOf(asked);
+    const does = (one) => playing.includes(one);
+    const activity = playing.join(",");
     const run = { seed, players: count, layout, activity, seconds, whole, leave, sudden, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
-
-    if (Object.hasOwn(LOAD.unbuilt, activity)) {
-        return { schema: LOAD.schema, run, built: false, reason: LOAD.unbuilt[activity] };
-    }
-
-    if (!LOAD.activities.includes(activity)) {
-        throw new Error(`No activity called ${activity}: ${[...LOAD.activities, ...Object.keys(LOAD.unbuilt)].join(", ")}`);
-    }
 
     if (!Number.isInteger(count) || count < 1 || !Number.isFinite(seconds) || seconds <= 0) {
         throw new Error("--players takes a whole number of players, --seconds how long to play");
     }
 
-    if (!LOAD.leaves.includes(leave) || (leave !== "none" && ["joinstorm", "dungeons"].includes(activity))) {
+    if (!LOAD.leaves.includes(leave) || (leave !== "none" && (does("joinstorm") || does("dungeons")))) {
         throw new Error(`--leave takes ${LOAD.leaves.join(", ")}; a join storm has everyone gone before it begins, and the dungeons' parties stay`);
     }
 
@@ -488,14 +586,14 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // --cold, of dungeons: and its levels not worked out ahead either, below)
     const wasDelving = Ahead.delving;
 
-    Ahead.delving = !undelved && !(cold && activity === "dungeons");
+    Ahead.delving = !undelved && !(cold && does("dungeons"));
 
     const delvedAhead = Ahead.delving;
 
     const clock = () => performance.now();
     const began = clock();
     const world = buildWorld({ seed });
-    const homes = activity === "dungeons" ? doorsOf(world, count) : layoutOf(world.plan, count, layout);
+    const homes = does("dungeons") ? doorsOf(world, count) : layoutOf(world.plan, count, layout);
     const overworld = world.maps.town;
     const navigation = navigatorOf(overworld);
     // (As a world server's: everyone rests together, and its owners' debug commands are theirs,
@@ -510,7 +608,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // (The time of day is the war's clock, core/daytime.js, and nothing sets it or turns the war
     // but the world's steps: so they're played, the war's turns with them, before anyone's in and
     // before anything's timed. An empty world's step is some 0.05 ms)
-    const night = activity === "night" ? { waited: untilTime(elapsedOf(host.war), DAY.night), turn: 0, from: 0, to: 0, dark: false } : null;
+    const night = does("night") ? { waited: untilTime(elapsedOf(host.war), DAY.night), turn: 0, from: 0, to: 0, dark: false } : null;
     const played = night ? night.waited : turns * TURN_MS;
 
     for (let ms = 0; ms < played; ms += STEP_MS) {
@@ -530,7 +628,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // the next taking, WORLDS, so there the clock must move while it's taken, as a server's does)
     const within = { since: null, over: 0 };
     const outbox = [];
-    const hosting = new Hosting(host, { send: (peer, text) => outbox.push(peer, text), clock: activity === "joinstorm" ? () => time + within.over + (within.since === null ? 0 : clock() - within.since) : () => time });
+    const hosting = new Hosting(host, { send: (peer, text) => outbox.push(peer, text), clock: does("joinstorm") ? () => time + within.over + (within.since === null ? 0 : clock() - within.since) : () => time });
     const runner = new WorldRunner(host, { hosting });
     const peers = homes.map((home, k) => new Peer(k, home));
     const byPeer = new Map(peers.map((peer) => [peer.peer, peer]));
@@ -545,9 +643,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // thread nothing a disk would. And each turn and each writing noted as it comes)
     const zipped = promisify(gzip);
     const kept = { turned: null, wrote: null, saves: [] };
-    const keeper =
-        activity === "warturn"
-            ? new Keeper(runner, {
+    const keeper = does("warturn")
+        ? new Keeper(runner, {
                   meta: { played: 0 },
                   journal: async () => {},
                   saveText: async (text) => {
@@ -665,7 +762,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     // (--cold, of dungeons: no dungeon's levels asked of the layouts' worker, world/layouts.js
     // delve, so each is worked out in the step that makes it: a dungeon no one waited near)
-    if (cold && activity === "dungeons" && ahead.layouts) {
+    if (cold && does("dungeons") && ahead.layouts) {
         ahead.layouts.interiors = null;
     }
     let settled;
@@ -760,7 +857,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // (The ground they'll come back to is made; they come back as new guests, are stood where
     // they were, and count their commands from the first again)
     const storm =
-        activity === "joinstorm"
+        does("joinstorm")
             ? { at: eventAt, over: burst, welcomes: LOAD.welcomes, loading: LOAD.loading, asked: 0, welcomed: 0, waiting: 0, queued: 0, snapshots: 0, done: -1, lastWaited: 0, waits: null, steps: null, admit: null, longest: null, ground: null, first: eventAt / STEP_MS, last: -1, waited: [], admitting: 0, admits: [], worst: null, letting: 0, stepping: false, made: { steps: { chunks: 0, tiles: 0 }, ahead: { chunks: 0, tiles: 0 } } }
             : null;
     const wasComing = Ahead.coming;
@@ -833,7 +930,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // (A building's is found now its town's made: a tavern's, one not gone into yet if there is
     // one, else whatever of the town's has a door off the street)
     const delving =
-        activity === "dungeons"
+        does("dungeons")
             ? [...new Set(homes.map(({ party }) => party))].map((party) => {
                   const members = peers.filter((peer) => peer.home.party === party);
                   const { door } = members[0].home;
@@ -869,17 +966,45 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     // --- The run ---
 
-    const fighters = ["fights"].includes(activity) ? Math.max(1, Math.round(count / LOAD.fightPer)) : ["battle", "invasion", "hellrift"].includes(activity) ? 1 : 0;
+    // (What's begun LOAD.eventAt in, each by a player of its own, `peer.begins`. A battle, an
+    // invasion or a hell rift by one: the first player, or, several begun in the one run, the
+    // first in a town who begins nothing else, since an invasion comes only to a town. The
+    // fights by one in every LOAD.fightPer, evenly through the players; or, one of those
+    // beginning something else, the next after them who doesn't)
+    const events = LOAD.events.filter(does).map((type) => ({ type, at: eventAt, asked: 0, ok: false, actors: 0 }));
+    const inTown = (peer) => peer.k === 0 || LOAD.towns.includes(world.plan.places.find(({ id }) => id === peer.home.place)?.kind);
 
-    peers.forEach((peer) => (peer.fights = fighters > 0 && peer.k % Math.ceil(count / fighters) === 0 && peer.k / Math.ceil(count / fighters) < fighters));
+    for (const { type } of events.filter((one) => one.type !== "fights")) {
+        const free = peers.filter((peer) => !peer.begins);
+        const one = free.find(inTown) ?? free[0];
 
-    const event = fighters ? { type: activity, at: eventAt, asked: 0, ok: false, actors: 0 } : null;
+        if (one) {
+            one.begins = type;
+        }
+    }
+
+    if (does("fights")) {
+        const fighters = Math.max(1, Math.round(count / LOAD.fightPer));
+
+        for (const theirs of peers.filter((peer) => peer.k % Math.ceil(count / fighters) === 0 && peer.k / Math.ceil(count / fighters) < fighters)) {
+            const one = theirs.begins ? peers.find((peer) => peer.k > theirs.k && !peer.begins) : theirs;
+
+            if (one) {
+                one.begins = "fights";
+            }
+        }
+    }
+
+    peers.forEach((peer) => (peer.fights = Boolean(peer.begins)));
+
+    const event = events.length === 1 ? events[0] : null;
+    const fieldedBefore = host.fielded;
     const eventCommand = (peer) =>
-        activity === "fights"
+        peer.begins === "fights"
             ? { type: "fieldBattle", size: LOAD.fightSize, facing: peer.roll() * Math.PI }
-            : activity === "battle"
+            : peer.begins === "battle"
               ? { type: "fieldBattle", size: FIELD_BATTLE.most, facing: peer.roll() * Math.PI }
-              : activity === "invasion"
+              : peer.begins === "invasion"
                 ? { type: "invade" }
                 : { type: "hellrift" };
 
@@ -987,13 +1112,13 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
             if (peer.fights && at === eventAt) {
                 saying.push([peer, peer.command(eventCommand(peer))]);
-                event.asked++;
+                events.find(({ type }) => type === peer.begins).asked++;
 
                 continue;
             }
 
             // (One who's begun a fight goes for whoever's nearest, once it's begun)
-            if (peer.fights && activity !== "invasion" && activity !== "hellrift" && at > eventAt) {
+            if (peer.fights && peer.begins !== "invasion" && peer.begins !== "hellrift" && at > eventAt) {
                 const fighting = me.order?.type === "engage" && host.battle.actor(me.order.target) && !host.battle.actor(me.order.target).dead;
                 const foe = !fighting && every(LOAD.foeEvery, peer) ? foeOf(me) : null;
 
@@ -1006,7 +1131,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                 }
             }
 
-            if (activity === "stick") {
+            if (does("stick")) {
                 // (A stick held towards somewhere near home, another once they're there or every
                 // LOAD.every: LOAD.stick commands a second, the fraction carried over)
                 if (!peer.to || every(LOAD.every, peer) || Math.hypot(peer.to[0] - me.x, peer.to[1] - me.y) < 2) {
@@ -1030,6 +1155,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     const steps = Math.round((seconds * 1000) / STEP_MS);
     const wall = new Float64Array(steps);
     const cpu = new Float64Array(steps);
+    // (And the look between each step and the next, what's made ahead: by the clock)
+    const looks = new Float64Array(steps);
     const parts = { hear: 0, step: 0, ahead: 0 };
     const actors = { start: host.battle.actors.length, most: host.battle.actors.length, end: 0 };
     const memory = { before: process.memoryUsage(), heapMost: 0 };
@@ -1054,6 +1181,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     let over = 0;
     // (The steps over LOAD.tick by the clock: how many, and the first LOAD.late of them with their parts)
     const lateSteps = { over: lateOver, count: 0, kept: [] };
+    // (And the longest of them, with its parts, wherever in the run it fell)
+    let longest = null;
 
     counted();
     kinds.clear();
@@ -1172,6 +1301,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             if (lateSteps.kept.length < LOAD.late) {
                 lateSteps.kept.push(partsOf());
             }
+
+            if (!longest || wall[step] > longest.wall) {
+                longest = lateSteps.kept.at(-1)?.at === step * STEP_MS ? lateSteps.kept.at(-1) : partsOf();
+            }
         }
 
         // (The players gone: the longest of the steps since, with its parts; and what the steps
@@ -1278,9 +1411,16 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             kept.wrote = null;
         }
 
-        if (event && step * STEP_MS === eventAt) {
-            event.actors = host.battle.actors.length - actors.most;
-            event.ok = activity === "invasion" ? host.invasions.length > 0 : activity === "hellrift" ? Boolean(host.hellRifts.open) : event.actors > 0;
+        // (What was asked for LOAD.eventAt in, begun or not: an invasion on, a rift open, more in
+        // the battle for a fight; and, several begun together, as many field battles mustered as
+        // were asked for, where how many more are in the battle is all of theirs together)
+        if (events.length && step * STEP_MS === eventAt) {
+            const fields = events.reduce((sum, { type, asked: by }) => sum + (type === "fights" || type === "battle" ? by : 0), 0);
+
+            for (const one of events) {
+                one.actors = host.battle.actors.length - actors.most;
+                one.ok = one.type === "invasion" ? host.invasions.length > 0 : one.type === "hellrift" ? Boolean(host.hellRifts.open) : one.actors > 0 && (events.length === 1 || host.fielded - fieldedBefore >= fields);
+            }
         }
 
         actors.most = Math.max(actors.most, host.battle.actors.length);
@@ -1310,6 +1450,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             const spent = clock() - making;
 
             parts.ahead += spent;
+            looks[step] += spent;
 
             // (warturn: how many boxes of ground the host said the war's next turn would
             // bring near, at the most, since the last turn)
@@ -1351,6 +1492,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // (The battle's step: the host's `battle` pass and all its parts together)
     const battle = Object.entries(measured.passes).reduce((sum, [name, { ms }]) => sum + (name === "battle" || name.startsWith("battle.") ? ms : 0), 0);
     const census = censusOf(host.battle);
+    const pacing = keptUp(wall, looks);
 
     actors.end = host.battle.actors.length;
 
@@ -1409,8 +1551,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         }
     }
 
-    if (event && !event.ok) {
-        problems.push(`the ${activity} asked for at ${eventAt / 1000} s didn't begin`);
+    for (const one of events) {
+        if (!one.ok) {
+            problems.push(`the ${one.type} asked for at ${eventAt / 1000} s didn't begin`);
+        }
     }
 
     if (storm) {
@@ -1472,7 +1616,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             // and their floors made and baked (--cold neither, --undelved the levels alone); how
             // many floors were made between steps; and how many tiles of the dungeons' levels'
             // navigation the steps baked for themselves)
-            ahead: { levels: !(cold && activity === "dungeons"), floors: delvedAhead, made: ahead.delved.levels, baked: delved.floors },
+            ahead: { levels: !(cold && does("dungeons")), floors: delvedAhead, made: ahead.delved.levels, baked: delved.floors },
             coming: {
                 dungeon: { wall: came("dungeon", wall), cpu: came("dungeon", cpu) },
                 building: { wall: came("building", wall), cpu: came("building", cpu) },
@@ -1574,6 +1718,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             over,
             // (How fast the world was played: its time over the clock's)
             speed: round((steps * STEP_MS) / took, 1),
+            // (The most steps over LOAD.tick one straight after another; and the share of its
+            // clock's time a world server would have played with these steps and looks: keptUp)
+            together: pacing.together,
+            pace: pacing.pace,
         },
         parts: { hear: round(parts.hear / steps, 4), step: round(parts.step / steps, 4), ahead: round(parts.ahead / steps, 4) },
         passes,
@@ -1583,7 +1731,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         // `end` and whatever the runner does between the step and what's sent)
         named: round(named / total, 4),
         counts: measured.counts,
-        late: lateSteps,
+        // (With `longest`, the longest of them, where there were any: among those kept or not)
+        late: longest ? { ...lateSteps, longest } : lateSteps,
         bytes: {
             total: sent,
             perPeer: {
@@ -1605,7 +1754,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             rss: round(after.rss / MB, 1),
         },
         actors,
-        ...(event ? { event } : {}),
+        // (What was begun LOAD.eventAt in: `event`, the one; or `events`, the several of a run of several)
+        ...(event ? { event } : events.length ? { events } : {}),
         ...(night ? { night } : {}),
         ...(warturn ? { warturn } : {}),
         ...report,
@@ -1628,7 +1778,7 @@ export const REPORT_SCHEMA = Object.freeze({
     joined: { players: "number", ms: "number", welcome: { bytes: SPREAD, ms: SPREAD } },
     warm: { ms: "number", settled: "boolean", chunks: "number", rooms: "number", tiles: "number" },
     navigation: { tile: "number", keep: "number", wanted: "number", capped: "boolean", held: "number", dropped: "number", reach: "number" },
-    steps: { count: "number", wall: SPREAD, cpu: SPREAD, late: "number", over: "number", speed: "number" },
+    steps: { count: "number", wall: SPREAD, cpu: SPREAD, late: "number", over: "number", speed: "number", together: "number", pace: "number" },
     parts: { hear: "number", step: "number", ahead: "number" },
     passes: [{ ms: "number", mean: "number", share: "number", calls: "number" }],
     battle: { ms: "number", mean: "number", share: "number" },
@@ -1785,6 +1935,14 @@ export const LEAVE_SCHEMA = Object.freeze({
     look: { worst: "number", worstAt: "number" },
 });
 
+/**
+ * What was begun LOAD.eventAt in (the report's `event`, a run of one such; each of `events`, a
+ * run of several together): which (LOAD.events), when (ms into the run), how many players asked
+ * for it, whether it began, and how many more were in the battle after that step (of several
+ * begun in the one step, all of theirs together).
+ */
+export const EVENT_SCHEMA = Object.freeze({ type: "string", at: "number", asked: "number", ok: "boolean", actors: "number" });
+
 /** What an unbuilt activity's report holds instead. */
 export const UNBUILT_SCHEMA = Object.freeze({ schema: "number", run: RUN, built: "boolean", reason: "string" });
 
@@ -1813,12 +1971,15 @@ export function checkReport(report, schema = report?.built === false ? UNBUILT_S
         return [`${at}: not an object`];
     }
 
-    // (A whole report of a run: what its activity adds, too, and what players gone together add)
+    // (A whole report of a run: what its activity adds, or each of its several, too; what's
+    // begun in a run of several, if more than one thing is; and what players gone together add)
+    const played = typeof report.run?.activity === "string" ? report.run.activity.split(",") : [];
     const whole =
         schema === REPORT_SCHEMA
             ? {
                   ...schema,
-                  ...(Object.hasOwn(ACTIVITY_SCHEMAS, report.run?.activity) ? { [report.run.activity]: ACTIVITY_SCHEMAS[report.run.activity] } : {}),
+                  ...Object.fromEntries(played.filter((one) => Object.hasOwn(ACTIVITY_SCHEMAS, one)).map((one) => [one, ACTIVITY_SCHEMAS[one]])),
+                  ...(played.filter((one) => LOAD.events.includes(one)).length > 1 ? { events: "array" } : {}),
                   ...(report.run?.activity === "joinstorm" || (report.run?.leave ?? "none") !== "none" || Object.hasOwn(report, "leave") ? { leave: LEAVE_SCHEMA } : {}),
               }
             : schema;
@@ -1831,9 +1992,18 @@ export function checkReport(report, schema = report?.built === false ? UNBUILT_S
         }
     }
 
-    // (And each late step kept, by its own)
+    // (And each late step kept, by its own; and the longest of them, where one's said)
     if (schema === REPORT_SCHEMA && Array.isArray(report.late?.kept)) {
         report.late.kept.forEach((step, k) => wrong.push(...checkReport(step, STEP_SCHEMA, `${at}.late.kept.${k}`)));
+
+        if (Object.hasOwn(report.late, "longest")) {
+            wrong.push(...checkReport(report.late.longest, STEP_SCHEMA, `${at}.late.longest`));
+        }
+    }
+
+    // (And each thing begun in a run of several, by its own)
+    if (schema === REPORT_SCHEMA && Array.isArray(report.events)) {
+        report.events.forEach((event, k) => wrong.push(...checkReport(event, EVENT_SCHEMA, `${at}.events.${k}`)));
     }
 
     return wrong;
@@ -1887,7 +2057,7 @@ export function wordsOf(report) {
 
     return [
         `${title}: ${steps.count} steps (${run.seconds} s of the world's time) in ${report.took.run} s, ${steps.speed} times as fast as it's played`,
-        `A step by the clock: mean ${steps.wall.mean.toFixed(2)} ms, p99 ${steps.wall.p99.toFixed(2)} ms, worst ${steps.wall.worst.toFixed(1)} ms at ${((steps.wall.worstAt * STEP_MS) / 1000).toFixed(1)} s${steps.late ? `; ${steps.late} over ${STEP_MS} ms` : ""}`,
+        `A step by the clock: mean ${steps.wall.mean.toFixed(2)} ms, p99 ${steps.wall.p99.toFixed(2)} ms, worst ${steps.wall.worst.toFixed(1)} ms at ${((steps.wall.worstAt * STEP_MS) / 1000).toFixed(1)} s${steps.late ? `; ${steps.late} over ${STEP_MS} ms, ${steps.together} at most one after another` : ""}${steps.pace < 1 ? `; a world server would have played ${(steps.pace * 100).toFixed(1)}% of its clock's time` : ""}`,
         `In the thread's own processor time: mean ${steps.cpu.mean.toFixed(2)} ms, p99 ${steps.cpu.p99.toFixed(2)} ms, worst ${steps.cpu.worst.toFixed(1)} ms${steps.over ? `; ${steps.over} over ${STEP_MS} ms` : ""}`,
         `Of a step: what was heard ${report.parts.hear.toFixed(3)} ms, the step and what it sent ${report.parts.step.toFixed(3)} ms; made ahead between steps ${report.parts.ahead.toFixed(3)} ms. Named passes ${(report.named * 100).toFixed(1)}% of it`,
         `The passes that took most (ms a step): ${top.map(([name, { mean, share }]) => `${name} ${mean.toFixed(3)} (${(share * 100).toFixed(0)}%)`).join(", ")}`,
@@ -1904,7 +2074,7 @@ export function wordsOf(report) {
                   `Late: ${report.late.count} step${report.late.count === 1 ? "" : "s"} over ${report.late.over} ms${report.late.count > report.late.kept.length ? `, the first ${report.late.kept.length} kept` : ""}: ${report.late.kept
                       .slice(0, 6)
                       .map((step) => `${(step.at / 1000).toFixed(2)} s ${step.wall.toFixed(1)} ms (${partsIn(step)})`)
-                      .join("; ")}${report.late.kept.length > 6 ? "; the rest in the report" : ""}`,
+                      .join("; ")}${report.late.kept.length > 6 ? "; the rest in the report" : ""}${report.late.longest && !report.late.kept.slice(0, 6).some(({ at }) => at === report.late.longest.at) ? `. The longest, at ${(report.late.longest.at / 1000).toFixed(2)} s: ${report.late.longest.wall.toFixed(1)} ms, what was heard ${report.late.longest.hear.toFixed(1)} of it (${partsIn(report.late.longest)})` : ""}`,
               ]
             : []),
         ...(report.leave
@@ -1914,6 +2084,7 @@ export function wordsOf(report) {
               ]
             : []),
         ...(report.event ? [`The ${report.event.type} at ${report.event.at / 1000} s: ${report.event.ok ? `begun (${report.event.actors} more in the battle)` : "not begun"}`] : []),
+        ...(report.events ? [`At ${report.events[0].at / 1000} s: ${report.events.map((event) => `the ${event.type}, asked for by ${event.asked}, ${event.ok ? "begun" : "not begun"}`).join("; ")} (${report.events[0].actors} more in the battle for them all)`] : []),
         ...(report.night
             ? [`At night: minute ${report.night.from} to minute ${report.night.to} of the day's ${DAY.length / 60000}${report.night.dark ? "" : ", not dark all through"}, the war's turn ${report.night.turn}; the light to see by ${(passes.light?.mean ?? 0).toFixed(3)} ms a step, ${Math.round((report.counts["light.actors"] ?? 0) / steps.count)} gone through for torches and ${Math.round((report.counts["light.pairs"] ?? 0) / steps.count)} lights measured against players' places a step`]
             : []),
@@ -1943,6 +2114,173 @@ export function wordsOf(report) {
     ];
 }
 
+/**
+ * Stage 1's gate (generated/multiplayer_scaling_plan.md, Stage 1's goal): its runs, each on every
+ * one of `seeds` for `seconds`, and the numbers each is set against. `mean` and `p99` are the
+ * most a step may take by the clock (ms); `together` the most steps over LOAD.tick one straight
+ * after another; `pace` the least of its clock's time the world may have played (the gate's
+ * "dilation"); `worse`, for the regression, how far above the baseline's mean a run's may be.
+ */
+export const GATE = Object.freeze({
+    seconds: 120,
+    seeds: LOAD.seeds,
+    lines: Object.freeze([
+        Object.freeze({ name: "walk", title: "Walk, 100 spread", players: 100, layout: "spread", activity: "walk", mean: 20, p99: 50, together: 3, pace: 0.99 }),
+        Object.freeze({ name: "mixed", title: "Mixed, 100 spread: five 6-a-side fights, one invasion and night", players: 100, layout: "spread", activity: "fights,invasion,night", mean: 25, p99: 50, together: 3, pace: 0.99 }),
+        Object.freeze({ name: "regression", title: "Regression, 8 spread", players: 8, layout: "spread", activity: "walk", worse: 0.1 }),
+    ]),
+});
+
+/** The gate's runs, in the order they're played: [{ line (of GATE.lines), seed, options (load's) }]. */
+export function gateRuns({ seconds = GATE.seconds } = {}) {
+    return GATE.lines.flatMap((line) => GATE.seeds.map((seed) => ({ line, seed, options: { seed, players: line.players, layout: line.layout, activity: line.activity, seconds } })));
+}
+
+/**
+ * One of the gate's runs set against its line's numbers: { line (its name), title, seed, mean,
+ * p99, worst (ms, by the clock), late (steps over LOAD.tick), together, pace, battle (the
+ * battle's step, ms), snapshot (ms to take the world), baseline (the mean it's held to, or null),
+ * missed (why it isn't met, a line each: none, it's met), judged (false: a regression run with no
+ * baseline, which is only reported) }. A run that went wrong in a way that's the same on any
+ * machine (failuresOf) has missed for that too. `baseline` is the mean (ms) of the same run in a
+ * gate's report kept from before, for a line with `worse`.
+ */
+export function judgeGate(line, report, { baseline = null } = {}) {
+    const { steps } = report;
+    const missed = [...failuresOf(report)];
+    const over = (value, most, what) => (value > most ? [`${what} ${value.toFixed(2)} ms, over ${most}`] : []);
+
+    if (!report.warm.settled) {
+        missed.push("what's round the players wasn't all made before the run");
+    }
+
+    if (line.mean !== undefined) {
+        missed.push(...over(steps.wall.mean, line.mean, "mean"), ...over(steps.wall.p99, line.p99, "p99"));
+
+        if (steps.together > line.together) {
+            missed.push(`${steps.together} steps over ${LOAD.tick} ms one after another, more than ${line.together}`);
+        }
+
+        if (steps.pace < line.pace) {
+            missed.push(`pace ${steps.pace}, under ${line.pace}`);
+        }
+    } else if (baseline !== null && steps.wall.mean > baseline * (1 + line.worse)) {
+        missed.push(`mean ${steps.wall.mean.toFixed(2)} ms, more than ${line.worse * 100}% over the baseline's ${baseline.toFixed(2)}`);
+    }
+
+    return {
+        line: line.name,
+        title: line.title,
+        seed: report.run.seed,
+        mean: steps.wall.mean,
+        p99: steps.wall.p99,
+        worst: steps.wall.worst,
+        late: report.late.count,
+        together: steps.together,
+        pace: steps.pace,
+        battle: report.battle.mean,
+        snapshot: report.snapshot.take,
+        baseline,
+        missed,
+        judged: line.mean !== undefined || baseline !== null,
+    };
+}
+
+/**
+ * The gate's rows (judgeGate's) as the table the plan commits, in Markdown, a line each: what
+ * each run is held to, its numbers, and whether it met them. `machine` is where it was run (a
+ * report's `run`: node, platform, arch, cpus) and `seconds` how long each played: a table of
+ * runs shorter or longer than the gate's says so, and calls none met.
+ */
+export function gateTable(rows, { machine = null, seconds = GATE.seconds } = {}) {
+    const real = seconds === GATE.seconds;
+    const target = (row) => {
+        const line = GATE.lines.find(({ name }) => name === row.line);
+
+        return line.mean !== undefined ? `mean ≤ ${line.mean} ms, p99 ≤ ${line.p99} ms, ≤ ${line.together} over ${LOAD.tick} ms together, pace ≥ ${line.pace}` : row.baseline === null ? "no baseline given: reported" : `mean ≤ ${(row.baseline * (1 + line.worse)).toFixed(2)} ms (the baseline's ${row.baseline.toFixed(2)} and ${line.worse * 100}%)`;
+    };
+    const verdict = (row) => (row.missed.length ? `Missed: ${row.missed.join("; ")}` : !row.judged ? "Reported" : real ? "Met" : "Within them, in a run that isn't the gate's");
+
+    return [
+        `Stage 1's gate, \`npm run load -- --gate\`: ${seconds} s a run${real ? "" : ` (not the gate's ${GATE.seconds} s: nothing here is the gate's verdict)`}, by the clock${machine ? `, on Node ${machine.node.replace(/^v/, "")}, ${machine.platform} ${machine.arch}, ${machine.cpus} cores` : ""}.`,
+        "",
+        `| The gate's line | Seed | Held to | Mean (ms) | p99 (ms) | Worst (ms) | Steps over ${LOAD.tick} ms | Most one after another | Pace | The battle's step (ms) | A snapshot taken (ms) | Verdict |`,
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        ...rows.map((row) => `| ${row.title} | ${row.seed} | ${target(row)} | ${row.mean.toFixed(2)} | ${row.p99.toFixed(2)} | ${row.worst.toFixed(1)} | ${row.late} | ${row.together} | ${row.pace} | ${row.battle.toFixed(2)} | ${row.snapshot.toFixed(1)} | ${verdict(row)} |`),
+    ];
+}
+
+/**
+ * Stage 1's gate played: each of its runs by `play` (given load's options and the run's name,
+ * resolving to its report: the script's own plays each in a process of its own), one after
+ * another, each judged. `baseline` is a gate's report kept from before ({ rows }), for the
+ * regression; `log` is told how it's going. Resolves to { schema, gate (whether these are the
+ * gate's own runs: its seconds), seconds, machine, rows (judgeGate's), late ({ run's name: its
+ * report's `late` }: how many steps of each run were late, the first of them and the longest
+ * with their parts), table (gateTable's
+ * lines), met (every line judged and none missed, in the gate's own runs), failed (any line
+ * missed) }.
+ */
+export async function gate({ seconds = GATE.seconds, baseline = null, play, log = () => {} } = {}) {
+    const rows = [];
+    const late = {};
+    let machine = null;
+
+    for (const { line, seed, options } of gateRuns({ seconds })) {
+        const name = `${line.players}-${line.layout}-${line.activity.replaceAll(",", "-")}-seed-${seed}`;
+
+        log(`${line.title}, seed ${seed}...`);
+
+        const report = await play(options, name);
+        const before = baseline?.rows?.find((row) => row.line === line.name && row.seed === seed)?.mean;
+        const row = judgeGate(line, report, { baseline: line.worse !== undefined && Number.isFinite(before) ? before : null });
+
+        machine ??= report.run;
+        rows.push(row);
+        late[name] = report.late;
+        log(`  mean ${row.mean.toFixed(2)} ms, p99 ${row.p99.toFixed(2)} ms, ${row.late} over ${LOAD.tick} ms (${row.together} together), pace ${row.pace}${row.missed.length ? `: ${row.missed.join("; ")}` : ""}`);
+
+        // (And its longest step named: what was heard in it, the passes that took most of it, and what it made)
+        if (report.late.longest) {
+            const { at, wall: took, hear: heard, passes: spent, made } = report.late.longest;
+
+            log(`  the longest step, at ${(at / 1000).toFixed(2)} s: ${took.toFixed(1)} ms, what was heard ${heard.toFixed(1)} of it; ${Object.entries(spent).slice(0, 3).map(([pass, ms]) => `${pass} ${ms.toFixed(1)}`).join(", ")}; it made ${made.chunks} chunks of ground and ${made.tiles} navigation tiles`);
+        }
+    }
+
+    const real = seconds === GATE.seconds;
+    const failed = rows.some((row) => row.missed.length > 0);
+
+    return {
+        schema: LOAD.schema,
+        gate: real,
+        seconds,
+        machine: machine && { node: machine.node, platform: machine.platform, arch: machine.arch, cpus: machine.cpus },
+        rows,
+        late,
+        table: gateTable(rows, { machine, seconds }),
+        met: real && !failed && rows.every((row) => row.judged),
+        failed,
+    };
+}
+
+// One run of the gate's, in a process of its own (a world of 100 holds a gigabyte and more, and
+// what Recast holds isn't given back while a process lives): its report, read back from where
+// the run wrote it
+function playApart(options, file) {
+    const given = ["--seed", options.seed, "--players", options.players, "--layout", options.layout, "--activity", options.activity, "--seconds", options.seconds, "--out", file, "--json"].map(String);
+
+    return new Promise((resolve, reject) => {
+        execFile(process.execPath, [fileURLToPath(import.meta.url), ...given], { maxBuffer: 2 ** 28 }, (error, _out, said) => {
+            if (error) {
+                reject(new Error(`A run of the gate's couldn't be made (${given.join(" ")}): ${String(said).trim() || error.message}`));
+            } else {
+                readFile(file, "utf8").then((text) => resolve(JSON.parse(text)), reject);
+            }
+        });
+    });
+}
+
 async function main() {
     const { values } = parseArgs({
         options: {
@@ -1961,9 +2299,39 @@ async function main() {
             undelved: { type: "boolean", default: false },
             leave: { type: "string", default: "none" },
             sudden: { type: "boolean", default: false },
+            gate: { type: "boolean", default: false },
+            baseline: { type: "string" },
         },
     });
     let report;
+
+    // (--gate: its runs, each in a process of its own; the table; and whether it's met)
+    if (values.gate) {
+        const out = path.resolve(values.out === REPORT ? path.join(path.dirname(REPORT), "gate.json") : values.out);
+        const folder = path.join(path.dirname(out), "gate");
+        let judged;
+
+        try {
+            const baseline = values.baseline === undefined ? null : JSON.parse(await readFile(path.resolve(values.baseline), "utf8"));
+            // (--seconds given: a look at what it prints, not the gate)
+            const seconds = process.argv.includes("--seconds") || process.argv.some((given) => given.startsWith("--seconds=")) ? Number(values.seconds) : GATE.seconds;
+
+            await mkdir(folder, { recursive: true });
+            judged = await gate({ seconds, baseline, play: (options, name) => playApart(options, path.join(folder, `${name}.json`)), log: values.json ? () => {} : console.log });
+        } catch (error) {
+            console.error(error.message);
+            process.exit(1);
+        }
+
+        await writeFile(out, JSON.stringify(judged, null, 2));
+        console.log(values.json ? JSON.stringify(judged, null, 2) : ["", ...judged.table, "", judged.gate ? (judged.met ? "The gate is met." : judged.failed ? "The gate is not met." : "No line missed, but the regression had no baseline to be held to (--baseline): the gate isn't called.") : `Not the gate: its runs are ${GATE.seconds} s.`].join("\n"));
+
+        if (judged.failed) {
+            process.exitCode = 1;
+        }
+
+        return;
+    }
 
     try {
         report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, undelved: values.undelved, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
