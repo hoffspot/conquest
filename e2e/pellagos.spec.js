@@ -18784,6 +18784,22 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
 
     expect(friends).toHaveLength(12);
 
+    // Room in full for everyone about, whoever else is held: no budget for the bodies at all. The
+    // budget's one for all of them (Low's 32: the player, these twenty-four, the town's ten folk),
+    // and the soldiers have of it what the folk haven't taken, each looked at in its own time
+    // (app/game.js #marshal, #folkRoom), neither giving way once it holds a place. Left to that,
+    // there was room for the twelve only where they were asked for before the folk were looked
+    // at, which went by the machine: one still waiting on its kind's figure as the folk were
+    // looked at was left in its crowd for good (room for eleven, the folk holding seven, not
+    // six); and as the room was given back below, the folk looked at first took what the twelve
+    // had let go, three or four of them never built in full again (room for eight or nine)
+    await page.evaluate(() => {
+        const { session } = window.pellagos;
+
+        window.roomy = { ...session.view.quality, bodies: Infinity };
+        session.view.quality = window.roomy;
+    });
+
     // (Till every one of them is drawn in full where it's put, none still being built)
     const stood = () =>
         page.evaluate(async (ids) => {
@@ -18816,10 +18832,9 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
     // capital's townsfolk): the rest are let go to their kinds' crowds as the figures are made
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
-        const quality = session.view.quality;
+        const quality = window.roomy;
         const others = [...game.avatars].filter(([id, avatar]) => !id.startsWith("field-") && avatar.constructor.name !== "CrowdAvatar").length;
 
-        window.roomy = quality;
         window.barFrames = [];
         session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 2 };
     });
