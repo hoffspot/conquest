@@ -115,6 +115,15 @@ export class Ahead {
     static easing = true;
 
     /**
+     * Whether the host is asked what the war's next turn will bring near its players as well
+     * (core/host.js soon's `turn`), and that ground made ahead, as it always is, or only what
+     * the war has near them now, as it was: only for the tests and scripts that check the
+     * world's steps come out the same either way, and what it saves them
+     * (generated/multiplayer_scaling_plan.md 1-28).
+     */
+    static turns = true;
+
+    /**
      * @param {object} world - The world (core/overworld.js buildWorld's: its overworld, maps.town).
      * @param {object} [options]
      * @param {object} [options.host] - The world's host (core/host.js), for the buildings it's
@@ -164,6 +173,14 @@ export class Ahead {
          */
         this.keeping = null;
         this.eased = { chunks: 0, tiles: 0 };
+
+        /**
+         * What the war's next turn will bring near the players (core/host.js soon's `foreseen`):
+         * how many boxes of ground the host last said it would want that nothing wants yet, and
+         * how many chunks have been made for such, in all.
+         */
+        this.turn = { boxes: 0, chunks: 0 };
+        this.turnChunks = new Set();
         navigation.gently = Ahead.easing;
 
         /**
@@ -335,7 +352,7 @@ export class Ahead {
         this.stale = false;
 
         const coming = Ahead.coming ? this.coming : [];
-        const { around, boxes, dungeons, theirs } = host.soon(coming);
+        const { around, boxes, dungeons, theirs, foreseen = [] } = host.soon(coming, { turn: Ahead.soon && Ahead.turns });
         const rings = new Map();
         const soon = new Map();
         // (What those not yet in want, that the players in don't: by its key, in the order it's
@@ -368,6 +385,13 @@ export class Ahead {
                 soon.set(cy * CHUNKS + cx, [cx, cy]);
             }
         }
+
+        // (Those of them wanted only for what the war's next turn will bring near: counted as
+        // they're made, #make)
+        const wantedNow = new Set((Ahead.soon ? boxes : []).filter((box) => !foreseen.includes(box)).flatMap(chunksIn).map(([cx, cy]) => cy * CHUNKS + cx));
+
+        this.turn.boxes = Ahead.soon ? foreseen.length : 0;
+        this.turnChunks = new Set((Ahead.soon ? foreseen : []).flatMap(chunksIn).map(([cx, cy]) => cy * CHUNKS + cx).filter((key) => soon.has(key) && !wantedNow.has(key)));
 
         // (Those waiting: round the players nearest first, in the order they were, then what's
         // wanted soon. Those made are marked as wanted still, so that what the world lets go of
@@ -624,6 +648,7 @@ export class Ahead {
                 this.chunks.splice(k, 1);
                 this.waited.delete(cy * CHUNKS + cx);
                 this.made++;
+                this.turn.chunks += this.turnChunks.has(cy * CHUNKS + cx) ? 1 : 0;
             }
 
             if (this.clock() >= until) {

@@ -104,7 +104,7 @@ describe("where one coming in would stand (core/host.js whereFor, soon's coming)
         const [sum, made] = [host.checksum(), world.maps.town.chunks.size];
         const muster = [Math.floor(town.at[0] - edge - SOON.town), Math.floor(town.at[1] - edge - SOON.town), Math.ceil(town.at[0] + edge + SOON.town), Math.ceil(town.at[1] + edge + SOON.town)];
 
-        assert.deepEqual(host.soon(), { around: [], boxes: [], dungeons: [], theirs: [] }, "no one in, no one coming: nothing");
+        assert.deepEqual(host.soon(), { around: [], boxes: [], dungeons: [], theirs: [], foreseen: [] }, "no one in, no one coming: nothing");
 
         const { around, boxes, dungeons, theirs } = host.soon([[place.x, place.y], [other.x, other.y]]);
 

@@ -33,7 +33,8 @@
 // the soldiers' torches are in every step), warturn (walking, a turn of the war falling ten seconds
 // in and the world saved four steps after it, as a world server saves it: what those two steps
 // cost beside the seconds round them; --turns 35 for a war that many turns old, played with no one
-// in first), joinstorm (everyone, once the ground's made, out of the world again, and all saying
+// in first; the ground of what the turn brings near is made ahead of it, core/host.js soon's
+// `turn`, or with --unforeseen not, as it was), joinstorm (everyone, once the ground's made, out of the world again, and all saying
 // hello within a second of one another ten seconds in, to a world that lets them in as a world
 // server does: two coming in at once, the rest told their place in the line, and the world taken
 // for them no oftener than its share of the thread allows, core/netplay.js WELCOMES, WORLDS; each
@@ -53,8 +54,9 @@
 // nearest player.
 //
 // The report's `late` lists the steps over LOAD.tick by the clock, the first LOAD.late of them
-// with their parts: when, how long, the hearing, each pass's time in that step and what each
-// counter went up by in it (generated/multiplayer_scaling_plan.md 0-13).
+// with their parts: when, how long, the hearing, each pass's time in that step, what each
+// counter went up by in it, and the ground the step made for itself (`made`: chunks, and
+// navigation tiles baked; generated/multiplayer_scaling_plan.md 0-13).
 //
 // --leave half, or all: that many of the players (every other one; everyone) gone from the world
 // in the one step, LOAD.eventAt in, the rest playing on (1-27): the report's `leave` says what
@@ -90,11 +92,11 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { DAY, elapsedOf, timeOfDay, untilTime } from "../client/js/core/daytime.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
-import { FIELD_BATTLE, Host } from "../client/js/core/host.js";
+import { FIELD_BATTLE, Host, SOON } from "../client/js/core/host.js";
 import { torchesLit } from "../client/js/core/light.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { TURN_MS } from "../client/js/core/war/war.js";
@@ -436,7 +438,7 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * only says so ({ schema, run, built: false, reason }). `lateOver` (ms) is how long a step is
  * late from (LOAD.tick: only a test, which can't make a step slow, asks for another).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
     const run = { seed, players: count, layout, activity, seconds, whole, leave, sudden, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
 
     if (Object.hasOwn(LOAD.unbuilt, activity)) {
@@ -468,6 +470,13 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     Ahead.easing = !sudden;
     Battle.forgetting = !sudden;
+
+    // (--unforeseen: nothing made ahead for what the war's next turn will bring near, and each
+    // chunk read moved among those kept there and then, as both were before 1-28, to compare)
+    const [wasTurns, wasRecently] = [Ahead.turns, Overworld.recently];
+
+    Ahead.turns = !unforeseen;
+    Overworld.recently = !unforeseen;
 
     const clock = () => performance.now();
     const began = clock();
@@ -1007,6 +1016,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     // of that step's time, the war's own pass and the world's writing out)
     const turnsIn = [];
     const savesIn = [];
+    // (What was made ahead for the next turn of the war: the chunks made for it when the last
+    // turn fell, server/ahead.js `turn`, and the most boxes of ground the host has said it
+    // would bring near since)
+    const turnAhead = { chunks: ahead.turn.chunks, boxes: 0 };
     const commandsBefore = hosting.dropped;
     const probes = install(new Probes({ clock, inner: !whole }));
     const started = clock();
@@ -1050,6 +1063,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const stormy = storm && step >= storm.first;
         const [bakedBefore, addedBefore, madeBefore] = [navigation.baked, navigation.added, ahead.made];
         const [chunksBefore, droppedIn] = [overworld.chunks.size, dropped];
+        const groundBefore = overworld.chunksMade;
+        const actorsBefore = host.battle.actors.length;
         const cpuBefore = cpuNow();
         const before = clock();
 
@@ -1084,6 +1099,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
         const after = clock();
         const [bakedIn, addedIn] = [navigation.baked - bakedBefore, navigation.added - addedBefore];
+        // (The chunks of ground the step made for itself: none's made ahead while it's played)
+        const groundIn = overworld.chunksMade - groundBefore;
 
         if (stormy) {
             storm.stepping = false;
@@ -1115,6 +1132,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                     .sort(([, a], [, b]) => b - a),
             ),
             counts: Object.fromEntries([...probes.counts].map(([name, n]) => [name, n - (countsBefore.get(name) ?? 0)]).filter(([, n]) => n !== 0)),
+            made: { chunks: groundIn, tiles: bakedIn },
         });
 
         if (wall[step] > lateOver) {
@@ -1216,10 +1234,11 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             const spent = [...probes.passes].map(([name, { ms }]) => [name, ms - (passesBefore.get(name) ?? 0)]).sort(([, a], [, b]) => b - a);
 
             if (kept.turned !== null) {
-                turnsIn.push({ step, number: kept.turned, war: spent.find(([name]) => name === "war")?.[1] ?? 0, next: [] });
+                turnsIn.push({ step, number: kept.turned, war: spent.find(([name]) => name === "war")?.[1] ?? 0, next: [], ahead: ahead.turn.chunks - turnAhead.chunks, boxes: turnAhead.boxes });
+                Object.assign(turnAhead, { chunks: ahead.turn.chunks, boxes: 0 });
                 kept.turned = null;
             } else {
-                turnsIn.at(-1).next.push({ step, pass: spent[0][0], ms: spent[0][1] });
+                turnsIn.at(-1).next.push({ step, pass: spent[0][0], ms: spent[0][1], chunks: groundIn, tiles: bakedIn, actors: host.battle.actors.length - actorsBefore });
             }
         }
 
@@ -1261,6 +1280,10 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
             parts.ahead += spent;
 
+            // (warturn: how many boxes of ground the host said the war's next turn would
+            // bring near, at the most, since the last turn)
+            turnAhead.boxes = host.war && TURN_MS - host.war.clock <= SOON.turn ? Math.max(turnAhead.boxes, ahead.turn.boxes) : turnAhead.boxes;
+
             // (The players gone: what this look let go of, and the longest of the looks since)
             if (going && step >= going.step && step < going.step + going.steps) {
                 going.let.chunks += Math.max(0, had - overworld.chunks.size);
@@ -1283,6 +1306,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     Ahead.coming = wasComing;
     Ahead.easing = wasEasing;
     Battle.forgetting = wasForgetting;
+    Ahead.turns = wasTurns;
+    Overworld.recently = wasRecently;
 
     uninstall();
 
@@ -1324,9 +1349,17 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const longest = turn ? between(turn) : null;
         const stepsOf = (from) => spreadOf(wall.subarray(Math.max(0, Math.min(steps, from)), Math.max(0, Math.min(steps, from + span))));
 
+        // (What the steps from a turn's to its save's made for themselves, and stood up or let go)
+        const madeIn = (one) => one.next.reduce((sum, each) => ({ chunks: sum.chunks + each.chunks, tiles: sum.tiles + each.tiles }), { chunks: 0, tiles: 0 });
+
         warturn = {
             played,
             turns: turnsIn.length,
+            // (Whether what the turn would bring near was made ahead, or with --unforeseen not;
+            // of the first turn: the boxes of ground the host said it would want and the chunks
+            // made ahead for them, and what the steps from the turn to its save still made)
+            foreseen: !unforeseen,
+            ground: { boxes: turn?.boxes ?? 0, ahead: turn?.ahead ?? 0, steps: turn ? madeIn(turn) : { chunks: 0, tiles: 0 } },
             turn: turn ? { at: turn.step * STEP_MS, number: turn.number, wall: round(wall[turn.step]), cpu: round(cpu[turn.step]), war: round(turn.war) } : { at: -1, number: 0, wall: 0, cpu: 0, war: 0 },
             save: save
                 ? { at: save.step * STEP_MS, after: save.step - turn.step, wall: round(wall[save.step]), cpu: round(cpu[save.step]), text: round(save.text), bytes: written?.bytes ?? 0, zipped: written?.zipped ?? 0, gzip: round(written?.ms ?? 0), written: kept.saves.length }
@@ -1334,7 +1367,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             between: longest ? { after: longest.step - turn.step, wall: round(wall[longest.step]), cpu: round(cpu[longest.step]), pass: longest.pass, ms: round(longest.ms) } : { after: 0, wall: 0, cpu: 0, pass: "", ms: 0 },
             round: { before: stepsOf(turn ? turn.step - span : 0), after: stepsOf(save ? save.step + 1 : steps) },
             // (Every turn that fell in the run: its step, the longest between it and its save, and its save's)
-            all: turnsIn.map((one) => ({ at: one.step * STEP_MS, number: one.number, turn: round(wall[one.step]), between: round(wall[between(one)?.step] ?? 0), save: round(wall[savesIn.find(({ step }) => step > one.step && step <= one.step + KEEPER.after)?.step] ?? 0) })),
+            all: turnsIn.map((one) => ({ at: one.step * STEP_MS, number: one.number, turn: round(wall[one.step]), between: round(wall[between(one)?.step] ?? 0), save: round(wall[savesIn.find(({ step }) => step > one.step && step <= one.step + KEEPER.after)?.step] ?? 0), boxes: one.boxes, ahead: one.ahead, chunks: madeIn(one).chunks })),
         };
 
         if (!turn || turn.step * STEP_MS !== eventAt) {
@@ -1457,7 +1490,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             going: round(going.going),
             before: span(Math.max(0, from - going.steps), from),
             steps: span(from, to),
-            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {} },
+            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {}, made: { chunks: 0, tiles: 0 } },
             let: going.let,
             look: { worst: round(going.look.worst), worstAt: going.look.worstAt },
         };
@@ -1591,7 +1624,13 @@ export const REPORT_SCHEMA = Object.freeze({
  * the step; how many saves were written in all), the longest of the steps between the two (how
  * many after the turn; the step; and the pass that took most of it, by name, and its time), the
  * steps of the second before the turn and of the second after the save, by the clock, and every
- * turn that fell in the run ([{ at, number, turn, between, save }]: those three steps of each).
+ * turn that fell in the run ([{ at, number, turn, between, save, boxes, ahead, chunks }]: those
+ * three steps of each, and its ground). Its ground (`ground`, the first turn's; `foreseen`:
+ * whether it was asked for, or with --unforeseen not): how many boxes of ground the host said
+ * the turn would bring near that nothing wanted yet (core/host.js soon's `foreseen`, at the
+ * most), how many chunks were made ahead for them before it fell (server/ahead.js `turn`), and
+ * how many chunks and navigation tiles the steps from the turn to its save made for themselves
+ * (generated/multiplayer_scaling_plan.md 1-28).
  * `joinstorm`: when the storm began (ms into the run) and over how long everyone said hello; how
  * many the world let come in at once and how long each was at making their copy; how many said
  * hello, were let in, and were still waiting as the run ended; how many times anyone was told
@@ -1622,6 +1661,8 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
     warturn: {
         played: "number",
         turns: "number",
+        foreseen: "boolean",
+        ground: { boxes: "number", ahead: "number", steps: { chunks: "number", tiles: "number" } },
         turn: { at: "number", number: "number", wall: "number", cpu: "number", war: "number" },
         save: { at: "number", after: "number", wall: "number", cpu: "number", text: "number", bytes: "number", zipped: "number", gzip: "number", written: "number" },
         between: { after: "number", wall: "number", cpu: "number", pass: "string", ms: "number" },
@@ -1667,9 +1708,11 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
 /**
  * A step kept with its parts (each of the report's `late.kept`, and `leave.longest`): when (ms
  * into the run), how long by the clock and in the thread's time, the hearing in it, each pass's
- * time in it by name, the longest first, and what each counter went up by in it.
+ * time in it by name, the longest first, what each counter went up by in it, and what it made
+ * for itself (`made`: chunks of ground, core/overworld.js chunksMade, and navigation tiles
+ * baked: what wasn't made ahead of it).
  */
-export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"] });
+export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"], made: { chunks: "number", tiles: "number" } });
 
 /**
  * What a report holds of players gone together (`leave`: a join storm's, everyone gone before
@@ -1799,7 +1842,7 @@ export function wordsOf(report) {
         Object.entries(step.passes)
             .slice(0, 3)
             .map(([name, ms]) => `${name} ${ms.toFixed(1)}`)
-            .join(", ");
+            .join(", ") + (step.made.chunks || step.made.tiles ? `; it made ${step.made.chunks} chunk${step.made.chunks === 1 ? "" : "s"} of ground and ${step.made.tiles} navigation tile${step.made.tiles === 1 ? "" : "s"}` : "");
 
     return [
         `${title}: ${steps.count} steps (${run.seconds} s of the world's time) in ${report.took.run} s, ${steps.speed} times as fast as it's played`,
@@ -1837,6 +1880,7 @@ export function wordsOf(report) {
             ? [
                   `The war's turn ${report.warturn.turn.number} at ${report.warturn.turn.at / 1000} s: its step ${report.warturn.turn.wall.toFixed(1)} ms (${report.warturn.turn.cpu.toFixed(1)} of the thread's; the war's own pass ${report.warturn.turn.war.toFixed(1)}), the second before it a mean of ${report.warturn.round.before.mean.toFixed(2)} ms a step and ${report.warturn.round.before.worst.toFixed(1)} at worst; the longest of the steps before its save, ${report.warturn.between.after} after it, ${report.warturn.between.wall.toFixed(1)} ms (${report.warturn.between.cpu.toFixed(1)} of the thread's; ${report.warturn.between.pass} ${report.warturn.between.ms.toFixed(1)})`,
                   `Its save ${report.warturn.save.after} steps after: that step ${report.warturn.save.wall.toFixed(1)} ms (${report.warturn.save.cpu.toFixed(1)} of the thread's), ${report.warturn.save.text.toFixed(2)} of it writing the world out (${kb(report.warturn.save.bytes)}; gzipped off the step to ${kb(report.warturn.save.zipped)} in ${report.warturn.save.gzip.toFixed(1)} ms); the second after it a mean of ${report.warturn.round.after.mean.toFixed(2)} ms a step and ${report.warturn.round.after.worst.toFixed(1)} at worst. ${report.warturn.turns} turn${report.warturn.turns === 1 ? "" : "s"} in the run${report.warturn.all.slice(1).map((one) => `; turn ${one.number} at ${one.at / 1000} s: ${one.turn.toFixed(1)} ms, then ${one.between.toFixed(1)} at most, its save's ${one.save.toFixed(1)}`).join("")}`,
+                  `Its ground${report.warturn.foreseen ? "" : ", none made ahead for a turn (--unforeseen)"}: ${report.warturn.all.map((one) => `turn ${one.number}, ${one.boxes} box${one.boxes === 1 ? "" : "es"} said to be wanted for what it would bring near and ${one.ahead} chunk${one.ahead === 1 ? "" : "s"} made ahead for them, ${one.chunks} made by the steps from it to its save`).join("; ")}`,
               ]
             : []),
         ...(report.joinstorm
@@ -1871,6 +1915,7 @@ async function main() {
             json: { type: "boolean", default: false },
             whole: { type: "boolean", default: false },
             cold: { type: "boolean", default: false },
+            unforeseen: { type: "boolean", default: false },
             leave: { type: "string", default: "none" },
             sudden: { type: "boolean", default: false },
         },
@@ -1878,7 +1923,7 @@ async function main() {
     let report;
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

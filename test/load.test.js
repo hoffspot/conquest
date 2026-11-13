@@ -8,7 +8,7 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DAY } from "../client/js/core/daytime.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, LEAVE_SCHEMA, load, LOAD, REPORT_SCHEMA, STEP_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
@@ -171,6 +171,9 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
             assert.equal(step.counts["battle.actors"], BATTLE_KINDS.reduce((sum, kind) => sum + (step.counts[`battle.actors.${kind}`] ?? 0), 0));
             assert.ok(Object.values(step.counts).every((n) => n !== 0));
             assert.deepEqual(Object.keys(step.counts).filter((name) => !COUNTERS.includes(name)), []);
+
+            // (And what it made for itself: none, in a town whose ground was made in the warm-up)
+            assert.deepEqual(step.made, { chunks: 0, tiles: 0 });
         }
 
         // (The look round, twice a second, is in the steps it falls in and no other)
@@ -278,10 +281,24 @@ describe("the load over a turn of the war (scripts/load.js load, activity wartur
         assert.ok([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(warturn.between.pass), warturn.between.pass);
         assert.deepEqual(Object.keys(warturn.round.before), ["mean", "p50", "p99", "worst", "worstAt"]);
         assert.equal(warturn.all.length, 1);
-        assert.deepEqual(Object.keys(warturn.all[0]), ["at", "number", "turn", "between", "save"]);
+        assert.deepEqual(Object.keys(warturn.all[0]), ["at", "number", "turn", "between", "save", "boxes", "ahead", "chunks"]);
         assert.deepEqual([warturn.all[0].at, warturn.all[0].number, warturn.all[0].turn, warturn.all[0].save], [2000, 1, warturn.turn.wall, warturn.save.wall]);
         assert.ok(wordsOf(report).some((line) => /^The war's turn 1 at 2 s: its step /.test(line)));
         assert.ok(wordsOf(report).some((line) => /^Its save 4 steps after: that step .* 1 turn in the run$/.test(line)));
+    });
+
+    it("says what ground the turn wanted: what the host said it would bring near, what was made ahead for that, and what the steps from the turn to its save made for themselves (generated/multiplayer_scaling_plan.md 1-28)", () => {
+        const { warturn } = report;
+
+        // (A new war's first turn brings nothing near four in the humans' first town: nothing
+        // said, nothing made ahead for it, and the steps after it make no ground)
+        assert.equal(warturn.foreseen, true);
+        assert.deepEqual(warturn.ground, { boxes: 0, ahead: 0, steps: { chunks: 0, tiles: 0 } });
+        assert.deepEqual([warturn.all[0].boxes, warturn.all[0].ahead, warturn.all[0].chunks], [0, 0, 0]);
+        assert.ok(wordsOf(report).some((line) => /^Its ground: turn 1, 0 boxes said to be wanted for what it would bring near and 0 chunks made ahead for them, 0 made by the steps from it to its save$/.test(line)));
+        assert.ok(wordsOf({ ...report, warturn: { ...warturn, foreseen: false } }).some((line) => /^Its ground, none made ahead for a turn \(--unforeseen\): turn 1, /.test(line)));
+        // (And it leaves the switches as it found them)
+        assert.deepEqual([Ahead.turns, Overworld.recently], [true, true]);
     });
 
     it("is held to what such a run reports, and fails if the turn didn't come or wasn't saved", () => {
