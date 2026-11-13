@@ -1352,7 +1352,11 @@ found the same 2,012 ways over them to the last bit).
     way, and tiles far from anyone are dear to make (the world under them made first). A way
     to somewhere it still can't get to ends as near as it gets. With `wait` (and somewhere to
     send them: `later`), tiles not in yet are sent on rather than made, and there's no way
-    (`[]`) till they're in; widening, it goes as far as the tiles in, and further next time;
+    (`[]`) till they're in; widening, it goes as far as the tiles in, and further next time. A
+    mesh told to widen later (`widenLater`: a world server's, docs/WAR.md) sends the tiles
+    further round on even for a way that's not to wait, unless the way's asked for `now`: one
+    every copy of the world asks its own mesh for and goes by at once (where an invasion's
+    soldiers may stand, core/host.js `#spots`), which a server and a browser must find the same;
   - `nearest(point)`, `walkable(x, y)`;
   - `stands(x, y, memo)`: `walkable`, its answer kept in `memo` (`standing()`) and given again
     while it's asked of the same point and none of the tiles round it has been put in since

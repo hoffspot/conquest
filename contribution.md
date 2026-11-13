@@ -635,7 +635,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      - Every switch has an expiry: a date in a test that fails once it's passed, so the switch
        is taken out or its date argued for, never forgotten (`unexpired` in `test/helpers.js`;
        `test/netcode.test.js` holds the dates, and fails for a setting that's one of a few,
-       a schema's `choice`, with no date there).
+       a schema's `choice`, with no date there). A static switch in the code that only plays
+       the old form of something that comes out the same either way (`Host.indexing`,
+       `Battle.sparing`) has none; one whose old form is a fault has its date in its own test
+       (`Host.widening`, in `test/spots.test.js`).
      - A change to what's replicated changes lockstep's op and the view's schema in the same
        pull request, with a test of each.
      - **No pull request for replication bumps `SNAPSHOT_VERSION`.** The save is the same

@@ -1319,6 +1319,20 @@ export class Host {
     static bearing = true;
 
     /**
+     * Whether a spot's way (#spots, `to`: an invasion's lines and its reinforcements) is
+     * looked for with the tiles further round made in the step if it falls short, whatever the
+     * mesh is told of other ways (core/navigation.js path's `now`, widenLater), as it always is;
+     * or as any other way is, as it was: only for the test that shows what that did, till its
+     * date there (test/spots.test.js). Every copy of the world asks its own mesh for these ways
+     * and none is sent, so they must come out the same on a world server (server/ahead.js:
+     * widenLater) as in the browsers joined to it. As it was, the server's fell short where
+     * theirs looked further, it passed over squares they took, and each of them was found
+     * astray and sent the world again. A browser's host never had widenLater, and plays the
+     * same either way.
+     */
+    static widening = true;
+
+    /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the battle (the world's own seed to start with).
@@ -8103,7 +8117,9 @@ export class Host {
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken
     // twice, nor anyone's); with `to` (a point, metres), only those with a way there (not a yard
-    // shut in among buildings, nowhere to go from it: within SPOT_WAY of it, the way's end)
+    // shut in among buildings, nowhere to go from it: within SPOT_WAY of it, the way's end). The
+    // way's looked for by each copy of the world over its own mesh, and so `now`: a world
+    // server's widened in the step as a browser's is (Host.widening)
     #spots(map = "town", { to = null } = {}) {
         const squares = squaresOf(this.world.maps[map]);
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
@@ -8111,7 +8127,7 @@ export class Host {
         // (Where they're to go: or the ground nearest it anyone can stand on)
         const there = navigator ? (navigator.nearest(to) ?? to) : null;
         const goes = ([x, y]) => {
-            const end = navigator.path([x + 0.5, y + 0.5], there).at(-1);
+            const end = navigator.path([x + 0.5, y + 0.5], there, { now: Host.widening }).at(-1);
 
             return Boolean(end) && hypot(end[0] - there[0], end[1] - there[1]) <= SPOT_WAY;
         };
