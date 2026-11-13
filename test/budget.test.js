@@ -53,6 +53,10 @@ const BUDGETS = [
     // (Each creature of the wild against the players in the cells round it, since 1-8: it was
     // every creature against every player, 5,300)
     ["wilds.pairs", 150, "the wild's creatures measured against players' places"],
+    // (The wild's creatures gone through for the packs' members, once a look for all the packs
+    // since the rest of 1-8: it was once a look for each pack, 219 with the two packs there are
+    // here, and grows as packs times creatures where this grows as creatures)
+    ["packs.wild", 170, "the wild's creatures gone through for the packs' members"],
     // (The battle's index of where everyone stands made afresh, and over how many: since 1-10
     // only as someone's added or taken out, those who've changed cell moved between cells the
     // rest of the time. It was 200 times, once a step, over 316,274)

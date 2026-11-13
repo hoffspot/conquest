@@ -234,12 +234,15 @@ describe("the load at night (scripts/load.js load, activity night)", () => {
         assert.equal(report.joined.players, 4);
     });
 
-    it("has the light to see by in every step: everyone gone through for torches, and lights measured against the players", () => {
+    it("has the light to see by in every step: the soldiers gone through for torches, and lights measured against the players", () => {
         const steps = (5 * 1000) / STEP_MS;
 
         assert.equal(report.steps.count, steps);
         assert.equal(report.passes.light.calls, steps);
-        assert.ok(report.counts["light.actors"] >= steps * report.actors.start, "the battle's roster gone through each step");
+        // (Since the rest of 1-11 the battle's soldiers, from the list it keeps of them, where it
+        // was its whole roster each step: core/host.js Host.bearing, test/bearing.test.js)
+        assert.ok(report.counts["light.actors"] >= steps, "soldiers gone through each step");
+        assert.ok(report.counts["light.actors"] < steps * report.actors.start, "and not the battle's whole roster");
         assert.ok(report.counts["light.pairs"] > 0);
         assert.ok(wordsOf(report).some((line) => /^At night: minute 53\.\d+ to minute 53\.\d+ of the day's 60, the war's turn 35; the light to see by /.test(line)));
     });

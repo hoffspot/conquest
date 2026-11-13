@@ -198,6 +198,23 @@ The engine is built for this from the start. These are its rules:
    buildings against players and now measure 6,700; towns and works, 134,000 and 1,300
    (test/budget.test.js holds them there).
 
+   Two things the wild's look asks aren't of the players, and are asked of an index too
+   (`Host.indexing`; generated/multiplayer_scaling_plan.md 1-8). How many bodies are about a
+   place, for the body budget (`#bodiesNear`), is counted among those the battle's own index of
+   where everyone stands has near it (battle.js `within`), where it went through everyone in the
+   battle for each asking: the index is the one every search inside the battle asks, and the
+   test made of each is the one that was always made. It answers from outside only while it's
+   the battle's as it stands (no one added, taken out, put somewhere or walked a metre since it
+   was last brought up to date); otherwise everyone's gone through, as before, so the asking
+   never makes the battle do its index's work again, and changes nothing in it. And
+   which of the wild's creatures are of a pack (`#reinforce`, a hell rift's tears) is taken from
+   one going through the wild's table for all the packs (`#packMates`), where it was gone
+   through once for each pack; it's made where it's wanted, made again once any more are put
+   out, and thrown away with the look, so nothing's kept that the wild's comings and goings
+   could leave behind. `Host.indexing` off goes through everyone and everything, as before, and
+   a pack reinforced in its fight with the budget reached, a rift's tears pouring, and a world
+   of 25 players play out the same step for step either way (test/indexing.test.js).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk
