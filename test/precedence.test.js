@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
-import { first, inOrder, Order, STANDING, standingOf, viewerOf } from "../client/js/app/precedence.js";
+import { first, inOrder, Order, seated, STANDING, standingOf, viewerOf } from "../client/js/app/precedence.js";
 
 // A viewer: "me" in the town, in a party with Bryn and Cai, set on a goblin, talking to an innkeeper
 function viewer(more = {}) {
@@ -210,6 +210,133 @@ describe("the order (Order.rank)", () => {
     });
 });
 
+describe("one room shared in the one order (seated)", () => {
+    // Bodies of three kinds, each `away` from the camera, ranked as the game ranks them; `held`,
+    // the ids of those with a body in full
+    const body = (id, away) => ({ id, kind: id.split("-")[0], map: "town", away, tall: 1.8 / away });
+    const rank = (bodies) => new Order().rank(viewer(), bodies, (entry) => Object.assign(entry, { tall: entry.actor.tall, away: entry.actor.away }));
+    const seats = (bodies, room, held, more = {}) => {
+        const { now, next } = seated(rank(bodies), room, { held: ({ actor }) => held.has(actor.id), margin: 3, ...more });
+
+        return { now: new Set([...now].map(({ actor }) => actor.id)), next: new Set([...next].map(({ actor }) => actor.id)) };
+    };
+    // One kind's look, as the game's are: its own with a place built in full, its own held
+    // without one let go; no one else's touched
+    const look = (kind, bodies, room, held, more) => {
+        const { now } = seats(bodies, room, held, more);
+
+        for (const { id } of bodies.filter((each) => each.kind === kind)) {
+            (now.has(id) ? held.add(id) : held.delete(id));
+        }
+    };
+    // Twelve soldiers 8 to 14 m off, ten folk 20 to 65 m off, six creatures 30 to 55 m off
+    const town = () => [
+        ...Array.from({ length: 12 }, (each, k) => body(`soldier-${k}`, 8 + k * 0.5)),
+        ...Array.from({ length: 10 }, (each, k) => body(`folk-${k}`, 20 + k * 5)),
+        ...Array.from({ length: 6 }, (each, k) => body(`beast-${k}`, 30 + k * 5)),
+    ];
+    const nearest = (bodies, room) => new Set([...bodies].sort((a, b) => a.away - b.away).slice(0, room).map(({ id }) => id));
+
+    it("gives the places to the first in the order, of whatever kind, and no more than there are", () => {
+        const bodies = town();
+
+        assert.deepEqual(seats(bodies, 18, new Set()).now, nearest(bodies, 18));
+        assert.equal(seats(bodies, 0, new Set()).now.size, 0);
+        assert.equal(seats(bodies, -4, new Set()).now.size, 0);
+        assert.equal(seats(bodies, Infinity, new Set()).now.size, bodies.length);
+        assert.equal(seats(bodies, 18, new Set()).next.size, 0);
+    });
+
+    it("comes to the same places whoever looks first, the nearest held, and never more held than the room", () => {
+        const kinds = ["soldier", "folk", "beast"];
+        const turns = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+
+        for (const room of [4, 12, 18, 27]) {
+            for (const turn of turns) {
+                // (The room all taken by the furthest first, as whoever looked first once took it)
+                const bodies = town();
+                const held = new Set([...bodies].sort((a, b) => b.away - a.away).slice(0, room).map(({ id }) => id));
+
+                for (let round = 0; round < 6; round++) {
+                    for (const k of turn) {
+                        look(kinds[k], bodies, room, held);
+                        assert.ok(held.size <= room, `${held.size} held with room for ${room}`);
+                    }
+                }
+
+                // (To within the margin: one held gives way only to one more than 3 places before it)
+                const places = new Map(rank(bodies).map(({ actor }, place) => [actor.id, place]));
+                const last = Math.max(...[...held].map((id) => places.get(id)));
+                const first = Math.min(...bodies.filter(({ id }) => !held.has(id)).map(({ id }) => places.get(id)));
+
+                assert.equal(held.size, room);
+                assert.ok(last - first <= 3, `room ${room}, turn ${turn}: one at place ${first} not held, one at ${last} held`);
+                // (And the twelve soldiers, the nearest of all, every one, with room for them)
+                assert.ok(room < 18 || bodies.slice(0, 12).every(({ id }) => held.has(id)), `room ${room}, turn ${turn}`);
+            }
+        }
+    });
+
+    it("lets one held go for a nearer one only once it's gone: the nearer one next, not now", () => {
+        const bodies = [body("folk-0", 10), body("folk-1", 20), body("folk-2", 30), body("folk-3", 40), body("folk-4", 50), body("soldier-0", 5)];
+        const held = new Set(["folk-0", "folk-1", "folk-2", "folk-3", "folk-4"]);
+        const first = seats(bodies, 5, held);
+
+        assert.deepEqual(first.now, new Set(["folk-0", "folk-1", "folk-2", "folk-3"]));
+        assert.deepEqual(first.next, new Set(["soldier-0"]));
+
+        // (The soldiers' look does nothing yet; the folk's lets the furthest go; then the soldier's built)
+        look("soldier", bodies, 5, held);
+        assert.ok(!held.has("soldier-0"));
+        look("folk", bodies, 5, held);
+        assert.ok(!held.has("folk-4"));
+        look("folk", bodies, 5, held);
+        assert.ok(!held.has("folk-4"));
+        look("soldier", bodies, 5, held);
+        assert.deepEqual(held, new Set(["soldier-0", "folk-0", "folk-1", "folk-2", "folk-3"]));
+    });
+
+    it("leaves two near each other in the order as they are, as they change places", () => {
+        const bodies = [body("folk-0", 10), body("folk-1", 20), body("folk-2", 30), body("soldier-0", 31), body("soldier-1", 32), body("soldier-2", 33)];
+        const held = new Set(["folk-0", "folk-1", "folk-2"]);
+        const kept = new Set(held);
+
+        // (The soldiers come nearer than the last of the folk, by one place, two and three: no one's let go)
+        for (const away of [29.5, 29, 28.5]) {
+            bodies.find(({ away: at }) => at > 30).away = away;
+            bodies.forEach((each) => (each.tall = 1.8 / each.away));
+            look("folk", bodies, 3, held);
+            look("soldier", bodies, 3, held);
+            assert.deepEqual(held, kept);
+        }
+
+        // (Four places before the last of them: that one's let go for it)
+        bodies.push(body("soldier-3", 15));
+        look("folk", bodies, 3, held);
+        look("soldier", bodies, 3, held);
+        assert.deepEqual(held, new Set(["folk-0", "folk-1", "soldier-3"]));
+    });
+
+    it("lets the furthest held go at once where the room's cut, of whatever kind", () => {
+        const bodies = town();
+        const held = nearest(bodies, 18);
+        const { now, next } = seats(bodies, 6, held);
+
+        assert.deepEqual(now, nearest(bodies, 6));
+        assert.equal(next.size, 0);
+    });
+
+    it("keeps a kind's own few whatever the room, counted in it all the same", () => {
+        const bodies = town();
+        const pinned = ({ actor }) => ["beast-0", "beast-1"].includes(actor.id);
+
+        // (Room for three: the two creatures, and the nearest soldier)
+        assert.deepEqual(seats(bodies, 3, new Set(), { pinned }).now, new Set(["beast-0", "beast-1", "soldier-0"]));
+        // (Room for one: the two all the same, and no one else)
+        assert.deepEqual(seats(bodies, 1, nearest(bodies, 5), { pinned }).now, new Set(["beast-0", "beast-1"]));
+    });
+});
+
 describe("the game ranks by the one order", () => {
     const game = readFileSync(new URL("../client/js/app/game.js", import.meta.url), "utf8");
 
@@ -217,6 +344,13 @@ describe("the game ranks by the one order", () => {
         for (const place of ["soldiers", "creatures", "folk", "throng", "plates"]) {
             assert.ok(game.includes(`this.orders.${place}.rank(`), place);
         }
+    });
+
+    it("and shares the bodies' budget by it: each look asks who has a place of all three kinds, none takes what the others left", () => {
+        assert.ok(game.includes("this.orders.bodies.rank("));
+        assert.ok(/seated\(sharers, this\.#bodiesBudget\(\) - others,/.test(game));
+        assert.equal(game.split("this.#seats(me, viewer)").length - 1, 3);
+        assert.ok(!/budget(\(\))? - this\.#heldInFull\(\(id\) => !ids\.has\(id\)/.test(game));
     });
 
     it("with no copy of who's fighting the player, nor a sort of its own, left in them", () => {

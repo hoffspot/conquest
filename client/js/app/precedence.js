@@ -106,6 +106,83 @@ export function inOrder(a, b) {
 export const first = (entry) => entry.standing < STANDING.rest;
 
 /**
+ * Who of those sharing one room has a place in it now: the bodies' budget, shared by the soldiers
+ * about, the wild's people-shaped creatures and the folk out in the world (app/game.js #seats),
+ * each of them rationed by a look of its own, at its own time. Each look asks this of everyone,
+ * in the one order, and acts only on its own, so who's given a place doesn't go by who looked
+ * first: each had the room the others had left, and neither gave way once it held a place, so a
+ * soldier 14 metres from the camera stayed in its crowd for good while a townsperson further off
+ * was held in full.
+ *
+ * `ranked` is everyone who'd have a place, first to last (Order.rank's entries, or anything
+ * else); `room`, how many places there are; `held(entry)`, whether one has a place already or is
+ * being given one; `pinned(entry)`, whether one has a place whatever the room (its kind's own
+ * floor: a battle's few soldiers), counted in the room all the same; `margin`, how many places
+ * further one held must be than one who isn't, to give its place up to it.
+ *
+ * Those pinned are in. Of the rest, those held keep their places, the nearest of them as many as
+ * there's room for; whatever room's left goes to the first of those not held; and with none left,
+ * one not held who'd be in by the order alone has the place of the last one held, if that one's
+ * more than `margin` places after it: only once that one's let go, though (`next`, not `now`), so
+ * there are never more held than the room. Two near each other in the order, changing places as
+ * they walk, change nothing: to be let go for one it was preferred to, a body must fall more than
+ * twice the margin behind it.
+ *
+ * Returns { now, next }, Sets of `ranked`'s own: `now`, those with a place (to be kept, or given
+ * one at once); `next`, those given one as soon as someone further's let go. Anyone held in
+ * neither is to be let go.
+ */
+export function seated(ranked, room, { held, pinned = () => false, margin = 0 }) {
+    const now = new Set();
+    const next = new Set();
+    // (Those held and those to come, of those not pinned, each with its place among them)
+    const keep = [];
+    const come = [];
+    let place = 0;
+
+    for (const entry of ranked) {
+        if (pinned(entry)) {
+            now.add(entry);
+        } else {
+            (held(entry) ? keep : come).push({ entry, place: place++ });
+        }
+    }
+
+    const places = Math.max(0, room - now.size);
+
+    keep.length = Math.min(keep.length, places);
+
+    let free = places - keep.length;
+
+    for (const one of come) {
+        // (Not in by the order alone: nor is anyone after it)
+        if (one.place >= places) {
+            break;
+        }
+
+        if (free > 0) {
+            now.add(one.entry);
+            free--;
+
+            continue;
+        }
+
+        if (!keep.length || keep[keep.length - 1].place - one.place <= margin) {
+            break;
+        }
+
+        keep.pop();
+        next.add(one.entry);
+    }
+
+    for (const { entry } of keep) {
+        now.add(entry);
+    }
+
+    return { now, next };
+}
+
+/**
  * An order of precedence, worked out again and again with what it made the time before: its
  * entries are kept from one ranking to the next and filled in again, so ranking makes nothing
  * new once it's ranked as many (a couple of times a second for who's held, every frame for the
