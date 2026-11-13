@@ -36,7 +36,9 @@
 //                          { type: "close", peer, reason }         sent out of the world (afk)
 //                          { type: "state", ... }                  how it is (report), with what it's
 //                                                                  counted of itself since it last said
-//                                                                  (`metrics`: world-metrics.js)
+//                                                                  (`metrics`: world-metrics.js; its
+//                                                                  late steps since, each with its
+//                                                                  parts, among it: `metrics.late`)
 //                          { type: "journal", text }               a line this thread put in the world's
 //                                                                  journal (a save, a backup, time let
 //                                                                  go), for the server's structured log
@@ -47,6 +49,7 @@ import { parentPort, workerData } from "node:worker_threads";
 import { salvageKept } from "../client/js/app/character-file.js";
 import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
 import { install } from "../client/js/core/probe.js";
+import { Navigation, navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
@@ -161,6 +164,12 @@ const metrics = new WorldMetrics({ clock });
 install(metrics.probes);
 
 keeper.onSave = (ms, ok) => metrics.saved(ms, ok);
+
+// (What a step made for itself is told with a late one: the ground's chunks, the navigation's
+// tiles baked and the floors' tiles baked, all there have been, read before each step and after)
+const ground = host.world.maps.town;
+const navigation = navigatorOf(ground);
+const stepBegins = () => metrics.late.begin(host.battle.time, ground.chunksMade, navigation.baked, Navigation.floorTiles);
 
 /** Those who've come in, by peer: { player, role, slot, linked, ready, hidden, held, everyone, since, character }. */
 const peers = new Map();
@@ -474,7 +483,10 @@ function tick() {
     ahead.expect(now - openedAt < LAST_IN.forMs ? [...hosting.coming(), ...lastIn] : hosting.coming());
 
     if (running) {
-        runner.advance(now - last, { most: RUNNER.catchUp });
+        // (Each step's parts read off the probes before it and after it's sent, and a late one
+        // kept with them: world-metrics.js LateSteps)
+        runner.advance(now - last, { most: RUNNER.catchUp, before: stepBegins });
+        metrics.late.end(host.battle.time, ground.chunksMade, navigation.baked, Navigation.floorTiles);
         fellBehind(runner.letGo(), now);
     }
 

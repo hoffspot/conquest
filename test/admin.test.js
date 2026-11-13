@@ -14,6 +14,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { NET_VERSION } from "../client/js/core/netplay.js";
+import { count, install, lap, uninstall } from "../client/js/core/probe.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE, METRICS_PATH } from "../server/admin.js";
 import { parseText, TEXT_TYPE } from "../server/metrics.js";
@@ -24,6 +25,7 @@ import { PLAY_PROTOCOL } from "../server/play.js";
 import { CRASHES, CRASHES_FILE } from "../server/storage/crashes.js";
 import { MEASURES, MEASURES_FILE } from "../server/storage/measures.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
+import { WorldMetrics } from "../server/world-metrics.js";
 import { LADDER } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
 
@@ -805,5 +807,85 @@ describe("the server's settings, creator keys, journal and health (server/manage
 
         assert.ok(activity.includes("settings were changed by the admin, on the server's computer: name “Pellagos Home Server”"));
         assert.ok(activity.includes(`settings were changed by the admin, on the server's computer: name the computer's own (“${own}”)`));
+    });
+});
+
+describe("a world's late steps, on a server (generated/multiplayer_scaling_plan.md 0-13)", () => {
+    let server;
+    let admin;
+
+    before(async () => {
+        server = await serve();
+        admin = await mac(server);
+    });
+
+    it("lists a faked 70 ms pass by its name on Health, with its parts, and counts it on /metrics by that name alone", async () => {
+        const world = (await admin.call("POST", "/worlds", { name: "Thornwick", race: "human", seed: 3 })).json;
+        const entered = await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION } });
+        const game = await play(server, world.world, entered.json.session);
+
+        // (The world's going, its thread saying how it is: with no late step yet, on a machine that keeps up)
+        await until(async () => (await admin.call("GET", "/server/health")).json.worlds[0]?.steps?.count > 0, "the world's steps on Health");
+
+        const before = (await admin.call("GET", "/server/health")).json.worlds[0];
+
+        assert.ok(Array.isArray(before.late), "every world going has its list");
+
+        // (A step as the world's thread reads one off its probes, world-worker.js tick, its muster
+        // made to take 70 ms by a clock that says so: told to the server as the thread tells it,
+        // in how it says it is)
+        let now = 0;
+        const thread = new WorldMetrics({ node: false, clock: () => now });
+        const installed = uninstall();
+
+        try {
+            install(thread.probes);
+            thread.late.begin(5000, 4, 9, 0);
+            lap("battle");
+            now += 11;
+            lap("muster");
+            count("muster.pairs", 240);
+            now += 70;
+            lap("flush.ops");
+            now += 2;
+            lap(null);
+            assert.equal(thread.late.end(5050, 10, 11, 0)?.pass, "muster");
+        } finally {
+            uninstall();
+
+            if (installed) {
+                install(installed);
+            }
+        }
+
+        const entry = [...server.registry.going].find((one) => one.id === world.world);
+        const counted = thread.take();
+        // (The world's own first steps, its town mustered as its player came in, may well have been late too: counted before)
+        const scrape = async () => parseText((await raw(server.adminPort, { route: METRICS_PATH })).body.toString("utf8")).pellagos_world_late_steps_total;
+        const had = (await scrape()).samples.find((sample) => sample.labels.kind === "muster")?.value ?? 0;
+
+        assert.equal(counted.late.length, 1);
+        server.registry.onState(world.world, { ...entry.thread.state, metrics: counted });
+
+        const health = (await admin.call("GET", "/server/health")).json;
+        const [late] = health.worlds[0].late.filter((one) => one.at === 5050);
+
+        assert.deepEqual({ ms: late.ms, pass: late.pass, passes: late.passes, counts: late.counts, made: late.made }, { ms: 83, pass: "muster", passes: { muster: 70, battle: 11, "flush.ops": 2 }, counts: { "muster.pairs": 240 }, made: { chunks: 6, tiles: 2, floors: 0 } });
+        assert.ok(Math.abs(late.when - Date.now()) < 60000);
+
+        // (And on /metrics: one counter, the pass's name its only label)
+        const family = await scrape();
+        const muster = family.samples.filter((sample) => sample.labels.kind === "muster");
+
+        assert.equal(family.type, "counter");
+        assert.deepEqual(muster.map((sample) => [Object.keys(sample.labels), sample.value >= had + 1]), [[["kind"], true]]);
+        assert.ok(family.samples.every((sample) => Object.keys(sample.labels).join() === "kind"));
+
+        // (Nothing of who was in it or how they got in is in either)
+        for (const text of [JSON.stringify(health.worlds[0].late), JSON.stringify(family)]) {
+            assert.ok(!text.includes(entered.json.player) && !text.includes(world.playerKey) && !text.includes(server.adminKey));
+        }
+
+        game.close();
     });
 });
