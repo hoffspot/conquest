@@ -929,14 +929,14 @@ export class Battle {
     // made once, where a pair of functions was made for every look
     #asideX = 0;
     #asideY = 0;
+    #seer = null;
+    #seesOne = (other) => this.canSee(this.#seer, other);
+    #frightensOne = (other) => this.#frightens(other, this.#seer);
 
     // What the mesh last answered each walker that asked (#onMesh): of where it stood (`at`), and
     // of where it would step (`to`), each a navigation.js standing(). Kept by the walker, here
     // and not on it: nothing of it is the battle's to keep, send or sum
     #stood = new WeakMap();
-    #seer = null;
-    #seesOne = (other) => this.canSee(this.#seer, other);
-    #frightensOne = (other) => this.#frightens(other, this.#seer);
 
     // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
     // #counted): read by nothing else, and begun again from nothing each step
@@ -1100,10 +1100,12 @@ export class Battle {
         }
 
         if (actor.kind === "player") {
+            const at = added ? -1 : cast.list.indexOf(actor);
+
             if (added) {
                 cast.list.push(actor);
-            } else {
-                cast.list.splice(cast.list.indexOf(actor), 1);
+            } else if (at >= 0) {
+                cast.list.splice(at, 1);
             }
         }
 
@@ -3501,6 +3503,37 @@ export class Battle {
         return null;
     }
 
+    // #routine's own function for a wait, as it made one for every call (Battle.sparing false):
+    // made here, so that #routine itself keeps nothing for it when it makes none
+    #betweenOf(actor) {
+        return ([least, most]) => least + actor.chance.next() * (most - least);
+    }
+
+    // The danger one of the folk sees, looked for as it was (Battle.sparing false): the two
+    // functions made for the look, here and not in #afraid, which then keeps nothing for them
+    #dangerTo(actor) {
+        return this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
+    }
+
+    // Whether any player sees one of the folk (#rest), and the first player one sees (#beckon),
+    // every player gone through as they were: apart from those two, which keep nothing for
+    // these functions when the players near are asked of the index
+    #seenByAny(actor) {
+        return this.#heroes.some((other) => {
+            this.#work.playerPairs++;
+
+            return !other.dead && this.canSee(other, actor);
+        });
+    }
+
+    #firstSeen(actor) {
+        return this.#heroes.find((other) => {
+            this.#work.playerPairs++;
+
+            return !other.dead && this.canSee(actor, other);
+        });
+    }
+
     // A wait of the folk's, rolled between the least and the most of it (ms) with their own dice
     #waitOf(actor, range) {
         return range[0] + actor.chance.next() * (range[1] - range[0]);
@@ -3517,7 +3550,7 @@ export class Battle {
     #routine(actor) {
         const routine = actor.routine;
         // (As it was, a function made for every one of the folk every step; #waitOf, none)
-        const between = Battle.sparing ? null : ([least, most]) => least + actor.chance.next() * (most - least);
+        const between = Battle.sparing ? null : this.#betweenOf(actor);
 
         // (Danger near: running from it, or standing their ground)
         if (this.#afraid(actor)) {
@@ -3616,7 +3649,7 @@ export class Battle {
                 danger = this.#nearestEnemy(actor, this.#seesOne, FLEE.sight, this.#frightensOne);
                 this.#seer = null;
             } else {
-                danger = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), FLEE.sight, (other) => this.#frightens(other, actor));
+                danger = this.#dangerTo(actor);
             }
 
             if (danger) {
@@ -3752,11 +3785,7 @@ export class Battle {
 
             this.#heroAsking = false;
         } else {
-            player = this.#heroes.find((other) => {
-                this.#work.playerPairs++;
-
-                return !other.dead && this.canSee(actor, other);
-            });
+            player = this.#firstSeen(actor);
         }
 
         if (player) {
@@ -3808,11 +3837,7 @@ export class Battle {
 
             this.#heroAsking = false;
         } else {
-            seen = this.#heroes.some((other) => {
-                this.#work.playerPairs++;
-
-                return !other.dead && this.canSee(other, actor);
-            });
+            seen = this.#seenByAny(actor);
         }
 
         if (!seen) {
@@ -6399,10 +6424,21 @@ export class Battle {
         const players = this.#players;
         const muster = this.#musterOf;
 
-        upright.clear();
+        let same = upright.size === players.length;
 
-        for (let i = 0; i < players.length; i++) {
-            upright.add(players[i]);
+        this.#heroAsking = false;
+
+        for (let i = 0; same && i < players.length; i++) {
+            same = upright.has(players[i]);
+        }
+
+        // (Made again only when who stands has changed: most steps no one's fallen or risen)
+        if (!same) {
+            upright.clear();
+
+            for (let i = 0; i < players.length; i++) {
+                upright.add(players[i]);
+            }
         }
 
         muster.actors = this.actors;
@@ -6761,6 +6797,13 @@ export class Battle {
             }
         }
 
+        return this.#indexedAfresh();
+    }
+
+    // The index made again of everyone (#indexed). Apart from it, so that asking for an index
+    // that's up to date, which every search does, makes nothing: what this keeps for the function
+    // that goes through everyone was made at every asking while the two were one
+    #indexedAfresh() {
         const from = inner("battle.index");
 
         count("battle.indexed");
