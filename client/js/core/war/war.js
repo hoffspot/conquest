@@ -245,10 +245,12 @@ export class War {
      * @param {object} plan - The world plan (worldplan/plan.js planWorld).
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the war's chances (the plan's seed to start with).
+     * @param {object} [options.roads] - Another war's roads on the same plan (roads.js: worked out
+     *     from the plan alone and never changed, so a copy of a war needn't work them out again).
      */
-    constructor(plan, { seed = plan.seed ?? 1 } = {}) {
+    constructor(plan, { seed = plan.seed ?? 1, roads = null } = {}) {
         this.plan = plan;
-        this.roads = new Roads(plan);
+        this.roads = roads ?? new Roads(plan);
         this.random = createRandom((seed * 7919 + 104729) >>> 0);
         this.seed = seed;
 
@@ -1405,13 +1407,17 @@ export class War {
         });
     }
 
-    /** The war on `plan` (made again from the same seed) carrying on from a snapshot. */
-    static restore(plan, snapshot) {
+    /**
+     * The war on `plan` (made again from the same seed) carrying on from a snapshot; with `roads`,
+     * another war's on the same plan, its roads aren't worked out again (a copy of one that's
+     * running: core/host.js #foresee).
+     */
+    static restore(plan, snapshot, { roads = null } = {}) {
         if (snapshot.version !== WAR_VERSION && ![1, 2, 3, 4, 5, 6, 7, 8].includes(snapshot.version)) {
             throw new Error(`A war kept by another version of the game (${snapshot.version})`);
         }
 
-        const war = new War(plan, { seed: snapshot.seed });
+        const war = new War(plan, { seed: snapshot.seed, roads });
         const kept = structuredClone(snapshot);
 
         war.random.state = kept.random;

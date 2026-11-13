@@ -73,7 +73,7 @@ import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUAR
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
-import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
+import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, TURN_MS, War, WORKED } from "./war/war.js";
 import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, stablemasterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, KNIFE, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
@@ -130,8 +130,12 @@ export const MUSTER = Object.freeze({ near: 120, far: 250 });
  *    out from it, and `squads` beyond those.
  * And a dungeon's levels (core/dungeons/build.js), made when a player's within DELVES.near of its
  * way in: wanted once one's within `delve`.
+ * And what a turn of the war brings near a player (an army turned back, reinforcements set out,
+ * a camp pitched) is stood up by the look after the turn, a step or a few later: so from `turn`
+ * ms before a turn falls, whoever asks for it is told what the war as it will be would want too
+ * (soon's `turn`, #foresee: generated/multiplayer_scaling_plan.md 1-28).
  */
-export const SOON = Object.freeze({ margin: 80, town: 40, folk: 16, works: 64, camp: 72, army: 72, road: 56, fort: 24, squads: 16, delve: 150 });
+export const SOON = Object.freeze({ margin: 80, town: 40, folk: 16, works: 64, camp: 72, army: 72, road: 56, fort: 24, squads: 16, delve: 150, turn: 10000 });
 
 /** How far from its post (or a patrol from its round) a guard goes after an enemy (metres). */
 export const LEASH = 14;
@@ -1729,6 +1733,15 @@ export class Host {
 
         /** When (battle ms) the buildings near the players are next looked over. */
         this.lookAt = 0;
+
+        /**
+         * The war as its next turn will leave it, once that's near and has been asked for
+         * ({ turn (the war's turn it was worked out in), war }: #foresee; null before), and how
+         * many times one's been worked out. For whoever makes the world's ground ahead (soon):
+         * nothing of the world's, and not kept with it.
+         */
+        this.foreseen = null;
+        this.foresights = 0;
 
         /** What's been done in the world by talking (buying, renting...): the last few. */
         this.done = [];
@@ -6443,8 +6456,13 @@ export class Host {
      * those wanted were they in already as well, and `theirs` says which of them each would
      * want ([[box...]...], in `coming`'s order: so that whoever lets them in can tell when their
      * own ground's made); `around` and `dungeons` are the players' own.
+     * Asked for the war's next turn too (`turn`: a world server's asking, server/ahead.js;
+     * generated/multiplayer_scaling_plan.md 1-28), from SOON.turn before it falls the `boxes`
+     * are also those of what the turn will bring near (#foresee: the war's part again, of the
+     * war as it will be), and `foreseen` says which they are, those nothing wants yet (none of
+     * them anyone's in `theirs`).
      */
-    soon(coming = []) {
+    soon(coming = [], { turn = false } = {}) {
         const outside = Boolean(this.world.plan && this.world.maps?.town?.chunk);
         const around = outside ? this.#whereabouts() : [];
         const places = outside && coming.length ? [...around, ...coming] : around;
@@ -6454,7 +6472,7 @@ export class Host {
         const theirs = coming.map(() => []);
 
         if (!places.length) {
-            return { around, boxes, dungeons, theirs };
+            return { around, boxes, dungeons, theirs, foreseen: [] };
         }
 
         const { margin } = SOON;
@@ -6474,8 +6492,22 @@ export class Host {
 
                       return nearing.length > 0 || around.some(([x, y]) => hypot(x - ax, y - ay) < within + margin);
                   };
+        // (While the war's next turn is asked about, `said`: only what isn't wanted already, each
+        // box by its corners, and none of them anyone's own to wait for)
+        const foreseen = [];
+        let said = null;
         const box = ([x, y], reach) => {
             const one = [Math.floor(x - reach), Math.floor(y - reach), Math.ceil(x + reach), Math.ceil(y + reach)];
+
+            if (said) {
+                if (!said.has(one.join(","))) {
+                    said.add(one.join(","));
+                    boxes.push(one);
+                    foreseen.push(one);
+                }
+
+                return;
+            }
 
             boxes.push(one);
 
@@ -6503,60 +6535,88 @@ export class Host {
         }
 
         // The war's: each town's soldiers, the works' guards, the camps and depots, the armies,
-        // what's on the roads and the fortifications (#muster)
-        for (const town of war?.towns ?? []) {
-            const place = this.#placeOf(town.id);
-            const edge = place ? SETTLEMENT_KINDS[place.kind].radius : 0;
+        // what's on the roads and the fortifications (#muster), as a war has them
+        const wars = (war) => {
+            for (const town of war.towns) {
+                const place = this.#placeOf(town.id);
+                const edge = place ? SETTLEMENT_KINDS[place.kind].radius : 0;
 
-            if (place && !this.mustered.has(town.id) && near(this.#middleOf(place), edge + MUSTER.near)) {
-                box(this.#middleOf(place), edge + SOON.town);
-            }
-        }
-
-        for (const works of war?.works ?? []) {
-            if (!this.worksOut.has(works.id) && near(works.at, WORKS_OUT.near)) {
-                box(works.at, SOON.works);
-            }
-        }
-
-        for (const camp of war ? [...war.camps, ...war.depots] : []) {
-            if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp.at, CAMP_NEAR.near)) {
-                box(camp.at, SOON.camp);
-            }
-        }
-
-        // (An army met too where it's near enough one met already to fight it, whoever's it is)
-        const met = [...this.armies.values()].map(({ at }) => at);
-
-        for (const force of war?.forces ?? []) {
-            const road = { envoy: [ENVOY, this.envoys], convoy: [CONVOY_NEAR, this.convoys], supply: [WAGON_NEAR, this.supplies] }[force.kind];
-
-            if (road) {
-                if (!road[1].has(force.id) && near(force.at, road[0].near)) {
-                    box(force.at, SOON.road);
-                }
-            } else if (["army", "reserve", "reinforcement"].includes(force.kind) && force.size > 0 && this.#afield(force) && !this.armies.has(force.id)) {
-                if (near(force.at, ARMY_NEAR.near) || met.some(([x, y]) => hypot(x - force.at[0], y - force.at[1]) <= ARMY_NEAR.fight + margin)) {
-                    box(force.at, SOON.army);
+                if (place && !this.mustered.has(town.id) && near(this.#middleOf(place), edge + MUSTER.near)) {
+                    box(this.#middleOf(place), edge + SOON.town);
                 }
             }
-        }
 
-        for (const fort of war?.forts ?? []) {
-            if (this.fortsOut.has(fort.id) || !near(fort.at, FORT_NEAR.near)) {
-                continue;
-            }
-
-            box(fort.at, fortSize(fort) / 2 + SOON.fort);
-
-            // (A forward garrison's squads: the ground at its gate and at each stop of their rounds)
-            if (fort.squads && !this.squadsOut.has(fort.id)) {
-                const points = this.#squadPoints(fort);
-
-                for (const point of points.rounds.flat()) {
-                    box(point, SQUAD_FREE.stop + SOON.squads);
+            for (const works of war.works) {
+                if (!this.worksOut.has(works.id) && near(works.at, WORKS_OUT.near)) {
+                    box(works.at, SOON.works);
                 }
             }
+
+            for (const camp of [...war.camps, ...war.depots]) {
+                if (!this.camps.has(camp.id) && camp.guard > 0 && near(camp.at, CAMP_NEAR.near)) {
+                    box(camp.at, SOON.camp);
+                }
+            }
+
+            // (An army met too where it's near enough one met already to fight it, whoever's it is)
+            const met = [...this.armies.values()].map(({ at }) => at);
+
+            for (const force of war.forces) {
+                const road = { envoy: [ENVOY, this.envoys], convoy: [CONVOY_NEAR, this.convoys], supply: [WAGON_NEAR, this.supplies] }[force.kind];
+
+                if (road) {
+                    if (!road[1].has(force.id) && near(force.at, road[0].near)) {
+                        box(force.at, SOON.road);
+                    }
+                } else if (["army", "reserve", "reinforcement"].includes(force.kind) && force.size > 0 && this.#afield(force) && !this.armies.has(force.id)) {
+                    if (near(force.at, ARMY_NEAR.near) || met.some(([x, y]) => hypot(x - force.at[0], y - force.at[1]) <= ARMY_NEAR.fight + margin)) {
+                        box(force.at, SOON.army);
+                    }
+                }
+            }
+
+            for (const fort of war.forts) {
+                if (this.fortsOut.has(fort.id) || !near(fort.at, FORT_NEAR.near)) {
+                    continue;
+                }
+
+                box(fort.at, fortSize(fort) / 2 + SOON.fort);
+
+                // (A forward garrison's squads: the ground at its gate and at each stop of their rounds)
+                if (fort.squads && !this.squadsOut.has(fort.id)) {
+                    const points = this.#squadPoints(fort);
+
+                    for (const point of points.rounds.flat()) {
+                        box(point, SQUAD_FREE.stop + SOON.squads);
+                    }
+                }
+            }
+        };
+
+        if (war) {
+            wars(war);
+        }
+
+        // And as its next turn will have them (`turn`: #foresee), once it's near: what a turn
+        // brings near a player (an army turned back, reinforcements set out, a camp pitched, a
+        // works taken) the look after it stands up at once, a step or a few later, with no
+        // time between to make its ground
+        const next = war && turn ? this.#foresee() : null;
+
+        if (next) {
+            said = new Set(boxes.map((one) => one.join(",")));
+            wars(next);
+
+            // (A works that changes hands is stood down and manned again in the one look)
+            for (const works of next.works) {
+                const out = this.worksOut.get(works.id);
+
+                if (out && (out.held !== works.held || (!works.held && out.people !== works.owner)) && near(works.at, WORKS_OUT.near)) {
+                    box(works.at, SOON.works);
+                }
+            }
+
+            said = null;
         }
 
         // The dungeons near, not made yet: each as those within reach of its way in would find it
@@ -6581,7 +6641,33 @@ export class Host {
             dungeons.push({ key, seed: building.seed, theme: building.theme ?? "caves", tier, generation: building.generation ?? 0 });
         }
 
-        return { around, boxes, dungeons, theirs };
+        return { around, boxes, dungeons, theirs, foreseen };
+    }
+
+    // The war as its next turn will leave it, were nothing done to it before then (a copy of it
+    // played on a turn: the war itself isn't touched, nor anything else), from SOON.turn before
+    // the turn falls; null till then. Worked out once a turn, the first time it's asked for
+    // (some 8 ms on a server's container, between two steps): what's done to the war in those
+    // last seconds (a town won, an army met marching on) may make it wrong, which costs only
+    // ground made that isn't wanted, or not made till the step that wants it
+    #foresee() {
+        const war = this.war;
+
+        if (TURN_MS - war.clock > SOON.turn) {
+            this.foreseen = null;
+
+            return null;
+        }
+
+        if (this.foreseen?.turn !== war.turn) {
+            const next = War.restore(this.world.plan, war.snapshot(), { roads: war.roads });
+
+            next.step();
+            this.foreseen = { turn: war.turn, war: next };
+            this.foresights++;
+        }
+
+        return this.foreseen.war;
     }
 
     // One of the plan's places, by its id (or undefined). Looked up in a table made once: the

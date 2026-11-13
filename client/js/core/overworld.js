@@ -210,6 +210,13 @@ export const CAMP_FARTHER = 3;
 export const KEEP = 256;
 
 /**
+ * How many of the chunks read last are found again with nothing moved (Overworld.recently): the
+ * four that meet at a corner. A search for free ground that finds none reads a ring's two sides
+ * turn about, a chunk's edge between them, a thousand times and more.
+ */
+export const RECENT = 4;
+
+/**
  * How a chunk's made a piece at a time (Overworld chunkWithin): its squares so many rows to a
  * piece, and no more than `most` chunks half made at once (the longest begun let go of, to be
  * begun again if it's asked for).
@@ -347,6 +354,16 @@ function lay(byChunk, line) {
  */
 export class Overworld {
     /**
+     * Whether the few chunks read last (RECENT) are found again with nothing moved, their place
+     * among those kept (the longest unused is the first let go) brought up to date only once
+     * another takes theirs or the order's wanted, as it always is; or each chunk read that isn't
+     * the very last is moved to the end of them there and then, as it was: only for the tests
+     * that check the chunks are kept and let go in the same order either way
+     * (generated/multiplayer_scaling_plan.md 1-28).
+     */
+    static recently = true;
+
+    /**
      * @param {object} options
      * @param {object} options.plan - The world plan (worldplan/plan.js planWorld).
      * @param {object} options.stamp - The town set into it: { at: [x, y] (its north-west square),
@@ -368,6 +385,11 @@ export class Overworld {
         this.chunks = new Map();
         this.waters = watersOf(plan);
         this.last = null;
+
+        // The chunks read last that are made (RECENT at most, the last read first: `last` is
+        // the first of them, if there are any): each used since everything before it in
+        // `chunks`, which has them where they were when they came in here (#settle)
+        this.recent = [];
 
         /** How many chunks are kept once made (keep): KEEP, or more. */
         this.kept = KEEP;
@@ -525,6 +547,8 @@ export class Overworld {
         }
 
         for (const [x0, y0, x1, y1] of boxes) {
+            this.#settle();
+
             for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
                 for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
                     this.chunks.delete(cy * CHUNKS + cx);
@@ -633,8 +657,36 @@ export class Overworld {
             return last;
         }
 
+        const recent = this.recent;
+
+        // (One of the few read last: the last read now, and nothing else moved)
+        for (let k = 1; k < recent.length; k++) {
+            const one = recent[k];
+
+            if (one.cx === cx && one.cy === cy) {
+                recent.copyWithin(1, 0, k);
+                recent[0] = one;
+                this.last = one;
+
+                return one;
+            }
+        }
+
         const key = cy * CHUNKS + cx;
         let chunk = this.chunks.get(key);
+
+        if (chunk && Overworld.recently) {
+            // (Among the few read last, the first of them; the one of them read longest ago
+            // put where it belongs among the rest: after all of them, the most recently used last)
+            if (recent.length >= RECENT) {
+                this.#put(recent.pop());
+            }
+
+            recent.unshift(chunk);
+            this.last = chunk;
+
+            return chunk;
+        }
 
         if (chunk) {
             // (Most recently used last, for letting go of the oldest)
@@ -653,6 +705,7 @@ export class Overworld {
 
             chunk = step.value;
             this.chunksMade++;
+            this.#settle();
             this.#letGo();
         }
 
@@ -660,6 +713,36 @@ export class Overworld {
         this.last = chunk;
 
         return chunk;
+    }
+
+    // The few chunks read last put where they belong among those kept: after the rest, the one
+    // read last of all at the end (before the order's read or changed: one let go, one made, one
+    // marked as wanted)
+    #settle() {
+        const recent = this.recent;
+
+        for (let k = recent.length - 1; k >= 0; k--) {
+            this.#put(recent[k]);
+        }
+
+        recent.length = 0;
+    }
+
+    // A chunk kept put last among those kept, the most recently used (if it's still kept)
+    #put(chunk) {
+        const key = chunk.cy * CHUNKS + chunk.cx;
+
+        if (this.chunks.get(key) === chunk) {
+            this.chunks.delete(key);
+            this.chunks.set(key, chunk);
+        }
+    }
+
+    /** The chunks kept (their keys, cy * CHUNKS + cx), the longest unused first: the order they'd be let go in. */
+    order() {
+        const recent = new Set(this.recent);
+
+        return [...[...this.chunks].filter(([, chunk]) => !recent.has(chunk)).map(([key]) => key), ...this.recent.map(({ cx, cy }) => cy * CHUNKS + cx).reverse()];
     }
 
     // The chunk longest unused let go of, with as many kept as are to be (keep)
@@ -703,6 +786,7 @@ export class Overworld {
             if (step.done) {
                 this.making.delete(key);
                 this.chunksMade++;
+                this.#settle();
                 this.#letGo();
                 this.chunks.set(key, step.value);
 
@@ -729,6 +813,7 @@ export class Overworld {
             return false;
         }
 
+        this.#settle();
         this.chunks.delete(key);
         this.chunks.set(key, chunk);
         this.ground.touch(cx, cy);
@@ -744,6 +829,7 @@ export class Overworld {
     keep(most) {
         this.kept = Math.max(KEEP, Math.floor(most) || 0);
         this.ground.keep(this.kept);
+        this.#settle();
 
         while (this.chunks.size > this.kept) {
             const oldest = this.chunks.keys().next().value;
