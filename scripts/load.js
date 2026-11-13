@@ -44,7 +44,11 @@
 // every other party by a dungeon's way in out in the wilds, the rest in a town by its tavern's
 // door; ten seconds in, a party every two seconds, each is stood at its door and goes in by it,
 // and inside they go for whatever's near or walk about: what the longest step of each door's
-// coming cost, its floors made and its first level woken, and the steps with players inside).
+// coming cost, its floors made and its first level woken, and the steps with players inside; a
+// dungeon's levels are worked out ahead, their floors made and their navigation baked between
+// steps before its party comes, as a world server makes them, server/ahead.js #delve, or with
+// --undelved its levels alone, as it was before generated/multiplayer_scaling_plan.md 1-29, or
+// with --cold nothing of it, as of a dungeon no one waited near).
 //
 // The battle's step is timed by its parts (core/probe.js BATTLE_PASSES): each kind of character's
 // turn and walking, and, apart from those, the searches, the ways found and the mesh asked within
@@ -55,8 +59,9 @@
 //
 // The report's `late` lists the steps over LOAD.tick by the clock, the first LOAD.late of them
 // with their parts: when, how long, the hearing, each pass's time in that step, what each
-// counter went up by in it, and the ground the step made for itself (`made`: chunks, and
-// navigation tiles baked; generated/multiplayer_scaling_plan.md 0-13).
+// counter went up by in it, and the ground the step made for itself (`made`: chunks, navigation
+// tiles baked, and `floors`, the tiles of buildings' floors and dungeons' levels baked;
+// generated/multiplayer_scaling_plan.md 0-13).
 //
 // --leave half, or all: that many of the players (every other one; everyone) gone from the world
 // in the one step, LOAD.eventAt in, the rest playing on (1-27): the report's `leave` says what
@@ -94,7 +99,7 @@ import { DAY, elapsedOf, timeOfDay, untilTime } from "../client/js/core/daytime.
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { FIELD_BATTLE, Host, SOON } from "../client/js/core/host.js";
 import { torchesLit } from "../client/js/core/light.js";
-import { navigatorOf } from "../client/js/core/navigation.js";
+import { Navigation, navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
@@ -438,7 +443,7 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * only says so ({ schema, run, built: false, reason }). `lateOver` (ms) is how long a step is
  * late from (LOAD.tick: only a test, which can't make a step slow, asks for another).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, undelved = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
     const run = { seed, players: count, layout, activity, seconds, whole, leave, sudden, node: process.version, platform: process.platform, arch: process.arch, cpus: os.cpus().length };
 
     if (Object.hasOwn(LOAD.unbuilt, activity)) {
@@ -477,6 +482,15 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     Ahead.turns = !unforeseen;
     Overworld.recently = !unforeseen;
+
+    // (--undelved: a dungeon's floors made in the step it's made in and their navigation baked
+    // in the steps its foes first find their ways in, as both were before 1-29, to compare;
+    // --cold, of dungeons: and its levels not worked out ahead either, below)
+    const wasDelving = Ahead.delving;
+
+    Ahead.delving = !undelved && !(cold && activity === "dungeons");
+
+    const delvedAhead = Ahead.delving;
 
     const clock = () => performance.now();
     const began = clock();
@@ -648,6 +662,12 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     const ahead = new Ahead(world, { host, clock });
     const warmed = clock();
+
+    // (--cold, of dungeons: no dungeon's levels asked of the layouts' worker, world/layouts.js
+    // delve, so each is worked out in the step that makes it: a dungeon no one waited near)
+    if (cold && activity === "dungeons" && ahead.layouts) {
+        ahead.layouts.interiors = null;
+    }
     let settled;
 
     // What's round the players made between steps until nothing's waiting (true), or until
@@ -660,11 +680,14 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         for (;;) {
             runner.bakeAhead(ahead);
 
-            if (ahead.settled) {
+            // (And a dungeon's levels still with the layouts' worker are waited for however long
+            // they take, where the maker's own patience, AHEAD.delve, goes by the clock: or on
+            // a busy machine a run would begin with a dungeon's floors not made)
+            if (ahead.settled && !(Ahead.delving && ahead.layouts?.delving.size)) {
                 return true;
             }
 
-            const has = ahead.made + ahead.rooms + navigation.tiles.size + dropped;
+            const has = ahead.made + ahead.rooms + ahead.delved.levels + ahead.delved.tiles + navigation.tiles.size + dropped;
 
             if (has !== had) {
                 had = has;
@@ -833,7 +856,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                   };
               })
             : null;
-    const delved = { inside: new Uint8Array(0), most: 0, entered: 0, longest: null };
+    const delved = { inside: new Uint8Array(0), most: 0, entered: 0, longest: null, floors: 0 };
     const coming = (door, step) => door.came >= 0 && step - door.came < LOAD.stagger / STEP_MS;
 
     for (const door of delving ?? []) {
@@ -1064,6 +1087,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const [bakedBefore, addedBefore, madeBefore] = [navigation.baked, navigation.added, ahead.made];
         const [chunksBefore, droppedIn] = [overworld.chunks.size, dropped];
         const groundBefore = overworld.chunksMade;
+        const [floorsBefore, levelsBefore] = [Navigation.floorTiles, Navigation.levelTiles];
         const actorsBefore = host.battle.actors.length;
         const cpuBefore = cpuNow();
         const before = clock();
@@ -1101,6 +1125,13 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const [bakedIn, addedIn] = [navigation.baked - bakedBefore, navigation.added - addedBefore];
         // (The chunks of ground the step made for itself: none's made ahead while it's played)
         const groundIn = overworld.chunksMade - groundBefore;
+        // (And the tiles of buildings' floors and dungeons' levels it baked for itself)
+        const floorsIn = Navigation.floorTiles - floorsBefore;
+
+        // (Of those, the dungeons' levels' alone: a building's floor is baked in a step or
+        // between two by when its folk first walk it, which goes by the machine's speed; a
+        // level's, made ahead, in none)
+        delved.floors += Navigation.levelTiles - levelsBefore;
 
         if (stormy) {
             storm.stepping = false;
@@ -1132,7 +1163,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                     .sort(([, a], [, b]) => b - a),
             ),
             counts: Object.fromEntries([...probes.counts].map(([name, n]) => [name, n - (countsBefore.get(name) ?? 0)]).filter(([, n]) => n !== 0)),
-            made: { chunks: groundIn, tiles: bakedIn },
+            made: { chunks: groundIn, tiles: bakedIn, floors: floorsIn },
         });
 
         if (wall[step] > lateOver) {
@@ -1308,6 +1339,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     Battle.forgetting = wasForgetting;
     Ahead.turns = wasTurns;
     Overworld.recently = wasRecently;
+    Ahead.delving = wasDelving;
 
     uninstall();
 
@@ -1436,6 +1468,11 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             // clock and in the thread's time; and the longest of all: when, how long after its
             // party came, whose, and the pass that took most of it)
             made: { dungeons: made("dungeon").length, buildings: made("building").length, levels: made("dungeon").reduce((sum, { key }) => sum + world.interiors.buildings.get(key).maps.length, 0) },
+            // (What of the dungeons was made ahead: whether their levels were worked out ahead,
+            // and their floors made and baked (--cold neither, --undelved the levels alone); how
+            // many floors were made between steps; and how many tiles of the dungeons' levels'
+            // navigation the steps baked for themselves)
+            ahead: { levels: !(cold && activity === "dungeons"), floors: delvedAhead, made: ahead.delved.levels, baked: delved.floors },
             coming: {
                 dungeon: { wall: came("dungeon", wall), cpu: came("dungeon", cpu) },
                 building: { wall: came("building", wall), cpu: came("building", cpu) },
@@ -1490,7 +1527,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             going: round(going.going),
             before: span(Math.max(0, from - going.steps), from),
             steps: span(from, to),
-            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {}, made: { chunks: 0, tiles: 0 } },
+            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {}, made: { chunks: 0, tiles: 0, floors: 0 } },
             let: going.let,
             look: { worst: round(going.look.worst), worstAt: going.look.worstAt },
         };
@@ -1647,7 +1684,10 @@ export const REPORT_SCHEMA = Object.freeze({
  * waited for, as a world server does, or, --cold, not). `dungeons`: how many parties, and of their doors how
  * many are dungeons' and how many buildings'; when the first came to its door (ms into the run)
  * and how long after one another; the doors whose floors were made in the run (how many dungeons
- * and buildings, and how many levels the dungeons have); the longest step of each door's coming
+ * and buildings, and how many levels the dungeons have); what of the dungeons was made ahead
+ * (`ahead`: whether their levels were worked out ahead, `levels`, and their floors made and their
+ * navigation baked, `floors`; how many floors were `made` between steps; and how many tiles of
+ * the dungeons' levels' navigation the steps `baked` for themselves); the longest step of each door's coming
  * (from its party's standing at it till the next party's: its floors made, its first level
  * woken, its party through), a dungeon's and a building's, by the clock and in the thread's time,
  * and the longest of all (when, how long after its party came, whose, and the pass that took most
@@ -1693,6 +1733,7 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
         at: "number",
         stagger: "number",
         made: { dungeons: "number", buildings: "number", levels: "number" },
+        ahead: { levels: "boolean", floors: "boolean", made: "number", baked: "number" },
         coming: {
             dungeon: { wall: SPREAD, cpu: SPREAD },
             building: { wall: SPREAD, cpu: SPREAD },
@@ -1712,7 +1753,7 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
  * for itself (`made`: chunks of ground, core/overworld.js chunksMade, and navigation tiles
  * baked: what wasn't made ahead of it).
  */
-export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"], made: { chunks: "number", tiles: "number" } });
+export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"], made: { chunks: "number", tiles: "number", floors: "number" } });
 
 /**
  * What a report holds of players gone together (`leave`: a join storm's, everyone gone before
@@ -1894,6 +1935,7 @@ export function wordsOf(report) {
             ? [
                   `Doors, from ${report.dungeons.at / 1000} s, a party every ${report.dungeons.stagger / 1000} s: ${report.dungeons.parties} parties at ${report.dungeons.doors.dungeons} dungeons and ${report.dungeons.doors.buildings} buildings; ${report.dungeons.entered} got in, ${report.dungeons.inside.most} inside at most, ${report.dungeons.inside.end} at the end, ${report.dungeons.inside.fallen} fallen`,
                   `Made in the run: ${report.dungeons.made.dungeons} dungeons (${report.dungeons.made.levels} levels) and ${report.dungeons.made.buildings} buildings. The longest step of a dungeon's coming: a mean of ${report.dungeons.coming.dungeon.wall.mean.toFixed(1)} ms, worst ${report.dungeons.coming.dungeon.wall.worst.toFixed(1)} (in the thread's time ${report.dungeons.coming.dungeon.cpu.mean.toFixed(1)} and ${report.dungeons.coming.dungeon.cpu.worst.toFixed(1)}); of a building's ${report.dungeons.coming.building.wall.mean.toFixed(1)} and ${report.dungeons.coming.building.wall.worst.toFixed(1)}; the longest of all a ${report.dungeons.coming.longest.door}'s, ${report.dungeons.coming.longest.after / 1000} s after its party came: ${report.dungeons.coming.longest.wall.toFixed(1)} ms, ${report.dungeons.coming.longest.pass} ${report.dungeons.coming.longest.ms.toFixed(1)} of it`,
+                  `${report.dungeons.ahead.floors ? `${report.dungeons.ahead.made} of the dungeons' floors made ahead, between steps` : report.dungeons.ahead.levels ? "The dungeons' levels worked out ahead, their floors made in the steps (--undelved)" : "Nothing of the dungeons made ahead (--cold)"}; ${report.dungeons.ahead.baked} tiles of their levels' navigation baked inside steps`,
                   `The ${report.dungeons.steps.count} steps with anyone inside: mean ${report.dungeons.steps.wall.mean.toFixed(2)} ms, p99 ${report.dungeons.steps.wall.p99.toFixed(2)}, worst ${report.dungeons.steps.wall.worst.toFixed(1)} (in the thread's time ${report.dungeons.steps.cpu.mean.toFixed(2)}, ${report.dungeons.steps.cpu.p99.toFixed(2)} and ${report.dungeons.steps.cpu.worst.toFixed(1)}), ${report.dungeons.steps.over} over ${LOAD.tick} ms, the longest at ${report.dungeons.steps.longest.at / 1000} s, ${report.dungeons.steps.longest.pass} ${report.dungeons.steps.longest.ms.toFixed(1)} of it; the ${report.dungeons.before.count} before anyone came to a door: mean ${report.dungeons.before.wall.mean.toFixed(2)} ms, p99 ${report.dungeons.before.wall.p99.toFixed(2)}`,
               ]
             : []),
@@ -1916,6 +1958,7 @@ async function main() {
             whole: { type: "boolean", default: false },
             cold: { type: "boolean", default: false },
             unforeseen: { type: "boolean", default: false },
+            undelved: { type: "boolean", default: false },
             leave: { type: "string", default: "none" },
             sudden: { type: "boolean", default: false },
         },
@@ -1923,7 +1966,7 @@ async function main() {
     let report;
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, undelved: values.undelved, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

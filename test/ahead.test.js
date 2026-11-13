@@ -16,7 +16,7 @@ import { nearestFree, squaresOf } from "../client/js/core/grid.js";
 import { dungeonFrom } from "../client/js/core/insides.js";
 import { bakeTile } from "../client/js/core/navigation/bake.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
-import { KEEP_ROOMS, keepRooms, navigatorOf } from "../client/js/core/navigation.js";
+import { floorOf, floorWants, KEEP_ROOMS, keepRooms, navigatorOf } from "../client/js/core/navigation.js";
 import { CHUNK, CHUNKS, KEEP, buildWorld } from "../client/js/core/overworld.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { layoutTown, SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
@@ -394,6 +394,69 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
 
         assert.ok(building().made);
         assert.equal(building().dungeon, given.dungeon);
+        ahead.dispose();
+    });
+
+    it("makes a dungeon's floors between steps once its levels are back, their navigation baked on the navigation's worker: it's made of those floors, and the steps of its coming bake none", async () => {
+        const world = buildWorld({ seed: 2 });
+        const squares = squaresOf(world.maps.town);
+        const from = (site, off) => nearestFree(squares, [Math.round(site.at[0] - off), Math.round(site.at[1])], { within: 20 });
+        const site = world.plan.sites.find((each) => {
+            if (each.kind !== "dungeon") {
+                return false;
+            }
+
+            try {
+                return Boolean(from(each, 100));
+            } catch {
+                return false;
+            }
+        });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: "p1", hero: HERO, square: from(site, SOON.delve - 50), map: "town" });
+        host.populate();
+
+        const ahead = new Ahead(world, { host });
+        const key = `site:${site.id}`;
+        const building = () => world.interiors.buildings.get(key);
+
+        assert.ok(ahead.navBaker.worker, "(a worker to bake on)");
+        ahead.around(...host.battle.actor("p1").square, 96);
+        assert.ok(await until(() => (ahead.pump(), building()?.given && ahead.settled), 120000), "settled, its levels back");
+
+        // (Not settled till every floor's made and every tile of each is back from the worker)
+        const ready = world.interiors.prepare(key, { make: false });
+
+        assert.ok(ready.done, "every floor made");
+        assert.equal(ready.maps.length, building().given.dungeon.levels.length);
+        assert.equal(ahead.delved.levels, ready.maps.length);
+        assert.equal(ahead.delved.tiles, 0, "(none baked here)");
+        assert.ok(!building().made, "(the dungeon not made yet, nor any floor among the world's maps)");
+        assert.ok(ready.maps.every((map) => !world.maps[map.id]));
+
+        for (const map of ready.maps) {
+            const { size, measures } = floorOf(map);
+
+            for (let ty = 0; ty * measures.tile < size[1]; ty++) {
+                for (let tx = 0; tx * measures.tile < size[0]; tx++) {
+                    assert.ok(!floorWants(map, tx, ty), `${map.id} ${tx},${ty} baked`);
+                }
+            }
+        }
+
+        // (Come to: made of them, its first level's foes out and finding their ways, nothing baked)
+        host.battle.place("p1", "town", building().entrance.outside);
+
+        for (let k = 0; k < 30; k++) {
+            host.advance(50);
+        }
+
+        assert.ok(building().made);
+        building().maps.forEach((id, k) => assert.equal(world.maps[id], ready.maps[k], id));
+        assert.ok(host.dungeons.get(site.id).awake[0].length > 0, "(its first level woken)");
+        assert.ok(navigatorOf(world.maps[building().maps[0]]).tiles.size > 0, "(and its mesh asked of, the tiles baked ahead taken)");
+        building().maps.forEach((id) => assert.equal(navigatorOf(world.maps[id]).baked, 0, `no tile of ${id} baked in those steps`));
         ahead.dispose();
     });
 
