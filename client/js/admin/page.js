@@ -2259,6 +2259,15 @@ async function renderActivity() {
 async function renderHealth() {
     const health = await call("GET", "/server/health");
     const ms = (value) => (value === null || value === undefined ? "—" : `${value.toFixed(1)} ms`);
+    // (Each world's last late steps, the latest first: a step whose passes took longer than a
+    // step of the world's time, with the passes that took most of it and what it made for itself)
+    const lates = health.worlds.flatMap((world) => (world.late ?? []).map((late) => ({ world, late }))).sort((a, b) => b.late.when - a.late.when);
+    const partsOf = (late) =>
+        Object.entries(late.passes)
+            .slice(0, 3)
+            .map(([name, spent]) => `${name} ${spent.toFixed(1)}`)
+            .join(", ");
+    const madeOf = ({ chunks, tiles, floors }) => [chunks ? `${chunks} of ground` : "", tiles ? `${tiles} navigation tiles` : "", floors ? `${floors} of floors` : ""].filter(Boolean).join(", ") || "—";
 
     $("#health").replaceChildren(
         panel(
@@ -2297,6 +2306,28 @@ async function renderHealth() {
                   )
                 : h("p", { class: "muted" }, "No world's going: every one is set aside, using nothing."),
         ),
+        ...(lates.length
+            ? [
+                  panel(
+                      "Late steps",
+                      h("p", { class: "muted small" }, "The last steps that took longer than a step of a world's time (50 ms), newest first: each with the passes that took most of it (ms) and what ground it had to make for itself."),
+                      h(
+                          "div",
+                          { class: "table" },
+                          h(
+                              "table",
+                              { id: "late-steps" },
+                              h("thead", {}, h("tr", {}, ["When", "World", "Step", "Its longest passes", "Made in it"].map((head) => h("th", {}, head)))),
+                              h(
+                                  "tbody",
+                                  {},
+                                  lates.map(({ world, late }) => h("tr", {}, h("td", {}, new Date(late.when).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "medium" })), h("td", {}, world.name), h("td", { class: "bad" }, ms(late.ms)), h("td", {}, partsOf(late)), h("td", {}, madeOf(late.made)))),
+                              ),
+                          ),
+                      ),
+                  ),
+              ]
+            : []),
         panel(
             "The server and its computer",
             facts([

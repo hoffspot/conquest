@@ -4,12 +4,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { count, COUNTERS, FLUSH_PASSES, HOST_PASSES, install, lap, uninstall } from "../client/js/core/probe.js";
+import { BATTLE_PASSES, count, COUNTERS, FLUSH_PASSES, HOST_PASSES, install, lap, uninstall } from "../client/js/core/probe.js";
 import { StepTimes, TIME_BUCKETS } from "../client/js/core/runner.js";
 import { metricsCost, METRICS_BUDGET } from "../scripts/step-budget.js";
 import { parseText, TIME_BUCKETS as SECONDS } from "../server/metrics.js";
 import { LABELS, ServerMetrics } from "../server/server-metrics.js";
-import { Collections, GC_KINDS, LoopDelay, WorldMetrics } from "../server/world-metrics.js";
+import { Collections, GC_KINDS, LATE, LoopDelay, WorldMetrics } from "../server/world-metrics.js";
 
 const total = (counts) => counts.reduce((sum, count) => sum + count, 0);
 
@@ -160,6 +160,86 @@ describe("what a world's thread counts of itself (server/world-metrics.js)", () 
             assert.deepEqual(during.work, {});
             assert.deepEqual(after.passes, { war: [2, 0] });
             assert.deepEqual(after.work, { steps: 1 });
+        } finally {
+            uninstall();
+        }
+    });
+
+    it("keeps a late step with its parts: a faked 70 ms pass is listed by its name, the longest first, with what was counted and made in it; its last 32, each told once", () => {
+        let now = 0;
+        const metrics = new WorldMetrics({ node: false, clock: () => now });
+        const { late } = metrics;
+        // (A step as the world's thread plays one: read before, its passes and what's sent of it, read after)
+        const step = (at, spent, { made = [0, 0, 0], during = () => {} } = {}) => {
+            late.begin(at, 10, 20, 30);
+
+            for (const [name, ms] of Object.entries(spent)) {
+                lap(name);
+                now += ms;
+                during(name);
+            }
+
+            lap(null);
+            count("steps");
+
+            return late.end(at + STEP_MS, 10 + made[0], 20 + made[1], 30 + made[2]);
+        };
+
+        assert.deepEqual([LATE.over, LATE.kept], [STEP_MS, 32], "late is longer than a step of the world's time");
+
+        try {
+            install(metrics.probes);
+            late.now = () => 1700000000000;
+
+            // (A step within a step's time is kept nowhere)
+            assert.equal(step(0, { light: 1, battle: 30, "flush.ops": 19 }), null);
+            assert.deepEqual([late.count, late.kept.length], [0, 0]);
+
+            // (The muster made to take 70 ms: over, and listed by its name, the longest first)
+            const kept = step(50, { light: 1, battle: 12, muster: 70, "flush.ops": 3 }, { made: [6, 2, 1], during: (name) => name === "muster" && count("muster.pairs", 300) });
+
+            assert.deepEqual(kept, { when: 1700000000000, at: 100, ms: 86, pass: "muster", passes: { muster: 70, battle: 12, "flush.ops": 3, light: 1 }, counts: { steps: 1, "muster.pairs": 300 }, made: { chunks: 6, tiles: 2, floors: 1 } });
+            assert.deepEqual([late.count, late.kept], [1, [kept]]);
+
+            // (Time between steps is no step's: a look at the world long for what it made ahead isn't a late step)
+            lap("war");
+            now += 500;
+            lap(null);
+            assert.equal(step(100, { battle: 5 }), null);
+
+            // (Told once, in what the thread says of itself: and the world's thread asked how it is
+            // in the middle of a step, the probes set back to nothing, still has the step whole)
+            const told = metrics.take();
+
+            assert.deepEqual(told.late, [kept]);
+            assert.deepEqual(metrics.take().late, []);
+
+            const split = step(150, { battle: 40, wilds: 30 }, { during: (name) => name === "battle" && metrics.take() });
+
+            assert.deepEqual([split.ms, split.pass, split.passes, split.counts], [70, "battle", { battle: 40, wilds: 30 }, { steps: 1 }]);
+
+            // (Two steps played one straight after another: the second's beginning ends the first)
+            late.begin(200);
+            lap("battle.think.routine");
+            now += 55;
+            lap(null);
+            late.begin(250);
+            lap("battle");
+            now += 2;
+            lap(null);
+            assert.equal(late.end(300), null);
+            assert.deepEqual([late.count, late.kept.at(-1).pass, late.kept.at(-1).at, late.kept.at(-1).ms], [3, "battle.think.routine", 250, 55]);
+
+            // (Only its last 32 kept, and no more than that waiting to be told)
+            for (let k = 0; k < 40; k++) {
+                step(1000 + k * 50, { fallen: 60 + k });
+            }
+
+            assert.deepEqual([late.count, late.kept.length, late.kept[0].ms, late.kept.at(-1).ms], [43, 32, 68, 99]);
+            assert.deepEqual(
+                metrics.take().late.map(({ ms }) => ms),
+                late.kept.map(({ ms }) => ms),
+            );
         } finally {
             uninstall();
         }
@@ -320,6 +400,52 @@ describe("the supervisor adding up what its worlds count (server/server-metrics.
         server.forget("w1");
         assert.deepEqual(server.passesOf("w1"), { passes: {}, work: {} });
         assert.equal(server.passesOf("w2").passes.battle.calls, 1);
+    });
+
+    it("counts its worlds' late steps by the pass that took most of each, the pass's name the counter's only label, and keeps each world's last 32 with their parts", () => {
+        const server = new ServerMetrics();
+        const state = stateOf(new WorldMetrics({ node: false }), new StepTimes());
+        const late = (pass, ms, more = {}) => ({ when: 1700000000000 + ms, at: 5000, ms, pass, passes: { [pass]: ms - 2, light: 2 }, counts: { steps: 1 }, made: { chunks: 0, tiles: 0, floors: 0 }, ...more });
+
+        assert.deepEqual(state.metrics.late, [], "none, nearly every time it says how it is");
+        server.heard("w1", state);
+        assert.deepEqual(read(server).pellagos_world_late_steps_total.samples, []);
+
+        server.heard("w1", { ...state, metrics: { ...state.metrics, late: [late("muster", 70), late("battle.move.routine", 61)] } });
+        server.heard("w2", { ...state, metrics: { ...state.metrics, late: [late("muster", 90, { made: { chunks: 6, tiles: 1, floors: 0 } })] } });
+        // (Whatever a thread says, nothing's labelled or kept by a name the probes haven't)
+        server.heard("w2", { ...state, metrics: { ...state.metrics, late: [late("K7Q2MXD4RT.1", 55, { passes: { "K7Q2MXD4RT.1": 50, war: 5 }, counts: { someone: 3, steps: 1 } }), null] } });
+
+        const families = read(server);
+        const { samples } = families.pellagos_world_late_steps_total;
+
+        assert.equal(families.pellagos_world_late_steps_total.type, "counter");
+        assert.deepEqual(
+            samples.map((sample) => [sample.labels, sample.value]),
+            [
+                [{ kind: "muster" }, 2],
+                [{ kind: "battle.move.routine" }, 1],
+                [{ kind: "other" }, 1],
+            ],
+        );
+        assert.deepEqual(samples.filter((sample) => sample.labels.kind !== "other" && ![...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES].includes(sample.labels.kind)), []);
+
+        // (Each world's own, the latest first, with its parts)
+        assert.deepEqual(server.lateOf("w1").map(({ pass, ms }) => [pass, ms]), [["battle.move.routine", 61], ["muster", 70]]);
+        assert.deepEqual(server.lateOf("w1")[1], late("muster", 70));
+        assert.deepEqual(server.lateOf("w2").map(({ pass, passes, counts, made }) => [pass, passes, counts, made]), [["other", { war: 5 }, { steps: 1 }, { chunks: 0, tiles: 0, floors: 0 }], ["muster", { muster: 88, light: 2 }, { steps: 1 }, { chunks: 6, tiles: 1, floors: 0 }]]);
+        assert.deepEqual(server.lateOf("w3"), []);
+
+        // (The last 32 of a world's, however many it tells of)
+        server.heard("w1", { ...state, metrics: { ...state.metrics, late: Array.from({ length: 40 }, (_, k) => late("wilds", 100 + k)) } });
+        assert.deepEqual([server.lateOf("w1").length, server.lateOf("w1")[0].ms, server.lateOf("w1").at(-1).ms], [LATE.kept, 139, 108]);
+
+        // (Kept while the world's set aside; let go of with the world. What was counted of them stays: the counter's the server's)
+        server.setAside("w1");
+        assert.equal(server.lateOf("w1").length, LATE.kept);
+        server.forget("w1");
+        assert.deepEqual(server.lateOf("w1"), []);
+        assert.equal(valueOf(read(server), "pellagos_world_late_steps_total", { kind: "muster" }), 2);
     });
 
     it("takes a world that's said nothing yet, or one of a server before this (no counts in what it says)", () => {

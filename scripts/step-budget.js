@@ -51,8 +51,9 @@ const METRICS_ROUNDS = 200000;
  * (the clock read before and after the step, its time counted; the look it was in and its two
  * parts counted; every pass of the step and of what's sent after it begun and ended by the
  * probes, and each of their counters counted once, which is more than a step does: the passes
- * that look round the players are played one step in ten; and once in twenty steps, a second,
- * all of it taken for the supervisor), done `rounds` times over with no world: how long each
+ * that look round the players are played one step in ten; the passes and the counters read before
+ * the step and after it for a late step's parts, world-metrics.js LateSteps; and once in twenty
+ * steps, a second, all of it taken for the supervisor), done `rounds` times over with no world: how long each
  * took (ms). Whatever probes were installed are put back after.
  */
 export function metricsCost(rounds = METRICS_ROUNDS) {
@@ -69,6 +70,8 @@ export function metricsCost(rounds = METRICS_ROUNDS) {
     for (let k = 0; k < rounds; k++) {
         const before = clock();
 
+        metrics.late.begin(k * STEP_MS, k, k, k);
+
         for (const pass of HOST_PASSES) {
             lap(pass);
         }
@@ -80,6 +83,7 @@ export function metricsCost(rounds = METRICS_ROUNDS) {
         }
 
         lap(null);
+        metrics.late.end((k + 1) * STEP_MS, k, k, k);
 
         for (const counter of COUNTERS) {
             count(counter, k & 7);
