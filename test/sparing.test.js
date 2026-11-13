@@ -252,3 +252,51 @@ describe("fewer goings through everyone (core/battle.js Battle.mustering, plan 1
         assert.deepEqual(mustering.counts, twice.counts);
     });
 });
+
+describe("the players near asked of the index (core/battle.js Battle.indexing, plan 1-19)", () => {
+    it("walks a city's crowd step for step as going through every player for each asking did, players coming, going and falling", () => {
+        const indexed = cityWalk({ churn: true });
+        const everyone = without("indexing", () => cityWalk({ churn: true }));
+
+        assertSame(indexed, everyone);
+
+        // (Asked as often, of far fewer: with every player in the one city most are near, but
+        // each asking measured them all, and now only those the index has within reach)
+        assert.equal(indexed.counts["battle.playerAsks"], everyone.counts["battle.playerAsks"]);
+        assert.ok(indexed.counts["battle.playerPairs"] > 0 && indexed.counts["battle.playerPairs"] < everyone.counts["battle.playerPairs"], `${indexed.counts["battle.playerPairs"]} players measured where it was ${everyone.counts["battle.playerPairs"]}`);
+    });
+});
+
+describe("a player back on their feet in the middle of a step (core/battle.js #upright, plan 1-19)", () => {
+    // A player struck down among soldiers who'd go for them, some seeing further than most
+    // (#playerSeen), and up again where they fell from: in the step they rise they aren't among
+    // the players standing as it began, so no one's drawn to them till the next, whether the
+    // players near are asked of the index or all gone through
+    const rising = () => {
+        const battle = new Battle({ blocked: Array.from({ length: 80 }, () => new Uint8Array(80)) }, { seed: 5 });
+        const steps = [];
+
+        battle.add({ id: "hero", kind: "player", team: "a", weapon: "sword", square: [40, 40], hp: 60, armed: true });
+        battle.add({ id: "far", kind: "player", team: "a", weapon: "bow", square: [8, 8], hp: 60 });
+
+        for (let k = 0; k < 6; k++) {
+            battle.add({ id: `s${k}`, kind: "soldier", team: "b", weapon: k % 2 ? "bow" : "sword", square: [34 + k * 2, 47 + (k % 2) * 2], ai: "patrol", patrol: [[34 + k * 2, 47 + (k % 2) * 2]], leash: 30, hp: 4000, ...(k < 3 ? { sight: 20 } : {}) });
+        }
+
+        for (let step = 0; step < 1600; step++) {
+            steps.push(JSON.stringify([battle.advance(STEP_MS), battle.actors.map((actor) => [actor.x, actor.y, actor.hp, actor.dead, actor.target])]));
+        }
+
+        return { steps, events: steps.join("") };
+    };
+
+    it("is gone for from the step after, exactly as when every player's gone through", () => {
+        const indexed = rising();
+        const everyone = without("indexing", rising);
+        const differs = indexed.steps.findIndex((step, k) => step !== everyone.steps[k]);
+
+        assert.equal(differs, -1, `the battles differ from step ${differs}`);
+        assert.ok(indexed.events.split('"type":"respawn"').length > 2, "(the player fell and rose, more than once)");
+        assert.ok(/"type":"death"[^}]*"id":"hero"/.test(indexed.events));
+    });
+});

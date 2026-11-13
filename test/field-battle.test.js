@@ -78,10 +78,16 @@ const run = (host, ms) => {
 describe("the battle among those near (battle.js #indexed)", () => {
     // Two lines of soldiers making for each other past the player, of every weapon: everything that
     // happens, and where everyone ends, hashed
-    const fight = () => {
+    // (With `others`, that many more players in it, between the lines and behind one of them)
+    const fight = ({ others = 0 } = {}) => {
         const { host, me } = outOfTown();
         const battle = host.battle;
         const weapons = ["sword", "bow", "hammer", "staff", "gauntlets", "cleaver", "wand"];
+
+        for (let k = 0; k < others; k++) {
+            host.join({ id: `p${k + 2}`, hero: { ...HERO, name: `P${k + 2}`, weapon: weapons[k % weapons.length] } });
+            battle.place(`p${k + 2}`, "town", [Math.floor(me.x) - 10 + k * 5, Math.floor(me.y) - 12 - (k % 3) * 9]);
+        }
 
         for (const [team, from, to] of [
             ["a", -4, -40],
@@ -95,6 +101,10 @@ describe("the battle among those near (battle.js #indexed)", () => {
         }
 
         battle.command(HOST_PLAYER, { type: "move", to: [Math.floor(me.x), Math.floor(me.y - 22)] });
+
+        for (let k = 0; k < others; k++) {
+            battle.command(`p${k + 2}`, { type: "move", to: [Math.floor(me.x) + 8 - k * 4, Math.floor(me.y) - 30 + (k % 2) * 16] });
+        }
 
         const events = run(host, 30000);
         const state = battle.actors.map((actor) => [actor.id, actor.x, actor.y, actor.hp, actor.dead, actor.target, actor.facing]);
@@ -118,6 +128,27 @@ describe("the battle among those near (battle.js #indexed)", () => {
         // (And there was a battle: blows, and the fallen on both sides)
         assert.ok(indexed.events.filter(({ type }) => type === "death").length > 10);
         assert.ok(["a", "b"].every((team) => indexed.battle.actors.some((actor) => actor.team === team && actor.dead)));
+    });
+
+    // Whoever asks after the players near it (#drawnTo, #playerSeen, #pathTo) asks the index for
+    // them and goes through those in the roster's order (plan 1-19), where it went through every
+    // player in the battle: the same battle with five players among the soldiers, each of them
+    // gone for
+    it("plays out a battle with several players in it exactly as going through every player for each asking does", () => {
+        const indexed = fight({ others: 4 });
+
+        Battle.indexing = false;
+
+        try {
+            assert.equal(indexed.hash, fight({ others: 4 }).hash);
+        } finally {
+            Battle.indexing = true;
+        }
+
+        const struck = new Set(indexed.events.filter(({ type }) => type === "hit").map(({ id }) => id));
+
+        assert.deepEqual([HOST_PLAYER, "p2", "p3", "p4", "p5"].filter((id) => !struck.has(id)), [], "(every player was struck)");
+        assert.equal(indexed.battle.actors.filter(({ kind }) => kind === "player").length, 5);
     });
 
     // Whoever's drawn to a player near (#drawnTo) goes through the players by their places in

@@ -107,7 +107,9 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * (`battle.walkers`), in how many strides (`battle.strides`), and how many stood where they were
  * with nowhere to go (`battle.idle`); the nearest enemy looked for (`battle.searches`, and
  * those looked at for it: `battle.searchLooks`), whether one's in a fight asked (`battle.fightAsks`),
- * and a player near asked after between looks (`battle.playerAsks`); who's near a point asked of
+ * a player near asked after between looks (`battle.playerAsks`), and the players measured for
+ * whoever asks after those near it (`battle.playerPairs`: a soldier set on no one, the folk
+ * resting and beckoning, a way to be found); who's near a point asked of
  * the index (`battle.nears`, and how many it gave: `battle.nearFound`); sight lines walked
  * (`battle.sights`); ways found (`battle.paths`, and by kind: `battle.paths.routine` ...); and the
  * mesh asked for its nearest point (`battle.meshAsks`), and how often what it last answered of
@@ -138,6 +140,7 @@ export const COUNTERS = Object.freeze([
     "battle.searchLooks",
     "battle.fightAsks",
     "battle.playerAsks",
+    "battle.playerPairs",
     "battle.nears",
     "battle.nearFound",
     "battle.sights",
