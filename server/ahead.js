@@ -21,7 +21,11 @@
 // before anyone's at its door. From the same answer it knows where the players are now: what was
 // waiting round one who's gone (out of the world, or through a portal to somewhere else) is let
 // go, and the world keeps as many chunks as those who are here want (core/overworld.js keep), so
-// that it never lets one go to make another.
+// that it never lets one go to make another. A dungeon's levels worked out, their floors are made
+// here between steps, one a pump (core/insides.js prepare), and each floor's navigation baked
+// before the dungeon's made (#delve; generated/multiplayer_scaling_plan.md 1-29): the step that
+// makes it took 30 ms to read its levels' plans into floors, and the step after, its first
+// level's foes finding their first ways, 60 to 90 baking the floor's mesh under them.
 //
 // And it's told where those not yet in will stand (expect: those waiting their turn to come in,
 // core/netplay.js Session coming, and at a server's start the heroes who were last in the world;
@@ -75,6 +79,10 @@ export const AHEAD = Object.freeze({
     // heights, and so many of the navigation's tiles at the most. Some six towns' ground a
     // second, at a server's two pumps a step (49 chunks round each); a hundred towns' in seven
     ease: Object.freeze({ chunks: 16, tiles: 32 }),
+    // A dungeon to come: how long (ms) its levels are waited for from the layouts' worker before
+    // all's said to be made without them (settled: a worker gone quiet; they take a few tenths
+    // of a second, and the first asked for a little more, the dungeon builder being loaded then)
+    delve: Object.freeze({ patience: 10000 }),
 });
 
 // The chunks a box of squares touches, on the world: [[cx, cy]...]
@@ -122,6 +130,15 @@ export class Ahead {
      * (generated/multiplayer_scaling_plan.md 1-28).
      */
     static turns = true;
+
+    /**
+     * Whether the floors of a dungeon to come are made ahead of it, and their navigation baked
+     * (#delve), as they always are, or made in the step the dungeon's made in and baked in the
+     * steps its foes first find their ways in, as they were: only for the tests and scripts
+     * that check the world's steps come out the same either way, and what it saves them
+     * (generated/multiplayer_scaling_plan.md 1-29).
+     */
+    static delving = true;
 
     /**
      * @param {object} world - The world (core/overworld.js buildWorld's: its overworld, maps.town).
@@ -181,6 +198,18 @@ export class Ahead {
          */
         this.turn = { boxes: 0, chunks: 0 };
         this.turnChunks = new Set();
+
+        /**
+         * The dungeons to come (core/host.js soon's `dungeons`: their buildings' keys, as the
+         * host last said); their levels' floors whose navigation's been asked for (#delve: each
+         * floor's map, with its building's key), and since when each has been waited for from
+         * the layouts' worker (#delving); and how many floors have been made ahead, and of
+         * their navigation's tiles baked here (with no worker to bake them), in all.
+         */
+        this.delves = [];
+        this.floored = new Map();
+        this.delveWaited = new Map();
+        this.delved = { levels: 0, tiles: 0 };
         navigation.gently = Ahead.easing;
 
         /**
@@ -447,6 +476,123 @@ export class Ahead {
         this.#tilesComing();
 
         this.layouts?.delve(Ahead.soon ? dungeons : []);
+        this.delves = Ahead.soon && Ahead.delving ? dungeons.map(({ key }) => key) : [];
+
+        for (const key of this.delveWaited.keys()) {
+            if (!this.delves.includes(key)) {
+                this.delveWaited.delete(key);
+            }
+        }
+    }
+
+    // The dungeons to come (`delves`: #review), their levels worked out (core/insides.js give:
+    // the layouts' worker's, world/layouts.js delve): one more level's floor made of them
+    // (insides.js prepare: one a pump, some 10 ms each of reading its plan), and each floor
+    // made has its navigation's tiles baked on the navigation's worker and kept for its mesh
+    // (world/navbaker.js floor; with no worker, one baked here a pump, as an open building's
+    // is: #inside). So the step that makes the dungeon takes its floors as they are, and its
+    // foes' first ways are found over a mesh that's in. Nothing a step works out changes: a
+    // floor and a tile are the same wherever they're made, and none is in the world till its
+    // dungeon's made. What was made for one no longer to come, or made again as another (its
+    // finders gone by; a mightier come), is let go
+    #delve() {
+        const interiors = this.world.interiors;
+
+        if (!interiors?.prepare) {
+            return;
+        }
+
+        for (const [map, key] of this.floored) {
+            const building = interiors.buildings.get(key);
+            const kept = building?.made ? this.world.maps[map.id] === map : this.delves.includes(key) && interiors.prepare(key, { make: false })?.maps.includes(map);
+
+            if (!kept) {
+                this.floored.delete(map);
+                this.navBaker.forget(map);
+            }
+        }
+
+        if (!Ahead.soon || !Ahead.delving) {
+            return;
+        }
+
+        let made = false;
+
+        for (const key of this.delves) {
+            let ready = interiors.prepare(key, { make: false });
+
+            if (ready && !ready.done && !made) {
+                ready = interiors.prepare(key);
+                made = true;
+                this.delved.levels++;
+            }
+
+            for (const map of ready?.maps ?? []) {
+                if (!this.floored.has(map)) {
+                    this.floored.set(map, key);
+                    this.navBaker.floor(map);
+                }
+            }
+        }
+
+        if (this.navBaker.worker) {
+            return;
+        }
+
+        // (No worker: the next tile of a floor to come, baked here)
+        for (const [map, key] of this.floored) {
+            const navigation = interiors.buildings.get(key)?.made ? null : navigatorOf(map);
+            const tile = navigation && this.#unbaked(navigation);
+
+            if (tile) {
+                navigation.ensure(...tile);
+                this.delved.tiles++;
+
+                return;
+            }
+        }
+    }
+
+    // Whether anything of a dungeon to come is still to be made ahead: its levels not back from
+    // the layouts' worker (waited for no longer than AHEAD.delve.patience), a floor of them not
+    // made, or a floor's navigation not asked for or, baked here, not all in. (A tile with the
+    // navigation's worker is waited for as any is: settled)
+    #delving() {
+        const interiors = this.world.interiors;
+
+        if (!Ahead.soon || !Ahead.delving || !interiors?.prepare) {
+            return false;
+        }
+
+        for (const key of this.delves) {
+            const building = interiors.buildings.get(key);
+
+            if (!building || building.made) {
+                continue;
+            }
+
+            const ready = interiors.prepare(key, { make: false });
+
+            if (!ready) {
+                if (this.layouts?.delving.has(key)) {
+                    if (!this.delveWaited.has(key)) {
+                        this.delveWaited.set(key, this.clock());
+                    }
+
+                    if (this.clock() - this.delveWaited.get(key) < AHEAD.delve.patience) {
+                        return true;
+                    }
+                }
+
+                continue;
+            }
+
+            if (!ready.done || ready.maps.some((map) => !this.floored.has(map) || (!this.navBaker.worker && this.#unbaked(navigatorOf(map))))) {
+                return true;
+            }
+        }
+
+        return this.navBaker.floorTiles.length > 0;
     }
 
     // The navigation's tiles round the first few of those not yet in whose ground isn't all made
@@ -597,11 +743,12 @@ export class Ahead {
      * overworld.js chunkWithin: one left half made is carried on the next time), those whose
      * heights or settlement are still with a worker passed over for now; with none waiting, a
      * tile of an open building's inside; then the next of the navigation's tiles sent off to be
-     * baked.
+     * baked. And before the chunks, a floor of a dungeon to come (#delve).
      */
     pump() {
         this.#review();
         this.#ease();
+        this.#delve();
 
         const until = this.clock() + AHEAD.budget;
 
@@ -713,7 +860,8 @@ export class Ahead {
             maps += this.world.interiors?.buildings.get(key)?.maps?.length ?? 0;
         }
 
-        keepRooms(Math.max(AHEAD.rooms, maps + AHEAD.spare));
+        // (And those of the dungeons to come whose floors' meshes are baked here: #delve)
+        keepRooms(Math.max(AHEAD.rooms, maps + (this.navBaker.worker ? 0 : this.floored.size) + AHEAD.spare));
     }
 
     // A tile of a building's inside's mesh not baked yet ([tx, ty]), or null
@@ -735,7 +883,8 @@ export class Ahead {
      * Whether all that's been asked for is made: no chunk waiting, no navigation tile being
      * baked, none waiting whose ground is made (one whose ground isn't, and isn't waiting to be,
      * is a way's far off from every player: nothing here makes its ground, and it's no reason
-     * to keep anyone waiting), and no open building's inside with a tile to bake. (A player
+     * to keep anyone waiting), no open building's inside with a tile to bake, and nothing of a
+     * dungeon to come still to be made (#delving). (A player
      * arriving waits for this before their world's clock starts: generated/world_server_plan.md
      * §4.)
      */
@@ -744,7 +893,7 @@ export class Ahead {
 
         this.#review();
 
-        return !this.chunks.length && !baker.asked.size && ![...baker.queue, ...baker.wanted].some(([tx, ty]) => this.#bakeable(tx, ty)) && !this.#insideWaiting();
+        return !this.chunks.length && !baker.asked.size && ![...baker.queue, ...baker.wanted].some(([tx, ty]) => this.#bakeable(tx, ty)) && !this.#insideWaiting() && !this.#delving();
     }
 
     // Whether a navigation tile waiting could be sent off now: not in, and its ground made

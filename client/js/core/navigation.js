@@ -373,6 +373,13 @@ export class Navigation {
      */
     static bounded = true;
 
+    /**
+     * How many tiles of small maps' meshes (a building's floors, a dungeon's levels, a scene's)
+     * have been baked here and now (ensure), in all: for whoever measures what the steps bake
+     * for themselves (scripts/load.js). Nothing reads it but they.
+     */
+    static floorTiles = 0;
+
     /** Whether a tile is in. */
     has(tx, ty) {
         return this.tiles.has(key(tx, ty));
@@ -522,6 +529,7 @@ export class Navigation {
         }
 
         this.baked++;
+        Navigation.floorTiles += this.measures === OVERWORLD ? 0 : 1;
         this.add(tx, ty, bakeTile(this.recast, this.input(tx, ty), tx, ty, this.measures));
     }
 

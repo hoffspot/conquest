@@ -1287,10 +1287,16 @@ export function dungeonRooms(building) {
     const dungeon = given ?? buildDungeon(from);
 
     building.given = null;
+    building.dungeon = dungeon;
+
+    return dungeonFloors(building, dungeon);
+}
+
+// A dungeon's levels as floors (dungeonRooms), for a building: named for it, each drawn, lit and
+// heard as its level is, or as its dungeon is
+function dungeonFloors(building, dungeon) {
     const realms = THEMES[dungeon.theme]?.realms ?? null;
     const named = building.name ?? dungeon.name;
-
-    building.dungeon = dungeon;
 
     return dungeon.levels.map((level, k) => ({
         suffix: `level-${k + 1}`,
@@ -1841,6 +1847,69 @@ export class Interiors {
         return building;
     }
 
+    // One of a dungeon's levels' floors (`floor`: dungeonRooms', the `k`th of `count`), a map by
+    // the id `id`, drawn at its dungeon's column of DUNGEON_ORIGINS (a hell's of HELL_ORIGINS, a
+    // keep's of KEEP_ORIGINS). Nothing of the world changes for its making
+    #levelMap(building, id, floor, k, count) {
+        const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
+        const keep = Boolean(building.scene);
+        const column = keep ? 0 : Math.max(0, number - 1);
+        const block = keep ? KEEP_ORIGINS : THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
+        const origin = [block.x + (column % block.across) * block.step, Math.floor(column / block.across) * block.row];
+        const map = readPlan(id, floor.name, floor.rows, { ground: floor.ground });
+
+        Object.assign(map, {
+            origin: [origin[0], origin[1] + k * block.step],
+            style: floor.style,
+            look: floor.look,
+            finish: null,
+            patron: null,
+            sound: floor.sound,
+            building: building.key,
+            layout: null,
+            people: "human",
+            // (What the art and the minimap want of the level: its theme, how deep, its torches
+            // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
+            // is drawn about each)
+            dungeon: { theme: floor.look, level: k, levels: count, lights: floor.level.lights, rooms: floor.level.rooms, balconies: floor.level.balconies ?? [], lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}), ...(floor.level.arena ? { arena: true } : {}) },
+        });
+
+        return map;
+    }
+
+    /**
+     * A dungeon's levels' floors made ahead of its making, between steps (server/ahead.js;
+     * generated/multiplayer_scaling_plan.md 1-29), from the levels worked out ahead for it
+     * (give): one more of them each time it's asked, kept with what was given, and taken when
+     * the dungeon's made if it's made as just that (#makeDungeon); if not, they're made there
+     * as ever, as each not made here yet is. Nothing of the world changes for it: a floor is the
+     * same wherever it's made, and none is among the world's maps till its dungeon's made.
+     * Returns the floors made so far and whether that's all of them ({ maps, done }); null for
+     * a building with nothing given, or made already. Asked with `make` false, it makes none:
+     * only says.
+     */
+    prepare(key, { make = true } = {}) {
+        const building = this.buildings.get(key);
+        const given = building?.kind === "dungeon" && !building.made ? building.given : null;
+
+        if (!given?.dungeon) {
+            return null;
+        }
+
+        // (As dungeonRooms would have them, were it made as what was given: for its tier and
+        // how many times it's been made, those it was given for)
+        given.floors ??= dungeonFloors(building, given.dungeon);
+        given.maps ??= [];
+
+        const k = given.maps.length;
+
+        if (make && k < given.floors.length) {
+            given.maps.push(this.#levelMap(building, dungeonLevel(key, given.from.generation, k), given.floors[k], k, given.floors.length));
+        }
+
+        return { maps: given.maps, done: given.maps.length === given.floors.length };
+    }
+
     // A dungeon's levels made (dungeonRooms), each a floor drawn at its column of DUNGEON_ORIGINS
     // (a hell's of HELL_ORIGINS), its front door's inside end on the first, and stairs down from
     // each level to the next (its stairs down's landing above, the foot of its stairs up below),
@@ -1850,32 +1919,15 @@ export class Interiors {
     // wilds before its way in, one way (no squares outside to go in by), sealed till its lord falls
     #makeDungeon(building) {
         const { key } = building;
+        // (Its levels' floors made ahead of it, prepare: taken, each that's the floor that would
+        // be made here, if the dungeon it's made as is the one they were made from)
+        const given = building.given;
         const floors = dungeonRooms(building);
-        const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
-        const keep = Boolean(building.scene);
-        const column = keep ? 0 : Math.max(0, number - 1);
-        const block = keep ? KEEP_ORIGINS : THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
-        const origin = [block.x + (column % block.across) * block.step, Math.floor(column / block.across) * block.row];
+        const ready = given?.maps && building.dungeon === given.dungeon ? given.maps : [];
         const maps = floors.map((floor, k) => {
-            const map = readPlan(dungeonLevel(key, building.generation, k), floor.name, floor.rows, { ground: floor.ground });
+            const id = dungeonLevel(key, building.generation, k);
 
-            Object.assign(map, {
-                origin: [origin[0], origin[1] + k * block.step],
-                style: floor.style,
-                look: floor.look,
-                finish: null,
-                patron: null,
-                sound: floor.sound,
-                building: key,
-                layout: null,
-                people: "human",
-                // (What the art and the minimap want of the level: its theme, how deep, its torches
-                // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
-                // is drawn about each)
-                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, balconies: floor.level.balconies ?? [], lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}), ...(floor.level.arena ? { arena: true } : {}) },
-            });
-
-            return map;
+            return ready[k]?.id === id && ready[k].name === floor.name ? ready[k] : this.#levelMap(building, id, floor, k, floors.length);
         });
 
         for (const map of maps) {

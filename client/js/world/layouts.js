@@ -32,6 +32,8 @@ export class Layouts {
         // last asked for as (what it's made from, as text)
         this.asked = new Map();
         this.delved = new Map();
+        // (Those of them asked of the worker and not answered yet, by key: what each was asked as)
+        this.delving = new Map();
         this.worker = null;
 
         if (typeof Worker === "undefined") {
@@ -48,6 +50,10 @@ export class Layouts {
             // (A dungeon's levels: given, if it's still wanted as what they were worked out from.
             // None, where the worker couldn't work it out: it's made when it's wanted, as ever)
             if (from) {
+                if (this.delving.get(from.key) === whatOf(from)) {
+                    this.delving.delete(from.key);
+                }
+
                 if (dungeon && this.delved.get(from.key) === whatOf(from)) {
                     this.interiors?.give(from.key, from, dungeon);
                 }
@@ -121,6 +127,7 @@ export class Layouts {
         for (const key of [...this.delved.keys()]) {
             if (!wanted.has(key)) {
                 this.delved.delete(key);
+                this.delving.delete(key);
                 this.interiors.give(key, null, null);
             }
         }
@@ -130,6 +137,7 @@ export class Layouts {
 
             if (this.delved.get(from.key) !== what) {
                 this.delved.set(from.key, what);
+                this.delving.set(from.key, what);
                 this.worker.postMessage({ dungeon: { key: from.key, seed: from.seed, theme: from.theme, tier: from.tier, generation: from.generation } });
             }
         }
@@ -139,5 +147,6 @@ export class Layouts {
     dispose() {
         this.worker?.terminate();
         this.worker = null;
+        this.delving.clear();
     }
 }
