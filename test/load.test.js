@@ -171,6 +171,9 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
             assert.equal(step.counts["battle.actors"], BATTLE_KINDS.reduce((sum, kind) => sum + (step.counts[`battle.actors.${kind}`] ?? 0), 0));
             assert.ok(Object.values(step.counts).every((n) => n !== 0));
             assert.deepEqual(Object.keys(step.counts).filter((name) => !COUNTERS.includes(name)), []);
+
+            // (And what it made for itself: none, in a town whose ground was made in the warm-up)
+            assert.deepEqual(step.made, { chunks: 0, tiles: 0 });
         }
 
         // (The look round, twice a second, is in the steps it falls in and no other)

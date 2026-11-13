@@ -53,8 +53,9 @@
 // nearest player.
 //
 // The report's `late` lists the steps over LOAD.tick by the clock, the first LOAD.late of them
-// with their parts: when, how long, the hearing, each pass's time in that step and what each
-// counter went up by in it (generated/multiplayer_scaling_plan.md 0-13).
+// with their parts: when, how long, the hearing, each pass's time in that step, what each
+// counter went up by in it, and the ground the step made for itself (`made`: chunks, and
+// navigation tiles baked; generated/multiplayer_scaling_plan.md 0-13).
 //
 // --leave half, or all: that many of the players (every other one; everyone) gone from the world
 // in the one step, LOAD.eventAt in, the rest playing on (1-27): the report's `leave` says what
@@ -1050,6 +1051,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         const stormy = storm && step >= storm.first;
         const [bakedBefore, addedBefore, madeBefore] = [navigation.baked, navigation.added, ahead.made];
         const [chunksBefore, droppedIn] = [overworld.chunks.size, dropped];
+        const groundBefore = overworld.chunksMade;
         const cpuBefore = cpuNow();
         const before = clock();
 
@@ -1084,6 +1086,8 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
         const after = clock();
         const [bakedIn, addedIn] = [navigation.baked - bakedBefore, navigation.added - addedBefore];
+        // (The chunks of ground the step made for itself: none's made ahead while it's played)
+        const groundIn = overworld.chunksMade - groundBefore;
 
         if (stormy) {
             storm.stepping = false;
@@ -1115,6 +1119,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
                     .sort(([, a], [, b]) => b - a),
             ),
             counts: Object.fromEntries([...probes.counts].map(([name, n]) => [name, n - (countsBefore.get(name) ?? 0)]).filter(([, n]) => n !== 0)),
+            made: { chunks: groundIn, tiles: bakedIn },
         });
 
         if (wall[step] > lateOver) {
@@ -1457,7 +1462,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
             going: round(going.going),
             before: span(Math.max(0, from - going.steps), from),
             steps: span(from, to),
-            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {} },
+            longest: going.longest ?? { at: -1, wall: 0, cpu: 0, hear: 0, passes: {}, counts: {}, made: { chunks: 0, tiles: 0 } },
             let: going.let,
             look: { worst: round(going.look.worst), worstAt: going.look.worstAt },
         };
@@ -1667,9 +1672,11 @@ export const ACTIVITY_SCHEMAS = Object.freeze({
 /**
  * A step kept with its parts (each of the report's `late.kept`, and `leave.longest`): when (ms
  * into the run), how long by the clock and in the thread's time, the hearing in it, each pass's
- * time in it by name, the longest first, and what each counter went up by in it.
+ * time in it by name, the longest first, what each counter went up by in it, and what it made
+ * for itself (`made`: chunks of ground, core/overworld.js chunksMade, and navigation tiles
+ * baked: what wasn't made ahead of it).
  */
-export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"] });
+export const STEP_SCHEMA = Object.freeze({ at: "number", wall: "number", cpu: "number", hear: "number", passes: ["number"], counts: ["number"], made: { chunks: "number", tiles: "number" } });
 
 /**
  * What a report holds of players gone together (`leave`: a join storm's, everyone gone before
@@ -1799,7 +1806,7 @@ export function wordsOf(report) {
         Object.entries(step.passes)
             .slice(0, 3)
             .map(([name, ms]) => `${name} ${ms.toFixed(1)}`)
-            .join(", ");
+            .join(", ") + (step.made.chunks || step.made.tiles ? `; it made ${step.made.chunks} chunk${step.made.chunks === 1 ? "" : "s"} of ground and ${step.made.tiles} navigation tile${step.made.tiles === 1 ? "" : "s"}` : "");
 
     return [
         `${title}: ${steps.count} steps (${run.seconds} s of the world's time) in ${report.took.run} s, ${steps.speed} times as fast as it's played`,
