@@ -322,19 +322,20 @@ export class Navigation {
         this.answer = { ref: new recast.Raw.UnsignedIntRef(), point: new recast.Raw.Vec3(), over: new recast.Raw.BoolRef() };
 
         // The tiles in the mesh, by key: { tx, ty, ref (Detour's, or 0 for one with nothing to
-        // walk), edit (`edits` as it went in) }, the most recently used last. (Not their data: the mesh has its own copy, and a
+        // walk) }, the most recently used last. (Not their data: the mesh has its own copy, and a
         // second kept here was 10 KB a tile no one read, 10 MB of a full overworld's.)
         this.tiles = new Map();
         this.baked = 0;
         this.added = 0;
 
         /**
-         * How many times a tile's been put in or taken out (add, drop; all of them, dispose).
-         * Each tile keeps what it was as it went in (`edit`), and an answer remembered of the
-         * mesh (stands) is good only while every tile round its point went in before it was
-         * given.
+         * How many times a tile's been put in or taken out (add, drop; all of them, dispose),
+         * and what that was as each tile in the mesh went in, by key (`since`): an answer
+         * remembered of the mesh (stands) is good only while every tile round its point went
+         * in before it was given.
          */
         this.edits = 0;
+        this.since = new Map();
 
         /** How many ways and lines it's given up on, asked across more than MOST_ASKED tiles. */
         this.tooFar = 0;
@@ -496,7 +497,8 @@ export class Navigation {
         }
 
         this.edits++;
-        this.tiles.set(k, { tx, ty, ref, edit: this.edits });
+        this.tiles.set(k, { tx, ty, ref });
+        this.since.set(k, this.edits);
         this.added++;
     }
 
@@ -511,6 +513,7 @@ export class Navigation {
             }
 
             this.tiles.delete(k);
+            this.since.delete(k);
             this.edits++;
         }
     }
@@ -870,10 +873,10 @@ export class Navigation {
     /**
      * `walkable`, remembered in `memo` (standing(): whoever asks keeps one for each thing it asks
      * about): asked again of the same point while none of the tiles round it has been put in
-     * since (each tile keeps the count of tiles put in or taken out, `edits`, as it was when it
-     * went in, and the memo that count as it was when the mesh answered), the answer it gave is
-     * given again, and neither the ground's height nor Detour is asked (`memo.asked` says
-     * whether they were). The tiles round the point are made sure of either way, in the order
+     * since (the count of tiles put in or taken out, `edits`, is kept for each tile as it was
+     * when it went in, `since`, and by the memo as it was when the mesh answered), the answer
+     * it gave is given again, and neither the ground's height nor Detour is asked
+     * (`memo.asked` says whether they were). The tiles round the point are made sure of either way, in the order
      * any asking makes sure of them (nearest's: #cover), so each is counted as used just when it
      * would be, one let go is baked again there and then, and which are let go of later is as it
      * was; and one put in for it, or since the mesh last answered, has the mesh asked. Looking
@@ -894,10 +897,10 @@ export class Navigation {
                     // (In: used just now, as ensure counts it)
                     this.tiles.delete(k);
                     this.tiles.set(k, tile);
-                    newest = Math.max(newest, tile.edit);
+                    newest = Math.max(newest, this.since.get(k));
                 } else if (!this.#unmade) {
                     this.ensure(tx, ty);
-                    newest = Math.max(newest, this.tiles.get(k)?.edit ?? 0);
+                    newest = Math.max(newest, this.since.get(k) ?? 0);
                 }
             }
         }
@@ -939,6 +942,7 @@ export class Navigation {
 
         this.mesh.destroy();
         this.tiles.clear();
+        this.since.clear();
         this.edits++;
         this.disposed = true;
     }
