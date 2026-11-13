@@ -40,7 +40,9 @@ const sha = (text) => createHash("sha1").update(text).digest("hex");
  * while and the wolves set alight. With `cap`, the overworld's navigation keeps only that many
  * tiles, so those the walkers leave are let go and baked again as they come back. Resolves to
  * every step's events and the world's sum every tenth step (`steps`), the world at the end
- * (`snapshot`), the work counted (`counts`), and what the navigation baked (`baked`).
+ * (`snapshot`), the work counted (`counts`), how many of the navigation's tiles were let go and
+ * put in again (`rebaked`), how many it holds at the end (`tiles`), and every tile put in or
+ * let go with the step it was in, and those it holds from the longest unused (`used`).
  */
 function cityWalk({ steps = 400, cap = null } = {}) {
     const world = buildWorld({ seed: 2 });
@@ -51,6 +53,27 @@ function cityWalk({ steps = 400, cap = null } = {}) {
     const at = (dx, dy) => nearestFree(squares, [Math.round(place.at[0] + dx), Math.round(place.at[1] + dy)], { within: 40 });
     const navigation = navigatorOf(overworld);
     const played = [];
+
+    // (How often each tile was put in: more than once, for one let go and baked again; and every
+    // tile put in or let go, in order, with the step it was in)
+    const added = new Map();
+    const tiles = [];
+    const [add, drop] = [navigation.add.bind(navigation), navigation.drop.bind(navigation)];
+    let playing = 0;
+
+    navigation.add = (tx, ty, data) => {
+        if (!navigation.has(tx, ty)) {
+            added.set(`${tx},${ty}`, (added.get(`${tx},${ty}`) ?? 0) + 1);
+            tiles.push(`${playing}+${tx},${ty}`);
+        }
+
+        add(tx, ty, data);
+    };
+
+    navigation.drop = (tx, ty) => {
+        tiles.push(`${playing}-${tx},${ty}`);
+        drop(tx, ty);
+    };
 
     if (cap !== null) {
         navigation.least = cap;
@@ -68,6 +91,8 @@ function cityWalk({ steps = 400, cap = null } = {}) {
 
     try {
         for (let step = 0; step < steps; step++) {
+            playing = step;
+
             if (step % 60 === 0) {
                 for (let k = 0; k < PLAYERS; k++) {
                     const [dx, dy] = WAYS[(step / 60 + 2 * k) % WAYS.length];
@@ -100,7 +125,7 @@ function cityWalk({ steps = 400, cap = null } = {}) {
         uninstall();
     }
 
-    return { host, steps: played, snapshot: sha(encode(host.snapshot())), counts: probes.toJSON().counts, baked: navigation.baked, events: played.map(([events]) => events).join("") };
+    return { host, steps: played, snapshot: sha(encode(host.snapshot())), counts: probes.toJSON().counts, rebaked: [...added.values()].filter((times) => times > 1).length, tiles: navigation.tiles.size, used: `${tiles.join(" ")} | ${[...navigation.tiles.keys()].join(" ")}`, events: played.map(([events]) => events).join("") };
 }
 
 // The same walk with one of the battle's switches off (`name`), the old form played
@@ -144,5 +169,43 @@ describe("the battle's step with nothing made to throw away (core/battle.js Batt
         for (const type of ["attack", "hit", "death", "unbuffed", "ail", "afflicted", "act", "rest"]) {
             assert.ok(events.includes(`"type":"${type}"`), `(a "${type}" event)`);
         }
+    });
+});
+
+describe("the mesh's answer for where a walker stands, remembered (core/battle.js Battle.remembering, plan 1-17)", () => {
+    // (So few tiles kept that those the walkers leave are let go, and baked again as they come back)
+    const CAP = 6;
+
+    it("walks a city's crowd step for step as asking the mesh every time did, tiles let go and baked again in the middle of it", () => {
+        const remembering = cityWalk({ cap: CAP, steps: 300 });
+        const asking = without("remembering", () => cityWalk({ cap: CAP, steps: 300 }));
+
+        assertSame(remembering, asking);
+        assert.ok(remembering.rebaked > 3, `${remembering.rebaked} tiles let go and baked again`);
+        assert.equal(remembering.used, asking.used, "the same tiles put in and let go in the same steps, and used in the same order");
+        assert.ok(remembering.tiles <= CAP);
+
+        // (Fewer askings, the rest answered from what it said of the same place before, though
+        // every tile baked again has it asked; and with the switch off nothing's remembered)
+        const [asked, kept, was] = [remembering.counts["battle.meshAsks"], remembering.counts["battle.meshKept"], asking.counts["battle.meshAsks"]];
+
+        assert.equal(asking.counts["battle.meshKept"] ?? 0, 0);
+        assert.equal(asked + kept, was, "every asking made, or spared");
+        assert.ok(was > 500 && kept > was / 5, `the mesh asked ${asked} times where it was ${was}`);
+    });
+
+    it("walks it the same with every tile kept, at little more than half the askings", () => {
+        const remembering = cityWalk();
+        const asking = without("remembering", () => cityWalk());
+        const [asked, kept, was] = [remembering.counts["battle.meshAsks"], remembering.counts["battle.meshKept"], asking.counts["battle.meshAsks"]];
+
+        assertSame(remembering, asking);
+        assert.equal(remembering.rebaked, 0);
+        assert.equal(remembering.used, asking.used, "the tiles used in the same order");
+        assert.equal(asked + kept, was, "every asking made, or spared");
+
+        // (Each step tried asks of where the walker stands and of where it would step: the first
+        // is what's remembered, so half is the most there is to spare)
+        assert.ok(was > 1000 && asked <= was * 0.55, `the mesh asked ${asked} times where it was ${was}`);
     });
 });

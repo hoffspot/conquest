@@ -80,7 +80,7 @@ import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } f
 import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { playerSight, sightAt } from "./light.js";
-import { navigatorOf } from "./navigation.js";
+import { navigatorOf, standing } from "./navigation.js";
 import { count, inner, lap as timed, outer, timing } from "./probe.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
@@ -842,6 +842,14 @@ export class Battle {
     static sparing = true;
 
     /**
+     * Whether the mesh's answer for where a walker stands is remembered while it stands there
+     * and the mesh has had no tile put in or taken out (#onMesh, navigation.js stands), as it
+     * always is, or the mesh asked again for every step it tries, as it was: only for the tests
+     * that check it's the same walk either way (generated/multiplayer_scaling_plan.md 1-17).
+     */
+    static remembering = true;
+
+    /**
      * Whether one taken out (remove) is forgotten at the cost of the one taken out, as it always
      * is: everyone by id (actor) brought up to date in place as anyone's added or taken out, not
      * made again of everyone at the next asking, and many taken out together forgotten by
@@ -881,13 +889,18 @@ export class Battle {
     // made once, where a pair of functions was made for every look
     #asideX = 0;
     #asideY = 0;
+
+    // What the mesh last answered each walker that asked (#onMesh): of where it stood (`at`), and
+    // of where it would step (`to`), each a navigation.js standing(). Kept by the walker, here
+    // and not on it: nothing of it is the battle's to keep, send or sum
+    #stood = new WeakMap();
     #seer = null;
     #seesOne = (other) => this.canSee(this.#seer, other);
     #frightensOne = (other) => this.#frightens(other, this.#seer);
 
     // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
     // #counted): read by nothing else, and begun again from nothing each step
-    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0 };
+    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0, meshKept: 0 };
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -3061,6 +3074,7 @@ export class Battle {
         count("battle.nearFound", work.nearFound);
         count("battle.sights", work.sights);
         count("battle.meshAsks", work.meshAsks);
+        count("battle.meshKept", work.meshKept);
     }
 
     // --- Drawing weapons and putting them away ---
@@ -7192,11 +7206,15 @@ export class Battle {
             const asking = inner("battle.mesh");
             let on = true;
 
-            this.#work.meshAsks++;
-
-            if (navigation.walkable(from.x, from.y)) {
+            if (Battle.remembering) {
+                on = this.#onMesh(navigation, from, x, y);
+            } else {
                 this.#work.meshAsks++;
-                on = navigation.walkable(x, y);
+
+                if (navigation.walkable(from.x, from.y)) {
+                    this.#work.meshAsks++;
+                    on = navigation.walkable(x, y);
+                }
             }
 
             outer(asking);
@@ -7224,11 +7242,15 @@ export class Battle {
             const asking = inner("battle.mesh");
             let on = true;
 
-            this.#work.meshAsks++;
-
-            if (navigation.walkable(from.x, from.y)) {
+            if (Battle.remembering) {
+                on = this.#onMesh(navigation, from, x, y);
+            } else {
                 this.#work.meshAsks++;
-                on = navigation.walkable(x, y);
+
+                if (navigation.walkable(from.x, from.y)) {
+                    this.#work.meshAsks++;
+                    on = navigation.walkable(x, y);
+                }
             }
 
             outer(asking);
@@ -7298,6 +7320,44 @@ export class Battle {
         }
 
         return false;
+    }
+
+    // Whether a walker standing on the mesh could stand at a point too (#clear's asking, with
+    // Battle.remembering): the mesh asked where it stands, and then of the point only if it's on
+    // it, as ever; but what it answered of where it stands is remembered while it stands there
+    // (navigation.js stands: till a tile's put in or taken out), so the eight steps aside tried
+    // from one place ask it once, not eight times, and a stride begun where the last one's step
+    // was asked about doesn't ask at all. Each asking made of the mesh is counted, and each
+    // answer it was spared
+    #onMesh(navigation, from, x, y) {
+        let stood = this.#stood.get(from);
+
+        if (!stood) {
+            stood = { at: standing(), to: standing() };
+            this.#stood.set(from, stood);
+        }
+
+        // (Standing where it last asked about stepping: that answer is this one's)
+        if (stood.to.x === from.x && stood.to.y === from.y && stood.to.mesh === navigation) {
+            const was = stood.at;
+
+            stood.at = stood.to;
+            stood.to = was;
+        }
+
+        const work = this.#work;
+        let on = navigation.stands(from.x, from.y, stood.at);
+
+        work.meshAsks += stood.at.asked ? 1 : 0;
+        work.meshKept += stood.at.asked ? 0 : 1;
+
+        if (on) {
+            on = navigation.stands(x, y, stood.to);
+            work.meshAsks += stood.to.asked ? 1 : 0;
+            work.meshKept += stood.to.asked ? 0 : 1;
+        }
+
+        return on;
     }
 
     // How far a point is from the nearest blocked square, up to BODY (metres)
