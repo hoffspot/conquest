@@ -476,7 +476,7 @@ export class Ahead {
         this.#tilesComing();
 
         this.layouts?.delve(Ahead.soon ? dungeons : []);
-        this.delves = Ahead.soon && Ahead.delving ? dungeons.map(({ key }) => key) : [];
+        this.delves = Ahead.soon && Ahead.delving ? (dungeons ?? []).map(({ key }) => key) : [];
 
         for (const key of this.delveWaited.keys()) {
             if (!this.delves.includes(key)) {
