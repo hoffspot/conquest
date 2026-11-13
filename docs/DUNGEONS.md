@@ -898,7 +898,21 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   What was given for one its finders went by is let go. Measured over twelve dungeons (the
   thread's own time, a busy machine): made where it's wanted, 33 to 85 ms of the step, 57 on the
   mean; its levels given, 5 to 23, 9 on the mean (its floors' plans read, which the step still
-  does).
+  did).
+- **Its floors made, and their navigation baked, before then too.** A level's plan read into a
+  floor is some 10 ms, and the mesh the foes of a level find their ways over is baked a tile at
+  a time, 10 ms each: with its levels given, the step that made a dungeon still read every
+  level's plan, and the step after, its first level's foes finding their first ways, baked
+  that floor's mesh, 60 to 90 ms. Neither changes what a step works out, so once the levels are
+  given one floor of them is made at a time between steps (`insides.js` `prepare`: kept with what
+  was given, and among no one's maps till the dungeon's made) and each floor's tiles are baked
+  off the thread and kept for its mesh (`world/navbaker.js` `floor`): by the world server
+  (`server/ahead.js` `#delve`, the switch `Ahead.delving`) and by the game (`app/game.js`
+  `#delveAhead`: a floor a frame). Made, the dungeon takes each floor that's the one it would
+  make there, and makes any other as ever; so every copy agrees whichever had them ready
+  (test/delving.test.js plays the same world both ways, step for step). The step of a dungeon's
+  coming is then its first level's foes put out and their first ways found: 7 ms for 61 foes
+  (generated/multiplayer_scaling_plan.md 1-29).
 - **Each level's foes as many and as tough as the side there** as it wakes (docs/WILDS.md, *A
   side's strength*): the boss and mini-bosses tougher, more of each pack and each a little tougher,
   the more set on free ground beside those the plan has.
