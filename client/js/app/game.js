@@ -3950,7 +3950,11 @@ export class Game {
                 layouts.interiors = this.world.interiors;
                 layouts.delve(dungeons);
             }
+
+            this.soonDelves = dungeons.map(({ key }) => key);
         }
+
+        this.#delveAhead();
 
         // (The first of them that isn't made, nor waiting on a worker; one that's waited
         // SOON_GROUND.patience seconds, a worker gone quiet, made whatever)
@@ -3969,6 +3973,52 @@ export class Game {
         // (A piece of it: the time allowed already gone by, as this clock has it)
         if (overworld.chunkWithin(...waiting[next], 0, () => 1)) {
             waiting.splice(next, 1);
+        }
+    }
+
+    // A dungeon to come (the host's `soon`: #groundAhead), its levels worked out: one more of its
+    // floors made a frame (core/insides.js prepare: some 10 ms of reading a level's plan, which
+    // the step that made the dungeon spent on all its levels at once), and each floor's
+    // navigation baked off the page's thread as an open building's is (#bakeFloors), before its
+    // first level's foes find their first ways over it: baked in that step, as it was, the game
+    // stood still 60 to 90 ms as its party came to the way in. What was baked for one its
+    // finders went by, or that was made as another, is let go; one made is its building's from
+    // then (#bakeFloors, as it's opened and let go). Nothing hangs on any of it being done in
+    // time: a floor and a tile are the same wherever they're made, and the world's the same
+    // either way (generated/multiplayer_scaling_plan.md 1-29; a world server's: server/ahead.js)
+    #delveAhead() {
+        const interiors = this.world.interiors;
+
+        if (!interiors?.prepare || !this.world.maps?.town?.chunkAt) {
+            return;
+        }
+
+        const floors = (this.delveFloors ??= new Map());
+        const wanted = this.soonDelves ?? [];
+
+        for (const [map, key] of floors) {
+            const building = interiors.buildings.get(key);
+            const kept = building?.made ? this.world.maps[map.id] === map : wanted.includes(key) && interiors.prepare(key, { make: false })?.maps.includes(map);
+
+            if (building?.made || !kept) {
+                floors.delete(map);
+            }
+
+            if (!kept) {
+                this.#navBaker().forget(map);
+            }
+        }
+
+        for (const key of wanted) {
+            if (interiors.prepare(key, { make: false })?.done === false) {
+                const { maps } = interiors.prepare(key);
+                const map = maps[maps.length - 1];
+
+                floors.set(map, key);
+                this.#navBaker().floor(map);
+
+                return;
+            }
         }
     }
 
