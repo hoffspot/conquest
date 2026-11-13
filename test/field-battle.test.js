@@ -121,8 +121,9 @@ describe("the battle among those near (battle.js #indexed)", () => {
     });
 
     // Whoever's drawn to a player near (#drawnTo) goes through the players by their places in
-    // their list, where it went through them with `for...of`: the same battle either way, and one
-    // in which the player was gone for
+    // their list, where it went through them with `for...of`, and a walker's stride makes no
+    // arrays of its numbers (plan 1-16): the same battle either way, and one in which the player
+    // was gone for
     it("plays out a battle exactly as going through the players with for...of does", () => {
         const sparing = fight();
 
@@ -212,6 +213,21 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(types("slipped") > 0, "one slips away");
         assert.ok(types("spell") > 10, "spells are cast");
         assert.ok(types("seen") > 0, "the unseen one is seen through");
+    });
+
+    // The same fight with nothing made to throw away (Battle.sparing, plan 1-16), or with the
+    // forms that made them: the strides' numbers in arrays, a function made to find each spell
+    // lasting on someone, the index's cells numbered above 2^31
+    it("plays out the open field's fight exactly as the forms that made something to throw away did", () => {
+        const sparing = melee();
+
+        Battle.sparing = false;
+
+        try {
+            assert.equal(sparing.hash, melee().hash);
+        } finally {
+            Battle.sparing = true;
+        }
     });
 
     it("brings the index up to date by moving those who've changed cell, and plays out exactly as making it afresh every time does", async () => {
