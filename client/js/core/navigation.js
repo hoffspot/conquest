@@ -136,6 +136,8 @@ export function navigatorOf(map) {
     if (!navigation) {
         navigation = map.ground?.heightAt && map.chunkAt ? new Navigation(recast, map) : map.walk ? walkNavigation(map) : squaresNavigation(map);
         navigation.ready = aheads.get(map) ?? null;
+        // (One of a dungeon's levels' own, not a sealed room's: counted apart, Navigation.levelTiles)
+        navigation.level = Boolean(map.dungeon && !map.dungeon.vault);
         navigators.set(map, navigation);
     }
 
@@ -373,6 +375,16 @@ export class Navigation {
      */
     static bounded = true;
 
+    /**
+     * How many tiles of small maps' meshes (a building's floors, a dungeon's levels, a scene's)
+     * have been baked here and now (ensure), in all: for whoever measures what the steps bake
+     * for themselves (scripts/load.js). Nothing reads it but they. And how many of those were
+     * a dungeon's levels' (`levelTiles`): a building's floor is baked here or ahead by when its
+     * folk first walk it, a dungeon's level only if it wasn't made ahead.
+     */
+    static floorTiles = 0;
+    static levelTiles = 0;
+
     /** Whether a tile is in. */
     has(tx, ty) {
         return this.tiles.has(key(tx, ty));
@@ -522,6 +534,8 @@ export class Navigation {
         }
 
         this.baked++;
+        Navigation.floorTiles += this.measures === OVERWORLD ? 0 : 1;
+        Navigation.levelTiles += this.level ? 1 : 0;
         this.add(tx, ty, bakeTile(this.recast, this.input(tx, ty), tx, ty, this.measures));
     }
 

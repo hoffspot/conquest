@@ -3282,6 +3282,23 @@ settlement and navigation tile the moment someone first walked into it:
   searches is the 2,401 squares above: 43,000 squares read to stand up one soldier. Nothing
   here changes that: whether an army met on water is stood on the nearest shore, or not met
   till it's ashore, is a rule (generated/multiplayer_scaling_plan.md, the rulings owed).
+- **A dungeon's floors, and their navigation** (`Ahead.delving`, `#delve`; core/insides.js
+  `prepare`; generated/multiplayer_scaling_plan.md 1-29). A dungeon to come has its levels
+  worked out on the layouts' worker (docs/DUNGEONS.md), but the step that made it still read
+  each level's plan into a floor (some 30 ms for three levels), and the step after, its first
+  level's 61 foes finding their first ways, baked that floor's mesh under them: 6 tiles of
+  Recast's 10 ms each. Neither is the simulation's. So once a dungeon's levels are back the
+  maker makes one floor of them a pump, kept with what was given and among no one's maps till
+  the dungeon's made, and has each floor's tiles baked on the navigation's worker and kept
+  for its mesh (world/navbaker.js `floor`; with no worker, one baked here a pump). The step
+  that makes the dungeon takes each floor that's the one it would make, and makes any that
+  isn't (a mightier finder come: another tier, another dungeon) as ever; what was made for one
+  its finders went by is let go. `settled` counts it, for whoever warms a world up before
+  timing it. The same world step for step either way (test/delving.test.js). With 8 players the longest step of a dungeon's coming is 7 ms where
+  it was 67 to 82, and with 25 no step of four dungeons' coming is over 25 ms where two were 51
+  to 71 (`npm run load -- --activity dungeons`, a 4-core container with nothing else running;
+  `--undelved` for how it was). A dungeon no one waited near is made whole in its step, as
+  ever: 66 to 173 ms, and 53 to 86 the step after (`--cold`).
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
