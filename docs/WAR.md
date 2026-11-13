@@ -3250,6 +3250,20 @@ settlement and navigation tile the moment someone first walked into it:
   seven. Nothing a step works out changes: a chunk or a tile kept a while longer is the one a
   step would make again (test/letting-go.test.js: six players in six towns, five gone at once and
   one back, step for step with `Ahead.easing` on and off).
+- **What a turn of the war brings near** (`Host.soon`'s `turn`, `SOON.turn`, `#foresee`;
+  `Ahead.turns`; generated/multiplayer_scaling_plan.md 1-28). What a turn decides is acted on
+  by the next look round, a step or a few later, all at once: an army turned back to within
+  300 m of a player, reinforcements set out near them, a camp pitched. Till the turn they
+  were nowhere near, so no one had asked for their ground, and that look made it: seed 2's war
+  35 turns old turns the lizards' reserve back 300 m and sends it two columns, and the step
+  after the turn made 6 chunks to stand 19 soldiers on, 97 ms with 8 players spread and 158
+  with 25; with that ground made ahead it makes none, and is 23 ms and 54. So from 10 s before a turn falls the host says, to a world server's maker, what the
+  war as it will be would want as well: a copy of the war played on one turn (its roads the
+  war's own, the rest copied: some 8 ms, once a turn, between two steps), and the war's part
+  of `soon` asked of the copy, only what nothing wants yet (`foreseen`). The war itself isn't
+  touched. What's done to the war in those ten seconds (a town won, an army met marching on)
+  can make the copy wrong, which costs ground made that isn't wanted, or made by the step as
+  before. A browser's game doesn't ask.
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).
