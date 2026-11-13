@@ -78,10 +78,16 @@ const run = (host, ms) => {
 describe("the battle among those near (battle.js #indexed)", () => {
     // Two lines of soldiers making for each other past the player, of every weapon: everything that
     // happens, and where everyone ends, hashed
-    const fight = () => {
+    // (With `others`, that many more players in it, between the lines and behind one of them)
+    const fight = ({ others = 0 } = {}) => {
         const { host, me } = outOfTown();
         const battle = host.battle;
         const weapons = ["sword", "bow", "hammer", "staff", "gauntlets", "cleaver", "wand"];
+
+        for (let k = 0; k < others; k++) {
+            host.join({ id: `p${k + 2}`, hero: { ...HERO, name: `P${k + 2}`, weapon: weapons[k % weapons.length] } });
+            battle.place(`p${k + 2}`, "town", [Math.floor(me.x) - 10 + k * 5, Math.floor(me.y) - 12 - (k % 3) * 9]);
+        }
 
         for (const [team, from, to] of [
             ["a", -4, -40],
@@ -95,6 +101,10 @@ describe("the battle among those near (battle.js #indexed)", () => {
         }
 
         battle.command(HOST_PLAYER, { type: "move", to: [Math.floor(me.x), Math.floor(me.y - 22)] });
+
+        for (let k = 0; k < others; k++) {
+            battle.command(`p${k + 2}`, { type: "move", to: [Math.floor(me.x) + 8 - k * 4, Math.floor(me.y) - 30 + (k % 2) * 16] });
+        }
 
         const events = run(host, 30000);
         const state = battle.actors.map((actor) => [actor.id, actor.x, actor.y, actor.hp, actor.dead, actor.target, actor.facing]);
@@ -120,9 +130,31 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(["a", "b"].every((team) => indexed.battle.actors.some((actor) => actor.team === team && actor.dead)));
     });
 
+    // Whoever asks after the players near it (#drawnTo, #playerSeen, #pathTo) asks the index for
+    // them and goes through those in the roster's order (plan 1-19), where it went through every
+    // player in the battle: the same battle with five players among the soldiers, each of them
+    // gone for
+    it("plays out a battle with several players in it exactly as going through every player for each asking does", () => {
+        const indexed = fight({ others: 4 });
+
+        Battle.indexing = false;
+
+        try {
+            assert.equal(indexed.hash, fight({ others: 4 }).hash);
+        } finally {
+            Battle.indexing = true;
+        }
+
+        const struck = new Set(indexed.events.filter(({ type }) => type === "hit").map(({ id }) => id));
+
+        assert.deepEqual([HOST_PLAYER, "p2", "p3", "p4", "p5"].filter((id) => !struck.has(id)), [], "(every player was struck)");
+        assert.equal(indexed.battle.actors.filter(({ kind }) => kind === "player").length, 5);
+    });
+
     // Whoever's drawn to a player near (#drawnTo) goes through the players by their places in
-    // their list, where it went through them with `for...of`: the same battle either way, and one
-    // in which the player was gone for
+    // their list, where it went through them with `for...of`, and a walker's stride makes no
+    // arrays of its numbers (plan 1-16): the same battle either way, and one in which the player
+    // was gone for
     it("plays out a battle exactly as going through the players with for...of does", () => {
         const sparing = fight();
 
@@ -213,6 +245,41 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(types("spell") > 10, "spells are cast");
         assert.ok(types("seen") > 0, "the unseen one is seen through");
     });
+
+    // The same fight with nothing made to throw away (Battle.sparing, plan 1-16), or with the
+    // forms that made them: the strides' numbers in arrays, a function made to find each spell
+    // lasting on someone, the index's cells numbered above 2^31
+    it("plays out the open field's fight exactly as the forms that made something to throw away did", () => {
+        const sparing = melee();
+
+        Battle.sparing = false;
+
+        try {
+            assert.equal(sparing.hash, melee().hash);
+        } finally {
+            Battle.sparing = true;
+        }
+    });
+
+    // The mesh's answer for where a walker stands remembered (Battle.remembering, plan 1-17), and
+    // everyone gone through fewer times a step (Battle.mustering, plan 1-18): each battle to the
+    // same end as with the mesh asked every time, and with everyone gone through as often as
+    // they were
+    for (const name of ["remembering", "mustering"]) {
+        it(`plays out both battles exactly as they were played with Battle.${name} off`, () => {
+            const [marching, standing] = [fight(), melee()];
+
+            assert.equal(Battle[name], true);
+            Battle[name] = false;
+
+            try {
+                assert.equal(marching.hash, fight().hash);
+                assert.equal(standing.hash, melee().hash);
+            } finally {
+                Battle[name] = true;
+            }
+        });
+    }
 
     it("brings the index up to date by moving those who've changed cell, and plays out exactly as making it afresh every time does", async () => {
         const { install, Probes, uninstall } = await import("../client/js/core/probe.js");

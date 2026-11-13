@@ -1354,6 +1354,12 @@ found the same 2,012 ways over them to the last bit).
     send them: `later`), tiles not in yet are sent on rather than made, and there's no way
     (`[]`) till they're in; widening, it goes as far as the tiles in, and further next time;
   - `nearest(point)`, `walkable(x, y)`;
+  - `stands(x, y, memo)`: `walkable`, its answer kept in `memo` (`standing()`) and given again
+    while it's asked of the same point and none of the tiles round it has been put in since
+    (`edits`, the mesh's count of tiles put in or taken out, is kept for each tile as it was
+    when it went in: `since`). The tiles are made sure of and counted as used as any asking does, so what's let
+    go later is the same; the battle keeps a memo for each walker
+    (core/battle.js `#onMesh`, `Battle.remembering`);
   - `raycast(from, to)`: how far straight towards a point before the mesh's edge;
   - `polygons(tx, ty)`: a tile's detail triangles, to draw.
 
@@ -1365,7 +1371,8 @@ found the same 2,012 ways over them to the last bit).
   data about 10 KB (5–8). A way found takes 0.05 ms at the
   median and 0.12 ms at the 95th centile; asking for one that can't be got to (into a building,
   say) searches every tile kept before giving up, up to 0.5 ms. Asking whether a point can be
-  stood on (`walkable`, which the battle asks eight times for one step aside) takes 3.1 µs in a
+  stood on (`walkable`, which the battle asked eight times for one step aside of where the
+  walker stands, and now asks once: `stands`) takes 3.1 µs in a
   town on a busy desktop: Detour's own call made straight, answered into three objects the mesh
   keeps (4.8 µs through the wrapper's, which makes and destroys them each asking; the same
   answer to the last bit, tested).
