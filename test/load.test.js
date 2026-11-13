@@ -173,7 +173,7 @@ describe("the load's report (scripts/load.js load, checkReport)", () => {
             assert.deepEqual(Object.keys(step.counts).filter((name) => !COUNTERS.includes(name)), []);
 
             // (And what it made for itself: none, in a town whose ground was made in the warm-up)
-            assert.deepEqual(step.made, { chunks: 0, tiles: 0 });
+            assert.deepEqual(step.made, { chunks: 0, tiles: 0, floors: 0 });
         }
 
         // (The look round, twice a second, is in the steps it falls in and no other)
@@ -558,6 +558,23 @@ describe("the load's dungeons and buildings (scripts/load.js doorsOf, load, acti
         assert.equal(dungeons.steps.longest.wall, dungeons.steps.wall.worst);
         assert.ok(wordsOf(report).some((line) => /^Doors, from 1 s, a party every 2 s: 2 parties at 1 dungeons and 1 buildings; \d got in, /.test(line)));
         assert.ok(wordsOf(report).some((line) => /^Made in the run: 1 dungeons \(\d+ levels\) and [01] buildings\. The longest step of a dungeon's coming: /.test(line)));
+    });
+
+    it("has the dungeon's floors made and their navigation baked between steps before its party comes, as a world server does; or, undelved, in its steps as they were, the same parties in by the same doors", async () => {
+        const { dungeons } = report;
+
+        // (Every level's floor made ahead, and no tile of a floor's navigation baked in a step)
+        assert.deepEqual(dungeons.ahead, { levels: true, floors: true, made: dungeons.made.levels, baked: 0 });
+        assert.ok(wordsOf(report).some((line) => line.startsWith(`${dungeons.made.levels} of the dungeons' floors made ahead, between steps; 0 tiles of floors' navigation baked inside steps`)));
+
+        const before = await load({ seed: 2, players: 8, activity: "dungeons", seconds: 8, eventAt: 1000, undelved: true });
+
+        assert.deepEqual(checkReport(before), []);
+        assert.deepEqual({ ...before.dungeons.ahead, baked: 0 }, { levels: true, floors: false, made: 0, baked: 0 });
+        assert.ok(before.dungeons.ahead.baked > 0, "its first level's navigation baked in a step");
+        assert.ok(wordsOf(before).some((line) => /^The dungeons' levels worked out ahead, their floors made in the steps \(--undelved\); \d+ tiles/.test(line)));
+        assert.deepEqual([before.dungeons.made, before.dungeons.entered], [dungeons.made, dungeons.entered]);
+        assert.equal(Ahead.delving, true, "(and the maker's as it was after)");
     });
 
     it("is held to what such a run reports, and fails if no one got in or a dungeon wasn't made", () => {
