@@ -147,8 +147,13 @@ const worksName = (works) => `the ${works.name} ${works.kind}`;
  * `within` (MISSION_REACH) a mission could be about, for the player's people (`realm`, through
  * whoever they serve: war.liege), the nearest first, those they carry already (`held`, by kind
  * and key) left out. Each { kind, key, at, target }: `target` as the mission keeps it.
+ * Something on the road is asked whether they could meet it (core/hurry.js onTheRoad, a walk
+ * along what's left of its road) only if it's within `within` of them, since a mission about it
+ * is of where it is, and one further off is left out whatever its road; with `sparing` false
+ * every one on a road is asked first, as it was, to the same answer (core/host.js
+ * Host.heralding, which the tests alone turn off).
  */
-export function missionsNear({ war, realm, at, within = MISSION_REACH, held = [] }) {
+export function missionsNear({ war, realm, at, within = MISSION_REACH, held = [], sparing = true }) {
     if (!war || !at || !war.realm(realm)?.alive) {
         return [];
     }
@@ -191,7 +196,11 @@ export function missionsNear({ war, realm, at, within = MISSION_REACH, held = []
             continue;
         }
 
-        if (ON_THE_ROAD[force.kind] && !meets(force)) {
+        // (On the road: a mission about it is of where it is, so one beyond their reach is
+        // none whether they could meet it or not, and isn't asked: the asking walks its road,
+        // and with a hundred players spread and a war some turns old it was nearly all of the
+        // messengers' look. generated/multiplayer_scaling_plan.md 1-31)
+        if (ON_THE_ROAD[force.kind] && ((sparing && !near(force.at)) || !meets(force))) {
             continue;
         }
 

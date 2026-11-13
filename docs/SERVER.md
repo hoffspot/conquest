@@ -588,6 +588,19 @@ a tick two or three times its step). And its **pace**: how much of its clock's t
 has played lately, 100% unless it fell more than a quarter of a second behind and let the rest
 go, running slow rather than further behind; its journal says when it has.
 
+Under the table, **Late steps** lists each world's last 32 steps that took longer than a step of
+its time, newest first: when, how long, the three passes of the step that took most of it by name
+(the battle's parts each by their own: `battle.paths`, `battle.move.routine`...; `muster`,
+`wilds`, `messengers`; what's sent after it, `flush.ops`...), and what ground the step had to
+make for itself (chunks of ground, navigation tiles, tiles of floors), which is what makes most
+of the long ones. A step here is its passes' times together, the step and what's sent of it, as
+the world's thread times them already: nothing more is timed for it, a step that isn't late keeps
+nothing, and a look long only for what it made ahead between steps isn't one (the whole tick has
+that). The list is there while the server runs, a world's kept while it's set aside; the whole of
+each (every pass, and what each counter went up by in it) is in what `GET /api/v1/server/health`
+gives the page. `/metrics` counts them by the pass that took most of each, below. The panel isn't
+shown while no world has had one.
+
 Taking the whole world for a player (one coming in, or one whose copy went astray or fell too far
 behind and asks for it again) is the dearest thing a world's thread does for one player: 4 ms
 with eight in it, and more with more. So a world on a server takes it once for however many want
@@ -680,6 +693,7 @@ address or a key.
 | `world_messages_total`, `world_commands_total` | What its players' games have said to it, and the commands among that |
 | `world_made_ahead_total` | What it's made ahead (`kind`: `chunks`, `rooms`) |
 | `world_pass_seconds_total`, `world_pass_calls_total` | The time its steps have spent in each of their passes, and how often each was begun (`kind`: `light`, `battle`, `war`, `wilds`, `end`..., and of what's sent after a step `flush.ops`, `flush.motion`...: `HOST_PASSES` and `FLUSH_PASSES` in `client/js/core/probe.js`). A pass's share of the step is its rate over all of theirs |
+| `world_late_steps_total` | The worlds' steps whose passes, what's sent after them among them, took over 0.05 together, by the pass that took most of each (`kind`, its only label: a pass's name as above, or one of the battle's parts, `BATTLE_PASSES` there). Which world's, and each with its parts, is on Health (**Late steps**) |
 | `world_work_total` | The work its steps have counted (`kind`: `steps`, `wilds.pairs`, `motion.pairs`, `checksums`, `sends`...: `COUNTERS` there) |
 | `world_actors`, `world_players`, `world_present`, `world_running` | How many are in its battle, in the world, present; whether its clock runs. Only while it's going |
 | `heap_bytes`, `external_bytes` | Each thread's JavaScript memory |
@@ -737,6 +751,21 @@ has what the world's own thread wrote while it ran (`world.journal`), scrubbed t
 who came in, left or was refused as events of their own. What the server wrote there for someone
 (a setting changed, a player sent out or given a part, a restore, a key by its label) is in the
 journal alone: read it in Activity.
+
+`npm run load` plays a world on Node as a world server's thread steps it, with as many players
+as asked for joined over a link that only counts, and says what a step costs and where
+(contribution.md, section 2, has every option). It takes several activities in one run
+(`--activity fights,invasion,night`), and `npm run load -- --gate` plays Stage 1's gate
+(generated/multiplayer_scaling_plan.md): 100 players spread walking, the same with five fights,
+an invasion and night together, and 8 spread, each on seeds 2 and 7 for 120 s, each run a process
+of its own. It sets each against the gate's numbers (a mean step of 20 ms walking and 25 mixed, a
+99th percentile of 50, never more than three steps over 50 ms one after another, a pace of 0.99)
+and prints the table to commit, with a verdict a row. The 8-spread runs are held to a tenth above
+`--baseline`, a gate's report kept from before (`test-results/load/gate.json`), and only reported
+without one. Its times are one machine's: run it by hand on the machine the gate names (the Mac
+the server runs on), with nothing else running. Nothing in CI runs it, and the nightly `scale.yml`
+holds its runs, the mixed one at 25 among them, only to a mean step under 50 ms. Each run's late
+steps are in its report with their parts, as Health lists a server's.
 
 `npm run soak:server` runs a world server with 8 players in Node, each playing by itself, for two
 hours, and says whether the world's memory stayed flat after the first hour (no more than 15% above

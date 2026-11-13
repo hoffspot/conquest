@@ -20,10 +20,10 @@
 // heap, who's in it) is let go of while it's set aside, and all of it when the world's deleted.
 
 import { performance } from "node:perf_hooks";
-import { COUNTERS, FLUSH_PASSES, HOST_PASSES } from "../client/js/core/probe.js";
+import { BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES } from "../client/js/core/probe.js";
 import { Metrics } from "./metrics.js";
 import { LIFE } from "./registry.js";
-import { Collections, LoopDelay } from "./world-metrics.js";
+import { Collections, LATE, LoopDelay } from "./world-metrics.js";
 
 /** The labels a series may have. */
 export const LABELS = Object.freeze(["world", "thread", "kind", "reason"]);
@@ -40,6 +40,22 @@ const reasonOf = (why) => (typeof why === "string" && /^[a-z][a-z0-9-]{0,39}$/.t
 // The passes of a step and the work counted, by the names a series may be labelled with: no other is taken from a world's thread
 const PASSES = new Set([...HOST_PASSES, ...FLUSH_PASSES]);
 const WORK = new Set(COUNTERS);
+// (A late step's longest pass may be one of the battle's own parts, timed apart: any other name is "other")
+const LONGEST = new Set([...HOST_PASSES, ...FLUSH_PASSES, ...BATTLE_PASSES]);
+const longestOf = (pass) => (LONGEST.has(pass) ? pass : "other");
+
+// A late step as a world's thread tells of it (world-metrics.js LateSteps), taken as plain numbers
+// by the names the probes have: nothing else of what a thread says is kept
+const numbers = (given, names) => Object.fromEntries(Object.entries(given ?? {}).filter(([name, value]) => names.has(name) && Number.isFinite(value)));
+const lateOf = (late) => ({
+    when: Number(late.when) || 0,
+    at: Number(late.at) || 0,
+    ms: Number(late.ms) || 0,
+    pass: longestOf(late.pass),
+    passes: numbers(late.passes, LONGEST),
+    counts: numbers(late.counts, WORK),
+    made: { chunks: Number(late.made?.chunks) || 0, tiles: Number(late.made?.tiles) || 0, floors: Number(late.made?.floors) || 0 },
+});
 
 // A time as the series have them (seconds), from ms; and from µs
 const seconds = (ms) => ms / 1000;
@@ -72,6 +88,16 @@ export class ServerMetrics {
             present: metrics.gauge("pellagos_world_present", "How many of a world's players are present: linked and loaded.", ["world"]),
             running: metrics.gauge("pellagos_world_running", "Whether a world's clock runs (1) or is stopped (0).", ["world"]),
         };
+
+        /**
+         * The worlds' late steps, by the pass that took most of each (generated/
+         * multiplayer_scaling_plan.md 0-13): one counter, the pass's name its only label. Which
+         * world's, and each with its parts, is on Health (lateOf).
+         */
+        this.late = metrics.counter("pellagos_world_late_steps_total", "A world's steps whose passes, what's sent after them among them, took longer than a step of its time (50 ms), by the pass that took most of each (kind: battle.move.routine, muster, flush.ops...).", ["kind"]);
+
+        // Each world's last LATE.kept late steps, with their parts, the oldest first
+        this.lateSteps = new Map();
 
         /** What's measured of a thread, a world's or the supervisor's. */
         this.thread = {
@@ -299,6 +325,33 @@ export class ServerMetrics {
                 world.work.with({ ...labels, kind }).inc(Math.max(0, count));
             }
         }
+
+        // (Its late steps since it last said: counted by the longest pass of each, and the last few kept with their parts)
+        for (const told of Array.isArray(counted.late) ? counted.late.slice(-LATE.kept) : []) {
+            if (told === null || typeof told !== "object") {
+                continue;
+            }
+
+            const late = lateOf(told);
+            const kept = this.lateSteps.get(id) ?? this.lateSteps.set(id, []).get(id);
+
+            this.late.with({ kind: late.pass }).inc();
+            kept.push(late);
+
+            if (kept.length > LATE.kept) {
+                kept.shift();
+            }
+        }
+    }
+
+    /**
+     * A world's last late steps (LATE.kept at most), the latest first: each { when (ms since
+     * 1970), at (the battle's time it ended at, ms), ms (its passes' together), pass (the
+     * longest's name), passes ({ name: ms }, the longest first), counts ({ name: how many more }),
+     * made ({ chunks, tiles, floors }) }. Kept while the world's set aside; let go of when it's deleted.
+     */
+    lateOf(id) {
+        return [...(this.lateSteps.get(id) ?? [])].reverse();
     }
 
     /**
@@ -345,6 +398,7 @@ export class ServerMetrics {
     /** A world deleted: every series of it let go of. */
     forget(id) {
         this.known.delete(id);
+        this.lateSteps.delete(id);
         this.registry.forget({ world: id });
     }
 }

@@ -1624,7 +1624,8 @@ export class Management {
      * made ahead with them), how much of its clock's time it's played lately (pace: 1, unless it
      * fell behind and let time go; dropped: all it has, ms), its memory, how many are in its battle (actors), its thread's CPU time
      * (cpu: µs, user and system), what it's made ahead between steps (made: chunks, tiles of
-     * buildings' insides), its players, its latest save's size, and whether it's slow;
+     * buildings' insides), its players, its latest save's size, whether it's slow, and its last
+     * late steps, the latest first, each with its parts (late: server-metrics.js lateOf);
      * and the server's own memory and the machine's load.
      */
     async health() {
@@ -1651,6 +1652,7 @@ export class Management {
                 players: state?.players.filter((one) => one.id).length ?? 0,
                 present: state?.present ?? 0,
                 save: save?.size ?? null,
+                late: this.server.metrics.lateOf(entry.id),
             });
         }
 

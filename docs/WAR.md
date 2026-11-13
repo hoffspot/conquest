@@ -215,6 +215,22 @@ The engine is built for this from the start. These are its rules:
    a pack reinforced in its fight with the budget reached, a rift's tears pouring, and a world
    of 25 players play out the same step for step either way (test/indexing.test.js).
 
+   The look to the war's messengers, every three seconds, spares two things the same way
+   (`Host.heralding`; generated/multiplayer_scaling_plan.md 1-31). Who's in a fight, so no
+   messenger comes to them, is found by going through the battle once for all the players
+   (`#besetNow`: everyone someone within 40 m on their map is set on), where the battle was gone
+   through for each player a messenger might come to (`#beset`: 3,400 a hundred times over at 100
+   spread); it's made the first time it's wanted in a look and thrown away with it, and no one's
+   set on anyone anew while messengers are put out. And what's on the war's roads (a convoy,
+   supply wagons, reinforcements, an envoy) is asked whether a player could meet it before its
+   road's end (`core/hurry.js` `onTheRoad`, a walk along what's left of its road) only if it's
+   within a mission's reach of them (`missionsNear`'s `sparing`): a mission about it is of where
+   it is, so one beyond 2 km was left out whatever its road, after the asking. With a hundred
+   players spread and a war 35 turns old that asking was most of the look. `Host.heralding` off
+   does both as before; twelve players by an enemy camp with a fight on about one of them play
+   out the same step for step either way, and a war 40 turns old gives each of a hundred places
+   the same missions for every people (test/heralding.test.js).
+
    Each game draws only what the host has, as it comes and goes (`app/game.js` mirrors the
    battle's characters).
 8. **Each player sees their own.** Fog, the map's icons, and talk are each player's own. A talk

@@ -57,6 +57,11 @@ const BUDGETS = [
     // since the rest of 1-8: it was once a look for each pack, 219 with the two packs there are
     // here, and grows as packs times creatures where this grows as creatures)
     ["packs.wild", 170, "the wild's creatures gone through for the packs' members"],
+    // (Those in the battle gone through to say which players are in a fight, as the war's
+    // messengers are looked to every three seconds: once a look for all the players since
+    // 1-31, four looks of the 1,583 in the battle. It was once for each player a messenger
+    // might come to, 316,600)
+    ["messengers.actors", 6_700, "those in the battle gone through for who's in a fight, as the messengers are looked to"],
     // (The battle's index of where everyone stands made afresh, and over how many: since 1-10
     // only as someone's added or taken out, those who've changed cell moved between cells the
     // rest of the time. It was 200 times, once a step, over 316,274)
