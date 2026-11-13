@@ -7068,6 +7068,32 @@ export class Battle {
     }
 
     /**
+     * Everyone on a map who might be within `reach` metres either way of a point (x, y), fallen
+     * or not, for whoever asks from outside the battle (core/host.js #bodiesNear): their places
+     * in `actors`, in no order; none further, though some may be, so whoever asks makes the test
+     * it always made of each, and counts or goes through them in `actors`' order itself. Or
+     * null, and whoever asks goes through everyone as it always did: the index answers from
+     * outside only while it's the battle's as it stands (no one added, taken out, put somewhere
+     * or walked a metre since it was last brought up to date, as every search inside the battle
+     * has it: #indexed), so asking never makes the battle bring it up to date or make it again,
+     * and changes nothing in it; and only where there are fewer cells to look in than there are
+     * in the battle.
+     */
+    within(mapId, x, y, reach) {
+        const index = this.#index;
+
+        if (!Battle.indexing || !(reach < Infinity) || !index || index.version !== this.#version || index.actors !== this.actors || index.length !== this.actors.length || index.small !== Battle.sparing) {
+            return null;
+        }
+
+        const out = reach + INDEX_SLACK;
+        const wide = Math.floor((x + out) / INDEX_CELL) - Math.floor((x - out) / INDEX_CELL) + 1;
+        const deep = Math.floor((y + out) / INDEX_CELL) - Math.floor((y - out) / INDEX_CELL) + 1;
+
+        return wide * deep > this.actors.length ? null : this.#within(mapId, x, y, reach);
+    }
+
+    /**
      * Everyone still standing on a map within `radius` metres of a point (x, y), and with `of`
      * given only its enemies (hostile(of, other)): in their order in `actors`, as going through
      * everyone comes on them, so whatever's done to each in turn (a blow, a roll of the dice) is

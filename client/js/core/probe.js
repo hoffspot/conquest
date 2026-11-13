@@ -119,7 +119,10 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * how many of the world's things times how many players' places (`lookAround.pairs`, buildings;
  * `spotting.pairs`, what's to be found; `muster.pairs`, towns and works; `townsfolk.pairs`, the
  * settlements whose folk are out; `wilds.pairs`, the wild's creatures; `motion.pairs`, everyone in
- * the battle, as where they stand is packed); the world's sums and snapshots taken (`checksums`,
+ * the battle, as where they stand is packed); the wild's creatures gone through for the packs'
+ * members (`packs.wild`: once a look for them all, where it was once for each pack) and those in
+ * the battle gone through for the bodies about a place (`bodies.actors`, in `bodies.asks`
+ * askings: those its index has near, while it's up to date, where it was everyone); the world's sums and snapshots taken (`checksums`,
  * `snapshots`); and what Hosting sent (`sends`, and their characters: `sent`).
  */
 export const COUNTERS = Object.freeze([
@@ -157,6 +160,9 @@ export const COUNTERS = Object.freeze([
     "muster.pairs",
     "townsfolk.pairs",
     "wilds.pairs",
+    "packs.wild",
+    "bodies.asks",
+    "bodies.actors",
     "motion.pairs",
     "checksums",
     "snapshots",
