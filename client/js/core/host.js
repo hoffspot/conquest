@@ -1295,6 +1295,18 @@ export class Host {
     static indexing = true;
 
     /**
+     * Whether the night's light is made from what the battle keeps of who might carry it, as it
+     * always is, or by going through everyone in the battle each step, as it was: only for the
+     * tests that check the light, and so the world, comes out the same either way (generated/
+     * multiplayer_scaling_plan.md 1-11). As it is (#light): the torches looked for among the
+     * soldiers alone, from the battle's own list of them (battle.js soldiers), each asked as it
+     * stands now whether it's out, standing and has a hand free; and the globes of the Light
+     * spell looked for, among everyone, only while one may be lasting on someone (battle.js
+     * lightUntil).
+     */
+    static bearing = true;
+
+    /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the battle (the world's own seed to start with).
@@ -2522,21 +2534,52 @@ export class Host {
         const globes = [];
         const tally = { pairs: 0 };
 
-        // (Everyone gone through once for both, each list in the battle's order as ever)
-        for (const actor of this.battle.actors) {
-            if (actor.map === "town" && !actor.dead) {
-                if (dark && carriesTorch(actor, dark)) {
+        if (!Host.bearing) {
+            // (Everyone gone through once for both, each list in the battle's order as ever)
+            for (const actor of this.battle.actors) {
+                if (actor.map === "town" && !actor.dead) {
+                    if (dark && carriesTorch(actor, dark)) {
+                        torches.push([actor.x, actor.y]);
+                    }
+
+                    // (Only those with any spell on them asked which: most have none)
+                    if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+                        globes.push([actor.x, actor.y]);
+                    }
+                }
+            }
+
+            count("light.actors", this.battle.actors.length);
+        } else {
+            // (The torches: only a soldier carries one, so only the soldiers gone through, from
+            // the list the battle keeps of them, in its order: battle.js soldiers. The same
+            // test made of each as it stands now, so one fallen, gone indoors or with its hand
+            // filled since is passed over as it always was)
+            const soldiers = dark ? this.battle.soldiers() : [];
+
+            for (let k = 0; k < soldiers.length; k++) {
+                const actor = soldiers[k];
+
+                if (actor.map === "town" && !actor.dead && carriesTorch(actor, dark)) {
                     torches.push([actor.x, actor.y]);
                 }
+            }
 
-                // (Only those with any spell on them asked which: most have none)
-                if (actor.buffs?.length && this.battle.buffOf(actor, "light")) {
+            // (The globes: anyone may have one, so everyone's gone through, but only while a
+            // Light's lasting on someone: the battle says until when the last of them does,
+            // battle.js lightUntil)
+            const lit = this.battle.lightUntil() > this.battle.time;
+
+            for (let k = 0; lit && k < this.battle.actors.length; k++) {
+                const actor = this.battle.actors[k];
+
+                if (actor.map === "town" && !actor.dead && actor.buffs?.length && this.battle.buffOf(actor, "light")) {
                     globes.push([actor.x, actor.y]);
                 }
             }
-        }
 
-        count("light.actors", this.battle.actors.length);
+            count("light.actors", soldiers.length + (lit ? this.battle.actors.length : 0));
+        }
 
         const light = lighting({
             elapsed,

@@ -115,7 +115,7 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * mesh asked for its nearest point (`battle.meshAsks`), and how often what it last answered of
  * where a walker stands was given again unasked (`battle.meshKept`); the players grouped
  * (`groups.calls`, and the pairs of players measured: `groups.pairs`); those gone through for the
- * light at night (`light.actors`, and the lights measured against players' places: `light.pairs`); and for each pass that measures the world against the players,
+ * light at night (`light.actors`: the soldiers, and everyone only while a Light's lasting on someone, where it was everyone each step; and the lights measured against players' places: `light.pairs`); and for each pass that measures the world against the players,
  * how many of the world's things times how many players' places (`lookAround.pairs`, buildings;
  * `spotting.pairs`, what's to be found; `muster.pairs`, towns and works; `townsfolk.pairs`, the
  * settlements whose folk are out; `wilds.pairs`, the wild's creatures; `motion.pairs`, everyone in

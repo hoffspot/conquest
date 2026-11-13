@@ -899,8 +899,13 @@ export class Battle {
 
     // Every player in the battle, in the roster's order, kept as anyone's added or taken out
     // (#castKnown, #castOf: made again of everyone whenever it might be out of date, as #ids is),
-    // and the ids of those standing as the step began (#mustered)
-    #cast = { actors: null, length: 0, roster: -1, list: [] };
+    // and the ids of those standing as the step began (#mustered); and every soldier in it, kept
+    // the same way beside them (`soldiers`: who might carry a torch at night, core/host.js #light)
+    #cast = { actors: null, length: 0, roster: -1, list: [], soldiers: [] };
+
+    // Until when the last of the Lights lasting on anyone does, at the latest (lightUntil): of the
+    // battle's list it was made of, and put later by each Light put on anyone since (buff)
+    #lit = { actors: null, until: -Infinity };
     #standing = new Set();
 
     // The players near a point as the index gave them (#heroesNear: their places in `actors`, in
@@ -1099,13 +1104,16 @@ export class Battle {
             return;
         }
 
-        if (actor.kind === "player") {
-            const at = added ? -1 : cast.list.indexOf(actor);
+        // (A soldier likewise, among the soldiers)
+        const list = actor.kind === "player" ? cast.list : actor.kind === "soldier" ? cast.soldiers : null;
+
+        if (list) {
+            const at = added ? -1 : list.indexOf(actor);
 
             if (added) {
-                cast.list.push(actor);
+                list.push(actor);
             } else if (at >= 0) {
-                cast.list.splice(at, 1);
+                list.splice(at, 1);
             }
         }
 
@@ -1114,17 +1122,46 @@ export class Battle {
     }
 
     // Every player in the battle, in the roster's order: as kept, or looked for among everyone
+    // (and every soldier with them, in the one going through: `soldiers`)
     #castOf() {
         const cast = this.#cast;
 
         if (cast.actors !== this.actors || cast.length !== this.actors.length || cast.roster !== this.#roster) {
-            cast.list = this.actors.filter((actor) => actor.kind === "player");
+            const { actors } = this;
+
+            cast.list = [];
+            cast.soldiers = [];
+
+            for (let k = 0; k < actors.length; k++) {
+                if (actors[k].kind === "player") {
+                    cast.list.push(actors[k]);
+                } else if (actors[k].kind === "soldier") {
+                    cast.soldiers.push(actors[k]);
+                }
+            }
+
             cast.actors = this.actors;
             cast.length = this.actors.length;
             cast.roster = this.#roster;
         }
 
         return cast.list;
+    }
+
+    /**
+     * Every soldier in the battle, fallen or not, wherever they are, in `actors`' order: for
+     * whoever would go through everyone for the soldiers among them (core/host.js #light, for
+     * who carries a torch at night). The battle's own list, not to be changed. It's kept as the
+     * players are (#cast): brought up to date in place as anyone's added or taken out, and made
+     * again of everyone whenever the battle's list, its length or its count of comings and
+     * goings isn't the one it was made of, so it's never behind the battle. Only who is a
+     * soldier is kept, which is what one is made as and never changes; where each is, whether
+     * it stands and what's in its hand are read off it by whoever asks, as they always were.
+     */
+    soldiers() {
+        this.#castOf();
+
+        return this.#cast.soldiers;
     }
 
     // A character as add makes one, in no battle yet. Every one's made here, add's and those
@@ -2760,6 +2797,11 @@ export class Battle {
             actor.buffs.push({ kind, until, by, level });
         }
 
+        // (A Light: none lasts later than the latest known, lightUntil, which this may now be)
+        if (kind === "light" && this.#lit.actors === this.actors && until > this.#lit.until) {
+            this.#lit.until = until;
+        }
+
         // (Unseen: whoever was after them loses them, but those who've seen through it before)
         if (kind === "invisibility") {
             for (const other of this.actors) {
@@ -2776,6 +2818,38 @@ export class Battle {
         this.#emit("buffed", { id, kind, until, by, level: had?.level ?? level });
 
         return true;
+    }
+
+    /**
+     * A time no Light lasting on anyone in the battle lasts beyond (-Infinity: none ever has):
+     * while it's not after `time`, no one has a globe of light over them, and whoever would go
+     * through everyone for those who have needn't (core/host.js #light). It only ever errs late:
+     * a Light ended early, or one whose bearer's gone, leaves it where it was, and everyone's
+     * gone through to find none. Never early, because a spell comes to last on someone in two
+     * ways only. By `buff`, which puts this later if the Light it puts on lasts later; or
+     * already on them in a battle carried on from a snapshot (restore), whose list of
+     * characters is a new one, and this is made again of everyone whenever the list isn't the
+     * one it was made of. One added (add) has no spell on it, and one up again has none.
+     */
+    lightUntil() {
+        const lit = this.#lit;
+
+        if (lit.actors !== this.actors) {
+            let until = -Infinity;
+
+            for (const { buffs = [] } of this.actors) {
+                for (let i = 0; i < buffs.length; i++) {
+                    if (buffs[i].kind === "light" && buffs[i].until > until) {
+                        until = buffs[i].until;
+                    }
+                }
+            }
+
+            lit.actors = this.actors;
+            lit.until = until;
+        }
+
+        return lit.until;
     }
 
     /** A spell that lasts ended on someone (Invisibility, when they do something: host.js): whether it was on them. */
