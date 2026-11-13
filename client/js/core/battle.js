@@ -850,6 +850,19 @@ export class Battle {
     static remembering = true;
 
     /**
+     * Whether a step goes through everyone as few times as it does now, or as often as it did:
+     * only for the tests that check it's the same battle either way (generated/
+     * multiplayer_scaling_plan.md 1-18). As it is: the players kept as a list brought up to
+     * date as anyone's added or taken out (#cast), not looked for among everyone each step;
+     * who's after whom noted in one going through, nothing made for one after no one
+     * (#mustered); the index brought up to date in one going through, not two (#reindexed);
+     * what ails anyone gone through only when something ails someone (#ail); and each
+     * character's turn begun by reading what it has, where five things were called to find it
+     * has none (#step). Whatever is done to anyone is done in the order it was.
+     */
+    static mustering = true;
+
+    /**
      * Whether one taken out (remove) is forgotten at the cost of the one taken out, as it always
      * is: everyone by id (actor) brought up to date in place as anyone's added or taken out, not
      * made again of everyone at the next asking, and many taken out together forgotten by
@@ -874,6 +887,12 @@ export class Battle {
     #heroes = [];
     #onPlayers = new Map();
     #chasers = new Map();
+
+    // Every player in the battle, in the roster's order, kept as anyone's added or taken out
+    // (#castKnown, #castOf: made again of everyone whenever it might be out of date, as #ids is),
+    // and the ids of those standing as the step began (#mustered)
+    #cast = { actors: null, length: 0, roster: -1, list: [] };
+    #standing = new Set();
 
     // Those found near a point by the search just made (#foundNear: their places in `actors`), in
     // the one list every such search fills, so none makes a list of its own: read at once by whoever
@@ -1014,11 +1033,13 @@ export class Battle {
         const actor = this.#made(given);
 
         const ids = this.#known();
+        const cast = this.#castKnown();
 
         this.actors.push(actor);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, true);
 
         // (Everyone by id, brought up to date: one of an id that's in already is the one found
         // by it from now on, as the last of them is when it's made of everyone; and then it's
@@ -1039,6 +1060,48 @@ export class Battle {
         const ids = this.#ids;
 
         return Battle.forgetting && ids && ids.actors === this.actors && ids.length === this.actors.length && ids.roster === this.#roster ? ids : null;
+    }
+
+    // The players in the battle as they're kept (#cast), if that's up to date and to be brought
+    // up to date in place (Battle.mustering); else null: made again of everyone when next wanted
+    #castKnown() {
+        const cast = this.#cast;
+
+        return Battle.mustering && cast.actors === this.actors && cast.length === this.actors.length && cast.roster === this.#roster ? cast : null;
+    }
+
+    // The players kept (`cast`: #castKnown's, as it was before) brought up to date, one just
+    // added to the battle or taken out of it: a player put last, as it is in the roster, or
+    // taken from its place
+    #recast(cast, actor, added) {
+        if (!cast) {
+            return;
+        }
+
+        if (actor.kind === "player") {
+            if (added) {
+                cast.list.push(actor);
+            } else {
+                cast.list.splice(cast.list.indexOf(actor), 1);
+            }
+        }
+
+        cast.length = this.actors.length;
+        cast.roster = this.#roster;
+    }
+
+    // Every player in the battle, in the roster's order: as kept, or looked for among everyone
+    #castOf() {
+        const cast = this.#cast;
+
+        if (cast.actors !== this.actors || cast.length !== this.actors.length || cast.roster !== this.#roster) {
+            cast.list = this.actors.filter((actor) => actor.kind === "player");
+            cast.actors = this.actors;
+            cast.length = this.actors.length;
+            cast.roster = this.#roster;
+        }
+
+        return cast.list;
     }
 
     // A character as add makes one, in no battle yet. Every one's made here, add's and those
@@ -2050,11 +2113,13 @@ export class Battle {
         }
 
         const ids = this.#known();
+        const cast = this.#castKnown();
 
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, false);
 
         if (ids && !ids.twice) {
             ids.of.delete(id);
@@ -2111,12 +2176,15 @@ export class Battle {
     #removed(actor) {
         const { id } = actor;
 
+        const cast = this.#castKnown();
+
         count("battle.removed");
         count("battle.forgets");
         this.actors.splice(this.actors.indexOf(actor), 1);
         this.#roster++;
         this.#version++;
         this.#regroup(actor);
+        this.#recast(cast, actor, false);
         this.projectiles = this.projectiles.filter(({ from, target }) => from !== id && target !== id);
 
         for (const other of this.actors) {
@@ -3000,17 +3068,56 @@ export class Battle {
         this.#march();
         this.#mustered();
 
-        for (const actor of this.actors) {
-            if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
-                timed((part = THINKS[actor.ai] ?? THINKS.other));
-            }
+        if (Battle.mustering) {
+            // (Each one's turn begun by what it has, read here: a horse, arms, a creature's way
+            // of hovering, a guard up, a boss's fight. The five things called for each, in this
+            // order, each began by finding most have none of what it's for)
+            const actors = this.actors;
 
-            this.#ride(actor);
-            this.#arm(actor);
-            this.#hover(actor);
-            this.#offGuard(actor);
-            this.#boss(actor);
-            this.#think(actor);
+            for (let a = 0; a < actors.length; a++) {
+                const actor = actors[a];
+
+                if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
+                    timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                const wild = actor.wild;
+
+                if (actor.mount) {
+                    this.#ride(actor);
+                }
+
+                if (actor.arms.length && !actor.dead) {
+                    this.#arm(actor);
+                }
+
+                if (wild?.hover && !actor.dead) {
+                    this.#hover(actor);
+                }
+
+                if (actor.onGuard) {
+                    this.#offGuard(actor);
+                }
+
+                if (wild && (wild.hatch || wild.fight)) {
+                    this.#boss(actor);
+                }
+
+                this.#think(actor);
+            }
+        } else {
+            for (const actor of this.actors) {
+                if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
+                    timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                this.#ride(actor);
+                this.#arm(actor);
+                this.#hover(actor);
+                this.#offGuard(actor);
+                this.#boss(actor);
+                this.#think(actor);
+            }
         }
 
         for (const actor of this.actors) {
@@ -6180,6 +6287,59 @@ export class Battle {
         const chasing = (id, by) => id !== null && id !== undefined && (chasers.get(id) ?? chasers.set(id, []).get(id)).push(by);
 
         chasers.clear();
+
+        if (Battle.mustering) {
+            // (The players from the list kept of them, #cast, not looked for among everyone twice
+            // over; into the lists the step keeps, which are its own: who's a player, and who of
+            // them stands, as the step begins)
+            const cast = this.#castOf();
+            const heroes = this.#heroes;
+            const players = this.#players;
+            const standing = this.#standing;
+            const actors = this.actors;
+
+            heroes.length = 0;
+            players.length = 0;
+            standing.clear();
+            this.#onPlayers.clear();
+
+            for (let i = 0; i < cast.length; i++) {
+                heroes.push(cast[i]);
+
+                if (!cast[i].dead) {
+                    players.push(cast[i]);
+                    standing.add(cast[i].id);
+                }
+            }
+
+            for (let a = 0; a < actors.length; a++) {
+                const actor = actors[a];
+
+                if (actor.dead) {
+                    continue;
+                }
+
+                const target = actor.target;
+                const attacking = actor.attack?.target ?? null;
+                const told = actor.order?.type === "engage" ? actor.order.target : null;
+
+                // (After no one, as most are: nothing to note)
+                if (target === null && attacking === null && told === null) {
+                    continue;
+                }
+
+                chasing(target, actor.id);
+                attacking !== target && chasing(attacking, actor.id);
+                told !== target && told !== attacking && chasing(told, actor.id);
+
+                if (actor.target !== null && standing.has(actor.target)) {
+                    this.#onPlayer(this.actor(actor.target))[this.#shoots(actor) ? "ranged" : "melee"]++;
+                }
+            }
+
+            return;
+        }
+
         this.#heroes = this.actors.filter((actor) => actor.kind === "player");
         this.#players = this.#heroes.filter((actor) => !actor.dead);
         this.#onPlayers.clear();
@@ -6412,6 +6572,67 @@ export class Battle {
         const { actors } = this;
         const { who, maps, cell, at, wide, small } = index;
         const length = actors.length;
+
+        if (Battle.mustering) {
+            // (In one going through everyone: each checked as it's come to and then brought up
+            // to date, where all were checked first and then gone through again. One found
+            // added, taken out or on another map, the index is left half brought up to date,
+            // and made afresh at once by whoever asked, #indexed: no one else has it)
+            let moves = 0;
+
+            wide.length = 0;
+
+            for (let k = 0; k < length; k++) {
+                const actor = actors[k];
+
+                if (who[k] !== actor || maps[k] !== actor.map) {
+                    return false;
+                }
+
+                const here = cellOf(Math.floor(actor.x / INDEX_CELL), Math.floor(actor.y / INDEX_CELL), small);
+
+                at[2 * k] = actor.x;
+                at[2 * k + 1] = actor.y;
+
+                if (actor.footprint) {
+                    wide.push(k);
+                }
+
+                if (here !== cell[k]) {
+                    const mine = index.cells.get(actor.map);
+                    const from = mine.get(cell[k]);
+
+                    if (from.length === 1) {
+                        mine.delete(cell[k]);
+                    } else {
+                        from.splice(from.indexOf(k), 1);
+                    }
+
+                    const to = mine.get(here);
+
+                    if (!to) {
+                        mine.set(here, [k]);
+                    } else {
+                        let i = to.length;
+
+                        while (i > 0 && to[i - 1] > k) {
+                            i--;
+                        }
+
+                        to.splice(i, 0, k);
+                    }
+
+                    cell[k] = here;
+                    moves++;
+                }
+            }
+
+            count("battle.reindexed");
+            count("battle.reindexedMoves", moves);
+            index.version = this.#version;
+
+            return true;
+        }
 
         for (let k = 0; k < length; k++) {
             if (who[k] !== actors[k] || maps[k] !== actors[k].map) {
@@ -8621,8 +8842,17 @@ export class Battle {
         // is nearly everyone: a list was, for each, every step)
         const actors = this.actors;
 
+        // (Whether anything ails anyone, noted as everyone's gone through for the spells on them:
+        // nothing here lays an affliction on anyone, so with none found there's no one to go
+        // through again for theirs, and most steps no one is, Battle.mustering)
+        let ailing = !Battle.mustering;
+
         for (let a = 0; a < actors.length; a++) {
             const actor = actors[a];
+
+            if (!ailing && actor.afflictions.length) {
+                ailing = true;
+            }
 
             if (!actor.buffs?.length) {
                 continue;
@@ -8640,7 +8870,7 @@ export class Battle {
             }
         }
 
-        for (let a = 0; a < actors.length; a++) {
+        for (let a = 0; ailing && a < actors.length; a++) {
             const actor = actors[a];
 
             if (actor.dead || !actor.afflictions.length) {

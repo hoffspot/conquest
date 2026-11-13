@@ -37,14 +37,15 @@ const sha = (text) => createHash("sha1").update(text).digest("hex");
 /**
  * A walk through the city's crowd, `steps` long: three players come into its middle, sent about
  * it every three seconds, wolves let loose among the folk a second in, one player unseen for a
- * while and the wolves set alight. With `cap`, the overworld's navigation keeps only that many
+ * while and the wolves set alight. With `churn`, players come and go and one's struck down in the
+ * middle of it. With `cap`, the overworld's navigation keeps only that many
  * tiles, so those the walkers leave are let go and baked again as they come back. Resolves to
  * every step's events and the world's sum every tenth step (`steps`), the world at the end
  * (`snapshot`), the work counted (`counts`), how many of the navigation's tiles were let go and
  * put in again (`rebaked`), how many it holds at the end (`tiles`), and every tile put in or
  * let go with the step it was in, and those it holds from the longest unused (`used`).
  */
-function cityWalk({ steps = 400, cap = null } = {}) {
+function cityWalk({ steps = 400, cap = null, churn = false } = {}) {
     const world = buildWorld({ seed: 2 });
     const overworld = world.maps.town;
     const place = world.plan.places.find(({ id }) => id === CITY);
@@ -97,7 +98,9 @@ function cityWalk({ steps = 400, cap = null } = {}) {
                 for (let k = 0; k < PLAYERS; k++) {
                     const [dx, dy] = WAYS[(step / 60 + 2 * k) % WAYS.length];
 
-                    host.command(`p${k + 1}`, { type: "move", to: at(dx, dy) });
+                    if (host.players.has(`p${k + 1}`)) {
+                        host.command(`p${k + 1}`, { type: "move", to: at(dx, dy) });
+                    }
                 }
             }
 
@@ -106,6 +109,24 @@ function cityWalk({ steps = 400, cap = null } = {}) {
                 for (let k = 0; k < 6; k++) {
                     host.battle.add({ id: `wolf-${k}`, kind: "beast", team: "wild", weapon: "claws", square: at(8 + (k % 3) * 2, -6 + Math.floor(k / 3) * 2), ai: "wild", hp: 90, wild: { creature: "wolf", tier: 2, temper: "aggressive", guard: 0, roam: 6, leash: 40, pack: null, leader: null } });
                 }
+            }
+
+            // (Players coming and going, and one struck down: the list kept of them, #cast)
+            if (churn && step === 100) {
+                host.join({ id: "p4", hero: { ...HERO, name: "P4" }, square: at(2, 2), map: "town" });
+                host.command("p4", { type: "move", to: at(12, -4) });
+            }
+
+            if (churn && step === 160) {
+                host.battle.afflict("p3", "burn", { by: "wolf-3", damage: 100000 });
+            }
+
+            if (churn && step === 220) {
+                host.leave("p2");
+            }
+
+            if (churn && step === 280) {
+                host.join({ id: "p5", hero: { ...HERO, name: "P5", weapon: "bow" }, square: at(-4, 6), map: "town" });
             }
 
             // (A spell lasting on one, and something ailing others: what #ail goes through)
@@ -207,5 +228,27 @@ describe("the mesh's answer for where a walker stands, remembered (core/battle.j
         // (Each step tried asks of where the walker stands and of where it would step: the first
         // is what's remembered, so half is the most there is to spare)
         assert.ok(was > 1000 && asked <= was * 0.55, `the mesh asked ${asked} times where it was ${was}`);
+    });
+});
+
+describe("fewer goings through everyone (core/battle.js Battle.mustering, plan 1-18)", () => {
+    it("walks a city's crowd step for step as going through everyone for each thing did, players coming, going and falling", () => {
+        const mustering = cityWalk({ churn: true });
+        const twice = without("mustering", () => cityWalk({ churn: true }));
+
+        assertSame(mustering, twice);
+
+        // (And the players came and went: one fell, one left, two came)
+        const { events, host } = mustering;
+
+        assert.deepEqual([...host.players.keys()].sort(), ["p1", "p3", "p4", "p5"]);
+        assert.ok(events.includes('"type":"death","time":') && /"type":"death"[^}]*"id":"p3"/.test(events), "(p3 was struck down)");
+        assert.equal(host.battle.actors.filter(({ kind }) => kind === "player").length, 4);
+    });
+
+    it("counts the same work either way, and makes the index afresh no oftener", () => {
+        const [mustering, twice] = [cityWalk({ steps: 200 }), without("mustering", () => cityWalk({ steps: 200 }))];
+
+        assert.deepEqual(mustering.counts, twice.counts);
     });
 });

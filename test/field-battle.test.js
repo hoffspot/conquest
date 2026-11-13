@@ -230,6 +230,26 @@ describe("the battle among those near (battle.js #indexed)", () => {
         }
     });
 
+    // The mesh's answer for where a walker stands remembered (Battle.remembering, plan 1-17), and
+    // everyone gone through fewer times a step (Battle.mustering, plan 1-18): each battle to the
+    // same end as with the mesh asked every time, and with everyone gone through as often as
+    // they were
+    for (const name of ["remembering", "mustering"]) {
+        it(`plays out both battles exactly as they were played with Battle.${name} off`, () => {
+            const [marching, standing] = [fight(), melee()];
+
+            assert.equal(Battle[name], true);
+            Battle[name] = false;
+
+            try {
+                assert.equal(marching.hash, fight().hash);
+                assert.equal(standing.hash, melee().hash);
+            } finally {
+                Battle[name] = true;
+            }
+        });
+    }
+
     it("brings the index up to date by moving those who've changed cell, and plays out exactly as making it afresh every time does", async () => {
         const { install, Probes, uninstall } = await import("../client/js/core/probe.js");
         const counted = (play) => {
