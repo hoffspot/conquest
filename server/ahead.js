@@ -352,7 +352,7 @@ export class Ahead {
         this.stale = false;
 
         const coming = Ahead.coming ? this.coming : [];
-        const { around, boxes, dungeons, theirs, foreseen } = host.soon(coming, { turn: Ahead.soon && Ahead.turns });
+        const { around, boxes, dungeons, theirs, foreseen = [] } = host.soon(coming, { turn: Ahead.soon && Ahead.turns });
         const rings = new Map();
         const soon = new Map();
         // (What those not yet in want, that the players in don't: by its key, in the order it's
