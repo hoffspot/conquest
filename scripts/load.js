@@ -96,7 +96,7 @@ import { FIELD_BATTLE, Host, SOON } from "../client/js/core/host.js";
 import { torchesLit } from "../client/js/core/light.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { characterFrom, HEARD, Hosting, NET_VERSION } from "../client/js/core/netplay.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, install, Probes, uninstall } from "../client/js/core/probe.js";
 import { WorldRunner } from "../client/js/core/runner.js";
 import { TURN_MS } from "../client/js/core/war/war.js";
@@ -471,11 +471,12 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     Ahead.easing = !sudden;
     Battle.forgetting = !sudden;
 
-    // (--unforeseen: nothing made ahead for what the war's next turn will bring near, as it was
-    // before 1-28, to compare)
-    const wasTurns = Ahead.turns;
+    // (--unforeseen: nothing made ahead for what the war's next turn will bring near, and each
+    // chunk read moved among those kept there and then, as both were before 1-28, to compare)
+    const [wasTurns, wasRecently] = [Ahead.turns, Overworld.recently];
 
     Ahead.turns = !unforeseen;
+    Overworld.recently = !unforeseen;
 
     const clock = () => performance.now();
     const began = clock();
@@ -1306,6 +1307,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     Ahead.easing = wasEasing;
     Battle.forgetting = wasForgetting;
     Ahead.turns = wasTurns;
+    Overworld.recently = wasRecently;
 
     uninstall();
 

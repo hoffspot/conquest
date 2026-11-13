@@ -3257,13 +3257,31 @@ settlement and navigation tile the moment someone first walked into it:
   were nowhere near, so no one had asked for their ground, and that look made it: seed 2's war
   35 turns old turns the lizards' reserve back 300 m and sends it two columns, and the step
   after the turn made 6 chunks to stand 19 soldiers on, 97 ms with 8 players spread and 158
-  with 25; with that ground made ahead it makes none, and is 23 ms and 54. So from 10 s before a turn falls the host says, to a world server's maker, what the
-  war as it will be would want as well: a copy of the war played on one turn (its roads the
-  war's own, the rest copied: some 8 ms, once a turn, between two steps), and the war's part
-  of `soon` asked of the copy, only what nothing wants yet (`foreseen`). The war itself isn't
-  touched. What's done to the war in those ten seconds (a town won, an army met marching on)
-  can make the copy wrong, which costs ground made that isn't wanted, or made by the step as
-  before. A browser's game doesn't ask.
+  with 25. So from 10 s before a turn falls the host says, to a world server's maker, what
+  the war as it will be would want as well: a copy of the war played on one turn (its roads
+  the war's own, the rest copied: some 8 ms, once a turn, between two steps), and the war's
+  part of `soon` asked of the copy, only what nothing wants yet (`foreseen`). The war itself
+  isn't touched. What's done to the war in those ten seconds (a town won, an army met
+  marching on) can make the copy wrong, which costs ground made that isn't wanted, or made by
+  the step as before. A browser's game doesn't ask. With that ground made ahead the step
+  makes none, and was 23 ms and 54.
+- **The chunks read last** (`Overworld.recently`, `RECENT`). Of those 19 soldiers 18 had
+  nowhere to stand (below), and each looked over the 2,401 squares round its place, ring by
+  ring, a ring's two sides turn about: across a chunk's edge that's a different chunk each
+  reading (1,051 changes of chunk in one such search), and each chunk read that wasn't the
+  very last was moved to the end of those kept, some 19,000 times in the step (most of what
+  was left of it with 25 players' chunks kept). The four read last are now found again with
+  nothing moved, and put where they belong among the rest only when another takes their
+  place or the order's wanted (one let go, one made, one marked): kept and let go in the same
+  order as before (test/turn-ahead.test.js). The step after that turn is 14 to 17 ms with 8
+  spread and 22 to 23 with 25 (a 4-core container), and no step of the run is over 50.
+- **An army with nowhere to stand** (`#meetArmy`; not changed). The war marches its forces
+  straight across country, lakes too: that reserve, 16 strong, and one of its columns are in
+  the middle of a lake when they're met, every square within 24 of them water, and none of the
+  18 is stood up (`#spots`). Each is kept as met with no one in it, and each of its soldiers'
+  searches is the 2,401 squares above: 43,000 squares read to stand up one soldier. Nothing
+  here changes that: whether an army met on water is stood on the nearest shore, or not met
+  till it's ashore, is a rule (generated/multiplayer_scaling_plan.md, the rulings owed).
 - **What the server's steps never bake.** The insides of 64 buildings keep their meshes, not 16
   (`keepRooms`: players in several towns at once). A way that falls short sends the tiles further
   round to be baked, and is walked as far as it goes meanwhile (`widenLater`).

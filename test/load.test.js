@@ -8,7 +8,7 @@ import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { DAY } from "../client/js/core/daytime.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
-import { buildWorld } from "../client/js/core/overworld.js";
+import { buildWorld, Overworld } from "../client/js/core/overworld.js";
 import { BATTLE_KINDS, BATTLE_PASSES, COUNTERS, FLUSH_PASSES, HOST_PASSES, probing } from "../client/js/core/probe.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 import { ACTIVITY_SCHEMAS, checkReport, doorsOf, failuresOf, layoutOf, LEAVE_SCHEMA, load, LOAD, REPORT_SCHEMA, STEP_SCHEMA, tilesWanted, UNBUILT_SCHEMA, wordsOf } from "../scripts/load.js";
@@ -297,8 +297,8 @@ describe("the load over a turn of the war (scripts/load.js load, activity wartur
         assert.deepEqual([warturn.all[0].boxes, warturn.all[0].ahead, warturn.all[0].chunks], [0, 0, 0]);
         assert.ok(wordsOf(report).some((line) => /^Its ground: turn 1, 0 boxes said to be wanted for what it would bring near and 0 chunks made ahead for them, 0 made by the steps from it to its save$/.test(line)));
         assert.ok(wordsOf({ ...report, warturn: { ...warturn, foreseen: false } }).some((line) => /^Its ground, none made ahead for a turn \(--unforeseen\): turn 1, /.test(line)));
-        // (And it leaves the switch as it found it)
-        assert.equal(Ahead.turns, true);
+        // (And it leaves the switches as it found them)
+        assert.deepEqual([Ahead.turns, Overworld.recently], [true, true]);
     });
 
     it("is held to what such a run reports, and fails if the turn didn't come or wasn't saved", () => {
