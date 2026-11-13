@@ -197,7 +197,7 @@ import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
 import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
-import { first, Order, STANDING, standingOf, viewerOf } from "./precedence.js";
+import { first, Order, seated, STANDING, standingOf, viewerOf } from "./precedence.js";
 import { Pacing } from "./pacing.js";
 import { Forecast } from "./forecast.js";
 import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF } from "./clocks.js";
@@ -1610,7 +1610,7 @@ export class Game {
         this.viewer = viewerOf();
         this.viewerAt = -Infinity;
         this.viewerTrading = null;
-        this.orders = { soldiers: new Order(), creatures: new Order(), folk: new Order(), throng: new Order(), plates: new Order() };
+        this.orders = { soldiers: new Order(), creatures: new Order(), folk: new Order(), bodies: new Order(), throng: new Order(), plates: new Order() };
 
         // (What the frame's bars over heads are placed by, said once a frame for them all:
         // #barsOverHeads, #plated)
@@ -5291,14 +5291,114 @@ export class Game {
         return held.size;
     }
 
+    // Who has a place in full in the bodies' budget (QUALITY bodies, no more than the memory guard
+    // allows: #bodiesBudget; never asked with none), of those who share it: the soldiers about (but
+    // a battle's, more than MARSHAL.from, who have the quality's few whatever else is held), the
+    // wild's people-shaped creatures (but those in the models' own room, #modelled) and the folk
+    // out in the world; not those far from the camera, in their crowds whatever room there is
+    // (#farSoldier, #farFolk). One room for them all, in the one order (app/precedence.js seated),
+    // beside everyone else held in full (the players, a building's folk, anyone's own, a battle's
+    // soldiers; not the wild's beasts built in code, their bodies shared, each one small): whoever
+    // the order puts first, the nearest the camera after, of whatever kind, and one held gives its
+    // place to one more than MARSHAL.margin places before it. The quality's few soldiers
+    // (QUALITY soldiers) have a place whatever else is held, and as many of the creatures, as
+    // they ever had, and whoever of the folk the player's talking or trading with, in the room
+    // all the same.
+    //
+    // Each of the three is looked at by its own job, at its own time (#marshal, #rationing,
+    // #folkRoom: PACED), and each asks this of all three and acts on its own. Each had the room
+    // the others had left before, the last places going to whichever looked first, for good: a
+    // soldier 14 metres from the camera in its crowd, a townsperson further off held in full.
+    // { now, room }: the ids of those with a place now (kept, or to be built in full; one given
+    // the place of someone further has it once that one's let go, not before, so there are never
+    // more held than the budget), and how many of each kind have one
+    #seats(me, viewer) {
+        const { soldiers: { full } = {}, models: spare = 0 } = this.view.quality;
+        const soldiers = this.#soldiersAbout(me);
+        const sharing = [...(soldiers.length > MARSHAL.from ? [] : soldiers), ...this.battle.actors.filter((actor) => (!actor.dead && this.#rationed(actor)) || this.#streetFolk(actor))];
+        const sharers = [];
+        const pins = new Set();
+        const beside = new Set();
+        const count = { soldier: 0, beast: 0 };
+        let models = 0;
+
+        for (const entry of this.orders.bodies.rank(viewer, sharing, this.#stature)) {
+            const { actor } = entry;
+
+            // (In the models' own room, beside the budget: not in this one, nor counted with
+            // everyone else held)
+            if (actor.kind === "beast" && this.#modelled(actor) && models++ < spare) {
+                beside.add(actor.id);
+
+                continue;
+            }
+
+            if (actor.kind === "soldier" ? this.#farSoldier(entry) : actor.kind === "folk" && this.#farFolk(actor, me, viewer) && this.crowds?.made(this.#folkKind(actor)?.key)) {
+                continue;
+            }
+
+            // (Its kind's own few: not one the player can't see from inside, not dressed till
+            // they can, #walledOff, which would keep a place from someone for nothing. And
+            // whoever of the folk is someone to the player, the one they're talking or trading
+            // with: never let go, as ever)
+            if (actor.kind === "folk" ? first(entry) : !this.#walledOff(actor, me) && count[actor.kind]++ < (full ?? (actor.kind === "soldier" ? Infinity : 0))) {
+                pins.add(entry);
+            }
+
+            sharers.push(entry);
+        }
+
+        const ids = new Set(sharers.map(({ actor }) => actor.id));
+        // (Held: in full, or being built so, as #heldInFull has it; and everyone else who is)
+        const queued = new Set([...this.enlisting, ...this.enlistees.keys()]);
+        const held = ({ actor }) => queued.has(actor.id) || this.#drawnInFull(actor.id);
+        const others = this.#heldInFull((id) => !ids.has(id) && !beside.has(id) && !(this.avatars.get(id) instanceof BeastAvatar));
+        const { now } = seated(sharers, this.#bodiesBudget() - others, { held, pinned: (entry) => pins.has(entry), margin: MARSHAL.margin });
+        const room = { soldier: 0, beast: 0, folk: 0 };
+
+        for (const { actor } of now) {
+            room[actor.kind]++;
+        }
+
+        return { now: new Set([...now].map(({ actor }) => actor.id)), room };
+    }
+
+    // One in its crowd with no place in the bodies' budget any more (#seats), taken out of the line
+    // to be built in full, where it's not begun: it's held as long as it's in it
+    #unqueue(id) {
+        if (this.avatars.get(id) instanceof CrowdAvatar && this.enlisting.includes(id)) {
+            this.enlisting = this.enlisting.filter((each) => each !== id);
+        }
+    }
+
+    // Whether one of the soldiers about, ranked (Order.rank's entry, #stature), is far from the
+    // camera: past DETAIL.reach (DETAIL.slack further, drawn in full), and no one to the player
+    #farSoldier(entry) {
+        return !first(entry) && entry.away > DETAIL.reach + (this.#drawnInFull(entry.actor.id) ? DETAIL.slack : 0);
+    }
+
+    // Whether one of the folk out in the world is far from the camera, where the player (`me`,
+    // `viewer`: #viewer) can see them: past DETAIL.reach (DETAIL.slack further, drawn in full),
+    // and no one to the player
+    #farFolk(actor, me, viewer) {
+        return !(standingOf(viewer, actor) < STANDING.rest) && actor.map === me.map && !this.#walledOff(actor, me) && this.#awayFromCamera(actor) > DETAIL.reach + (this.#drawnInFull(actor.id) ? DETAIL.slack : 0);
+    }
+
+    // Whether one of the wild's people-shaped creatures is drawn from its kind's bought model,
+    // read: not one drawn still as its stand-in, a character built before the model was read (in
+    // the bodies' budget till it's drawn again from the model, #modelling)
+    #modelled(actor) {
+        return Boolean(MODELS[actor.wild.creature] && modelOf(actor.wild.creature)) && !(this.avatars.get(actor.id) instanceof Avatar);
+    }
+
     // The soldiers about drawn in full or in the crowds (world/crowd.js, MARSHAL): past DETAIL.reach
     // from the camera, in their kind's crowd once its figure's made (but whoever's fighting the
     // player); nearer, with a battle's near the player (more than MARSHAL.from), those nearest the
     // camera (whoever's fighting the player first) in full (QUALITY soldiers), the rest in their
     // crowd; fewer, as many as there's room for in full (QUALITY bodies: a phone's memory holds only
-    // so many, each ten megabytes or so, page and graphics card), as many as the quality's budget
-    // leaves beside everyone else drawn in full (a capital's guards and townsfolk, and a caravan's
-    // escort passing: #heldInFull), never fewer than a battle's. One waiting on its kind's figure
+    // so many, each ten megabytes or so, page and graphics card), those with a place in the
+    // quality's budget, shared with the wild's creatures and the folk in the one order (#seats:
+    // the nearer the camera first, of whatever kind), never fewer than a battle's. One waiting on its kind's figure
     // not drawn meanwhile, nor built in full (but where it can't be made). A couple of times a second
     #marshal(dt) {
         if ((this.marshalClock = (this.marshalClock ?? 0) - dt) > 0) {
@@ -5316,10 +5416,13 @@ export class Game {
 
         const soldiers = this.#soldiersAbout(me);
         const ids = new Set(soldiers.map(({ id }) => id));
-        // (How many of them can be drawn in full: in a battle the quality's own, else as many as
-        // the bodies' budget has room for beside everyone else drawn in full, or to be)
-        const room = soldiers.length > MARSHAL.from ? full : Math.max(full, this.#bodiesBudget() - this.#heldInFull((id) => !ids.has(id)));
         const viewer = this.#viewer(me);
+        // (Who of them can be drawn in full: in a battle the quality's own few, the first of them,
+        // one in full only just past them left as it is; else those with a place in the bodies'
+        // budget, #seats; all of them with no budget)
+        const seats = soldiers.length > MARSHAL.from || this.#bodiesBudget() === Infinity ? null : this.#seats(me, viewer);
+        const room = seats ? seats.room.soldier : soldiers.length > MARSHAL.from ? full : Infinity;
+        const inFull = (actor, place) => (seats ? seats.now.has(actor.id) : place < room);
 
         // (Whom it's looked at now, and with what room: #unlooked)
         this.looked.soldiers = ids;
@@ -5330,7 +5433,7 @@ export class Game {
         const ranked = [];
 
         for (const entry of this.orders.soldiers.rank(viewer, soldiers, this.#stature)) {
-            if (!first(entry) && entry.away > DETAIL.reach + (this.#drawnInFull(entry.actor.id) ? DETAIL.slack : 0)) {
+            if (this.#farSoldier(entry)) {
                 far.add(entry.actor);
             } else {
                 ranked.push(entry.actor);
@@ -5341,7 +5444,7 @@ export class Game {
 
         // (All of them with room in full, drawn so or to be: nothing to do; but any waiting on their
         // kind's figure, come within the reach since, to be built in full, below)
-        if (!far.size && ranked.length <= room && !this.crowdWaiting.size && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
+        if (!far.size && ranked.every(inFull) && !this.crowdWaiting.size && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
             return;
         }
 
@@ -5373,7 +5476,7 @@ export class Game {
             const avatar = this.avatars.get(actor.id);
             const crowded = avatar instanceof CrowdAvatar;
 
-            if (place < room) {
+            if (inFull(actor, place)) {
                 // (In full: built, the crowd's in its place till it is; and one not drawn at all
                 // yet, its kind's figure made, drawn in its crowd meanwhile, not unseen till it's
                 // built: the nearest of a fight joined, still waiting on their kinds' figures as
@@ -5391,8 +5494,14 @@ export class Game {
                 return;
             }
 
-            if (!crowded && !(avatar && place < room + MARSHAL.margin)) {
+            if (!crowded && !(!seats && avatar && place < room + MARSHAL.margin)) {
                 crowd(actor);
+            }
+
+            // (And one in its crowd with no place in the budget any more, still in line to be
+            // built in full: out of the line, holding nothing)
+            if (seats) {
+                this.#unqueue(actor.id);
             }
         });
 
@@ -5406,7 +5515,7 @@ export class Game {
         // fallen meanwhile, forgotten, never seen; those out of reach, still waiting; those with
         // room now, come nearer, built in full. Not the fallen and those out of reach built in
         // full, as they were: 38 of an invasion's dead were, far off, waiting their turn)
-        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.indexOf(actor) >= room;
+        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || !inFull(actor, ranked.indexOf(actor));
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
@@ -5836,28 +5945,31 @@ export class Game {
         this.looked.creatures = ids;
         this.looked.creaturesRoom = this.#roomSaid();
 
-        // (Room beside everyone else held in full, but the wild's beasts built in code: their
-        // bodies shared, each one small)
-        const room = Math.max(this.view.quality.soldiers?.full ?? 0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
+        // (Those with a place in the bodies' budget, shared with the soldiers and the folk in the
+        // one order: #seats)
+        const viewer = this.#viewer(me);
+        const seats = this.#seats(me, viewer);
+        const room = seats.room.beast;
         const crowded = (id) => this.avatars.get(id) instanceof CrowdAvatar;
-        // (Those drawn from their kind's model, read, as many as there's room for beside the budget;
-        // not one drawn still as its stand-in, a character built before the model was read: it's in
-        // the budget till it's drawn again from the model, #modelling)
-        const modelled = (actor) => Boolean(MODELS[actor.wild.creature] && modelOf(actor.wild.creature)) && !(this.avatars.get(actor.id) instanceof Avatar);
+        // (Those drawn from their kind's model, read, as many as there's room for beside the
+        // budget: #modelled)
+        const modelled = (actor) => this.#modelled(actor);
         const spare = this.view.quality.models ?? 0;
         const beside = Math.min(spare, rationed.filter(modelled).length);
 
         this.rationed = { rationed: rationed.length, room, models: beside };
 
-        if (rationed.length - beside <= room && !rationed.some(({ id }) => crowded(id)) && !this.rationWaiting.size) {
-            return;
-        }
-
         // (In the order: app/precedence.js, #stature)
-        const ranked = this.orders.creatures.rank(this.#viewer(me), rationed, this.#stature);
-        // (Each one's place in the budget's room, in order, but those in the models' own, -1)
+        const ranked = this.orders.creatures.rank(viewer, rationed, this.#stature);
+        // (Each one's place among them, in order, but those in the models' own room, -1; and
+        // whether it's in full: in the models' room, or with a place in the budget)
         let [models, next] = [0, 0];
         const placed = ranked.map(({ actor }) => [actor, modelled(actor) && models < spare ? ((models += 1), -1) : next++]);
+        const inFull = (id, place) => place < 0 || seats.now.has(id);
+
+        if (placed.every(([actor, place]) => inFull(actor.id, place) && !crowded(actor.id)) && !this.rationWaiting.size) {
+            return;
+        }
 
         this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
 
@@ -5865,7 +5977,7 @@ export class Game {
             const avatar = this.avatars.get(actor.id);
 
             // (With room: in full, built so if it's in its crowd, the crowd in its place till it is)
-            if (place < room) {
+            if (inFull(actor.id, place)) {
                 if (crowded(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                     this.enlisting.push(actor.id);
                 }
@@ -5873,8 +5985,10 @@ export class Game {
                 return;
             }
 
-            // (In its crowd already; or in full, only just past the room: left as it is)
-            if (crowded(actor.id) || (avatar && place < room + MARSHAL.margin)) {
+            // (In its crowd already: left as it is, and out of the line to be built in full)
+            if (crowded(actor.id)) {
+                this.#unqueue(actor.id);
+
                 return;
             }
 
@@ -5909,7 +6023,7 @@ export class Game {
 
             if (!actor || actor.dead || this.avatars.has(id)) {
                 this.rationWaiting.delete(id);
-            } else if (this.crowds.failed(this.#throngKind(actor).key) || (places.get(id) ?? 0) < room) {
+            } else if (this.crowds.failed(this.#throngKind(actor).key) || !places.has(id) || inFull(id, places.get(id))) {
                 this.rationWaiting.delete(id);
 
                 if (!this.enlisting.includes(id) && !this.enlistees.has(id)) {
@@ -6018,9 +6132,12 @@ export class Game {
 
         const folk = this.battle.actors.filter((actor) => this.#streetFolk(actor));
         const ids = new Set(folk.map(({ id }) => id));
-        // (Room beside everyone else held in full, but the wild's beasts built in code: their
-        // bodies shared, each one small)
-        const room = Math.max(0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
+        // (Those with a place in the bodies' budget, shared with the soldiers and the wild's
+        // creatures in the one order: #seats)
+        const viewer = this.#viewer(me);
+        const seats = this.#seats(me, viewer);
+        const room = seats.room.folk;
+        const inFull = (id) => seats.now.has(id);
         const crowded = (id) => this.avatars.get(id) instanceof CrowdAvatar;
 
         for (const id of this.folkWaiting) {
@@ -6031,29 +6148,29 @@ export class Game {
 
         // (Whoever the order puts before those who merely stand about: the one the player's
         // talking or trading with, as ever, and anyone set on them or their party)
-        const viewer = this.#viewer(me);
         const kept = (actor) => standingOf(viewer, actor) < STANDING.rest;
         // (Far from the camera, one the player can see: the townsfolk drawn in their crowd there)
-        const far = (actor) => !kept(actor) && actor.map === me.map && !this.#walledOff(actor, me) && this.#awayFromCamera(actor) > DETAIL.reach + (this.#drawnInFull(actor.id) ? DETAIL.slack : 0);
+        const far = (actor) => this.#farFolk(actor, me, viewer);
 
         this.folkRationed = { folk: folk.length, room, crowd: folk.filter(({ id }) => crowded(id)).length };
 
-        if (folk.length <= room && !this.folkWaiting.size && !folk.some((actor) => crowded(actor.id) || (this.#folkKind(actor) && far(actor)))) {
+        if (folk.every(({ id }) => inFull(id)) && !this.folkWaiting.size && !folk.some((actor) => crowded(actor.id) || (this.#folkKind(actor) && far(actor)))) {
             return;
         }
 
         const ranked = this.orders.folk.rank(viewer, folk, this.#stature);
         const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id) || this.aside.has(id);
 
-        ranked.forEach(({ actor }, place) => {
+        ranked.forEach(({ actor }) => {
             const { id } = actor;
             const kind = this.#folkKind(actor);
 
-            // (One of the townsfolk past the room, or far off, that the player can see: in their
-            // crowd, once its figure's made; one in full only just past the room, left as it is.
-            // Till it's made, as anyone else of the folk)
-            if (kind && !kept(actor) && (place >= room || far(actor)) && !this.#walledOff(actor, me)) {
-                if (crowded(id) || (this.#drawnInFull(id) && place < room + MARSHAL.margin && !far(actor))) {
+            // (One of the townsfolk with no place, or far off, that the player can see: in their
+            // crowd, once its figure's made. Till it's made, as anyone else of the folk)
+            if (kind && !kept(actor) && (!inFull(id) || far(actor)) && !this.#walledOff(actor, me)) {
+                if (crowded(id)) {
+                    this.#unqueue(id);
+
                     return;
                 }
 
@@ -6073,7 +6190,7 @@ export class Game {
             // (With room: dressed again if it was waiting, unless it's out of the player's sight;
             // or in its crowd, once the player can see it, its crowd's figure fading as it's
             // shown, #handOver)
-            if (place < room) {
+            if (inFull(id)) {
                 if (this.folkWaiting.delete(id) && !this.avatars.has(id) && !queued(id)) {
                     (this.#walledOff(actor, me) ? this.aside.add(id) : this.enlisting.push(id));
                 } else if (crowded(id) && !queued(id) && !this.#walledOff(actor, me)) {
@@ -6083,7 +6200,7 @@ export class Game {
                 return;
             }
 
-            if (crowded(id) || this.folkWaiting.has(id) || (this.avatars.has(id) && place < room + MARSHAL.margin) || (!this.avatars.has(id) && !queued(id))) {
+            if (crowded(id) || this.folkWaiting.has(id) || (!this.avatars.has(id) && !queued(id))) {
                 return;
             }
 

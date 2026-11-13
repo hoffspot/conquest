@@ -4742,20 +4742,55 @@ upright). One drawn in full goes to its crowd only once it's 10 metres further t
 their crowds too once there's no room for them in full: a phone holds only so many bodies drawn
 in full, each about ten megabytes between the page and its graphics card (an iPhone's tab was
 let go with 54 of them on Low, by a capital's guards and townsfolk and a caravan's escort passing;
-steady at 40), so the soldiers about are drawn in full only as far as the quality's budget leaves
+steady at 40), so the soldiers about are drawn in full only as far as the quality's budget has
 room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on Low and Medium,
 24 on High, its skins four times the pixels; never fewer than `soldiers.full`), the rest in
 their crowds, their bodies in full let go. The debug log says how many soldiers were about and
 how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
-crier in his square, a stranger by the road) are held in full only as far as the budget leaves
+crier in his square, a stranger by the road) are held in full only as far as the budget has
 room too (`#folkRoom`, twice a second), in the same order: whoever the player's talking or
 trading with first, then the biggest on the screen, those on another map last. The townsfolk past the room, and those more
 than 45 metres from the camera, are drawn in crowds of their own (*The townsfolk in their
 crowds*, below). The rest past the room (a crier, a stranger, or one of the townsfolk while their
-crowd's figure is made) aren't drawn: undressed, the furthest first (one held only just past it,
-`MARSHAL.margin`, left as it is), or not dressed at all, and dressed once there's room for them
-again. The debug log says how many there were, how many had room and how many were in their
-crowds (`folk`); in seed 2's start town on Low, its nine had room for 29, and under a budget of 8
+crowd's figure is made) aren't drawn: undressed, the furthest first, or not dressed at all, and
+dressed once there's room for them again. The debug log says how many there were, how many had
+room and how many were in their crowds (`folk`).
+
+**One room, in one order** (app/game.js `#seats`, app/precedence.js `seated`). The soldiers about
+(fewer than a battle's), the wild's people-shaped creatures (*Past the bodies' budget, let go*,
+below) and the folk out in the world share the budget's room, beside everyone else held in full
+(the players, a building's folk, anyone's own, a battle's soldiers; not the beasts built in code,
+nor those in the models' own room). Each of the three is looked at by its own job, at its own
+time in the half second (`#marshal`, `#rationing`, `#folkRoom`), and each asks who has a place of
+all three together, ranked in the order of precedence (*Who comes first*, below), and acts on
+its own:
+
+- The quality's few soldiers (`soldiers.full`) have a place whatever else is held, as many of
+  the creatures, and whoever of the folk the player's talking or trading with: counted in the
+  room all the same.
+- Those held in full, or in line to be, keep their places, the first of them as many as there's
+  room for: the rest are let go at once (the budget cut by the memory guard).
+- Whatever room's left goes to the first of those not held, of whatever kind.
+- With none left, one not held who'd have a place by the order alone is given the place of the
+  last one held, where that one's more than 3 places after it (`MARSHAL.margin`): that one's let
+  go by its own job at its next look, and only then is the nearer one built, at its own job's
+  next. So there are never more held than the budget, and two near each other in the order,
+  changing places as they walk, change nothing: for a body built in another's place to be let
+  go for that one again, the two must change places by more than twice the margin.
+
+Till 2026-11-13 each of the three had the room the other two had left (the budget less everyone
+else held), and left one of its own in full only just past its room as it was. So the last places
+went to whichever was looked at first, for good: the folk, looked at before the soldiers, took
+what the soldiers had let go, and neither gave way. Soldiers 24 metres from the camera stayed in
+their crowd while townsfolk 44 metres off were held in full, and both rooms could be taken at
+once, more held than the budget (31 with a budget of 29, in the browser test of this:
+`e2e/pellagos.spec.js`, "soldiers come near the camera are built in full"; the test of the
+soldiers' bars beside it failed now and then on CI for the same, one of its twelve never built).
+Soldiers further than the game draws anyone (`DRAW_REACH`) are no one's to ration and are built
+in full all the same, counted with everyone else: a field battle's far army holds its bodies out
+of sight.
+
+In seed 2's start town on Low, its nine had room for 29, and under a budget of 8
 the furthest of them, 40 metres off, went undrawn till there was room again (till 2026-10-28;
 now in their crowd):
 
@@ -5036,12 +5071,14 @@ when the throng changes:
   elite) are held in full only as far as the bodies' budget leaves room, as the soldiers are
   (`QUALITY.bodies`, *Soldiers in their crowds*, above; app/game.js `#rationing`, twice a second).
   - The budget counts everyone else held in full or about to be, but the beasts built in code, whose
-    bodies are shared and small.
+    bodies are shared and small; its room is shared with the soldiers about and the folk out in
+    the world, in the one order (*One room, in one order*, above), never fewer of the creatures
+    than `soldiers.full`.
   - In the order of precedence (*Who comes first*, below): whoever's fighting the player or
     their party first, then the biggest on the screen where it stands; those on another map last.
   - Those past the room are drawn in their kind's crowd as a soldier is (`CrowdAvatar`, not a
-    stand-in), their body in full let go; one not built yet isn't built at all. One in full only
-    just past the room (`MARSHAL.margin`) is left as it is.
+    stand-in), their body in full let go; one not built yet isn't built at all. One in full gives
+    its place only to one more than 3 places before it (`MARSHAL.margin`).
   - Built in full again once there's room for it, as it comes near or sets on the player.
   - A dungeon's level is put out at once: one's foes had seventy-two bodies held on an iPhone,
     which let the game's tab go (a player's crash report, 2026-10-14). Forty-eight goblins about the
@@ -5093,7 +5130,8 @@ figure); each one more takes about 4 MB.
 ### Who comes first (app/precedence.js)
 
 Where not everyone can be had as they'd best be, one order says who's before whom: who's held in
-full where a phone's memory holds only so many bodies (`#marshal`, `#rationing`, `#folkRoom`),
+full where a phone's memory holds only so many bodies (`#marshal`, `#rationing`, `#folkRoom`,
+the three sharing the one room in it: `seated`, *One room, in one order*, above),
 who's drawn in full in a crowded fight that comes too slowly (`#thronging`), and whose bar is
 shown where bars over heads overlap (*The screens*, below). It's the "full-tier order" of the
 scaling plan's Stage 5 ([generated/multiplayer_scaling_plan.md](../generated/multiplayer_scaling_plan.md);
@@ -8378,7 +8416,12 @@ does besides moving and drawing everyone is spread so that no one frame carries 
   whoever they're set on, attackers, the party's foes, whoever they're talking or trading with,
   then the biggest on the screen, the nearer of two as big, other maps last); what a place keeps
   of its own, after everyone the order names; ranking making nothing new once it's ranked as
-  many; and the game ranking by it in each place, with no order of its own left.
+  many; one room shared in it (`seated`: the places to the first of whatever kind; the same
+  places whoever looks first, never more held than the room; one held let go for a nearer one
+  only once more than the margin after it, and the nearer one built only once it's gone; two
+  near each other changing places changing nothing; a kind's own few kept whatever the room);
+  and the game ranking by it in each place, and sharing the bodies' budget by it, with no order
+  of its own left.
   `test/plate-cover.test.js`: bars over heads that cover one another (hud.js `Covering`): how
   much of one lies under those shown before it, one more than half under them hidden and
   covering no one, a file seen end-on showing a few, the ones always shown never hidden, one

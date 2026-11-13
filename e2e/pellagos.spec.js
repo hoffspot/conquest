@@ -18434,7 +18434,10 @@ test("soldiers about the player past the bodies the quality's memory can hold in
     const most = await page.evaluate(() => {
         const { game, session } = window.pellagos;
         const quality = session.view.quality;
-        const others = [...game.avatars.values()].filter((avatar) => avatar.constructor.name !== "CrowdAvatar").length;
+        // (Everyone else held in full, as the budget counts them: not the wild's beasts built in
+        // code, their bodies shared, each one small. The soldiers' room counted those till the
+        // budget was one room, 2026-11-13: app/game.js #seats)
+        const others = [...game.avatars.values()].filter((avatar) => !["CrowdAvatar", "BeastAvatar"].includes(avatar.constructor.name)).length;
 
         session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 5 };
 
@@ -18784,6 +18787,25 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
 
     expect(friends).toHaveLength(12);
 
+    // Room in full for everyone about, whoever else is held: no budget for the bodies at all.
+    // This is of the bars, not of the budget, and Low's 32 hasn't room for the twelve for as long
+    // as it's watched: the twelve foes hold twelve of it out of sight (soldiers further than
+    // anyone's drawn are built in full all the same), and the budget's one room for the
+    // soldiers, the town's ten folk and its guards in the one order (app/game.js #seats), the
+    // nearer the camera first. So whenever seven of the folk walk nearer it than the back rank,
+    // from 26 to 69 seconds into the game and again after, one to three of the twelve are
+    // rightly in their crowds, and a machine slow enough to be still watching then waits forty
+    // seconds of the game for them to walk off. (Before the budget was one room, till 2026-11-13,
+    // the soldiers had what the folk hadn't taken, each looked at in its own time and neither
+    // giving way: one of the twelve was left in its crowd for good now and then, and three or
+    // four never built in full again as the room was given back below)
+    await page.evaluate(() => {
+        const { session } = window.pellagos;
+
+        window.roomy = { ...session.view.quality, bodies: Infinity };
+        session.view.quality = window.roomy;
+    });
+
     // (Till every one of them is drawn in full where it's put, none still being built)
     const stood = () =>
         page.evaluate(async (ids) => {
@@ -18816,10 +18838,9 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
     // capital's townsfolk): the rest are let go to their kinds' crowds as the figures are made
     await page.evaluate(() => {
         const { game, session } = window.pellagos;
-        const quality = session.view.quality;
+        const quality = window.roomy;
         const others = [...game.avatars].filter(([id, avatar]) => !id.startsWith("field-") && avatar.constructor.name !== "CrowdAvatar").length;
 
-        window.roomy = quality;
         window.barFrames = [];
         session.view.quality = { ...quality, soldiers: { ...quality.soldiers, full: 2 }, bodies: others + 2 };
     });
@@ -18859,6 +18880,128 @@ test("a soldier's bar stays over it, shown on every frame, as its body's let go 
 
         expect(unshown, `${id}: no bar shown at ${unshown.slice(0, 6).join(", ")}`).toEqual([]);
     }
+});
+
+test("soldiers come near the camera are built in full in the places of townsfolk further off who held them first: the soldiers, the folk and the wild's creatures share the bodies' budget in one order, never more held than it", async ({ page }) => {
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=2");
+
+    // The town's folk stood in a line before the camera, 17 to 35 m from the player, and its
+    // guards kept where they are; played on by hand, everyone put back where they're stood
+    const folk = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor(game.me);
+        const camera = game.view.camera.position;
+        const mine = game.avatars.get(game.me).object.position;
+        const length = Math.hypot(mine.x - camera.x, mine.z - camera.z);
+        const ahead = [(mine.x - camera.x) / length, (mine.z - camera.z) / length];
+        const across = [-ahead[1], ahead[0]];
+        const folk = game.battle.actors.filter((actor) => actor.kind === "folk" && actor.map === player.map);
+        const guards = game.battle.actors.filter((actor) => actor.kind === "soldier" && actor.map === player.map);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.before = (forward, sideways) => [player.x + ahead[0] * forward + across[0] * sideways, player.y + ahead[1] * forward + across[1] * sideways];
+        window.pinned = new Map([...folk.map((actor, k) => [actor.id, window.before(17 + k * 2, 0)]), ...guards.map((actor) => [actor.id, [actor.x, actor.y]])]);
+        // (In full: held as a body of its own, not the wild's beasts built in code, which share theirs)
+        window.inFull = (id) => game.avatars.has(id) && !["CrowdAvatar", "BeastAvatar"].includes(game.avatars.get(id).constructor.name);
+        window.queued = (id) => game.enlisting.includes(id) || game.enlistees.has(id);
+        window.most = 0;
+        window.playPinned = async (seconds) => {
+            for (let time = 0; time < seconds; time += 1 / 30) {
+                for (const [id, [x, y]] of window.pinned) {
+                    Object.assign(game.battle.actor(id), { x, y, square: [Math.floor(x), Math.floor(y)], path: [], dead: false });
+                }
+
+                player.hp = player.maxHp;
+
+                // (The field battle kept from running out, as the test above keeps it)
+                for (const field of game.host.fields) {
+                    field.at = game.battle.time;
+                }
+
+                game.advance(1 / 30, { render: false, wait: true });
+                // (Frame by frame: the most bodies ever held in full at once)
+                window.most = Math.max(window.most, [...game.avatars.keys()].filter(window.inFull).length);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
+        return folk.map(({ id }) => id);
+    });
+
+    expect(folk.length).toBeGreaterThanOrEqual(8);
+
+    // Every one of the folk in full: with no one else about, there's room for them all
+    const dressed = async () => {
+        await page.evaluate(() => window.playPinned(1));
+
+        return page.evaluate((ids) => ids.filter(window.inFull).length, folk);
+    };
+
+    await expect.poll(dressed, { timeout: 240000, intervals: [100] }).toBe(folk.length);
+
+    // Two armies of twelve: the player's people's stood in two ranks between the camera and the
+    // folk, every one of them nearer it than any of the folk; their foes 200 m off
+    await page.evaluate(() => window.pellagos.game.fieldBattle(12));
+    expect(await playUntil(page, () => window.pellagos.game.battle.actors.filter(({ id }) => id.startsWith("field-")).length >= 24, { seconds: 5 })).toBe(true);
+
+    // And a budget with room for fourteen of the twelve and the folk, beside everyone else held:
+    // the folk hold ten of those places as the twelve come. Each of them rationed by a look of
+    // its own had what the other had left, and neither gave way: the soldiers had room for four
+    // then (the quality's few), the other eight left in their crowds for good, nearer the camera
+    // than every townsperson held in full
+    const { friends, budget } = await page.evaluate((folk) => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor(game.me);
+        const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
+        const friends = fielded.filter((actor) => !game.battle.hostile(actor, player)).map(({ id }) => id);
+        const foes = fielded.filter((actor) => game.battle.hostile(actor, player));
+
+        for (const id of Object.keys(game.battle.formations)) {
+            game.battle.formation(id, { to: null, advance: false });
+        }
+
+        friends.forEach((id, k) => window.pinned.set(id, window.before(8 + Math.floor(k / 6) * 5, ((k % 6) - 2.5) * 2.5)));
+        foes.forEach((actor, k) => window.pinned.set(actor.id, window.before(-200, k * 2)));
+
+        // (Everyone else held: those in full or to be, and the foes, each built in full in its
+        // time though it's out of sight)
+        const held = game.battle.actors.filter(({ id }) => window.inFull(id) || window.queued(id) || foes.some((foe) => foe.id === id));
+        const others = held.filter(({ id }) => !friends.includes(id) && !folk.includes(id)).length;
+
+        window.roomy = session.view.quality;
+        session.view.quality = { ...window.roomy, bodies: others + 14 };
+
+        return { friends, budget: others + 14 };
+    }, folk);
+
+    expect(friends).toHaveLength(12);
+
+    // Every one of the twelve built in full
+    const stood = async () => {
+        await page.evaluate(() => window.playPinned(1));
+
+        return page.evaluate((ids) => ids.filter((id) => window.inFull(id) && !window.queued(id)).length, friends);
+    };
+
+    await expect.poll(stood, { timeout: 240000, intervals: [100] }).toBe(12);
+    await page.evaluate(() => window.playPinned(2));
+
+    // As they stand: the twelve in full still; the folk have given up all but the places left
+    // over (two, and one more for each of the town's guards let go since), the rest of them in
+    // their crowds or not drawn; and never more bodies held in full than the budget
+    const seen = await page.evaluate(
+        ({ friends, folk }) => ({ friends: friends.filter(window.inFull).length, folk: folk.filter(window.inFull).length, held: [...window.pellagos.game.avatars.keys()].filter(window.inFull).length, most: window.most }),
+        { friends, folk },
+    );
+
+    expect(seen.friends, JSON.stringify(seen)).toBe(12);
+    expect(seen.folk, JSON.stringify(seen)).toBeLessThan(folk.length - 4);
+    expect(seen.held, JSON.stringify(seen)).toBeLessThanOrEqual(budget);
+    expect(seen.most, JSON.stringify(seen)).toBeLessThanOrEqual(budget);
+
+    await page.evaluate(() => (window.pellagos.session.view.quality = window.roomy));
 });
 
 test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {
