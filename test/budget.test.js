@@ -60,13 +60,16 @@ const BUDGETS = [
     // (Those in the battle gone through to say which players are in a fight, as the war's
     // messengers are looked to every three seconds: once a look for all the players since
     // 1-31, four looks of the 1,583 in the battle. It was once for each player a messenger
-    // might come to, 316,600)
-    ["messengers.actors", 6_700, "those in the battle gone through for who's in a fight, as the messengers are looked to"],
+    // might come to, 316,600. Since 1-23 four looks of 710: no building's folk are in the
+    // battle till a player goes in, core/host.js Host.peopling, and these walk the streets)
+    ["messengers.actors", 3_000, "those in the battle gone through for who's in a fight, as the messengers are looked to"],
     // (The battle's index of where everyone stands made afresh, and over how many: since 1-10
     // only as someone's added or taken out, those who've changed cell moved between cells the
-    // rest of the time. It was 200 times, once a step, over 316,274)
-    ["battle.indexed", 26, "times the battle's index was made afresh"],
-    ["battle.indexedActors", 40_000, "actors gone through making it"],
+    // rest of the time. It was 200 times, once a step, over 316,274; then 19 times over
+    // 28,671; and since 1-23 7 times over 4,318, no building's folk added and let go as the
+    // players pass its door)
+    ["battle.indexed", 10, "times the battle's index was made afresh"],
+    ["battle.indexedActors", 6_000, "actors gone through making it"],
     // (The players measured for whoever asks after those near it: a soldier set on no one, the
     // folk resting and beckoning, a way to be found. Since 1-19 those the index has within
     // reach, about one for every eight askings with the players standing apart; it was every

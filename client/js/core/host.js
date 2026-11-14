@@ -92,9 +92,10 @@ export const HOST_PLAYER = "player";
  * metres of a player out in the world (or a player's heading into) got ready to go into, their
  * floors made; those `far` from every player let go. Its folk, a barracks' garrison and a
  * scene's court are made only as a player goes in (Host.peopling: told to go in by one of its
- * ways, or set down inside), and let go, the building still ready, once every player's more than
- * `away` metres from its door: whoever comes back from nearer finds the room as they left it,
- * from further one made afresh.
+ * ways, or set down inside). Its folk are let go, the building still ready, once every player's
+ * more than `away` metres from its door: whoever comes back from nearer finds the room as they
+ * left it, from further one made afresh. Those who fight, the garrison and the court, are kept
+ * till the building's let go, `far` from everyone, so no fight's undone by stepping back.
  */
 export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90, away: 40 });
 
@@ -1349,10 +1350,15 @@ export class Host {
      * of its ways is taken (from however far: ENTER_REACH), which is before any step that could
      * set them down inside; failing that in the step a player's set down in it by anything else
      * (carried there by magic or the guild's portal, up again there), and failing that by the
-     * next look round with a player in it. They're let go (#vacate, "vacated" told) by the look
-     * round that finds no player in it or told to go in, and every player more than
-     * RELEVANCE.away from its door. Nothing's kept for it: who's peopled is read off who's in
-     * the battle (#peopled), so a snapshot holds nothing new.
+     * next look round with a player in it. Its folk are let go (#vacate, "vacated" told) by the
+     * look round that finds no player in it or told to go in, and every player more than
+     * RELEVANCE.away from its door. Those who fight, its garrison and its court, are not (the
+     * owner's ruling of the same day): once made they're kept as they were left till the
+     * building's let go, RELEVANCE.far from everyone, as they always were, so a fight can't be
+     * begun again whole by stepping 40 m back; folk, whom no one fights, are all that the 40 m
+     * rule lets go. Nothing's kept for it: whose folk are in is read off who's in the battle
+     * (#peopled), and who's at their posts off what the world keeps of them anyway (#manned:
+     * `quartered`, `courts`), so a snapshot holds nothing new.
      */
     static peopling = true;
 
@@ -19360,7 +19366,7 @@ export class Host {
             } else if (wanted.has(building.key)) {
                 // (A player in it or told to go in, and no one made: set down in it by nothing
                 // that says so, or carried on from a world that made them otherwise)
-                if (Host.peopling && !this.#peopled(building)) {
+                if (Host.peopling && !(this.#peopled(building) && (this.#manned(building) || !this.#mannable(building)))) {
                     this.battle.forget(gone);
                     this.#openBuilding(building.key, true);
                 }
@@ -19368,7 +19374,8 @@ export class Host {
                 if (!about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
                     this.#closeBuilding(building.key, gone);
                 } else if (Host.peopling && this.#peopled(building) && !about.some(x, z, RELEVANCE.away, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.away)))) {
-                    // (Its people let go, everyone gone from its door; its floors kept ready)
+                    // (Its folk let go, everyone gone from its door; its floors kept ready, and
+                    // those who fight in it kept at their posts)
                     this.#vacate(building.key, gone);
                 }
             }
@@ -19433,7 +19440,7 @@ export class Host {
             this.#event("open", { key, folk: [] });
         }
 
-        if (coming && Host.peopling && !this.#peopled(building)) {
+        if (coming && Host.peopling) {
             this.#people(building);
         }
     }
@@ -19455,26 +19462,47 @@ export class Host {
         }
     }
 
-    // Whether an open building has its people in it (Host.peopling): any of its folk in the
-    // battle, its barracks' garrison stood up or its court held. Read off what the world keeps
-    // anyway, so a copy made from a snapshot says the same
+    // Whether an open building has its folk in it (Host.peopling): any of them in the battle.
+    // Read off what the world keeps anyway, so a copy made from a snapshot says the same
     #peopled(building) {
-        return this.open.get(building.key).length > 0 || this.courts.has(building.key) || (building.kind === "barracks" && this.quartered.get(this.#barracksTown(building))?.key === building.key);
+        return this.open.get(building.key).length > 0;
     }
 
-    // An open building's people made, a player going in (Host.peopling): its folk about their
-    // business, its ruler as the war has them now, its garrison or its court at their posts
+    // Whether an open building has those who fight at their posts in it: its barracks' garrison
+    // stood up, or its court held (dead or alive: a garrison put down is still its garrison,
+    // till its relief). Read off what the world keeps, as #peopled is
+    #manned(building) {
+        return this.courts.has(building.key) || (building.kind === "barracks" && this.quartered.get(this.#barracksTown(building))?.key === building.key);
+    }
+
+    // Whether a building is one with those who fight to stand in it: a barracks of one of the
+    // war's towns, or a scene with a court
+    #mannable(building) {
+        return building.kind === "barracks" ? Boolean(this.#barracksTown(building)) : building.kind === "scenery" && Boolean(SCENERY[building.scenery]?.court);
+    }
+
+    // An open building's people made, a player going in (Host.peopling), whichever of them
+    // aren't there: its folk about their business, its ruler as the war has them now (if none
+    // of its folk are in the battle: let go 40 m off, or never made); its garrison or its court
+    // at their posts (if they aren't: they're kept till the building's let go, so those a player
+    // left there are there as they were left, fallen or standing, and no one's made twice)
     #people(building) {
-        this.#enthrone(building);
+        const [peopled, manned] = [this.#peopled(building), this.#manned(building)];
+        let folk = this.open.get(building.key);
 
-        const folk = this.#folkOf(building);
+        if (!peopled) {
+            this.#enthrone(building);
+            folk = this.#folkOf(building);
+            this.open.set(building.key, folk);
+        }
 
-        this.open.set(building.key, folk);
-        this.#posted(building);
+        if (!manned) {
+            this.#posted(building);
+        }
 
-        // (Told only if there's anyone: a place with no one to make, a building held by
-        // outlaws or a dungeon's way in, is asked again while a player's in it, and says nothing)
-        if (this.#peopled(building)) {
+        // (Told only if anyone's made: a place with no one to make, a building held by outlaws
+        // or a dungeon's way in, is asked again while a player's in it, and says nothing)
+        if ((!peopled && folk.length > 0) || (!manned && this.#manned(building))) {
             this.#event("peopled", { key: building.key, folk });
         }
     }
@@ -19526,24 +19554,34 @@ export class Host {
         this.#event("close", { key, folk });
     }
 
-    // An open building's people let go, everyone gone from its door (Host.peopling,
+    // An open building's folk let go, everyone gone from its door (Host.peopling,
     // RELEVANCE.away): out of the battle, its floors kept ready; made afresh when a player next
-    // goes in
+    // goes in. Not those who fight, a barracks' garrison or a scene's court (the owner's ruling
+    // of 14 November 2026): they're kept as they were left till the building's let go,
+    // RELEVANCE.far from everyone, as they always were, so no fight's undone by stepping back
+    // from the door
     #vacate(key, later = null) {
-        const folk = this.#turnOut(key, later);
+        const folk = this.#dismissFolk(key, later);
 
         this.open.set(key, []);
         this.#event("vacated", { key, folk });
     }
 
-    // A building's folk out of the battle, its garrison and its court with them: their ids
-    #turnOut(key, later = null) {
+    // A building's folk out of the battle: their ids
+    #dismissFolk(key, later = null) {
         const folk = this.open.get(key);
 
         for (const id of folk) {
             this.battle.remove(id, later);
             this.folk.delete(id);
         }
+
+        return folk;
+    }
+
+    // A building's folk out of the battle, its garrison and its court with them: their ids
+    #turnOut(key, later = null) {
+        const folk = this.#dismissFolk(key, later);
 
         for (const [town, out] of [...this.quartered]) {
             if (out.key === key) {

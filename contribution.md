@@ -666,8 +666,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    A test whose world needs the folk of the buildings round its players in the battle has the
    players look in at each door first (`lookIn` in `test/helpers.js`: told to go into each
    building got ready round them, and to stop): a building's folk, its barracks' garrison and
-   its court are made only as a player is told to go in, and kept while one is within 40 m of
-   the door (`Host.peopling`, docs/GAME.md *Made as the door's gone into*).
+   its court are made only as a player is told to go in; the folk are kept while one is within
+   40 m of the door, the garrison and the court till the building is let go, 90 m from everyone
+   (`Host.peopling`, docs/GAME.md *Made as the door's gone into*).
 6. **Show it.** For anything that changes how the game looks, take before and after pictures
    from the same place, and put them in the pull request. Picture sheets and scratch scripts
    aren't committed.

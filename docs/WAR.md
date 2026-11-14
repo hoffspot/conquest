@@ -185,9 +185,9 @@ The engine is built for this from the start. These are its rules:
    player:
    - the buildings got ready to go into (`RELEVANCE`: those within 22 metres of any player, or
      that any player is heading into or is in; let go once every player's more than 90 away),
-     and the people in them: made as a player's told to go in, let go once every player's more
-     than 40 metres from the door (`Host.peopling`, docs/GAME.md *Made as the door's gone
-     into*);
+     and the people in them: made as a player's told to go in; their folk let go once every
+     player's more than 40 metres from the door, a garrison or a court only with the building
+     (`Host.peopling`, docs/GAME.md *Made as the door's gone into*);
    - later, the war's forces in skirmishes.
 
    Twice a second (`RELEVANCE.every`) it looks round: buildings, towns' soldiers and townsfolk,
@@ -1432,10 +1432,12 @@ town:
   city 4, a town 3, a village 2. One stands for one of the garrison: one fallen is one fewer in
   the war (`war.loss`);
 - **made up** a while after any of them falls (`RELIEF_MS`), from the garrison as it is then, once
-  no player's in the room; let go once every player's more than 40 m from its door (it was 90,
-  with the building), those standing gone, and stood up afresh of the garrison as it is then
-  for whoever next goes in: what's fallen of it stays lost to the war, and nothing's lost or
-  won by its letting go (`test/peopling.test.js`);
+  no player's in the room; let go with the building, when every player's 90 m off, those
+  standing gone, and stood up afresh of the garrison as it is then for whoever next goes in.
+  Not at the 40 m at which a building's folk are let go (the owner's ruling of 14 November
+  2026): a player who steps back from the door and returns finds the garrison they left,
+  fallen and standing, its relief due when it was, so no fight's begun again whole that way
+  (`test/peopling.test.js`);
 - **standing at their posts, taking no turn,** while no player's in the room and no enemy
   (`Battle.idling`, docs/GAME.md *Standing till someone comes in*): each one's next look about is
   kept to the step it would have fallen in, so whoever comes in is noticed exactly as when they

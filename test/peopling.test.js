@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { nearestFree, squaresOf } from "../client/js/core/grid.js";
-import { ENTER_REACH, HOST_PLAYER, Host, RELEVANCE, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { ENTER_REACH, HOST_PLAYER, Host, RELEVANCE, RELIEF_MS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { Hosting, Joining, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { install, Probes, uninstall } from "../client/js/core/probe.js";
@@ -424,7 +424,7 @@ describe("the same room while nearby, a room made afresh from further off (RELEV
 });
 
 describe("what hung on a building being got ready (Host.peopling)", () => {
-    it("stands a barracks' garrison up as a player's told to go in, not on its doorstep; lets it go 40 m off and stands it up afresh, as many as the town's garrison has then; one put down is one fewer in the war all the same", () => {
+    it("stands a barracks' garrison up as a player's told to go in, not on its doorstep; and keeps it as it was left, one of it put down, while the player's 46 m off and back: not whole again, not made twice, its relief's wait as it was; let go only with the building, 90 m off, and stood up afresh after", () => {
         const game = town();
         const barracks = game.building("barracks");
         const town_ = game.host.war.town(game.world.start.id);
@@ -440,7 +440,7 @@ describe("what hung on a building being got ready (Host.peopling)", () => {
         game.run(SECOND);
         assert.equal(game.me.map, barracks.maps[0]);
 
-        // (One of them put down: one fewer of the town's garrison, in the war)
+        // (One of them put down: one fewer of the town's garrison, in the war; its relief due)
         const garrison = town_.garrison;
 
         game.host.battle.afflict(first.ids[1], "burn", { by: HOST_PLAYER, damage: 100000 });
@@ -448,27 +448,159 @@ describe("what hung on a building being got ready (Host.peopling)", () => {
         assert.ok(game.host.battle.actor(first.ids[1])?.dead ?? true);
         assert.equal(town_.garrison, garrison - 1);
 
-        // (Out and 46 m off: let go; nothing more lost to the war by it)
+        const relief = game.host.quartered.get(town_.id).relief;
+
+        assert.ok(relief > game.host.battle.time && relief <= game.host.battle.time + RELIEF_MS, "to be made up, a relief's wait after the fall");
+
+        // (Out and 46 m off, past where a room's folk are let go: the garrison kept, as left)
         goOut(game, barracks);
         stand(game, game.me, barracks, 46);
+
+        const standing = () => first.ids.filter((id) => game.host.battle.actor(id) && !game.host.battle.actor(id).dead).toSorted();
+        const left = standing();
+        const away = game.run(6 * LOOK);
+
+        assert.equal(left.length, first.ids.length - 1);
+        assert.equal(away.filter((event) => event.type === "unquartered" || event.type === "quartered" || event.type === "vacated").length, 0);
+        assert.equal(game.host.quartered.get(town_.id), first, "the same garrison");
+        assert.deepEqual(standing(), left);
+        assert.equal(first.relief, relief, "its relief due when it was");
+
+        // (Back in: those left, where they were left; no one stood up again)
+        const before = game.events.length;
+
+        goIn(game, barracks);
+        assert.equal(game.host.quartered.get(town_.id), first);
+        assert.deepEqual(standing(), left, "not whole again");
+        assert.equal(within(game.host, barracks).filter((actor) => !actor.dead).length, left.length, "and no one made twice");
+        assert.equal(game.events.slice(before).filter((event) => event.type === "quartered" || event.type === "peopled").length, 0);
+        assert.equal(town_.garrison, garrison - 1);
+
+        // (Out and 95 m off: let go with the building, as it always was; back, stood up afresh)
+        goOut(game, barracks);
+        stand(game, game.me, barracks, 95);
 
         const gone = game.run(LOOK + 1);
 
         assert.equal(gone.filter((event) => event.type === "unquartered" && event.town === town_.id).length, 1);
-        assert.ok(!game.host.quartered.has(town_.id));
-        assert.ok(first.ids.every((id) => !game.host.battle.actor(id) || game.host.battle.actor(id).dead), "the standing gone from the battle");
-        assert.equal(town_.garrison, garrison - 1);
-
-        // (Back in: stood up afresh of the garrison as it is, and there to be fought)
+        assert.equal(told(gone, "close", barracks.key).length, 1);
+        assert.ok(!game.host.quartered.has(town_.id) && standing().length === 0);
         toDoor(game.me, barracks);
         assert.deepEqual(game.host.command(HOST_PLAYER, { type: "enter", link: barracks.door.id }), { ok: true });
 
         const again = game.host.quartered.get(town_.id);
 
-        assert.ok(again && again.ids.length >= 1 && again.ids.every((id) => !first.ids.includes(id)));
-        assert.ok(again.ids.every((id) => game.host.battle.actor(id) && !game.host.battle.actor(id).dead));
+        assert.ok(again && again.ids.length >= 1 && again.ids.every((id) => !first.ids.includes(id) && game.host.battle.actor(id) && !game.host.battle.actor(id).dead));
         assert.deepEqual([again.cleared, again.relief], [false, null]);
         assert.equal(town_.garrison, garrison - 1);
+    });
+
+    it("makes a part-fallen garrison up after its relief's wait as it always did, the player 46 m off the whole while: no sooner for the distance, and by the host's relief, not by their going", () => {
+        const game = town();
+        const barracks = game.building("barracks");
+        const town_ = game.host.war.town(game.world.start.id);
+
+        goIn(game, barracks);
+
+        const first = game.host.quartered.get(town_.id);
+
+        game.host.battle.afflict(first.ids[1], "burn", { by: HOST_PLAYER, damage: 100000 });
+        game.run(3 * SECOND);
+
+        const relief = first.relief;
+
+        goOut(game, barracks);
+        stand(game, game.me, barracks, 46);
+
+        // (Till a second before it's due: as left. Then made up, all of it, of the garrison now)
+        game.run(Math.floor((relief - game.host.battle.time) / STEP_MS) - SECOND);
+        assert.equal(game.host.quartered.get(town_.id), first, "not before its wait's out");
+        game.run(2 * SECOND);
+
+        const now = game.host.quartered.get(town_.id);
+
+        assert.ok(now !== first && now.relief === null && now.ids.length >= 1 && now.ids.every((id) => game.host.battle.actor(id) && !game.host.battle.actor(id).dead));
+        assert.ok(game.host.open.has(barracks.key));
+    });
+
+    it("lets a room's folk go 46 m off and makes them afresh on return while those who fight in it stay as they were left, in a building with both: no one twice", () => {
+        const game = town();
+        const barracks = game.building("barracks");
+        const hall = game.building("hall");
+        const town_ = game.host.war.town(game.world.start.id);
+
+        // (No building of the world's has both today: a clerk put on the barracks' roll, as one
+        // of the hall's folk is made, at a free square of its floor)
+        stand(game, game.me, barracks, 15);
+        game.run(LOOK);
+        game.world.interiors.make(hall.key);
+
+        const floor = barracks.maps[0];
+        const [dx, dy] = barracks.door.ends.find((end) => end.map === floor).arrive;
+        const clerk = { ...structuredClone(hall.folk[0]), id: `${barracks.key}/clerk`, map: floor, square: [dx, dy - 2], routine: { order: "cycle", wait: [4000, 8000], stops: [{ square: [dx, dy - 2], facing: 0 }] } };
+
+        barracks.folk.push(clerk);
+        goIn(game, barracks);
+
+        const first = game.host.quartered.get(town_.id);
+
+        assert.deepEqual(game.host.open.get(barracks.key), [clerk.id]);
+        assert.ok(first.ids.length >= 2 && game.host.battle.actor(clerk.id));
+        game.host.battle.afflict(first.ids[1], "burn", { by: HOST_PLAYER, damage: 100000 });
+        game.run(3 * SECOND);
+        goOut(game, barracks);
+
+        const standing = () => first.ids.filter((id) => game.host.battle.actor(id) && !game.host.battle.actor(id).dead).toSorted();
+        const left = standing();
+
+        // (46 m off: the clerk let go, the garrison not)
+        stand(game, game.me, barracks, 46);
+
+        const gone = game.run(LOOK + 1);
+
+        assert.deepEqual(told(gone, "vacated", barracks.key).map(({ folk }) => folk), [[clerk.id]]);
+        assert.ok(!game.host.battle.actor(clerk.id) && !game.host.folk.has(clerk.id));
+        assert.equal(gone.filter((event) => event.type === "unquartered").length, 0);
+        assert.deepEqual(standing(), left);
+        game.run(4 * LOOK);
+        assert.equal(told(game.events, "vacated", barracks.key).length, 1, "let go once");
+
+        // (Back in: the clerk afresh, the garrison as left; one of each)
+        const before = game.events.length;
+
+        toDoor(game.me, barracks);
+        assert.deepEqual(game.host.command(HOST_PLAYER, { type: "enter", link: barracks.door.id }), { ok: true });
+        game.run(1);
+        assert.deepEqual(told(game.events.slice(before), "peopled", barracks.key).map(({ folk }) => folk), [[clerk.id]]);
+        assert.equal(game.events.slice(before).filter((event) => event.type === "quartered").length, 0);
+        assert.equal(game.host.quartered.get(town_.id), first);
+        assert.deepEqual(standing(), left);
+        assert.equal(game.host.battle.actors.filter(({ id }) => id === clerk.id).length, 1);
+        assert.equal(new Set(game.host.battle.actors.map(({ id }) => id)).size, game.host.battle.actors.length, "no one in the battle twice");
+    });
+
+    it("stands a kept garrison up again of its town's new holders once it's taken, no player in the room, as it always did; and one never gone into of whoever holds it when someone is", () => {
+        const game = town();
+        const barracks = game.building("barracks");
+        const town_ = game.host.war.town(game.world.start.id);
+        const takers = game.host.war.realms.map(({ id }) => id).find((id) => id !== town_.owner);
+
+        goIn(game, barracks);
+        goOut(game, barracks);
+        stand(game, game.me, barracks, 46);
+        game.run(2 * LOOK);
+
+        const first = game.host.quartered.get(town_.id);
+
+        assert.equal(first.people, town_.owner);
+        town_.owner = takers;
+        game.run(30 * SECOND);
+
+        const now = game.host.quartered.get(town_.id);
+
+        assert.ok(now && now !== first && now.people === takers, "of its new holders");
+        assert.ok(first.ids.every((id) => !game.host.battle.actor(id) || game.host.battle.actor(id).dead));
+        assert.ok(now.ids.every((id) => game.host.battle.actor(id)?.team === game.host.battle.actor(now.ids[0]).team));
     });
 
     it("leaves one hired away out of a room made afresh, and makes the rest of it", () => {
@@ -716,6 +848,161 @@ describe("every copy of a world has the same people in its buildings (Host.peopl
             assert.equal(within(joining.host, tavern).length, 8, peer);
         }
 
+    });
+});
+
+describe("every copy of a world keeps the same garrison (Host.peopling: those who fight kept till the building's let go)", () => {
+    it("carries a world on from a snapshot taken with a garrison part put down and the player 46 m off, with its town since taken, and after its relief, step for step as the one it was taken from: the player back in, and away past 90 m", () => {
+        const game = town();
+        const barracks = game.building("barracks");
+        const town_ = game.host.war.town(game.world.start.id);
+        const takers = game.host.war.realms.map(({ id }) => id).find((id) => id !== town_.owner);
+        const copies = [];
+        const all = () => [game.host, ...copies.map(({ again }) => again)];
+        const take = (said) => {
+            const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(game.host.snapshot())));
+
+            assert.equal(again.checksum(), game.host.checksum(), said);
+            assert.equal(encode([...again.quartered]), encode([...game.host.quartered]), `${said}: the garrison kept`);
+            assert.deepEqual([...again.open].map(([key, folk]) => [key, folk.toSorted()]), [...game.host.open].map(([key, folk]) => [key, folk.toSorted()]), said);
+            copies.push({ said, again });
+        };
+        const play = (steps) => {
+            for (let step = 0; step < steps; step++) {
+                game.run(1);
+
+                for (const { said, again } of copies) {
+                    again.advance(STEP_MS);
+                    assert.equal(again.checksum(), game.host.checksum(), `${said}, at ${game.host.battle.time} ms`);
+                }
+            }
+        };
+        const tell = (command) => all().map((host) => host.command(HOST_PLAYER, command))[0];
+        const move = (to) => all().forEach((host) => (to === null ? toDoor(host.battle.actor(HOST_PLAYER), host.world.interiors.buildings.get(barracks.key)) : stand({ world: host.world }, host.battle.actor(HOST_PLAYER), host.world.interiors.buildings.get(barracks.key), to)));
+        const until = (met) => {
+            for (let second = 0; second < 60 && !met(); second++) {
+                play(SECOND);
+            }
+
+            assert.ok(met());
+        };
+        const inAndOut = () => {
+            move(null);
+            play(2);
+            assert.equal(tell({ type: "enter", link: barracks.door.id }).ok, true);
+            until(() => game.me.map === barracks.maps[0]);
+            play(2 * SECOND);
+            tell({ type: "enter", link: barracks.door.id });
+            until(() => game.me.map === "town");
+        };
+
+        goIn(game, barracks);
+
+        const first = game.host.quartered.get(town_.id);
+
+        game.host.battle.afflict(first.ids[1], "burn", { by: HOST_PLAYER, damage: 100000 });
+        game.run(3 * SECOND);
+        goOut(game, barracks);
+        stand(game, game.me, barracks, 46);
+        game.run(2 * LOOK);
+        take("a garrison part put down, the player 46 m off");
+        inAndOut();
+        assert.equal(game.host.quartered.get(town_.id).ids.join(), first.ids.join(), "the same garrison for every copy");
+        move(46);
+        play(2 * LOOK);
+
+        // (Its town taken: every copy told the same, as a turn of the war tells them)
+        all().forEach((host) => (host.war.town(town_.id).owner = takers));
+        play(2 * SECOND);
+        assert.equal(game.host.quartered.get(town_.id).people, takers);
+        take("its town taken, its new holders' garrison kept");
+        inAndOut();
+        move(95);
+        play(2 * LOOK);
+        assert.ok(!game.host.quartered.has(town_.id));
+        take("let go with the building");
+        inAndOut();
+        play(SECOND);
+        assert.equal(copies.length, 3);
+
+        for (const { said, again } of copies) {
+            assert.equal(sha(encode(again.snapshot())), sha(encode(game.host.snapshot())), `${said}: the world whole at the end`);
+        }
+    });
+
+    it("welcomes a joiner while a part-fallen garrison is kept with the host's player 46 m off: its copy has the same ones standing, fights the same fight when the host goes back in, and is never astray", () => {
+        const world = buildWorld({ seed: 2 });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+
+        const barracks = [...world.interiors.buildings.values()].find((each) => each.place === "home" && each.kind === "barracks" && each.entrance);
+        const town_ = host.war.town(world.start.id);
+        const game = { host, world, me: host.battle.actor(HOST_PLAYER), events: [], run: (steps) => Array.from({ length: steps }, () => host.advance(STEP_MS)).flat() };
+
+        goIn(game, barracks);
+
+        const first = host.quartered.get(town_.id);
+
+        host.battle.afflict(first.ids[1], "burn", { by: HOST_PLAYER, damage: 100000 });
+        game.run(3 * SECOND);
+        goOut(game, barracks);
+        stand(game, game.me, barracks, 46);
+        game.run(2 * LOOK);
+
+        const post = [];
+        const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }) });
+        const joining = new Joining({ send: (text) => post.push({ from: "peer", text }) });
+        const deliver = () => {
+            while (post.length) {
+                const { from, text } = post.shift();
+
+                from ? hosting.hear(from, text) : joining.hear(text);
+            }
+        };
+        let astray = 0;
+        const play = (steps) => {
+            for (let step = 0; step < steps; step++) {
+                host.advance(STEP_MS);
+                hosting.flush();
+                deliver();
+
+                while (joining.step()) {
+                    // (every step it's been sent)
+                }
+
+                astray += joining.astray ? 1 : 0;
+                deliver();
+            }
+        };
+
+        joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
+        joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 50 } });
+        deliver();
+        play(2 * SECOND);
+        assert.ok(joining.host && joining.me, "(the copy made)");
+
+        const standing = (each) => first.ids.filter((id) => each.battle.actor(id) && !each.battle.actor(id).dead).toSorted();
+
+        assert.equal(standing(host).length, first.ids.length - 1);
+        assert.deepEqual(standing(joining.host), standing(host));
+        assert.equal(encode([...joining.host.quartered]), encode([...host.quartered]));
+
+        // (The host's player back to the door, in every copy, and in by their own command)
+        for (const each of [host, joining.host]) {
+            toDoor(each.battle.actor(HOST_PLAYER), each.world.interiors.buildings.get(barracks.key));
+            stand({ world: each.world }, each.battle.actor(joining.me), each.world.interiors.buildings.get(barracks.key), 300);
+        }
+
+        play(2);
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: barracks.door.id }).ok, true);
+        play(4 * SECOND);
+        assert.equal(game.me.map, barracks.maps[0]);
+        assert.equal(host.quartered.get(town_.id), first, "the garrison they left");
+        assert.deepEqual(standing(joining.host), standing(host));
+        assert.equal(astray, 0, "never astray");
+        assert.ok(joining.checks > 5, `${joining.checks} sums checked`);
+        assert.equal(joining.host.checksum(), host.checksum());
     });
 });
 
