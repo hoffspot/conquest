@@ -5405,6 +5405,29 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
     // (The world's folk dressed before going in: the townsfolk come out round the player)
     const outdoors = await page.evaluate(() => window.pellagos.game.battle.actors.filter(({ kind, map, id }) => kind === "folk" && map !== "taproom" && map !== "upstairs" && window.pellagos.game.avatars.has(id)).map(({ id }) => id));
+
+    // (And the folk of the buildings round the square in the battle, as they all were while a
+    // building's were made 22 metres from its door: the player's told to go into each got ready
+    // round them, and to stop. A building's folk are made as a player's told to go in, and kept
+    // while one's within 40 metres of its door, core/host.js Host.peopling, plan 1-23)
+    const lookedIn = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        let folk = 0;
+
+        for (const key of [...game.host.open.keys()]) {
+            if (game.host.command("player", { type: "enter", link: game.world.interiors.buildings.get(key).door.id }).ok) {
+                folk += game.host.open.get(key).length;
+            }
+        }
+
+        game.host.command("player", { type: "stop" });
+
+        return { folk, map: game.battle.actor("player").map };
+    });
+
+    expect(lookedIn.map).toBe("town");
+    expect(lookedIn.folk).toBeGreaterThan(0);
+
     const inside = await through("town", "door", 5);
 
     expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
@@ -5982,6 +6005,139 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
 
         return game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player" && game.avatars.has(actor.id)).length;
     })).toBeGreaterThanOrEqual(5);
+});
+
+test("a building's people are made as the player's told to go in, not at its door: no one of the Stag's Head in the battle on its doorstep; told to go in they're there before the door's gone through, dressed and drawn; out and 30 metres off they stand as they were left; 46 off they're let go, the inn still got ready; gone back into, made afresh and drawn", async ({ page }) => {
+    // (In twice, its folk's bodies built each time: minutes without a GPU)
+    test.setTimeout(360000);
+    await playing(page, "/?play&seed=2");
+
+    const begun = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.put = (id, [x, y]) => {
+            const actor = game.battle.actor(id);
+
+            Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get(id).place(x + 0.5, y + 0.5, actor.facing);
+            game.previous.set(id, { x: actor.x, y: actor.y });
+        };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
+        const { x, z } = building.entrance.door;
+        const [ax, ay] = building.door.ends[0].arrive;
+        const [dx, dy] = [ax + 0.5 - x, ay + 0.5 - z];
+        const length = Math.hypot(dx, dy) || 1;
+
+        window.inn = {
+            key: building.key,
+            door: building.door.id,
+            step: building.door.ends[0].arrive,
+            // (So many metres out from its door, the way it faces)
+            out: (metres) => [Math.floor(x + (dx / length) * metres), Math.floor(z + (dy / length) * metres)],
+            folk: () => game.battle.actors.filter(({ id }) => id.startsWith(`${building.key}/`)),
+            // (How each of them stands: all the battle keeps of them but when they next look
+            // about and rest, kept up while they stand, core/battle.js #lull)
+            stood: () => JSON.stringify(window.inn.folk().map((actor) => ({ ...actor, lookAt: null, restAt: null, chance: null }))),
+        };
+
+        // (On its doorstep ten seconds, told nothing: got ready, and no one in it)
+        window.put("player", window.inn.step);
+        game.host.lookAt = 0;
+        game.advance(10, { render: false });
+
+        return { name: building.name, peopling: game.host.constructor.peopling, open: game.host.open.has(building.key), kept: game.host.open.get(building.key), made: building.maps.filter((id) => game.world.maps[id]).length, folk: window.inn.folk().length, visited: game.visits.has(building.key) };
+    });
+
+    expect(begun).toEqual({ name: "The Stag's Head", peopling: true, open: true, kept: [], made: 2, folk: 0, visited: true });
+
+    // Told to go in, as a tap on its door tells the host: made in that step, before any's played
+    const told = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const result = game.host.command("player", { type: "enter", link: window.inn.door });
+        const made = window.inn.folk().length;
+        let steps = 0;
+
+        while (game.battle.actor("player").map === "town" && steps++ < 100) {
+            game.advance(0.05, { frame: 0.05, render: false });
+        }
+
+        return { result, made, steps, key: window.inn.key, map: game.battle.actor("player").map, folk: window.inn.folk().length, kept: game.host.open.get(window.inn.key).length };
+    });
+
+    expect(told.result).toEqual({ ok: true });
+    expect(told.made).toBeGreaterThanOrEqual(6);
+    expect(told).toMatchObject({ map: `${told.key}/taproom`, folk: told.made, kept: told.made });
+    expect(told.steps).toBeLessThan(100);
+
+    // (And drawn, once their bodies are built: everyone in the room the player's in)
+    const drawn = () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const here = game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player");
+
+        return here.length > 0 && here.every((actor) => game.avatars.has(actor.id));
+    };
+
+    expect(await playUntil(page, drawn, { seconds: 90 })).toBe(true);
+
+    // Out again, and 30 metres off for twenty seconds: every one of them as they were left
+    const near = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.command("player", { type: "enter", link: window.inn.door });
+
+        for (let k = 0; k < 400 && game.battle.actor("player").map !== "town"; k++) {
+            game.advance(0.05, { frame: 0.05, render: false });
+        }
+
+        game.advance(0.05, { frame: 0.05, render: false });
+
+        const left = window.inn.stood();
+
+        window.put("player", window.inn.out(30));
+        game.advance(20, { render: false });
+
+        return { map: game.battle.actor("player").map, folk: window.inn.folk().length, same: window.inn.stood() === left, moved: window.inn.folk().some((actor) => actor.x !== actor.spawn[0] + 0.5 || actor.y !== actor.spawn[1] + 0.5) };
+    });
+
+    expect(near).toEqual({ map: "town", folk: told.made, same: true, moved: true });
+
+    // 46 metres off: let go at the next look round, none of them drawn, the inn still got ready
+    const gone = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.put("player", window.inn.out(46));
+        game.host.lookAt = 0;
+        game.advance(0.2);
+
+        return { folk: window.inn.folk().length, kept: game.host.open.get(window.inn.key), open: game.host.open.has(window.inn.key), visited: game.visits.has(window.inn.key), drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${window.inn.key}/`)).length };
+    });
+
+    expect(gone).toEqual({ folk: 0, kept: [], open: true, visited: true, drawn: 0 });
+
+    // Back in by its door: made afresh as they're told to go in, each where its plan puts them,
+    // and drawn
+    const again = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        window.put("player", window.inn.step);
+        game.advance(0.2);
+        game.host.command("player", { type: "enter", link: window.inn.door });
+
+        const made = window.inn.folk();
+        const fresh = made.length > 0 && made.every((actor) => actor.x === actor.spawn[0] + 0.5 && actor.y === actor.spawn[1] + 0.5);
+
+        game.advance(5);
+
+        return { made: made.length, fresh, map: game.battle.actor("player").map };
+    });
+
+    expect(again).toEqual({ made: told.made, fresh: true, map: told.map });
+    expect(await playUntil(page, drawn, { seconds: 90 })).toBe(true);
 });
 
 test("buildings' floors built only once the player comes to their doors, though they're got ready further off, and held at most twelve further off than they're built (the furthest let go of first, none built again only to be let go), and counted in what the game holds: each on the page alone, put away till the player goes in", async ({ page }) => {

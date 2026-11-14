@@ -36,6 +36,19 @@ function throughEveryone(play) {
     }
 }
 
+// With a building's people made as it's got ready, 22 m from its door, and kept till it's let
+// go, as they were, what `play` gives (core/host.js Host.peopling)
+function asItWas(play) {
+    assert.equal(Host.peopling, true, "Host.peopling is on");
+    Host.peopling = false;
+
+    try {
+        return play();
+    } finally {
+        Host.peopling = true;
+    }
+}
+
 // The world's clock put to `elapsed` ms
 const at = (host, elapsed) => Object.assign(host.war, { turn: Math.floor(elapsed / 60000), clock: elapsed % 60000 });
 
@@ -253,8 +266,20 @@ describe("a night of comings and goings, lit from what the battle keeps and by g
 
     it("goes through the soldiers, and everyone only while a Light may be lasting, where it went through everyone each step", () => {
         assert.ok(kept.counts["light.actors"] > 0);
-        assert.ok(kept.counts["light.actors"] < everyone.counts["light.actors"] * 0.75, `${kept.counts["light.actors"]} gone through, ${everyone.counts["light.actors"]} before`);
+        // (Under four fifths of everyone, as the game plays it now: the owner's ruling of 14
+        // November 2026. Everyone is fewer with no building's folk in the battle till a player
+        // goes in, core/host.js Host.peopling, plan 1-23, and the soldiers and the Lights are
+        // as many as they were: 69,341 of 87,897, 79%)
+        assert.ok(kept.counts["light.actors"] < everyone.counts["light.actors"] * 0.8, `${kept.counts["light.actors"]} gone through, ${everyone.counts["light.actors"]} before`);
         assert.equal(kept.counts["light.pairs"], everyone.counts["light.pairs"], "(the lights measured against players are the same)");
+
+        // (And under three quarters, as it was asked, of the night as it was: the folk of the
+        // buildings near the players in the battle from 22 m off their doors, Host.peopling off)
+        const was = asItWas(() => ({ kept: night().counts, everyone: throughEveryone(night).counts }));
+
+        assert.ok(was.kept["light.actors"] > 0);
+        assert.ok(was.kept["light.actors"] < was.everyone["light.actors"] * 0.75, `as it was: ${was.kept["light.actors"]} gone through, ${was.everyone["light.actors"]} before`);
+        assert.equal(was.kept["light.pairs"], was.everyone["light.pairs"]);
     });
 
     it("carries on the same from a snapshot taken in the dark with a Light still lasting, either way, its players sent about as before", () => {

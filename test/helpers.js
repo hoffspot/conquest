@@ -1,6 +1,7 @@
 // Helpers shared by the tests.
 
 import assert from "node:assert/strict";
+import { RELEVANCE } from "../client/js/core/host.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 
 // The longest a system's clock tick is (ms: Linux's is 1 to 10, Windows' 15.6). A thread's own
@@ -80,4 +81,46 @@ export function unexpired(name, date, now = new Date()) {
 
     assert.ok(!Number.isNaN(ends.getTime()), `${name}: an expiry as 2027-05-01, not ${JSON.stringify(date)}`);
     assert.ok(now < ends, `The switch "${name}" expired on ${date}: take it out (its name is never used again), or, if it's still needed, say why in the pull request that gives it a later date.`);
+}
+
+/**
+ * Every player out in the world (or those of `ids`) told to go into each building got ready
+ * round them, and then to stop where they are: so each of those buildings' people are made, as
+ * they are when a player's told to go in (core/host.js Host.peopling, generated/
+ * multiplayer_scaling_plan.md 1-23), and kept, standing as they're made, while that player stays
+ * within 40 m of its door. For a test whose world is one with the folk of the buildings round
+ * its players in the battle, which every world was while they were made 22 m from a door: its
+ * players look in at each door, from anywhere but a door's own square. With the switch off
+ * they're there already, and this makes no one. How many buildings were looked into.
+ */
+export function lookIn(host, ids = [...host.players.keys()]) {
+    let looked = 0;
+
+    for (const id of ids) {
+        const actor = host.battle.actor(id);
+        let told = false;
+
+        if (!actor || actor.dead || actor.map !== "town") {
+            continue;
+        }
+
+        for (const key of [...host.open.keys()]) {
+            const building = host.world.interiors.buildings.get(key);
+            const { x, z } = building.entrance.door;
+
+            if (Math.hypot(x - actor.x, z - actor.y) < RELEVANCE.near && host.command(id, { type: "enter", link: building.door.id }).ok) {
+                told = true;
+                looked++;
+            }
+        }
+
+        // (One standing on a door's own square is through it as they're told: not for this)
+        assert.equal(actor.map, "town", `${id} was told to look in from a door's own square, and went through it`);
+
+        if (told) {
+            host.command(id, { type: "stop" });
+        }
+    }
+
+    return looked;
 }

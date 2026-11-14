@@ -294,7 +294,20 @@ describe("the host (host.js)", () => {
         assert.deepEqual(events.map(({ type, with: withId = undefined }) => [type, withId]), [["talk", one.id], ["effect", undefined], ["talk", null]]);
     });
 
-    it("gets the buildings near any player ready, and lets them go once every player's far off", () => {
+    it("gets the buildings near any player ready, and lets them go once every player's far off: as it was, their folk made with them (Host.peopling off)", () => {
+        // (A building's folk made as it's got ready and kept till it's let go, as they were
+        // before plan 1-23: the test after this one has them as they are)
+        assert.equal(Host.peopling, true);
+        Host.peopling = false;
+
+        try {
+            asItWas();
+        } finally {
+            Host.peopling = true;
+        }
+    });
+
+    function asItWas() {
         const host = hosted([HOST_PLAYER, "guest"]);
         const building = [...host.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
         const [me, guest] = [host.battle.actor(HOST_PLAYER), host.battle.actor("guest")];
@@ -333,6 +346,64 @@ describe("the host (host.js)", () => {
 
         assert.deepEqual(closed?.folk, opened.folk);
         assert.ok(opened.folk.every((id) => !host.battle.actor(id) && !host.folk.has(id)));
+        assert.ok(host.world.maps[inside]);
+    }
+
+    it("gets the buildings near any player ready with no one in them; makes their folk as a player's told to go in, keeps them while any player's in or within 40 m of the door, and lets the building go once every player's far off (Host.peopling)", () => {
+        const host = hosted([HOST_PLAYER, "guest"]);
+        const building = [...host.world.interiors.buildings.values()].find((each) => each.entrance && each.kind === "tavern");
+        const [me, guest] = [host.battle.actor(HOST_PLAYER), host.battle.actor("guest")];
+        const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null });
+        const [start] = [host.world.spawns.player];
+        const folk = () => host.battle.actors.filter(({ map }) => building.maps.includes(map));
+
+        // Both far off: not ready
+        put(me, start.map((value) => value - 100));
+        put(guest, start.map((value) => value - 101));
+        run(host, RELEVANCE.every);
+        assert.ok(!host.open.has(building.key));
+
+        // The guest by its door: ready, its floors made, no one inside
+        put(guest, building.door.ends[0].arrive);
+
+        const opened = run(host, RELEVANCE.every).find(({ type, key }) => type === "open" && key === building.key);
+
+        assert.deepEqual(opened?.folk, []);
+        assert.ok(building.made);
+        assert.deepEqual([host.open.get(building.key), folk()], [[], []]);
+        run(host, RELEVANCE.every * 4);
+        assert.deepEqual(folk(), [], "still no one, the guest standing at its door");
+
+        // The guest told to go in: its folk inside, there and then
+        assert.deepEqual(host.command("guest", { type: "enter", link: building.door.id }), { ok: true });
+
+        const made = host.open.get(building.key);
+
+        assert.ok(made.length >= 6);
+        assert.ok(made.every((id) => host.battle.actor(id)?.map.startsWith(building.key) && host.folk.has(id)));
+
+        const peopled = run(host, RELEVANCE.every).find(({ type, key }) => type === "peopled" && key === building.key);
+
+        assert.deepEqual(peopled?.folk, made);
+
+        // The guest walks off, but the host player's in it: its folk kept
+        const inside = building.maps[0];
+
+        put(me, host.world.maps[inside].marks.D[0]);
+        me.map = inside;
+        guest.map = "town";
+        put(guest, start.map((value) => value - 101));
+        run(host, RELEVANCE.every * 2);
+        assert.ok(host.open.has(building.key) && made.every((id) => host.battle.actor(id)));
+
+        // Everyone off: let go, its folk gone (its plans kept)
+        me.map = "town";
+        put(me, start.map((value) => value - 100));
+
+        const closed = run(host, RELEVANCE.every).find(({ type, key }) => type === "close" && key === building.key);
+
+        assert.deepEqual(closed?.folk, made);
+        assert.ok(made.every((id) => !host.battle.actor(id) && !host.folk.has(id)));
         assert.ok(host.world.maps[inside]);
     });
 

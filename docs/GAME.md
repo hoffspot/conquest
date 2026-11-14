@@ -1417,8 +1417,10 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   owner's ruling of 14 November 2026). The folk of a building, and the soldiers quartered in a
   barracks, stand as they are while no player is on their map (their floor: a tavern's upstairs
   is a map of its own): no turn, no walking, no look for danger, no way found, no act and no
-  rest. They're in the battle as ever, got ready and let go as ever, and every copy of the
-  world has them. They go on from where they stood, their waits as they were, none begun afresh,
+  rest. They're in the battle from when a player first goes in till every player's 40 m from
+  the door, the soldiers till the building's let go (below, *Made as the door's gone into*),
+  and every copy of the world has them. They
+  go on from where they stood, their waits as they were, none begun afresh,
   from the step after the one a player comes onto their map in (through its door, up its
   stairs, set down there, come into the world there), a player fallen there counting as one
   there; and stand again from the step after the last has gone. So a room come back to is as it
@@ -1452,6 +1454,57 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
     side (`test/idling.test.js`, which has the switch's date: the two aren't the same battle),
     and `npm run load -- --astir` to compare. With a player kept standing on every floor of
     every open building the world plays the same step for step either way.
+- **Made as the door's gone into** (`Host.peopling`, `RELEVANCE.away`, core/host.js `#people`,
+  `#vacate`, `#peopled`; plan 1-23, the owner's ruling of 14 November 2026: "the same room
+  while nearby"). A building's folk, a barracks' garrison and a scene's court aren't in the
+  battle till a player goes in. The building's got ready as ever, 22 m from its door (its
+  floors made, for the game and the world server to build and bake ahead: *Getting buildings
+  ready*, below), with no one in it.
+  - **When they're made.** In the step a player's command to go in by one of its ways is taken
+    (`enter`, from however far the game shows the way: `ENTER_REACH`, 224 m), before that
+    command has moved anyone: so they're in the battle, in every copy, before any step that
+    could set the player down among them, and kept while that player's on their way. Failing
+    that, in the step a player's set down inside by anything else (carried in by magic, through
+    the guild's portal, up again where they sleep); failing that, by the next look round that
+    finds a player in it (one come into the world there). A `peopled` event tells of it
+    (`{ key, folk }`), which the game hears: folk made a moment after it saw its player going
+    in are dressed all the same. Made, they stand as they're made till
+    the step after a player's on their floor, as above, and are about their business within a
+    second. Making a tavern's fifteen takes a third of a millisecond and finds no way.
+  - **The same room while nearby.** Its folk stay, standing as they were left, while any
+    player is in the building, told to go into it, or within 40 m of its door
+    (`RELEVANCE.away`; a player in another building counts as at that building's door).
+    Whoever comes back finds the room as it was, bit for bit, and it goes on from there.
+  - **Let go, and made afresh.** The look round (twice a second) that finds no player in it or
+    told to go in, and every player more than 40 m from its door, takes its folk out of the
+    battle (`#vacate`, a `vacated` event; the building stays got ready to 90 m, its floors
+    kept). Whoever goes in after that finds its folk made afresh, each where its plan puts
+    them, as a building let go at 90 m always was. One hired away stays hired.
+  - **Those who fight are kept to 90 m** (the owner's ruling of 14 November 2026). A barracks'
+    garrison and a scene's court (Bellhaven's Order of the Bell) are made at the going in like
+    everyone, but the 40 m rule never lets them go: once made they're kept as they were left,
+    fallen or standing, till the building itself is let go, 90 m from every player, as they
+    always were. So a fight can't be begun again whole by stepping 40 m back from the door: a
+    garrison part put down is as it was left for whoever comes back from nearer than 90 m, its
+    relief due when it was (docs/WAR.md, *Barracks*), and no one's made twice. Who these are
+    is said by how they're made, not by what they carry: those the building *posts* (`#posted`:
+    `#quarter`, `#holdCourt`), who are soldiers and creatures a player can fight. A building's
+    *folk* (`building.folk`: keepers, patrons, officials, a keep's sentries and a guild's
+    adventurers among them) are neutral in the battle, no one can fight them, and they follow
+    the 40 m rule. In a building with both, its folk go at 40 m and come back afresh while
+    those posted stay as left (`#peopled` for the one, `#manned` for the other).
+  - **Every copy has the same ones.** Nothing new is kept: whose folk are in is read off who's
+    in the battle (`#peopled`), and who's posted off what the world kept of them already
+    (`#manned`: `quartered`, `courts`), so the snapshot is as it was (`SNAPSHOT_VERSION` unchanged),
+    and a world carried on from one taken at any point of this plays on the same. A copy on
+    the old rules would have them in its battle, so `NET_VERSION` is 228.
+  - **What it saves.** They're out of the snapshot, the checksum, the battle's index, the
+    light's pass and every going through the roster while no one's gone in; plan 1-23 has what
+    was measured. `Host.peopling` off makes them as the building's got ready and keeps them
+    till it's let go, as they were, for the tests that set the two side by side
+    (`test/peopling.test.js`, which has the switch's date), and `npm run load -- --peopled` to
+    compare. Wenches and Ale's twelve are the world's own, not a building's got ready, and are
+    in the battle always, as they were.
 - **Talking.** Told to `approach` someone (`{ type: "approach", target }`), a character walks to
   the nearest square it could talk to them from (`canTalk`: seeing them, next to them, or up to
   3.2 squares away across something in the way: the bar, a table, a counter), there (searching
@@ -3698,8 +3751,10 @@ shaders.
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
 making for) is got ready: its plans made, then each floor built, one to a piece of work, for at
-most 6 ms a frame. Its folk are in the battle from then on, standing as they're made till a
-player's on their floor (above, *Standing till someone comes in*), and each is dressed (their body,
+most 6 ms a frame. Its folk are in the battle only from when a player's told to go in (above,
+*Made as the door's gone into*: before 14 November 2026 they were from when it was got ready),
+standing as they're made till a player's on their floor (*Standing till someone comes in*), and
+each is dressed (their body,
 garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player goes in: told
 to go through one of its ways in, or inside (`DOORSTEP`, app/game.js `#doorstep`), a piece of
 work each after its floors. Not as they come near its door, as they were till 2026-10-25: a
@@ -3764,9 +3819,10 @@ built then and kept to 30 metres, 20 at most only of those further off than 22: 
 2026-10-25 a building's floors are built only at its door, and kept to 16 metres, 12 at most. In
 the start town's square, the four buildings round it (their doors 12 to 16 metres off) are got
 ready, none of their floors built, where all four were. Once the player is
-90 metres away (and outside), it's let go: its
-folk out of the battle, their characters and any floors thrown away (built again if they come
-back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
+90 metres away (and outside), it's let go: their characters and any floors thrown away (built
+again if they come back); the plans are kept, and a garrison or a court in it goes then. Its
+folk are out of the battle sooner, once every player's 40 metres from its door (*Made as the
+door's gone into*). Wenches and Ale's floors are built at the start and kept; its folk are
 dressed and let go of at its door as any building's.
 
 **The memory guard** (app/memoryguard.js `MEMORY_GUARD`, app/game.js `#memoryGuarding`): on a

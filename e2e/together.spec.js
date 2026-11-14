@@ -520,7 +520,24 @@ test("a guest taken over upstairs in Wenches and Ale from another device starts 
     await first.evaluate(() => window.pellagos.game.remote.command({ type: "enter", link: "tavern-stairs" }));
     await expect.poll(() => map(first), { timeout: 120000 }).toBe("upstairs");
 
-    // (Others' folk in the world: another building's, and those out in the streets)
+    // (Others' folk in the world: another building's, and those out in the streets. The host's
+    // told to go into each building got ready round them, and to stop: a building's folk are
+    // made as a player's told to go in, and kept while one's within 40 metres of its door,
+    // core/host.js Host.peopling, plan 1-23)
+    expect(await host.evaluate(() => {
+        const { game } = window.pellagos;
+        let folk = 0;
+
+        for (const key of [...game.host.open.keys()]) {
+            if (game.host.command(game.me, { type: "enter", link: game.world.interiors.buildings.get(key).door.id }).ok) {
+                folk += game.host.open.get(key).length;
+            }
+        }
+
+        game.host.command(game.me, { type: "stop" });
+
+        return folk;
+    })).toBeGreaterThan(0);
     expect(await host.evaluate(() => window.pellagos.game.battle.actors.filter(({ kind, map }) => kind === "folk" && map !== "taproom" && map !== "upstairs").length)).toBeGreaterThan(10);
 
     // On the second: taken over, upstairs, the room shown; the tavern's twelve dressed as it loads,
