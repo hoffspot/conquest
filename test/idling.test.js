@@ -58,9 +58,10 @@ const wolf = (square, map, more = {}) => ({ id: "wolf", kind: "beast", name: "Wo
 const guard = (id, square, map, more = {}) => ({ id, kind: "soldier", name: "guardsman", team: "human", weapon: "sword", square, map, ai: "patrol", patrol: [square], leash: 12, ...more });
 
 // Everything of someone that the battle keeps, as text; and all of it but when they next look
-// about, which is kept up for one held (battle.js #lull): how they stand
+// about and when they next rest, with the dice the rest's moment is thrown on, which are kept up
+// for one held (battle.js #lull): how they stand
 const stateOf = (actor) => JSON.stringify(actor);
-const standingOf = (actor) => JSON.stringify({ ...actor, lookAt: null, rethinkAt: null });
+const standingOf = (actor) => JSON.stringify({ ...actor, lookAt: null, rethinkAt: null, restAt: null, chance: null });
 
 /**
  * An evening in the tavern (core/world.js generateWorld: its taproom and the floor above, a
@@ -279,20 +280,25 @@ describe("the folk of a building no player is in stand as they are (core/battle.
         assert.ok(within.some(({ type }) => type === "rest" || type === "act"), "someone's resting or at their work within a second");
         assert.notEqual(played.stood[back + 1][ROOM], stood, "from the very next step");
 
-        // (The owner's second answer: their waits as they were, none begun afresh. Those who sit,
-        // whose rests fell due while they stood, all begin one in the step after the door's
-        // gone through, the player in sight of them; unseen, as they were, each waited a moment
-        // of its own after it was first seen again)
+        // (The owner's second answer: their waits as they were, none begun afresh; and their
+        // answer of the same day on rests: those who sit, whose rests fell due while they stood,
+        // don't all begin one in the step after the door's gone through, the player in sight of
+        // them, but one after another in the three seconds after, each a moment of its own
+        // after it's first seen, as they did when they were stepped unseen)
         const rests = (events) => events.filter(({ type }) => type === "rest").map(({ id }) => id);
         const seated = folkOf(battle, ROOM).filter((actor) => actor.routine.seated).map(({ id }) => id);
+        const after = (run, from) => run.events.slice(from + 1, from + 1 + 3 * SECOND + 2);
+        const spread = (run, from) => after(run, from).filter((events) => rests(events).length > 0).length;
 
         assert.equal(seated.length, 4);
-        assert.deepEqual(rests(played.events[back + 1]).sort(), [...seated].sort(), "the four who sit, together");
+        assert.ok(rests(played.events[back + 1]).length <= 1, "not together in the step after the door");
+        assert.ok(seated.every((id) => rests(after(played, back).flat()).includes(id)), "the four who sit, each within three seconds");
+        assert.ok(spread(played, back) >= 3, `in ${spread(played, back)} steps of their own`);
 
         const was = unseen(() => evening({ first: (b, world) => b.add(hero("ada", world.tavern.outside, "town")), acts: [IN, OUT, BACK].map((at) => ({ at, does: enter })), steps: BACK + 10 * SECOND }));
         const then = crossed(was, "ada", BACK);
 
-        assert.ok(rests(was.events[then + 1]).length <= 1 && rests(was.events.slice(then + 1, then + 1 + 3 * SECOND).flat()).length >= 3, "one after another in the three seconds after, as they were");
+        assert.ok(rests(was.events[then + 1]).length <= 1 && rests(after(was, then).flat()).length >= 3 && spread(was, then) >= 3, "as they were, unseen");
         assert.ok(folkOf(battle, ROOM).every((actor) => actor.map === ROOM && actor.lookAt > back * STEP_MS));
     });
 

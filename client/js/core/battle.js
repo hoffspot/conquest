@@ -906,8 +906,9 @@ export class Battle {
      * door is gone through in. Held, one takes no turn, walks nowhere, looks for no danger, finds
      * no way and strikes no blow; it's in the battle as ever, and the passes over everyone
      * (what ails them, what lasts on them, the index) still come to it. Of its own, only the
-     * time of its next look is kept up (#lull). Who is held is worked out as each step begins
-     * from what every copy of the world has, nothing kept for it: a snapshot holds nothing of it.
+     * times of its next look and its next rest are kept up (#lull). Who is held is worked out as
+     * each step begins from what every copy of the world has, nothing kept for it: a snapshot
+     * holds nothing of it.
      */
     static idling = true;
 
@@ -3456,11 +3457,18 @@ export class Battle {
     // few as a look that found no one puts it, and none made. So a room's folk and a barracks'
     // garrison don't all look in the step someone comes in, their looks' times all long past: each
     // looks in the step it would have, and a garrison at its posts is in every way as it was
-    // when it was stepped unseen
+    // when it was stepped unseen. And when one of the folk next rests, put off a moment of its
+    // own as a rest come due with no one to see it is (#rest), so a room's folk don't all begin
+    // one in the step someone comes in, but one after another as they did (the owner's ruling
+    // of 14 November 2026)
     #lull(actor) {
         if (actor.ai === "routine") {
             if (this.time >= (actor.lookAt ?? 0)) {
                 actor.lookAt = this.#nextStep(actor, FLEE.look);
+            }
+
+            if (this.time >= actor.restAt && ROLES[actor.role]?.rests) {
+                actor.restAt = this.time + REST_WHEN_SEEN_MS[0] + actor.chance.next() * (REST_WHEN_SEEN_MS[1] - REST_WHEN_SEEN_MS[0]);
             }
         } else if (this.time >= actor.rethinkAt) {
             actor.rethinkAt = this.#nextStep(actor);

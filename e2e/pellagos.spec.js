@@ -5650,7 +5650,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
-test("a tavern no one's in stands as it was left: its folk where they were half a minute on, none acting or resting unseen; walked into, they're about their business within a second, those who sit seated and resting, someone on their way, and drawn so", async ({ page }) => {
+test("a tavern no one's in stands as it was left: its folk where they were half a minute on, none acting or resting unseen; walked into, they're about their business within a second, those who sit seated and resting one after another in the seconds after, someone on their way, and drawn so", async ({ page }) => {
     // (Stood outside, in, and its folk's bodies built: a minute or more without a GPU)
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -5659,9 +5659,10 @@ test("a tavern no one's in stands as it was left: its folk where they were half 
         const { game } = window.pellagos;
         const battle = game.battle;
         const folk = () => battle.actors.filter((actor) => actor.kind === "folk" && actor.map === "taproom");
-        // (How each of them stands: all the battle keeps of them but when they next look about,
-        // which is kept up while they stand, core/battle.js #lull)
-        const stood = () => JSON.stringify(folk().map((actor) => ({ ...actor, lookAt: null })));
+        // (How each of them stands: all the battle keeps of them but when they next look about
+        // and when they next rest, with the dice that's thrown on, which are kept up while they
+        // stand, core/battle.js #lull)
+        const stood = () => JSON.stringify(folk().map((actor) => ({ ...actor, lookAt: null, restAt: null, chance: null })));
         game.stop();
         Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
 
@@ -5692,13 +5693,20 @@ test("a tavern no one's in stands as it was left: its folk where they were half 
 
         const now = folk();
         const seated = now.filter((actor) => actor.routine.seated);
+        const first = { seconds: (battle.time - through.at) / 1000, moved: stood() !== before, resting: now.filter((actor) => actor.restingUntil > battle.time).length };
+
+        // (And three more: their rests begun one after another, each a moment of its own after
+        // it was first seen)
+        game.advance(3, { render: false });
 
         return {
             waited,
             through,
             after: {
-                seconds: (battle.time - through.at) / 1000,
-                moved: stood() !== before,
+                seconds: first.seconds,
+                moved: first.moved,
+                restingAtOnce: first.resting,
+                rested: now.filter((actor) => actor.restingUntil > through.at).length,
                 turns: now.every((actor) => actor.restAt > 0 || actor.waitUntil > 0 || actor.path.length > 0 || actor.arrived),
                 resting: now.filter((actor) => actor.restingUntil > battle.time).length,
                 walking: now.filter((actor) => actor.path.length > 0).length,
@@ -5713,13 +5721,15 @@ test("a tavern no one's in stands as it was left: its folk where they were half 
     expect(played.waited.folk).toBeGreaterThanOrEqual(5);
     expect(played.waited).toMatchObject({ same: true, held: true });
 
-    // (Still so in the step the door's gone through; and a second on, about their business:
-    // those who sit resting in their seats, the rest waiting at their work or on their way)
+    // (Still so in the step the door's gone through; a second on, about their business; and
+    // three more on, those who sit in their seats and having rested, not all of them at once,
+    // the rest waiting at their work or on their way)
     expect(played.through).toMatchObject({ map: "taproom", same: true });
     expect(played.after.seconds).toBeLessThanOrEqual(1.1);
     expect(played.after).toMatchObject({ moved: true, turns: true });
-    expect(played.after.resting).toBeGreaterThanOrEqual(2);
-    expect(played.after.resting + played.after.walking).toBeGreaterThanOrEqual(3);
+    expect(played.after.rested).toBeGreaterThanOrEqual(2);
+    expect(played.after.restingAtOnce).toBeLessThan(played.after.rested);
+    expect(played.after.rested + played.after.walking).toBeGreaterThanOrEqual(3);
     expect(played.after.seated).toBeGreaterThanOrEqual(3);
     expect(played.after.inSeats).toBe(played.after.seated);
 

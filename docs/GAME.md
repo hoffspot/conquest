@@ -1422,13 +1422,16 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   from the step after the one a player comes onto their map in (through its door, up its
   stairs, set down there, come into the world there), a player fallen there counting as one
   there; and stand again from the step after the last has gone. So a room come back to is as it
-  was left, one of its folk perhaps in the middle of a walk, and whoever's wait or rest fell due
-  while they stood sets off or rests at once: those who sit, in sight of the door, all begin a
-  rest in the step after it's gone through, where unseen each waited its own moment. Only the
-  time of each one's next look about is kept up while it stands (`#lull`: put on to its own step
-  of the next few, as a look that found no one puts it), so a room doesn't all look for danger
-  in the one step, and a garrison at its posts is in every way as it was when it was stepped
-  unseen: it notices whoever comes in at the step it would have.
+  was left, one of its folk perhaps in the middle of a walk, and whoever's wait fell due while
+  they stood sets off at once. Two times of each one are kept up while it stands (`#lull`), and
+  nothing else. The time of its next look about is put on to its own step of the next few, as a
+  look that found no one puts it, so a room doesn't all look for danger in the one step, and a
+  garrison at its posts is in every way as it was when it was stepped unseen: it notices
+  whoever comes in at the step it would have. And the time of its next rest, come due, is put
+  off a moment of its own (0.8 to 3 s, on its own dice), as a rest come due with no one to see
+  it always was: so those who sit, in sight of the door, begin their rests one after another in
+  the three seconds after it's gone through, as they did, and not all in the one step (the
+  owner's ruling of the same day).
   - **Who's stepped all the same.** No one's held on a map that holds, as the step begins, a
     player, or anyone alive who isn't about their own quiet business there: a creature of the
     wild, a follower left there, a soldier who came in after someone (it goes out again by the
