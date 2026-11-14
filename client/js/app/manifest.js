@@ -180,7 +180,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/ambush.js", 9085, "d983c74f5a"],
             ["js/core/aqueducts.js", 12827, "6e70aed948"],
             ["js/core/arches.js", 9655, "c074d59168"],
-            ["js/core/battle.js", 447173, "ed6df75bd3"],
+            ["js/core/battle.js", 449618, "f587d554b2"],
             ["js/core/burnt.js", 5313, "a94738f753"],
             ["js/core/crying.js", 5070, "834d1efe9b"],
             ["js/core/cultword.js", 6117, "be56ad53c8"],

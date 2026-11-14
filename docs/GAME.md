@@ -1068,6 +1068,24 @@ events, the world's sum as it goes and all of it at the end (`test/sparing.test.
   has, where five things were called to find it has none. Whatever's done to anyone is done in
   the order it was.
 
+**A look for danger only where there could be any** (`Battle.counting`, `#afraid`; plan 1-20). No
+one neutral frightens anyone, and a building's folk are mostly on a map with no one else, so two in
+three of the folk's looks for danger (half of all the searches a step made with a hundred players
+spread: 441 a step, 220 now) went through those round them to find no one. The index now counts,
+for each map, those on it who aren't neutral (`bold`), and one of the folk on a map with none looks
+for no one. The count is never told of anything: it's read off everyone, their `map` and their
+`neutral` as they are, every time the index is made or brought up to date, which the first asking
+of it in every step does (a step begins by marking it out of date), and the look asks the index
+first exactly as the search did. So whoever comes to a map in whatever way (added, through a door,
+set down by the host, their map written straight onto them as the host brings a leader's followers,
+a stranger no longer neutral, one fallen up again) is counted before any look that would have found
+them, and nothing that writes a character has anything to remember. One lying dead is still
+counted, which only means a look is made that finds no one. `test/counting.test.js` brings a wolf
+into a tavern's room of folk by each of those ways and has them run at the same step with the
+switch off, every step's events and the whole battle the same; `test/sparing.test.js`'s walk
+through a city comes out the same with under half the searches, and nothing else counted
+differently.
+
 **One shape** (`OPTIONAL`, `#made`). Every character in a battle has the same properties in the
 same order, whatever it is and whatever it's been given since: `add` makes each with all its own,
 and then with every property only some come to have (a player's gear's, a follower's orders', a

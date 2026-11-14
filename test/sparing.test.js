@@ -1,11 +1,13 @@
 // The battle's step made cheaper with nothing changed (client/js/core/battle.js; generated/
-// multiplayer_scaling_plan.md 1-16 to 1-19): nothing made to throw away where it needn't be
+// multiplayer_scaling_plan.md 1-16 to 1-20): nothing made to throw away where it needn't be
 // (Battle.sparing), the mesh's answer for where a walker stands remembered while it stands there
-// (Battle.remembering), fewer goings through everyone (Battle.mustering), and the players near
-// asked of the index (Battle.indexing). Each plays the old form with its switch off, and a walk
-// through a city's crowd, three players among its folk and soldiers with wolves let loose in it,
-// comes out the same step for step either way: every step's events, the world's sum as it goes,
-// and all of it at the end. Counts are asked, never times.
+// (Battle.remembering), fewer goings through everyone (Battle.mustering), the players near
+// asked of the index (Battle.indexing), and the folk looking for danger only where someone
+// could frighten them (Battle.counting: test/counting.test.js brings danger to them by every
+// way). Each plays the old form with its switch off, and a walk through a city's crowd, three
+// players among its folk and soldiers with wolves let loose in it, comes out the same step for
+// step either way: every step's events, the world's sum as it goes, and all of it at the end.
+// Counts are asked, never times.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
@@ -264,6 +266,24 @@ describe("the players near asked of the index (core/battle.js Battle.indexing, p
         // each asking measured them all, and now only those the index has within reach)
         assert.equal(indexed.counts["battle.playerAsks"], everyone.counts["battle.playerAsks"]);
         assert.ok(indexed.counts["battle.playerPairs"] > 0 && indexed.counts["battle.playerPairs"] < everyone.counts["battle.playerPairs"], `${indexed.counts["battle.playerPairs"]} players measured where it was ${everyone.counts["battle.playerPairs"]}`);
+    });
+});
+
+describe("the folk's look for danger only where someone could frighten them (core/battle.js Battle.counting, plan 1-20)", () => {
+    it("walks a city's crowd step for step as the folk looking on every map did, players coming, going and falling", () => {
+        const counting = cityWalk({ churn: true });
+        const looking = without("counting", () => cityWalk({ churn: true }));
+
+        assertSame(counting, looking);
+
+        // (Fewer than half the searches, for the folk indoors with no one but folk about them;
+        // and nothing else counted differently, the index made and brought up to date no
+        // oftener: only the searches and whom they looked at)
+        const differing = Object.keys(looking.counts).filter((name) => looking.counts[name] !== counting.counts[name]);
+
+        assert.deepEqual(differing.sort(), ["battle.searchLooks", "battle.searches"]);
+        assert.ok(counting.counts["battle.searches"] < looking.counts["battle.searches"] / 2, `${counting.counts["battle.searches"]} searches where there were ${looking.counts["battle.searches"]}`);
+        assert.ok(counting.counts["battle.searchLooks"] < looking.counts["battle.searchLooks"]);
     });
 });
 
