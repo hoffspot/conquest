@@ -533,14 +533,15 @@ export function templeFolkOf(building, nave) {
 // shelves of ledgers and scrolls on the wall behind her; the quest board along the west wall;
 // tables with benches for the adventurers; a hearth on the east wall, across from the board, and
 // the guild's portal beside it (to the other branches the player's been to: core/portals.js);
-// barrels either side of the door, in the middle of the south wall
+// on the hearth's other side, against the wall, the great chest that opens on each hero's own
+// stash (core/strongroom.js); barrels either side of the door, in the middle of the south wall
 const GUILD = [
     "eeeeeeee............",
     "....................",
     "..MMMMMMMM..........",
     "....................",
-    "q...................",
-    "q.....bbb.....bbb...",
+    "q..................+",
+    "q.....bbb.....bbb..+",
     "q.....TTT.....TTT..H",
     "q.....bbb.....bbb..H",
     "q..................H",

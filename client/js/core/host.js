@@ -36,7 +36,7 @@ import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.j
 import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
 import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
 import { horseFrom, horseHealth, out as horseOut, STABLE } from "./mounts.js";
-import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, STRONGROOM, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareAt, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
@@ -64,6 +64,7 @@ import { keptOf, sharedOf, spareBattle } from "./keptactor.js";
 import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
+import { atStrongroom, strongroomOn } from "./strongroom.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -774,7 +775,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 53;
+export const SNAPSHOT_VERSION = 54;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -973,6 +974,13 @@ export const SNAPSHOT_STEPS = Object.freeze({
             battle: { ...spareBattle(snapshot.battle), projectiles: (snapshot.battle.projectiles ?? []).map((projectile) => ({ flown: 0, ...projectile })) },
         };
     },
+    // 54: each player's stash, carried with their character (progress.strongroom, progress.js
+    // STRONGROOM: the tabs it starts with, empty)
+    53: (snapshot) => ({
+        ...snapshot,
+        version: 54,
+        players: snapshot.players.map((player) => ({ ...player, progress: { strongroom: { tabs: Array.from({ length: STRONGROOM.tabs }, () => Array(STRONGROOM.size).fill(null)) }, ...player.progress } })),
+    }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1212,6 +1220,14 @@ export const REFUSALS = Object.freeze({
     // (At a stable: #stableService)
     stable: "They keep no horses here.",
     unfallen: "That horse is well: there's nothing to bring back.",
+    // (The stash: core/strongroom.js, progress.js STRONGROOM, #strongroom)
+    strongroom: "Stand at the great chest by the hearth in any adventurers' guild to open your stash.",
+    strongroomFull: "That tab of your stash is full.",
+    strongroomLocked: "That tab of your stash is locked: buy it first.",
+    strongroomTabs: "Your stash has all the tabs it can: six.",
+    strongroomOwned: "That tab of your stash is yours already.",
+    strongroomOrder: "The stash's tabs are bought in order: buy the one before it first.",
+    strongroomUnalike: "Nothing you carry stacks with anything in this tab.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -2246,6 +2262,14 @@ export class Host {
      *  - { type: "arrange", from, to }: move what's in one slot of their pack to another (put
      *    together with things alike, or swapped); { type: "split", index, count, to }: split
      *    some off a stack (into slot `to`, or the first empty one);
+     *  - { type: "strongroom", do, ... }: their stash, standing at the chest in an adventurers'
+     *    guild (core/strongroom.js; progress.js STRONGROOM): `do` "put" (the stack at `index` in
+     *    their pack into tab `tab`, in its place `to` or wherever it goes), "take" (the stack in
+     *    place `place` of tab `tab` into their pack, in its slot `to` or wherever it goes),
+     *    "shift" (the stack in place `place` of tab `tab` to tab `into`, in its place `to` or
+     *    wherever it goes), "sort" (tab `tab` put in order), "stow" (everything in their pack
+     *    that stacks with what tab `tab` holds put on it there), "buy" (tab `tab`, the next, for
+     *    its price);
      *  - { type: "discard", index }: throw away a stack, for good once a moment's passed;
      *    { type: "undiscard" }: take back what was just thrown away;
      *  - { type: "drop", index, count }: drop things from a stack (all of it, with no count) on
@@ -2474,6 +2498,8 @@ export class Host {
                 return this.#packed(player.progress.sort());
             case "split":
                 return this.#packed(player.progress.split(command.index, command.count, Number.isInteger(command.to) ? command.to : undefined));
+            case "strongroom":
+                return this.#strongroom(player, actor, command);
             case "discard":
                 return this.#discard(player, command.index);
             case "undiscard":
@@ -5233,6 +5259,76 @@ export class Host {
     // Things in the pack moved or split (the reason they couldn't be: progress.js move, split)
     #packed(why) {
         return why ? refuse(why) : OK;
+    }
+
+    // Their stash (progress.js STRONGROOM), asked of standing at the great chest in an
+    // adventurers' guild's hall (any: core/strongroom.js), alive and not with a horse out (none
+    // comes indoors, but its whistle stays with them while one is): things put in, taken out or
+    // moved between its tabs, a tab put in order, what stacks with a tab's put on it, the next
+    // tab bought (as a shop's paid: #buy). All of it or nothing: the pack, the stash and the gold
+    // as they were, should any of it fail. Told to them ("strongroom": what was done, to which tab)
+    #strongroom(player, actor, command) {
+        const { progress } = player;
+        const what = command.do;
+        const whole = (value) => (Number.isInteger(value) ? value : null);
+        const [tab, to] = [whole(command.tab), whole(command.to)];
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        const chest = this.world.interiors?.of(actor.map)?.kind === "guild" ? strongroomOn(this.world.maps?.[actor.map]) : null;
+
+        if (!chest || !atStrongroom(chest, actor.x, actor.y)) {
+            return refuse("strongroom");
+        }
+
+        if (horseOut(actor.mount)) {
+            return refuse("riding");
+        }
+
+        const before = { gold: progress.gold, pack: progress.pack.map((stack) => stack && { ...stack }), tabs: progress.strongroom.tabs.map((each) => each.map((stack) => stack && { ...stack })) };
+        let why;
+        let price = 0;
+
+        try {
+            switch (what) {
+                case "put":
+                    why = progress.lodge(whole(command.index), tab, to);
+                    break;
+                case "take":
+                    why = progress.withdraw(tab, whole(command.place), to);
+                    break;
+                case "shift":
+                    why = progress.shift(tab, whole(command.place), whole(command.into), to);
+                    break;
+                case "sort":
+                    why = progress.sortTab(tab);
+                    break;
+                case "stow":
+                    why = progress.stowAlike(tab);
+                    break;
+                case "buy":
+                    why = progress.buyTab(tab ?? progress.strongroom.tabs.length);
+                    price = why ? 0 : STRONGROOM.price;
+                    break;
+                default:
+                    why = "command";
+            }
+        } catch (error) {
+            Object.assign(progress, { gold: before.gold, pack: before.pack, strongroom: { tabs: before.tabs } });
+            throw error;
+        }
+
+        if (why) {
+            Object.assign(progress, { gold: before.gold, pack: before.pack, strongroom: { tabs: before.tabs } });
+
+            return refuse(why);
+        }
+
+        this.#event("strongroom", { id: player.id, do: what, tab: what === "shift" ? whole(command.into) : tab, ...(price ? { price } : {}) });
+
+        return { ok: true, ...(price ? { price, tabs: progress.strongroom.tabs.length } : {}) };
     }
 
     // A stack thrown away: gone, but kept a moment to take back

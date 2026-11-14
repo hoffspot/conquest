@@ -70,6 +70,7 @@ const INSIDE = {
     board: [206, 190, 146],
     shelves: [84, 60, 38],
     portal: [110, 168, 236],
+    strongroom: [138, 96, 46],
     stand: [120, 122, 130],
     // (A cave's, the lair's and a dungeon's: core/dungeons)
     rock: [44, 40, 38],

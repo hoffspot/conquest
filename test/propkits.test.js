@@ -17,7 +17,8 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const THREE = await import("three");
 const { PROP_KITS, TONES, flamesOf, kitPiece, kitsFor, pieceName } = await import("../client/js/world/propkits.js");
 const { DUNGEON_PROPS, partsOf } = await import("../client/js/world/dungeons3d.js");
-const { buildInterior, STOREY } = await import("../client/js/world/interiors3d.js");
+const INTERIORS = await import("../client/js/world/interiors3d.js");
+const { buildInterior, STOREY } = INTERIORS;
 const { readPlan, UPSTAIRS_PLAN } = await import("../client/js/core/interiors.js");
 const { LAYOUTS, SHOP_INSIDES, barracksRooms, dungeonRooms, guildRooms, hallRooms, keepRooms, smithyRooms, taproomPlan, templeRooms } = await import("../client/js/core/insides.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
@@ -359,6 +360,40 @@ describe("licensed prop kits (world/propkits.js)", () => {
 
                 assert.ok(built.object.getObjectByName("kit-stand-ins")?.visible, `${name}: its own drawn till the kit's read`);
             }
+        }
+    });
+
+    it("stands the halls kit's chest in every people's guild for the stash, a fifth bigger than the pack made it, its back to the east wall north of the hearth; the game's own great chest drawn till it's read (core/strongroom.js)", () => {
+        const { STRONG_CHEST } = INTERIORS;
+
+        assert.equal(kitPiece("chest", { people: "human", place: "guild" }).model, "medieval-hall-chest");
+
+        for (const people of PEOPLES) {
+            const map = hallsOf(people).find(({ style }) => style === "guild");
+            const box = map.pieces.find(({ kind }) => kind === "strongroom");
+            const built = buildInterior(map);
+            const [chest, ...more] = halls(built, "chest");
+            const own = PROP_KITS["medieval-hall"].pieces.chest.size;
+
+            assert.equal(more.length, 0, people);
+            assert.equal(chest.model, "medieval-hall-chest", `${people}: the halls kit's, every people's guild`);
+            assert.equal(chest.tone ?? null, TONES[people], people);
+            assert.deepEqual(chest.fit.map((metres) => Math.round(metres * 1000) / 1000), own.map((metres) => Math.round(metres * STRONG_CHEST.long * 1000) / 1000), people);
+            assert.ok(Math.abs(chest.fit[0] - 1.2) < 1e-9 && chest.fit[0] > 0.9, `${people}: drawn bigger than kitBox's chests`);
+            assert.equal(chest.turn, -Math.PI / 2, `${people}: facing west, into the room`);
+            assert.ok(Math.abs(chest.x + chest.fit[2] / 2 - (map.width - STRONG_CHEST.off)) < 1e-9, `${people}: its back to the wall`);
+            assert.equal(chest.z, box.y + box.h / 2);
+            assert.ok(map.blocked[Math.floor(chest.z)][Math.floor(chest.x)] && box.x === Math.floor(chest.x), people);
+
+            // (Clear of the hearthstone, which reaches 0.2 m past the hearth, and of the window,
+            // the shield over it on the wall and its height)
+            const hearth = map.pieces.find(({ kind }) => kind === "hearth");
+
+            assert.ok(chest.z + chest.fit[0] / 2 < hearth.y - 0.2, `${people}: clear of the hearthstone`);
+            assert.ok(chest.z - chest.fit[0] / 2 > 3.6, `${people}: clear of the window`);
+            assert.ok(chest.fit[1] < 1.4, `${people}: under the shield on the wall`);
+            assert.ok(built.object.getObjectByName("kit-stand-ins")?.visible, `${people}: its own drawn till the kit's read`);
+            built.dispose();
         }
     });
 

@@ -298,7 +298,15 @@ yet. Across the room from the board, by the hearth, stands the guild's **portal*
 with a veil of blue light. Tap it and you walk up to it and a map opens showing every branch of
 the guild you've been inside; tap one, agree to its fare (5 gold and 7 more a kilometre, a
 fifth less each rank up, free at Mithril), and you step out of that branch's portal, your
-followers with you. The receptionist explains it ("What's that archway by the hearth?").
+followers with you. The receptionist explains it ("What's that archway by the hearth?"). On the
+hearth's other side, against the wall, stands a great iron-bound chest: your **stash**. Tap it
+and you walk up to it and it opens beside your pack: 40 places to a tab, two tabs to start with
+and up to four more at 10,000 gold each, bought in order (tap a locked tab). Tap anything, in the
+pack or the stash, and it goes across, onto a stack alike or into the first free place; drag it to
+put it in a place of your choosing, or onto another tab; hold it (or right-click) to see what it
+is. **Sort** puts the tab in order, and **Stow alike** puts into it everything you carry that
+stacks with what it holds. It's yours alone, and the same in every guild's chest, in every
+world your hero goes to. Walk away, or press Escape, and it closes.
 
 **Talking.** Tap one of the folk and you walk up to them (or to the bar, or the other side of a
 table) and talk: their name and what they are, what they say, and what you can say back (tap a
@@ -851,6 +859,7 @@ client/                 The game (static files served to the browser)
     explored.js         What the player has found: the buildings gone into, the chunks walked,
                         the trails' signs read and the homes tracked
     portals.js          The guild's portals: the branches open to step through to, and their fares
+    strongroom.js       The stash's chest in every guild's hall, and how near it a hero must stand
     host.js             The one authority over a running world: its players (by id), their
                         commands, the buildings near them got ready, kept and made again; and
                         what ground and which dungeons it will soon want made (soon)

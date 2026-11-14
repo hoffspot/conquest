@@ -1,5 +1,6 @@
 // Growing stronger (docs/WAR.md M3): skills that grow by being used, each along a tree of its own
-// ranks; gear, bought and found, of better and worse make; gold; and a pack to carry it all in.
+// ranks; gear, bought and found, of better and worse make; gold; a pack to carry it all in, and a
+// stash to keep what isn't carried, at the chest in any adventurers' guild (STRONGROOM).
 // And from all of it, a player's might, which brings the war on (war/war.js setMight).
 //
 // A skill grows by what it's used for: landing blows up close (blade), from afar (marksman),
@@ -448,6 +449,14 @@ export const PACK_SIZE = 40;
 export const PACK_PAGE = 20;
 
 /**
+ * A hero's stash (docs/GAME.md *The stash*), opened at the great chest in any adventurers' guild
+ * (core/strongroom.js) and carried with them wherever they go, as their gold and pack are: tabs of
+ * `size` places, each a stack of things alike as the pack's slots are; `tabs` of them to begin
+ * with, and more bought one at a time, in order, for `price` gold each, up to `most`.
+ */
+export const STRONGROOM = Object.freeze({ size: 40, tabs: 2, most: 6, price: 10000 });
+
+/**
  * How much stronger a wand or grimoire makes spells (a share: 0.1 to 1), rolled when one's made:
  * each band ([least, most]) as likely as its `weight` has it, then anywhere in it. The weaker are
  * common, the strongest very rare.
@@ -570,15 +579,17 @@ const blockOf = (id, quality, block) => {
 };
 
 const isSlot = (slot) => Number.isInteger(slot) && slot >= 0 && slot < PACK_SIZE;
+const isPlace = (place) => Number.isInteger(place) && place >= 0 && place < STRONGROOM.size;
 
 // Whether a stack is of a kind of thing (of any make, or only one; of any boost, or only one)
 const matches = (stack, id, quality, boost) => stack?.id === id && (quality === null || stack.quality === quality) && (boost === null || (stack.boost ?? null) === boost);
 const isCount = (count) => Number.isInteger(count) && count > 0;
 
 // A pack as kept: its slots, each a stack ({ id, quality, count }) or null, in their places; and
-// one kept before things stacked (a list of things, one each), each put in, those alike together
-function packOf(kept) {
-    const pack = Array(PACK_SIZE).fill(null);
+// one kept before things stacked (a list of things, one each), each put in, those alike together.
+// (A tab of the stash as kept the same, `size` places of it: STRONGROOM)
+function packOf(kept, size = PACK_SIZE) {
+    const pack = Array(size).fill(null);
     const loose = [];
 
     (Array.isArray(kept) ? kept : []).forEach((item, slot) => {
@@ -588,7 +599,7 @@ function packOf(kept) {
 
         const stack = { ...thingOf(item), count: isCount(item.count) ? item.count : 1 };
 
-        if (isCount(item.count) && isSlot(slot) && !pack[slot]) {
+        if (isCount(item.count) && Number.isInteger(slot) && slot >= 0 && slot < size && !pack[slot]) {
             pack[slot] = stack;
         } else {
             loose.push(stack);
@@ -605,6 +616,85 @@ function packOf(kept) {
     }
 
     return pack;
+}
+
+// A stash as kept ({ tabs: [a tab's places, as a pack's are kept] }): its tabs, as many as were
+// bought, and never fewer than it starts with (STRONGROOM); none kept (a character kept before
+// there were stashes), that many empty
+function strongroomOf(kept) {
+    const tabs = (Array.isArray(kept?.tabs) ? kept.tabs : []).slice(0, STRONGROOM.most);
+
+    while (tabs.length < STRONGROOM.tabs) {
+        tabs.push([]);
+    }
+
+    return { tabs: tabs.map((tab) => packOf(tab, STRONGROOM.size)) };
+}
+
+// Stacks put in order (a pack's, or a tab of the stash's, `size` places): gear first (by where
+// it's worn, the best made first), then things to use, then tomes, then creatures' parts; things
+// alike put together. Its places, the rest empty
+function inOrder(stacks, size) {
+    const order = (stack) => {
+        const def = ITEMS[stack.id];
+        const group = def.slot ? 0 : def.use && !def.tome && !def.part ? 1 : def.tome ? 2 : 3;
+        const slot = def.slot ? GEAR_SLOTS.findIndex(({ takes }) => takes === def.slot) : 0;
+
+        return [group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
+    };
+    const sorted = packOf(stacks.filter(Boolean), size).filter(Boolean);
+
+    sorted.sort((a, b) => {
+        const [x, y] = [order(a), order(b)];
+
+        return x.findIndex((value, k) => value !== y[k]) === -1 ? 0 : x.map((value, k) => (value < y[k] ? -1 : value > y[k] ? 1 : 0)).find((sign) => sign !== 0);
+    });
+
+    return [...sorted, ...Array(size - sorted.length).fill(null)];
+}
+
+// The stack in a place of one row of places (the pack's, or a tab of the stash's) moved to
+// another's: to the place `to`, onto things alike there, into it if it's empty, or swapped with
+// what's there; with no `to`, onto the first stack of things alike in the other row, or else into
+// its first empty place (`full`, the reason, if there's none). Nothing changed unless it's done.
+// The reason it can't be, or null
+function moveAcross(from, at, into, to, full) {
+    const moving = from[at];
+
+    if (to === null) {
+        // (Within the one row, it's where it'd go already)
+        if (from === into) {
+            return null;
+        }
+
+        const onto = into.findIndex((each) => alike(each, moving));
+        const place = onto >= 0 ? onto : into.indexOf(null);
+
+        if (place < 0) {
+            return full;
+        }
+
+        into[place] = { ...moving, count: (into[place]?.count ?? 0) + moving.count };
+        from[at] = null;
+
+        return null;
+    }
+
+    if (from === into && at === to) {
+        return null;
+    }
+
+    const there = into[to];
+
+    if (alike(moving, there)) {
+        into[to] = { ...there, count: there.count + moving.count };
+        from[at] = null;
+    } else {
+        into[to] = moving;
+        from[at] = there;
+    }
+
+    return null;
 }
 
 /**
@@ -790,16 +880,16 @@ function gearOf(kept, hero) {
     return { worn, off };
 }
 
-/** A player's skills, gold, pack and gear. */
+/** A player's skills, gold, pack, gear and stash. */
 // A list of ids kept (strings, each once), from what was kept: none, if it wasn't a list
 const idsOf = (kept) => [...new Set((Array.isArray(kept) ? kept : []).filter((id) => typeof id === "string"))];
 
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion, bestiary, legends }.
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion, bestiary, legends, strongroom: { tabs: [[stacks]] } }.
      * @param {object} [hero] - Their hero (for the weapon they started with, and their spiked boots).
      */
-    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null, bestiary = null, legends = null } = {}, { weapon = "sword", boots = false } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null, bestiary = null, legends = null, strongroom = null } = {}, { weapon = "sword", boots = false } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -848,6 +938,14 @@ export class Progress {
          * given (`uniques`: never given again).
          */
         this.legends = { met: idsOf(legends?.met), uniques: idsOf(legends?.uniques) };
+
+        /**
+         * Their stash (STRONGROOM), opened at the chest in any adventurers' guild and carried
+         * with them wherever they go: its tabs bought, each its places, each a stack of things
+         * alike as the pack's slots are, or null. (A character kept before there were stashes
+         * has its first tabs, empty)
+         */
+        this.strongroom = strongroomOf(strongroom);
     }
 
     /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
@@ -1405,29 +1503,161 @@ export class Progress {
      * use, then tomes, then creatures' parts; things alike put together.
      */
     sort() {
-        const order = (stack) => {
-            const def = ITEMS[stack.id];
-            const group = def.slot ? 0 : def.use && !def.tome && !def.part ? 1 : def.tome ? 2 : 3;
-            const slot = def.slot ? GEAR_SLOTS.findIndex(({ takes }) => takes === def.slot) : 0;
+        this.pack = inOrder(this.pack, PACK_SIZE);
 
-            return [group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
-        };
-        const stacks = packOf(this.pack.filter(Boolean)).filter(Boolean);
+        return null;
+    }
 
-        stacks.sort((a, b) => {
-            const [x, y] = [order(a), order(b)];
+    // --- The stash (STRONGROOM) ---
 
-            return x.findIndex((value, k) => value !== y[k]) === -1 ? 0 : x.map((value, k) => (value < y[k] ? -1 : value > y[k] ? 1 : 0)).find((sign) => sign !== 0);
+    // Whether a tab of the stash is open (bought, or one it starts with), and a place in a tab
+    #tabOpen(tab) {
+        return Number.isInteger(tab) && tab >= 0 && tab < this.strongroom.tabs.length;
+    }
+
+    /**
+     * Put the stack in a slot of the pack into a tab of the stash (`tab`, from 0): in its place
+     * `to` (onto things alike there, into it empty, or swapped with what's there, which comes into
+     * the pack where the stack was); or, with none, onto the first stack of things alike in the
+     * tab, or else into its first empty place. Returns the reason it can't be, or null: "item"
+     * (nothing there), "strongroomLocked" (a tab not bought), "strongroomFull" (no room in the tab).
+     */
+    lodge(index, tab, to = null) {
+        if (!isSlot(index) || !this.pack[index] || (to !== null && !isPlace(to))) {
+            return "item";
+        }
+
+        if (!this.#tabOpen(tab)) {
+            return "strongroomLocked";
+        }
+
+        return moveAcross(this.pack, index, this.strongroom.tabs[tab], to, "strongroomFull");
+    }
+
+    /**
+     * Take the stack in a place of a tab of the stash out into the pack: into its slot `to` (as
+     * lodge: what's there swapped into the stash in its place, if it isn't alike); or, with none,
+     * onto the first stack of things alike in the pack, or else into its first empty slot, on
+     * whichever page. Returns the reason it can't be, or null: "item", "strongroomLocked", "full"
+     * (no room in the pack).
+     */
+    withdraw(tab, place, to = null) {
+        if (!this.#tabOpen(tab)) {
+            return "strongroomLocked";
+        }
+
+        if (!isPlace(place) || !this.strongroom.tabs[tab][place] || (to !== null && !isSlot(to))) {
+            return "item";
+        }
+
+        return moveAcross(this.strongroom.tabs[tab], place, this.pack, to, "full");
+    }
+
+    /**
+     * Move the stack in a place of a tab of the stash to another place (`to`) of a tab (`into`:
+     * the same or another), as lodge puts things in; or, with no `to`, onto another tab, onto the
+     * first stack of things alike in it or else into its first empty place. Returns the reason it
+     * can't be, or null: "item", "strongroomLocked", "strongroomFull".
+     */
+    shift(tab, place, into, to = null) {
+        if (!this.#tabOpen(tab) || !this.#tabOpen(into)) {
+            return "strongroomLocked";
+        }
+
+        if (!isPlace(place) || !this.strongroom.tabs[tab][place] || (to !== null && !isPlace(to))) {
+            return "item";
+        }
+
+        return moveAcross(this.strongroom.tabs[tab], place, this.strongroom.tabs[into], to, "strongroomFull");
+    }
+
+    /** Put a tab of the stash in order, as the pack's sorted (sort). Returns the reason it can't be, or null. */
+    sortTab(tab) {
+        if (!this.#tabOpen(tab)) {
+            return "strongroomLocked";
+        }
+
+        this.strongroom.tabs[tab] = inOrder(this.strongroom.tabs[tab], STRONGROOM.size);
+
+        return null;
+    }
+
+    /**
+     * Everything in the pack that stacks with what a tab of the stash holds already (alike: the
+     * same kind, as well made, rolled the same) put onto it there. Returns the reason it can't be,
+     * or null: "strongroomLocked", "strongroomUnalike" (nothing carried stacks with anything in it).
+     */
+    stowAlike(tab) {
+        if (!this.#tabOpen(tab)) {
+            return "strongroomLocked";
+        }
+
+        const into = this.strongroom.tabs[tab];
+        let moved = 0;
+
+        this.pack.forEach((stack, index) => {
+            const onto = stack ? into.findIndex((each) => alike(each, stack)) : -1;
+
+            if (onto >= 0) {
+                into[onto] = { ...into[onto], count: into[onto].count + stack.count };
+                this.pack[index] = null;
+                moved++;
+            }
         });
 
-        this.pack = [...stacks, ...Array(PACK_SIZE - stacks.length).fill(null)];
+        return moved ? null : "strongroomUnalike";
+    }
+
+    /**
+     * Buy the stash's next tab (`tab`, from 0: the one after the last bought; tabs are bought in
+     * order), for its price (STRONGROOM). Returns the reason it can't be, or null: "strongroomTabs"
+     * (it has all it can), "strongroomOwned" (that one's open already), "strongroomOrder" (not
+     * the next), "gold".
+     */
+    buyTab(tab = this.strongroom.tabs.length) {
+        const next = this.strongroom.tabs.length;
+
+        if (next >= STRONGROOM.most) {
+            return "strongroomTabs";
+        }
+
+        if (!Number.isInteger(tab)) {
+            return "command";
+        }
+
+        if (tab < next) {
+            return "strongroomOwned";
+        }
+
+        if (tab > next) {
+            return "strongroomOrder";
+        }
+
+        if (this.gold < STRONGROOM.price) {
+            return "gold";
+        }
+
+        this.gold -= STRONGROOM.price;
+        this.strongroom.tabs.push(Array(STRONGROOM.size).fill(null));
 
         return null;
     }
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion }, bestiary: this.bestiary.toJSON(), legends: { met: [...this.legends.met], uniques: [...this.legends.uniques] } };
+        return {
+            skills: { ...this.skills },
+            schools: { ...this.schools },
+            spells: [...this.spells],
+            spellXp: { ...this.spellXp },
+            gold: this.gold,
+            pack: this.pack.map((stack) => (stack ? { ...stack } : null)),
+            gear: structuredClone(this.gear),
+            invasion: { ...this.invasion },
+            bestiary: this.bestiary.toJSON(),
+            legends: { met: [...this.legends.met], uniques: [...this.legends.uniques] },
+            strongroom: { tabs: this.strongroom.tabs.map((tab) => tab.map((stack) => (stack ? { ...stack } : null))) },
+        };
     }
 }
 
