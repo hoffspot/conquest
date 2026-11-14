@@ -163,6 +163,14 @@ function without(name, walk) {
     }
 }
 
+// A walk with the folk of buildings no player's in about their rounds unseen, as they were
+// when these walks were written (Battle.idling off: plan 1-22, the owner's ruling of 14
+// November 2026, has them stand till someone comes in). The city's taverns and shops are where
+// the folk who sit act, and where most of the folk looked about with no one to fear: so what a
+// walk must show of those is shown of the old form, and the walk as the game plays it now is
+// held to come out the same beside it
+const unseen = (walk) => without("idling", walk);
+
 // Two walks the same, step for step: the first step that differs said, if any does
 function assertSame(a, b) {
     const differs = a.steps.findIndex((step, k) => step[0] !== b.steps[k][0] || step[1] !== b.steps[k][1]);
@@ -173,8 +181,15 @@ function assertSame(a, b) {
 
 describe("the battle's step with nothing made to throw away (core/battle.js Battle.sparing, plan 1-16)", () => {
     it("walks a city's crowd step for step as the forms that made them did", () => {
-        const sparing = cityWalk();
-        const spendthrift = without("sparing", () => cityWalk());
+        // (As the game plays it now, the folk indoors standing: the same either way. Then with
+        // them about their rounds unseen, where the walk has all it's to show)
+        assertSame(
+            cityWalk(),
+            without("sparing", () => cityWalk()),
+        );
+
+        const sparing = unseen(() => cityWalk());
+        const spendthrift = unseen(() => without("sparing", () => cityWalk()));
 
         assertSame(sparing, spendthrift);
 
@@ -271,8 +286,16 @@ describe("the players near asked of the index (core/battle.js Battle.indexing, p
 
 describe("the folk's look for danger only where someone could frighten them (core/battle.js Battle.counting, plan 1-20)", () => {
     it("walks a city's crowd step for step as the folk looking on every map did, players coming, going and falling", () => {
-        const counting = cityWalk({ churn: true });
-        const looking = without("counting", () => cityWalk({ churn: true }));
+        // (As the game plays it now, no one indoors looks, and the count leaves next to nothing
+        // out: the same walk either way. Then with the folk indoors about their rounds unseen,
+        // which is where the count has its work)
+        const [held, heldLooking] = [cityWalk({ churn: true }), without("counting", () => cityWalk({ churn: true }))];
+
+        assertSame(held, heldLooking);
+        assert.ok(held.counts["battle.held"] / held.steps.length > 20, `${held.counts["battle.held"]} held`);
+
+        const counting = unseen(() => cityWalk({ churn: true }));
+        const looking = unseen(() => without("counting", () => cityWalk({ churn: true })));
 
         assertSame(counting, looking);
 

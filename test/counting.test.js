@@ -7,6 +7,13 @@
 // longer neutral, one fallen up again), and the folk run from it at the very step they did when
 // they looked every time: every step's events and the whole battle after every step, the same
 // with the switch on and off. Counts are asked, never times.
+//
+// Since the folk of a building no player is in stand as they are (Battle.idling, plan 1-22: the
+// owner's ruling of 14 November 2026), a tavern's folk take no turn till someone comes in, and
+// there is no look for the count to leave out. So these evenings are played as they were when
+// this was written, the folk about their rounds unseen (Battle.idling off: its old form, which
+// is where the count has its work), and one more as the game plays them now, the same with the
+// count kept or not. The count goes when Battle.idling does (test/idling.test.js has its date).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
@@ -82,18 +89,36 @@ function evening({ first = () => {}, acts, steps }) {
     return { battle, steps: played, searches, afraid, above, feared };
 }
 
-// An evening played with the count kept, and again with the folk looking every time as they did
-function both(evening) {
-    const counting = evening();
-
-    assert.equal(Battle.counting, true, "Battle.counting is on");
-    Battle.counting = false;
+// What `play` gives with the folk about their rounds where no player is, as they were
+// (Battle.idling off)
+function unseen(play) {
+    assert.equal(Battle.idling, true, "Battle.idling is on");
+    Battle.idling = false;
 
     try {
-        return { counting, looking: evening() };
+        return play();
     } finally {
-        Battle.counting = true;
+        Battle.idling = true;
     }
+}
+
+// An evening played with the count kept, and again with the folk looking every time as they
+// did; both with the folk about their rounds unseen, or (`held`) standing as they do now
+function both(evening, { held = false } = {}) {
+    const each = () => {
+        const counting = evening();
+
+        assert.equal(Battle.counting, true, "Battle.counting is on");
+        Battle.counting = false;
+
+        try {
+            return { counting, looking: evening() };
+        } finally {
+            Battle.counting = true;
+        }
+    };
+
+    return held ? each() : unseen(each);
 }
 
 // Two evenings the same, step for step: the first step that differs said, if any does
@@ -339,14 +364,14 @@ describe("the folk's look for danger, only where someone could frighten them (co
                 ],
                 steps: 400,
             });
-        const usual = evenings();
+        const usual = unseen(evenings);
 
         for (const name of ["reindexing", "mustering", "indexing", "sparing"]) {
             assert.equal(Battle[name], true);
             Battle[name] = false;
 
             try {
-                const other = evenings();
+                const other = unseen(evenings);
 
                 assert.equal(other.steps.findIndex((step, k) => step !== usual.steps[k]), -1, `with Battle.${name} off`);
                 assert.deepEqual(other.searches, usual.searches, `the same searches a step, Battle.${name} off`);
@@ -359,5 +384,36 @@ describe("the folk's look for danger, only where someone could frighten them (co
         // till it turns)
         assert.ok(firstAfraid(usual, CALM) >= CALM);
         assert.ok(sum(usual.searches, 0, CALM) <= CALM, `${sum(usual.searches, 0, CALM)} searches before it turned`);
+    });
+
+    it("is the same evening kept or not as the game plays it now, the folk standing till someone comes in (Battle.idling): a wolf in at the door, and out", () => {
+        const OUT = 500;
+        const played = both(
+            () =>
+                evening({
+                    first: (battle, world) => battle.add(wolf(world.tavern.outside, "town")),
+                    acts: [
+                        { at: CALM, does: (battle) => battle.command("wolf", { type: "enter", link: "tavern-door" }) },
+                        { at: OUT, does: (battle) => battle.command("wolf", { type: "enter", link: "tavern-door" }) },
+                    ],
+                    steps: 1000,
+                }),
+            { held: true },
+        );
+        const { counting } = played;
+        const came = counting.steps.findIndex((step, at) => at >= CALM && step.includes('"cross"'));
+        const went = counting.steps.findIndex((step, at) => at >= OUT && step.includes('"cross"'));
+
+        assertSame(played);
+        assert.ok(came > CALM && went > OUT);
+
+        // (No one held looks, so there's nothing for the count to leave out before the wolf
+        // comes; in the room with them it frightens them as ever, within a look)
+        assert.equal(leftOut(played, 0, came), 0);
+
+        const first = firstAfraid(counting, CALM);
+
+        assert.ok(first >= came && first <= came + 1 + FLEE.look / STEP_MS, `afraid at step ${first}, the wolf in at ${came}`);
+        assert.ok(counting.afraid.slice(first, went).some((ids) => ids.length >= 5), "most of the room afraid");
     });
 });

@@ -100,6 +100,11 @@
 // everyone gone before its first step. With --sudden, all of it's let go as it was before 1-27,
 // to compare.
 //
+// --astir, with any run: the folk of a building no player is in, and a barracks' soldiers, go
+// about their rounds unseen, as they did before 1-22 (core/battle.js Battle.idling off), to
+// compare: the report's `battle.idling` says which was played, and `battle.held` among its
+// counts how many were held a step.
+//
 // Before it's timed, what's round the players is made ahead until nothing's waiting (Ahead.settled),
 // however long that takes: a step that makes ground is a loading cost, measured by npm run
 // step-budget. Each player out in the world wants some 120 of the navigation's tiles baked round
@@ -536,7 +541,7 @@ const kindOf = (text) => (text.startsWith('{"kind":"') ? text.slice(9, text.inde
  * only says so ({ schema, run, built: false, reason }). `lateOver` (ms) is how long a step is
  * late from (LOAD.tick: only a test, which can't make a step slow, asks for another).
  */
-export async function load({ seed = 2, players: count = 8, layout = "spread", activity: asked = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, undelved = false, leave = "none", sudden = false, lateOver = LOAD.tick, log = () => {} } = {}) {
+export async function load({ seed = 2, players: count = 8, layout = "spread", activity: asked = "walk", seconds = LOAD.seconds, eventAt = LOAD.eventAt, turns = 0, burst = LOAD.storm, whole = false, cold = false, unforeseen = false, undelved = false, leave = "none", sudden = false, astir = false, lateOver = LOAD.tick, log = () => {} } = {}) {
     // (What's played: one activity, or several together, named with commas between as they were asked for)
     const unbuilt = String(asked)
         .split(",")
@@ -573,6 +578,12 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
 
     Ahead.easing = !sudden;
     Battle.forgetting = !sudden;
+
+    // (--astir: the folk of a building no player's in, and a barracks' soldiers, about their
+    // rounds unseen, as they were before 1-22, to compare: core/battle.js)
+    const wasIdling = Battle.idling;
+
+    Battle.idling = !astir;
 
     // (--unforeseen: nothing made ahead for what the war's next turn will bring near, and each
     // chunk read moved among those kept there and then, as both were before 1-28, to compare)
@@ -1478,6 +1489,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
     Ahead.coming = wasComing;
     Ahead.easing = wasEasing;
     Battle.forgetting = wasForgetting;
+    Battle.idling = wasIdling;
     Ahead.turns = wasTurns;
     Overworld.recently = wasRecently;
     Ahead.delving = wasDelving;
@@ -1725,7 +1737,7 @@ export async function load({ seed = 2, players: count = 8, layout = "spread", ac
         },
         parts: { hear: round(parts.hear / steps, 4), step: round(parts.step / steps, 4), ahead: round(parts.ahead / steps, 4) },
         passes,
-        battle: { ms: round(battle), mean: round(battle / steps, 4), share: round(battle / total, 4) },
+        battle: { ms: round(battle), mean: round(battle / steps, 4), share: round(battle / total, 4), idling: !astir },
         census,
         // (The share of the steps' time that falls to a named pass or to what was heard: all but
         // `end` and whatever the runner does between the step and what's sent)
@@ -1781,7 +1793,7 @@ export const REPORT_SCHEMA = Object.freeze({
     steps: { count: "number", wall: SPREAD, cpu: SPREAD, late: "number", over: "number", speed: "number", together: "number", pace: "number" },
     parts: { hear: "number", step: "number", ahead: "number" },
     passes: [{ ms: "number", mean: "number", share: "number", calls: "number" }],
-    battle: { ms: "number", mean: "number", share: "number" },
+    battle: { ms: "number", mean: "number", share: "number", idling: "boolean" },
     census: [CENSUS],
     named: "number",
     counts: ["number"],
@@ -2061,8 +2073,8 @@ export function wordsOf(report) {
         `In the thread's own processor time: mean ${steps.cpu.mean.toFixed(2)} ms, p99 ${steps.cpu.p99.toFixed(2)} ms, worst ${steps.cpu.worst.toFixed(1)} ms${steps.over ? `; ${steps.over} over ${STEP_MS} ms` : ""}`,
         `Of a step: what was heard ${report.parts.hear.toFixed(3)} ms, the step and what it sent ${report.parts.step.toFixed(3)} ms; made ahead between steps ${report.parts.ahead.toFixed(3)} ms. Named passes ${(report.named * 100).toFixed(1)}% of it`,
         `The passes that took most (ms a step): ${top.map(([name, { mean, share }]) => `${name} ${mean.toFixed(3)} (${(share * 100).toFixed(0)}%)`).join(", ")}`,
-        `The battle's step: ${report.battle.mean.toFixed(3)} ms (${(report.battle.share * 100).toFixed(0)}%)${run.whole ? ", its passes timed whole" : ""}; by its parts: ${parts.map(([name, { mean }]) => `${name.slice(7)} ${mean.toFixed(3)}`).join(", ")}`,
-        `Its work a step: ${each("battle.actors")} in it (${BATTLE_KINDS.map((kind) => `${kind} ${each(`battle.actors.${kind}`)}`).join(", ")}), ${each("battle.idle")} of them standing with nowhere to go and ${each("battle.fallen")} down; ${each("battle.walkers")} walked, in ${each("battle.strides")} strides; ${each("battle.searches")} searches for the nearest enemy looked at ${each("battle.searchLooks")}, ${each("battle.fightAsks")} asked whether they're in a fight, ${each("battle.playerAsks")} whether a player's near, and ${each("battle.playerPairs")} players measured for those who ask; the index asked who's near ${each("battle.nears")} times, giving ${each("battle.nearFound")}; ${each("battle.sights")} sight lines; ${each("battle.paths")} ways found; the mesh asked ${each("battle.meshAsks")} times, and its last answer of where a walker stands given again ${each("battle.meshKept")}`,
+        `The battle's step: ${report.battle.mean.toFixed(3)} ms (${(report.battle.share * 100).toFixed(0)}%)${run.whole ? ", its passes timed whole" : ""}${report.battle.idling ? "" : ", the folk of buildings no one's in about their rounds as they were (--astir)"}; by its parts: ${parts.map(([name, { mean }]) => `${name.slice(7)} ${mean.toFixed(3)}`).join(", ")}`,
+        `Its work a step: ${each("battle.actors")} in it (${BATTLE_KINDS.map((kind) => `${kind} ${each(`battle.actors.${kind}`)}`).join(", ")}), ${each("battle.idle")} of them standing with nowhere to go, ${each("battle.held")} held where no player is and ${each("battle.fallen")} down; ${each("battle.walkers")} walked, in ${each("battle.strides")} strides; ${each("battle.searches")} searches for the nearest enemy looked at ${each("battle.searchLooks")}, ${each("battle.fightAsks")} asked whether they're in a fight, ${each("battle.playerAsks")} whether a player's near, and ${each("battle.playerPairs")} players measured for those who ask; the index asked who's near ${each("battle.nears")} times, giving ${each("battle.nearFound")}; ${each("battle.sights")} sight lines; ${each("battle.paths")} ways found; the mesh asked ${each("battle.meshAsks")} times, and its last answer of where a walker stands given again ${each("battle.meshKept")}`,
         `Who's in the battle: ${Object.entries(census).map(([kind, { all, indoors, alone, m30, m60, m120, m250, beyond }]) => `${kind} ${all} (within 30 m of a player ${m30}, 60 m ${m60}, 120 m ${m120}, 250 m ${m250}, beyond ${beyond}; indoors ${indoors}, ${alone} with no player there)`).join("; ")}`,
         `Sent each player: ${kb(bytes.perPeer.mean)}/s (the busiest ${kb(bytes.perPeer.most)}/s, a worst second of ${kb(bytes.perPeer.worstSecond)}); by kind: ${Object.entries(bytes.byKind).map(([kind, sum]) => `${kind} ${kb(sum.bytes)} in ${sum.messages}`).join(", ")}`,
         `Heard: ${bytes.up.messages} messages, ${kb(bytes.up.bytes)}; ${bytes.up.refused} commands let go of for coming faster than ${bytes.up.allowed} a second`,
@@ -2299,6 +2311,7 @@ async function main() {
             undelved: { type: "boolean", default: false },
             leave: { type: "string", default: "none" },
             sudden: { type: "boolean", default: false },
+            astir: { type: "boolean", default: false },
             gate: { type: "boolean", default: false },
             baseline: { type: "string" },
         },
@@ -2334,7 +2347,7 @@ async function main() {
     }
 
     try {
-        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, undelved: values.undelved, leave: values.leave, sudden: values.sudden, turns: Number(values.turns), log: values.json ? () => {} : console.log });
+        report = await load({ seed: Number(values.seed), players: Number(values.players), layout: values.layout, activity: values.activity, seconds: Number(values.seconds), whole: values.whole, cold: values.cold, unforeseen: values.unforeseen, undelved: values.undelved, leave: values.leave, sudden: values.sudden, astir: values.astir, turns: Number(values.turns), log: values.json ? () => {} : console.log });
     } catch (error) {
         console.error(error.message);
         process.exit(1);

@@ -278,8 +278,10 @@ describe("a night of comings and goings, lit from what the battle keeps and by g
             return steps;
         };
 
-        // (Ways there were, the players' among them: the move orders after the snapshot)
-        assert.ok(kept.ways.length > 100, `(${kept.ways.length} ways found after the snapshot)`);
+        // (Ways there were, the players' among them: the move orders after the snapshot. 66,
+        // where there were 220 while the folk of the towns' buildings found ways about their
+        // rounds with no player in to see them: core/battle.js Battle.idling, plan 1-22)
+        assert.ok(kept.ways.length > 50, `(${kept.ways.length} ways found after the snapshot)`);
         assert.ok(new Set(kept.ways.filter(([, id]) => /^p\d$/.test(id)).map(([time]) => time)).size >= 5, "(players sent about after it, five times and more)");
         assertSame(carried(kept.kept), second, KEPT);
         assertSame(throughEveryone(() => carried(kept.kept)), second, KEPT);

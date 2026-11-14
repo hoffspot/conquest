@@ -1426,7 +1426,12 @@ player at its door), of whoever holds the town:
   city 4, a town 3, a village 2. One stands for one of the garrison: one fallen is one fewer in
   the war (`war.loss`);
 - **made up** a while after any of them falls (`RELIEF_MS`), from the garrison as it is then, once
-  no player's in the room; let go with the building, when every player's far.
+  no player's in the room; let go with the building, when every player's far;
+- **standing at their posts, taking no turn,** while no player's in the room and no enemy
+  (`Battle.idling`, docs/GAME.md *Standing till someone comes in*): each one's next look about is
+  kept to the step it would have fallen in, so whoever comes in is noticed exactly as when they
+  were stepped unseen, and their relief, which is the host's doing and no turn of theirs, comes
+  as ever (`test/idling.test.js`).
 
 **Cleared.** Once its captain and every guardsman are down, the barracks is **cleared**
 (`#barracksFell`). Since M18 that doesn't take the town by itself (*Standing armies*): a town is
