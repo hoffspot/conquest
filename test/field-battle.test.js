@@ -171,6 +171,23 @@ describe("the battle among those near (battle.js #indexed)", () => {
         assert.ok(sparing.events.some(({ type, id }) => type === "hit" && id === HOST_PLAYER), "(the player was struck)");
     });
 
+    // One of the folk looks about for danger only on a map that holds someone who isn't
+    // neutral, as the index counts them (plan 1-20), where it looked every time: the same
+    // battle either way (test/counting.test.js brings danger to a room of folk by every way)
+    it("plays out a battle exactly as the folk looking for danger on every map does", () => {
+        const counting = fight({ others: 4 });
+
+        Battle.counting = false;
+
+        try {
+            assert.equal(counting.hash, fight({ others: 4 }).hash);
+        } finally {
+            Battle.counting = true;
+        }
+
+        assert.ok(counting.events.filter(({ type }) => type === "death").length > 10);
+    });
+
     // Everything that asks who's near a point (#standingNear) or who's nearest within reach
     // (#hold, #obey), on an open field: a guard tower shooting from its loops, a player standing
     // among their enemies, the tower's own footprint within a swordsman's reach, casters whose

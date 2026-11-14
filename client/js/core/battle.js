@@ -881,6 +881,18 @@ export class Battle {
      */
     static forgetting = true;
 
+    /**
+     * Whether one of the folk looks about for danger only on a map that holds someone who isn't
+     * neutral (#afraid), as it always does, or on every map, as it did: only for the tests that
+     * check it's the same battle either way (generated/multiplayer_scaling_plan.md 1-20). No one
+     * neutral frightens anyone (#frightens), so on a map of folk alone the look finds no one,
+     * whoever it goes through. How many on each map aren't neutral is kept with the index
+     * (`bold`, `unafraid`), and counted again of everyone whenever the index is made or brought
+     * up to date, which every step's first asking of it does: read off each as they are then,
+     * `map` and `neutral`, so nothing that writes either has anything to remember.
+     */
+    static counting = true;
+
     // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
     // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
     #ids = null;
@@ -3716,14 +3728,18 @@ export class Battle {
             // (Again in its own step of the next FLEE.look: not all the folk in the same one)
             actor.lookAt = this.#nextStep(actor, FLEE.look);
 
-            let danger;
+            let danger = null;
 
-            if (Battle.sparing) {
-                this.#seer = actor;
-                danger = this.#nearestEnemy(actor, this.#seesOne, FLEE.sight, this.#frightensOne);
-                this.#seer = null;
-            } else {
-                danger = this.#dangerTo(actor);
+            // (With no one on its map but the neutral, none of whom frightens, there's no one
+            // to find and no one's looked for: Battle.counting)
+            if (!Battle.counting || !this.#folkOnly(actor.map)) {
+                if (Battle.sparing) {
+                    this.#seer = actor;
+                    danger = this.#nearestEnemy(actor, this.#seesOne, FLEE.sight, this.#frightensOne);
+                    this.#seer = null;
+                } else {
+                    danger = this.#dangerTo(actor);
+                }
             }
 
             if (danger) {
@@ -6894,6 +6910,8 @@ export class Battle {
         const wide = [];
         const heroes = [];
         const heroCells = new Map();
+        const unafraid = new Uint8Array(length);
+        const bold = new Map();
 
         this.actors.forEach((actor, k) => {
             const mine = cells.get(actor.map) ?? cells.set(actor.map, new Map()).get(actor.map);
@@ -6920,6 +6938,12 @@ export class Battle {
             if (actor.kind === "player") {
                 heroes.push(k);
             }
+
+            // (Those who aren't neutral, counted by map: #afraid)
+            if (!actor.neutral) {
+                unafraid[k] = 1;
+                bold.set(actor.map, (bold.get(actor.map) ?? 0) + 1);
+            }
         });
 
         // (The players among them, by cells of their own, HERO_CELL: #heroesNear)
@@ -6933,7 +6957,7 @@ export class Battle {
             (mine.get(heroCell[i]) ?? mine.set(heroCell[i], []).get(heroCell[i])).push(heroes[i]);
         }
 
-        this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell, small, heroes, heroCell, heroCells };
+        this.#index = { actors: this.actors, length, version: this.#version, cells, at, order, wide, who, maps, cell, small, heroes, heroCell, heroCells, unafraid, bold };
         outer(from);
 
         return this.#index;
@@ -6949,7 +6973,7 @@ export class Battle {
     // in `actors` or on another map
     #reindexed(index) {
         const { actors } = this;
-        const { who, maps, cell, at, wide, small } = index;
+        const { who, maps, cell, at, wide, small, unafraid } = index;
         const length = actors.length;
 
         if (Battle.mustering) {
@@ -6975,6 +6999,10 @@ export class Battle {
 
                 if (actor.footprint) {
                     wide.push(k);
+                }
+
+                if ((actor.neutral ? 0 : 1) !== unafraid[k]) {
+                    this.#turned(index, k, actor);
                 }
 
                 if (here !== cell[k]) {
@@ -7034,6 +7062,10 @@ export class Battle {
                 wide.push(k);
             }
 
+            if ((actor.neutral ? 0 : 1) !== unafraid[k]) {
+                this.#turned(index, k, actor);
+            }
+
             if (here !== cell[k]) {
                 const mine = index.cells.get(actor.map);
                 const from = mine.get(cell[k]);
@@ -7068,6 +7100,23 @@ export class Battle {
         index.version = this.#version;
 
         return true;
+    }
+
+    // One found neutral who wasn't when the index last looked, or no longer neutral who was
+    // (#reindexed, on the map the index has them on): its map's count of those who aren't
+    // (`bold`) put right, and what's noted of them (`unafraid`)
+    #turned(index, k, actor) {
+        const now = actor.neutral ? 0 : 1;
+
+        index.unafraid[k] = now;
+        index.bold.set(actor.map, (index.bold.get(actor.map) ?? 0) + (now ? 1 : -1));
+    }
+
+    // Whether no one on a map could frighten any of the folk (#afraid, #frightens): no one on it
+    // who isn't neutral, as the index counted them, brought up to date first if it might be out
+    // of date (#indexed), as the look itself would have brought it
+    #folkOnly(mapId) {
+        return !this.#indexed().bold.get(mapId);
     }
 
     // The players' own cells of an index (`heroCells`) brought up to date as its cells are
