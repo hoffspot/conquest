@@ -630,6 +630,11 @@ const TOGETHER = Object.freeze({
 // whoever's near them, aren't (docs/WAR.md M11)
 const DRAW_REACH = 160;
 
+// How far past it (metres) a soldier held in full, or begun, is before its body's let go
+// (#marshal: none's built out there, where nothing of it is drawn), so one walking the edge isn't
+// let go and built again at every step, as DETAIL.slack is for the crowds
+const OUT_OF_REACH = Object.freeze({ slack: 10 });
+
 // How many of those coming into view (someone new, or someone come into the player's building or
 // near them, the camera turned to them) have their pictures sent to the graphics card each frame,
 // each hidden till then (#sending): a skin's 5 MB or so, not all of a building's folk's in the one
@@ -5399,7 +5404,10 @@ export class Game {
     // so many, each ten megabytes or so, page and graphics card), those with a place in the
     // quality's budget, shared with the wild's creatures and the folk in the one order (#seats:
     // the nearer the camera first, of whatever kind), never fewer than a battle's. One waiting on its kind's figure
-    // not drawn meanwhile, nor built in full (but where it can't be made). A couple of times a second
+    // not drawn meanwhile, nor built in full (but where it can't be made). And those on the map
+    // further from the player than anyone's drawn (DRAW_REACH, #soldierBeyond) hold no body in
+    // full at all, whatever room there is: in their crowds, hidden, or waiting on its figure.
+    // A couple of times a second
     #marshal(dt) {
         if ((this.marshalClock = (this.marshalClock ?? 0) - dt) > 0) {
             return;
@@ -5415,6 +5423,8 @@ export class Game {
         }
 
         const soldiers = this.#soldiersAbout(me);
+        // (Those on the map further than anyone's drawn: none held in full, below)
+        const beyond = this.battle.actors.filter((actor) => this.#soldierBeyond(actor, me));
         const ids = new Set(soldiers.map(({ id }) => id));
         const viewer = this.#viewer(me);
         // (Who of them can be drawn in full: in a battle the quality's own few, the first of them,
@@ -5425,7 +5435,7 @@ export class Game {
         const inFull = (actor, place) => (seats ? seats.now.has(actor.id) : place < room);
 
         // (Whom it's looked at now, and with what room: #unlooked)
-        this.looked.soldiers = ids;
+        this.looked.soldiers = new Set([...ids, ...beyond.map(({ id }) => id)]);
         this.looked.soldiersRoom = this.#roomSaid();
         // (Past the reach from the camera: in their crowd, whatever room there is, but whoever
         // the order puts before those who merely stand about; the rest in the order, #stature)
@@ -5440,11 +5450,22 @@ export class Game {
             }
         }
 
-        this.marshalled = { soldiers: soldiers.length, room, far: far.size };
+        this.marshalled = { soldiers: soldiers.length, room, far: far.size, beyond: beyond.length };
+
+        // (One further than anyone's drawn: whether it's past the slack too; and whether it's as
+        // it's to be out there, below: in its crowd and in no line to be built, or held in full,
+        // or begun, still within the slack)
+        const past = (actor) => Math.max(Math.abs(actor.x - me.x), Math.abs(actor.y - me.y)) > DRAW_REACH + OUT_OF_REACH.slack;
+        const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id);
+        const settled = (actor) => {
+            const avatar = this.avatars.get(actor.id);
+
+            return avatar instanceof CrowdAvatar ? !queued(actor.id) || !past(actor) : (Boolean(avatar) || this.enlistees.has(actor.id)) && !past(actor);
+        };
 
         // (All of them with room in full, drawn so or to be: nothing to do; but any waiting on their
         // kind's figure, come within the reach since, to be built in full, below)
-        if (!far.size && ranked.every(inFull) && !this.crowdWaiting.size && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn)) {
+        if (!far.size && ranked.every(inFull) && !this.crowdWaiting.size && ![...(this.crowds?.members ?? [])].some(({ standIn }) => !standIn) && beyond.every(settled)) {
             return;
         }
 
@@ -5507,6 +5528,33 @@ export class Game {
 
         for (const actor of far) {
             if (!(this.avatars.get(actor.id) instanceof CrowdAvatar)) {
+                crowd(actor);
+            }
+        }
+
+        // (Those further than anyone's drawn, DRAW_REACH: nothing of them is shown out there
+        // (#inSight), so none holds a body in full. One not drawn is not built, out of the line
+        // and waiting on its kind's figure as one near does; one held in full is let go to its
+        // crowd once it's OUT_OF_REACH.slack past the reach, and one begun given up there; and
+        // each stands in its kind's crowd once the figure's made, hidden, so it's drawn from the
+        // frame it comes within reach, and built in full in the figure's place if it has room
+        // then, as any of the soldiers about is. Each was no one's to look at and built in full
+        // in its turn, never seen: a field battle's far army of twelve, 200 m off, held twelve
+        // of Low's 32 places, each a body made and kept in the page (its pictures never sent to the
+        // graphics card, never shown: #sending). But where its kind's figure can't be made:
+        // built in full after all, as it was)
+        for (const actor of beyond) {
+            const { id } = actor;
+
+            if (settled(actor) || this.crowds.failed(this.#crowdKind(actor).key)) {
+                continue;
+            }
+
+            if (!this.#drawnInFull(id)) {
+                this.#unenlist([id]);
+            }
+
+            if (!this.avatars.has(id) || this.#drawnInFull(id)) {
                 crowd(actor);
             }
         }
@@ -5726,7 +5774,19 @@ export class Game {
 
     // Whether someone's one of those soldiers about the player (`me`)
     #soldierAbout(actor, me) {
-        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH && this.host.soldiers.has(actor.id);
+        return this.#soldierOut(actor, me) && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
+    }
+
+    // Whether someone's a soldier on the player's map (`me`) further from them than anyone's
+    // drawn (DRAW_REACH): the marshal's too, to hold no body in full out there
+    #soldierBeyond(actor, me) {
+        return this.#soldierOut(actor, me) && (Math.abs(actor.x - me.x) > DRAW_REACH || Math.abs(actor.y - me.y) > DRAW_REACH);
+    }
+
+    // Whether someone's a soldier the marshal draws, near the player (`me`) or far: alive, on
+    // their map, not a siege engine's
+    #soldierOut(actor, me) {
+        return actor?.kind === "soldier" && !actor.engine && !actor.dead && actor.map === me.map && this.host.soldiers.has(actor.id);
     }
 
     // How many kinds of soldiers' figures look to be made while the game loads (#figuresFirst): of
@@ -6442,7 +6502,8 @@ export class Game {
     }
 
     // Whether someone waiting to be dressed in full has still to be looked at by whoever says if
-    // there's room for them so: one of the soldiers about by the marshal, one of the wild's
+    // there's room for them so: one of the soldiers out on the player's map by the marshal (about
+    // them, or further than anyone's drawn, where none's built at all), one of the wild's
     // people-shaped creatures by the rationing. Come out since it last looked, or looked at with
     // other room than there is now (`said`: #roomSaid; the memory guard's cut the bodies' budget,
     // the quality's changed), it mustn't be begun: each looks a couple of times a second, each at
@@ -6457,7 +6518,7 @@ export class Game {
         }
 
         if (actor.kind === "soldier") {
-            return this.#soldierAbout(actor, me) && !(this.looked.soldiers.has(actor.id) && this.looked.soldiersRoom === said) ? "marshalClock" : null;
+            return this.#soldierOut(actor, me) && !(this.looked.soldiers.has(actor.id) && this.looked.soldiersRoom === said) ? "marshalClock" : null;
         }
 
         return this.#rationed(actor) && !actor.dead && this.#bodiesBudget() !== Infinity && !(this.looked.creatures.has(actor.id) && this.looked.creaturesRoom === said) ? "rationClock" : null;
