@@ -3848,6 +3848,15 @@ export class Host {
             for (const stack of player.progress.pack) {
                 mix(stack?.count ?? 0);
             }
+
+            // (Their stash, as their pack: a copy's gone astray shows before anything's taken out)
+            for (const tab of player.progress.strongroom.tabs) {
+                mix(tab.length);
+
+                for (const stack of tab) {
+                    mix(stack?.count ?? 0);
+                }
+            }
         }
 
         return sum;

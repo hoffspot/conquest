@@ -9,13 +9,16 @@
 // same on every copy of the world (NET_VERSION 229).
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { salvageKept } from "../client/js/app/character-file.js";
 import { exportCharacter, importCharacter, loadProgress, saveProgress, writeSave } from "../client/js/app/save.js";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { CREATURES } from "../client/js/core/creatures.js";
+import { GEAR, LEVELS, rollGear } from "../client/js/core/gear.js";
 import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { readPlan } from "../client/js/core/interiors.js";
 import { guildRooms } from "../client/js/core/insides.js";
 import { horseFrom } from "../client/js/core/mounts.js";
-import { Hosting, Joining, NET_VERSION } from "../client/js/core/netplay.js";
+import { HEARD, Hosting, Joining, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { beforePortal, portalOn } from "../client/js/core/portals.js";
 import { PACK_SIZE, Progress, STRONGROOM, thingOf } from "../client/js/core/progress.js";
@@ -24,6 +27,8 @@ import { makeUnique } from "../client/js/core/rare.js";
 import { atStrongroom, beforeStrongroom, STRONGROOM_REACH, strongroomOn } from "../client/js/core/strongroom.js";
 import { encode } from "../client/js/core/wire.js";
 import { guilds } from "../client/js/core/worldplan/plan.js";
+import { BROKER_LIMITS } from "../server/broker.js";
+import { PLAY_LIMITS } from "../server/play.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const empty = () => Array(STRONGROOM.size).fill(null);
@@ -455,6 +460,77 @@ describe("the stash at a guild's chest (host.js #strongroom)", () => {
 
         other.join({ id: HOST_PLAYER, ...structuredClone(character) });
         assert.deepEqual(other.players.get(HOST_PLAYER).progress.strongroom.tabs[0][39], stack("meal", 3));
+    });
+
+    it("brings in a hero with every tab and their pack full of the longest pieces there are: what they say coming in is under what a host, a world server and its broker take from one who's joined", () => {
+        const random = createRandom(7);
+        let longest = null;
+
+        for (const id of Object.keys(GEAR)) {
+            for (let k = 0; k < 20; k++) {
+                const piece = { ...rollGear(id, "legendary", random, { level: LEVELS.most, people: "darkElf" }), count: 1 };
+
+                if (!longest || encode(piece).length > encode(longest).length) {
+                    longest = piece;
+                }
+            }
+        }
+
+        const bestiary = Object.fromEntries(Object.keys(CREATURES).map((kind) => [kind, { points: 99999, seen: true, signs: 99999, slain: 99999 }]));
+        const tabs = Array.from({ length: STRONGROOM.most }, () => Array(STRONGROOM.size).fill(longest));
+        const progress = new Progress({ gold: 999999999, pack: Array(PACK_SIZE).fill(longest), bestiary, strongroom: { tabs } });
+        let hello = null;
+
+        // (As a game says it coming in: core/netplay.js Joining hello)
+        new Joining({ send: (text) => (hello = text) }).hello({ hero: { ...HERO, name: "W".repeat(24) }, progress: progress.toJSON() });
+
+        assert.equal(progress.strongroom.tabs.flat().filter(Boolean).length, STRONGROOM.most * STRONGROOM.size);
+        assert.ok(hello.length > 64 * 1024, `${hello.length}: more than the 64 KB a joined game was held to before stashes`);
+        assert.ok(hello.length < HEARD.most / 2, `${hello.length} characters, with room to spare under the host's ${HEARD.most}`);
+
+        // (Relayed: a line before it saying who it's from)
+        for (const [cap, said] of [[PLAY_LIMITS.message, "a world server's play socket"], [BROKER_LIMITS.small, "a world server's broker"]]) {
+            assert.ok(cap >= HEARD.most, `${said} takes as much as a host does`);
+            assert.ok(hello.length + 64 < cap, said);
+        }
+
+        // (Let in by a host, whole: their stash as they brought it)
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+        const post = [];
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+
+        const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }) });
+
+        hosting.hear("p2", hello);
+
+        const said = post.map(({ text }) => JSON.parse(text).kind);
+        const joined = [...host.players.values()].find(({ id }) => id !== HOST_PLAYER);
+
+        assert.ok(!said.includes("refused"), said.join(", "));
+        assert.deepEqual(joined?.progress.strongroom.tabs, tabs);
+    });
+
+    it("counts each stash in the world's checksum, as each pack is: a copy's gone astray shows before anything's taken out", () => {
+        const { host, player } = atTheChest();
+        const was = host.checksum();
+
+        player.progress.strongroom.tabs[1][7] = stack("potion", 2);
+        assert.notEqual(host.checksum(), was);
+    });
+
+    it("says what in a kept hero's stash this version of the game hasn't got, as it does for their pack, and keeps the rest", () => {
+        const progress = new Progress().toJSON();
+
+        progress.strongroom.tabs[0][3] = { id: "notAThingAnyMore", count: 2 };
+        progress.strongroom.tabs[1][9] = stack("potion", 4);
+
+        const { character, left } = salvageKept({ hero: { ...HERO, race: "human" }, progress }, { seed: 2 });
+
+        assert.equal(character.progress.strongroom.tabs[0][3], null);
+        assert.deepEqual(character.progress.strongroom.tabs[1][9], stack("potion", 4));
+        assert.ok(left.some((said) => said.startsWith("2 things the game no longer has")), left.join(" "));
     });
 
     it("is done the same on a joined player's copy of the world: their stash as the host's, never astray (NET_VERSION 229)", () => {

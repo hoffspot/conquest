@@ -1474,7 +1474,13 @@ export class Progress {
      * one they'd fight with) }. Nothing's changed.
      */
     trying(index, to = null) {
-        return tryOn(new Progress(this.toJSON()), index, to);
+        return tryOn(this.#trial(), index, to);
+    }
+
+    // A copy to try gear on: all but the stash, which nothing worn reads (each gear card asks,
+    // and a stash may hold 240 stacks)
+    #trial() {
+        return new Progress({ ...this.toJSON({ strongroom: false }), strongroom: null });
     }
 
     /**
@@ -1491,7 +1497,7 @@ export class Progress {
             return { reason: index < 0 ? "room" : "item", before, after: before, off: [], weapon: weaponOf(this) };
         }
 
-        const trial = new Progress(this.toJSON());
+        const trial = this.#trial();
 
         trial.pack[index] = { ...thingOf(item), count: 1 };
 
@@ -1643,8 +1649,8 @@ export class Progress {
         return null;
     }
 
-    /** What's kept. */
-    toJSON() {
+    /** What's kept (without the stash only for a copy that won't be: Progress #trial). */
+    toJSON({ strongroom = true } = {}) {
         return {
             skills: { ...this.skills },
             schools: { ...this.schools },
@@ -1656,7 +1662,7 @@ export class Progress {
             invasion: { ...this.invasion },
             bestiary: this.bestiary.toJSON(),
             legends: { met: [...this.legends.met], uniques: [...this.legends.uniques] },
-            strongroom: { tabs: this.strongroom.tabs.map((tab) => tab.map((stack) => (stack ? { ...stack } : null))) },
+            ...(strongroom ? { strongroom: { tabs: this.strongroom.tabs.map((tab) => tab.map((stack) => (stack ? { ...stack } : null))) } } : {}),
         };
     }
 }
