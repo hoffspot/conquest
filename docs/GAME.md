@@ -1068,7 +1068,10 @@ events, the world's sum as it goes and all of it at the end (`test/sparing.test.
   has, where five things were called to find it has none. Whatever's done to anyone is done in
   the order it was.
 
-**A look for danger only where there could be any** (`Battle.counting`, `#afraid`; plan 1-20). No
+**A look for danger only where there could be any** (`Battle.counting`, `#afraid`; plan 1-20;
+since the folk of a building no player is in take no turn at all, `Battle.idling`, this leaves out
+only the looks of those calming on a map everyone else has left, and of the old form played with
+that switch off, which is where its tests play it: it goes when `Battle.idling` does). No
 one neutral frightens anyone, and a building's folk are mostly on a map with no one else, so two in
 three of the folk's looks for danger (half of all the searches a step made with a hundred players
 spread: 441 a step, 220 now) went through those round them to find no one. The index now counts,
@@ -1410,6 +1413,42 @@ whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they 
   same twice running (a `rest` event: `{ id, role, rest }`), staying where they are until it's
   done. Not straight after an act, nor the moment the player first sees them (0.8 to 3 seconds
   later); unseen, never.
+- **Standing till someone comes in** (`Battle.idling`, `#stirred`, `#idles`; plan 1-22, the
+  owner's ruling of 14 November 2026). The folk of a building, and the soldiers quartered in a
+  barracks, stand as they are while no player is on their map (their floor: a tavern's upstairs
+  is a map of its own): no turn, no walking, no look for danger, no way found, no act and no
+  rest. They're in the battle as ever, got ready and let go as ever, and every copy of the
+  world has them. They go on from where they stood, their waits as they were, none begun afresh,
+  from the step after the one a player comes onto their map in (through its door, up its
+  stairs, set down there, come into the world there), a player fallen there counting as one
+  there; and stand again from the step after the last has gone. So a room come back to is as it
+  was left, one of its folk perhaps in the middle of a walk, and whoever's wait or rest fell due
+  while they stood sets off or rests at once: those who sit, in sight of the door, all begin a
+  rest in the step after it's gone through, where unseen each waited its own moment. Only the
+  time of each one's next look about is kept up while it stands (`#lull`: put on to its own step
+  of the next few, as a look that found no one puts it), so a room doesn't all look for danger
+  in the one step, and a garrison at its posts is in every way as it was when it was stepped
+  unseen: it notices whoever comes in at the step it would have.
+  - **Who's stepped all the same.** No one's held on a map that holds, as the step begins, a
+    player, or anyone alive who isn't about their own quiet business there: a creature of the
+    wild, a follower left there, a soldier who came in after someone (it goes out again by the
+    door), one of the garrison set on someone, soldiers of two sides. So no one's held where
+    anyone could fight them or frighten them. On a quiet map, one with something of its own to
+    see to still takes its turns: fallen (up again at its place), afraid (till it's calm, six
+    seconds after what frightened it has gone; then it stands where it is, one that sits up
+    from its seat till someone comes in), ailing, set on by someone, in the middle of a blow,
+    its weapon out. Nothing in a dungeon is ever held, nor anyone out in the world.
+  - **Every copy holds the same ones.** Who's held is worked out as each step begins from who
+    is on which map, which every copy has, and nothing is kept of it: a snapshot holds nothing
+    new (`SNAPSHOT_VERSION` as it was), and a world carried on from one taken in the middle of
+    a hold, or in the step a door's gone through, plays on the same. A copy on the old rules
+    would step them, so `NET_VERSION` is 227.
+  - **What it saves.** With a hundred players spread, 2,000 of the battle's 3,300 characters
+    are indoors with no player there; plan 1-22 has what was measured. `Battle.idling` off
+    plays them about their rounds unseen, as they were, for the tests that set the two side by
+    side (`test/idling.test.js`, which has the switch's date: the two aren't the same battle),
+    and `npm run load -- --astir` to compare. With a player kept standing on every floor of
+    every open building the world plays the same step for step either way.
 - **Talking.** Told to `approach` someone (`{ type: "approach", target }`), a character walks to
   the nearest square it could talk to them from (`canTalk`: seeing them, next to them, or up to
   3.2 squares away across something in the way: the bar, a table, a counter), there (searching
@@ -3656,7 +3695,8 @@ shaders.
 **Getting buildings ready.** Every half a second, outside, the game looks over the buildings
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
 making for) is got ready: its plans made, then each floor built, one to a piece of work, for at
-most 6 ms a frame. Its folk are in the battle from then on, but each is dressed (their body,
+most 6 ms a frame. Its folk are in the battle from then on, standing as they're made till a
+player's on their floor (above, *Standing till someone comes in*), and each is dressed (their body,
 garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player goes in: told
 to go through one of its ways in, or inside (`DOORSTEP`, app/game.js `#doorstep`), a piece of
 work each after its floors. Not as they come near its door, as they were till 2026-10-25: a

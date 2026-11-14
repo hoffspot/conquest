@@ -426,6 +426,29 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
     });
 });
 
+describe("the load with the folk of buildings no one's in about their rounds as they were (scripts/load.js load, --astir; generated/multiplayer_scaling_plan.md 1-22)", () => {
+    it("holds them where no player is, counts how many a step, and with --astir steps them as it did, the switch put back", async () => {
+        const held = await load({ seed: 2, players: 4, layout: "spread", seconds: 4 });
+        const astir = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, astir: true });
+        const steps = held.steps.count;
+
+        assert.deepEqual(checkReport(held), []);
+        assert.deepEqual(checkReport(astir), []);
+        assert.deepEqual([held.battle.idling, astir.battle.idling], [true, false]);
+        assert.equal(Battle.idling, true, "the switch put back");
+
+        // (The load's players stand in the streets: every building's folk are held, most of the
+        // battle with four players spread, and with --astir none; the same characters in it)
+        assert.equal(astir.counts["battle.held"] ?? 0, 0);
+        assert.ok(held.counts["battle.held"] / steps > 20 && held.counts["battle.held"] < held.counts["battle.actors"], `${held.counts["battle.held"] / steps} held a step of ${held.counts["battle.actors"] / steps}`);
+        assert.equal(held.counts["battle.actors"], astir.counts["battle.actors"]);
+        assert.ok(held.counts["battle.searches"] < astir.counts["battle.searches"] || held.counts["battle.paths"] < astir.counts["battle.paths"], "less looked for or found");
+        assert.ok(wordsOf(held).some((line) => line.startsWith("Its work a step: ") && / held where no player is /.test(line)));
+        assert.ok(wordsOf(astir).some((line) => line.startsWith("The battle's step: ") && line.includes("about their rounds as they were (--astir)")));
+        assert.ok(!wordsOf(held).some((line) => line.includes("--astir")));
+    });
+});
+
 describe("the load's players leaving together (scripts/load.js load, --leave; generated/multiplayer_scaling_plan.md 1-27)", () => {
     let half;
     let sudden;

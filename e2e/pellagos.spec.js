@@ -5650,6 +5650,103 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
+test("a tavern no one's in stands as it was left: its folk where they were half a minute on, none acting or resting unseen; walked into, they're about their business within a second, those who sit seated and resting, someone on their way, and drawn so", async ({ page }) => {
+    // (Stood outside, in, and its folk's bodies built: a minute or more without a GPU)
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const played = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const battle = game.battle;
+        const folk = () => battle.actors.filter((actor) => actor.kind === "folk" && actor.map === "taproom");
+        // (How each of them stands: all the battle keeps of them but when they next look about,
+        // which is kept up while they stand, core/battle.js #lull)
+        const stood = () => JSON.stringify(folk().map((actor) => ({ ...actor, lookAt: null })));
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (To its door, and stood there half a minute: no one's in)
+        battle.command("player", { type: "move", to: game.world.tavern.outside });
+        game.advance(25, { render: false });
+
+        const before = stood();
+        const time = battle.time;
+
+        game.advance(30, { render: false });
+
+        const waited = { same: stood() === before, seconds: (battle.time - time) / 1000, folk: folk().length, held: folk().every((actor) => actor.waitUntil === 0 && !actor.path.length) };
+
+        // (In at the door, a step at a time till the step it's gone through in)
+        battle.command("player", { type: "enter", link: "tavern-door" });
+
+        let steps = 0;
+
+        while (battle.actor("player").map !== "taproom" && steps++ < 400) {
+            game.advance(0.05, { frame: 0.05, render: false });
+        }
+
+        const through = { map: battle.actor("player").map, same: stood() === before, at: battle.time };
+
+        // (And a second on)
+        game.advance(1, { render: false });
+
+        const now = folk();
+        const seated = now.filter((actor) => actor.routine.seated);
+
+        return {
+            waited,
+            through,
+            after: {
+                seconds: (battle.time - through.at) / 1000,
+                moved: stood() !== before,
+                turns: now.every((actor) => actor.restAt > 0 || actor.waitUntil > 0 || actor.path.length > 0 || actor.arrived),
+                resting: now.filter((actor) => actor.restingUntil > battle.time).length,
+                walking: now.filter((actor) => actor.path.length > 0).length,
+                seated: seated.length,
+                inSeats: seated.filter((actor) => (actor.afraid ?? null) === null && !actor.reseat && actor.x === actor.spawn[0] + 0.5 && actor.y === actor.spawn[1] + 0.5).length,
+            },
+        };
+    });
+
+    // (Half a minute with no one in: every one of them as they stood, none having taken a turn)
+    expect(played.waited.seconds).toBeGreaterThanOrEqual(29);
+    expect(played.waited.folk).toBeGreaterThanOrEqual(5);
+    expect(played.waited).toMatchObject({ same: true, held: true });
+
+    // (Still so in the step the door's gone through; and a second on, about their business:
+    // those who sit resting in their seats, the rest waiting at their work or on their way)
+    expect(played.through).toMatchObject({ map: "taproom", same: true });
+    expect(played.after.seconds).toBeLessThanOrEqual(1.1);
+    expect(played.after).toMatchObject({ moved: true, turns: true });
+    expect(played.after.resting).toBeGreaterThanOrEqual(2);
+    expect(played.after.resting + played.after.walking).toBeGreaterThanOrEqual(3);
+    expect(played.after.seated).toBeGreaterThanOrEqual(3);
+    expect(played.after.inSeats).toBe(played.after.seated);
+
+    // (And drawn so, once their bodies are built: those who sit seated, some of them resting)
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const folk = game.battle.actors.filter((actor) => actor.kind === "folk" && actor.map === "taproom");
+
+        return folk.every((actor) => game.avatars.has(actor.id));
+    }, { seconds: 60 })).toBe(true);
+
+    const drawn = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const folk = game.battle.actors.filter((actor) => actor.kind === "folk" && actor.map === "taproom");
+
+        game.advance(2);
+
+        const seated = folk.filter((actor) => actor.routine.seated);
+
+        return { shown: game.mapId, seated: seated.length, drawnSeated: seated.filter((actor) => game.avatars.get(actor.id).actions.seated).length, standing: folk.filter((actor) => !actor.routine.seated && !game.avatars.get(actor.id).actions.seated).length, all: folk.length };
+    });
+
+    expect(drawn.shown).toBe("taproom");
+    expect(drawn.drawnSeated).toBe(drawn.seated);
+    expect(drawn.standing).toBe(drawn.all - drawn.seated);
+});
+
 test("every tavern can be gone into: got ready as the player comes near, its folk dressed only once they go in (told to go through its door), not at its door; its own room and folk inside; its folk let go of a little way off, its floors further, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
     // (Seed 2's town has a second tavern, the Stag's Head, an inn)
     await playing(page, "/?play&seed=2");

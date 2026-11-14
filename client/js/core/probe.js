@@ -105,7 +105,8 @@ export const FLUSH_PASSES = Object.freeze(["flush.quiet", "flush.checksum", "flu
  * who the battle stepped, a step at a time (`battle.actors`, everyone in it; `battle.fallen`, those
  * of them down; and by kind, BATTLE_KINDS: `battle.actors.routine` ...), how many of them walked
  * (`battle.walkers`), in how many strides (`battle.strides`), and how many stood where they were
- * with nowhere to go (`battle.idle`); the nearest enemy looked for (`battle.searches`, and
+ * with nowhere to go (`battle.idle`), and how many were held, taking no turn and walking nowhere,
+ * on a map no player was on (`battle.held`: core/battle.js Battle.idling); the nearest enemy looked for (`battle.searches`, and
  * those looked at for it: `battle.searchLooks`), whether one's in a fight asked (`battle.fightAsks`),
  * a player near asked after between looks (`battle.playerAsks`), and the players measured for
  * whoever asks after those near it (`battle.playerPairs`: a soldier set on no one, the folk
@@ -141,6 +142,7 @@ export const COUNTERS = Object.freeze([
     "battle.walkers",
     "battle.strides",
     "battle.idle",
+    "battle.held",
     "battle.searches",
     "battle.searchLooks",
     "battle.fightAsks",

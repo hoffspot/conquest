@@ -408,6 +408,9 @@ const MOVES = kindsOf("battle.move");
 const ACTORS = kindsOf("battle.actors");
 const PATHS = kindsOf("battle.paths");
 
+// The world's own map, out of doors, where no one's ever held for want of a player (Battle.idling)
+const OUTSIDE = "town";
+
 const turnOf = (id, steps) => {
     let sum = 0;
 
@@ -893,6 +896,21 @@ export class Battle {
      */
     static counting = true;
 
+    /**
+     * Whether a building's folk and the soldiers quartered in a barracks stand as they are while
+     * no player is on their map (#stirred, #idles), as they do, or go about their rounds unseen,
+     * as they did: for the tests that set the two side by side, till its date (test/idling.test.js:
+     * the two are not the same battle, so it has one). The owner's ruling of 14 November 2026
+     * (generated/multiplayer_scaling_plan.md 1-22): they stand till someone comes in, go on from
+     * where they stood with their waits as they were, and start in the step after the one the
+     * door is gone through in. Held, one takes no turn, walks nowhere, looks for no danger, finds
+     * no way and strikes no blow; it's in the battle as ever, and the passes over everyone
+     * (what ails them, what lasts on them, the index) still come to it. Of its own, only the
+     * time of its next look is kept up (#lull). Who is held is worked out as each step begins
+     * from what every copy of the world has, nothing kept for it: a snapshot holds nothing of it.
+     */
+    static idling = true;
+
     // Everyone by id (actor), and where everyone stands (#indexed): made again whenever they might
     // be out of date (`version`, bumped as anyone's added, taken out or put somewhere new)
     #ids = null;
@@ -919,6 +937,16 @@ export class Battle {
     // battle's list it was made of, and put later by each Light put on anyone since (buff)
     #lit = { actors: null, until: -Infinity };
     #standing = new Set();
+
+    // The maps where someone's held or might be (Battle.idling), as the step began (#stirred):
+    // false, one astir, where no one is; true, one found quiet when the first of its own asked
+    // (#idles); till then, the side of the soldiers posted on it, if it has any. Who was held in
+    // this step's turns, by place in `actors`, for its walking and its blows to leave out too;
+    // and the map #idles last asked about this step, with what it was told
+    #quiet = new Map();
+    #lulled = new Uint8Array(0);
+    #asked = null;
+    #askedQuiet = false;
 
     // The players near a point as the index gave them (#heroesNear: their places in `actors`, in
     // order), in a list of their own that only the askings after players fill, so no other
@@ -957,7 +985,7 @@ export class Battle {
 
     // The step's work as it's done, tallied for whoever measures it (core/probe.js COUNTERS;
     // #counted): read by nothing else, and begun again from nothing each step
-    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0, meshKept: 0, playerPairs: 0 };
+    #work = { routine: 0, patrol: 0, wild: 0, follow: 0, other: 0, fallen: 0, idle: 0, held: 0, walkers: 0, strides: 0, searches: 0, looks: 0, fightAsks: 0, playerAsks: 0, nears: 0, nearFound: 0, sights: 0, meshAsks: 0, meshKept: 0, playerPairs: 0 };
 
     /**
      * @param {object} world - From generateWorld (world.js): its blocked squares and spawns.
@@ -3177,17 +3205,29 @@ export class Battle {
         this.#march();
         this.#mustered();
 
+        // (Who's held this step, Battle.idling: decided for each as its turn comes, by how the
+        // maps stood as the step began, and kept for its walking and its blows)
+        const actors = this.actors;
+        const idling = Battle.idling;
+        const lulled = idling ? this.#stirred() : null;
+
         if (Battle.mustering) {
             // (Each one's turn begun by what it has, read here: a horse, arms, a creature's way
             // of hovering, a guard up, a boss's fight. The five things called for each, in this
             // order, each began by finding most have none of what it's for)
-            const actors = this.actors;
-
             for (let a = 0; a < actors.length; a++) {
                 const actor = actors[a];
 
                 if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
                     timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                // (One held: no turn, but its next look's time kept; timed with its kind's turns)
+                if (idling && this.#idles(actor)) {
+                    lulled[a] = 1;
+                    this.#lull(actor);
+
+                    continue;
                 }
 
                 const wild = actor.wild;
@@ -3215,9 +3255,19 @@ export class Battle {
                 this.#think(actor);
             }
         } else {
-            for (const actor of this.actors) {
+            for (let a = 0; a < actors.length; a++) {
+                const actor = actors[a];
+
                 if (probed && part !== (THINKS[actor.ai] ?? THINKS.other)) {
                     timed((part = THINKS[actor.ai] ?? THINKS.other));
+                }
+
+                // (One held: no turn, but its next look's time kept; timed with its kind's turns)
+                if (idling && this.#idles(actor)) {
+                    lulled[a] = 1;
+                    this.#lull(actor);
+
+                    continue;
                 }
 
                 this.#ride(actor);
@@ -3229,25 +3279,34 @@ export class Battle {
             }
         }
 
-        for (const actor of this.actors) {
+        for (let a = 0; a < actors.length; a++) {
+            const actor = actors[a];
+            const held = idling && lulled[a] === 1;
+
             if (probed) {
                 if (part !== (MOVES[actor.ai] ?? MOVES.other)) {
                     timed((part = MOVES[actor.ai] ?? MOVES.other));
                 }
 
-                // (Who's in it, counted as each is come to: no going through everyone again for it)
+                // (Who's in it, counted as each is come to: no going through everyone again for
+                // it. One held is in it, and counted as the rest are, and among the held)
                 this.#work[Object.hasOwn(MOVES, actor.ai) ? actor.ai : "other"]++;
                 this.#work.fallen += actor.dead ? 1 : 0;
                 this.#work.idle += !actor.dead && !actor.path.length && actor.target === null ? 1 : 0;
+                this.#work.held += held ? 1 : 0;
             }
 
-            this.#move(actor);
+            if (!held) {
+                this.#move(actor);
+            }
         }
 
         probed && timed("battle.fight");
 
-        for (const actor of this.actors) {
-            this.#fight(actor);
+        for (let a = 0; a < actors.length; a++) {
+            if (!idling || lulled[a] === 0) {
+                this.#fight(actors[a]);
+            }
         }
 
         probed && timed("battle.effects");
@@ -3280,6 +3339,7 @@ export class Battle {
         count("battle.actors", this.actors.length);
         count("battle.fallen", work.fallen);
         count("battle.idle", work.idle);
+        count("battle.held", work.held);
         count("battle.walkers", work.walkers);
         count("battle.strides", work.strides);
         count("battle.searches", work.searches);
@@ -3292,6 +3352,119 @@ export class Battle {
         count("battle.sights", work.sights);
         count("battle.meshAsks", work.meshAsks);
         count("battle.meshKept", work.meshKept);
+    }
+
+    // --- Standing as they are where no player is (Battle.idling) ---
+
+    /**
+     * The maps as the step begins, for who's held in it (#idles), and the step's marks of the
+     * held, all unmade. A map is astir, and no one on it held, if it holds a player, standing or
+     * fallen, or anyone alive who isn't about its own quiet business there (#homely): a creature
+     * of the wild, a follower, a soldier who came in after someone, one of its own soldiers set
+     * on someone; or soldiers of two sides posted on it. So no one's held where anyone could
+     * fight them, frighten them or be seen by them, and every copy of the world, which has the
+     * same characters on the same maps as the step begins, holds the same ones.
+     */
+    #stirred() {
+        const quiet = this.#quiet;
+        const actors = this.actors;
+
+        quiet.clear();
+
+        for (let a = 0; a < actors.length; a++) {
+            const actor = actors[a];
+            const map = actor.map;
+
+            // (Out in the world, or one of the folk about their business, as most indoors are:
+            // nothing to note)
+            if (map === OUTSIDE || (actor.ai === "routine" && actor.neutral && actor.kind !== "player")) {
+                continue;
+            }
+
+            if (actor.kind === "player" || (!actor.dead && !this.#homely(actor))) {
+                quiet.set(map, false);
+            } else if (actor.kind === "soldier" && !actor.dead) {
+                // (Soldiers of two sides posted on the one map, which no barracks has: astir.
+                // Till #idles asks, a map with soldiers at home on it is noted by their side)
+                const side = quiet.get(map);
+
+                if (side === undefined) {
+                    quiet.set(map, actor.team);
+                } else if (side !== actor.team) {
+                    quiet.set(map, false);
+                }
+            }
+        }
+
+        this.#asked = null;
+
+        if (this.#lulled.length < actors.length) {
+            this.#lulled = new Uint8Array(actors.length + 64);
+        } else {
+            this.#lulled.fill(0, 0, actors.length);
+        }
+
+        return this.#lulled;
+    }
+
+    // Whether someone's where it belongs and about its own business there, in no fight: one of
+    // the folk on their rounds or in their seat, or a soldier on the map it was posted on (a
+    // barracks' garrison: one that followed someone in is somewhere else than its post, and a
+    // follower has a leader), set on no one
+    #homely(actor) {
+        if (actor.ai === "routine") {
+            return Boolean(actor.neutral);
+        }
+
+        return actor.kind === "soldier" && actor.ai === "patrol" && actor.map === actor.spawnMap && !actor.leader && actor.target === null && !actor.attack && !actor.order;
+    }
+
+    /**
+     * Whether a character is held this step (Battle.idling): at home on a map that was quiet as
+     * the step began (#stirred) and is no dungeon's, with nothing of its own to see to. One with
+     * something to see to takes its turn as ever, though its map is quiet: fallen (it's up again
+     * in its turn), afraid (calm again in its turn), ailing, set on by someone, in the middle of
+     * a blow or a spell, its weapon out or on its way in or out, a healer or a caster, one in a
+     * line of battle.
+     */
+    #idles(actor) {
+        const map = actor.map;
+
+        if (map === OUTSIDE || actor.dead || !this.#homely(actor)) {
+            return false;
+        }
+
+        // (A building's folk come one after another in the roster: the last map asked about is
+        // most often this one's)
+        if (map !== this.#asked) {
+            let quiet = this.#quiet.get(map);
+
+            if (quiet !== true && quiet !== false) {
+                quiet = !this.maps[map]?.dungeon;
+                this.#quiet.set(map, quiet);
+            }
+
+            this.#asked = map;
+            this.#askedQuiet = quiet;
+        }
+
+        return this.#askedQuiet && (actor.afraid ?? null) === null && actor.afflictions.length === 0 && !actor.casting && !actor.attack && !actor.armed && !actor.drawing && !actor.mount && !actor.onGuard && !actor.formation && !actor.heals && !actor.casts && !this.#chasers.has(actor.id);
+    }
+
+    // One held, in the turn it doesn't take: all that's kept up of it is when it next looks about
+    // (the folk's look for danger, a soldier's for an enemy), put on to its own step of the next
+    // few as a look that found no one puts it, and none made. So a room's folk and a barracks'
+    // garrison don't all look in the step someone comes in, their looks' times all long past: each
+    // looks in the step it would have, and a garrison at its posts is in every way as it was
+    // when it was stepped unseen
+    #lull(actor) {
+        if (actor.ai === "routine") {
+            if (this.time >= (actor.lookAt ?? 0)) {
+                actor.lookAt = this.#nextStep(actor, FLEE.look);
+            }
+        } else if (this.time >= actor.rethinkAt) {
+            actor.rethinkAt = this.#nextStep(actor);
+        }
     }
 
     // --- Drawing weapons and putting them away ---
