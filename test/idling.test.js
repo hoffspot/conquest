@@ -25,7 +25,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { install, lap, Probes, uninstall } from "../client/js/core/probe.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { generateWorld } from "../client/js/core/world.js";
-import { unexpired } from "./helpers.js";
+import { lookIn, unexpired } from "./helpers.js";
 
 // Battle.idling's expiry (contribution.md, section 3, *Two netcodes side by side*): off, it plays
 // the rule the owner changed, not the same battle, so it's to be taken out once nothing's left
@@ -527,7 +527,10 @@ const insideOf = (host) => [...new Set(host.battle.actors.filter((actor) => acto
 
 // A world (seed 2) with its player at the door of the barracks of the town they start in, not
 // gone in, and everything near got ready: the barracks' garrison and the folk of the buildings
-// round it, and the tavern's, all with no player on their maps. Played `seconds`
+// round it, and the tavern's, all with no player on their maps. Played `seconds`, after the one
+// step whose look round gets them ready: the player's then told to go into each and to stop
+// where they are (lookIn), since a building's people are made only as a player's told to go in
+// (core/host.js Host.peopling, plan 1-23), and they're kept while the player's at the door
 function atTheDoor(seconds = 2) {
     const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
@@ -537,9 +540,13 @@ function atTheDoor(seconds = 2) {
     const building = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "barracks" && place === "home");
     const me = host.battle.actor(HOST_PLAYER);
 
+    // (Told from the step before its door, then stood on its doorstep as ever)
+    put(me, building.door.ends[0].arrive);
+    host.advance(STEP_MS);
+    assert.ok(lookIn(host) >= 3, "(the barracks, and the buildings round its door, looked into)");
     put(me, building.door.ends[0].squares[0]);
 
-    for (let t = 0; t < seconds * 1000; t += STEP_MS) {
+    for (let t = STEP_MS; t < seconds * 1000; t += STEP_MS) {
         host.advance(STEP_MS);
     }
 

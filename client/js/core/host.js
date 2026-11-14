@@ -90,9 +90,13 @@ export const HOST_PLAYER = "player";
 /**
  * How often (battle ms) the buildings near the players are looked over: those within `near`
  * metres of a player out in the world (or a player's heading into) got ready to go into, their
- * folk about their business inside; those `far` from every player let go.
+ * floors made; those `far` from every player let go. Its folk, a barracks' garrison and a
+ * scene's court are made only as a player goes in (Host.peopling: told to go in by one of its
+ * ways, or set down inside), and let go, the building still ready, once every player's more than
+ * `away` metres from its door: whoever comes back from nearer finds the room as they left it,
+ * from further one made afresh.
  */
-export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90 });
+export const RELEVANCE = Object.freeze({ every: 500, near: 22, far: 90, away: 40 });
 
 // The side of a cell of the players' places (metres), where the passes that measure the world
 // against them look for those near (near.js): about as far as most of them ask
@@ -1333,6 +1337,26 @@ export class Host {
     static widening = true;
 
     /**
+     * Whether a building's folk, a barracks' garrison and a scene's court are made only as a
+     * player goes into it and let go once every player's RELEVANCE.away from its door, as they
+     * are; or made as the building's got ready, RELEVANCE.near from its door, and kept till it's
+     * let go, RELEVANCE.far from everyone, as they were: for the tests that set the two side by
+     * side, till its date (test/peopling.test.js: not the same battle, so it has one). The
+     * owner's ruling of 14 November 2026 (generated/multiplayer_scaling_plan.md 1-23): "the same
+     * room while nearby". As it is, a building's got ready as ever (its floors made, "open"
+     * told, for whoever builds them ahead: app/game.js, server/ahead.js), with no one in it. Its
+     * people are made (#people, "peopled" told) in the step a player's command to go in by one
+     * of its ways is taken (from however far: ENTER_REACH), which is before any step that could
+     * set them down inside; failing that in the step a player's set down in it by anything else
+     * (carried there by magic or the guild's portal, up again there), and failing that by the
+     * next look round with a player in it. They're let go (#vacate, "vacated" told) by the look
+     * round that finds no player in it or told to go in, and every player more than
+     * RELEVANCE.away from its door. Nothing's kept for it: who's peopled is read off who's in
+     * the battle (#peopled), so a snapshot holds nothing new.
+     */
+    static peopling = true;
+
+    /**
      * @param {object} world - From buildWorld (overworld.js) or generateWorld (world.js).
      * @param {object} [options]
      * @param {number} [options.seed] - Seeds the battle (the world's own seed to start with).
@@ -1777,7 +1801,10 @@ export class Host {
         /** The folk in the battle, by id: how each looks and talks (world.folk's, a building's). */
         this.folk = new Map();
 
-        /** The buildings got ready to go into (by key): the ids of their folk. */
+        /**
+         * The buildings got ready to go into (by key): the ids of their folk in the battle (none
+         * till a player goes in: Host.peopling).
+         */
         this.open = new Map();
 
         /** When (battle ms) the buildings near the players are next looked over. */
@@ -2363,9 +2390,10 @@ export class Host {
                     return refuse(rite);
                 }
 
-                // (Heading into a building: it's got ready now)
+                // (Heading into a building: it's got ready now, and its people made, before any
+                // step that could set the player down among them: Host.peopling)
                 if (link.building) {
-                    this.#openBuilding(link.building);
+                    this.#openBuilding(link.building, true);
                 }
 
                 return this.#order(actor, { type: "enter", link: link.id, run });
@@ -2626,7 +2654,7 @@ export class Host {
     /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
-     * "close", "explored" (`by` another of their party: #share), "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
+     * "close", "peopled" and "vacated" (a building's people made and let go: Host.peopling), "explored" (`by` another of their party: #share), "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over; "away", a player marked away or back, and "afk", one to be
      * sent out of the world for it: AFK; "treasure", a treasure map read, its keepers woken, it dug
      * up or given up: #treasures; "bestiary", a kind's research gone up a level: #researched;
@@ -3062,13 +3090,23 @@ export class Host {
         }
 
         for (const event of events) {
+            // A player up again in a building they didn't fall in (where they sleep): its people
+            // made, if they aren't (Host.peopling)
+            if (Host.peopling && event.type === "respawn" && event.from !== event.map && this.players.has(event.id)) {
+                const building = this.world.interiors?.of(event.map);
+
+                if (building?.entrance) {
+                    this.#openBuilding(building.key, true);
+                }
+            }
+
             // A player into a building: it's ready (if it wasn't), and the first time in, it's
             // marked on their maps
             if (event.type === "cross" && this.players.has(event.id)) {
                 const building = this.world.interiors?.of(event.to);
 
                 if (building?.entrance) {
-                    this.#openBuilding(building.key);
+                    this.#openBuilding(building.key, true);
                 }
 
                 if (building && this.players.get(event.id).explored.enter(building.key)) {
@@ -3701,10 +3739,14 @@ export class Host {
         for (const key of snapshot.open) {
             const building = world.interiors.buildings.get(key);
 
-            host.#enthrone(building);
-            host.open.set(key, building.folk.filter(({ id }) => !host.hired.has(id)).map(({ id }) => id));
+            // (Its folk those of them in the battle, which has none of a building no one's
+            // gone into: Host.peopling, #peopled; as it was, all of them)
+            const folk = building.folk.filter(({ id }) => !host.hired.has(id) && (!Host.peopling || host.battle.actor(id)));
 
-            for (const one of building.folk.filter(({ id }) => !host.hired.has(id))) {
+            host.#enthrone(building);
+            host.open.set(key, folk.map(({ id }) => id));
+
+            for (const one of folk) {
                 host.folk.set(one.id, one);
             }
         }
@@ -17217,7 +17259,7 @@ export class Host {
             return refuse("command");
         }
 
-        this.#openBuilding(there.key);
+        this.#openBuilding(there.key, true);
 
         const hall = there.maps[0];
         const out = portalOn(this.world.maps?.[hall]);
@@ -19313,10 +19355,22 @@ export class Host {
             if (!this.open.has(building.key)) {
                 if (wanted.has(building.key) || about.some(x, z, RELEVANCE.near, (place) => (measured++, place.out && hypot(x - place.x, z - place.y) < RELEVANCE.near))) {
                     this.battle.forget(gone);
-                    this.#openBuilding(building.key);
+                    this.#openBuilding(building.key, wanted.has(building.key));
                 }
-            } else if (!wanted.has(building.key) && known.length === places.length && !about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
-                this.#closeBuilding(building.key, gone);
+            } else if (wanted.has(building.key)) {
+                // (A player in it or told to go in, and no one made: set down in it by nothing
+                // that says so, or carried on from a world that made them otherwise)
+                if (Host.peopling && !this.#peopled(building)) {
+                    this.battle.forget(gone);
+                    this.#openBuilding(building.key, true);
+                }
+            } else if (known.length === places.length) {
+                if (!about.some(x, z, RELEVANCE.far, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.far)))) {
+                    this.#closeBuilding(building.key, gone);
+                } else if (Host.peopling && this.#peopled(building) && !about.some(x, z, RELEVANCE.away, (place) => (measured++, !(hypot(x - place.x, z - place.y) > RELEVANCE.away)))) {
+                    // (Its people let go, everyone gone from its door; its floors kept ready)
+                    this.#vacate(building.key, gone);
+                }
             }
         }
 
@@ -19350,30 +19404,78 @@ export class Host {
         return interiors.buildings.get(key) ?? null;
     }
 
-    // Get a building ready to go into: its floors and folk made (once), and its folk about their
-    // business inside
-    #openBuilding(key) {
+    // Get a building ready to go into: its floors made (once); and, a player going in (`coming`),
+    // its people made, if they aren't (Host.peopling: as it was, with its floors, whoever's
+    // coming)
+    #openBuilding(key, coming = false) {
         const building = this.#building(key);
 
-        if (!building?.entrance || this.open.has(key)) {
+        if (!building?.entrance) {
             return;
         }
 
-        this.#findersTier(building);
-        this.world.interiors.make(key);
-        this.#enthrone(building);
+        if (!this.open.has(key)) {
+            this.#findersTier(building);
+            this.world.interiors.make(key);
+            this.#enthrone(building);
 
+            if (!Host.peopling) {
+                const folk = this.#folkOf(building);
+
+                this.open.set(key, folk);
+                this.#event("open", { key, folk });
+                this.#posted(building);
+
+                return;
+            }
+
+            this.open.set(key, []);
+            this.#event("open", { key, folk: [] });
+        }
+
+        if (coming && Host.peopling && !this.#peopled(building)) {
+            this.#people(building);
+        }
+    }
+
+    // A building's folk put in the battle, about their business inside (those not in it, nor
+    // hired away): their ids
+    #folkOf(building) {
         const side = this.#sideOf(building.place === "home" ? this.world.start?.id : building.place, building.people);
-        const folk = this.#notTheirs(building) ? [] : building.folk.filter((one) => this.#addFolk(one, side)).map(({ id }) => id);
 
-        this.open.set(key, folk);
-        this.#event("open", { key, folk });
+        return this.#notTheirs(building) ? [] : building.folk.filter((one) => this.#addFolk(one, side)).map(({ id }) => id);
+    }
 
-        // (A barracks: its garrison in it; a scene's court, the Order of the Bell at its posts)
+    // A barracks' garrison stood up in it; a scene's court, the Order of the Bell at its posts
+    #posted(building) {
         if (building.kind === "barracks") {
             this.#quarter(building);
         } else if (building.kind === "scenery" && SCENERY[building.scenery]?.court) {
             this.#holdCourt(building);
+        }
+    }
+
+    // Whether an open building has its people in it (Host.peopling): any of its folk in the
+    // battle, its barracks' garrison stood up or its court held. Read off what the world keeps
+    // anyway, so a copy made from a snapshot says the same
+    #peopled(building) {
+        return this.open.get(building.key).length > 0 || this.courts.has(building.key) || (building.kind === "barracks" && this.quartered.get(this.#barracksTown(building))?.key === building.key);
+    }
+
+    // An open building's people made, a player going in (Host.peopling): its folk about their
+    // business, its ruler as the war has them now, its garrison or its court at their posts
+    #people(building) {
+        this.#enthrone(building);
+
+        const folk = this.#folkOf(building);
+
+        this.open.set(building.key, folk);
+        this.#posted(building);
+
+        // (Told only if there's anyone: a place with no one to make, a building held by
+        // outlaws or a dungeon's way in, is asked again while a player's in it, and says nothing)
+        if (this.#peopled(building)) {
+            this.#event("peopled", { key: building.key, folk });
         }
     }
 
@@ -19418,9 +19520,25 @@ export class Host {
     // Let a building go: its folk out of the battle (its plans are kept, and anyone can still go
     // in: its folk come back when it's got ready again)
     #closeBuilding(key, later = null) {
-        const folk = this.open.get(key);
+        const folk = this.#turnOut(key, later);
 
         this.open.delete(key);
+        this.#event("close", { key, folk });
+    }
+
+    // An open building's people let go, everyone gone from its door (Host.peopling,
+    // RELEVANCE.away): out of the battle, its floors kept ready; made afresh when a player next
+    // goes in
+    #vacate(key, later = null) {
+        const folk = this.#turnOut(key, later);
+
+        this.open.set(key, []);
+        this.#event("vacated", { key, folk });
+    }
+
+    // A building's folk out of the battle, its garrison and its court with them: their ids
+    #turnOut(key, later = null) {
+        const folk = this.open.get(key);
 
         for (const id of folk) {
             this.battle.remove(id, later);
@@ -19434,7 +19552,8 @@ export class Host {
         }
 
         this.#leaveCourt(key, later);
-        this.#event("close", { key, folk });
+
+        return folk;
     }
 
     // One of the folk, going about their business in the battle (no one fights them), of the town

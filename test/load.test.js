@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { before, describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
+import { Host } from "../client/js/core/host.js";
 import { DAY } from "../client/js/core/daytime.js";
 import { DELVES } from "../client/js/core/dungeons/play.js";
 import { KEEP_TILES, MOST_TILES, TILE } from "../client/js/core/navigation.js";
@@ -354,12 +355,25 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
         assert.deepEqual([leave.before.count, leave.steps.count], [0, 1000 / STEP_MS]);
         assert.ok(leave.longest.at >= 0 && leave.longest.at < 1000);
         assert.equal(leave.longest.wall, leave.steps.wall.worst);
+        // (The one town's buildings closed, its townsfolk and soldiers out of the battle, in
+        // the step the look round falls in: two goings through it for them all. No building's
+        // folk with them: the load's players stand in the streets and none was told to go in,
+        // core/host.js Host.peopling, plan 1-23)
+        assert.ok(leave.let.buildings > 4 && leave.let.characters > 0, JSON.stringify(leave.let));
+        assert.equal(leave.let.forgets, 2);
+        assert.ok(wordsOf(report).some((line) => line.startsWith("Everyone gone at 0 s (8 left, 0 stayed): the 20 steps after a mean of ")));
+        assert.deepEqual(checkReport({ ...report, leave: undefined }), ["report.leave: not an object"]);
+    });
+
+    it("lets the buildings' folk go with them where they're made as a building's got ready, as they were (--peopled): three goings through the battle for them all", async () => {
+        const { leave } = await load({ seed: 2, players: 8, layout: "one-town", activity: "joinstorm", seconds: 9, eventAt: 1000, burst: 0, peopled: true });
+
         // (The one town's buildings closed, its folk, townsfolk and soldiers out of the battle,
         // in the step the look round falls in: three goings through it for them all)
         assert.ok(leave.let.buildings > 4 && leave.let.characters > 2 * leave.let.buildings, JSON.stringify(leave.let));
         assert.equal(leave.let.forgets, 3);
-        assert.ok(wordsOf(report).some((line) => line.startsWith("Everyone gone at 0 s (8 left, 0 stayed): the 20 steps after a mean of ")));
-        assert.deepEqual(checkReport({ ...report, leave: undefined }), ["report.leave: not an object"]);
+        assert.equal(leave.let.buildings, report.leave.let.buildings, "(the same buildings closed either way)");
+        assert.ok(leave.let.characters > report.leave.let.characters);
     });
 
     it("takes the world once for each two let in, tells the rest their place as it changes, and the last waits on three pairs' loading", () => {
@@ -428,8 +442,12 @@ describe("the load's join storm (scripts/load.js load, activity joinstorm)", () 
 
 describe("the load with the folk of buildings no one's in about their rounds as they were (scripts/load.js load, --astir; generated/multiplayer_scaling_plan.md 1-22)", () => {
     it("holds them where no player is, counts how many a step, and with --astir steps them as it did, the switch put back", async () => {
-        const held = await load({ seed: 2, players: 4, layout: "spread", seconds: 4 });
-        const astir = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, astir: true });
+        // (With a building's folk made as it's got ready, as they were, --peopled: the load's
+        // players stand in the streets and go into nothing, so with them made only as a
+        // player's told to go in there's no one in a building to hold, core/host.js
+        // Host.peopling, plan 1-23; the next test has the two side by side)
+        const held = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, peopled: true });
+        const astir = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, astir: true, peopled: true });
         const steps = held.steps.count;
 
         assert.deepEqual(checkReport(held), []);
@@ -446,6 +464,32 @@ describe("the load with the folk of buildings no one's in about their rounds as 
         assert.ok(wordsOf(held).some((line) => line.startsWith("Its work a step: ") && / held where no player is /.test(line)));
         assert.ok(wordsOf(astir).some((line) => line.startsWith("The battle's step: ") && line.includes("about their rounds as they were (--astir)")));
         assert.ok(!wordsOf(held).some((line) => line.includes("--astir")));
+    });
+});
+
+describe("the load with buildings' people made as they're got ready, as they were (scripts/load.js load, --peopled; generated/multiplayer_scaling_plan.md 1-23)", () => {
+    it("has no building's folk in the battle with its players in the streets, fewer characters and a smaller snapshot; with --peopled has them as it did, the switch put back", async () => {
+        const now = await load({ seed: 2, players: 4, layout: "spread", seconds: 4 });
+        const was = await load({ seed: 2, players: 4, layout: "spread", seconds: 4, peopled: true });
+        const steps = now.steps.count;
+
+        assert.deepEqual(checkReport(now), []);
+        assert.deepEqual(checkReport(was), []);
+        assert.deepEqual([now.battle.peopling, was.battle.peopling], [true, false]);
+        assert.equal(Host.peopling, true, "the switch put back");
+
+        // (The census at the end: no one indoors but the first town's own tavern's twelve, who
+        // are the world's and always there; as it was, the folk of every building round the four)
+        const indoors = (report) => Object.values(report.census).reduce((sum, { indoors: n }) => sum + n, 0);
+
+        assert.equal(indoors(now), 12);
+        assert.ok(indoors(was) > indoors(now) + 20, `${indoors(was)} indoors as it was, ${indoors(now)} now`);
+        assert.ok(now.counts["battle.actors"] / steps < was.counts["battle.actors"] / steps - 20, `${now.counts["battle.actors"] / steps} in the battle a step, ${was.counts["battle.actors"] / steps} as it was`);
+        assert.ok(now.counts["battle.held"] < was.counts["battle.held"]);
+        assert.ok(now.snapshot.bytes < was.snapshot.bytes, `a snapshot of ${now.snapshot.bytes} bytes, ${was.snapshot.bytes} as it was`);
+        assert.ok(wordsOf(was).some((line) => line.startsWith("The battle's step: ") && line.includes("made as they're got ready, as they were (--peopled)")));
+        assert.ok(!wordsOf(now).some((line) => line.includes("--peopled")));
+        assert.deepEqual(checkReport({ ...now, battle: { ...now.battle, peopling: undefined } }), ["report.battle.peopling: not a boolean"]);
     });
 });
 

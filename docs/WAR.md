@@ -184,7 +184,10 @@ The engine is built for this from the start. These are its rules:
 7. **What's near any player comes to life.** The host decides what's real, looking at every
    player:
    - the buildings got ready to go into (`RELEVANCE`: those within 22 metres of any player, or
-     that any player is heading into or is in; let go once every player's more than 90 away);
+     that any player is heading into or is in; let go once every player's more than 90 away),
+     and the people in them: made as a player's told to go in, let go once every player's more
+     than 40 metres from the door (`Host.peopling`, docs/GAME.md *Made as the door's gone
+     into*);
    - later, the war's forces in skirmishes.
 
    Twice a second (`RELEVANCE.every`) it looks round: buildings, towns' soldiers and townsfolk,
@@ -1417,8 +1420,11 @@ racked before it. **Inside** (`insides.js` `BARRACKS`), its long room, 18 by 14 
 - bunks two high along the walls, and the hearth;
 - the mess table and its benches in the middle, strongboxes by the door.
 
-**Its garrison** (`host.js` `BARRACKS_NEAR`, `#quarter`), stood up in it once it's got ready (a
-player at its door), of whoever holds the town:
+**Its garrison** (`host.js` `BARRACKS_NEAR`, `#quarter`), stood up in it as a player's told to
+go in by its door (`Host.peopling`, docs/GAME.md *Made as the door's gone into*: in the step the
+command's taken, so it's there to be fought before anyone's through the door; before 14 November
+2026 it was stood up as the barracks was got ready, 22 m from its door), of whoever holds the
+town:
 - **its captain** behind their desk, in a captain's cloak, two and a half times as hard to bring
   down as a guardsman and striking 1.3 times as hard;
 - **its guardsmen** at their posts round the room, the furthest from the door first. How many: its
@@ -1426,7 +1432,10 @@ player at its door), of whoever holds the town:
   city 4, a town 3, a village 2. One stands for one of the garrison: one fallen is one fewer in
   the war (`war.loss`);
 - **made up** a while after any of them falls (`RELIEF_MS`), from the garrison as it is then, once
-  no player's in the room; let go with the building, when every player's far;
+  no player's in the room; let go once every player's more than 40 m from its door (it was 90,
+  with the building), those standing gone, and stood up afresh of the garrison as it is then
+  for whoever next goes in: what's fallen of it stays lost to the war, and nothing's lost or
+  won by its letting go (`test/peopling.test.js`);
 - **standing at their posts, taking no turn,** while no player's in the room and no enemy
   (`Battle.idling`, docs/GAME.md *Standing till someone comes in*): each one's next look about is
   kept to the step it would have fallen in, so whoever comes in is noticed exactly as when they

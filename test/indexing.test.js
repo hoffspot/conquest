@@ -20,6 +20,7 @@ import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { BODIES } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { layoutOf } from "../scripts/load.js";
+import { lookIn } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -164,6 +165,12 @@ describe("a pack reinforced in the middle of its fight, and the body budget reac
             Object.assign(me, { hp: 1e6, maxHp: 1e6 });
             run(5000);
 
+            // (Those in the settlements told to go into the buildings round them and to stop:
+            // their folk in the battle, as they were while a building's were made 22 m from its
+            // door, core/host.js Host.peopling, plan 1-23. Without them the battle's fewer than
+            // the cells about a place, and the index isn't asked)
+            lookIn(host);
+
             const fighting = [...host.packs.keys()][0];
             const foe = [...host.wild].filter(([, one]) => one.pack === fighting).map(([id]) => host.battle.actor(id)).find((actor) => actor && !actor.dead);
 
@@ -306,6 +313,10 @@ describe("a hell rift's tears pouring packs, their packs falling, the budget rea
 
             Object.assign(host.war, { turn: Math.floor(opens / 60000), clock: opens % 60000 });
             run(2000);
+
+            // (And the folk of the buildings round those in the settlements in the battle, as
+            // above: lookIn)
+            lookIn(host);
 
             const open = host.hellRifts.open;
 

@@ -168,8 +168,23 @@ function without(name, walk) {
 // November 2026, has them stand till someone comes in). The city's taverns and shops are where
 // the folk who sit act, and where most of the folk looked about with no one to fear: so what a
 // walk must show of those is shown of the old form, and the walk as the game plays it now is
-// held to come out the same beside it
-const unseen = (walk) => without("idling", walk);
+// held to come out the same beside it. And those folk in the battle at all, as they were then:
+// made as a building's got ready, 22 m from its door, where they're now made only as a player's
+// told to go in (Host.peopling off: plan 1-23, the owner's ruling of the same day), and these
+// walkers go into nothing
+const unseen = (walk) => peopled(() => without("idling", walk));
+
+// A walk with a building's folk made as it's got ready and kept till it's let go, as they were
+function peopled(walk) {
+    assert.equal(Host.peopling, true, "Host.peopling is on");
+    Host.peopling = false;
+
+    try {
+        return walk();
+    } finally {
+        Host.peopling = true;
+    }
+}
 
 // Two walks the same, step for step: the first step that differs said, if any does
 function assertSame(a, b) {
@@ -289,10 +304,17 @@ describe("the folk's look for danger only where someone could frighten them (cor
         // (As the game plays it now, no one indoors looks, and the count leaves next to nothing
         // out: the same walk either way. Then with the folk indoors about their rounds unseen,
         // which is where the count has its work)
-        const [held, heldLooking] = [cityWalk({ churn: true }), without("counting", () => cityWalk({ churn: true }))];
+        const [now, nowLooking] = [cityWalk({ churn: true }), without("counting", () => cityWalk({ churn: true }))];
+
+        assertSame(now, nowLooking);
+
+        // (And with the folk of the city's buildings in the battle and held, as they were while
+        // a building's were made 22 m from its door: Host.peopling off, plan 1-23)
+        const [held, heldLooking] = peopled(() => [cityWalk({ churn: true }), without("counting", () => cityWalk({ churn: true }))]);
 
         assertSame(held, heldLooking);
         assert.ok(held.counts["battle.held"] / held.steps.length > 20, `${held.counts["battle.held"]} held`);
+        assert.ok(now.counts["battle.held"] < held.counts["battle.held"], "(fewer to hold, no one made till a door's gone into)");
 
         const counting = unseen(() => cityWalk({ churn: true }));
         const looking = unseen(() => without("counting", () => cityWalk({ churn: true })));

@@ -21,6 +21,7 @@ import { scalingOf } from "../client/js/core/strength.js";
 import { War } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { landAt, planWorld, WORKS } from "../client/js/core/worldplan/plan.js";
+import { lookIn } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -586,9 +587,11 @@ describe("the places gone into (M7.5b: a cave, the drake's lair, a broken watcht
         assert.ok(Math.abs(held.chest[0] - (altar.x + altar.w)) <= 1 && Math.abs(held.chest[1] - altar.y) <= 1, `the chest by it: ${held.chest}`);
         assert.equal(band.filter((one) => one.map === nave.id).length, Math.ceil(band.length / 2));
 
-        // In by the temple's door: no priest, no worshippers
+        // In by the temple's door (told to go in, and stopped: a building's folk are made as a
+        // player's told to, core/host.js Host.peopling, plan 1-23): no priest, no worshippers
         put(me, [...set.entrance.outside]);
         run(host, 600);
+        assert.equal(lookIn(host), 1);
         assert.deepEqual(host.open.get(building.key), []);
         assert.ok(!building.folk.some(({ id }) => host.battle.actor(id)), "none of its folk");
 
@@ -599,6 +602,7 @@ describe("the places gone into (M7.5b: a cave, the drake's lair, a broken watcht
 
         put(me, [...world.maps.town.sites.set.get(manor.id).entrance.outside]);
         run(host, 600);
+        assert.equal(lookIn(host), 1);
         assert.equal(keep.kind, "keep");
         assert.ok(host.open.get(keep.key)?.includes(`${keep.key}/ruler`), JSON.stringify(host.open.get(keep.key)));
         assert.ok(!host.held.has(manor.id));
@@ -697,8 +701,11 @@ describe("the places gone into (M7.5b: a cave, the drake's lair, a broken watcht
 
         const kept = world.interiors.buildings.get(`site:${theirs.id}`);
 
+        // (Told to go in by its door, and stopped: its folk are made then, core/host.js
+        // Host.peopling, plan 1-23)
         put(me, [...world.maps.town.sites.set.get(theirs.id).entrance.outside]);
         run(host, 600);
+        assert.equal(lookIn(host), 1);
         assert.deepEqual(host.open.get(kept.key), [`${kept.key}/lookout`, `${kept.key}/sentry`, `${kept.key}/quartermaster`]);
         assert.ok(!host.held.has(theirs.id));
 

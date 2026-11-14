@@ -18,6 +18,7 @@ import { Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { install, Probes, uninstall } from "../client/js/core/probe.js";
 import { encode } from "../client/js/core/wire.js";
+import { lookIn } from "./helpers.js";
 
 const HERO = Object.freeze({ name: "Ada", race: "human", shape: {}, look: {}, weapon: "sword", boots: false });
 const KEPT = ["foes", "seeing", "spared", "struckBy", "enmity"];
@@ -256,7 +257,13 @@ describe("players leaving their towns together (core/host.js #lookAround, #towns
         assert.equal(towns.length, 3);
         towns.forEach((place, k) => host.join({ id: `p${k + 1}`, hero: HERO, square: middle(place), map: "town" }));
         host.populate();
-        play(24);
+        play(12);
+
+        // (Each told to go into the buildings round them and to stop: their folk in the battle,
+        // as every building's near a player were before they were made only as one's told to go
+        // in, core/host.js Host.peopling, plan 1-23)
+        lookIn(host);
+        play(12);
 
         const before = { actors: host.battle.actors.length, open: host.open.size, mustered: host.mustered.size, townsfolk: host.townsfolk.size, step: played.length };
 
@@ -269,7 +276,9 @@ describe("players leaving their towns together (core/host.js #lookAround, #towns
 
         // (And one back to where they were: its buildings open again, the same folk in them)
         host.join({ id: "p2", hero: HERO, square: middle(towns[1]), map: "town" });
-        play(24);
+        play(12);
+        lookIn(host, ["p2"]);
+        play(12);
 
         return { host, towns, played, before, after, snapshot: encode(host.snapshot()) };
     }

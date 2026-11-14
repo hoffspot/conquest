@@ -1242,7 +1242,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -15615,8 +15615,14 @@ export class Game {
 
         visit.welcomed = true;
 
+        // (But for one waiting to be dressed already: welcomed again as its people are made,
+        // #hear "peopled")
+        const waiting = new Set(visit.queue.filter((work) => work.folk).map((work) => work.who));
+
         for (const id of visit.people()) {
-            visit.queue.push(Object.assign(() => this.#people(visit, id), { folk: true }));
+            if (!waiting.has(id)) {
+                visit.queue.push(Object.assign(() => this.#people(visit, id), { folk: true, who: id }));
+            }
         }
     }
 
@@ -16574,6 +16580,29 @@ export class Game {
 
                 this.#release(event.key);
                 this.#mirror();
+                break;
+            }
+            case "peopled": {
+                // (A building's people made, a player going in: core/host.js Host.peopling. If
+                // the player's own going in was seen before they were made, they're dressed now)
+                const visit = this.visits.get(event.key);
+
+                if (visit?.welcomed) {
+                    visit.welcomed = false;
+                    this.#welcome(visit);
+                }
+
+                break;
+            }
+            case "vacated": {
+                // (And let go, everyone gone from its door, the building still got ready: any
+                // of them still dressed let go of)
+                const visit = this.visits.get(event.key);
+
+                if (visit) {
+                    this.#farewell(visit);
+                }
+
                 break;
             }
             case "join":
