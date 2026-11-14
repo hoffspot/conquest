@@ -4745,8 +4745,9 @@ let go with 54 of them on Low, by a capital's guards and townsfolk and a caravan
 steady at 40), so the soldiers about are drawn in full only as far as the quality's budget has
 room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on Low and Medium,
 24 on High, its skins four times the pixels; never fewer than `soldiers.full`), the rest in
-their crowds, their bodies in full let go. The debug log says how many soldiers were about and
-how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
+their crowds, their bodies in full let go. The debug log says how many soldiers were about,
+how many had room, and how many were further off than anyone's drawn (`soldiers`; *Further than
+anyone's drawn*, below). The folk out in the world (the townsfolk in the streets, a
 crier in his square, a stranger by the road) are held in full only as far as the budget has
 room too (`#folkRoom`, twice a second), in the same order: whoever the player's talking or
 trading with first, then the biggest on the screen, those on another map last. The townsfolk past the room, and those more
@@ -4786,9 +4787,34 @@ their crowd while townsfolk 44 metres off were held in full, and both rooms coul
 once, more held than the budget (31 with a budget of 29, in the browser test of this:
 `e2e/pellagos.spec.js`, "soldiers come near the camera are built in full"; the test of the
 soldiers' bars beside it failed now and then on CI for the same, one of its twelve never built).
-Soldiers further than the game draws anyone (`DRAW_REACH`) are no one's to ration and are built
-in full all the same, counted with everyone else: a field battle's far army holds its bodies out
-of sight.
+**Further than anyone's drawn** (app/game.js `#marshal`, `#soldierBeyond`). Nothing of anyone
+more than 160 metres from the player, either way, is drawn (`DRAW_REACH`, `#inSight`: hidden,
+whatever body they have). So a soldier on the player's map out there holds no body in full,
+whatever the budget, on every quality:
+
+- One not drawn yet isn't built: it's taken out of the line, and stands in its kind's crowd,
+  hidden, once the figure's made (asked for, for that); till then it waits on it, as one near
+  does. The dressing doesn't begin one the marshal hasn't looked at yet (`#unlooked`).
+- One held in full is let go to its crowd once it's 10 metres past the reach
+  (`OUT_OF_REACH.slack`), and one being built is given up there, so one walking the edge isn't
+  let go and built again at every step. Within the slack it's left as it is.
+- Come back within reach, it's one of the soldiers about again: drawn in its crowd from that
+  frame, and built in full in the figure's place if it's within 45 metres of the camera, or
+  fighting the player, and has room, as anyone is.
+- Where its kind's figure can't be made, it's built in full after all, as it was.
+
+Till 2026-11-14 these were no one's to ration: each was built in full in its turn and counted
+with everyone else, never seen. A field battle's far army of twelve, 200 metres off, held twelve
+of Low's 32 places, each a body made and kept in the page (its pictures weren't sent to the
+graphics card, never shown; in the browser test of the soldiers' bars,
+`e2e/pellagos.spec.js`, 37 bodies were asked of the 32, so one to three of the twelve it watches
+were rightly in their crowds whenever enough of the town's folk walked nearer the camera; now 25
+are held, and there's room for the twelve throughout). The debug log's `soldiers` says how many
+are out there (`beyond`): a town's own, mustered with a player within 120 metres and kept out
+till none's within 250 (core/host.js `MUSTER`), and anyone's round another player far off. The
+wild's people-shaped creatures out there (round another player: the wild's are let go 90 metres
+from everyone) are still built as the budget has room, the last in its order, and the folk who
+have no crowd (a crier, a stranger by the road).
 
 In seed 2's start town on Low, its nine had room for 29, and under a budget of 8
 the furthest of them, 40 metres off, went undrawn till there was room again (till 2026-10-28;
