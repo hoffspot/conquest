@@ -41,7 +41,7 @@ export const MANIFEST = Object.freeze([
         detail: "Pellagos",
         files: [
             ["js/app/battlemap.js", 16517, "7d6695a2ef"],
-            ["js/app/bestiary.js", 18473, "391755eb18"],
+            ["js/app/bestiary.js", 17850, "3f8049c082"],
             ["js/app/budget.js", 3468, "c4120529d7"],
             ["js/app/building.js", 3700, "99d08e6837"],
             ["js/app/camera.js", 16518, "c96d110528"],
@@ -49,7 +49,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/charge.js", 5087, "193e705eb1"],
             ["js/app/choices.js", 7166, "4b77ccf428"],
             ["js/app/clocks.js", 2868, "a8e80104a4"],
-            ["js/app/craftinfo.js", 17331, "bf5a0079d0"],
+            ["js/app/craftinfo.js", 17145, "61fc17f143"],
             ["js/app/creator.js", 47878, "20636e4251"],
             ["js/app/doors.js", 14568, "7367740e5d"],
             ["js/app/fate.js", 4610, "862fcbe9db"],
