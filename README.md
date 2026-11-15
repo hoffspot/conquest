@@ -467,6 +467,16 @@ gold?"); what it won't buy stays junk, and it says so (the adventurers' guild bu
 Only what you mark is ever junk: what you pick up or buy never is, and a piece you put on, sell,
 drop or give away loses its mark.
 
+**Crafting.** Every piece of gear can be made at a crafter's (a blacksmith, a swordsmith, an
+armorer, an occult scriptorium, the masters) of what the wild leaves and what they sell: an
+ingot, a hide or a gem as its main material, a second of another kind, and a creature's part as
+its essence if you like ("Adamantite Demon Sword"). Its **Craft** tab lists all they make, what
+you haven't the ingredients for greyed; choose one, fill its slots from your pack, and see what
+it'll be first (how well made, its name, each power's range, the fee) before **Craft** makes it at
+once. On its Sell tab, **Break down** a piece (or all your junk) for ingredients. Tap an
+ingredient for its card: what it's for, and where it comes from (the bestiary names the creatures
+that leave it, each part in its make's colour). docs/CRAFTING.md has all of it.
+
 **Sound**, in three kinds, each with its own volume:
 
 - **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
@@ -828,8 +838,10 @@ client/                 The game (static files served to the browser)
                         two pages of stacks (dragged, held, split, dropped, thrown away,
                         sorted, marked as junk; tapped, a card beside it says what it is); the
                         skills; a shop's wares (tapped, a row opens to say what it is), and its
-                        Sell tab's Sell all junk. gearinfo.js says what gear does, and what's
-                        rolled on a shop's as it's bought
+                        Sell tab's Sell all junk; a crafter's Craft tab, and breaking down.
+                        gearinfo.js says what gear does, and what's rolled on a shop's as it's
+                        bought; craftinfo.js what a crafter makes and of what, a piece before
+                        it's made, and an ingredient's card
     journal.js          The journal: the player's rank, their war missions, their requests,
                         their people, their company; the bestiary (bestiary.js: a page for
                         each creature met, as far as it's been found out); and the last ten

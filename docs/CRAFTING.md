@@ -41,8 +41,10 @@ Stage 2 put its rules in the game, the host's to run the same on every copy of t
   *Multiplayer*), at every crafter there is, a capital's to the legendary (*The crafters*);
 - `NET_VERSION` 231; `test/crafting-host.test.js`.
 
-No shop sells a material yet, no creature leaves a new part, and the player has no way to ask for
-any of it: stages 3 to 5 put that there.
+Stage 5 put it before the player (*What the player sees*, below; docs/GAME.md *Crafting*): a
+crafter's Craft tab, breaking down, an ingredient's card, the bestiary's parts in their makes'
+colours, the new blows seen, and sounds for making and breaking down. Stages 3 and 4 put the new
+creatures in the world and the materials on the crafters' shelves.
 
 ## How a piece is made
 
@@ -480,8 +482,9 @@ Each in the order it's on the striker, each on a foe still standing: a foe the b
 takes none, and one felled by the first takes none of the rest. Its reaction is fire's for fire
 (`"fire"`) and arcane light for the rest (`"arcane"`: the water's, the air's, the earth's and
 magic's others land so, frost and rot, lightning, acid, bolts); its `projectile` none, the blow's
-shot having landed already, so what it grows of a hero's skills is what a legendary weapon's effect
-grows; its enmity the harm it did, no seed on top (the blow's own `#provoke` has set the foe on the
+shot having landed already, so what it grows of a hero's skills is the striker's weapon's: a bow's
+shot's, Marksman; any other's, Blade (host.js `#learn`, `#shot`: stage 5; stage 2 had a shot's
+grow Blade); its enmity the harm it did, no seed on top (the blow's own `#provoke` has set the foe on the
 striker already); it staggers no one. A blow's harm before armour, for acid's, is its roll times
 the striker's power, then everything else the blow's harm went through as it is: the target's wards
 against the blow, the bestiary's edge, a boss's shield and a shield's block.
@@ -608,8 +611,9 @@ rows its list has.
   The masters never stand in one (worldplan/settle.js `masterShops`), so a capital's own crafters,
   its blacksmiths, its specialists and stage 4's four, work to the legendary, and break it down: a
   capital's blacksmith makes an orichalcum sword. The host knows a capital's crafter by their
-  building's settlement (host.js `#inCapital`: the start's, for a building at home; never a site's,
-  a castle's or a pedlar's out in the world). A master's list is the same anywhere.
+  building's settlement (host.js `#inCapital`, crafting.js `inCapital`, the one rule the pack shows
+  it by too: the start's, for a building at home; never a site's, a castle's or a pedlar's out in
+  the world). A master's list is the same anywhere.
 
 ### Which settlements keep which
 
@@ -701,12 +705,65 @@ It lists what each creature leaves already, at Mastered (app/bestiary.js `spoils
 there is is an ingredient now, so that's where the player learns where each comes from. Stage 5:
 
 - each part shown there in its make's colour, as gear is (progress.js `gradeOf`: an ingredient's
-  make), with what it's for, briefly ("Fire on each blow, in a weapon");
+  make, stage 5: so a part on the ground, in the pack and in auto-snag's choice of makes is of its
+  make too), with what it's for, briefly ("Fire on each blow, in a weapon": app/gearinfo.js
+  `usedFor`, its power in a weapon), its name tapped opening its card beneath it (app/journal.js);
 - an ingredient's card (tapped in the pack, at a crafter's, in the bestiary) says what it is
   (`about`), what it's used for (`usesOf`: its power in a weapon, a wand and worn, and its kind's
   slots), and where it comes from (`sourcesOf`): the crafters that sell it, the creatures that
   leave it (by name once they're in the bestiary, "Something in the mountains" till then, as
-  Monster Hunter's ??? is), and that broken-down gear gives it back.
+  Monster Hunter's ??? is), and that broken-down gear gives it back (app/craftinfo.js
+  `ingredientInfo`, `sourcesWords`: a creature met is one Sighted; one still to come, stage 3's,
+  where it'll be met, bestiary.js `whereNew`; three not yet met said, then "And by more you've yet
+  to meet"); and a creature's part, what the guild pays for it.
+
+## What the player sees
+
+Stage 5 (docs/GAME.md *Crafting*, for the player's view of it):
+
+- **The Craft tab** (app/pack.js; its words app/craftinfo.js, pure), beside Buy and Sell at every
+  shop in `CRAFTERS` (keyed off it, so the four new crafters have it once they're keepers): the
+  crafter's list by piece under where it goes (`craftList`), each piece's main materials in their
+  makes' colours, what the pack's short of greyed and said, never hidden. A piece chosen shows its
+  three slots, each one's choices from what the pack carries (`slotsOf`; never the stash's),
+  filled first with the commonest second that keeps the piece as fine as its main material can
+  make it, and no essence (`usingFirst`); the piece as it would be made (`previewInfo`, of
+  `previewOf`, at the player's might's level and haggling, as the host makes it), the fee, what the
+  ingredients are worth and what's short; **Craft** sends `{ type: "craft", from, base, using, fee
+  }`, refusals said in the panel. The piece made is shown as it came out.
+- **A capital's crafters** (`capital`): the pack asks the rule the host makes it by, core/crafting.js
+  `inCapital(world, map)`, pure, of the world every copy builds (the keeper's building's
+  settlement); host.js `#inCapital` calls it, so the two can't disagree.
+- **Breaking down** on the Sell tab: a piece the crafter breaks down (`salvagesAt`) says in its
+  card what it gives back, and its Break down asks first in the panel (of a stack, how many);
+  **Break down all junk** under Sell all junk, asked once with what comes back (`junkSalvage`, the
+  count shown sent: `salvageJunk`).
+- **Opened on its Craft tab** by the game's `openCrafting(keeper)` (app/game.js), or by a talk's
+  `shopWanted` with `tab: "craft"` (#endTalk opens it once the talk's over, as a shop's wares are).
+  Stage 4's "What can you make?" (core/dialogue.js `keeperTree`) does that: its effect handled in
+  the talk's `onEffect` as `{ shop }`'s is, setting `this.shopWanted = { shop: keeps, keeper:
+  npc.id, name: npc.name, tab: "craft" }`.
+- **Told**: `crafted` and `brokenDown` heard (app/game.js `HOST_EVENTS`): "Made for you: Steel Demon
+  Sword, for 45 gold. It's in your pack.", the anvil rung and the work quenched (`anvil`, `hiss`);
+  "You break down your junk, 3 things: back come 4 iron ingots.", a hammer's crush (`crush`): the
+  smithy's and a war hammer's own sounds, no new recording (audio/catalog.js says where they play).
+- **The new blows seen** (app/game.js `BLOW_LOOKS`): each hit of its own shows a little of its
+  element where the blow landed, out of the bursts there are (the burn's flames and embers, frost
+  and a legendary weapon's frost and sparks, venom's bubbles, ichor for acid, a blessing's gold for
+  holy fire, a curse's withering and shadows), a dozen or so sparks, and its number smaller than
+  the blow's, in its element's colour (styles.css `.damage.blow-*`); no flinch, wound or blood of
+  its own, the blow having had them.
+- **The keys and a controller**, as at the stash: Enter (Cross) chooses and crafts, Escape (Circle)
+  puts away what's open, then goes back to the list, then shuts the panel; L1 and R1 turn Buy,
+  Sell and Craft; held, right-clicked or Square, a material's card. A phone upright or on its side
+  fits it all, scrolled.
+- **Tests**: `test/crafting-view.test.js` (the pure words and lists, the bestiary's parts, the
+  grade), `test/crafting-host.test.js` (a shot's elemental harm growing Marksman, `inCapital`),
+  `e2e/crafting.spec.js` (all of it played at the start town's blacksmith).
+
+No message, field or refusal is new with it, and nothing of the world or the rules two games agree
+on changed but the skill a shot's fire grows (the host's, in lockstep: `NET_VERSION` 231 is this
+pull request's one bump) and an ingredient's grade (what auto-snag takes by make, the host's too).
 
 ## Multiplayer
 
@@ -802,13 +859,13 @@ server has a field of that name already.
    (core/dialogue.js `keeperTree`, with a "What can you make?" that opens the crafting), their signs
    and awnings; every crafter's keeper able to make (the specialists' and the masters' too); tests
    (shops, insides, town, dialogue).
-5. **What the player sees.** The pack's crafting (a crafter's list by piece and material, missing
-   ingredients greyed, a slot's choices from what's carried, the piece shown first: make, name,
-   powers and their ranges, effect, fee, worth; Craft), breaking down one piece and all junk;
-   ingredients' cards and colours; the bestiary (*The bestiary*); sounds for making and breaking
-   down, if any, in audio/catalog.js; browser tests; before and after pictures; docs/GAME.md
-   (*Crafting*), docs/WAR.md (*Shops*), docs/WILDS.md (the new beasts), and this page brought up
-   to date.
+5. **What the player sees** (done: *What the player sees*). The pack's crafting (a crafter's list
+   by piece and material, missing ingredients greyed, a slot's choices from what's carried, the
+   piece shown first: make, name, powers and their ranges, effect, fee, worth; Craft), breaking
+   down one piece and all junk; ingredients' cards and colours; the bestiary (*The bestiary*); the
+   new blows' look; a shot's elemental harm growing Marksman; sounds for making and breaking down
+   in audio/catalog.js; browser tests; docs/GAME.md (*Crafting*), docs/WAR.md (*Shops*), README,
+   and this page brought up to date. docs/WILDS.md's new beasts are stage 3's.
 
 ## Choices the owner may want to change
 

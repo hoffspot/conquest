@@ -931,7 +931,7 @@ nests', the hells' and the Rift's.
   | Sighted | 1 | **What it is** (core/lore/bestiary.js `BESTIARY_LORE`): a few lines, and where it's met |
   | Known | 4 | **Its ways**: how it sets on whoever comes, how many go together (and who guards a lair's master), when it's out, the camps and lairs it keeps to, the sign of it on its trail, how far out it's met |
   | Studied | 8 | **How it fights**: its hit points at its least and most level, the share of every blow it turns, the harm it keeps off, what it can't be done (thrown), and each of its attacks (its harm, its reach, what it leaves) |
-  | Mastered | 14 | **What it leaves**: each thing it may drop and how often; and the player's edge on it |
+  | Mastered | 14 | **What it leaves**: each thing it may drop and how often, in its make's colour, with what it's for (*Crafting*); and the player's edge on it |
 
   Slain unseen (in the dark, from afar), one counts as seen too. Seen once is enough: the sight
   of it earns nothing more.
@@ -953,6 +953,12 @@ nests', the hells' and the Rift's.
   found out, what's still to find shut ("At Studied: watch for it, read the signs it leaves, and
   slay it to learn more."). Every word of it is the game's own: the creature's table, its
   weapon's, what it leaves (spoils.js), and its lines in core/lore/bestiary.js.
+- **What it leaves, for crafting** (docs/CRAFTING.md *The bestiary*): every part a creature leaves
+  but what's eaten is an ingredient, so each is named in its make's colour (progress.js `gradeOf`:
+  an ingredient's make, as gear's is), with what it's for, briefly, its power in a weapon ("Often:
+  Demon's horn. Fire on each blow, in a weapon."). Its name tapped opens its card beneath it, as
+  it's shown in the pack (*Crafting*: what it is, what it's for, where it comes from); tapped
+  again, it's put away.
 - **Its portrait** (app/game.js `portraitOf`, `PORTRAIT`): one of its kind as the game draws it
   (beasts/beast.js `dressCreature`: from its own model, waited for up to 8 s and else its
   stand-in; people-shaped ones holding what they fight with), standing at rest, alone, high above
@@ -6151,6 +6157,8 @@ any shop (the owner asked for it at every shop, 14 and 15 November 2026).
   ("Still junk, as <the keeper> won't buy them: 2 wolf pelts, a healing draught. The adventurers'
   guild buys everything."), and said again once it's sold ("You sell your junk: 3 things for 3
   gold. 3 things they won't buy are still marked as junk..."), the coins heard (`coins`).
+- **Break down all junk**, under it at a crafter's (*Crafting*): all the junk that crafter breaks
+  down, asked once with what comes back, the rest still junk for a crafter that will.
 - **The host's.** `{ type: "markJunk", index, junk }` (true or false) and `{ type: "sellJunk",
   to, price, count }`: the shopkeeper near (`#shopkeeper`, refused `far`), alive (`dead`), the
   total and the count the player was shown (`junkSale`, which the pack's question is worked out
@@ -6166,6 +6174,70 @@ any shop (the owner asked for it at every shop, 14 and 15 November 2026).
   stack kept only where it's set, and absent (all that's kept before it) it means what it always
   did, not junk, so there's nothing for a step to fill in; an older game reading a newer save
   drops the marks and nothing else.
+
+### Crafting (core/crafting.js, recipes.js, materials.js; core/host.js #craft, #salvage, #salvageJunk; app/pack.js, app/craftinfo.js)
+
+Every piece of gear can be made at a crafter's, of what the wild leaves and what the crafters
+sell: docs/CRAFTING.md has the whole of it (the ingredients, the recipes, the powers, the
+crafters, the prices). What the player sees:
+
+- **The Craft tab.** At every crafter's (core/recipes.js `CRAFTERS`: a blacksmith, a swordsmith,
+  an armorer, an occult scriptorium, the three masters, and the four new crafters as they come),
+  the trading panel has a third tab beside Buy and Sell. It lists everything the crafter makes
+  (`recipesAt`; in a capital, every crafter to the legendary, by the same rule the host makes it
+  by: crafting.js `inCapital`), each piece under where it goes (Weapons, The other hand, Head,
+  Body, Forearms and hands, Waist, Legs and feet, Back, Jewellery: app/craftinfo.js `craftList`),
+  with what it takes ("A metal, a leather, and an essence if you like") and each main material it's
+  made in, the commonest first, in its make's colour. What the pack's short of is greyed, struck
+  through and said ("Gold Sword: you haven't Gold ingot (0 of 1)"), never hidden: the owner's
+  choice, as Monster Hunter greys what can't be made yet.
+- **A piece chosen** shows its three slots (`slotsOf`): its main material, its second and an
+  essence, each slot's choices what the pack carries of its kind (never the stash's), each in its
+  make's colour with how many are carried of how many it takes, and None for the essence. It's
+  filled first with the commonest second carried that keeps the piece as fine as its main material
+  can make it, and no essence (`usingFirst`). A main material finer than the crafter works is shown
+  but not to be had ("master's"). Under each slot, the chosen ingredient's card, a tap away.
+- **What it'll be**, before it's made (`previewInfo`, of core/crafting.js `previewOf`: what the host
+  makes it by): its name in its make's colour ("Steel Demon Sword", "One-handed weapon · Fine"),
+  its level (the player's might's), its blows, a legendary weapon's effect, a wand's spell power
+  and a shield's block (each rolled as it's made), its own armour and bonus, and each power its
+  ingredients bring with the range it'll come out in and which of them brings it ("+8–18% of each
+  blow's harm again as fire, setting the foe struck burning as often (Demon's horn)"); then the
+  fee and the gold they have, what its ingredients are worth, and what the pack's short of.
+- **Craft** makes it at once (the host's `craft`, with the fee shown: refused if it's changed),
+  the piece in the pack, its powers rolled in the ranges shown, shown in the panel as it came out
+  ("Made, and in your pack"), and said: "Made for you: Steel Demon Sword, for 45 gold. It's in
+  your pack.", the anvil rung and the work quenched (`anvil`, `hiss`). Refused (short of the gold,
+  the ingredients gone meanwhile...), why's said in the panel under it, as the stash's refusals
+  are, the coins dropped (`buyDenied`).
+- **Breaking down**, on the Sell tab at a crafter's: a piece it breaks down (`salvagesAt`: what it
+  makes, no finer than it works, never what's bound) says in its card what it gives back
+  ("Broken down here: a steel ingot back."), and **Break down** asks in the panel first ("Break
+  down Fine sword? You'd get back a steel ingot. Broken down, it's gone for good.": Break down, or
+  Not now; of a stack, how many first). **Break down all junk**, under Sell all junk, does all the
+  junk that crafter breaks down at once, asked once with what comes back and what stays junk.
+  Said ("You break down your junk, 3 things: back come 4 iron ingots."), a hammer's crush heard
+  (`crush`).
+- **An ingredient's card** (`ingredientInfo`), tapped in the pack, held (or right-clicked) at a
+  crafter's or opened under a slot, or tapped in the bestiary: its name in its make's colour, what
+  kind of ingredient it is ("Ingredient: a leather · Fine"), what it is, its power in a weapon, a
+  wand or grimoire, and worn, as strong as it comes on a piece of the player's level, what it goes
+  into (the pieces it's the main material or the second of; an essence, anything), and where it
+  comes from: the crafters that sell it, the creatures that leave it (by name once they're in the
+  bestiary, "Left by something in the woods..." till then), and broken-down gear; a creature's
+  part, what the guild pays.
+- **The keys and a controller**, as at the stash: Enter (Cross) chooses a material and crafts, its
+  Craft in focus once a piece is chosen; Escape (Circle) puts away what's open, then goes back
+  from a piece to the list, then shuts the panel; L1 and R1 turn Buy, Sell and Craft; Square on a
+  material shows its card. On a phone, upright or on its side, it all fits the panel, scrolled.
+- **Opened on its Craft tab** by the game's `openCrafting(keeper)`, as a crafter's keeper's "What
+  can you make?" will (docs/CRAFTING.md stage 4).
+- **The new blows seen**: a crafted weapon's fire, frost and the rest after the blow they ride on
+  (`ON_BLOW`) show a little of their element where it landed (the burn's flames and embers, frost,
+  a legendary weapon's sparks, venom's bubbles, acid, a blessing's gold, a curse's shadows:
+  app/game.js `BLOW_LOOKS`), and their number in their element's colour, smaller than the blow's;
+  no flinch or wound of their own. Each grows the skill the blow it rides on grows: a bow's shot's,
+  Marksman; any other's, Blade (host.js `#learn`).
 
 ### Sound (audio/)
 

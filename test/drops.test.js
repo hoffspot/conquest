@@ -56,7 +56,7 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
         assert.deepEqual(shownOf(wolf), [
             { id: "gold", grade: "common" },
             { id: "sword", grade: "legendary" },
-            { id: "wolfPelt", grade: "common" },
+            { id: "wolfPelt", grade: "fine" },
         ]);
         assert.deepEqual(shownOf({ item: { id: "ring", quality: "rare", count: 1 } }), [{ id: "ring", grade: "rare" }]);
         // (A unique, given for a rare encounter, its own: core/rare.js UNIQUES)
@@ -65,7 +65,7 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
         const { things } = laid([wolf]).drawn.get("g1");
 
         assert.equal(things.length, 3);
-        assert.deepEqual(things.map(({ ring }) => ring.material.color.getHex()), [RARITY_GLOW.common, RARITY_GLOW.legendary, RARITY_GLOW.common]);
+        assert.deepEqual(things.map(({ ring }) => ring.material.color.getHex()), [RARITY_GLOW.common, RARITY_GLOW.legendary, RARITY_GLOW.fine]);
         // (Apart from one another, round where it lies)
         assert.ok(things.every(({ icon }, k) => things.every((other, j) => j === k || icon.position.distanceTo(other.icon.position) > FLOAT.size * 0.6)));
     });
@@ -134,6 +134,6 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
         const left = { ...wolf, bundle: { gold: 5, items: [wolf.bundle.items[1]] } };
 
         drops.sync(new Map([["g1", left]]), { map: "town", near: { x: 0, z: 0 }, reach: 50, originOf: () => [0, 0], mine: "player" });
-        assert.deepEqual(drops.drawn.get("g1").things.map(({ icon }) => icon.name), ["gold:common", "wolfPelt:common"]);
+        assert.deepEqual(drops.drawn.get("g1").things.map(({ icon }) => icon.name), ["gold:common", "wolfPelt:fine"]);
     });
 });

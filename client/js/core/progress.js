@@ -26,7 +26,7 @@ import { BREWS, CHARM_ROLLS, charmPower, CHARMS, charmStats, SCROLLS, STARTING_S
 import { blockMost, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearName, levelFactor, levelOf, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
-import { BLOW_CAP, MATERIALS, ON_BLOW } from "./materials.js";
+import { BLOW_CAP, INGREDIENTS, MATERIALS, ON_BLOW } from "./materials.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -329,9 +329,10 @@ export const comesInMakes = (id) => Boolean(ITEMS[id]?.slot || ITEMS[id]?.charm)
 /**
  * How rare a thing is (a QUALITIES make: the colour it's shown in, and the shops that keep it):
  * gear, charms and treasure maps as well made as they are; a draught, scroll or tome as rare as
- * it is (goods.js `rarity`), or common.
+ * it is (goods.js `rarity`); an ingredient, a creature's part or a crafter's material, of its make
+ * (materials.js INGREDIENTS: docs/CRAFTING.md *The bestiary*); or common.
  */
-export const gradeOf = ({ id, quality = "common" }) => (comesInMakes(id) || ITEMS[id]?.map ? (QUALITIES[quality] ? quality : "common") : (ITEMS[id]?.rarity ?? "common"));
+export const gradeOf = ({ id, quality = "common" }) => (comesInMakes(id) || ITEMS[id]?.map ? (QUALITIES[quality] ? quality : "common") : (ITEMS[id]?.rarity ?? (Object.hasOwn(INGREDIENTS, id ?? "") ? INGREDIENTS[id].make : "common")));
 
 /**
  * The order a shop's wares are shown in ({ id, quality }, as wares has them): by kind

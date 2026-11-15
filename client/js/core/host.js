@@ -65,7 +65,8 @@ import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atStrongroom, strongroomOn } from "./strongroom.js";
-import { CRAFT_REFUSALS, craftItem, junkSalvage, previewOf, salvageOf, salvagesAt, takesFrom } from "./crafting.js";
+import { CRAFT_REFUSALS, craftItem, inCapital, junkSalvage, previewOf, salvageOf, salvagesAt, takesFrom } from "./crafting.js";
+import { ON_BLOW } from "./materials.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -3933,6 +3934,18 @@ export class Host {
         }
     }
 
+    // Whether a hit (not a spell's) was a shot, for the skill it grows: one that flew (its
+    // projectile); or, a crafted weapon's fire, frost and the rest after the blow it rides on
+    // (core/materials.js ON_BLOW: no projectile of its own, the shot having landed already), the
+    // striker's weapon one that shoots (a bow)
+    #shot(event) {
+        if (event.projectile !== null) {
+            return true;
+        }
+
+        return Object.hasOwn(ON_BLOW, event.attack ?? "") && Boolean(WEAPONS[event.weapon]?.attacks.some(({ kind }) => kind === "ranged"));
+    }
+
     // What happened in the battle, for the players' skills: blows landed (up close, from afar)
     // and taken, heals, stuns, running out of breath; and what's on those they fell
     #learn(event) {
@@ -4006,9 +4019,11 @@ export class Host {
 
         switch (event.type) {
             case "hit":
-                // (A spell's: its school grows by it landing, below)
+                // (A spell's: its school grows by it landing, below. A crafted weapon's fire, frost
+                // and the rest, a hit of its own after the blow it rides on (core/materials.js
+                // ON_BLOW), grow what that blow does: a bow's shot's, Marksman; any other's, Blade)
                 if (!event.spell) {
-                    this.#gain(by, event.projectile === null ? "blade" : "marksman", event.damage);
+                    this.#gain(by, this.#shot(event) ? "marksman" : "blade", event.damage);
                 }
 
                 this.#gain(own, "endurance", event.damage);
@@ -5373,12 +5388,10 @@ export class Host {
 
     // Whether one of the folk keeping a shop keeps it in a capital (their building's settlement:
     // the start's, or the place it's in; never a site's, a castle's or one out in the world), where
-    // every crafter works to the legendary (core/recipes.js CAPITAL_BEST, the owner's ruling)
+    // every crafter works to the legendary (core/recipes.js CAPITAL_BEST, the owner's ruling): the
+    // one rule the pack shows it by too (core/crafting.js inCapital)
     #inCapital(keeper) {
-        const building = keeper.map && keeper.map !== "town" ? this.world.interiors?.of(keeper.map) : null;
-        const place = building?.place === "home" ? this.world.start?.id : building?.place;
-
-        return Boolean(place && place !== "site" && this.world.plan && this.#placeOf(place)?.kind === "capital");
+        return inCapital(this.world, keeper.map, (id) => this.#placeOf(id));
     }
 
     // The crafter a player's dealing with (an id), near them and alive (#shopkeeper): { keeper,

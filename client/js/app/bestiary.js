@@ -16,7 +16,8 @@ import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { NATURAL, WEAPONS } from "../core/weapons.js";
 import { SPOILS } from "../core/spoils.js";
-import { itemLabel } from "../core/progress.js";
+import { gradeOf, itemLabel } from "../core/progress.js";
+import { usedFor } from "./gearinfo.js";
 
 // Each land a creature's met in, in words
 const LANDS = Object.freeze({
@@ -106,6 +107,21 @@ function shareOf(share) {
 
 // How often, from a chance
 const often = (chance) => (chance >= 0.75 ? "nearly always" : chance >= 0.45 ? "often" : chance >= 0.2 ? "sometimes" : "now and then");
+
+/**
+ * Where a creature still to come is met, in words, as whereOf has it of those there are (core/
+ * materials.js NEW_BEASTS: its lands, `biomes`, and its people's wilds, `people`): what an
+ * ingredient's card says of it, "Something in the mountains", till it's in the bestiary.
+ */
+export function whereNew({ biomes = null, people = null } = {}) {
+    const lands = biomes?.length ? listed(biomes.map((biome) => LANDS[biome] ?? biome)) : null;
+
+    if (people) {
+        return lands ? `in ${lands} of ${WILDS[people]}` : `anywhere in ${WILDS[people]}`;
+    }
+
+    return lands ? `in ${lands}` : "out in the world";
+}
 
 /** Where a kind's met, in words ("in the woods, the tundra and the heaths", "anywhere"...). */
 export function whereOf(kind) {
@@ -273,16 +289,27 @@ function fightOf(kind) {
     return lines;
 }
 
-// What it leaves
+// What it leaves: { lines, parts: [{ id, rarity, before, label, after, use }] }, a part for each of
+// the first lines, each a thing it leaves in its make's colour (progress.js gradeOf: an
+// ingredient's make) with what it's for, briefly (gearinfo.js usedFor: "Fire on each blow, in a
+// weapon"), its card a tap away (docs/CRAFTING.md *The bestiary*)
 function spoilsOf(kind) {
     const spoils = SPOILS[kind];
-    const lines = (spoils?.items ?? []).map(({ id, chance, count }) => `${capital(often(chance))}: ${itemLabel({ id })}${count && count[1] > 1 ? ` (${count[0]} to ${count[1]})` : ""}.`);
+    const parts = (spoils?.items ?? []).map(({ id, chance, count }) => ({
+        id,
+        rarity: gradeOf({ id }),
+        before: `${capital(often(chance))}: `,
+        label: itemLabel({ id }),
+        after: `${count && count[1] > 1 ? ` (${count[0]} to ${count[1]})` : ""}.`,
+        use: usedFor(id),
+    }));
+    const lines = parts.map(({ before, label, after, use }) => `${before}${label}${after}${use ? ` ${use}.` : ""}`);
 
     if (spoils?.gold) {
         lines.push("Gold, in its purse.");
     }
 
-    return lines.length ? lines : ["Nothing worth taking."];
+    return { lines: lines.length ? lines : ["Nothing worth taking."], parts };
 }
 
 /**
@@ -290,7 +317,8 @@ function spoilsOf(kind) {
  * kind, name, level (0 to `levels`, MASTERED), title (its level's name), next (the next level's
  * name, or null at the last), points, from and to (the points its level and the next take: to
  * null at the last), counts (a line: how many seen, read, slain), sections: [{ heading, level
- * (the level it opens at), open, lines (or, shut, how to open it) }] }.
+ * (the level it opens at), open, lines (or, shut, how to open it), parts (open, what it leaves:
+ * the things its first lines are, each in its make's colour, and what it's for: spoilsOf) }] }.
  */
 export function pageOf(kind, entry = {}) {
     const spec = CREATURES[kind];
@@ -300,11 +328,12 @@ export function pageOf(kind, entry = {}) {
     const homes = homesOf(kind);
     const [least, most] = spec.tiers;
     const pay = payOf(kind);
+    const spoils = spoilsOf(kind);
     const sections = [
         { heading: "What it is", level: 1, lines: [lore?.lore ?? "", `Met ${whereOf(kind)}.`] },
         { heading: "Its ways", level: 2, lines: [...waysOf(kind), ...(homes.length ? [`Keeps to ${listed(homes)}.`] : []), ...(lore?.sign ? [`On its trail: ${lore.sign}.`] : []), least === most ? `Met at level ${least}.` : `Met from level ${least} to ${most}.`] },
         { heading: "How it fights", level: 3, lines: fightOf(kind) },
-        { heading: "What it leaves", level: MASTERED, lines: [...spoilsOf(kind), `You know where to strike it: ${Math.round((RESEARCH.edge - 1) * 100)}% harder.`, `The adventurers' guilds pay ${pay.gold} gold for your notes on it.`] },
+        { heading: "What it leaves", level: MASTERED, lines: [...spoils.lines, `You know where to strike it: ${Math.round((RESEARCH.edge - 1) * 100)}% harder.`, `The adventurers' guilds pay ${pay.gold} gold for your notes on it.`], parts: spoils.parts },
     ];
 
     return {
@@ -318,7 +347,7 @@ export function pageOf(kind, entry = {}) {
         from: RESEARCH.levels[level - 1]?.points ?? 0,
         to: RESEARCH.levels[level]?.points ?? null,
         counts: [entry.seen ? "Seen" : null, entry.signs ? `${entry.signs} ${entry.signs === 1 ? "sign" : "signs"} read` : null, entry.slain ? `${entry.slain} slain` : null].filter(Boolean).join(" · "),
-        sections: sections.map((section) => ({ ...section, open: level >= section.level, lines: level >= section.level ? section.lines.filter(Boolean) : [`At ${RESEARCH.levels[section.level - 1].name}: watch for it, read the signs it leaves, and slay it to learn more.`] })),
+        sections: sections.map((section) => ({ ...section, open: level >= section.level, lines: level >= section.level ? section.lines.filter(Boolean) : [`At ${RESEARCH.levels[section.level - 1].name}: watch for it, read the signs it leaves, and slay it to learn more.`], parts: level >= section.level ? (section.parts ?? []) : [] })),
     };
 }
 

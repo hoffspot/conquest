@@ -752,6 +752,14 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     racks."): the garrison's plain arms and armour and the pieces of its people's uniform, up to
     fine (`SHOPS.watch`: their own shop, not their part's, as one of the folk can keep, host.js
     `#shopkeeper`).
+- **Crafters.** The smith, the specialists who make what they sell (a swordsmith, an armorer, an
+  occult scriptorium) and the three masters make things too (core/recipes.js `CRAFTERS`;
+  docs/CRAFTING.md): their trading panel has a Craft tab beside Buy and Sell, listing every piece
+  they make in every main material they work, what the pack's short of greyed, each piece shown
+  before it's made (its make, name, each power's range, the fee) and made at once; and on its
+  Sell tab, gear they make broken down for ingredients, one piece or all the junk at once
+  (docs/GAME.md *Crafting*). A blacksmith works to a masterwork, the specialists to the very rare,
+  the masters to the legendary, and in a capital every crafter to the legendary.
 - **Each day's stock** (`core/stock.js` `dailyStock`). A specialist's or a master's shelves
   change each day of the world (core/daytime.js `dayOf`: an hour of play), the same for everyone
   who plays together, worked out from the world's seed, the shop (the building it's kept in:

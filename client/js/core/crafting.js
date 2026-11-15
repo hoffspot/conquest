@@ -60,6 +60,22 @@ const crafterAt = (shop, capital = false) => {
     return crafter && capital ? { ...crafter, best: CAPITAL_BEST } : crafter;
 };
 
+/**
+ * Whether one of the folk keeping a shop on a map (`map`: the building they're in, or "town") keeps
+ * it in a capital, where every crafter works to the legendary (`capital`: CAPITAL_BEST, the owner's
+ * ruling): by their building's settlement, the start's for a building at home, the place it's in
+ * for any other; never a site's, a castle's or one out in the world. Of the world as every copy
+ * builds it (core/overworld.js buildWorld: its plan, its start, its buildings), so the host, making
+ * it (host.js #inCapital), and the pack, showing it first (app/game.js), say the same. `placeOf`
+ * finds a place by its id: the first of that id in the plan's places, as host.js #placeOf keeps them.
+ */
+export function inCapital(world, map, placeOf = (id) => world.plan.places.find((place) => place.id === id)) {
+    const building = map && map !== "town" ? world.interiors?.of(map) : null;
+    const place = building?.place === "home" ? world.start?.id : building?.place;
+
+    return Boolean(place && place !== "site" && world.plan && placeOf(place)?.kind === "capital");
+}
+
 /** The ingredients of a kind (materials.js INGREDIENT_KINDS), the commonest first: ids. */
 export const ingredientsOf = (kind) => ORDER.flatMap((make) => Object.keys(INGREDIENTS).filter((id) => INGREDIENTS[id].kind === kind && INGREDIENTS[id].make === make));
 

@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { blowWorded, describe as describeItem, totals } from "../client/js/app/gearinfo.js";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
-import { CRAFT_REFUSALS, craftItem, craftRefusal, ingredientsOf, junkSalvage, previewOf, recipesAt, salvageOf, salvagesAt, takesFrom } from "../client/js/core/crafting.js";
+import { CRAFT_REFUSALS, craftItem, craftRefusal, inCapital, ingredientsOf, junkSalvage, previewOf, recipesAt, salvageOf, salvagesAt, takesFrom } from "../client/js/core/crafting.js";
 import { STATS } from "../client/js/core/gear.js";
 import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { BLOW_CAP, ON_BLOW, UNHOLY } from "../client/js/core/materials.js";
@@ -805,6 +805,15 @@ describe("a capital's crafters, to the legendary (the owner's ruling: recipes.js
         const there = crafterIn(host, host.battle.actor(`${shop.key}/keeper`), null, { capital: true });
         const shown = there.shown("sword", orichalcum);
 
+        // (The one rule, the pack's too: core/crafting.js inCapital, of the world as every copy has
+        // it; the home town's smithy and the town itself, not)
+        const home = [...host.world.interiors.buildings.values()].find((building) => building.place === "home" && building.kind === "swordsmith");
+
+        assert.equal(inCapital(host.world, shop.maps[0]), true);
+        assert.equal(inCapital(host.world, home.maps[0]), false);
+        assert.equal(inCapital(host.world, "town"), false);
+        assert.equal(inCapital(host.world, null), false);
+
         assert.equal(shown.make, "legendary");
         assert.equal(shown.effect, "earthsunder");
 
@@ -818,6 +827,30 @@ describe("a capital's crafters, to the legendary (the owner's ruling: recipes.js
 });
 
 describe("a hero's blows in the host (#outfit), kept and carried on", () => {
+    it("grows what the blow it rides on grows: a bow's shot's fire Marksman, never Blade; a sword's fire Blade (host.js #learn)", () => {
+        for (const [weapon, grows, not] of [
+            ["bow", "marksman", "blade"],
+            ["sword", "blade", "marksman"],
+        ]) {
+            const at = atCrafter("smith", { gear: { mainHand: thingOf({ id: weapon, bonuses: { fireBlow: 0.4 } }) }, skills: { blade: 0, marksman: 0 } });
+            const { host, me, player } = at;
+            const orc = host.battle.actor("orc");
+
+            assert.deepEqual(me.blows, { fireBlow: 0.4 }, weapon);
+            Object.assign(orc, { dead: false, hp: 100000, maxHp: 100000, respawnAt: 0 });
+            put(orc, "town", [5200, 6600]);
+            put(me, "town", [weapon === "bow" ? 5204 : 5201, 6600]);
+            Object.assign(me, { hp: 100000, maxHp: 100000 });
+            assert.equal(host.command(HOST_PLAYER, { type: "engage", target: "orc" }).ok, true);
+
+            const fired = run(host, 8000).filter(({ type, attack, by }) => type === "hit" && attack === "fireBlow" && by === HOST_PLAYER);
+
+            assert.ok(fired.length >= 2 && fired.every(({ projectile }) => projectile === null), `${weapon}: ${fired.length} hits of fire`);
+            assert.ok(player.progress.skills[grows] > 0, `${weapon} grows ${grows}`);
+            assert.equal(player.progress.skills[not], 0, `${weapon} never grows ${not}`);
+        }
+    });
+
     it("puts the crafted weapon's blows on its wielder as they put it on, each no more than the cap, and none as they take it off", () => {
         const sword = thingOf(craftItem("sword", ["adamantiteIngot", "wyvernScale", "demonHorn"], createRandom(7), { level: 60 }));
         const at = atCrafter("smith", { pack: [{ ...sword, count: 1 }, { ...thingOf({ id: "quiver", bonuses: { fireBlow: 0.35 } }), count: 1 }, { ...thingOf({ id: "bow", bonuses: { fireBlow: 0.3 } }), count: 1 }] });

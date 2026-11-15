@@ -192,6 +192,8 @@ export class JournalPanel {
         this.view = "journal";
         this.page = null;
         this.shown = null;
+        // (On a creature's page, the thing it leaves whose card is open: its id, or null)
+        this.partShown = null;
 
         this.body = element("div", "journal-body");
         this.panel.append(header, tabs, this.body);
@@ -256,7 +258,7 @@ export class JournalPanel {
         if (this.view === "bestiary") {
             const page = this.page ? bestiary.pageOf(this.page) : null;
 
-            this.body.replaceChildren(...(page ? this.#creature(page, bestiary.portraitOf) : this.#bestiary(bestiary)));
+            this.body.replaceChildren(...(page ? this.#creature(page, bestiary.portraitOf, bestiary.cardOf) : this.#bestiary(bestiary)));
 
             return;
         }
@@ -631,6 +633,7 @@ export class JournalPanel {
                         open.append(element("span", "bestiary-name", name), element("span", "bestiary-title", title), this.#pips(level, levels));
                         open.addEventListener("click", () => {
                             this.page = kind;
+                            this.partShown = null;
                             this.show(this.shown);
                             this.body.scrollTop = 0;
                         });
@@ -650,8 +653,9 @@ export class JournalPanel {
     }
 
     // A kind's page in the bestiary, as far as it's been found out (app/bestiary.js pageOf), its
-    // portrait beside its name once it's drawn (`portraitOf`), and the way back
-    #creature(page, portraitOf = null) {
+    // portrait beside its name once it's drawn (`portraitOf`), and the way back; what it leaves each
+    // in its make's colour, its card a tap away (`cardOf`: an ingredient's, app/craftinfo.js)
+    #creature(page, portraitOf = null, cardOf = null) {
         const back = element("button", "journal-button bestiary-back", "All creatures");
         const head = element("div", "journal-standing bestiary-head");
         const about = element("div", "bestiary-head-about");
@@ -687,15 +691,64 @@ export class JournalPanel {
         );
         head.append(frame, about);
 
-        const sections = page.sections.map(({ heading, open, lines }) => {
+        const sections = page.sections.map(({ heading, open, lines, parts = [] }) => {
             const body = element("div", `bestiary-section${open ? "" : " shut"}`);
 
-            body.append(...lines.map((line) => element("p", "bestiary-line", line)));
+            body.append(...lines.map((line, k) => (parts[k] ? this.#part(parts[k], cardOf) : element("p", "bestiary-line", line))));
 
             return this.#section(heading, body);
         });
 
         return [back, head, ...sections];
+    }
+
+    // Something a creature leaves (app/bestiary.js spoilsOf): how often, its name in its make's
+    // colour, and what it's for, briefly; an ingredient's name tapped, its card beneath it (as it's
+    // shown in the pack: what it is, what it's for, where it comes from), tapped again, put away
+    #part({ id, rarity, before, label, after, use }, cardOf) {
+        const box = element("div", "bestiary-part");
+        const line = element("p", "bestiary-line");
+        const info = cardOf?.(id) ?? null;
+        const name = element(info ? "button" : "span", `bestiary-part-name rarity-${rarity}`, label);
+        const shown = () => {
+            box.querySelector(".bestiary-card")?.remove();
+
+            if (this.partShown === id) {
+                box.append(this.#ingredientCard(info));
+            }
+
+            name.setAttribute("aria-expanded", String(this.partShown === id));
+        };
+
+        box.dataset.part = id;
+        line.append(before, name, after, ...(use ? [" ", element("span", "bestiary-part-use", `${use}.`)] : []));
+        box.append(line);
+
+        if (info) {
+            name.type = "button";
+            name.setAttribute("aria-label", `${label}: what it is`);
+            name.addEventListener("click", () => {
+                this.partShown = this.partShown === id ? null : id;
+                shown();
+            });
+            shown();
+        }
+
+        return box;
+    }
+
+    // An ingredient's card, as the pack's are (app/pack.js card: its name in its make's colour, what
+    // kind of thing it is and how well made, `made`, and its lines)
+    #ingredientCard({ label, rarity, kind, made, lines }) {
+        const card = element("div", `pack-card bestiary-card rarity-${rarity}`);
+        const list = element("ul", "pack-lines");
+
+        list.append(...lines.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
+        card.setAttribute("role", "group");
+        card.setAttribute("aria-label", `${label}: what it is`);
+        card.append(element("p", "pack-kind", `${kind}${made ? ` · ${made}` : ""}`), list);
+
+        return card;
     }
 
     // A kind's level, as pips: one for each of its `levels`, filled as far as it's come
