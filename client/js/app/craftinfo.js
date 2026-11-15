@@ -13,10 +13,10 @@
 import { CREATURES } from "../core/creatures.js";
 import { ingredientsOf, MAKE_ABOVE, powerOf, recipesAt, salvageOf, salvagesAt, sourcesOf, usesOf } from "../core/crafting.js";
 import { blockMost, GEAR, levelFactor, levelOf, statsOf } from "../core/gear.js";
-import { INGREDIENTS, NEW_BEASTS } from "../core/materials.js";
+import { INGREDIENTS } from "../core/materials.js";
 import { ITEMS, itemLabel, priceOf, QUALITIES } from "../core/progress.js";
 import { RECIPES } from "../core/recipes.js";
-import { listed, whereNew, whereOf } from "./bestiary.js";
+import { listed, whereOf } from "./bestiary.js";
 import { blowsOf, boostsWorded, effectWords, kindOf, MAKES, rangeWorded, worded } from "./gearinfo.js";
 
 /** Each kind of ingredient (core/materials.js INGREDIENT_KINDS), in words: its name, and one of it. */
@@ -257,16 +257,15 @@ const UNKNOWN_SAID = 3;
  * Hunter's ??? is; and that gear broken down at a crafter's gives it back. [{ text, tone }]
  */
 export function sourcesWords(id, { known = () => false } = {}) {
-    const { sold, dropped, planned, salvage } = sourcesOf(id);
+    const { sold, dropped, salvage } = sourcesOf(id);
     const lines = [];
 
     if (sold.length) {
         lines.push({ text: `Sold by ${listed(sold.map((shop) => CRAFTER_WORDS[shop] ?? shop))}.`, tone: "set" });
     }
 
-    const creatures = [...new Set([...dropped, ...planned])];
-    const named = creatures.filter((kind) => CREATURES[kind] && known(kind)).map((kind) => CREATURES[kind].name);
-    const unknown = [...new Set(creatures.filter((kind) => !(CREATURES[kind] && known(kind))).map((kind) => (CREATURES[kind] ? whereOf(kind) : whereNew(NEW_BEASTS[kind]))))];
+    const named = dropped.filter((kind) => known(kind)).map((kind) => CREATURES[kind].name);
+    const unknown = [...new Set(dropped.filter((kind) => !known(kind)).map((kind) => whereOf(kind)))];
 
     if (named.length) {
         lines.push({ text: `Left by ${listed(named)}.`, tone: "set" });

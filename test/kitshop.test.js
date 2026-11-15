@@ -24,7 +24,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 const THREE = await import("three");
 const { entranceOf, entranceSpecOf, ENTRANCES, SHOP_DOORS } = await import("../client/js/core/insides.js");
 const { layoutTown } = await import("../client/js/core/setpieces/town.js");
-const { MASTER_SHOPS, PLOT, SHOP_LANDMARKS, SPECIALISTS } = await import("../client/js/core/setpieces/pieces.js");
+const { CRAFTER_SHOPS, MASTER_SHOPS, PLOT, SHOP_LANDMARKS, SPECIALISTS } = await import("../client/js/core/setpieces/pieces.js");
 const { MATERIALS, TINTS } = await import("../client/js/world/art/engine/materials.js");
 const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { STYLES } = await import("../client/js/world/art/kits/house.js");
@@ -415,7 +415,7 @@ describe("a shop among its neighbours (art/kits/kitshop.js, setpieces/town.js)",
                         const corners = [[sign.box[0], sign.box[4]], [sign.box[1], sign.box[4]], [sign.box[1], sign.box[5]], [sign.box[0], sign.box[5]]].map(([u, v]) => world(u, v));
 
                         shops++;
-                        assert.ok(SPECIALISTS.includes(piece.name) || MASTER_SHOPS.includes(piece.name));
+                        assert.ok(SPECIALISTS.includes(piece.name) || MASTER_SHOPS.includes(piece.name) || CRAFTER_SHOPS.includes(piece.name));
 
                         for (const other of pieces.filter((one) => one !== piece)) {
                             // (Its lot, and its eaves out past it, 0.35 m at most)

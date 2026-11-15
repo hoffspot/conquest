@@ -724,6 +724,116 @@ const PAINTERS = {
         }
     },
 
+    // The crafters' shops (docs/CRAFTING.md *The crafters*): a bowyer's bow and arrow, a
+    // leatherworker's stretched hide, a tailor's shears and a jeweller's ring
+    longbow(c, colour) {
+        // A longbow strung, an arrow nocked across it, fletched in the colour
+        line(c, "rgba(20, 12, 6, 0.9)", 0.2, [[-0.35, -0.95], [0.12, -0.6], [0.32, 0], [0.12, 0.6], [-0.35, 0.95]]);
+        line(c, "#a8682e", 0.12, [[-0.35, -0.95], [0.12, -0.6], [0.32, 0], [0.12, 0.6], [-0.35, 0.95]]);
+        line(c, "#efe6d0", 0.025, [[-0.35, -0.95], [-0.35, 0.95]]);
+        line(c, "#4a3420", 0.06, [[-0.8, 0], [0.75, 0]]);
+        solid(c, "#c8cfd6", (p) => {
+            p.moveTo(0.72, -0.12);
+            p.lineTo(0.98, 0);
+            p.lineTo(0.72, 0.12);
+            p.closePath();
+        }, { outline: 0.03 });
+
+        for (const dx of [-0.78, -0.64]) {
+            solid(c, colour, (p) => {
+                p.moveTo(dx, 0);
+                p.lineTo(dx - 0.14, -0.16);
+                p.lineTo(dx - 0.02, -0.16);
+                p.lineTo(dx + 0.12, 0);
+                p.lineTo(dx - 0.02, 0.16);
+                p.lineTo(dx - 0.14, 0.16);
+                p.closePath();
+            }, { outline: 0.02 });
+        }
+    },
+
+    hide(c, colour) {
+        // A hide stretched out to dry, its edges pulled to points where it's pegged, stitched down
+        // its middle in the colour
+        solid(c, "#a8703c", (p) => {
+            p.moveTo(-0.55, -0.85);
+            p.quadraticCurveTo(0, -0.7, 0.55, -0.85);
+            p.quadraticCurveTo(0.5, -0.55, 0.8, -0.4);
+            p.quadraticCurveTo(0.6, 0, 0.8, 0.35);
+            p.quadraticCurveTo(0.5, 0.55, 0.55, 0.9);
+            p.quadraticCurveTo(0, 0.75, -0.55, 0.9);
+            p.quadraticCurveTo(-0.5, 0.55, -0.8, 0.35);
+            p.quadraticCurveTo(-0.6, 0, -0.8, -0.4);
+            p.quadraticCurveTo(-0.5, -0.55, -0.55, -0.85);
+            p.closePath();
+        });
+        line(c, "#5a3418", 0.05, [[0, -0.66], [0, 0.72]]);
+
+        for (let k = 0; k < 6; k++) {
+            const y = -0.55 + k * 0.23;
+
+            line(c, colour, 0.05, [[-0.12, y], [0.12, y + 0.06]]);
+        }
+    },
+
+    shears(c, colour) {
+        // A tailor's shears, open, their bows in the colour
+        for (const side of [-1, 1]) {
+            c.save();
+            c.translate(0, 0.1);
+            c.rotate(side * 0.38);
+            solid(c, "#dfe4ea", (p) => {
+                p.moveTo(-0.07, 0.05);
+                p.lineTo(-0.02, -0.92);
+                p.lineTo(0.07, -0.8);
+                p.lineTo(0.08, 0.05);
+                p.closePath();
+            }, { outline: 0.04 });
+            c.restore();
+        }
+
+        for (const side of [-1, 1]) {
+            solid(c, colour, (p) => {
+                p.arc(side * 0.38, 0.6, 0.24, 0, TAU);
+                p.moveTo(side * 0.38 + 0.12, 0.6);
+                p.arc(side * 0.38, 0.6, 0.12, 0, TAU, true);
+            }, { outline: 0.04 });
+        }
+
+        solid(c, "#c9a13b", (p) => p.arc(0, 0.1, 0.07, 0, TAU), { outline: 0.02 });
+    },
+
+    ring(c, colour) {
+        // A gold ring, a cut stone of the colour set in it, a glint off it
+        solid(c, "#d8a838", (p) => {
+            p.arc(0, 0.25, 0.62, 0, TAU);
+            p.moveTo(0.48, 0.25);
+            p.arc(0, 0.25, 0.48, 0, TAU, true);
+        });
+        solid(c, colour, (p) => {
+            p.moveTo(-0.32, -0.42);
+            p.lineTo(-0.16, -0.7);
+            p.lineTo(0.16, -0.7);
+            p.lineTo(0.32, -0.42);
+            p.lineTo(0, -0.08);
+            p.closePath();
+        }, { outline: 0.04 });
+        line(c, "rgba(255, 255, 255, 0.75)", 0.03, [[-0.32, -0.42], [0.32, -0.42]]);
+
+        for (const [x, y, r] of [[0.62, -0.72, 0.12], [-0.7, -0.35, 0.08]]) {
+            solid(c, "#fff6d8", (p) => {
+                for (let k = 0; k < 4; k++) {
+                    const a = (k / 4) * TAU;
+
+                    p.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+                    p.lineTo(x + Math.cos(a + TAU / 8) * r * 0.35, y + Math.sin(a + TAU / 8) * r * 0.35);
+                }
+
+                p.closePath();
+            }, { outline: 0.01, light: false });
+        }
+    },
+
     sunburst(c, colour) {
         // The Six's mark: a sun of six rays, a flame at its heart
         solid(c, colour, (p) => {

@@ -66,6 +66,9 @@ const OWN = Object.freeze({
     olm: "lizard",
     ahuizotl: "lizard",
     stoneGolem: "stone",
+    mythrilGolem: "stone",
+    adamantiteGolem: "stone",
+    orichalcumColossus: "stone",
 });
 
 // The people-shaped (drawn as people are) who go barefoot: the rest leave a boot's print

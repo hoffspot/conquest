@@ -27,6 +27,7 @@
 // Everyone of a role (roles.js) talks as the role's tree (TREES) says, unless they have their own
 // (OWN_TREES, by id). Pure data and a little bookkeeping, no DOM.
 
+import { CRAFTERS } from "./recipes.js";
 import { Variety } from "./variety.js";
 
 /** Where the talking's done, for {place}. */
@@ -36,10 +37,19 @@ export const PLACE = "Wenches and Ale";
 const FAREWELL = { say: "Farewell.", next: null };
 
 /**
- * A specialist's or a master's shopkeeper's talk (docs/WAR.md *Shops*): greeted (`first`, the first
- * time; `again`, after), their wares to buy (`shop`: their shop's kind), today's special asked
- * after ({special} and {specialPrice}, or that it's gone: `{ special }` in a condition), and one
- * thing to ask them about (`ask`, and what they say: `answer`).
+ * What's asked of a crafter (core/recipes.js CRAFTERS: the smith, the specialists who make, the
+ * masters and the four new) for what they'd make: its `commission` effect names the crafter (a
+ * CRAFTERS id), and the talk ends on it as it does on buying. The game opens the keeper's shop on
+ * its Craft tab (app/game.js: `shopWanted.tab`, "craft").
+ */
+export const commissionOf = (shop) => ({ say: "What can you make?", next: null, do: [{ commission: shop }] });
+
+/**
+ * A specialist's, a crafter's or a master's shopkeeper's talk (docs/WAR.md *Shops*): greeted
+ * (`first`, the first time; `again`, after), their wares to buy (`shop`: their shop's kind), what
+ * they'd make, a crafter's (commissionOf), today's special asked after ({special} and
+ * {specialPrice}, or that it's gone: `{ special }` in a condition), and one thing to ask them about
+ * (`ask`, and what they say: `answer`).
  */
 function keeperTree({ shop, first, again, ask, answer, special, gone }) {
     const buy = { say: "Show me what you have for sale.", next: null, do: [{ shop }] };
@@ -50,7 +60,7 @@ function keeperTree({ shop, first, again, ask, answer, special, gone }) {
             greet: { say: [{ if: { met: false }, lines: first }, { lines: again }], choices: "more" },
             more: {
                 say: ["What else?", "Anything more?", "Ask away."],
-                choices: [buy, { say: "What's today's special?", next: "special" }, { say: ask, next: "ask" }, FAREWELL],
+                choices: [buy, ...(CRAFTERS[shop] ? [commissionOf(shop)] : []), { say: "What's today's special?", next: "special" }, { say: ask, next: "ask" }, FAREWELL],
             },
             special: {
                 say: [{ if: { special: true }, lines: special }, { lines: gone }],
@@ -421,6 +431,7 @@ export const TREES = Object.freeze({
                 say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
                 choices: [
                     { say: "Show me what you have for sale.", next: null, do: [{ shop: "smith" }] },
+                    commissionOf("smith"),
                     { say: "Could you put an edge on my blade? (3 gold)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
                     { say: "What are you working on?", next: "work" },
                     { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
@@ -471,6 +482,7 @@ export const TREES = Object.freeze({
                 say: ["What else?", "Speak up, the fire's loud.", "Anything more?"],
                 choices: [
                     { say: "Show me what you have for sale.", next: null, do: [{ shop: "smith" }] },
+                    commissionOf("smith"),
                     { say: "Could you put an edge on my blade? (3 gold)", next: "sharpen", do: [{ buy: "sharpening", price: 3 }] },
                     { say: "What are you working on?", next: "work" },
                     { if: { notFlag: "askedApprentice" }, say: "Who's that at the bellows?", next: "apprentice", do: [{ remember: "askedApprentice" }] },
@@ -651,6 +663,46 @@ export const TREES = Object.freeze({
         answer: ["Rub it on your blade, or your arrowheads. For a while after, what you hit might burn, or freeze, or sicken. One at a time, mind.", "It clings to steel and bites whatever it's put into. Fire oil burns, frost oil slows, venom oil poisons. Don't lick your sword."],
         special: ["Today's special, cooling on the back shelf: {special}. {specialPrice} gold. I'll not make another for a while.", "{special}. Took me three tries and an eyebrow. {specialPrice} gold."],
         gone: ["Sold already. Someone wanted it more than you. Tomorrow I'll brew something else.", "Gone! Come back tomorrow. Bring gold."],
+    }),
+    // The crafters (docs/CRAFTING.md *The crafters*): a bowyer, patient, fond of their woods
+    bowyer: keeperTree({
+        shop: "bowyer",
+        first: ["Mind the staves, they're seasoning. {name}, bowyer. Bows, staves, quivers: if it bends and doesn't break, it's mine.", "Come in, come in. {name}. Yew in the racks, ash on the bench, and a bow for every arm. What draws you?"],
+        again: ["{player}. How's your string holding?", "Back again, {player}? I've a stave just come right that you should feel."],
+        ask: "What makes a good bow?",
+        answer: ["The wood, first: sapwood for the back, heartwood for the belly, as the yew grows it. Then years of patience. Then a good string.", "A stave that's been let season and not hurried. Hurry a bow and it'll take its revenge on your fingers."],
+        special: ["Hanging behind me: {special}. {specialPrice} gold. I'll not have wood like that again this year.", "{special}. {specialPrice} gold. Seasoned three winters, and worth every one of them."],
+        gone: ["Gone at first light, to a hunter who knew what they had. Tomorrow.", "Sold already. Come back tomorrow; there's another seasoning."],
+    }),
+    // A leatherworker: blunt, smelling of tan and oak bark, proud of a stitch
+    leatherworker: keeperTree({
+        shop: "leatherworker",
+        first: ["Don't mind the smell; that's the tan pit out back. {name}, leatherworker. Boots, jerkins, belts, bracers. What's falling apart on you?", "{name}. Hides in, leather out, and it'll outlast you if you oil it. Have a look."],
+        again: ["{player}. Those boots of mine still keeping the wet out?", "Back, {player}? Let's see what you've worn through."],
+        ask: "Why leather, and not mail?",
+        answer: ["It's quiet, it's light, and it doesn't rust. Boiled and shaped, it'll turn a blade near as well as iron, and you can still run in it.", "A man in mail hears every step he takes. A man in my leather hears everyone else's."],
+        special: ["On the stand there: {special}. {specialPrice} gold. Every stitch by hand, and every one of them tight.", "{special}. Best hide I've had in a twelvemonth. {specialPrice} gold."],
+        gone: ["Sold this morning. A courier, and they'll be running in it now. Tomorrow.", "Gone already. There's more on the frames; come back tomorrow."],
+    }),
+    // A tailor: quick, particular, a tape about the neck and pins in the mouth
+    tailor: keeperTree({
+        shop: "tailor",
+        first: ["Oh, look at that hem. No, no, come in. {name}, tailor. Cloaks, gambesons, a good hat; whatever you're wearing, I'd have cut it better.", "Welcome! {name}. Wool, linen, silk from the south. Stand straight; I'm measuring you whether you like it or not."],
+        again: ["{player}! Still in that cloak? We can do better.", "Back again, {player}? I've a bolt in you'd look well in."],
+        ask: "What's a gambeson?",
+        answer: ["Linen quilted over layers of wool, as many as you can bear. It turns a cut, and it's warm on watch. Knights wear one under their mail.", "Cloth that fights back. Twenty layers, stitched through, and a blade bites the first and gives up by the tenth."],
+        special: ["On the dummy by the window: {special}. {specialPrice} gold, and I'll take it in for you myself.", "{special}. {specialPrice} gold. There's not another cut like it this side of the mountains."],
+        gone: ["Gone! A lady from the hall had it off the dummy before I'd finished the buttons. Tomorrow.", "Sold, I'm afraid. I'll have another finished by tomorrow."],
+    }),
+    // A jeweller: soft-spoken, a loupe in one eye, watching every hand near the cases
+    jeweller: keeperTree({
+        shop: "jeweller",
+        first: ["Hands where I can see them, if you please. Thank you. {name}, jeweller. Rings, amulets, a stone set as you like it.", "Good day. {name}. Gold, silver and the stones the mountains give up. Look in the cases; ask before you touch."],
+        again: ["{player}. A pleasure, as ever. The cases are new today.", "Ah, {player}. Something to catch the light?"],
+        ask: "Is there power in a stone?",
+        answer: ["Some say a garnet keeps a traveller safe and an amethyst keeps the head clear. I say a stone well set keeps its wearer whatever it holds.", "In some. A quartz takes a spell and holds it, a little. The rarer stones hold more, and cost more, and are worth it."],
+        special: ["In the case under the lamp: {special}. {specialPrice} gold. It's the finest piece I've set this season.", "{special}. {specialPrice} gold, and I'll polish it for you while you count."],
+        gone: ["Gone, to a buyer who didn't haggle. Come back tomorrow; I've a stone to set tonight.", "Sold already. Tomorrow there'll be another in the case."],
     }),
     // The masters (one of each in each people's lands): a Master Swordsmith, grave and exacting
     masterSwordsmith: keeperTree({

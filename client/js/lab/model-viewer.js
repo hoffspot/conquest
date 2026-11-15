@@ -193,6 +193,17 @@ const ABOUT = {
     ashWalker: ["Ash walker", "A hell's Halls of Bone: quick, its claws leaving you bleeding"],
     hellwalker: ["Hellwalker", "A hell's River of Fire, in packs, at home: quick, its claws leaving you bleeding"],
     bileWalker: ["Bile walker", "A hell's Pit: quick, its claws leaving you bleeding"],
+    // (The crafters' quarry: each drawn from the model, or the stand-in, of the creature it's like,
+    // in its own colour and size, till a model of its own is bought: beasts/model.js quarryModel)
+    mythrilGolem: ["Mythril golem", "The mountains, snows and tundra far out, and the caves: the Stone Golem's model in its frost skin, silver-blue, four fifths as big"],
+    adamantiteGolem: ["Adamantite golem", "The burning lands, badlands and mountains furthest out, and the caves: the Stone Golem's model in its moss skin, dark green"],
+    orichalcumColossus: ["Orichalcum colossus", "The burning lands at their furthest, alone, and a hell's River of Fire: the Stone Golem's model in its ember skin, red-gold, half as big again"],
+    gildedScarab: ["Gilded scarab", "Only in the cat folk's wilds, in packs: the giant cockroach's model, gold, as big again and a half"],
+    ironbarkTreant: ["Ironbark treant", "Only in the orcs' wilds, far out: the blighted treant's stand-in, unblighted, grey as iron"],
+    ghostwoodTreant: ["Ghostwood treant", "The dark woods and marshes far out, only by night, and the ancient temples: the blighted treant's stand-in, unblighted, pale"],
+    sylvanAncient: ["Sylvan ancient", "Only in the elves' wilds at their furthest, alone: the blighted treant's stand-in, unblighted, silver-barked, half as big again"],
+    gloomweaver: ["Gloomweaver", "Only in the dark elves' wilds at their furthest, alone, and the ants' nests: the black widow's model, violet-black, half as big again"],
+    moonMoth: ["Moon moth", "The elves' woods and the meadows far out, only by night, alone: the dungeon wasp's model, white, more than twice as big"],
 };
 
 // --- The scene ---
@@ -1730,6 +1741,7 @@ const groups = [
     ["The Orc King's war band", ["orcKing", "orcIronjaw", "orcBloodtusk", "orcRaider"]],
     ["The Order of the Bell", ["bellInitiate", "bellBrother", "bellMaceman", "bellSpearman", "bellArcher", "choirKnight", "priorVane", "bellRider", "choirRider"]],
     ["For the mightiest", ["kaiju", "stoneGolem", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "orcReaver", "orcWarlord", "cultLeader", "greaterDemon", "demonLord", "vharzul", "cerberus", "ashmaw", "demonBoss", "ashkhar"]],
+    ["The crafters' quarry", ["mythrilGolem", "adamantiteGolem", "orichalcumColossus", "gildedScarab", "ironbarkTreant", "ghostwoodTreant", "sylvanAncient", "gloomweaver", "moonMoth"]],
 ];
 
 for (const [label, ids] of groups) {

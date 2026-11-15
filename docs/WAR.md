@@ -713,7 +713,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     healing), and food for the wild's beasts, meat bait (3 gold) and a feed bag (2 gold)
     (docs/WILDS.md *Bait*);
   - the smith and the apprentice: every weapon, piece of armour and shield, and the pieces of
-    their people's uniform, as well made as the player buying is mighty (`tiered`,
+    their people's uniform, and the materials the smith makes things of (bronze, iron and steel
+    ingots, oak, tanned leather: below), as well made as the player buying is mighty (`tiered`,
     `SMITH_MAKES`, by their might's tier, one every ten: core/might.js `mightTier`): common and
     fine to begin with (might 0 to 29), fine and masterwork as they grow (30 to 59), masterwork
     alone for the mightiest (60 and more). Better than that is the specialists'. The gear and
@@ -736,6 +737,13 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     and armour, an occult scriptorium's tomes, spell scrolls, charms and the arcane (wands,
     grimoires, spellwards, wizards' hats), an alchemist's draughts, elixirs, oils and cures
     (always a stamina draught and a Stamina Boost among them);
+  - the crafters (docs/CRAFTING.md *The crafters*), a village one of the first three, a town
+    two, a city two and the jeweller, a capital all four (*Which settlements keep which*), each a
+    house near the market made over: as a specialist's, a new assortment each day of what they
+    make, better made than a blacksmith's, and a daily special: a bowyer's bows, staves and
+    quivers (always a bow among them), a leatherworker's caps, jerkins, bracers, gloves, belts,
+    war belts, breeches and boots, a tailor's wizards' hats, gambesons, trousers and cloaks, a
+    jeweller's rings and amulets;
   - the masters (one of each for each people, each in a different village, town or city of
     theirs, chosen with the world: worldplan/settle.js), each with a new assortment each day of the rare, very rare and legendary, at twice the
     price, and a legendary special: the Master Swordsmith's arms, the Master Armorer's armour,
@@ -753,23 +761,37 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     fine (`SHOPS.watch`: their own shop, not their part's, as one of the folk can keep, host.js
     `#shopkeeper`).
 - **Crafters.** The smith, the specialists who make what they sell (a swordsmith, an armorer, an
-  occult scriptorium) and the three masters make things too (core/recipes.js `CRAFTERS`;
-  docs/CRAFTING.md): their trading panel has a Craft tab beside Buy and Sell, listing every piece
+  occult scriptorium), the four crafters (a bowyer, a leatherworker, a tailor and a jeweller) and
+  the three masters make things too (core/recipes.js `CRAFTERS`; docs/CRAFTING.md): their trading
+  panel has a Craft tab beside Buy and Sell, listing every piece
   they make in every main material they work, what the pack's short of greyed, each piece shown
   before it's made (its make, name, each power's range, the fee) and made at once; and on its
   Sell tab, gear they make broken down for ingredients, one piece or all the junk at once
   (docs/GAME.md *Crafting*). A blacksmith works to a masterwork, the specialists to the very rare,
   the masters to the legendary, and in a capital every crafter to the legendary.
-- **Each day's stock** (`core/stock.js` `dailyStock`). A specialist's or a master's shelves
-  change each day of the world (core/daytime.js `dayOf`: an hour of play), the same for everyone
-  who plays together, worked out from the world's seed, the shop (the building it's kept in:
-  `stockKey`) and the day:
+- **Materials.** Every crafter (core/recipes.js `CRAFTERS`: the smith, the swordsmith, the
+  armorer, the occult scriptorium, the four crafters and the masters) sells the commoner
+  materials it makes things of, as `CRAFTERS` `sells` has them (`SHOPS` `materials`: metals,
+  woods, cloths, leathers and gems, common and fine, never finer: docs/CRAFTING.md *Where they
+  come from*), each common, shown under "Materials for crafting" (`WARE_KINDS`): a smith all
+  that's asked for, a shop with a daily stock every one of them every day, 10 to 20 of each
+  (core/stock.js `MATERIAL_COUNT`), for everyone who plays together, as its other wares are. And
+  each buys back those it sells. Asked "What can you make?", every crafter's keeper (the smith's
+  too: core/dialogue.js `commissionOf`) hands the game the crafter it's asked of (the talk's
+  `commission`): their trading panel opens on its Craft tab.
+- **Each day's stock** (`core/stock.js` `dailyStock`). A specialist's, a crafter's or a master's
+  shelves change each day of the world (core/daytime.js `dayOf`: an hour of play), the same for
+  everyone who plays together, worked out from the world's seed, the shop (the building it's kept
+  in: `stockKey`) and the day:
   - so many different things (`daily.picks`: a swordsmith 9, an armorer 10, an occult
-    scriptorium and an alchemist 12, the Master Swordsmith 7, the Master Armorer 8, the Mystic
-    Emporium 10), a piece of gear in two makes at most, each made as the shop's `grades` weigh
+    scriptorium and an alchemist 12, a bowyer 5, a leatherworker 8, a tailor 6, a jeweller 4,
+    the Master Swordsmith 7, the Master Armorer 8, the Mystic Emporium 10), a piece of gear in
+    two makes at most, each made as the shop's `grades` weigh
     it (a specialist's fine 35%, masterwork 40%, rare 20%, very rare 5%; a master's rare 50%,
     very rare 35%, legendary 15%; a scroll, tome or draught only if it's as rare as that);
-  - so many of each (a specialist 1 to 3, an alchemist 2 to 6, a master one), as many as there
+  - so many of each (a specialist or a crafter 1 to 3, an alchemist 2 to 6, a master one; a
+    crafter's materials 10 to 20, worked out after the rest, so its shelves and its special are
+    as they'd be without them), as many as there
     are for everyone: once they're bought, "Sold out" till the next day ("They've sold all they
     had of that today: there'll be more tomorrow."). The host keeps what's been sold today
     (`stocks`, kept in snapshots: `SNAPSHOT_VERSION` 22), so a guest's shop is the host's;
@@ -785,9 +807,11 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
 - **What each buys.** Each shop buys only its own line (`line`, `LINES`): a smith arms and armour,
   a swordsmith arms, an armorer armour, an occult scriptorium the arcane (wands, grimoires, a
   spellward, a wizard's hat, tomes, scrolls, charms), the Mystic Emporium the arcane and jewellery,
-  an alchemist, a priest or an herbalist draughts, a tavern ale and meals; the adventurers' guild
-  everything, the creatures' parts too ("They don't buy that: the adventurers' guild buys
-  everything.").
+  a bowyer bows, staves and quivers (`bows`), a leatherworker what it makes of leather
+  (`leathers`), a tailor what it makes of cloth (`clothes`), a jeweller jewellery, an alchemist, a
+  priest or an herbalist draughts, a tavern ale and meals; a crafter the materials it sells too
+  (`buys`); the adventurers' guild everything, the creatures' parts too ("They don't buy that:
+  the adventurers' guild buys everything.").
 
   What's carried sells for 40% of its price (a creature's part for all it's worth, to the guild).
   All a player's haggling together (the Trade skill's, the Fox's, a set's, a rabbit's foot's) goes
@@ -2760,7 +2784,10 @@ are made good. The raiders are brought back up to 70% of the line that came, com
 from where it came out; the town's to 80% of its own, coming out from where its line formed. Each
 joins the weakest of its side's line's bodies still standing, its ranks opening for them: given
 places behind its hindmost rank as it stood before they came, five abreast, so that a wave of 22
-stands five ranks deep. (Till
+stands five ranks deep. With none of its line standing, they're put into its centre's, and a body
+that was gone (none left in it) with someone in it again rallies and comes on again
+(core/engagement.js), so the side isn't beaten with them still standing: a band that fights to the
+last does. (Till
 `NET_VERSION` 178 each newcomer was put a rank behind the one before, a wave strung out one to a
 rank: in a bandits' invasion of 360, the first wave of 95 was given places as far as 552 m back,
 and over two minutes its soldiers set off on 159 paths longer than 80 m, then turned back as the

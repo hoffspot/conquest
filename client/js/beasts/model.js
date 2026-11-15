@@ -14,6 +14,7 @@ import { hashed } from "../app/catalog.js";
 import { readGltf } from "../world/art/engine/models.js";
 import { candidatesAt, tierAt } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
+import { NEW_BEASTS } from "../core/materials.js";
 import { landAt } from "../core/worldplan/plan.js";
 import { boulderGeometry, boulderMaterial } from "../world/boulder.js";
 import { heldOnPage } from "../world/release.js";
@@ -325,6 +326,60 @@ const riderOf = (parts, skins = null) =>
 const BROTHERS_HELMS = ["HelmPlain", "HelmFlat", "HelmBar", "HelmRidge"];
 
 /**
+ * The crafters' quarry's own models (core/materials.js NEW_BEASTS, docs/CRAFTING.md *New beasts*),
+ * once one's bought for a kind: its entry as any of MODELS' is (its clips, joints, how long and
+ * tall it's made and drawn, its pace...: written from the model, as import-licensed-model's skill
+ * says), by its kind; its `asset` its own catalog entry, NEW_BEASTS' `model`. Drawn from once the
+ * catalog has that entry too (quarryModel); till then the kind's drawn as the creature it's like
+ * is. None bought yet.
+ */
+export const OWN_MODELS = Object.freeze({});
+
+/**
+ * One of the crafters' quarry's models (core/materials.js NEW_BEASTS `id`: the creature it's
+ * `like`, its `skin`, `tint` and `size`, and its own model to come, `model`), as MODELS has it:
+ * its own once one's been bought for it and the catalog has it (`bought`: OWN_MODELS' entry, its
+ * `asset` that catalog entry), drawn as it's made; till then the model the creature it's like is
+ * drawn from (`made`: MODELS' entries), in that model's `skin` if it's given one, tinted (`tint`:
+ * modelBody), drawn `size` times as long and going as much faster at its walk's own pace and its
+ * run's; or none (null), if that creature has no model (a treant: then its stand-in's drawn,
+ * beasts/looks.js, till its own model's bought). Either way it names its own model to come
+ * (`own`). A pure function of what it's given: the catalog's models (`catalog`) and the bought
+ * ones' entries.
+ */
+export function quarryModel(id, { made = MODELS, catalog = ASSETS.models, bought = OWN_MODELS } = {}) {
+    const { like, skin = null, tint, size, model: own } = NEW_BEASTS[id];
+
+    if (bought[id] && catalog[own]?.files?.length) {
+        return Object.freeze({ ...bought[id], asset: own, own });
+    }
+
+    const lent = made[like];
+
+    if (!lent) {
+        return null;
+    }
+
+    return Object.freeze({
+        ...lent,
+        ...(skin ? { skins: Object.freeze([skin]) } : {}),
+        tint,
+        own,
+        length: +(lent.length * size).toFixed(3),
+        pace: +(lent.pace * size).toFixed(2),
+        ...(lent.runPace ? { runPace: +(lent.runPace * size).toFixed(2) } : {}),
+    });
+}
+
+// The kinds drawn from a model of their own (`made`), and with them the crafters' quarry's, each
+// drawn from its own model or the one it borrows, if either is to be had (quarryModel)
+function withQuarry(made) {
+    const quarry = Object.keys(NEW_BEASTS).map((id) => [id, quarryModel(id, { made })]);
+
+    return { ...made, ...Object.fromEntries(quarry.filter(([, model]) => model)) };
+}
+
+/**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
  * wear (`skins`: "" its own, or one of the catalog's "<asset>-skins", <name>.<skin>.bin, only the
@@ -348,9 +403,11 @@ const BROTHERS_HELMS = ["HelmPlain", "HelmFlat", "HelmBar", "HelmRidge"];
  * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
  * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false). One that
  * stands on guard (battle.js #onGuard) holds its guard up in a clip of its own (`guard`: `hold`,
- * looped) and braces behind it in another as a blow's caught on it (`struck`).
+ * looped) and braces behind it in another as a blow's caught on it (`struck`). One of the
+ * crafters' quarry names its own model to come (`own`: its catalog entry, quarryModel), and, drawn
+ * from another's, is drawn in a colour of its own (`tint`: modelBody).
  */
-export const MODELS = Object.freeze({
+export const MODELS = Object.freeze(withQuarry({
     // (The Behemoth of the Rift: drawn 36 metres long, as it's made. Its jaws slammed down (the
     // start of its Roar, its head reared and brought down), its roar, and its atomic breath (its
     // Energy Breath, the beam it breathes drawn from its catalog's entry: beasts/beam.js BEAMS),
@@ -892,7 +949,7 @@ export const MODELS = Object.freeze({
     orcKing: kingly(1.2),
     orcIronjaw: kingly(1.15, ["brown"]),
     orcBloodtusk: kingly(1.15, ["red"]),
-});
+}));
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,
 // by the catalog's entry, and those still being fetched: one read for every kind drawn from it (a
@@ -1368,6 +1425,36 @@ export function useModel(id, gltf) {
 
 // The textures a skin's material may give in place of its model's own, as three.js names them
 const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+
+/**
+ * How a kind drawn from another's model is drawn in a colour of its own (MODELS' `tint`: the
+ * crafters' quarry's): its pictures' light and shade kept, gentler (the square root of how light
+ * each point is, from `least` of the tint's colour at the darkest to `least` + `more` at the
+ * lightest), in the tint's colour, `share` of the way from its own. A dark model's lit up so (a
+ * black widow's, a cockroach's), as a colour multiplied in couldn't; its glow (an ember skin's)
+ * left as it is.
+ */
+export const TINT = Object.freeze({ share: 0.85, least: 0.55, more: 0.9 });
+
+// (A model's material drawn in a tint (TINT): its colour, after its picture's, mixed toward the
+// tint as light or dark as the picture is there; as fire lights it and anything else done to its
+// shader before, done first)
+function tinted(material, colour) {
+    const tint = new THREE.Color(colour);
+    const before = material.onBeforeCompile;
+
+    material.onBeforeCompile = (shader, renderer) => {
+        before.call(material, shader, renderer);
+        shader.uniforms.tint = { value: tint };
+        shader.fragmentShader = shader.fragmentShader.replace("void main() {", "uniform vec3 tint;\nvoid main() {").replace(
+            "#include <map_fragment>",
+            `#include <map_fragment>
+            diffuseColor.rgb = mix(diffuseColor.rgb, tint * (${TINT.least.toFixed(2)} + ${TINT.more.toFixed(2)} * sqrt(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)))), ${TINT.share.toFixed(2)});`,
+        );
+    };
+    material.customProgramCacheKey = () => "beast-tinted";
+    material.needsUpdate = true;
+}
 
 // How many are drawn from each model file (by the catalog's entry: BeastAvatar's), and since when
 // none has been (performance.now()'s), each kept that long for another to be drawn from it at once
@@ -2242,7 +2329,8 @@ function copyOf(gltf, worn = () => true) {
 /**
  * A body (BeastAvatar's plan) made from a kind's model as read (`gltf`), at the size BeastAvatar
  * scales it by (`scale`: drawn at MODELS' `length` all the same), in one of its skins (`skin`: ""
- * its own, or one of MODELS' `skins`, as wantModel read it; its own if that wasn't). `groundAt(x,
+ * its own, or one of MODELS' `skins`, as wantModel read it; its own if that wasn't), and in its
+ * MODELS' `tint` if it has one (TINT). `groundAt(x,
  * z)`: the ground's height, for its fire to spread along. `parts`: the parts it wears, of a model
  * whose parts are kept apart (partsOf); all of them if null.
  */
@@ -2302,6 +2390,11 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "", 
             if (given?.emissiveMap) {
                 own.emissive.copy(given.emissive);
                 own.emissiveIntensity = given.emissiveIntensity;
+            }
+
+            // (One drawn from another's model in a colour of its own: TINT)
+            if (model.tint) {
+                tinted(own, model.tint);
             }
 
             materials.set(node.material.name, own);

@@ -868,7 +868,7 @@ export function barracksPosts(quarters) {
     return { captain: { square: [...captain], facing: s }, posts: posts.sort((a, b) => hypot(b.square[0] - door[0], b.square[1] - door[1]) - hypot(a.square[0] - door[0], a.square[1] - door[1])) };
 }
 
-// --- The specialists' and the masters' shops (docs/WAR.md *Shops*) ---
+// --- The specialists', the masters' and the crafters' shops (docs/WAR.md *Shops*) ---
 
 // A swordsmith's, 18 by 12 metres: racks of blades along the back wall and down the walls, shelves
 // of hilts and scabbards between them, the counter across the room, two display tables either
@@ -956,6 +956,78 @@ const EMPORIUM = [
     "........DD........",
 ];
 
+// --- The crafters' shops (docs/CRAFTING.md *The crafters*) ---
+
+// A bowyer's: racks of bows and staves along the back wall and down the walls, shelves of
+// quivers and sheaves of arrows between them, the counter, two tables of bows and staves either
+// side of the runner, shaving benches by the walls, casks of shafts, strongboxes by the door
+const BOWYER = [
+    "RRRR..eeeeee..RRRR",
+    "..................",
+    "R.....MMMMMM.....R",
+    "R.......rr.......R",
+    "R...TT..rr..TT...R",
+    "R...TT..rr..TT...R",
+    "........rr........",
+    "X.......rr.......X",
+    "X.......rr.......X",
+    "K.......rr.......K",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// A leatherworker's: hides stretched on their frames along the back wall and down the walls,
+// shelves of what's made of them either side, the counter, two cutting tables, jerkins on their
+// stands, benches with the awls and mallets, a tub of tan by the wall
+const LEATHERWORKER = [
+    "eeee..RRRRRR..eeee",
+    "..................",
+    "R.....MMMMMM.....R",
+    "R.......rr.......R",
+    "R..TT...rr...TT..R",
+    "R..TT...rr...TT..R",
+    "........rr........",
+    "X.......rr.......X",
+    "X.......rr.......X",
+    "n.......rr.......K",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// A tailor's: shelves of bolts of cloth all round, the counter, dummies wearing what's made
+// either side, two cutting tables, candle stands to sew by
+const TAILOR = [
+    "eeeeee.eeee.eeeeee",
+    "..................",
+    "e.....MMMMMM.....e",
+    "e.......rr.......e",
+    "e..n....rr....n..e",
+    "........rr........",
+    "e..TT...rr...TT..e",
+    "e..TT...rr...TT..e",
+    "..v.....rr.....v..",
+    "e.......rr.......e",
+    "c.......rr.......c",
+    "........DD........",
+];
+
+// A jeweller's: shelves of caskets and plate all round, the counter, two glass cases of rings
+// and amulets, benches with the loupe and the little anvil, candle stands, strongboxes
+const JEWELLER = [
+    "eeeeee.eeee.eeeeee",
+    "..................",
+    "e.....MMMMMM.....e",
+    "e.......rr.......e",
+    "e..TT...rr...TT..e",
+    "e..TT...rr...TT..e",
+    "..v.....rr.....v..",
+    "X.......rr.......X",
+    "X.......rr.......X",
+    "e.......rr.......e",
+    "c.......rr.......c",
+    "........DD........",
+];
+
 /**
  * Each shop inside: its plan, and its keeper's part (`role`: how they dress), title, and the
  * name the shop goes by (`named`: by the keeper's family name, or its own).
@@ -968,6 +1040,13 @@ export const SHOP_INSIDES = Object.freeze({
     masterSwordsmith: { rows: SWORDSMITH, role: "quartermaster", title: "Master Swordsmith", named: () => "the Master Swordsmith's" },
     masterArmorer: { rows: ARMORER, role: "quartermaster", title: "Master Armorer", named: () => "the Master Armorer's" },
     emporium: { rows: EMPORIUM, role: "arcanist", title: "Proprietor", named: () => "the Mystic Emporium" },
+    // (The crafters' keepers dressed for the work, as roles.js has them: the bowyer aproned, the
+    // leatherworker as a smith is, the tailor and the jeweller in good plain cloth, as an
+    // innkeeper is)
+    bowyer: { rows: BOWYER, role: "apprentice", title: "Bowyer", named: (family) => `${family}'s Bows` },
+    leatherworker: { rows: LEATHERWORKER, role: "smith", title: "Leatherworker", named: (family) => `${family}'s Leathers` },
+    tailor: { rows: TAILOR, role: "innkeeper", title: "Tailor", named: (family) => `${family}'s Tailoring` },
+    jeweller: { rows: JEWELLER, role: "innkeeper", title: "Jeweller", named: (family) => `${family}'s Jewels` },
 });
 
 /** A shop's floor: its one room (SHOP_INSIDES), drawn as its kind's (`look`). */
@@ -1483,7 +1562,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", riftTower: "the Tower of Sar Mordal", watchtower: "the watchtower", dungeon: "the dungeon", scenery: "the castle" });
+const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", bowyer: "the bowyer's", leatherworker: "the leatherworker's", tailor: "the tailor's", jeweller: "the jeweller's", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", riftTower: "the Tower of Sar Mordal", watchtower: "the watchtower", dungeon: "the dungeon", scenery: "the castle" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column

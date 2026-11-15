@@ -15,7 +15,7 @@ import { MASTERED, RESEARCH } from "../client/js/core/bestiary.js";
 import { previewOf, recipesAt, salvageOf, sourcesOf } from "../client/js/core/crafting.js";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { GEAR, STATS } from "../client/js/core/gear.js";
-import { FAMILIES, INGREDIENTS, NEW_BEASTS } from "../client/js/core/materials.js";
+import { FAMILIES, INGREDIENTS } from "../client/js/core/materials.js";
 import { gradeOf, itemLabel, ITEMS } from "../client/js/core/progress.js";
 import { CRAFTERS, RECIPES } from "../client/js/core/recipes.js";
 import { SPOILS } from "../client/js/core/spoils.js";
@@ -178,17 +178,15 @@ describe("an ingredient's card (app/craftinfo.js ingredientInfo, sourcesWords)",
         assert.deepEqual(said("steelIngot"), ["Sold by blacksmiths, swordsmiths, armorers, the Master Swordsmiths and the Master Armorers.", "Given back by gear broken down at a crafter's."]);
         assert.deepEqual(said("wolfPelt"), ["Left by something in the woods, the tundra, the heaths, the elves' woods, the meadows, the snows and the dark woods."]);
         assert.deepEqual(said("wolfPelt", (kind) => kind === "wolf"), ["Left by Wolf."]);
-        assert.deepEqual(said("mythrilIngot"), ["Left by something in the mountains, the snows and the tundra.", "Given back by gear broken down at a crafter's."], "(a creature still to come, stage 3's, where it'll be met)");
+        assert.deepEqual(said("mythrilIngot"), ["Left by something in the mountains, the snows and the tundra.", "Given back by gear broken down at a crafter's."], "(the mythril golem, where it's met)");
         assert.equal(said("obsidian").at(-1), "And by more you've yet to meet.");
         assert.ok(said("obsidian", () => true)[0].startsWith("Left by Magma slime, "));
         assert.deepEqual(Object.keys(CRAFTER_WORDS).sort(), Object.keys(CRAFTERS).sort());
 
         // (Every creature that leaves something said, met or not)
         for (const id of Object.keys(INGREDIENTS)) {
-            const { dropped, planned } = sourcesOf(id);
-
-            for (const kind of [...dropped, ...planned]) {
-                assert.ok(CREATURES[kind] || NEW_BEASTS[kind], `${id}: ${kind}`);
+            for (const kind of sourcesOf(id).dropped) {
+                assert.ok(CREATURES[kind], `${id}: ${kind}`);
             }
         }
     });

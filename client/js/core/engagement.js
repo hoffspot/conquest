@@ -453,6 +453,13 @@ export function stepEngagement(engagement, ctx) {
             if (!here.length && body.state !== "gone") {
                 body.brokeAt ??= LINE.includes(body.part) && formationOf(body) ? [...formationOf(body).anchor] : null;
                 body.state = "gone";
+            } else if (here.length && body.state === "gone") {
+                // (Someone in it again: newcomers put into its formation while none of its side's
+                // line stood to take them, host.js #reinforceInvasion. It's no longer gone: it
+                // rallies, and comes on again, melee)
+                body.state = "faltering";
+                body.until = now;
+                body.brokeAt = null;
             }
         }
     }

@@ -24,7 +24,8 @@ import { createRandom, noise } from "../random.js";
 import { atan2, cos, length, PI, sin, sqrt, TAU } from "../exact.js";
 import { patronOf } from "../lore/gods.js";
 import { nameTavern } from "../lore/taverns.js";
-import { churchOf, ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, SPECIALISTS, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
+import { CRAFTER_TOWNS } from "../recipes.js";
+import { churchOf, CRAFTER_SHOPS, ENTERED, GROUND, homeTree, HOUSE_STYLES, HOUSE_VARIANTS, houseKey, LANDMARKS, landmarkKey, OUTBUILDINGS, PEOPLE_PLACES, PLOT, PROPS, propKey, SPECIALISTS, TRADES, treeKey, TREE_VARIANTS } from "./pieces.js";
 
 /**
  * The kinds of settlement, and how each is laid out: how far its houses reach from the middle
@@ -71,6 +72,32 @@ export const PEOPLE_TOWNS = Object.freeze({
  * or greater: a town, a city or a capital).
  */
 export const keepsShops = (spec) => Boolean(spec?.seat) && ["church", "guild", "blacksmith"].every((name) => spec.landmarks.includes(name));
+
+/**
+ * Which of the crafters' shops (pieces.js CRAFTER_SHOPS) a settlement of a kind (SETTLEMENT_KINDS)
+ * keeps, by its seed (core/recipes.js CRAFTER_TOWNS: those it always has, and so many of the rest,
+ * chosen by its seed from a random of their own, so nothing else of its layout changes): a
+ * village one of the leatherworker, the bowyer and the tailor; a town two; a city two and the
+ * jeweller; a capital all four; a hamlet or a farmstead none. In CRAFTER_SHOPS' order.
+ */
+export function craftersOf(kind, seed) {
+    const keeps = CRAFTER_TOWNS[kind];
+
+    if (!keeps) {
+        return [];
+    }
+
+    const chosen = new Set([...keeps.always, ...createRandom(seed * 29 + 3).shuffle([...keeps.some]).slice(0, keeps.count)]);
+
+    return CRAFTER_SHOPS.filter((name) => chosen.has(name));
+}
+
+/**
+ * How many houses (along its streets and behind them) a settlement keeps for its folk at least, a
+ * crafter's shop made over or not: one isn't, where it would leave fewer (a village of a few
+ * houses keeps them).
+ */
+export const CRAFTER_SPARE = 3;
 
 // How far out a settlement's barracks stands (shares of its radius: from, to), where it can
 const BARRACKS_OUT = Object.freeze([0.35, 0.8]);
@@ -157,7 +184,10 @@ const ATTEMPTS = 20;
  * A settlement of a kind (SETTLEMENT_KINDS) from a seed, its main streets leaving the ways given
  * (`exits`: angles in radians, 0 east and π/2 south; or, if none are given, three or four ways
  * round), laid out as `people` lays out its settlements (PEOPLE_TOWNS; its pieces then carry
- * `people`, and its houses their `type`). Returns { kind, seed, people, width, height (metres:
+ * `people`, and its houses their `type`); its specialists' shops, a master's (`master`: one of
+ * pieces.js MASTER_SHOPS, if one's kept here) and its crafters' (craftersOf, by its kind and seed)
+ * each a house made over (`crafters`: craftersOf's unless said, as none to lay it out as it was
+ * before there were any). Returns { kind, seed, people, width, height (metres:
  * the town and the fields round it), centre ([x, y]), radius, market ({ corners, centre }),
  * streets ([{ points, width, main }]),
  * exits ([x, y]: where the main streets reach the edge), pieces ([{ key, kind, name, style,
@@ -177,7 +207,7 @@ const ATTEMPTS = 20;
  * is drawn over which where they overlap: WALK_LAYERS, the last a square of deck across a bend,
  * filling its outside) }]) }.
  */
-export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human", master = null } = {}) {
+export function layoutTown({ seed = 1, kind = "town", exits = null, people = "human", master = null, crafters = craftersOf(kind, seed) } = {}) {
     const spec = SETTLEMENT_KINDS[kind];
 
     if (!spec) {
@@ -188,7 +218,7 @@ export function layoutTown({ seed = 1, kind = "town", exits = null, people = "hu
     const look = PEOPLE_TOWNS[people] ?? PEOPLE_TOWNS.human;
 
     for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919, look, people, master);
+        const town = designTown(spec, exits, createRandom(random.seed()), seed + attempt * 7919, look, people, master, crafters);
 
         if (town) {
             return { kind, seed, people, ...town };
@@ -297,7 +327,7 @@ const facingOf = (vx, vy) => atan2(vx, vy);
 
 // --- Laying it out ---
 
-function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people = "human", master = null) {
+function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people = "human", master = null, crafters = []) {
     const other = people !== "human";
     const size = 2 * Math.round(spec.radius + spec.fields);
     const [width, height] = [size, size];
@@ -1091,6 +1121,36 @@ function designTown(spec, exits, random, seed, look = PEOPLE_TOWNS.human, people
 
             Object.assign(stable, { key: landmarkKey("stable"), kind: "landmark", name: "stable", ...identity("stable"), style, storeys: 1 });
         }
+    }
+
+    // Its crafters' shops (docs/CRAFTING.md *Which settlements keep which*: craftersOf), last, so
+    // that every other building stands as it did before there were any: each the house nearest
+    // the market whose door opens onto a street, as the specialists' are (on dry land and on the
+    // street if one can be; failing that, over a lagoon with its doorstep on a walk), made over as
+    // its seat is, and nothing else moved. None where it would leave the settlement fewer than
+    // CRAFTER_SPARE houses, nor where there's no house left to make over: the layout as it is,
+    // never laid out again for one
+    for (const name of crafters) {
+        const houses = pieces.filter(({ kind }) => kind === "house");
+        const opening = houses.filter(({ x, y, w, h, facing }) => opens(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const fronts = opening.filter(({ back }) => !back);
+        const stepping = houses.filter(({ back, x, y, w, h, facing }) => !back && steps(frame(x, y, w * PLOT, h * PLOT, facing)));
+        const near = (house) => length(house.x - centre[0], house.y - centre[1]);
+        const shop = houses.length > CRAFTER_SPARE ? [fronts.filter(({ water: wet }) => !wet), fronts, opening, stepping].find((each) => each.length)?.reduce((best, house) => (near(house) < near(best) - 1e-9 ? house : best)) : null;
+
+        if (!shop) {
+            continue;
+        }
+
+        const { style, storeys } = shop;
+
+        for (const key of Object.keys(shop)) {
+            if (!["x", "y", "w", "h", "facing", "people", "water"].includes(key)) {
+                delete shop[key];
+            }
+        }
+
+        Object.assign(shop, { key: landmarkKey(name), kind: "landmark", name, ...identity(name), style, storeys: Math.max(1, storeys ?? 1) });
     }
 
     // The yards as they're drawn; their fences stand on the squares along their sides

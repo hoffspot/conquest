@@ -108,21 +108,6 @@ function shareOf(share) {
 // How often, from a chance
 const often = (chance) => (chance >= 0.75 ? "nearly always" : chance >= 0.45 ? "often" : chance >= 0.2 ? "sometimes" : "now and then");
 
-/**
- * Where a creature still to come is met, in words, as whereOf has it of those there are (core/
- * materials.js NEW_BEASTS: its lands, `biomes`, and its people's wilds, `people`): what an
- * ingredient's card says of it, "Something in the mountains", till it's in the bestiary.
- */
-export function whereNew({ biomes = null, people = null } = {}) {
-    const lands = biomes?.length ? listed(biomes.map((biome) => LANDS[biome] ?? biome)) : null;
-
-    if (people) {
-        return lands ? `in ${lands} of ${WILDS[people]}` : `anywhere in ${WILDS[people]}`;
-    }
-
-    return lands ? `in ${lands}` : "out in the world";
-}
-
 /** Where a kind's met, in words ("in the woods, the tundra and the heaths", "anywhere"...). */
 export function whereOf(kind) {
     const spec = CREATURES[kind];

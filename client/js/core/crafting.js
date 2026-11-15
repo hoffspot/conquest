@@ -20,7 +20,7 @@
 // #salvageJunk), and the pack shows it first by the same arithmetic.
 
 import { DESIGNS, GEAR, levelFactor, levelOf, rollBlock, STATS, UNIFORM_PEOPLES } from "./gear.js";
-import { FAMILIES, INGREDIENTS, MAKE_STRENGTH, MORE_SPOILS, NEW_BEASTS, ON_BLOW, RANGES } from "./materials.js";
+import { FAMILIES, INGREDIENTS, MAKE_STRENGTH, ON_BLOW, RANGES } from "./materials.js";
 import { bound, isJunk, ITEMS, QUALITIES, rollBoost } from "./progress.js";
 import { CAPITAL_BEST, CRAFT_FEE, CRAFTERS, RECIPES, SALVAGE } from "./recipes.js";
 import { SPOILS } from "./spoils.js";
@@ -447,9 +447,8 @@ export function junkSalvage(pack, shop, { capital = false } = {}) {
 
 /**
  * Where an ingredient comes from: { sold (the crafters that sell it: CRAFTERS ids), dropped (the
- * creatures that leave it: spoils.js SPOILS), planned (those that will, stage 3's: materials.js
- * NEW_BEASTS and MORE_SPOILS), salvage (whether gear broken down gives it back: recipes.js
- * SALVAGE) }. What its card tells, with what it's used for (usesOf).
+ * creatures that leave it: spoils.js SPOILS), salvage (whether gear broken down gives it back:
+ * recipes.js SALVAGE) }. What its card tells, with what it's used for (usesOf).
  */
 export function sourcesOf(id) {
     const leaves = (items) => items.some((each) => each.id === id);
@@ -457,7 +456,6 @@ export function sourcesOf(id) {
     return {
         sold: Object.keys(CRAFTERS).filter((shop) => CRAFTERS[shop].sells.includes(id)),
         dropped: Object.keys(SPOILS).filter((creature) => leaves(SPOILS[creature].items)),
-        planned: [...Object.keys(NEW_BEASTS).filter((creature) => leaves(NEW_BEASTS[creature].items)), ...Object.keys(MORE_SPOILS).filter((creature) => leaves(MORE_SPOILS[creature]))],
         salvage: Object.values(SALVAGE).some((makes) => Object.values(makes).includes(id)),
     };
 }

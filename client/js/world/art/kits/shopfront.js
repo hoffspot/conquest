@@ -1,9 +1,12 @@
-// The specialists' and the masters' shops from outside (docs/WAR.md *Shops*), whichever people's
-// town they stand in: each one's name and sign, and what's set out by its door to show what's sold
-// within. A swordsmith's rack of blades and a whetstone; an armorer's harness on its stand and the
-// shields on a board; an occult scriptorium's open book on a lectern and its tomes stacked; an
-// alchemist's shelf of bottles and the herbs drying; the masters' the same, finer, under their
-// banners; the Mystic Emporium's orb glowing on its pillar between lanterns of coloured glass.
+// The specialists', the crafters' and the masters' shops from outside (docs/WAR.md *Shops*),
+// whichever people's town they stand in: each one's name and sign, and what's set out by its door
+// to show what's sold within. A swordsmith's rack of blades and a whetstone; an armorer's harness
+// on its stand and the shields on a board; an occult scriptorium's open book on a lectern and its
+// tomes stacked; an alchemist's shelf of bottles and the herbs drying; a bowyer's rack of bows and
+// a straw butt to shoot at; a leatherworker's hide stretched on its frame and hides piled on a
+// trestle; a tailor's bolts of cloth and a dummy in a cloak; a jeweller's case of rings and its
+// scales; the masters' the same as their trades', finer, under their banners; the Mystic
+// Emporium's orb glowing on its pillar between lanterns of coloured glass.
 //
 // Built facing south (out along +z), as the town's buildings are, in world pixels (five to a
 // metre); each kit (landmarks.js, and each people's) builds the shop's house and calls dressShop
@@ -31,6 +34,11 @@ export const SHOPFRONTS = Object.freeze({
     masterSwordsmith: { name: "Master Swordsmith", emblem: "blades", tint: 3, ground: "#2a1e0a", dark: "#120c02", left: "blades", right: "blades", master: "cloth-gold" },
     masterArmorer: { name: "Master Armorer", emblem: "helm", tint: 5, ground: "#2a1e0a", dark: "#120c02", left: "harness", right: "shields", master: "cloth-gold" },
     emporium: { name: "Mystic Emporium", emblem: "orb", tint: 5, ground: "#2a1438", dark: "#120818", left: "orb", right: "bottles", master: "cloth-violet", lanterns: true },
+    // (The crafters', docs/CRAFTING.md *The crafters*)
+    bowyer: { name: "Bowyer", emblem: "longbow", tint: 4, ground: "#26301c", dark: "#10160a", left: "bows", right: "butt" },
+    leatherworker: { name: "Leatherworker", emblem: "hide", tint: 0, ground: "#3a2614", dark: "#1a1008", left: "frame", right: "hides" },
+    tailor: { name: "Tailor", emblem: "shears", tint: 2, ground: "#3a1428", dark: "#1a0812", left: "bolts", right: "dummy" },
+    jeweller: { name: "Jeweller", emblem: "ring", tint: 1, ground: "#142a3a", dark: "#08121a", left: "case", right: "scales" },
 });
 
 /** The shops built this way: their landmarks' names (setpieces/pieces.js SHOP_LANDMARKS). */
@@ -242,7 +250,229 @@ function banner(solid, x, z, cloth) {
     solid.box(x - m(0.38), m(2.86), z + m(0.045), x + m(0.38), m(2.92), z + m(0.06), material("gold"));
 }
 
-const PIECES = Object.freeze({ blades, whetstone, harness, shields, lectern, tomes, bottles, herbs, orb });
+// How high what's set out may stand (world pixels): `most` metres, or under an awning (`under`
+// metres up, where there's one over it) a hand lower
+const highest = (most, under) => Math.min(m(most), under === null ? Infinity : m(under) - m(0.12));
+
+// A rack of bows: two posts and a rail along their tops, bows hung strung from it by their upper
+// nocks, their bellies out to the street, and a stave or two leant at its foot
+function bows(solid, x, z, random, under = null) {
+    const timber = material("timber");
+    const top = highest(1.68, under);
+
+    for (const side of [-1, 1]) {
+        solid.box(x + side * m(0.75) - m(0.05), 0, z - m(0.05), x + side * m(0.75) + m(0.05), top, z + m(0.05), timber);
+    }
+
+    solid.box(x - m(0.8), top - m(0.08), z - m(0.06), x + m(0.8), top, z + m(0.06), timber);
+
+    for (let k = 0; k < 4; k++) {
+        const bx = x - m(0.5) + k * m(0.33);
+        const [high, long] = [top - m(0.1), Math.min(top - m(0.2), m(random.range(1.25, 1.4)))];
+        const low = high - long;
+        const belly = m(random.range(0.12, 0.17));
+        const wood = material(random.pick(["timber", "timber-light", "planks-dark"]));
+
+        // (Its limbs, bending out from the grip; the grip bound in leather; the string)
+        solid.beam([bx, high, z + m(0.08)], [bx, high - long * 0.3, z + m(0.08) + belly * 0.75], m(0.035), m(0.03), wood);
+        solid.beam([bx, high - long * 0.3, z + m(0.08) + belly * 0.75], [bx, high - long * 0.45, z + m(0.08) + belly], m(0.04), m(0.035), wood);
+        solid.beam([bx, high - long * 0.55, z + m(0.08) + belly], [bx, high - long * 0.7, z + m(0.08) + belly * 0.75], m(0.04), m(0.035), wood);
+        solid.beam([bx, high - long * 0.7, z + m(0.08) + belly * 0.75], [bx, low, z + m(0.08)], m(0.035), m(0.03), wood);
+        solid.beam([bx, high - long * 0.45, z + m(0.08) + belly], [bx, high - long * 0.55, z + m(0.08) + belly], m(0.05), m(0.045), material("leather"));
+        solid.beam([bx, high, z + m(0.075)], [bx, low, z + m(0.075)], m(0.008), m(0.008), material("linen"));
+    }
+
+    // (Staves leant at its foot, still in the rough)
+    for (const dx of [-0.6, 0.55]) {
+        solid.beam([x + m(dx), 0, z + m(0.3)], [x + m(dx) + m(0.08), m(1.3), z + m(0.08)], m(0.05), m(0.05), material("timber-light"));
+    }
+}
+
+// A straw butt to shoot at on its three legs, tipped back a little, its rings painted
+function butt(solid, x, z) {
+    const timber = material("timber");
+    const [cy, cz] = [m(1.0), z + m(0.08)];
+
+    solid.beam([x - m(0.45), 0, z + m(0.3)], [x - m(0.1), cy + m(0.2), cz - m(0.05)], m(0.05), m(0.05), timber);
+    solid.beam([x + m(0.45), 0, z + m(0.3)], [x + m(0.1), cy + m(0.2), cz - m(0.05)], m(0.05), m(0.05), timber);
+    solid.beam([x, 0, z - m(0.35)], [x, cy, cz - m(0.1)], m(0.05), m(0.05), timber);
+
+    // (Its face, tipped back: a disc of straw and its rings, each a little out from the last)
+    const disc = (r, out, name) => {
+        const points = Array.from({ length: 16 }, (_, k) => {
+            const a = (k / 16) * TAU;
+
+            return [x + Math.cos(a) * r, cy + Math.sin(a) * r, cz + out - Math.sin(a) * r * 0.2];
+        });
+
+        solid.facing(points, [0, 0.2, 1], material(name));
+    };
+
+    disc(m(0.48), 0, "thatch");
+    solid.facing(Array.from({ length: 16 }, (_, k) => [x + Math.cos((-k / 16) * TAU) * m(0.48), cy + Math.sin((-k / 16) * TAU) * m(0.48), cz - m(0.1) - Math.sin((-k / 16) * TAU) * m(0.48) * 0.2]), [0, -0.2, -1], material("thatch"));
+    disc(m(0.36), m(0.01), "paint-cream");
+    disc(m(0.25), m(0.02), "paint-blue");
+    disc(m(0.15), m(0.03), "paint-red");
+    disc(m(0.06), m(0.04), "paint-gold");
+
+    // (Two arrows in it)
+    for (const [dx, dy] of [[0.08, 0.12], [-0.14, -0.05]]) {
+        solid.beam([x + m(dx), cy + m(dy), cz + m(0.04)], [x + m(dx) + m(0.05), cy + m(dy) + m(0.06), cz + m(0.6)], m(0.015), m(0.015), material("timber-light"));
+        solid.box(x + m(dx) + m(0.035), cy + m(dy) + m(0.04), cz + m(0.5), x + m(dx) + m(0.065), cy + m(dy) + m(0.08), cz + m(0.62), material("paint-red"));
+    }
+}
+
+// A hide stretched on its frame to dry: two posts and two rails, the hide laced to them
+function frame(solid, x, z, random, under = null) {
+    const timber = material("timber");
+    const top = highest(1.72, under);
+    const hide = material(random.pick(["hide", "hide-dark", "leather"]));
+
+    for (const side of [-1, 1]) {
+        solid.box(x + side * m(0.65) - m(0.05), 0, z - m(0.05), x + side * m(0.65) + m(0.05), top, z + m(0.05), timber);
+    }
+
+    solid.box(x - m(0.7), top - m(0.1), z - m(0.05), x + m(0.7), top, z + m(0.05), timber);
+    solid.box(x - m(0.7), m(0.25), z - m(0.05), x + m(0.7), m(0.35), z + m(0.05), timber);
+
+    const [hi, lo] = [top - m(0.22), m(0.47)];
+    const middle = (hi + lo) / 2;
+    // (Round to its corners where it's laced: no corner of it turned in, so it's one face)
+    const outline = [[-0.42, hi], [0, hi + m(0.05)], [0.42, hi], [0.52, middle], [0.42, lo], [0, lo - m(0.05)], [-0.42, lo], [-0.52, middle]].map(([dx, y]) => [x + m(dx), y, z + m(0.07)]);
+
+    solid.facing(outline, [0, 0, 1], hide);
+    solid.facing([...outline].reverse().map(([px, py, pz]) => [px, py, pz - m(0.02)]), [0, 0, -1], hide);
+
+    // (Its lacing, from its points out to the frame)
+    for (const [dx, y, tx, ty] of [[-0.42, hi, -0.6, top - m(0.1)], [0.42, hi, 0.6, top - m(0.1)], [-0.42, lo, -0.6, m(0.35)], [0.42, lo, 0.6, m(0.35)], [-0.52, middle, -0.6, middle], [0.52, middle, 0.6, middle]]) {
+        solid.beam([x + m(dx), y, z + m(0.06)], [x + m(tx), ty, z + m(0.04)], m(0.012), m(0.012), material("rope"));
+    }
+}
+
+// Hides piled on a trestle, folded, and a pair of boots on the ground by it
+function hides(solid, x, z, random) {
+    const timber = material("planks-dark");
+
+    for (const side of [-1, 1]) {
+        solid.beam([x + side * m(0.5), 0, z - m(0.25)], [x + side * m(0.5), m(0.7), z], m(0.05), m(0.05), timber);
+        solid.beam([x + side * m(0.5), 0, z + m(0.25)], [x + side * m(0.5), m(0.7), z], m(0.05), m(0.05), timber);
+    }
+
+    solid.box(x - m(0.65), m(0.7), z - m(0.28), x + m(0.65), m(0.76), z + m(0.28), timber);
+
+    let y = m(0.76);
+
+    for (let k = 0; k < 4; k++) {
+        const [w, d, h] = [m(random.range(0.9, 1.15)), m(random.range(0.4, 0.5)), m(random.range(0.05, 0.08))];
+        const dx = m(random.range(-0.06, 0.06));
+
+        solid.box(x + dx - w / 2, y, z - d / 2, x + dx + w / 2, y + h, z + d / 2, material(random.pick(["hide", "hide-dark", "leather", "fur", "fur-grey"])));
+        y += h;
+    }
+
+    // (A pair of boots)
+    for (const dx of [0.75, 0.95]) {
+        solid.box(x + m(dx) - m(0.06), 0, z - m(0.05), x + m(dx) + m(0.06), m(0.32), z + m(0.08), material("leather"));
+        solid.box(x + m(dx) - m(0.06), 0, z + m(0.08), x + m(dx) + m(0.06), m(0.09), z + m(0.22), material("leather"));
+    }
+}
+
+// Bolts of cloth stood on end in a rack, each its own colour, a rail across them
+function bolts(solid, x, z, random, under = null) {
+    const timber = material("timber");
+    const top = highest(1.3, under);
+
+    solid.box(x - m(0.8), 0, z - m(0.2), x + m(0.8), m(0.08), z + m(0.2), timber);
+
+    for (const side of [-1, 1]) {
+        solid.box(x + side * m(0.78) - m(0.04), 0, z - m(0.04), x + side * m(0.78) + m(0.04), top, z + m(0.04), timber);
+    }
+
+    solid.box(x - m(0.8), top - m(0.3), z - m(0.2), x + m(0.8), top - m(0.25), z - m(0.14), timber);
+
+    const cloths = random.shuffle(["velvet", "velvet-purple", "wool-blue", "wool-green", "wool-ochre", "linen", "war-red", "indigo", "silk", "cloth-gold"]);
+
+    for (let k = 0; k < 7; k++) {
+        const bx = x - m(0.6) + k * m(0.2);
+        const tall = top - m(random.range(0.02, 0.2));
+
+        solid.cylinder(bx, z, m(0.08), tall, m(0.085), m(0.085), material(cloths[k]), { segments: 8 });
+        solid.cylinder(bx, z, tall, tall + m(0.02), m(0.025), m(0.025), material("timber-light"), { segments: 5 });
+    }
+}
+
+// A tailor's dummy on its three feet, wearing a cloak of a good colour
+function dummy(solid, x, z, random, under = null) {
+    const timber = material("timber");
+    const top = highest(1.66, under);
+    const neck = top - m(0.06);
+
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * TAU;
+
+        solid.beam([x, m(0.25), z], [x + Math.cos(a) * m(0.3), 0, z + Math.sin(a) * m(0.3)], m(0.04), m(0.04), timber);
+    }
+
+    solid.cylinder(x, z, 0, neck - m(0.5), m(0.03), m(0.03), timber, { segments: 6 });
+    // (Its body, linen over its frame: broad at the shoulders, in at the waist)
+    solid.lathe(x, z, [[m(0.13), neck - m(0.62)], [m(0.16), neck - m(0.5)], [m(0.13), neck - m(0.35)], [m(0.17), neck - m(0.18)], [m(0.18), neck - m(0.08)], [m(0.06), neck], [0, neck]], material("linen"), { segments: 10 });
+    solid.cylinder(x, z, neck, top, m(0.035), m(0.035), timber, { segments: 6 });
+    // (The cloak, from its shoulders to its hem, open at the front)
+    solid.lathe(x, z + m(-0.02), [[m(0.34), m(0.42)], [m(0.28), neck - m(0.6)], [m(0.21), neck - m(0.25)], [m(0.19), neck - m(0.08)], [0, neck - m(0.04)]], material(random.pick(["velvet", "wool-blue", "wool-green", "velvet-purple", "war-red"])), { segments: 10 });
+    solid.cylinder(x, z + m(0.17), neck - m(0.12), neck - m(0.08), m(0.03), m(0.03), material("brass"), { segments: 6 });
+}
+
+// A jeweller's case on four legs: velvet under a sloping lid of glass propped open, rings and
+// stones on the velvet
+function jewelCase(solid, x, z, random) {
+    const wood = material("planks-dark");
+
+    for (const dx of [-0.55, 0.55]) {
+        for (const dz of [-0.2, 0.2]) {
+            solid.box(x + m(dx) - m(0.03), 0, z + m(dz) - m(0.03), x + m(dx) + m(0.03), m(0.85), z + m(dz) + m(0.03), wood);
+        }
+    }
+
+    solid.box(x - m(0.62), m(0.85), z - m(0.27), x + m(0.62), m(1.0), z + m(0.27), wood);
+    solid.box(x - m(0.56), m(1.0), z - m(0.21), x + m(0.56), m(1.01), z + m(0.21), material("velvet"));
+
+    for (let k = 0; k < 9; k++) {
+        const [jx, jz] = [x - m(0.45) + (k % 5) * m(0.22), z - m(0.1) + Math.floor(k / 5) * m(0.2)];
+
+        if (k % 2) {
+            solid.box(jx - m(0.03), m(1.01), jz - m(0.03), jx + m(0.03), m(1.05), jz + m(0.03), material(random.pick(["wine", "glass-green", "glass-violet", "jade", "maya-blue"])));
+        } else {
+            solid.cylinder(jx, jz, m(1.01), m(1.03), m(0.045), m(0.045), material(random.pick(["gold", "silver", "brass"])), { segments: 8 });
+        }
+    }
+
+    // (Its brass rim, and its lid of glass propped up behind)
+    solid.box(x - m(0.62), m(1.0), z + m(0.25), x + m(0.62), m(1.04), z + m(0.27), material("brass"));
+    solid.facing([[x - m(0.6), m(1.02), z - m(0.24)], [x + m(0.6), m(1.02), z - m(0.24)], [x + m(0.6), m(1.4), z - m(0.36)], [x - m(0.6), m(1.4), z - m(0.36)]], [0, 0.3, 1], material("glass-lit"));
+}
+
+// A jeweller's scales on a little table: a post, a beam across it, two pans hung from its ends,
+// a weight in one
+function scales(solid, x, z) {
+    const wood = material("planks-dark");
+
+    for (const dx of [-0.25, 0.25]) {
+        solid.box(x + m(dx) - m(0.03), 0, z - m(0.03), x + m(dx) + m(0.03), m(0.8), z + m(0.03), wood);
+    }
+
+    solid.box(x - m(0.35), m(0.8), z - m(0.22), x + m(0.35), m(0.86), z + m(0.22), wood);
+    solid.cylinder(x, z, m(0.86), m(1.3), m(0.02), m(0.02), material("brass"), { segments: 6 });
+    solid.box(x - m(0.3), m(1.28), z - m(0.012), x + m(0.3), m(1.31), z + m(0.012), material("brass"));
+
+    for (const side of [-1, 1]) {
+        solid.beam([x + side * m(0.28), m(1.28), z], [x + side * m(0.28), m(1.02), z], m(0.006), m(0.006), material("iron"));
+        solid.lathe(x + side * m(0.28), z, [[0, m(0.98)], [m(0.11), m(1.0)], [m(0.12), m(1.02)]], material("brass"), { segments: 10 });
+    }
+
+    solid.cylinder(x + m(0.28), z, m(1.0), m(1.05), m(0.03), m(0.025), material("iron-black"), { segments: 6 });
+}
+
+const PIECES = Object.freeze({ blades, whetstone, harness, shields, lectern, tomes, bottles, herbs, orb, bows, butt, frame, hides, bolts, dummy, case: jewelCase, scales });
 
 /**
  * What's set out before a shop's door (a SHOPFRONTS name): its two pieces either side of the

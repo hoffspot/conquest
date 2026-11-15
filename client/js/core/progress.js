@@ -27,6 +27,7 @@ import { blockMost, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearName, levelFacto
 import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
 import { BLOW_CAP, INGREDIENTS, MATERIALS, ON_BLOW } from "./materials.js";
+import { CRAFTERS } from "./recipes.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -239,8 +240,10 @@ const MASTER_SPECIAL = Object.freeze({ legendary: 1 });
  * wand or a grimoire; a quiver), armour (shields, and what's worn but jewellery), the arcane (wands
  * and grimoires, a spellward, a wizard's hat, tomes, scrolls and charms), jewellery, draughts (all
  * that's drunk but ale, and cures; not a bomb) and provisions (ale, a hot meal and bait for the
- * wild's beasts). The
- * adventurers' guild buys everything.
+ * wild's beasts); and what the crafters new with crafting make (core/recipes.js CRAFTERS): a
+ * bowyer's bows, staves and quivers, a leatherworker's leathers, a tailor's clothes. The
+ * adventurers' guild buys everything; a crafter the materials it sells too (SHOPS `materials`:
+ * buys).
  */
 export const LINES = Object.freeze({
     arms: (def) => (def.slot === "mainHand" && !def.magic) || Boolean(def.quiver),
@@ -249,11 +252,15 @@ export const LINES = Object.freeze({
     jewels: (def) => Boolean(def.jewel),
     draughts: (def) => Boolean(def.use && !def.slot && !def.part && !def.food && !def.tome && !def.scroll && !def.bomb && !def.bait && def.id !== "meal" && def.id !== "ale"),
     provisions: (def) => def.id === "meal" || def.id === "ale" || Boolean(def.bait),
+    bows: (def) => CRAFTERS.bowyer.makes.includes(def.id),
+    leathers: (def) => CRAFTERS.leatherworker.makes.includes(def.id),
+    clothes: (def) => CRAFTERS.tailor.makes.includes(def.id),
 });
 
 /**
  * What each shop sells (`items`: the things it keeps), and the best make it has of each (`best`);
- * what it buys (`line`: LINES); whether its stock is each day's (`daily`: so many things
+ * what it buys (`line`: LINES); the materials it sells and buys, a crafter's (`materials`:
+ * materials.js MATERIALS ids, common); whether its stock is each day's (`daily`: so many things
  * (`picks`), so many of each (`count`), of which makes, or as rare (`grades`), and its daily
  * special's (`special`), and what else may be its special as if it were of the rarest
  * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), how often it has a special
@@ -266,9 +273,17 @@ export const LINES = Object.freeze({
  *   occult scriptorium's tomes, scrolls and the arcane, an alchemist's draughts; better made than a
  *   blacksmith's, a new assortment each day, so many of each (as many as there are, for everyone
  *   who plays together), and a special, very rare or legendary.
+ * - **The crafters** new with crafting (docs/CRAFTING.md *The crafters*: core/recipes.js
+ *   CRAFTERS), in the villages, towns, cities and capitals that keep them (setpieces/town.js
+ *   craftersOf): a bowyer's bows, staves and quivers, a leatherworker's leathers, a tailor's
+ *   clothes and a jeweller's rings and amulets, as a specialist's are, each day's.
  * - **The masters**, one of each for each people: the Master Swordsmith's arms, the Master
  *   Armorer's armour, and the Mystic Emporium's tomes, jewellery, charms and the arcane: rare,
  *   very rare and legendary, at twice the price, and a legendary special.
+ * - **Every crafter** (the blacksmith, the specialists who make, the masters and the four new: a
+ *   CRAFTERS id) sells the materials it makes things of too (`materials`: CRAFTERS `sells`,
+ *   materials.js MATERIALS), common, on its shelves every day, plenty of each (core/stock.js
+ *   MATERIAL_COUNT; a blacksmith's as many as are wanted), and buys them back.
  * - **A castle's** quartermaster (its armoury: the arms and armour of war, up to legendary) and
  *   arcanist (the arcane and draughts); an abbey's herbalist (draughts, holy jewels and books of
  *   prayer); a people's watchtower's quartermaster (their own shop, not their part's: host.js
@@ -284,14 +299,18 @@ export const LINES = Object.freeze({
  *   some days a common treasure map or a charm, a little dearer than in town.
  */
 export const SHOPS = Object.freeze({
-    smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"] },
-    swordsmith: { items: ARMS, best: "veryRare", line: ["arms"], daily: { picks: 9, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL, always: ["sword"] } },
-    armorer: { items: ARMOUR, best: "veryRare", line: ["armour"], daily: { picks: 10, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
-    scriptorium: { items: [...ARCANA, ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "veryRare", line: ["arcana"], daily: { picks: 12, count: [1, 3], grades: { common: 0.2, ...SPECIALIST }, special: SPECIALIST_SPECIAL } },
+    smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"], materials: CRAFTERS.smith.sells },
+    swordsmith: { items: ARMS, best: "veryRare", line: ["arms"], materials: CRAFTERS.swordsmith.sells, daily: { picks: 9, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL, always: ["sword"] } },
+    armorer: { items: ARMOUR, best: "veryRare", line: ["armour"], materials: CRAFTERS.armorer.sells, daily: { picks: 10, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
+    scriptorium: { items: [...ARCANA, ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "veryRare", line: ["arcana"], materials: CRAFTERS.scriptorium.sells, daily: { picks: 12, count: [1, 3], grades: { common: 0.2, ...SPECIALIST }, special: SPECIALIST_SPECIAL } },
     alchemist: { items: DRAUGHTS, best: "veryRare", line: ["draughts"], daily: { picks: 12, count: [2, 6], grades: { common: 0.5, ...SPECIALIST }, special: SPECIALIST_SPECIAL, always: ["staminaDraught", "staminaBoost"] } },
-    masterSwordsmith: { items: ARMS, best: "legendary", line: ["arms"], markup: 2, daily: { picks: 7, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL, always: ["sword"] } },
-    masterArmorer: { items: ARMOUR, best: "legendary", line: ["armour"], markup: 2, daily: { picks: 8, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL } },
-    emporium: { items: [...ARCANA, "amulet", "ring", ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "legendary", line: ["arcana", "jewels"], markup: 2, daily: { picks: 10, count: [1, 2], grades: MASTER, special: MASTER_SPECIAL, specials: [tomeOf("explosion")] } },
+    bowyer: { items: CRAFTERS.bowyer.makes, best: "veryRare", line: ["bows"], materials: CRAFTERS.bowyer.sells, daily: { picks: 5, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL, always: ["bow"] } },
+    leatherworker: { items: CRAFTERS.leatherworker.makes, best: "veryRare", line: ["leathers"], materials: CRAFTERS.leatherworker.sells, daily: { picks: 8, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
+    tailor: { items: CRAFTERS.tailor.makes, best: "veryRare", line: ["clothes"], materials: CRAFTERS.tailor.sells, daily: { picks: 6, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
+    jeweller: { items: CRAFTERS.jeweller.makes, best: "veryRare", line: ["jewels"], materials: CRAFTERS.jeweller.sells, daily: { picks: 4, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
+    masterSwordsmith: { items: ARMS, best: "legendary", line: ["arms"], markup: 2, materials: CRAFTERS.masterSwordsmith.sells, daily: { picks: 7, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL, always: ["sword"] } },
+    masterArmorer: { items: ARMOUR, best: "legendary", line: ["armour"], markup: 2, materials: CRAFTERS.masterArmorer.sells, daily: { picks: 8, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL } },
+    emporium: { items: [...ARCANA, "amulet", "ring", ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "legendary", line: ["arcana", "jewels"], markup: 2, materials: CRAFTERS.emporium.sells, daily: { picks: 10, count: [1, 2], grades: MASTER, special: MASTER_SPECIAL, specials: [tomeOf("explosion")] } },
     armoury: { items: ["sword", "hammer", "greatsword", "axe", "bow", "gauntlets", "quiver", "roundShield", "kiteShield", "towerShield", "nasalHelm", "gambeson", "mail", "plate", "platedGloves", "greaves", "sabatons", ...UNIFORM], best: "legendary", line: ["arms", "armour"] },
     arcane: { items: ["wand", "grimoire", "staff", "spellward", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork", line: ["arcana", "jewels", "draughts"] },
     abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork", line: ["draughts", "jewels", "arcana"] },
@@ -314,13 +333,13 @@ export const SMITH_MAKES = Object.freeze([["common", "fine"], ["common", "fine"]
  * weapons, what's held in the off hand, what's worn, jewellery, things to eat, drink and cure
  * with, tomes and scrolls, and the spoils of the wild.
  */
-export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", charm: "Charms", supplies: "Food, drink and draughts", tome: "Tomes and scrolls", spoils: "Spoils of the wild" });
+export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields and off hand", worn: "Clothes and armour", jewel: "Jewellery", charm: "Charms", supplies: "Food, drink and draughts", tome: "Tomes and scrolls", material: "Materials for crafting", spoils: "Spoils of the wild" });
 
 /** Which of WARE_KINDS a thing is (its id). */
 export function wareKind(id) {
     const def = ITEMS[id];
 
-    return !def ? "supplies" : def.tome || def.scroll || def.map ? "tome" : def.part ? "spoils" : def.charm ? "charm" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
+    return !def ? "supplies" : def.tome || def.scroll || def.map ? "tome" : def.part ? "spoils" : def.material ? "material" : def.charm ? "charm" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
 }
 
 /** Whether a thing comes in every make (QUALITIES), as gear and charms do; else it's only ever common. */
@@ -350,12 +369,13 @@ export function shopOrder(a, b) {
 
 /**
  * Whether a shop buys a thing (its id): the adventurers' guild everything, the creatures' parts
- * too; any other, only its own line (SHOPS `line`: LINES).
+ * too; any other, only its own line (SHOPS `line`: LINES), and a crafter the materials it sells
+ * (SHOPS `materials`).
  */
 export function buys(shop, id) {
     const def = ITEMS[id];
 
-    return shop === "guild" || Boolean(def && SHOPS[shop]?.line?.some((line) => LINES[line]({ ...def, id })));
+    return shop === "guild" || Boolean(def && (SHOPS[shop]?.line?.some((line) => LINES[line]({ ...def, id })) || SHOPS[shop]?.materials?.includes(id)));
 }
 
 /** What sells for what (a share of its price), before haggling. */
@@ -829,15 +849,17 @@ export function priceOf({ id, quality = "common", boost = null, level = 1 }, { h
 
 /**
  * What a shop has for sale ([{ id, quality, people }]): each thing it keeps, common, and better
- * made as far as it goes; a uniform's pieces, its own people's (`people`: whose shop it is).
- * (What's rolled on a better made one is rolled as it's bought, as a wand's boost is.)
+ * made as far as it goes; a uniform's pieces, its own people's (`people`: whose shop it is); and
+ * the materials it sells, a crafter's (SHOPS `materials`). (What's rolled on a better made one is
+ * rolled as it's bought, as a wand's boost is. A shop with a daily stock has in what core/stock.js
+ * dailyStock says, of these.)
  */
 export function wares(shop, people = "human", { tier = null } = {}) {
-    const { items, best, tiered } = SHOPS[shop] ?? { items: [], best: "common" };
+    const { items, best, tiered, materials = [] } = SHOPS[shop] ?? { items: [], best: "common" };
     const makes = tiered && tier !== null ? SMITH_MAKES[Math.max(0, Math.min(SMITH_MAKES.length - 1, Math.floor(tier)))] : Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
     const maker = UNIFORM_PEOPLES.includes(people) ? people : "human";
 
-    return items.flatMap((id) => (comesInMakes(id) ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }]));
+    return [...items.flatMap((id) => (comesInMakes(id) ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }])), ...materials.map((id) => ({ id, quality: "common" }))];
 }
 
 /** A make, as likely as MAKES has it (random.js random), each exceptional one less likely for an easy kill (`falloff`: fallenOff). */

@@ -512,4 +512,40 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "A squat urn of black stone, glowing green within, set in a sanctum by a Tomb Lord to hold the souls of those buried there. While two of them stand he takes only half the harm of any blow, and the dead rise from them to fight for him: shatter them.",
         sign: "shards of black stone, cold to the touch, a faint green light fading in them",
     }),
+    mythrilGolem: Object.freeze({
+        lore: "A golem of the Stone Golem's kind, smaller, its stone veined silver-blue with mythril, walking the mountains, snows and tundra far out and the caves under them. No one made it that anyone knows of: the old songs say the mountains make them, where the mythril runs thick. It swings its hammer, pounds the ground and hurls boulders at whoever keeps off. Broken, it gives up its mythril, and now and then a sapphire grown in its chest. No blast moves it, and earth harms it little.",
+        sign: "deep footprints in the scree, glinting silver-blue where the stone's scraped",
+    }),
+    adamantiteGolem: Object.freeze({
+        lore: "A golem as big as the Stone Golem, mossed over and dark green-black, of the burning lands, the badlands and the mountains furthest out, and the caves under them. Adamantite is the hardest thing there is, and so is it. It fights as the Stone Golem does, hammer, pound and boulder. A diamond is grown in the heart of one in eight or so.",
+        sign: "a boulder torn out whole, and the rock round the hole scored dark green",
+    }),
+    orichalcumColossus: Object.freeze({
+        lore: "Half as tall again as the Stone Golem, its stone shot through with red-gold orichalcum that glows like embers in its cracks, the colossus walks alone in the burning lands at their furthest, and in the River of Fire in the hells. The drowned kings' crowns were made of what it's made of. It fights as the golems do, hammer, pound and boulder. Broken, it gives up its orichalcum, and now and then the star ruby in its chest.",
+        sign: "footprints a stride apart, the ash in each still warm",
+    }),
+    gildedScarab: Object.freeze({
+        lore: "A beetle of the cat folk's wilds as long as a man, its shell gold, real gold, grown out of whatever it eats. They go about in twos to fours, bite and rear up to strike down, and their bite can carry a sickness. The cat folk say they're the sun's own, and won't hunt them; others do, for the gold.",
+        sign: "a gleam of gold flaked off on a stone, and small round balls of dung rolled in a line",
+    }),
+    ironbarkTreant: Object.freeze({
+        lore: "A treant of the orcs' wilds, its bark grey and as hard as iron, as tall again as a man. It lets no one near, slamming down its limbs and calling up roots that hold whoever they catch. An axe turns on it. Felled, its wood sinks in water and turns an axe, and the orcs' shield makers pay well for it. No blast moves it.",
+        sign: "an axe's head snapped off and left lying among grey roots",
+    }),
+    ghostwoodTreant: Object.freeze({
+        lore: "A pale treant you can almost see through, walking the dark woods and the marshes only by night, far out, and standing in the ancient temples' dark where its roots have broken the floor. Its wood is cold and whispers. It lets no one near, slamming down its limbs and calling up roots. By day there's only a pale dead tree where it stood.",
+        sign: "a pale dead tree that wasn't there yesterday, frost on its bark",
+    }),
+    sylvanAncient: Object.freeze({
+        lore: "A tree of the elves' wilds older than the elves, silver-barked and half as tall again as any treant, walking alone at the very edges of their lands. The elves leave it be, and ask whoever's hunting it to. It lets no one near, slamming down its limbs and calling up roots. Felled, its wood is as light as a reed and stronger than steel, and its sap golden and sweet. No blast moves it.",
+        sign: "a ring of saplings in a clearing, all of one silver kind",
+    }),
+    gloomweaver: Object.freeze({
+        lore: "A black widow grown half as big again and violet-black, of the dark elves' wilds at their furthest and the deepest galleries of the ants' nests. It spins between the dark trees a web whose thread catches whatever it touches, and hunts at its edges, biting and pouncing with a venom of its own, worse than any common poison. It sees in the dark.",
+        sign: "a web as wide as a house strung between two trees, its thread violet-black",
+    }),
+    moonMoth: Object.freeze({
+        lore: "A moth as big as a horse, white as the moon, out only by night over the elves' woods and the meadows at their furthest. The elves say it spins its silk of moonlight. It stings, and dives in from above to drive its sting home, venomous. Its wings shed a glittering dust, and what's spun of its silk glows.",
+        sign: "a glittering dust on the grass, and a pale wing's scale as big as a hand",
+    }),
 });

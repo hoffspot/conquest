@@ -14,8 +14,8 @@ first of which is this page and the data and pure rules it describes:
 
 - `client/js/core/materials.js`: the ingredients (`INGREDIENTS`, and the commoner ones sold at the
   shops, `MATERIALS`), the powers they bring (`FAMILIES`, `RANGES`, `MAKE_STRENGTH`), the new
-  blows (`ON_BLOW`, `BLOW_CAP`, `UNHOLY`), and the creatures to come and what they'll leave
-  (`NEW_BEASTS`, `MORE_SPOILS`).
+  blows (`ON_BLOW`, `BLOW_CAP`, `UNHOLY`), and the new creatures, what each borrows and what it
+  leaves (`NEW_BEASTS`: in the world since stage 3, *New beasts*).
 - `client/js/core/recipes.js`: a recipe for every piece (`RECIPES`), the crafters (`CRAFTERS`),
   which settlements keep which (`CRAFTER_TOWNS`), what gear broken down gives back (`SALVAGE`),
   and the fee (`CRAFT_FEE`).
@@ -25,7 +25,7 @@ first of which is this page and the data and pure rules it describes:
   fee), what a pack's short of (`lackingIn`), the piece made (`craftItem`), what gear broken down
   gives back (`salvageOf`, `salvagesAt`, `junkSalvage`), and where an ingredient comes from and
   what it's used for (`sourcesOf`, `usesOf`).
-- The new creatures' parts in core/spoils.js `PARTS` (fifteen, none of them left by anything yet),
+- The new creatures' parts in core/spoils.js `PARTS` (fifteen, each left by something since stage 3),
   the sold materials in core/progress.js `ITEMS` (`material: true`), and their pictures in
   app/icons.js (two new kinds, a cut `gem` and a `bolt` of cloth).
 - `test/crafting.test.js`.
@@ -43,8 +43,10 @@ Stage 2 put its rules in the game, the host's to run the same on every copy of t
 
 Stage 5 put it before the player (*What the player sees*, below; docs/GAME.md *Crafting*): a
 crafter's Craft tab, breaking down, an ingredient's card, the bestiary's parts in their makes'
-colours, the new blows seen, and sounds for making and breaking down. Stages 3 and 4 put the new
-creatures in the world and the materials on the crafters' shelves.
+colours, the new blows seen, and sounds for making and breaking down. Stage 3 put the new beasts
+in the world, and what they and some creatures there were leave (*New beasts*); stage 4 the four
+new crafters' shops in the settlements that keep them, their keepers and their "What can you
+make?", and the materials on every crafter's shelves (*The crafters*).
 
 ## How a piece is made
 
@@ -152,9 +154,9 @@ of any make put in it (a test holds it).
 
 - **Sold** (the commoner grades, common and fine, and only those): at the crafters
   (`CRAFTERS` `sells`), each what it works with. Nothing finer is ever sold.
-- **Off the wild's creatures**: the parts they've always left (core/spoils.js `SPOILS`), and the
-  new ones, off creatures to come and some more off those there are (`NEW_BEASTS`, `MORE_SPOILS`:
-  stage 3). The rarest from the hardest foes: every legendary ingredient only off the perilous
+- **Off the wild's creatures**: the parts they've always left, and the new ones, off the new
+  beasts and some more off those there were (core/spoils.js `SPOILS`, since stage 3: *New beasts*).
+  The rarest from the hardest foes: every legendary ingredient only off the perilous
   (the Dreadthorn, the drake, the Behemoth, the frost troll, Ashkhar, the Stone Golem of
   Harrowstone, and the new colossus, ancient and moon moth), every very rare one only off
   creatures met as far out as the ninth tier, every rare one the eighth (a test holds it).
@@ -176,12 +178,12 @@ part)" a creature's part new with this.
 | `rustedMail` | Rusted mail rings | common | keen | 10 | ingot, `#4e4a42` | off: Draugr, Dirge warden, Bloat gorger, Pit ravager | Rings of a barrow's old mail, rusted together. Beaten out again, rust and all, it still bites. |
 | `steelIngot` (new) | Steel ingot | fine | might | 24 | ingot, `#a9b4bf` | sold: smith, swordsmith, armorer, masterSwordsmith, masterArmorer; salvage | Iron folded with charcoal till it holds an edge and bends without breaking. |
 | `silverIngot` (new) | Silver ingot | fine | holy | 30 | ingot, `#d8dde4` | sold: swordsmith, jeweller, masterSwordsmith, masterArmorer, emporium | Pure silver. The restless dead and the werewolf shrink from it. |
-| `blackSteelIngot` (new part) | Black steel ingot | masterwork | keen | 40 | ingot, `#2a2c30` | to come off: Orc raider, Orc reaver, Orc warlord, Orc champion, Orc King; salvage | The orcs' own steel, quenched in blood and oil, black as a crow's wing. It takes a wicked edge. |
-| `goldIngot` (new part) | Gold ingot | masterwork | luck | 45 | ingot, `#e8b830` | to come off: Gilded scarab, Goblin King, Bandit chief, Drake | Soft, heavy and bright. Too soft to fight in alone, but gold calls to gold, they say. |
-| `mythrilIngot` (new part) | Mythril ingot | rare | swift | 80 | ingot, `#8ac8f0` | to come off: Mythril golem; salvage | Silver-blue, light as a feather and harder than steel: what a mythril golem is made of. |
+| `blackSteelIngot` (new part) | Black steel ingot | masterwork | keen | 40 | ingot, `#2a2c30` | off: Orc raider, Orc reaver, Orc warlord, Orc champion, Orc King; salvage | The orcs' own steel, quenched in blood and oil, black as a crow's wing. It takes a wicked edge. |
+| `goldIngot` (new part) | Gold ingot | masterwork | luck | 45 | ingot, `#e8b830` | off: Gilded scarab, Goblin King, Bandit chief, Drake | Soft, heavy and bright. Too soft to fight in alone, but gold calls to gold, they say. |
+| `mythrilIngot` (new part) | Mythril ingot | rare | swift | 80 | ingot, `#8ac8f0` | off: Mythril golem; salvage | Silver-blue, light as a feather and harder than steel: what a mythril golem is made of. |
 | `graveIron` | Grave-iron | rare | shadow | 60 | ingot, `#3a3f4a` | off: Wight lord, Dirge warden, Forge brute | Iron from a barrow king's grave goods, cold to the touch however long it's held. |
-| `adamantiteIngot` (new part) | Adamantite ingot | very rare | might | 160 | ingot, `#2e5a48` | to come off: Adamantite golem; salvage | Dark green-black, the hardest thing there is: it blunts every file in the forge. |
-| `orichalcumIngot` (new part) | Orichalcum ingot | legendary | might | 340 | ingot, `#e07a30` | to come off: Orichalcum colossus; salvage | Red-gold and warm to the touch, the metal of the drowned kings' crowns. Nothing made by hands is finer. |
+| `adamantiteIngot` (new part) | Adamantite ingot | very rare | might | 160 | ingot, `#2e5a48` | off: Adamantite golem; salvage | Dark green-black, the hardest thing there is: it blunts every file in the forge. |
+| `orichalcumIngot` (new part) | Orichalcum ingot | legendary | might | 340 | ingot, `#e07a30` | off: Orichalcum colossus; salvage | Red-gold and warm to the touch, the metal of the drowned kings' crowns. Nothing made by hands is finer. |
 
 #### Woods
 
@@ -194,9 +196,9 @@ part)" a creature's part new with this.
 | `yewWood` (new) | Yew wood | fine | might | 20 | wood, `#b0582e` | sold: scriptorium, bowyer, masterSwordsmith | Heartwood and sapwood together, as a longbow wants it. |
 | `mahoganyWood` (new) | Mahogany | fine | luck | 22 | wood, `#6e2a1a` | sold: bowyer | Red jungle wood brought up the rivers: rich men's furniture, and a lucky grip. |
 | `heartwood` | Blighted heartwood | masterwork | arcane | 25 | wood, `#5a4a3a` | off: Blighted treant; salvage | The black heart of a blighted treant, still faintly warm. It drinks spells like water. |
-| `ironwood` (new part) | Ironwood | rare | might | 70 | wood, `#4a4a4e` | to come off: Ironbark treant; salvage | Grey wood as heavy as iron, from the ironbark treants of the orcs' lands. It sinks, and it turns an axe. |
-| `ghostwood` (new part) | Ghostwood | very rare | shadow | 150 | wood, `#c8dce8` | to come off: Ghostwood treant; salvage | Pale wood you can almost see through, from a tree that walks at night. It's cold, and it whispers. |
-| `sylvanwood` (new part) | Sylvanwood | legendary | swift | 330 | wood, `#c8d8b0` | to come off: Sylvan ancient; salvage | Silver-barked wood from an ancient of the elves' forests, light as a reed and stronger than steel. |
+| `ironwood` (new part) | Ironwood | rare | might | 70 | wood, `#4a4a4e` | off: Ironbark treant; salvage | Grey wood as heavy as iron, from the ironbark treants of the orcs' lands. It sinks, and it turns an axe. |
+| `ghostwood` (new part) | Ghostwood | very rare | shadow | 150 | wood, `#c8dce8` | off: Ghostwood treant; salvage | Pale wood you can almost see through, from a tree that walks at night. It's cold, and it whispers. |
+| `sylvanwood` (new part) | Sylvanwood | legendary | swift | 330 | wood, `#c8d8b0` | off: Sylvan ancient; salvage | Silver-barked wood from an ancient of the elves' forests, light as a reed and stronger than steel. |
 
 #### Cloths
 
@@ -208,12 +210,12 @@ part)" a creature's part new with this.
 | `spiderSilk` | Spider silk | fine | swift | 6 | silk, `#e8e8f0` | off: Cave spider, Dungeon spider, Elite dungeon spider, Black widow, Egg sac | A spider's thread, wound off by the yard: fine, light and strong as wire. |
 | `mareHair` | Mare's hair | fine | binding | 9 | silk, `#2a2430` | off: Mare | Black hair from a mare's mane, the stuff of bad dreams. Woven, it holds. |
 | `sackFace` | Hodmedod's sack face | fine | luck | 12 | silk, `#b89c6a` | off: Hodmedod | A hodmedod's sacking face, stitched eyes and all. Scarecrows are lucky, for some. |
-| `widowSilk` (new part) | Black widow silk | masterwork | venom | 22 | silk, `#2a2430` | to come off: Black widow; salvage | Black, glossy thread from a black widow's spinnerets, stronger than steel wire and bitter with venom. |
+| `widowSilk` (new part) | Black widow silk | masterwork | venom | 22 | silk, `#2a2430` | off: Black widow; salvage | Black, glossy thread from a black widow's spinnerets, stronger than steel wire and bitter with venom. |
 | `spectralVeil` | Spectral veil | masterwork | arcane | 16 | silk, `#c8dcea` | off: Restless ghost | A ghost's veil, cold and weightless. Spells pass through it as it passes through walls. |
 | `kelpieMane` | Kelpie's mane | masterwork | frost | 18 | silk, `#2a5a3a` | off: Kelpie | Weed-green hair from a kelpie's mane, forever damp and as cold as the loch. |
 | `wraithShroud` | Wraith's shroud | rare | shadow | 26 | silk, `#24202c` | off: Wraith; salvage | A wraith's shroud, black as a moonless night: whoever wears it is hard to make out. |
-| `gloomsilk` (new part) | Gloomsilk | very rare | binding | 150 | silk, `#3a2a5a` | to come off: Gloomweaver; salvage | Violet-black thread from a gloomweaver's web. Whatever it touches is caught. |
-| `moonsilk` (new part) | Moonsilk | legendary | holy | 320 | silk, `#e8f0ff` | to come off: Moon moth; salvage | Spun from moonlight by the moon moth, the elves say: it glows, and nothing unholy bears its touch. |
+| `gloomsilk` (new part) | Gloomsilk | very rare | binding | 150 | silk, `#3a2a5a` | off: Gloomweaver; salvage | Violet-black thread from a gloomweaver's web. Whatever it touches is caught. |
+| `moonsilk` (new part) | Moonsilk | legendary | holy | 320 | silk, `#e8f0ff` | off: Moon moth; salvage | Spun from moonlight by the moon moth, the elves say: it glows, and nothing unholy bears its touch. |
 
 #### Leathers
 
@@ -232,7 +234,7 @@ part)" a creature's part new with this.
 | `direPelt` | Dire wolf pelt | fine | vigour | 12 | pelt, `#2e2c2e` | off: Dire wolf | Thick black fur from a dire wolf. |
 | `bullHide` | Wild bull's hide | fine | vigour | 12 | hide, `#e8e2d4` | off: Wild bull | A wild bull's white hide, as thick as a door. |
 | `hartHide` | Hart hide | fine | vigour | 8 | hide, `#8a5634` | off: Hart | Supple red-brown deerskin. |
-| `carapace` | Carapace plate | fine | might | 7 | plate, `#b89458` | off: Giant centipede, Great centipede, Dungeon scorpion, Giant cockroach, Sand scorpion; to come off: Gilded scarab | A plate of a great insect's shell, light and as hard as horn. |
+| `carapace` | Carapace plate | fine | might | 7 | plate, `#b89458` | off: Giant centipede, Great centipede, Dungeon scorpion, Giant cockroach, Sand scorpion, Gilded scarab | A plate of a great insect's shell, light and as hard as horn. |
 | `cobraSkin` | Cobra skin | fine | venom | 10 | skin, `#6a5a40` | off: Spitting cobra | A spitting cobra's banded skin. |
 | `poisonSkin` | Poison frog skin | fine | venom | 8 | skin, `#5a7a2a` | off: Bog frog | Bright, slick skin from a poison frog. Handle it with gloves. |
 | `ahuizotlPelt` | Ahuizotl pelt | fine | frost | 14 | pelt, `#16161a` | off: Ahuizotl | Sleek black fur from the water-dog of the lizard folk's swamps, never dry. |
@@ -275,11 +277,11 @@ part)" a creature's part new with this.
 | `nightmareShard` | Nightmare shard | masterwork | shadow | 20 | shard, `#d0a8ff` | off: Mare | A splinter of a mare's dream, violet and cold. |
 | `geodeHeart` | Geode heart | rare | arcane | 30 | core, `#c080ff` | off: Rock tusker | Violet crystal from inside a rock tusker, where its heart should be. |
 | `soulShard` | Soul shard | rare | blood | 32 | shard, `#8affc0` | off: High priest of the cult, Wraith, Fiend, Greater demon, Demon lord, Vharzul the Greenflame, Cerberus, Ashmaw, Demon Boss, Ashkhar the Bellbound, Ossuary priest, Flayed hierarch, Chained glutton, Gorger warlord, Pit henchman, Brimstone walker, Ash walker, Hellwalker, Bile walker, Soul jar | Green crystal with a soul caught in it, faintly singing. |
-| `sapphire` (new part) | Sapphire | rare | frost | 80 | gem, `#2a5ad8` | to come off: Mythril golem; salvage | Deep blue and as cold as a winter lake, grown in a mythril golem's chest. |
+| `sapphire` (new part) | Sapphire | rare | frost | 80 | gem, `#2a5ad8` | off: Mythril golem; salvage | Deep blue and as cold as a winter lake, grown in a mythril golem's chest. |
 | `crownShard` | Wight crown shard | very rare | shadow | 120 | shard, `#c8a840` | off: Wight lord, Flayed hierarch, Gorger warlord, Pit henchman | A shard of a wight's crown, gold and dark stone. |
-| `diamond` (new part) | Diamond | very rare | holy | 170 | gem, `#eef6ff` | to come off: Adamantite golem; salvage | The clearest and hardest of stones, from an adamantite golem's heart. It shines even in the dark. |
+| `diamond` (new part) | Diamond | very rare | holy | 170 | gem, `#eef6ff` | off: Adamantite golem; salvage | The clearest and hardest of stones, from an adamantite golem's heart. It shines even in the dark. |
 | `blightCrystal` | Blighted crystal shard | legendary | arcane | 260 | shard, `#8a4ad0` | off: Stone golem | A splinter of the flawed crystal at the Stone Golem of Harrowstone's heart, dark with the blight in it. |
-| `starRuby` (new part) | Star ruby | legendary | fire | 360 | gem, `#d81a3a` | to come off: Orichalcum colossus; salvage | A ruby with a six-rayed star in it, from an orichalcum colossus's chest. It's warm, and it never dims. |
+| `starRuby` (new part) | Star ruby | legendary | fire | 360 | gem, `#d81a3a` | off: Orichalcum colossus; salvage | A ruby with a six-rayed star in it, from an orichalcum colossus's chest. It's warm, and it never dims. |
 
 #### Essences
 
@@ -318,11 +320,11 @@ part)" a creature's part new with this.
 | `knuckerFang` | Knucker fang | fine | frost | 12 | fang, `#efe6d0` | off: Knucker | A water dragon's fang, cold and wet. |
 | `witchStraw` | Bewitched straw | fine | binding | 7 | wood, `#d8b860` | off: Hodmedod | Straw from a hodmedod, bewitched: it twitches. |
 | `wispEssence` | Wisp essence | fine | holy | 12 | essence, `#9ae8ff` | off: Will-o'-wisp | A will-o'-wisp's light in a bottle. |
-| `ectoplasm` | Ectoplasm | fine | arcane | 12 | gel, `#a8e8e0` | off: Restless ghost; to come off: Ghostwood treant | A ghost's ectoplasm, cold and clinging. |
+| `ectoplasm` | Ectoplasm | fine | arcane | 12 | gel, `#a8e8e0` | off: Restless ghost, Ghostwood treant | A ghost's ectoplasm, cold and clinging. |
 | `blightCap` | Blight cap | fine | venom | 12 | fungus, `#8a4a9a` | off: Blighted treant | A violet toadstool off a blighted treant. |
 | `mandrakeRoot` | Mandrake root | fine | mending | 8 | wood, `#a88a5e` | off: Mandrake | A mandrake root, shaped like a little man. It screams when it's cut. |
 | `houndEar` | Red hound's ear | fine | luck | 9 | ear, `#a82a20` | off: Hound of Annwn | A red hound's ear: it still twitches at a sound. |
-| `pixieDust` | Pixie dust | fine | arcane | 9 | dust, `#7ae8a8` | off: Pixie swarm; to come off: Moon moth | A pinch of glittering pixie dust. |
+| `pixieDust` | Pixie dust | fine | arcane | 9 | dust, `#7ae8a8` | off: Pixie swarm, Moon moth | A pinch of glittering pixie dust. |
 | `antler` | Hart's antler | fine | holy | 10 | tusk, `#d8c8a4` | off: Hart | A hart's antler. The white hart's are holy, they say, and some of it rubs off on the rest. |
 | `venomGland` | Venom gland | fine | venom | 8 | gland, `#8a2020` | off: Cave spider, Dungeon spider, Elite dungeon spider | A spider's venom gland. |
 | `olmGills` | Olm gills | fine | frost | 6 | gland, `#d8807e` | off: Cave olm | A cave olm's pink, feathery gills. |
@@ -344,7 +346,7 @@ part)" a creature's part new with this.
 | `stoneTusk` | Stone tusk | masterwork | might | 22 | tusk, `#b8b0a0` | off: Rock tusker | A rock tusker's stone tusk. |
 | `chimeraHorn` | Chimera's horn | masterwork | might | 26 | tusk, `#9a8a70` | off: Chimera | A chimera's goat horn. |
 | `nightglowGland` | Nightglow gland | masterwork | storm | 22 | gland, `#ff6040` | off: Elite dungeon spider | An elite spider's glowing gland, bright as a lantern and crackling. |
-| `widowGland` | Black widow's venom gland | masterwork | venom | 18 | gland, `#c81818` | off: Black widow; to come off: Gloomweaver | A black widow's venom gland. Its venom cramps as it burns. |
+| `widowGland` | Black widow's venom gland | masterwork | venom | 18 | gland, `#c81818` | off: Black widow, Gloomweaver | A black widow's venom gland. Its venom cramps as it burns. |
 | `barrowRing` | Barrow ring | masterwork | luck | 24 | charm, `#c8a840` | off: Draugr | A gold ring off a draugr's finger. Whoever it was, they were rich. |
 | `wyvernSting` | Wyvern sting | rare | venom | 30 | sting, `#d8ccaa` | off: Wyvern | A wyvern's tail sting, as long as a knife. |
 | `kelpieBridle` | Kelpie's bridle | rare | binding | 40 | charm, `#9ab8a8` | off: Kelpie | A kelpie's bridle: whoever holds it is its master. |
@@ -363,7 +365,7 @@ part)" a creature's part new with this.
 | `frostHeart` | Frost heart | legendary | frost | 140 | heart, `#80d0ff` | off: Frost troll, Ashkhar the Bellbound | A heart of blue ice, that never melts. |
 | `riftSpine` | Glowing dorsal spine | legendary | storm | 320 | shard, `#40ff90` | off: Behemoth of the Rift, Rift stalker | A dorsal spine off the Behemoth, still glowing. |
 | `riftHeart` | Heart of the Behemoth | legendary | storm | 1200 | heart, `#3ad0ff` | off: Behemoth of the Rift | The Heart of the Behemoth of the Rift, lightning caught in it. |
-| `ancientSap` (new part) | Ancient's sap | legendary | mending | 300 | gel, `#e8a830` | to come off: Sylvan ancient | Golden sap from a sylvan ancient, sweet as honey: the life of a tree a thousand years old. |
+| `ancientSap` (new part) | Ancient's sap | legendary | mending | 300 | gel, `#e8a830` | off: Sylvan ancient | Golden sap from a sylvan ancient, sweet as honey: the life of a tree a thousand years old. |
 
 ## Powers
 
@@ -564,8 +566,9 @@ crafter: what's dearer at a master's is what they sell, not their work.
 | Plate armour (180 gold), level 1 | 90 | 270 | 720 | 1260 | 1890 | 2700 |
 | Gloves (6 gold), level 1 | 3 | 9 | 24 | 42 | 63 | 90 |
 
-**The ingredients' own.** A sold material's price is what a crafter asks for it (stage 4 puts it on
-the shelves, a shop's markup on top as for anything); a creature's part's is what the guild pays,
+**The ingredients' own.** A sold material's price is what a crafter asks for it (on its shelves:
+progress.js `SHOPS` `materials`, a master's markup on top as for anything, twice); a creature's
+part's is what the guild pays,
 as it always was. The new parts are priced by their make, as the old ones were by their creature:
 masterwork 22 to 45 gold, rare 70 to 80, very rare 150 to 170, legendary 300 to 360. So the
 Adamantite Demon Sword's ingredients are worth 230 gold and its fee, at the 60th level, 503; a
@@ -573,7 +576,7 @@ very rare sword bought from a swordsmith's shelves, rolled by chance, would be a
 
 ## The crafters
 
-Each crafter is a shop (core/progress.js `SHOPS` id; the four new ones stage 4 adds): what it
+Each crafter is a shop (core/progress.js `SHOPS` id; the four new ones stage 4 added): what it
 makes, the finest make it works to (`best`: none of a finer main material, and nothing finer
 broken down; in a capital, the legendary, below), what it sells to make things with, and how many
 rows its list has.
@@ -615,6 +618,63 @@ rows its list has.
   it by too: the start's, for a building at home; never a site's, a castle's or a pedlar's out in
   the world). A master's list is the same anywhere.
 
+### The shops
+
+The four new crafters are shops as the specialists are (stage 4):
+
+- **What they sell** (progress.js `SHOPS`): what each makes (`CRAFTERS` `makes`), a new
+  assortment each day as a specialist's, fine to very rare (`grades`, as a swordsmith's), and a
+  daily special, very rare or legendary (core/stock.js `dailyStock`): a bowyer 5 things a day
+  (always a bow among them), a leatherworker 8, a tailor 6, a jeweller 4, 1 to 3 of each.
+- **The materials on every crafter's shelves** (`SHOPS` `materials`: `CRAFTERS` `sells`), the
+  smith's, the specialists' who make (not the alchemist's), the masters' and the four new: each
+  common, under "Materials for crafting" (`WARE_KINDS` `material`). A blacksmith's as many as are
+  asked for, as all its wares are; a shop with a daily stock 10 to 20 of each every day
+  (`MATERIAL_COUNT`), for everyone who plays together, worked out after its other wares and its
+  special, so they're as they'd be without them (`dailyStock`'s `materials`; host.js `stockOf`
+  puts them on its shelves after the rest).
+- **What they buy** (`LINES`, `buys`): what they make (`bows`, `leathers`, `clothes`, a jeweller's
+  `jewels`), and every crafter the materials it sells.
+- **Inside** (core/insides.js `SHOP_INSIDES`, world/interiors3d.js `shop`, `shopWares`): a room 18
+  by 12 metres as every shop's, its counter and keeper, and its trade's own. A bowyer's bows hung
+  strung on racks along the walls, staves leant below, shelves of quivers, two tables of bows,
+  staves, a quiver, a hatchet and a basket of fletchings, shaving benches with saws and mallets. A leatherworker's hides stretched
+  on frames along the walls, shelves of leathers, belts and boots, cutting tables with sheepskins,
+  boards and mallets, a jerkin on its stand, benches with knives and dye, a tub of tan. A tailor's
+  shelves of bolts of every colour, two dummies in gowns or cloaks, cutting tables with a bolt
+  unrolled, cloth folded, shears and baskets of thread. A jeweller's shelves of caskets, cups and
+  plate, two cases of rings and stones on velvet under a propped lid of glass, benches with a
+  candle and a bowl of stones. What there's a model of in the catalog is one (a hatchet, a saw, a
+  mallet, a sheepskin, a board, a knife, baskets, cups, a ewer, candleholders); the rest (bows,
+  staves, quivers, hides, bolts, dummies, rings) the game's own art.
+- **Their keepers**: a Bowyer (dressed as an apprentice, in a leather apron), a Leatherworker (as
+  a smith), a Tailor and a Jeweller (as an innkeeper, in good plain cloth), each shop named by its
+  keeper ("Rowe's Bows", "Rowe's Leathers", "Rowe's Tailoring", "Rowe's Jewels"), "the bowyer's"
+  and the rest before they're met. Each talks as the specialists do (core/dialogue.js
+  `keeperTree`: of their trade, and of today's special).
+- **"What can you make?"**: every crafter's keeper is asked it, the smith's (and a castle's
+  smith, who makes as a smith) and the specialists' and masters' who make too, not the
+  alchemist's (`commissionOf`: the talk ends on it, as on buying). Its effect is `{ commission:
+  <the crafter: a CRAFTERS id> }`, handed to the game; app/game.js opens the keeper's shop on its
+  Craft tab once the talk's over (`shopWanted` with `tab: "craft"`: *What the player sees*). The
+  host keeps it as it keeps any effect of talk, and does nothing with it.
+- **Their buildings** (setpieces/pieces.js `CRAFTER_SHOPS`, `SHOP_LANDMARKS`): a house made over
+  (*Which settlements keep which*), gone into by its door as the specialists' are. Outside
+  (art/kits/shopfront.js `SHOPFRONTS`), their names on their boards ("Bowyer", "Leatherworker",
+  "Tailor", "Jeweller"), their signs (new emblems, kits/emblems.js: a longbow and arrow, a
+  stretched hide, a tailor's shears, a ring and its stone) and what's set out by the door: a rack
+  of bows and a straw butt with two arrows in it; a hide laced on its frame and hides piled on a
+  trestle by a pair of boots; bolts of cloth in a rack and a dummy in a cloak; a jeweller's case
+  under its propped lid and its scales. The humans' built of the licensed house kit each in a
+  look of its own (art/kits/kitshop.js `SHOP_LOOKS`): the bowyer's yew-orange plaster under
+  shingles, olive and buff stripes; the leatherworker's umber, half-hipped in red tiles, brown and
+  tan; the tailor's madder rose, three jettied storeys, its gable to the street, rose and white;
+  the jeweller's lapis blue over stone, hipped in slate, lapis and gold (new tints, painters.js
+  `TINTS`; new stripes, cloth.js `SHOP_AWNINGS`); without the licensed models, the game's own in
+  those walls, roofs and storeys. Every other people's built as their specialists' are, by their
+  own kits.
+- **On the maps** (app/mapicons.js): a bow and arrow, a stretched hide, shears, a ring.
+
 ### Which settlements keep which
 
 `CRAFTER_TOWNS`: the four new crafters, each a house near the market made over as the specialists'
@@ -633,6 +693,24 @@ So the capital has every crafter but the masters, and wants none of theirs: ever
 works to the legendary (*The crafters*, the owner's ruling). The masters stay where they are
 (worldplan/settle.js `masterShops`: each people's one of each in a village, town or city of theirs,
 never their capital), the legendary there too, away from a capital.
+
+How they're placed (setpieces/town.js `craftersOf`, stage 4):
+
+- **Which**, by the settlement's kind and its seed (`layoutTown`'s), from a random of their own
+  (`createRandom(seed * 29 + 3)`), so nothing else of the layout changes: `always`, and `count`
+  of `some` shuffled. The same place always keeps the same ones.
+- **Where**: each the house nearest the market whose door opens onto a street, on dry land if
+  one can be (failing that, over a lagoon with its doorstep on a walk; failing that, a building
+  behind the street's houses), as the specialists' are; made over in place, its style and storeys
+  kept. They're made over last, after the specialists', a master's and the stable, so every
+  building those chose is chosen as it was, and the ids and seeds of every landmark are as they
+  were. **A world laid out before keeps every building it had**, each where it stood: only a few
+  of its houses near the market are shops now (`test/shops.test.js` lays places out with and
+  without them, `crafters: []`, and finds nothing else changed).
+- **A place too small**: none where it would leave the place `CRAFTER_SPARE` houses (3) or fewer,
+  along its streets and behind them (some lizard folk's and dark elves' villages of two or three
+  houses), and the place is never laid out again for one: it does without. Every village, town
+  and city of the humans', and every capital of every people's, has room.
 
 ## Salvage
 
@@ -657,34 +735,103 @@ does: the same marks, the same question first, all of it or nothing.
 
 ## New beasts
 
-Nine creatures, so every rarer ingredient has one to come off (stage 3). Each borrows a body and a
-fight from one there is, drawn in its own colour and size (beasts/model.js `MODELS`, the borrowed
-model's skin where it has one that suits: the Stone Golem's model's ember, moss and frost skins were
-kept "for something rarer"; beasts/looks.js `LOOKS` its stand-in), and has its own entry in both,
-by its own id, and a catalog key of its own waiting (`model`): a model bought for it later is put in
-by its entry's `asset`, and nothing of the rules changes.
+Nine creatures, so every rarer ingredient has one to come off (stage 3: in the game). Each borrows
+a body and a fight from one there is, drawn in its own colour and size (beasts/model.js `MODELS`,
+the borrowed model's skin where it has one that suits: the Stone Golem's model's ember, moss and
+frost skins were kept "for something rarer"; beasts/looks.js `LOOKS` its stand-in), and has its own
+entry in both, by its own id, and a catalog key of its own waiting (`model`): a model bought for it
+later is put in by its entry's `asset`, and nothing of the rules changes (*Its own model, later*,
+below). The owner's ruling: "Use existing models recolored but also allow for additional, specific
+purchased models to be added in the future."
 
 | Id | Name | Body (borrowed, tint, size) | Its own model, to come | Tiers | Met | Leaves |
 | --- | --- | --- | --- | --- | --- | --- |
 | `mythrilGolem` | Mythril golem | Stone golem (`stoneGolem`), its `frost` skin, `#8ac8f0`, ×0.8 | `beast-mythril-golem` | 6 to 9 | mountain, snow, tundra; dungeons: caves | Mythril ingot 60% ×1–2, Sapphire 15% |
 | `adamantiteGolem` | Adamantite golem | Stone golem (`stoneGolem`), its `moss` skin, `#2e5a48`, ×1 | `beast-adamantite-golem` | 8 to 10 | volcanic, badlands, mountain; dungeons: caves | Adamantite ingot 55% ×1–2, Diamond 12% |
-| `orichalcumColossus` | Orichalcum colossus | Stone golem (`stoneGolem`), its `ember` skin, `#e07a30`, ×1.6 | `beast-orichalcum-colossus` | 10 to 10, perilous | volcanic; dungeons: hell | Orichalcum ingot 60% ×1–2, Star ruby 15% |
-| `gildedScarab` | Gilded scarab | Giant cockroach (`giantCockroach`), `#e8b830`, ×1.4 | `beast-gilded-scarab` | 3 to 7 | the cat folk's lands' wilds | Gold ingot 35%, Carapace plate 40% |
+| `orichalcumColossus` | Orichalcum colossus | Stone golem (`stoneGolem`), its `ember` skin, `#e07a30`, ×1.6 | `beast-orichalcum-colossus` | 10 to 10, perilous | volcanic; dungeons: hell (the River of Fire) | Orichalcum ingot 60% ×1–2, Star ruby 15% |
+| `gildedScarab` | Gilded scarab | Giant cockroach (`giantCockroach`), `#e8b830`, ×1.4 | `beast-gilded-scarab` | 3 to 7 | the cat folk's lands' wilds | Gold ingot 12%, Carapace plate 40% |
 | `ironbarkTreant` | Ironbark treant | Blighted treant (`treant`), `#4a4a4e`, ×1.1 | `beast-ironbark-treant` | 6 to 9 | the orcs' lands' wilds | Ironwood 50% ×1–2 |
 | `ghostwoodTreant` | Ghostwood treant | Blighted treant (`treant`), `#c8dce8`, ×1.15 | `beast-ghostwood-treant` | 8 to 10, night only | darkwood, marsh; dungeons: ancient | Ghostwood 50%, Ectoplasm 35% |
-| `sylvanAncient` | Sylvan ancient | Blighted treant (`treant`), `#c8d8b0`, ×1.6 | `beast-sylvan-ancient` | 10 to 10, perilous | the elves' lands' wilds | Sylvanwood 60% ×1–2, Ancient's sap 30% |
+| `sylvanAncient` | Sylvan ancient | Blighted treant (`treant`), `#c8d8b0`, ×1.6 | `beast-sylvan-ancient` | 8 to 10, perilous | the elves' lands' wilds | Sylvanwood 60% ×1–2, Ancient's sap 30% |
 | `gloomweaver` | Gloomweaver | Black widow (`blackWidow`), `#3a2a5a`, ×1.5 | `beast-gloomweaver` | 8 to 10, perilous | the dark elves' lands' wilds; dungeons: nest | Gloomsilk 60% ×1–2, Black widow's venom gland 50% |
-| `moonMoth` | Moon moth | Dungeon wasp (`dungeonWasp`), `#e8f0ff`, ×2.2 | `beast-moon-moth` | 10 to 10, perilous, night only | elfwood, meadow | Moonsilk 50%, Pixie dust 50% ×1–2 |
+| `moonMoth` | Moon moth | Dungeon wasp (`dungeonWasp`), `#e8f0ff`, ×2.2 | `beast-moon-moth` | 8 to 10, perilous, night only | elfwood, meadow | Moonsilk 50%, Pixie dust 50% ×1–2 |
 
-Each fights as the creature it borrows from (its `weapon`, its moves, its temper), its hit points
-and harm as its tiers have them (creatures.js `TIER_GROWTH`); none of them a world's boss. Those
-out only at night as the bats are (`night: "only"`). Stage 3 adds each to creatures.js
-`CREATURES`, spoils.js `SPOILS`, the wilds' and the dungeons' tables (core/wilds.js,
-core/director.js, core/dungeons/themes.js `packs`), the bestiary's lore (core/lore/bestiary.js
-`BESTIARY_LORE`, for its *What it is*), and the tests that hold every creature to its model and
-stand-in (`test/model.test.js`).
+Each fights as the creature it borrows from (its `weapon`, its moves, its temper, its hit points at
+the first tier, its armour, what harm it keeps off, how it bleeds), its hit points and harm as its
+tiers have them (creatures.js `TIER_GROWTH`); none of them a world's boss. Those out only at night
+as the bats are (`night: "only"`), and see in the dark as the night's own do. They're in
+creatures.js `CREATURES` (at its end), spoils.js `SPOILS`, the wilds' tables (creatures.js
+`candidatesAt`: their lands and tiers) and the dungeons' (core/dungeons/themes.js `packs`), the
+fresh tracks' (core/director.js `TRACKLESS`: the moon moth leaves none), the bestiary's lore
+(core/lore/bestiary.js `BESTIARY_LORE`), their voices (audio/sound.js `CREATURE_VOICES`, the
+borrowed creature's family, lower as each is bigger: audio/catalog.js says so), their prints
+(world/tracks3d.js: the golems' the Stone Golem's), and the model viewer (*The crafters' quarry*).
+`test/crafting.test.js`, `test/creatures.test.js` and `test/model.test.js` hold them to
+materials.js `NEW_BEASTS`.
 
-And more off creatures there are (`MORE_SPOILS`, stage 3 too):
+What was decided where the table didn't say:
+
+- **Met out in the wilds though perilous** (creatures.js `abroad`, as the frost troll is; it was
+  `id === "frostTroll"`): the colossus, the ancient, the gloomweaver and the moon moth. Perilous,
+  they're met alone (pack 1), never an elite, and their fall's told across the screen; the rest
+  keep the borrowed creature's pack (a gilded scarab's two to four, a giant cockroach's).
+- **The sylvan ancient and the moon moth from the eighth tier, not the tenth.** The tenth tier is
+  only ever reached in the mountains, snows and burning lands far out (creatures.js `TIER_LAND`);
+  no people's lands but the orcs' come to it, and the elves' woods and the meadows never go past
+  the eighth (measured over six worlds' plans), so at 10 to 10 neither would ever have been met.
+  At 8 to 10 each is met at the eighth (`test/creatures.test.js` holds that every one of the nine
+  is met in seed 2's world). The gloomweaver, 8 to 10 as planned, is met at the eighth too.
+- **The gloomweaver doesn't lurk** (the black widow's `lurk`): it's met in the open, with no roof
+  to hang from, and a creature's ways are the same wherever it's met.
+- **Hit points** are the borrowed creature's at the first tier, as the table's "fights as" has it,
+  but for the two perilous foes whose kind is small: the gloomweaver has 80 (a black widow's 54)
+  and the moon moth 70 (a dungeon wasp's 26, which would have been 82 at the eighth tier, the
+  weakest of the perilous by far for the legendary cloth). With them they stand with the frost
+  troll (75), the wight lord (70) and the sylvan ancient (80).
+- **Their colour on a borrowed model** (beasts/model.js `TINT`, the entry's `tint`): the model's
+  pictures' light and shade kept, gentler (the square root of how light each point is), in the
+  tint's colour, 85% of the way from its own, in its own copy of each material; a colour multiplied
+  in would leave a dark model (a cockroach, a black widow) as dark as it was. A skin's glow (the
+  ember skin's) is left as it is. Their stand-ins are coloured in their own looks.
+- **The balance runner** (`npm run balance -- --tiers 5,8 --seeds 2,3,4,5,6,7 --sides solo,four`,
+  24 fights each, before and after): at the fifth tier nothing changed. At the eighth, where the
+  golems and treants are met now, a player alone lost 292 hit points a fight where they'd lost
+  246 (562 a minute where 499), fell 0.29 times a fight where 0.25, and won 17 of 24 where 18;
+  four together lost 279 each where 233, fell 1.54 times where 1.33, and won 15 where 16, fewer
+  foes coming at them (5.8 where 7.1: a golem or a treant alone, where a pack was). The golems
+  hit as the Stone Golem does, a world's boss's blows, at the tier they're met: a `hp` and a
+  weapon of their own would soften them, if that's too much.
+- **Where in the dungeons**: the caves' packs a mythril golem or an adamantite golem, alone; the
+  ancient temples' a ghostwood treant; the ants' nests' a gloomweaver; a hell's River of Fire an
+  orichalcum colossus. `DUNGEON_VERSION` 18 → 19, as what a seed makes changed.
+
+### Its own model, later
+
+Each new beast's `MODELS` entry is made by `quarryModel` (beasts/model.js): its own model once one's
+been bought for it and the catalog has it, else the borrowed one, recoloured and resized (or, a
+treant's kind, which has no model, none: its stand-in), and it names its own model to come either
+way (`own`). `test/model.test.js` holds that each names `beast-<its id>`, that the catalog has none
+yet, and that its own is drawn only once both are there. To give one its own bought model:
+
+1. Bring the model in as `.claude/skills/import-licensed-model/SKILL.md` says (licence first,
+   the pipeline, scrambled into `hoffspot/conquest-models`), under its own catalog key, the one
+   materials.js `NEW_BEASTS` names (`beast-mythril-golem`; its skins, if it has any, as
+   `beast-mythril-golem-skins`), and in `.gitignore`, `client/models/beasts/LICENSE.md`,
+   `README.md`, `NOTICE.md`, `docs/LICENSED_MODELS.md`, `contribution.md`'s list and
+   `test/scramble.test.js` as every licensed model is.
+2. Write its entry in beasts/model.js `OWN_MODELS`, by its id (`mythrilGolem`), as any of `MODELS`'
+   is, from the model: its `asset` (its own key), how long and tall it's made and drawn, its clips
+   for each of the borrowed creature's ways (weapons.js `NATURAL`'s `animation`s: the golems'
+   `smash`, `sweep`, `pound` and `heave`, the treants' `melee` and `roots`...), its joints, its
+   pace. No `tint`: it's drawn in its own colours. Each of its clips and bones is checked against
+   the model (`test/model.test.js`, with `LICENSED_MODELS=required`).
+3. If its clips time its blows otherwise, give it a weapon of its own (weapons.js `NATURAL`, and
+   creatures.js `weapon`), as each bought model's is; nothing else in the rules changes.
+4. `npm run build:manifest`, its stand-in left as it is (it's drawn till the model's read), its
+   line in the model viewer (lab/model-viewer.js `ABOUT`) and in docs/WILDS.md saying it's its own.
+
+And more off creatures there were, in their `SPOILS` since stage 3 (materials.js's `MORE_SPOILS`,
+which planned it, is gone, and crafting.js `sourcesOf` reads `SPOILS` alone):
 
 | Creature | Leaves besides |
 | --- | --- |
@@ -740,9 +887,9 @@ Stage 5 (docs/GAME.md *Crafting*, for the player's view of it):
   count shown sent: `salvageJunk`).
 - **Opened on its Craft tab** by the game's `openCrafting(keeper)` (app/game.js), or by a talk's
   `shopWanted` with `tab: "craft"` (#endTalk opens it once the talk's over, as a shop's wares are).
-  Stage 4's "What can you make?" (core/dialogue.js `keeperTree`) does that: its effect handled in
-  the talk's `onEffect` as `{ shop }`'s is, setting `this.shopWanted = { shop: keeps, keeper:
-  npc.id, name: npc.name, tab: "craft" }`.
+  A crafter's keeper's "What can you make?" (core/dialogue.js `commissionOf`) does that: its
+  `commission` effect handled in the talk's `onEffect` as `{ shop }`'s is, setting
+  `this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name, tab: "craft" }`.
 - **Told**: `crafted` and `brokenDown` heard (app/game.js `HOST_EVENTS`): "Made for you: Steel Demon
   Sword, for 45 gold. It's in your pack.", the anvil rung and the work quenched (`anvil`, `hiss`);
   "You break down your junk, 3 things: back come 4 iron ingots.", a hammer's crush (`crush`): the
@@ -825,8 +972,14 @@ server has a field of that name already.
 **The versions** (contribution.md, section 3):
 
 - `NET_VERSION` 230 → 231, once, in stage 2: new commands in lockstep, and the battle's rules
-  change (the new blows), and with stages 3 and 4 the world's creatures and its towns. One bump
-  for the one pull request.
+  change (the new blows), and with stages 3 and 4 the world's creatures and its towns (stage 4:
+  its crafters' shops made over from houses, their doorsteps opened, the materials on the shelves,
+  and a body of a battle that was gone coming back once it's reinforced, core/engagement.js). One
+  bump for the one pull request. Nothing else guards a town's layout: there's no version of the
+  world plan's or a town's, `TERRAIN_VERSION` is the ground's (a town's ground, its streets and
+  what stands where are as they were) and `DUNGEON_VERSION` a dungeon's.
+- `DUNGEON_VERSION` 18 → 19, in stage 3: the dungeons' packs have the new beasts in them, so what
+  a seed makes changed (a dungeon kept by 18 is made again from its seed, core/dungeons/build.js).
 - `SNAPSHOT_VERSION` stays 54 and `SAVE_VERSION` 2: what's made is gear as it's kept now (its
   `name`, its `bonuses`, its `effect`), only with bonuses that are new; kept only where they're
   set, and absent they mean nothing, so there's nothing for a step to fill in; an older game
@@ -848,17 +1001,20 @@ server has a field of that name already.
 3. **The new beasts.** The nine in creatures.js, spoils.js, the wilds and the dungeons, their
    models (borrowed, by their own ids) and stand-ins, their lore; `MORE_SPOILS` into `SPOILS`
    (then taken out of materials.js, `sourcesOf` reading `SPOILS` alone); the bestiary's count
-   (97 → 106) where docs/GAME.md says it; tests (model.test.js, creatures.test.js, the balance
-   runner for their tiers: `npm run balance`).
-4. **The shops and the towns.** The four new crafters in `SHOPS` (their wares: what they sell,
-   `CRAFTERS` `sells`, and what they make, as the specialists sell theirs; the lines they buy:
-   materials, and what they make), the materials on the crafters' shelves; their buildings
-   (setpieces/pieces.js, as `SPECIALISTS` are, by `CRAFTER_TOWNS`, made over from houses near the
-   market and nothing else moved, so a world laid out before keeps every building it had), their
-   insides and keepers (core/insides.js `SHOP_INSIDES`, `NAMES`), their keepers' talk
-   (core/dialogue.js `keeperTree`, with a "What can you make?" that opens the crafting), their signs
-   and awnings; every crafter's keeper able to make (the specialists' and the masters' too); tests
-   (shops, insides, town, dialogue).
+   where docs/GAME.md says it (it said 97, where there were 127 kinds: 136 now); tests
+   (model.test.js, creatures.test.js, the balance runner for their tiers: `npm run balance`).
+   Done: *New beasts* says what was decided.
+4. **The shops and the towns** (done: *The shops*, *Which settlements keep which*). The four new
+   crafters in `SHOPS` (their wares: what they sell, `CRAFTERS` `sells`, and what they make, as
+   the specialists sell theirs; the lines they buy: materials, and what they make), the materials
+   on the crafters' shelves; their buildings (setpieces/pieces.js `CRAFTER_SHOPS`, by
+   `CRAFTER_TOWNS`: town.js `craftersOf`, made over from houses near the market and nothing else
+   moved, so a world laid out before keeps every building it had), their insides and keepers
+   (core/insides.js `SHOP_INSIDES`, `NAMES`), their keepers' talk (core/dialogue.js `keeperTree`,
+   with a "What can you make?", `commissionOf`, that opens the crafting), their signs, awnings
+   and map icons; every crafter's keeper asked it (the smith's, the specialists' and the masters'
+   too); tests (test/shops.test.js, test/stock.test.js, and the expectations of the others that
+   counted the shops, in its commit).
 5. **What the player sees** (done: *What the player sees*). The pack's crafting (a crafter's list
    by piece and material, missing ingredients greyed, a slot's choices from what's carried, the
    piece shown first: make, name, powers and their ranges, effect, fee, worth; Craft), breaking
@@ -893,7 +1049,14 @@ server has a field of that name already.
 - **Strength**: a legendary ingredient 2.5 times a common one's power, and the blows each up to
   0.4 of a blow's harm, all gear together.
 - **The new beasts**: nine, golems, treants, a spider, a scarab, a moth, borrowing models there
-  are; the moon moth a perilous foe at the tenth tier for the legendary cloth.
+  are; the moon moth a perilous foe for the legendary cloth, met at the eighth tier, not the
+  tenth, as no elfwood or meadow is further out than that (and the sylvan ancient so too: *New
+  beasts*). Each has the hit points of the creature it borrows but the gloomweaver (80) and the
+  moon moth (70), given as many as the other perilous foes met in the wilds, so the very rare and
+  legendary cloth are hard won. A gilded scarab goes in a giant cockroach's packs (two at the
+  third tier, four by the seventh) and leaves a gold ingot one time in eight (12%), so a fight
+  with them leaves about a quarter of an ingot at the third tier and two thirds of one at the
+  seventh.
 - **Holy fire harms only the unholy**, at twice the others' range; shadow harms all but them.
 - **Every creature's part is an ingredient** but what's eaten, so none is only for selling now.
 - **Names in capitals**, as the owner wrote "Adamantite Demon Sword", where the game's own

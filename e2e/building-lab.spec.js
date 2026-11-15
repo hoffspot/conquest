@@ -147,17 +147,17 @@ test("builds the taverns with their names and signs, the guild, the churches of 
     });
 
     // (Four taverns, the guild, a church of each grade and build, the smithy, the market hall,
-    // the windmill, a town hall, a keep, two barracks and a guardhouse, two stables, and the seven
-    // shops)
-    expect(built.stats.pieces).toBe(26);
+    // the windmill, a town hall, a keep, two barracks and a guardhouse, two stables, and the
+    // eleven shops)
+    expect(built.stats.pieces).toBe(30);
     expect(built.stats.calls).toBeLessThan(80);
 
     // Each tavern's name on its board and its sign by the door, the guild's, the churches'
     // patrons' signs, the town hall's board and sign, the keep's crown, the barracks' and
     // guardhouse's boards and shields, and each shop's board and sign
-    expect(built.names.filter((name) => name.startsWith("board ")).length).toBe(15);
+    expect(built.names.filter((name) => name.startsWith("board ")).length).toBe(19);
     expect(built.names.filter((name) => name.startsWith("sign ")).length).toBeGreaterThanOrEqual(19);
-    expect(built.names).toEqual(expect.arrayContaining(["board swordsmith", "sign swordsmith", "board alchemist", "sign alchemist", "board emporium", "sign emporium", "board masterArmorer", "sign masterArmorer"]));
+    expect(built.names).toEqual(expect.arrayContaining(["board swordsmith", "sign swordsmith", "board alchemist", "sign alchemist", "board emporium", "sign emporium", "board masterArmorer", "sign masterArmorer", "board bowyer", "sign bowyer", "board jeweller", "sign jeweller"]));
     expect(built.names).toEqual(expect.arrayContaining(["board Barracks", "sign Barracks", "board Guardhouse", "sign Guardhouse"]));
     expect(built.names).toContain("sign guild");
     expect(built.names).toContain("sign blacksmith");
@@ -196,12 +196,12 @@ test("builds every shop in its own look on lots of every size, of the house kit 
         return { stats: window.buildingLab.state.stats, names: [...names], meshes, green, address: location.search };
     });
 
-    // (The seven shops on five lots each: each its board and its sign, its awnings and a master's
-    // banners in the breeze)
-    expect(built.stats.pieces).toBe(35);
+    // (The eleven shops on five lots each: each its board and its sign, its awnings and a
+    // master's banners in the breeze)
+    expect(built.stats.pieces).toBe(55);
     expect(built.address).toBe("?seed=7&show=shops");
 
-    for (const name of ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium"]) {
+    for (const name of ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium", "bowyer", "leatherworker", "tailor", "jeweller"]) {
         expect(built.names).toEqual(expect.arrayContaining([`board ${name}`, `sign ${name}`]));
     }
 

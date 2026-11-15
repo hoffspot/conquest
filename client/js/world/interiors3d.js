@@ -6525,11 +6525,12 @@ const BARRACKS_WALLS = Object.freeze([
     { role: "shield", x: 16.6, z: 14, turn: Math.PI, y: 1.4, most: [0.6, 0.8] },
 ]);
 
-// --- The specialists' and the masters' shops (core/insides.js SHOP_INSIDES: docs/WAR.md *Shops*) ---
+// --- The specialists', the crafters' and the masters' shops (core/insides.js SHOP_INSIDES: docs/WAR.md *Shops*) ---
 
 // Each shop's look inside (its map's `look`: the shop's kind): its walls' finish, its counter's
-// cloth, what's on its shelves (phials and jars, books and scrolls, or the gear it sells), its
-// banners' cloth and trim (a master's), and whether its rug's laid up from the door
+// cloth, what's on its shelves (phials and jars, books and scrolls, the gear it sells, a
+// crafter's quivers, leathers, bolts of cloth or caskets), its banners' cloth and trim (a
+// master's), and whether its rug's laid up from the door
 const SHOP_LOOKS = Object.freeze({
     swordsmith: { walls: "stone", cloth: "leather", shelves: "hilts", rug: "rug" },
     armorer: { walls: "stone", cloth: "wool-blue", shelves: "helms", rug: "rug" },
@@ -6538,12 +6539,31 @@ const SHOP_LOOKS = Object.freeze({
     masterSwordsmith: { walls: "stone", cloth: "velvet", shelves: "hilts", rug: "rug", banner: ["velvet", "cloth-gold"] },
     masterArmorer: { walls: "stone", cloth: "velvet", shelves: "helms", rug: "rug", banner: ["velvet", "cloth-gold"] },
     emporium: { walls: "plaster-white", cloth: "velvet-purple", shelves: "curios", rug: "rug", banner: ["velvet-purple", "cloth-gold"] },
+    bowyer: { walls: "plaster", cloth: "wool-green", shelves: "quivers", rug: "rug" },
+    leatherworker: { walls: "stone", cloth: "linen", shelves: "leathers", rug: "rug" },
+    tailor: { walls: "plaster-white", cloth: "velvet", shelves: "bolts", rug: "rug" },
+    jeweller: { walls: "plaster-white", cloth: "velvet-purple", shelves: "caskets", rug: "rug" },
 });
+
+// A run of squares against a wall (a plan's piece along it, as a shop's shelves and racks are),
+// in art pixels: the way it runs (`along`: east, else south), how long it is, and `at(u, d)`, the
+// point `u` along it and `d` out from the wall into the room ([x, z])
+function wallRun(piece) {
+    const along = piece.w >= piece.h;
+    const side = along ? (piece.y === 0 ? "n" : "s") : piece.x === 0 ? "w" : "e";
+    const origin = { n: [m(piece.x), m(piece.y)], s: [m(piece.x), m(piece.y + 1)], w: [m(piece.x), m(piece.y)], e: [m(piece.x + 1), m(piece.y)] }[side];
+    const out = { n: [0, 1], s: [0, -1], w: [1, 0], e: [-1, 0] }[side];
+    const dir = along ? [1, 0] : [0, 1];
+
+    return { along, out, length: m(along ? piece.w : piece.h), at: (u, d) => [origin[0] + dir[0] * u + out[0] * d, origin[1] + dir[1] * u + out[1] * d] };
+}
 
 // Shelves against whichever wall they stand by (a run of squares along it: core/insides.js
 // SHOP_INSIDES), four boards up, and on them what the shop sells: phials and jars of every colour
 // (`phials`), books and scrolls (`books`), helms and gauntlets (`helms`), sheathed blades and
-// daggers (`hilts`), or a curio-seller's mix of them all (`curios`)
+// daggers (`hilts`), a curio-seller's mix of them all (`curios`); a bowyer's quivers of arrows and
+// sheaves of shafts (`quivers`), a leatherworker's folded leathers, belts and boots (`leathers`), a
+// tailor's bolts of cloth (`bolts`), a jeweller's caskets, plate and cups (`caskets`)
 function wallShelves(solid, shelf, map, what) {
     const along = shelf.w >= shelf.h;
     const side = along ? (shelf.y === 0 ? "n" : "s") : shelf.x === 0 ? "w" : "e";
@@ -6597,6 +6617,47 @@ function wallShelves(solid, shelf, map, what) {
                 } else {
                     box(u - m(0.14), base, m(0.2), u + m(0.14), base + m(0.03), m(0.26), "iron");
                 }
+            } else if (kind === "quivers") {
+                // (A quiver standing, its arrows' fletchings over its mouth; or a sheaf of shafts
+                // laid along the board, bound)
+                if (pick < 0.6) {
+                    solid.cylinder(cx, cz, base, base + m(0.3), m(0.06), m(0.07), material(pick < 0.3 ? "leather" : "hide"), { segments: 8 });
+
+                    for (const [dx, dz] of [[-0.02, -0.02], [0.02, 0.01], [0, 0.03]]) {
+                        solid.box(cx + m(dx) - 0.06, base + m(0.3), cz + m(dz) - 0.06, cx + m(dx) + 0.06, base + m(0.42), cz + m(dz) + 0.06, material("timber-light"));
+                        solid.box(cx + m(dx) - 0.15, base + m(0.36), cz + m(dz) - 0.02, cx + m(dx) + 0.15, base + m(0.44), cz + m(dz) + 0.02, material(pick < 0.4 ? "war-red" : "linen"));
+                    }
+                } else {
+                    box(u - m(0.14), base, m(0.16), u + m(0.14), base + m(0.06), m(0.34), "timber-light");
+                    box(u - m(0.03), base, m(0.15), u + m(0.03), base + m(0.065), m(0.35), "rope");
+                }
+            } else if (kind === "leathers") {
+                // (Leathers folded in a pile, a belt coiled, or a pair of boots)
+                if (pick < 0.5) {
+                    box(u - m(0.13), base, m(0.1), u + m(0.13), base + m(0.06 + pick * 0.12), m(0.38), pick < 0.25 ? "leather" : "hide");
+                } else if (pick < 0.75) {
+                    solid.cylinder(cx, cz, base, base + m(0.05), m(0.08), m(0.08), material("leather", WALL), { segments: 10 });
+                    solid.cylinder(cx, cz, base + m(0.05), base + m(0.055), m(0.03), m(0.03), material("brass", WALL), { segments: 6 });
+                } else {
+                    box(u - m(0.11), base, m(0.12), u - m(0.02), base + m(0.22), m(0.22), "leather");
+                    box(u + m(0.02), base, m(0.12), u + m(0.11), base + m(0.22), m(0.22), "leather");
+                    box(u - m(0.11), base, m(0.22), u + m(0.11), base + m(0.07), m(0.34), "leather");
+                }
+            } else if (kind === "bolts") {
+                // (Bolts of cloth laid along the board, ends out, each its own colour)
+                const cloths = ["velvet", "wool-blue", "linen", "wool-green", "velvet-purple", "wool-ochre", "war-red", "silk", "indigo", "cloth-gold"];
+
+                box(u - m(0.13), base, m(0.05), u + m(0.13), base + m(0.16 + pick * 0.06), m(0.4), cloths[Math.floor(pick * 97) % cloths.length]);
+            } else if (kind === "caskets") {
+                // (A little casket, a silver cup, or a plate stood on its edge against the wall)
+                if (pick < 0.4) {
+                    box(u - m(0.1), base, m(0.15), u + m(0.1), base + m(0.1), m(0.3), pick < 0.2 ? "planks-dark" : "velvet");
+                    box(u - m(0.1), base + m(0.1), m(0.15), u + m(0.1), base + m(0.12), m(0.3), "brass");
+                } else if (pick < 0.7) {
+                    solid.lathe(cx, cz, [[m(0.04), base], [m(0.015), base + m(0.03)], [m(0.015), base + m(0.1)], [m(0.05), base + m(0.16)], [0, base + m(0.13)]], material(pick < 0.55 ? "silver" : "gold"), { segments: 8 });
+                } else {
+                    box(u - m(0.12), base, m(0.1), u + m(0.12), base + m(0.24), m(0.13), pick < 0.85 ? "pewter" : "gold");
+                }
             } else if (pick < 0.5) {
                 solid.lathe(cx, cz, [[m(0.07), base], [m(0.09), base + m(0.06)], [m(0.08), base + m(0.14)], [0, base + m(0.16)]], material("bone", WALL), { segments: 8 });
             }
@@ -6628,8 +6689,120 @@ function shieldRack(solid, rack) {
     }
 }
 
+// A bowyer's rack along a wall (a plan's "R" run): a board on the wall, pegs out of it, bows hung
+// strung from them, their bellies out into the room, and staves leant along its foot
+function bowRack(solid, rack) {
+    const { length, at } = wallRun(rack);
+    const point = (u, y, d) => {
+        const [x, z] = at(u, d);
+
+        return [x, y, z];
+    };
+    const box = (u0, y0, d0, u1, y1, d1, name, how = {}) => {
+        const [[ax, az], [bx, bz]] = [at(u0, d0), at(u1, d1)];
+
+        solid.box(Math.min(ax, bx), y0, Math.min(az, bz), Math.max(ax, bx), y1, Math.max(az, bz), material(name, how));
+    };
+
+    box(0, m(0.3), 0, length, m(2.1), m(0.06), "planks", WALL);
+
+    for (let u = m(0.25), k = 0; u < length - m(0.15); u += m(0.32), k++) {
+        const pick = roughOf(rack.x * 11 + k, rack.y * 7 + k);
+        const [top, long] = [m(1.95), m(1.35 + pick * 0.15)];
+        const belly = m(0.12 + pick * 0.06);
+        const wood = ["timber", "timber-light", "planks-dark"][k % 3];
+
+        box(u - m(0.02), top, 0, u + m(0.02), top + m(0.04), m(0.14), "iron-black");
+        solid.beam(point(u, top, m(0.1)), point(u, top - long * 0.3, m(0.1) + belly * 0.75), m(0.045), m(0.04), material(wood));
+        solid.beam(point(u, top - long * 0.3, m(0.1) + belly * 0.75), point(u, top - long * 0.5, m(0.1) + belly), m(0.05), m(0.045), material(wood));
+        solid.beam(point(u, top - long * 0.5, m(0.1) + belly), point(u, top - long * 0.7, m(0.1) + belly * 0.75), m(0.05), m(0.045), material(wood));
+        solid.beam(point(u, top - long * 0.7, m(0.1) + belly * 0.75), point(u, top - long, m(0.1)), m(0.045), m(0.04), material(wood));
+        solid.beam(point(u, top - long * 0.44, m(0.1) + belly), point(u, top - long * 0.56, m(0.1) + belly), m(0.05), m(0.045), material("leather"));
+        solid.beam(point(u, top, m(0.095)), point(u, top - long, m(0.095)), m(0.008), m(0.008), material("linen"));
+
+        // (A stave leant against the board below every other bow)
+        if (k % 2) {
+            solid.beam(point(u + m(0.1), 0, m(0.35)), point(u + m(0.12), m(1.5), m(0.08)), m(0.05), m(0.05), material("timber-light"));
+        }
+    }
+}
+
+// A leatherworker's frames along a wall (a plan's "R" run): posts and rails against it, a hide
+// stretched on each frame and laced to it
+function hideRack(solid, rack) {
+    const { length, out, at } = wallRun(rack);
+    const point = (u, y, d) => {
+        const [x, z] = at(u, d);
+
+        return [x, y, z];
+    };
+    const box = (u0, y0, d0, u1, y1, d1, name) => {
+        const [[ax, az], [bx, bz]] = [at(u0, d0), at(u1, d1)];
+
+        solid.box(Math.min(ax, bx), y0, Math.min(az, bz), Math.max(ax, bx), y1, Math.max(az, bz), material(name));
+    };
+    const frames = Math.max(1, Math.round(length / m(1.5)));
+    const span = length / frames;
+    const normal = [out[0], 0, out[1]];
+
+    for (let k = 0; k < frames; k++) {
+        const [u0, u1] = [k * span + m(0.08), (k + 1) * span - m(0.08)];
+        const middle = (u0 + u1) / 2;
+        const half = (u1 - u0) / 2 - m(0.14);
+        const [hi, lo] = [m(1.85), m(0.5)];
+        const pick = roughOf(rack.x * 5 + k, rack.y * 3);
+
+        for (const u of [u0, u1 - m(0.08)]) {
+            box(u, 0, m(0.05), u + m(0.08), m(2.05), m(0.13), "timber");
+        }
+
+        box(u0, m(1.95), m(0.05), u1, m(2.03), m(0.13), "timber");
+        box(u0, m(0.35), m(0.05), u1, m(0.43), m(0.13), "timber");
+
+        // (Its face out into the room: its back's against the wall, never seen)
+        // (Round to its corners where it's laced: no corner of it turned in, so it's one face)
+        const corners = [[-1, hi], [0, hi + m(0.06)], [1, hi], [1.18, (hi + lo) / 2], [1, lo], [0, lo - m(0.06)], [-1, lo], [-1.18, (hi + lo) / 2]].map(([v, y]) => point(middle + v * half, y, m(0.1)));
+        const hide = ["hide", "leather", "fur-grey", "hide-dark"][Math.floor(pick * 4)];
+
+        solid.facing(corners, normal, material(hide));
+
+        for (const [v, y, ty] of [[-1, hi, m(1.95)], [1, hi, m(1.95)], [-1, lo, m(0.43)], [1, lo, m(0.43)]]) {
+            solid.beam(point(middle + v * half, y, m(0.1)), point(middle + v * (half + m(0.1)), ty, m(0.09)), m(0.012), m(0.012), material("rope"));
+        }
+    }
+}
+
+// A jerkin on its stand: a post on a cross foot, a leather jerkin on its shoulders, a belt about it
+function jerkinStand(solid, x, z, seed) {
+    solid.box(x - m(0.28), 0, z - m(0.04), x + m(0.28), m(0.06), z + m(0.04), material("timber"));
+    solid.box(x - m(0.04), 0, z - m(0.28), x + m(0.04), m(0.06), z + m(0.28), material("timber"));
+    solid.cylinder(x, z, 0, m(1.5), m(0.035), m(0.035), material("timber"), { segments: 6 });
+    solid.lathe(x, z, [[m(0.2), m(0.82)], [m(0.18), m(0.95)], [m(0.21), m(1.22)], [m(0.23), m(1.36)], [m(0.1), m(1.44)], [0, m(1.45)]], material(seed > 0.5 ? "leather" : "hide-dark"), { segments: 10 });
+    solid.cylinder(x, z, m(0.88), m(0.94), m(0.205), m(0.205), material("leather"), { segments: 10 });
+    solid.box(x - m(0.04), m(0.88), z + m(0.18), x + m(0.04), m(0.94), z + m(0.22), material("brass"));
+}
+
+// A tailor's dummy on its three feet, wearing what's made: a gown or a cloak in a good colour
+function tailorDummy(solid, x, z, seed) {
+    const cloth = ["velvet", "wool-blue", "velvet-purple", "wool-green", "war-red"][Math.floor(seed * 5) % 5];
+
+    for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+
+        solid.beam([x, m(0.25), z], [x + Math.cos(a) * m(0.3), 0, z + Math.sin(a) * m(0.3)], m(0.04), m(0.04), material("timber"));
+    }
+
+    solid.cylinder(x, z, 0, m(1.0), m(0.03), m(0.03), material("timber"), { segments: 6 });
+    solid.lathe(x, z, [[m(0.13), m(0.98)], [m(0.16), m(1.1)], [m(0.13), m(1.25)], [m(0.17), m(1.42)], [m(0.18), m(1.52)], [m(0.06), m(1.6)], [0, m(1.6)]], material("linen"), { segments: 10 });
+    solid.cylinder(x, z, m(1.6), m(1.66), m(0.035), m(0.035), material("timber"), { segments: 6 });
+    solid.lathe(x, z, [[m(0.36), m(0.4)], [m(0.29), m(0.95)], [m(0.21), m(1.3)], [m(0.19), m(1.48)], [0, m(1.54)]], material(cloth), { segments: 12 });
+    solid.cylinder(x, z + m(0.17), m(1.42), m(1.46), m(0.03), m(0.03), material("brass"), { segments: 6 });
+}
+
 // A display table: a cloth over it, and on it what the shop sells laid out (gauntlets and a helm;
-// a candle and an inkpot; jewels on velvet), its blades, books and orbs models (shopWares)
+// a candle and an inkpot; jewels on velvet; a bowyer's bows and a quiver, a leatherworker's
+// gloves and belts, a tailor's cloth folded and a pair of shears; a jeweller's glass case of rings
+// and stones), its blades, books and orbs models (shopWares)
 function displayTable(solid, piece, look, kind) {
     const [x0, z0, x1, z1] = [m(piece.x + 0.1), m(piece.y + 0.1), m(piece.x + piece.w - 0.1), m(piece.y + piece.h - 0.1)];
     const [cx, cz] = [(x0 + x1) / 2, (z0 + z1) / 2];
@@ -6656,6 +6829,58 @@ function displayTable(solid, piece, look, kind) {
         for (const [dx, dz, gem] of [[0.22, -0.12, "gold"], [0.4, 0.1, "silver"], [0.5, -0.15, "jade"]]) {
             solid.cylinder(cx + m(dx), cz + m(dz), top + m(0.04), top + m(0.06), m(0.05), m(0.05), material(gem), { segments: 8 });
         }
+    } else if (kind === "bowyer") {
+        // (Two bows laid unstrung along it, gently curved, staves in the rough by them, and a quiver
+        // of arrows; its tools models)
+        for (const dx of [0.05, 0.15]) {
+            solid.box(cx + m(dx) - m(0.025), top - m(0.04), z0 + m(0.2), cx + m(dx) + m(0.025), top, z1 - m(0.5), material("timber-light"));
+        }
+
+        for (const [k, dx] of [-0.55, -0.3].entries()) {
+            const [x, z0b, z1b] = [cx + m(dx), z0 + m(0.15), z1 - m(0.15)];
+            const sweep = m(0.1);
+
+            solid.beam([x, top - m(0.02), z0b], [x + sweep, top - m(0.02), (z0b + z1b) / 2], m(0.04), m(0.03), material(k ? "timber-light" : "timber"));
+            solid.beam([x + sweep, top - m(0.02), (z0b + z1b) / 2], [x, top - m(0.02), z1b], m(0.04), m(0.03), material(k ? "timber-light" : "timber"));
+        }
+
+        solid.box(cx + m(0.35), top - m(0.04), cz - m(0.45), cx + m(0.5), top + m(0.06), cz + m(0.15), material("leather"));
+    } else if (kind === "leatherworker") {
+        // (Gloves in pairs, a belt coiled, a strap or two; its hides and tools models)
+        for (const [dx, dz] of [[-0.45, -0.3], [-0.2, -0.3]]) {
+            solid.box(cx + m(dx) - m(0.08), top - m(0.04), cz + m(dz) - m(0.1), cx + m(dx) + m(0.08), top + m(0.0), cz + m(dz) + m(0.1), material("leather"));
+        }
+
+        solid.cylinder(cx + m(0.45), cz + m(0.4), top - m(0.04), top + m(0.02), m(0.1), m(0.1), material("leather"), { segments: 10 });
+        solid.box(cx - m(0.6), top - m(0.04), cz + m(0.25), cx + m(0.1), top - m(0.02), cz + m(0.3), material("hide-dark"));
+    } else if (kind === "tailor") {
+        // (Cloth folded in piles, a bolt unrolled across it, a pair of shears on it)
+        solid.box(x0 + m(0.2), top - m(0.04), cz - m(0.12), x1 - m(0.2), top - m(0.02), cz + m(0.3), material("wool-blue"));
+
+        for (const [dx, dz, cloth] of [[-0.45, -0.5, "linen"], [0.4, -0.5, "velvet-purple"]]) {
+            solid.box(cx + m(dx) - m(0.15), top - m(0.04), cz + m(dz) - m(0.12), cx + m(dx) + m(0.15), top + m(0.1), cz + m(dz) + m(0.12), material(cloth));
+        }
+
+        for (const side of [-1, 1]) {
+            solid.beam([cx + m(0.1), top, cz + m(0.1)], [cx + m(0.1) + side * m(0.06), top, cz + m(0.32)], m(0.02), m(0.01), material("iron"));
+        }
+    } else if (kind === "jeweller") {
+        // (A case of glass on it: rings and stones on velvet under a lid propped open behind them;
+        // its cups and vessels models)
+        solid.box(x0 + m(0.15), top - m(0.04), z0 + m(0.15), x1 - m(0.15), top + m(0.1), z1 - m(0.15), material("planks-dark"));
+        solid.box(x0 + m(0.2), top + m(0.1), z0 + m(0.2), x1 - m(0.2), top + m(0.11), z1 - m(0.2), material("velvet"));
+
+        for (let k = 0; k < 10; k++) {
+            const [jx, jz] = [x0 + m(0.4) + (k % 5) * ((x1 - x0 - m(0.8)) / 4), cz + m(0.15) + Math.floor(k / 5) * m(0.35)];
+
+            if (k % 2) {
+                solid.box(jx - m(0.035), top + m(0.11), jz - m(0.035), jx + m(0.035), top + m(0.16), jz + m(0.035), material(["wine", "glass-green", "glass-violet", "jade", "maya-blue"][k % 5]));
+            } else {
+                solid.cylinder(jx, jz, top + m(0.11), top + m(0.13), m(0.05), m(0.05), material(["gold", "silver"][(k / 2) % 2]), { segments: 8 });
+            }
+        }
+
+        solid.facing([[x0 + m(0.18), top + m(0.12), z0 + m(0.2)], [x1 - m(0.18), top + m(0.12), z0 + m(0.2)], [x1 - m(0.18), top + m(0.5), z0 + m(0.1)], [x0 + m(0.18), top + m(0.5), z0 + m(0.1)]], [0, 0.25, 1], material("glass-lit"));
     }
 }
 
@@ -6730,13 +6955,20 @@ function shop(map) {
     for (const rack of at("rack").filter((each) => !modelled.has(each))) {
         if (kind === "armorer" || kind === "masterArmorer") {
             shieldRack(solid, rack);
+        } else if (kind === "bowyer") {
+            bowRack(solid, rack);
+        } else if (kind === "leatherworker") {
+            hideRack(solid, rack);
         } else {
             armoury(solid, rack);
         }
     }
 
+    // (A harness on each stand; a leatherworker's a jerkin, a tailor's a dummy wearing a gown)
     for (const stand of at("stand").filter((each) => !modelled.has(each))) {
-        armourStand(solid, m(stand.x + 0.5), m(stand.y + 0.5), roughOf(stand.x, stand.y));
+        const dress = kind === "tailor" ? tailorDummy : kind === "leatherworker" ? jerkinStand : armourStand;
+
+        dress(solid, m(stand.x + 0.5), m(stand.y + 0.5), roughOf(stand.x, stand.y));
     }
 
     // (An alchemist's tables bare, its stills and jars models; any other's a cloth over it, its
@@ -6877,7 +7109,10 @@ const SHOP_TOPS = Object.freeze({ counter: 1.09, display: 0.81, table: 0.78, ben
  * a swordsmith's tables (a master's the great swords), sword racks and a weapon rack down its
  * walls, its grindstone; an armorer's shields leant by its harness, helms, and a mail shirt and
  * a shield on its benches; a scribe's open books, quills and scrolls; an alchemist's alembics, mortars, flasks and
- * apothecary's jars; the Emporium's crystal ball and celestial globe.
+ * apothecary's jars; the Emporium's crystal ball and celestial globe. A bowyer's hatchets, saws,
+ * mallets and baskets; a leatherworker's sheepskins, boards, knives and mallets; a tailor's
+ * baskets of thread and its candles; a jeweller's cups, ewers and candleholders. (What there's no
+ * model of, a bow, a stave, a hide, a bolt of cloth, a ring, its own art draws: shop.)
  */
 export function shopWares(map, kind) {
     const placed = [];
@@ -6995,6 +7230,74 @@ export function shopWares(map, kind) {
         put("hourglass", cx - 0.5, cz, { y: SHOP_TOPS.counter });
         put("books", cx + 0.3, cz, { y: SHOP_TOPS.counter, turn: 0.3 });
         put("bottle-magic", cx + 0.85, cz, { y: SHOP_TOPS.counter, turn: 0.8 });
+    } else if (kind === "bowyer") {
+        // (A hatchet to rough the staves out on its tables, by the bows and staves drawn there, and
+        // a basket of fletchings; its shaving benches' saws and mallets; a basket and a candle on
+        // the counter)
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put("hatchet", x + 0.5, z + 0.6, { y: SHOP_TOPS.display, ...laid, turn: 0.4 });
+            put("basket", x + 0.15, z + 0.55, { y: SHOP_TOPS.display, size: 0.3, turn: k % 2 ? 0.6 : -0.6 });
+        });
+
+        for (const bench of at("workbench")) {
+            put("saw", bench.x + 0.5, bench.y + bench.h - 0.6, { y: SHOP_TOPS.bench, ...laid, turn: Math.PI / 2 });
+            put("mallet", bench.x + 0.45, bench.y + 0.55, { y: SHOP_TOPS.bench, ...laid });
+        }
+
+        put("basket", cx - 0.5, cz, { y: SHOP_TOPS.counter });
+        put("candlestick", cx + 0.6, cz, { y: SHOP_TOPS.counter });
+    } else if (kind === "leatherworker") {
+        // (A sheepskin and a cutting board on each table, a mallet by them; a knife and a pot of
+        // dye on its benches; a board and a basket on the counter)
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put("pelt", x - 0.1, z - 0.15, { y: SHOP_TOPS.display, size: 1.1, pitch: -Math.PI / 2, turn: k % 2 ? 0.2 : -0.2, shadow: false });
+            put("board", x + 0.45, z + 0.55, { y: SHOP_TOPS.display, turn: 0.3 });
+            put("mallet", x - 0.5, z + 0.6, { y: SHOP_TOPS.display, ...laid, turn: -0.4 });
+        });
+
+        for (const bench of at("workbench")) {
+            put("dagger", bench.x + 0.5, bench.y + bench.h - 0.6, { y: SHOP_TOPS.bench, ...onBack });
+            put("bucket", bench.x + 0.45, bench.y + 0.55, { y: SHOP_TOPS.bench, size: 0.3 });
+        }
+
+        put("board", cx - 0.5, cz, { y: SHOP_TOPS.counter, turn: 0.2 });
+        put("basket", cx + 0.5, cz, { y: SHOP_TOPS.counter });
+    } else if (kind === "tailor") {
+        // (Baskets of thread and a lidded one of buttons on its cutting tables, a candle to sew
+        // by; a basket, a candlestick and a dish of pins on the counter)
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put("basket", x + 0.45, z + 0.5, { y: SHOP_TOPS.display, turn: k % 2 ? 0.5 : -0.5 });
+            put("basket-lidded", x - 0.5, z + 0.55, { y: SHOP_TOPS.display, size: 0.3 });
+            put(k % 2 ? "candleholder-b" : "candleholder-c", x + 0.6, z - 0.55, { y: SHOP_TOPS.display });
+        });
+
+        put("basket", cx - 0.6, cz, { y: SHOP_TOPS.counter });
+        put("candlestick", cx + 0.1, cz, { y: SHOP_TOPS.counter });
+        put("pot-flat", cx + 0.7, cz, { y: SHOP_TOPS.counter, size: 0.18 });
+    } else if (kind === "jeweller") {
+        // (Cups and a little ewer standing on its cases behind the rings; a candleholder and a
+        // bowl of stones on each bench; a cup and a candle on the counter)
+        tables.forEach((table, k) => {
+            const [x, z] = middle(table);
+
+            put(k % 2 ? "goblet-a" : "goblet-c", x - 0.55, z - 0.6, { y: SHOP_TOPS.display + 0.1 });
+            put("vase-small", x, z - 0.6, { y: SHOP_TOPS.display + 0.1, size: 0.2 });
+            put(k % 2 ? "goblet-c" : "goblet-a", x + 0.55, z - 0.6, { y: SHOP_TOPS.display + 0.1 });
+        });
+
+        for (const bench of at("workbench")) {
+            put("candleholder-a", bench.x + 0.5, bench.y + 0.5, { y: SHOP_TOPS.bench });
+            put("bowl-small", bench.x + 0.5, bench.y + bench.h - 0.6, { y: SHOP_TOPS.bench, size: 0.18 });
+        }
+
+        put("goblet-b", cx - 0.5, cz, { y: SHOP_TOPS.counter });
+        put("candleholder-c", cx + 0.6, cz, { y: SHOP_TOPS.counter });
     }
 
     return placed;

@@ -784,6 +784,60 @@ export const LOOKS = Object.freeze({
     antClutch: { body: "blob", scale: [0.95, 1.1], size: 0.55, eggs: 7, clear: 0.12, colours: { body: 0xe0cc8a, core: 0x3a2a1a, glow: 0x8a7040 } },
     eggSac: { body: "blob", scale: [0.95, 1.1], size: 0.5, eggs: 1, silk: true, clear: 0.15, colours: { body: 0xc8c8c0, core: 0x2a2a28, glow: 0xe8e8e0 } },
     soulJar: { body: "blob", scale: [0.95, 1.05], size: 0.42, jar: true, colours: { body: 0x1a1a1e, core: 0x60ff9a, glow: 0x40e080 } },
+    // (The crafters' quarry (core/creatures.js; docs/CRAFTING.md *New beasts*), each the stand-in of
+    // the creature it's like, in its own colour and as much bigger as it's drawn (core/materials.js
+    // NEW_BEASTS `tint`, `size`), till its model's read (beasts/model.js: the one it borrows, or one of
+    // its own once one's bought): the golems as the Stone Golem's is, brutes of stone (HUMANOIDS, and
+    // BRUTES below), a mythril golem's silver-blue and four fifths as big, an adamantite golem's dark
+    // green, the orichalcum colossus's red-gold and half as big again; a gilded scarab a giant
+    // cockroach's, gold; the treants a blighted treant's, unblighted, an ironbark's grey as iron, a
+    // ghostwood's pale, a sylvan ancient's silver-barked; a gloomweaver a black widow's, violet-black;
+    // a moon moth a dungeon wasp's, white)
+    mythrilGolem: { body: "humanoid", scale: [1.76, 1.84] },
+    adamantiteGolem: { body: "humanoid", scale: [2.2, 2.3] },
+    orichalcumColossus: { body: "humanoid", scale: [3.52, 3.68] },
+    gildedScarab: {
+        body: "arachnid",
+        scale: [1.26, 1.54],
+        size: 0.75,
+        colours: { shell: 0xe8b830, dark: 0x5a3e0c, marks: 0xffd860, eyes: 0x0a0604 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
+    ironbarkTreant: {
+        body: "biped",
+        scale: [1.04, 1.19],
+        kind: "treant", height: 2.8,
+        colours: { bark: 0x4a4a4e, leaves: 0x4a5a3a, eyes: 0xffb040, moss: 0x3a4236 },
+        attacks: ["slam", "sweep"], rests: ["root", "sway", "creak"], specials: ["roots"],
+    },
+    ghostwoodTreant: {
+        body: "biped",
+        scale: [1.09, 1.24],
+        kind: "treant", height: 2.8,
+        colours: { bark: 0xc8dce8, leaves: 0xa8bcc8, eyes: 0x9ae8ff, moss: 0x8aa0ae },
+        attacks: ["slam", "sweep"], rests: ["root", "sway", "creak"], specials: ["roots"],
+    },
+    sylvanAncient: {
+        body: "biped",
+        scale: [1.52, 1.73],
+        kind: "treant", height: 2.8,
+        colours: { bark: 0xc8d8b0, leaves: 0x7aa84a, eyes: 0xe8f0a0, moss: 0x6a8a4a },
+        attacks: ["slam", "sweep"], rests: ["root", "sway", "creak"], specials: ["roots"],
+    },
+    gloomweaver: {
+        body: "arachnid",
+        scale: [1.43, 1.58],
+        size: 1,
+        colours: { shell: 0x3a2a5a, dark: 0x120a1e, marks: 0x9a6ad8, eyes: 0x200818 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
+    moonMoth: {
+        body: "swarm",
+        scale: [2.02, 2.38],
+        kind: "insect", size: 0.9, count: 1, spread: 0.2,
+        colours: { fur: 0xe8f0ff, wings: 0xf4f8ff, eyes: 0x2a2440 },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
 });
 
 // A value between two, from the random numbers
@@ -1052,6 +1106,12 @@ const BRUTES = {
     // (The Stone Golem, standing in for its own model: a hulking brute the grey of cut stone, its
     // eyes the blighted violet of the crystal at its heart, bracered)
     stoneGolem: { ...gorger(["#7a766c", "#6e6a62", "#868176"], [["bracers"]]), irises: ["#b070ff", "#8a4ad0"] },
+    // (The golems the crafters want, standing in for the Stone Golem's model as its stand-in does: a
+    // mythril golem's stone silver-blue, its eyes icy; an adamantite golem's dark green; the
+    // orichalcum colossus's red-gold, its eyes embers)
+    mythrilGolem: { ...gorger(["#8aa8c0", "#7c9ab2", "#98b6cc"], [["bracers"]]), irises: ["#c8f0ff", "#8ac8f0"] },
+    adamantiteGolem: { ...gorger(["#3e5e50", "#36564a", "#466a5a"], [["bracers"]]), irises: ["#9affc0", "#6adf9a"] },
+    orichalcumColossus: { ...gorger(["#b0683a", "#a05e32", "#c07444"], [["bracers"]]), irises: ["#ffb020", "#ff7a1a"] },
     // (A hell's walkers, standing in for their own model: gaunt and skinned as the flayed are, in
     // their level's skin: brimstone amber, ash grey, raw flesh, bile green)
     brimstoneWalker: flayed(["#9a6a2a", "#8a5e24", "#a87632"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),

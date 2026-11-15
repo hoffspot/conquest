@@ -1,7 +1,8 @@
 // The shops in the world (docs/WAR.md *Shops*): each people's master shops placed (worldplan/
-// settle.js), the specialists' in every town, city and capital and a master's where it's kept,
-// houses made over (setpieces/town.js); their shopfronts in each people's look (art/kits/
-// shopfront.js); inside, their floors, their keepers selling and talking (core/insides.js,
+// settle.js), the specialists' in every town, city and capital and a master's where it's kept, the
+// crafters' by the settlement's kind and seed (docs/CRAFTING.md), houses made over and nothing else
+// moved (setpieces/town.js); their shopfronts in each people's look (art/kits/shopfront.js);
+// inside, their floors, their keepers selling, talking and asked what they'd make (core/insides.js,
 // core/dialogue.js), what they sell set out as makers' models and museums' scans
 // (world/interiors3d.js shopWares); and their icons on the maps
 import assert from "node:assert/strict";
@@ -24,18 +25,20 @@ const context = () =>
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
 const THREE = await import("three");
-const { keepsShops, layoutTown, SETTLEMENT_KINDS } = await import("../client/js/core/setpieces/town.js");
-const { ENTERED, MASTER_SHOPS, SHOP_LANDMARKS, SPECIALISTS } = await import("../client/js/core/setpieces/pieces.js");
+const { CRAFTER_SPARE, craftersOf, keepsShops, layoutTown, SETTLEMENT_KINDS } = await import("../client/js/core/setpieces/town.js");
+const { CRAFTER_SHOPS, ENTERED, MASTER_SHOPS, SHOP_LANDMARKS, SPECIALISTS } = await import("../client/js/core/setpieces/pieces.js");
+const { CRAFTER_TOWNS, CRAFTERS } = await import("../client/js/core/recipes.js");
+const { waysOut } = await import("../client/js/core/settlements.js");
 const { ENTERABLE, ENTRANCES, entranceSpecOf, SHOP_INSIDES, shopFolkOf, shopRooms } = await import("../client/js/core/insides.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { planWorld } = await import("../client/js/core/worldplan/plan.js");
 const { RACES } = await import("../client/js/core/worldplan/races.js");
 const { SHOPS } = await import("../client/js/core/progress.js");
-const { TREES, treeFor } = await import("../client/js/core/dialogue.js");
+const { Conversation, TREES, treeFor } = await import("../client/js/core/dialogue.js");
 const { landmark, LANDMARK_BUILDERS } = await import("../client/js/world/art/kits/landmarks.js");
 const { SHOPFRONTS } = await import("../client/js/world/art/kits/shopfront.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
-const { ICON_KINDS } = await import("../client/js/app/mapicons.js");
+const { ICON_KINDS, ICON_NAMES } = await import("../client/js/app/mapicons.js");
 const { DUNGEON_PROPS } = await import("../client/js/world/dungeons3d.js");
 const { shopWares } = await import("../client/js/world/interiors3d.js");
 
@@ -117,7 +120,7 @@ describe("the shops in a settlement (setpieces/town.js)", () => {
             }
 
             for (const kind of ["village", "hamlet", "farmstead"]) {
-                assert.ok(!layoutTown({ seed: 4, kind, people }).pieces.some(({ name }) => SHOP_LANDMARKS.includes(name)), `${people} ${kind}`);
+                assert.ok(!layoutTown({ seed: 4, kind, people }).pieces.some(({ name }) => SPECIALISTS.includes(name) || MASTER_SHOPS.includes(name)), `${people} ${kind}`);
             }
         }
     });
@@ -144,6 +147,140 @@ describe("the shops in a settlement (setpieces/town.js)", () => {
 
             assert.deepEqual([x.x, x.y], [y.x, y.y], `${name} unmoved by the master's shop`);
         }
+    });
+});
+
+describe("the crafters' shops in a settlement (setpieces/town.js craftersOf, docs/CRAFTING.md)", () => {
+    const PLACED = ["village", "town", "city", "capital"];
+    // (A layout's crafters' shops, in the order they stand among its pieces)
+    const craftersIn = (town) => town.pieces.filter(({ name }) => CRAFTER_SHOPS.includes(name)).map(({ name }) => name);
+
+    it("chooses a village one of the leatherworker, the bowyer and the tailor by its seed, a town two, a city two and its jeweller, a capital all four, a hamlet and a farmstead none", () => {
+        const seen = { village: new Set(), town: new Set(), city: new Set() };
+
+        for (let seed = 1; seed <= 60; seed++) {
+            for (const kind of PLACED) {
+                const chosen = craftersOf(kind, seed);
+                const { always, some, count } = CRAFTER_TOWNS[kind];
+
+                assert.deepEqual(craftersOf(kind, seed), chosen, `${kind} ${seed}: the same every time`);
+                assert.equal(chosen.length, always.length + count, `${kind} ${seed}`);
+                assert.ok(always.every((name) => chosen.includes(name)) && chosen.every((name) => always.includes(name) || some.includes(name)), `${kind} ${seed}: ${chosen}`);
+                assert.deepEqual(chosen, CRAFTER_SHOPS.filter((name) => chosen.includes(name)), `${kind} ${seed}: in order`);
+                seen[kind]?.add(chosen.join());
+            }
+
+            assert.deepEqual(craftersOf("capital", seed), [...CRAFTER_SHOPS]);
+            assert.ok(craftersOf("city", seed).includes("jeweller") && !craftersOf("town", seed).includes("jeweller") && !craftersOf("village", seed).includes("jeweller"));
+
+            for (const kind of ["hamlet", "farmstead", "castle"]) {
+                assert.deepEqual(craftersOf(kind, seed), []);
+            }
+        }
+
+        // (Every one of the three in a village somewhere, every pair of them in a town)
+        assert.equal(seen.village.size, 3);
+        assert.equal(seen.town.size, 3);
+        assert.equal(seen.city.size, 3);
+    });
+
+    it("makes over a house near the market for each crafter a place keeps, as the specialists' are, in every people's settlements", () => {
+        let made = 0;
+
+        for (const people of PEOPLES) {
+            for (const kind of PLACED) {
+                for (const seed of kind === "capital" ? [1, 2] : [1, 2, 3, 4]) {
+                    const town = layoutTown({ seed, kind, people });
+                    const chosen = craftersOf(kind, seed);
+                    const houses = town.pieces.filter((piece) => piece.kind === "house").length;
+                    const have = craftersIn(town);
+
+                    // (Each it keeps once; one left out only where it would have left the place no
+                    // more than CRAFTER_SPARE houses)
+                    assert.equal(new Set(have).size, have.length, `${people} ${kind} ${seed}: ${have}`);
+                    assert.ok(have.every((name) => chosen.includes(name)), `${people} ${kind} ${seed}: ${have} of ${chosen}`);
+                    assert.ok(have.length === chosen.length || houses <= CRAFTER_SPARE, `${people} ${kind} ${seed}: ${have} of ${chosen}, ${houses} houses left`);
+
+                    for (const piece of town.pieces.filter(({ name }) => CRAFTER_SHOPS.includes(name))) {
+                        assert.equal(piece.kind, "landmark");
+                        assert.equal(piece.id, `${piece.name}-1`);
+                        assert.equal(typeof piece.seed, "number");
+                        assert.ok(ENTERED.includes(piece.name) && ENTERABLE.includes(piece.name), piece.name);
+                        made++;
+                    }
+                }
+            }
+        }
+
+        assert.ok(made > 150, `${made} crafters' shops`);
+    });
+
+    it("keeps every kind of shop there is in a capital (the owner's rule): its blacksmiths, the specialists' and the four crafters'", () => {
+        for (const seed of [1, 2, 3]) {
+            const plan = planWorld(seed);
+
+            for (const place of plan.places.filter(({ kind }) => kind === "capital")) {
+                const town = layoutTown({ seed: place.seed, kind: place.kind, exits: waysOut(plan, place), people: place.race ?? "human", master: place.master ?? null });
+                const names = town.pieces.filter(({ kind }) => kind === "landmark").map(({ name }) => name);
+
+                for (const name of ["blacksmith", ...SPECIALISTS, ...CRAFTER_SHOPS]) {
+                    assert.ok(names.includes(name), `world ${seed}, ${place.race}'s capital: its ${name}`);
+                }
+
+                // (Every crafter there but the masters, kept in a village, town or city of theirs)
+                assert.ok(Object.keys(CRAFTERS).filter((name) => !MASTER_SHOPS.includes(name)).every((name) => name === "smith" || names.includes(name)));
+            }
+        }
+    });
+
+    it("moves nothing else: laid out as it was before there were crafters, every other building stands where it stood, and each crafter's on a house's lot", () => {
+        for (const people of PEOPLES) {
+            for (const kind of Object.keys(SETTLEMENT_KINDS)) {
+                for (const [seed, master] of [[3, null], [8, ["village", "town", "city"].includes(kind) ? "masterArmorer" : null]]) {
+                    const now = layoutTown({ seed, kind, people, master });
+                    const before = layoutTown({ seed, kind, people, master, crafters: [] });
+                    const where = `${people} ${kind} ${seed}`;
+
+                    assert.deepEqual(craftersIn(before), [], where);
+
+                    for (const key of Object.keys(before).filter((one) => one !== "pieces")) {
+                        assert.deepEqual(now[key], before[key], `${where}: its ${key}`);
+                    }
+
+                    assert.equal(now.pieces.length, before.pieces.length, where);
+
+                    before.pieces.forEach((was, k) => {
+                        const is = now.pieces[k];
+
+                        if (!CRAFTER_SHOPS.includes(is.name)) {
+                            assert.deepEqual(is, was, `${where}: ${was.key} as it was`);
+
+                            return;
+                        }
+
+                        assert.equal(was.kind, "house", `${where}: the ${is.name} made over from a house`);
+                        assert.deepEqual([is.x, is.y, is.w, is.h, is.facing, is.people, is.water, is.style], [was.x, was.y, was.w, was.h, was.facing, was.people, was.water, was.style], `${where}: the ${is.name} on its lot`);
+                    });
+                }
+            }
+        }
+    });
+
+    it("leaves a village of a few houses as it is: no crafter where it would leave it CRAFTER_SPARE houses or fewer", () => {
+        let small = 0;
+
+        for (let seed = 1; seed <= 30; seed++) {
+            for (const people of ["lizard", "darkElf"]) {
+                const before = layoutTown({ seed, kind: "village", people, crafters: [] });
+
+                if (before.pieces.filter((piece) => piece.kind === "house").length <= CRAFTER_SPARE) {
+                    assert.deepEqual(craftersIn(layoutTown({ seed, kind: "village", people })), [], `${people} village ${seed}`);
+                    small++;
+                }
+            }
+        }
+
+        assert.ok(small > 0, "a village too small for one");
     });
 });
 
@@ -176,6 +313,8 @@ describe("a shop drawn (art/kits/shopfront.js, landmarks.js, art/peoples, app/ma
         for (const name of SHOP_LANDMARKS) {
             assert.ok(ICON_KINDS.includes(name), name);
         }
+
+        assert.deepEqual(CRAFTER_SHOPS.map((name) => ICON_NAMES[name]), ["Bowyer", "Leatherworker", "Tailor", "Jeweller"]);
     });
 });
 
@@ -233,6 +372,37 @@ describe("a shop inside (core/insides.js, core/dialogue.js)", () => {
         assert.equal(SHOP_INSIDES.swordsmith.named("Ashdown"), "Ashdown's Blades");
         assert.equal(SHOP_INSIDES.alchemist.named("Rowe"), "Rowe's Apothecary");
         assert.equal(SHOP_INSIDES.emporium.named("Rowe"), "the Mystic Emporium");
+        assert.deepEqual(CRAFTER_SHOPS.map((name) => SHOP_INSIDES[name].named("Rowe")), ["Rowe's Bows", "Rowe's Leathers", "Rowe's Tailoring", "Rowe's Jewels"]);
+        assert.deepEqual(CRAFTER_SHOPS.map((name) => SHOP_INSIDES[name].title), ["Bowyer", "Leatherworker", "Tailor", "Jeweller"]);
+    });
+
+    it("has every crafter's keeper asked what they can make, the crafter named to the game, the talk ending on it as on buying; no one else's", () => {
+        // (Each crafter's talk: the smiths', the castle's smith making as a smith, and the shops')
+        const talks = { smith: "smith", castleSmith: "smith", ...Object.fromEntries(Object.keys(CRAFTERS).filter((name) => name !== "smith").map((name) => [name, name])) };
+
+        for (const [talk, crafter] of Object.entries(talks)) {
+            const tree = TREES[talk];
+            const asked = tree.nodes.more.choices.filter(({ say }) => say === "What can you make?");
+
+            assert.equal(asked.length, 1, talk);
+            assert.deepEqual(asked[0].do, [{ commission: crafter }], talk);
+            assert.equal(asked[0].next, null, talk);
+
+            // (Chosen: the talk's over, and the game told which crafter's)
+            const done = [];
+            const conversation = new Conversation(tree, { speaker: { id: "keeper", name: "Ada Rowe", title: "Keeper" }, player: { name: "Nessa" }, names: { apprentice: "Wil" }, memory: { talks: 0, flags: [] }, knowledge: new Set(), onEffect: (effect) => done.push(effect), check: () => true });
+
+            conversation.choose(conversation.choices.findIndex(({ text }) => text === "What can you make?"));
+            assert.ok(conversation.ended, talk);
+            assert.deepEqual(done, [{ commission: crafter }], talk);
+        }
+
+        // (No one who doesn't make: an alchemist, a pedlar, a castle's quartermaster and arcanist)
+        for (const talk of ["alchemist", "pedlar", "quartermaster", "arcanist", "barkeep"]) {
+            const choices = Object.values(TREES[talk].nodes).flatMap(({ choices }) => (Array.isArray(choices) ? choices : []));
+
+            assert.ok(!choices.some(({ do: effects }) => effects?.some((effect) => "commission" in effect)), talk);
+        }
     });
 });
 
@@ -258,7 +428,7 @@ describe("a shop's wares as models (world/interiors3d.js shopWares, scripts/buil
         }
     });
 
-    it("sets out each trade's own: blades on a swordsmith's tables and in its racks, its grindstone; an armorer's helms, mail and shields; a scribe's books, quills and scrolls; an alchemist's alembics, mortars, flasks and jars; the Emporium's crystal ball and globe", () => {
+    it("sets out each trade's own: blades on a swordsmith's tables and in its racks, its grindstone; an armorer's helms, mail and shields; a scribe's books, quills and scrolls; an alchemist's alembics, mortars, flasks and jars; the Emporium's crystal ball and globe; a bowyer's tools and baskets of fletchings, a leatherworker's sheepskins and knives, a tailor's baskets of thread, a jeweller's cups", () => {
         const models = (name) => new Set(shopWares(plan(name), name).map(({ model }) => model));
         const wanted = {
             swordsmith: ["sword-arming", "sword-long", "claymore", "dagger", "sword-rack", "grindstone"],
@@ -268,6 +438,10 @@ describe("a shop's wares as models (world/interiors3d.js shopWares, scripts/buil
             scriptorium: ["book-open", "books", "quill", "scroll", "hourglass"],
             alchemist: ["alembic", "mortar", "albarello", "bottle-magic", "bottle-magic-2"],
             emporium: ["crystal-ball", "globe-celestial", "skull", "hourglass"],
+            bowyer: ["hatchet", "saw", "mallet", "basket"],
+            leatherworker: ["pelt", "board", "mallet", "dagger", "bucket"],
+            tailor: ["basket", "basket-lidded", "candlestick", "pot-flat"],
+            jeweller: ["goblet-a", "goblet-b", "goblet-c", "vase-small", "candleholder-a", "bowl-small"],
         };
 
         for (const [name, want] of Object.entries(wanted)) {

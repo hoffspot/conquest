@@ -1556,7 +1556,10 @@ export class Game {
         this.markers = markersOf(markers);
         this.onMarkers = onMarkers;
 
-        /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
+        /**
+         * Trading with a shopkeeper (from their talk, or a crafter's crafting): { shop, keeper (their
+         * id), name, people }, or null.
+         */
         this.shopping = null;
         this.shopWanted = null;
 
@@ -10096,11 +10099,12 @@ export class Game {
                 });
 
                 // (Their wares, once the talk's over: their own shop, or their part's, as the host
-                // has it)
+                // has it; or, asked what a crafter can make (`commission`, core/dialogue.js
+                // commissionOf), the same opened on its Craft tab)
                 const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? out?.shop ?? SHOPKEEPERS[npc.role];
 
-                if (effect.shop && keeps) {
-                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
+                if ((effect.shop || effect.commission) && keeps) {
+                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name, ...(effect.commission ? { tab: "craft" } : {}) };
                 }
             },
         });
