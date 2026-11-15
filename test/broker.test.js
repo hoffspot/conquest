@@ -257,8 +257,8 @@ describe("the broker", () => {
         host.send(`to ${peer}\n${big}`);
         assert.equal(await joiner.next("data\n"), `data\n${big}`);
 
-        // (Too long for a game's command: not passed on)
-        joiner.send(`data\n${"x".repeat(70 * 1024)}`);
+        // (Too long for anything a game says, a character coming in the longest: not passed on)
+        joiner.send(`data\n${"x".repeat(BROKER_LIMITS.small + 1024)}`);
 
         // (Put out: its link closed, the host told; not told the world's closed, its host has said why)
         host.send(`kick ${peer}`);

@@ -802,6 +802,7 @@ export const TREES = Object.freeze({
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
                     { say: "What's that archway by the hearth?", next: "portal" },
+                    { say: "What's the big chest by the hearth?", next: "chest" },
                     { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult", do: [{ heard: "hell" }] },
                     // (One of theirs gone home to mend, sent for: core/host.js #sendFor, any guild)
                     { if: { mending: true, recallPurse: true }, say: "Send for {mending}, please. ({recallPrice} gold)", next: "sentFor", do: [{ recall: true }] },
@@ -901,6 +902,11 @@ export const TREES = Object.freeze({
             },
             // (The guild's portal: where it goes, what it costs, and what their rank takes off:
             // core/portals.js, the game's words)
+            // (The stash's chest: core/strongroom.js, core/progress.js STRONGROOM)
+            chest: {
+                say: "That's your stash! Well, everyone's. Open it and it's your own, and only yours: whatever you leave in it, you'll find in the chest at any branch. Two tabs of room to start with, and more for ten thousand gold apiece, up to six.",
+                choices: "more",
+            },
             portal: {
                 say: "Oh, the portal! Every branch has one. Step up to it and you can go through to any other branch you've been inside. Only those, mind: the veil won't open on a hall you've never stood in. Something about knowing where you're going.",
                 choices: [

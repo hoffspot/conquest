@@ -542,15 +542,17 @@ are kept.
   Guild"), as the guilds of adventure stories have them: the counter across the north end, with
   shelves of ledgers and scrolls on the wall behind it; the quest board along the west wall;
   four tables with benches; the hearth on the east wall, across the room from the board, and the
-  guild's portal beside it (*The guild's portals*, below); and barrels either side of the door:
+  guild's portal beside it (*The guild's portals*, below); on the hearth's other side, against the
+  wall, the great chest each hero's stash is opened at (*The stash*, below); and barrels either
+  side of the door:
 
   ```
   eeeeeeee............   e  shelves     M  counter   q  quest board
   ....................   T  table       b  bench     H  hearth
-  ..MMMMMMMM..........   K  barrels     U  portal
+  ..MMMMMMMM..........   K  barrels     U  portal    +  the stash's chest
   ....................
-  q...................
-  q.....bbb.....bbb...
+  q..................+
+  q.....bbb.....bbb..+
   q.....TTT.....TTT..H
   q.....bbb.....bbb..H
   q..................H
@@ -4018,7 +4020,8 @@ branches, and the portal ("What's that archway by the hearth?": where it goes, o
 the player's been into; what it costs, and what each rank takes off; that it's members' only, and
 companions go free; each ending with what the player's own rank takes off, `{portalShare}`: the
 full fare at Copper, so much off at Iron to Gold, nothing to pay at Mithril, or that they must
-register first). Talking to her, the talk shows the player's rank by her name. Asked what's on the board, she lists its notices, up to four
+register first), and the chest on its other side ("What's the big chest by the hearth?": the
+player's own stash, the same at every branch, two tabs and more at ten thousand gold apiece). Talking to her, the talk shows the player's rank by her name. Asked what's on the board, she lists its notices, up to four
 (`notice1` to `notice4`: what each asks in a few words, and what it pays: docs/WAR.md M8); one
 picked is read in full, and taken, or the player looks at the others. The adventurers are wry and give advice ("Be nice to
 {receptionist}. She decides who gets the good notices.").
@@ -6039,6 +6042,69 @@ branch they've been into, for gold.
   `unregistered`, `here`, `unexplored`, `fighting`, `midst`, `gold`). It's heard and seen as
   being carried by magic is (`carried`, `why: "portal"`), in the portal's own blue, and said:
   "Through the portal: the guild's branch in Dunholm, for 8 gold."
+
+### The stash (core/strongroom.js, core/progress.js STRONGROOM, app/pack.js)
+
+Every hero has a stash, as Diablo's players have: room for what they'd keep but not carry. It's
+opened at the great chest in any adventurers' guild's hall, against the east wall on the hearth's
+other side from the portal (insides.js GUILD's `+`, two squares long), and it's the hero's own:
+kept with their gold and pack (`Progress.strongroom`), carried wherever they go, so every guild's
+chest, in every town of every people and every world they go into, opens the same stash.
+
+- **Its room** (`STRONGROOM`): tabs of 40 places, each a stack of things alike, as the pack's
+  slots are (`alike`). Two tabs to begin with; tabs 3 to 6 bought one at a time, in order, for
+  10,000 gold each. Anything the pack holds can go in, what's bound to the hero too (a unique, a
+  horse's whistle): it stays theirs there. What's worn is taken off first.
+- **The chest** is the halls kit's chest (`medieval-hall-chest`, world/propkits.js), drawn a fifth
+  bigger than the pack made it (1.2 m along the wall: interiors3d.js `STRONG_CHEST`), so it reads
+  as more than a chest anywhere else, its back to the wall and its front to the room, clear of the
+  window, the hearthstone and the shield over it. Every people's guild has the halls kit, toned
+  to theirs. Without the licensed models, and till the kit's read, the game draws its own great
+  chest there: dark planks bound with iron, its lid domed, iron at its corners, a hasp and a lock.
+- **Opening it.** Tapping the chest walks the player up to it (the square before its middle,
+  `beforeStrongroom`), as a tap on the portal does, and there the stash opens (`#keepToStrongroom`,
+  `openStrongroom`); anything else they're told to do on the way, and it's forgotten. Over it, the
+  mouse's pointer is the hand. With a controller, standing before it and looking at it, Cross
+  opens it ("Your stash"). It doesn't open while the player's trading with another ("Finish your
+  trade first.").
+- **The panel** is the pack's, titled "Stash", the hero's gold in its corner: the stash and what
+  they carry together, side by side (the stash eight places a row, a page of the pack five, the
+  places the same size), or on a phone held upright the stash over the pack, both eight a row;
+  on a short screen (a phone on its side) the panel nearly the screen's height and the stash ten
+  a row. The stash's tabs run along its top, the one shown lit; those still to buy dashed, with a
+  padlock and "10,000". Beside them, **Sort** (the tab shown put in order, as the pack's Sort puts
+  the pack) and **Stow alike** (everything carried that stacks with what the tab holds put on it).
+- **Moving things.** A thing tapped, on either side, is sent across: onto a stack of things alike
+  there, else into the first free place (the pack's, on whichever page; the tab shown's). Dragged,
+  it goes where it's let go: a place in the tab shown (onto things alike, into it empty, or
+  swapped with what's there), a slot of the pack, or a tab's button (wherever it goes in that tab).
+  Held over a tab, the stash turns to it, as the pack's pages turn. Held, or right-clicked, what it
+  is is shown in its card, with what can be done with it (Take out; carried, Put in the stash and
+  the pack's own). With the keys, Enter on a place sends it across; with a controller, Cross does,
+  and Square shows the card.
+- **A tab bought.** A tab still to buy tapped is asked about in the panel itself, over the
+  places: "Buy tab 3?", what a tab costs and the gold they have, and "Buy for 10,000 gold" or "Not
+  now". A later one tapped asks for the next first ("Tab 4 first: the stash's tabs are bought in
+  order"). Short of the gold, it's refused and said why in the panel, the coins dropped
+  (`buyDenied`); bought, the coins are heard, "Tab 3 of your stash is yours.", and it's turned to.
+- **Shutting it**: its cross, Escape (a card or a tab asked about is put away first), anything
+  that closes the pack, or the player walking away from the chest (further than `STRONGROOM_REACH`,
+  2.5 squares from its middle), going through a door or falling. The chest's lid is heard as it
+  opens and as it shuts (`chestOpen`, `chestClose`), and a stack moving across (`pickup`).
+- **The host's** (`{ type: "strongroom", do, ... }`, host.js `#strongroom`): `put` (a slot of the
+  pack into a tab, at a place or wherever it goes), `take` (a place of a tab into the pack), `shift`
+  (from a tab to a place of a tab, or onto another), `sort`, `stow` and `buy` (the next tab, for its
+  price, as a shop's ware's paid). Each only for a hero alive, standing at the chest of an
+  adventurers' guild's hall (within `STRONGROOM_REACH`), with no horse out; all of it or nothing,
+  the pack, the stash and the gold as they were if it's refused. Refused, the game says why
+  (`strongroom`, `strongroomFull`, `strongroomLocked`, `strongroomTabs`, `strongroomOwned`,
+  `strongroomOrder`, `strongroomUnalike`, `full`, `gold`, `dead`, `riding`). Each told
+  (`strongroom`, with what was done to which tab), so the panel's shown again on every copy of the
+  world. It changed lockstep's commands, so `NET_VERSION` went to 229; and what a snapshot holds,
+  so `SNAPSHOT_VERSION` went to 54, a world kept before it carried on with each player's first
+  two tabs, empty (`SNAPSHOT_STEPS` 53). On a device it's kept with what they carry (app/save.js
+  `loadProgress`), and a character kept before there were stashes has the first two tabs, empty.
+  A world server keeps it with each hero it keeps, and a character's file carries it.
 
 ### Sound (audio/)
 

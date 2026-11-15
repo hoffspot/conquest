@@ -3792,8 +3792,10 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     drops twice in a few seconds.
   - **Commands:** 30 a second, 60 at once (a stick turning sends 16 a second); more are let go
     of unanswered, as a world server lets go of what comes too fast.
-  - **Nothing longer than 64 KB:** a character coming in is the longest thing a joined game
-    says, and one longer is told they can't be brought in.
+  - **Nothing longer than 256 KB:** a character coming in is the longest thing a joined game
+    says (a hero with six tabs of their stash and their pack full of the longest pieces there
+    are, about 82 KB), and one longer is told they can't be brought in. A world server's play
+    socket and its broker take as much from a game (`PLAY_LIMITS.message`, `BROKER_LIMITS.small`).
   - **On a direct link** (`app/peer.js` `MOST`): a message's pieces are kept to 4 MB, one whose
     pieces run on past that let go of; and a game with 8 MB waiting to go to it, too slow to take
     it, has its channel closed, as the servers' sockets close on one (its place is kept, and a

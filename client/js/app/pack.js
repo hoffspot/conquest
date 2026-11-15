@@ -26,6 +26,17 @@
 // the paperdoll goes on there, and one worn dragged back to the pack comes off. Double-clicked,
 // gear goes on or comes off.
 //
+// At the great chest in an adventurers' guild (core/strongroom.js), it shows the player's stash
+// (core/progress.js STRONGROOM) and what they carry together: side by side where there's room
+// across, the stash over the pack where there isn't (a phone held upright). The stash's tabs run
+// along its top, those still to buy locked, their price on them; one tapped is asked about in the
+// panel itself (Buy, or Not now). A thing tapped, on either side, is sent across: onto a stack of
+// things alike there, or into the first free place (the pack's, on whichever page; the tab
+// shown's). Dragged, it goes where it's let go: a place on either side, or another tab (held over
+// a tab, the stash turns to it, as the pack's pages turn). Held, or right-clicked, what it is is
+// shown in its card. Sort puts the tab shown in order, and Stow alike puts into it everything
+// carried that stacks with what it holds already.
+//
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
@@ -59,6 +70,12 @@ const DOLL = Object.freeze({ left: ["head", "chest", "bracers", "legs", "mainHan
 
 // What each slot's called on the paperdoll (short enough for its tile)
 const SHORT = Object.freeze({ mainHand: "Weapon" });
+
+// A padlock, on a tab of the stash still to buy
+const LOCK = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/></svg>';
+
+// Gold as it's shown at the stash: 10,000 (the same in every browser, whatever its language)
+const thousands = (gold) => String(gold).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // What stands for each slot when nothing's in it, faintly
 const PLACEHOLDERS = Object.freeze({ head: "nasalHelm", amulet: "amulet", cloak: "travelCloak", chest: "mail", bracers: "bracers", gloves: "gloves", belt: "belt", legs: "trousers", boots: "leatherBoots", ring1: "ring", ring2: "ring", mainHand: "sword", offHand: "roundShield" });
@@ -217,6 +234,9 @@ export class PackPanel {
         this.tab = "gear";
         this.trading = "buy";
         this.page = 0;
+        // (At the stash: the tab still to buy asked about ({ tab, why: why it couldn't be bought,
+        // if it was refused }), or null)
+        this.buying = null;
         this.selected = null;
         this.peeking = null;
         this.peeks = new WeakMap();
@@ -237,12 +257,15 @@ export class PackPanel {
          * unequip, use, buy, sell, arrange, sort, split, discard, drop; trading with another
          * player, offer, agree and cancel), a thing to put on an action wheel (its id), the
          * paperdoll turned (by an angle, radians), and to close; and a page turned (to hear it).
+         * At the stash, its commands too (core/host.js "strongroom": `then` hears what came of
+         * one, { ok, words }: why not, said), and a tab of it turned to (`onTab`, from 0).
          */
         this.onCommand = () => {};
         this.onWheel = () => {};
         this.onTurn = () => {};
         this.onClose = () => {};
         this.onPage = () => {};
+        this.onTab = () => {};
     }
 
     get open() {
@@ -269,10 +292,13 @@ export class PackPanel {
      * unwanted (what it won't buy, said, or null) }, trade: null or (trading
      * with another player) { name, mine, theirs (what each offers: { gold, items: [{ id, quality,
      * count, label }] }), agreed: { mine, theirs }, rev (which offers these are: the host's count of
-     * them, said back in agreeing, so an offer changed meanwhile isn't agreed to unseen) } }.
+     * them, said back in agreeing, so an offer changed meanwhile isn't agreed to unseen) } },
+     * strongroom: null or (open at its chest) { tab (the one shown, from 0), size, price (of a
+     * tab still to buy), tabs: [{ open, used (how many places hold something), next (still to
+     * buy: whether it's the next) }], slots (the tab shown's places, each as the pack's are) }.
      */
     show(view) {
-        const { gold, pack, shop, trade = null } = view;
+        const { gold, pack, shop, trade = null, strongroom = null } = view;
 
         // (Trading with a shopkeeper anew: buying first, nothing open)
         if (shop && this.view?.shop?.name !== shop.name) {
@@ -285,18 +311,29 @@ export class PackPanel {
 
         useDefs();
         this.view = view;
-        this.title.textContent = shop ? `Trading with ${shop.name}` : trade ? `Trading with ${trade.name}` : "Pack";
-        this.gold.textContent = `${gold} gold`;
+        this.title.textContent = shop ? `Trading with ${shop.name}` : trade ? `Trading with ${trade.name}` : strongroom ? "Stash" : "Pack";
+        this.gold.textContent = `${strongroom ? thousands(gold) : gold} gold`;
         this.panel.hidden = false;
         this.panel.classList.toggle("trading", Boolean(shop || trade));
         this.panel.classList.toggle("bartering", Boolean(trade));
+        this.panel.classList.toggle("stashing", Boolean(strongroom));
 
-        if (shop || trade) {
+        if (shop || trade || strongroom) {
             this.tab = "gear";
         }
 
         if (this.selected?.index !== undefined && !pack[this.selected.index]) {
             this.selected = null;
+        }
+
+        // (A place of the stash chosen: gone with what's in it, or with its tab turned from)
+        if (this.selected?.place !== undefined && (!strongroom || this.selected.tab !== strongroom.tab || !strongroom.slots[this.selected.place])) {
+            this.selected = null;
+        }
+
+        // (A tab asked about bought, or the stash shut)
+        if (this.buying && (!strongroom || strongroom.tabs[this.buying.tab]?.open)) {
+            this.buying = null;
         }
 
         if (this.selected?.slot && !view.gear.find(({ slot }) => slot === this.selected.slot)?.item) {
@@ -321,12 +358,17 @@ export class PackPanel {
         this.panel.hidden = true;
         this.selected = null;
         this.peeking = null;
+        this.buying = null;
         this.about.hidden = true;
     }
 
-    /** Put away what's open to see what it is (the card, or a row's): whether anything was. */
+    /** Put away what's open to see what it is (the card, or a row's; at the stash, a tab asked about): whether anything was. */
     unpeek() {
-        const open = !this.about.hidden || this.peeking !== null;
+        const open = !this.about.hidden || this.peeking !== null || this.buying !== null;
+
+        if (this.buying !== null) {
+            this.#askToBuy(null);
+        }
 
         if (!this.about.hidden) {
             this.#select(null);
@@ -358,7 +400,7 @@ export class PackPanel {
     // The tabs: Gear and Skills; trading with a shopkeeper, Buy and Sell across the top instead
     // (trading with another player, neither)
     #showTabs() {
-        const trading = Boolean(this.view.shop || this.view.trade);
+        const trading = Boolean(this.view.shop || this.view.trade || this.view.strongroom);
 
         this.modes.hidden = !this.view.shop;
         this.modes.replaceChildren(
@@ -438,6 +480,19 @@ export class PackPanel {
             this.body.replaceChildren(...(this.trading === "sell" ? this.#selling() : this.#buying()));
             this.#dolled(false);
             this.about.hidden = true;
+
+            return;
+        }
+
+        // At the stash: it and what's carried, together
+        if (this.view.strongroom && !trade) {
+            const main = element("div", "pack-main stash-main");
+
+            main.append(this.#stashed(), this.#carried());
+            this.body.replaceChildren(main);
+            this.#dolled(false);
+            this.#listen(main);
+            this.#describe();
 
             return;
         }
@@ -736,7 +791,7 @@ export class PackPanel {
         this.grid = grid;
         this.#fillGrid();
 
-        const hint = !this.view.pack.some(Boolean) ? "Nothing but lint." : this.view.trade ? "Tap something to see it, and offer it." : "Tap something to see what it does. Hold a piece of gear to put it on or take it off (or drag it); hold anything else (or right-click) for what to do with it.";
+        const hint = !this.view.pack.some(Boolean) ? "Nothing but lint." : this.view.trade ? "Tap something to see it, and offer it." : this.view.strongroom ? "Tap something to send it across, or drag it where it's to go. Hold it (or right-click) to see what it is." : "Tap something to see what it does. Hold a piece of gear to put it on or take it off (or drag it); hold anything else (or right-click) for what to do with it.";
 
         section.append(element("h3", "pack-heading", "Carried"), tools, grid, element("p", "pack-hint pack-tip", hint));
 
@@ -766,14 +821,15 @@ export class PackPanel {
         this.#describe();
     }
 
-    // A slot of the pack: its stack's icon, how many, and how well made
-    #cell(stack, index) {
-        const cell = element("button", `pack-cell${stack ? ` made-${stack.quality} rarity-${rarityOf(stack)}` : " empty"}`);
+    // A slot of the pack (or, `stashed`, a place in the tab of the stash shown): its stack's icon,
+    // how many, and how well made
+    #cell(stack, index, { stashed = false } = {}) {
+        const cell = element("button", `pack-cell${stashed ? " stash-cell" : ""}${stack ? ` made-${stack.quality} rarity-${rarityOf(stack)}` : " empty"}`);
 
         cell.type = "button";
-        cell.dataset.index = String(index);
+        cell.dataset[stashed ? "place" : "index"] = String(index);
         cell.setAttribute("role", "option");
-        cell.setAttribute("aria-selected", String(this.selected?.index === index));
+        cell.setAttribute("aria-selected", String(stashed ? this.selected?.place === index : this.selected?.index === index));
         cell.setAttribute("aria-label", stack ? `${stack.label}${stack.count > 1 ? `, ${stack.count}` : ""}` : "Empty");
 
         if (stack) {
@@ -783,6 +839,124 @@ export class PackPanel {
         }
 
         return cell;
+    }
+
+    // --- The stash ---
+
+    // The stash, open at its chest: its tabs along its top (those still to buy locked, their
+    // price on them), what's done to the tab shown (Sort, Stow alike), the tab still to buy asked
+    // about (if one is), and the tab shown's places
+    #stashed() {
+        const { strongroom } = this.view;
+        const section = element("section", "pack-section stash-section");
+        const tabs = element("div", "stash-tabs");
+        const tools = element("div", "stash-tools");
+        const grid = element("div", "pack-grid stashed");
+
+        tabs.setAttribute("role", "tablist");
+        tabs.setAttribute("aria-label", "The stash's tabs");
+        tabs.append(
+            ...strongroom.tabs.map(({ open, used }, k) => {
+                const label = open ? `Tab ${k + 1} (${used} of ${strongroom.size} full)` : `Tab ${k + 1}, locked: ${thousands(strongroom.price)} gold`;
+                const tab = button(open ? String(k + 1) : "", () => (open ? this.#turnTab(k) : this.#askToBuy(k)), { label, className: `stash-tab${open ? "" : " locked"}` });
+
+                tab.dataset.tab = String(k);
+                tab.title = label;
+
+                // (A tab still to buy a button, not a tab: a controller's L1 and R1 turn the
+                // stash's tabs, and would ask to buy each as they passed it)
+                if (open) {
+                    tab.setAttribute("role", "tab");
+                    tab.setAttribute("aria-selected", String(k === strongroom.tab));
+                } else {
+                    tab.innerHTML = `${LOCK}<span class="stash-price">${thousands(strongroom.price)}</span>`;
+                }
+
+                return tab;
+            }),
+        );
+        tools.append(
+            button("Sort", () => this.onCommand({ type: "strongroom", do: "sort", tab: strongroom.tab }), { label: `Sort: tab ${strongroom.tab + 1} of the stash put in order`, className: "pack-button pack-sort stash-sort" }),
+            button("Stow alike", () => this.onCommand({ type: "strongroom", do: "stow", tab: strongroom.tab }), { label: `Stow alike: everything you carry that stacks with what's in tab ${strongroom.tab + 1}, put in it`, className: "pack-button stash-stow" }),
+        );
+        grid.setAttribute("role", "listbox");
+        grid.setAttribute("aria-label", `Tab ${strongroom.tab + 1} of the stash`);
+        grid.replaceChildren(...strongroom.slots.map((stack, place) => this.#cell(stack, place, { stashed: true })));
+
+        const top = element("div", "stash-top");
+
+        top.append(tabs, tools);
+        section.append(element("h3", "pack-heading", "Stash"), top, ...(this.buying ? [this.#buyAsk()] : []), grid);
+
+        return section;
+    }
+
+    // A tab of the stash turned to (heard)
+    #turnTab(tab) {
+        if (tab !== this.view?.strongroom?.tab) {
+            this.onPage();
+            this.onTab(tab);
+        }
+    }
+
+    // A tab of the stash still to buy asked about in the panel (or no longer: null), its Buy in
+    // focus
+    #askToBuy(tab) {
+        this.buying = tab === null ? null : { tab, why: null };
+        this.#render();
+
+        if (this.buying) {
+            this.body.querySelector(".stash-ask .primary")?.focus();
+        }
+    }
+
+    // A tab still to buy asked about: the next (tabs are bought in order), what it costs and what
+    // they have, why it couldn't be bought if it was refused, and whether to buy it (or Not now)
+    #buyAsk() {
+        const { strongroom, gold } = this.view;
+        const next = strongroom.tabs.findIndex(({ open }) => !open);
+        const price = thousands(strongroom.price);
+        const box = element("div", "stash-ask");
+        const buttons = element("div", "pack-ask-buttons");
+
+        box.setAttribute("role", "group");
+        box.setAttribute("aria-label", `Buy tab ${next + 1}`);
+        box.append(
+            element("p", "stash-ask-title", this.buying.tab === next ? `Buy tab ${next + 1}?` : `Tab ${next + 1} first`),
+            element("p", "stash-ask-text", `${this.buying.tab === next ? "" : "The stash's tabs are bought in order. "}A tab is ${price} gold, and you have ${thousands(gold)}.`),
+        );
+
+        if (this.buying.why) {
+            box.append(element("p", "stash-ask-why", this.buying.why));
+        }
+
+        buttons.append(button("Not now", () => this.#askToBuy(null)), button(`Buy for ${price} gold`, () => this.#buyTab(next), { label: `Buy tab ${next + 1} for ${price} gold`, className: "pack-button primary" }));
+        box.append(buttons);
+
+        return box;
+    }
+
+    // The next tab bought (once the player's said so), or why not said in the panel
+    #buyTab(tab) {
+        this.onCommand({ type: "strongroom", do: "buy", tab }, (result) => {
+            if (!result?.ok && this.buying) {
+                this.buying = { ...this.buying, why: result?.words ?? null };
+            }
+        });
+    }
+
+    // At the stash: a thing tapped sent across, from the pack into the tab shown or from the tab
+    // shown into the pack, onto things alike there or into the first free place
+    #across(place) {
+        const { strongroom, pack } = this.view;
+
+        this.#select(null);
+
+        if (place.index !== undefined && pack[place.index]) {
+            this.onCommand({ type: "strongroom", do: "put", index: place.index, tab: strongroom.tab });
+        } else if (place.place !== undefined && place.tab === strongroom.tab && strongroom.slots[place.place]) {
+            this.onCommand({ type: "strongroom", do: "take", tab: strongroom.tab, place: place.place });
+        }
     }
 
     // How many of a thing exactly as the stack is (its make, level, what's rolled on it) the
@@ -865,7 +1039,8 @@ export class PackPanel {
     // another page, none's tapped, or it was chosen for its wheel)
     #describe() {
         const worn = this.selected?.slot ? this.view.gear.find(({ slot }) => slot === this.selected.slot) : null;
-        const stack = this.selected?.index !== undefined ? this.view.pack[this.selected.index] : null;
+        const stashed = this.selected?.place !== undefined && this.selected.tab === this.view.strongroom?.tab ? this.view.strongroom.slots[this.selected.place] : null;
+        const stack = this.selected?.index !== undefined ? this.view.pack[this.selected.index] : stashed;
         const thing = worn?.item ?? stack;
 
         if (!thing || this.selected.quiet || !this.#selectedElement()) {
@@ -886,12 +1061,22 @@ export class PackPanel {
             if (!this.view.shop && !this.view.trade) {
                 actions.append(button("Take off", then(() => this.onCommand({ type: "unequip", slot: worn.slot })), { label: `Take off ${thing.label}` }));
             }
+        } else if (stashed) {
+            // (In the stash: taken out into the pack)
+            const place = { place: this.selected.place, tab: this.selected.tab };
+
+            actions.append(button("Take out", then(() => this.#across(place)), { label: `Take out: ${stack.label}` }));
         } else {
+            // (Carried, at the stash: put in it first of all)
+            if (this.view.strongroom) {
+                actions.append(button("Put in the stash", then(() => this.#across({ index })), { label: `Put in the stash: ${stack.label}` }));
+            }
+
             actions.append(...this.#actionsFor(stack).map(({ key, label }) => button(label, then(() => this.#do(key, index)), { label: `${label}: ${stack.label}` })));
         }
 
         // (Its buttons beneath what it is, always in view: what it is scrolls, if it must)
-        inner.append(card(thing, { count: stack?.count ?? 1, compare: stack ? "Put on instead of what's worn:" : null, worth: true }));
+        inner.append(card(thing, { count: stack?.count ?? 1, compare: stack ? (stashed ? "Taken out and put on instead of what's worn:" : "Put on instead of what's worn:") : null, worth: true }));
         this.about.className = `pack-about rarity-${rarityOf(thing)}`;
         this.about.replaceChildren(inner, ...(actions.childElementCount ? [actions] : []), button("", () => this.#select(null), { label: "Put it away", className: "pack-about-close" }));
         this.about.lastChild.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
@@ -901,9 +1086,9 @@ export class PackPanel {
 
     // What's tapped, as it's shown: its slot of the pack (on the page showing), or of the paperdoll
     #selectedElement() {
-        const { index, slot } = this.selected ?? {};
+        const { index, slot, place } = this.selected ?? {};
 
-        return index !== undefined ? this.body.querySelector(`.pack-cell[data-index="${index}"]`) : slot ? this.body.querySelector(`.doll-slot[data-slot="${slot}"]`) : null;
+        return index !== undefined ? this.body.querySelector(`.pack-cell[data-index="${index}"]`) : place !== undefined ? this.body.querySelector(`.stash-cell[data-place="${place}"]`) : slot ? this.body.querySelector(`.doll-slot[data-slot="${slot}"]`) : null;
     }
 
     // The card put beside what it's about, its point at it, in view: beside it where there's room
@@ -1071,8 +1256,21 @@ export class PackPanel {
     // --- Tapping, holding and dragging things in the pack and on the paperdoll ---
 
     // What's under a pointer: a slot of the pack ({ index, element }), the paperdoll's
-    // ({ slot, element }), or a page's tab ({ page, element })
+    // ({ slot, element }), or a page's tab ({ page, element }); at the stash, a place in the tab
+    // shown ({ place, tab, element }), or one of its tabs ({ shelf: which, open, element })
     #under(target) {
+        const stashed = target?.closest?.(".stash-cell");
+
+        if (stashed && this.panel.contains(stashed)) {
+            return { place: Number(stashed.dataset.place), tab: this.view.strongroom?.tab ?? 0, element: stashed };
+        }
+
+        const shelf = target?.closest?.(".stash-tab");
+
+        if (shelf && this.panel.contains(shelf)) {
+            return { shelf: Number(shelf.dataset.tab), open: !shelf.classList.contains("locked"), element: shelf };
+        }
+
         const cell = target?.closest?.(".pack-cell");
 
         if (cell && this.panel.contains(cell)) {
@@ -1090,8 +1288,12 @@ export class PackPanel {
         return page && this.panel.contains(page) ? { page: Number(page.dataset.page), element: page } : null;
     }
 
-    // What's in a place: a stack in the pack, or a piece worn
+    // What's in a place: a stack in the pack, or a piece worn; or, in the tab of the stash shown, a stack
     #thingAt(place) {
+        if (place?.place !== undefined) {
+            return place.tab === this.view.strongroom?.tab ? (this.view.strongroom.slots[place.place] ?? null) : null;
+        }
+
         return place?.index !== undefined ? this.view.pack[place.index] : place?.slot ? (this.view.gear.find(({ slot }) => slot === place.slot)?.item ?? null) : null;
     }
 
@@ -1099,7 +1301,7 @@ export class PackPanel {
         area.addEventListener("pointerdown", (event) => {
             const place = this.#under(event.target);
 
-            if (!place || place.page !== undefined || event.button !== 0 || this.press) {
+            if (!place || place.page !== undefined || place.shelf !== undefined || event.button !== 0 || this.press) {
                 return;
             }
 
@@ -1119,22 +1321,26 @@ export class PackPanel {
             document.addEventListener("pointercancel", this.upped);
         });
 
-        // Right-clicked (or the menu key): the wheel, to click on
+        // Right-clicked (or the menu key): the wheel, to click on; at the stash, what it is
         area.addEventListener("contextmenu", (event) => {
             const place = this.#under(event.target);
 
             event.preventDefault();
 
-            if (place?.index !== undefined && this.view.pack[place.index]) {
+            if (this.view.strongroom) {
+                if (this.#thingAt(place)) {
+                    this.#select(place);
+                }
+            } else if (place?.index !== undefined && this.view.pack[place.index]) {
                 this.#openWheel({ place, clicked: true });
             }
         });
 
-        // Double-clicked: gear on, or off
+        // Double-clicked: gear on, or off (not at the stash, where each click sends it across)
         area.addEventListener("dblclick", (event) => {
             const place = this.#under(event.target);
 
-            if (place && !this.view.shop && !this.view.trade) {
+            if (place && !this.view.shop && !this.view.trade && !this.view.strongroom) {
                 this.#wear(place);
             }
         });
@@ -1143,9 +1349,24 @@ export class PackPanel {
         area.addEventListener("keydown", (event) => {
             const place = this.#under(event.target);
 
-            if (place && place.page === undefined && (event.key === "Enter" || event.key === " ")) {
+            if (place && place.page === undefined && place.shelf === undefined && (event.key === "Enter" || event.key === " ")) {
                 event.preventDefault();
-                this.#select(place);
+
+                if (this.view.strongroom) {
+                    this.#across(place);
+                } else {
+                    this.#select(place);
+                }
+            }
+        });
+
+        // Pressed by a controller's Cross (a click from no pointer: app/padplay.js), at the stash:
+        // tapped, sent across
+        area.addEventListener("click", (event) => {
+            const place = event.detail === 0 && this.view.strongroom ? this.#under(event.target) : null;
+
+            if (place && (place.index !== undefined || place.place !== undefined)) {
+                this.#across(place);
             }
         });
     }
@@ -1207,10 +1428,17 @@ export class PackPanel {
                 this.#dropOn(press.place, to);
             }
         } else if (event.type === "pointerup" && !press.mode) {
-            // (Held long enough, though the page was too busy to notice in time: gear on or off)
+            // (Held long enough, though the page was too busy to notice in time: gear on or off;
+            // at the stash, what it is. Tapped there, it's sent across)
             const thing = this.#thingAt(press.place);
 
-            if (event.timeStamp - press.at >= HOLD_MS && thing && (press.place.slot || thing.equip) && !this.view.shop && !this.view.trade) {
+            if (this.view.strongroom) {
+                if (event.timeStamp - press.at >= HOLD_MS && thing) {
+                    this.#select(press.place);
+                } else {
+                    this.#across(press.place);
+                }
+            } else if (event.timeStamp - press.at >= HOLD_MS && thing && (press.place.slot || thing.equip) && !this.view.shop && !this.view.trade) {
                 this.#held(press);
             } else {
                 this.#select(press.place);
@@ -1232,6 +1460,15 @@ export class PackPanel {
         const thing = this.#thingAt(press.place);
 
         if (!thing) {
+            return;
+        }
+
+        // (At the stash: what it is, in its card, with what can be done with it)
+        if (this.view.strongroom) {
+            press.mode = "held";
+            globalThis.navigator?.vibrate?.(12);
+            this.#select(press.place);
+
             return;
         }
 
@@ -1258,8 +1495,35 @@ export class PackPanel {
         }
     }
 
-    // Dropped somewhere: in the pack, moved (or, worn, taken off there); on the paperdoll, put on there
+    // Dropped somewhere: in the pack, moved (or, worn, taken off there); on the paperdoll, put on
+    // there. At the stash: from the pack into a place of the tab shown, or onto another tab
+    // (wherever it goes in it); from the stash into the pack (a slot of it, or wherever it goes,
+    // dropped on a page's tab), to another place in the tab shown, or onto another tab
     #dropOn(from, to) {
+        const { strongroom } = this.view;
+
+        if (strongroom && (from.index !== undefined || from.place !== undefined)) {
+            const onto = to.shelf !== undefined && to.open ? to.shelf : null;
+
+            if (from.index !== undefined && to.place !== undefined) {
+                this.onCommand({ type: "strongroom", do: "put", index: from.index, tab: strongroom.tab, to: to.place });
+            } else if (from.index !== undefined && onto !== null) {
+                this.onCommand({ type: "strongroom", do: "put", index: from.index, tab: onto });
+            } else if (from.index !== undefined && to.index !== undefined && from.index !== to.index) {
+                this.onCommand({ type: "arrange", from: from.index, to: to.index });
+            } else if (from.place !== undefined && to.place !== undefined && (from.tab !== strongroom.tab || from.place !== to.place)) {
+                this.onCommand({ type: "strongroom", do: "shift", tab: from.tab, place: from.place, into: strongroom.tab, to: to.place });
+            } else if (from.place !== undefined && onto !== null && onto !== from.tab) {
+                this.onCommand({ type: "strongroom", do: "shift", tab: from.tab, place: from.place, into: onto });
+            } else if (from.place !== undefined && to.index !== undefined) {
+                this.onCommand({ type: "strongroom", do: "take", tab: from.tab, place: from.place, to: to.index });
+            } else if (from.place !== undefined && to.page !== undefined) {
+                this.onCommand({ type: "strongroom", do: "take", tab: from.tab, place: from.place });
+            }
+
+            return;
+        }
+
         if (to.index !== undefined) {
             if (from.index !== undefined && from.index !== to.index) {
                 this.onCommand({ type: "arrange", from: from.index, to: to.index });
@@ -1274,10 +1538,10 @@ export class PackPanel {
     // A place tapped (or null): what's there chosen, its card shown; `card` false, chosen without
     // it (`quiet`: its wheel opened)
     #select(place, { card = true } = {}) {
-        this.selected = this.#thingAt(place) ? { ...(place.slot ? { slot: place.slot } : { index: place.index }), ...(card ? {} : { quiet: true }) } : null;
+        this.selected = this.#thingAt(place) ? { ...(place.slot ? { slot: place.slot } : place.place !== undefined ? { place: place.place, tab: place.tab } : { index: place.index }), ...(card ? {} : { quiet: true }) } : null;
 
         for (const cell of this.panel.querySelectorAll(".pack-cell")) {
-            cell.setAttribute("aria-selected", String(Number(cell.dataset.index) === this.selected?.index));
+            cell.setAttribute("aria-selected", String(cell.classList.contains("stash-cell") ? Number(cell.dataset.place) === this.selected?.place : Number(cell.dataset.index) === this.selected?.index));
         }
 
         for (const slot of this.panel.querySelectorAll(".doll-slot")) {
@@ -1314,7 +1578,12 @@ export class PackPanel {
             this.#turnTo(over.page);
         }
 
-        this.#light(over?.page === undefined ? over?.element : null);
+        // (Over a tab of the stash bought, the stash turned to it)
+        if (over?.shelf !== undefined && over.open) {
+            this.#turnTab(over.shelf);
+        }
+
+        this.#light(over?.page === undefined && over?.shelf === undefined ? over?.element : null);
     }
 
     #light(target) {

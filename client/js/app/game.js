@@ -55,6 +55,7 @@ import { keepOutlook, SCENERY } from "../core/scenery.js";
 import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
+import { atStrongroom, beforeStrongroom, strongroomOn } from "../core/strongroom.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
 import { atWriting, beforeWriting, keepRead, WRITINGS, writingOn } from "../core/writings.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
@@ -77,7 +78,7 @@ import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
-import { ABILITIES, bound, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { ABILITIES, bound, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, STRONGROOM, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
@@ -414,7 +415,7 @@ const PAD_PICK_MS = 120;
 const PAD_REACH = Object.freeze({ talk: 5, foe: 10, thing: 5, portal: 8 });
 
 // What Cross does to each kind of thing in front of the player, said beside it
-const PAD_WORDS = Object.freeze({ talk: "Talk", trade: "Trade", attack: "Fight", drop: "Pick up", door: "Go through", portal: "The portal", table: "The war table", lectern: "Read", sign: "Read", shrine: "Pray" });
+const PAD_WORDS = Object.freeze({ talk: "Talk", trade: "Trade", attack: "Fight", drop: "Pick up", door: "Go through", portal: "The portal", strongroom: "Your stash", table: "The war table", lectern: "Read", sign: "Read", shrine: "Pray" });
 
 // A dungeon's level's camera, its tilt and distance the space's (world/view.js DUNGEON_VIEW):
 // the player's own tilt or zoom kept on them as a nudge while it's as open or as tight as where
@@ -1242,7 +1243,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2049,6 +2050,11 @@ export class Game {
         // pray at: #keepToShrine)
         this.toSign = null;
         this.toShrine = null;
+        // (And the map whose stash's chest they're walking up to, to open: #keepToStrongroom; and
+        // the stash open beside the pack, at the chest: { map, tab } (the tab shown), or null)
+        this.toStrongroom = null;
+        this.strongroom = null;
+        this.strongroomTab = 0;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -2738,7 +2744,7 @@ export class Game {
         this.sigil.onCast = () => this.castPrismatic();
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
-        this.pack.onCommand = (command) => this.#packCommand(command);
+        this.pack.onCommand = (command, then = null) => this.#packCommand(command, then);
         this.pack.onWheel = (id) => this.#putOnWheel(`item:${id}`, actionOf(`item:${id}`)?.on === "enemy" ? "enemy" : "self");
         this.dollTurn = 0;
         this.pack.onTurn = (angle) => {
@@ -2750,6 +2756,13 @@ export class Game {
         this.spellbook.onClose = () => this.closeSpellbook();
         this.pack.onClose = () => this.closePack();
         this.pack.onPage = () => this.sound?.play("pageTurn");
+        // (A tab of the stash turned to, open at its chest: shown)
+        this.pack.onTab = (tab) => {
+            if (this.strongroom && tab !== this.strongroom.tab) {
+                this.strongroom.tab = tab;
+                this.#showPack();
+            }
+        };
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
@@ -4866,6 +4879,8 @@ export class Game {
         this.#keepTalking();
         this.#keepShopping();
         this.#keepToPortal();
+        this.#keepToStrongroom();
+        this.#keepAtStrongroom();
         this.#keepToTable();
         this.#keepToLectern();
         this.#keepToSign();
@@ -11862,6 +11877,32 @@ export class Game {
         }
     }
 
+    // The player's stash changed (core/host.js #strongroom): heard (a stack moved in or out; a tab
+    // bought, its coins, said, and turned to), and shown as it is now
+    #strongroomed(event) {
+        if (event.id !== this.me) {
+            return;
+        }
+
+        if (event.do === "buy") {
+            this.hud.message(`Tab ${event.tab + 1} of your stash is yours.`, 2.5);
+            this.sound?.play("coins");
+
+            if (this.strongroom) {
+                this.strongroom.tab = event.tab;
+            }
+        } else if (event.do !== "sort") {
+            this.sound?.play("pickup");
+        }
+
+        this.hud.setGold(this.progress.gold);
+        this.onProgress(this.progress);
+
+        if (this.pack?.open) {
+            this.#showPack();
+        }
+    }
+
     // Someone's gear changed: what they wear and carry shown (and how they hold their weapon)
     #regear({ id, weapon, worn, held = null }) {
         const avatar = this.avatars.get(id);
@@ -14022,13 +14063,16 @@ export class Game {
         }
     }
 
-    /** Close the pack (and stop trading). */
+    /** Close the pack (and stop trading, and shut the stash). */
     closePack() {
-        // (Its strap buckled, if it was open)
+        // (Its strap buckled, if it was open; the stash's lid shut, if that was)
         if (this.pack?.open) {
-            this.sound?.play("packClose");
+            this.sound?.play(this.strongroom ? "chestClose" : "packClose");
         }
 
+        // (The tab shown kept, to open on next time)
+        this.strongroomTab = this.strongroom?.tab ?? this.strongroomTab ?? 0;
+        this.strongroom = null;
         this.#stopShopping();
         this.pack?.hide();
 
@@ -14098,6 +14142,7 @@ export class Game {
             case "open":
                 this.closeJournal();
                 this.#stopShopping();
+                this.strongroom = null;
                 this.hud.message(`Trading with ${them}: offer what you will, then agree.`, 3);
                 break;
             case "offer":
@@ -14152,6 +14197,7 @@ export class Game {
     // Trade with a shopkeeper: the pack open, their wares in it
     #openShop({ shop, keeper, name }) {
         this.closeJournal();
+        this.strongroom = null;
         this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
         this.#showPack();
     }
@@ -14188,7 +14234,8 @@ export class Game {
 
             return { slot, label, takes, item: item && { ...item, info: describe(piece, progress, { label: item.label, haggle }) }, locked: slot === "offHand" && !offHandFree(held) && !GEAR[held]?.quiver, only: slot === "offHand" && GEAR[held]?.quiver ? "Quiver" : null };
         });
-        const pack = progress.pack.map((stack, index) => {
+        // (What's carried, or (`stashed`) in the stash: what each is and what can be done with it)
+        const entry = (stack, index, stashed = false) => {
             if (!stack) {
                 return null;
             }
@@ -14196,8 +14243,20 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null, giveTo: bound(stack) ? [] : this.#wearers(stack) };
-        });
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), info: def.slot || def.charm ? describe(stack, progress, stashed ? { label, haggle, outside: true } : { index, label, haggle }) : null, giveTo: bound(stack) || stashed ? [] : this.#wearers(stack) };
+        };
+        const pack = progress.pack.map((stack, index) => entry(stack, index));
+        // (The stash, open at its chest: each tab bought and how full it is, those still to buy,
+        // and what's in the one shown)
+        const { tabs } = progress.strongroom;
+        const tab = this.strongroom ? Math.max(0, Math.min(tabs.length - 1, this.strongroom.tab)) : 0;
+        const strongroom = this.strongroom && {
+            tab,
+            size: STRONGROOM.size,
+            price: STRONGROOM.price,
+            tabs: Array.from({ length: STRONGROOM.most }, (_, k) => (k < tabs.length ? { open: true, used: tabs[k].filter(Boolean).length } : { open: false, next: k === tabs.length })),
+            slots: tabs[tab].map((stack, place) => entry(stack, place, true)),
+        };
         const me = this.battle.actor(this.me);
         const might = this.host.mightFor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50, might });
@@ -14253,6 +14312,7 @@ export class Game {
             pack,
             shop,
             trade: trade && { name: this.host.players.get(other)?.hero.name ?? "them", mine: offer(trade.offers[this.me]), theirs: offer(trade.offers[other]), agreed: { mine: Boolean(trade.agreed[this.me]), theirs: Boolean(trade.agreed[other]) }, rev: trade.rev ?? 0 },
+            strongroom: trade || shop ? null : strongroom,
         });
     }
 
@@ -14268,11 +14328,15 @@ export class Game {
             .map(([id]) => ({ id, name: this.battle.actor(id)?.name ?? "them" }));
     }
 
-    #packCommand(asked) {
+    #packCommand(asked, then = null) {
         const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" ? { ...asked, to: this.shopping?.keeper } : asked;
         const worn = asked.type === "equip" || asked.type === "outfit" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
 
         return this.#command(command, (result) => {
+            // (What came of it told back to the pack, why not in words: app/pack.js, the stash's
+            // tab bought)
+            then?.({ ...result, words: result.ok ? null : (REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.") });
+
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
                 this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
@@ -14287,6 +14351,11 @@ export class Game {
                 // with the next step, and moving things about makes none)
                 this.hud.setGold(this.progress.gold);
                 this.onProgress(this.progress);
+
+                // (A tab of the stash bought: turned to at once)
+                if (command.type === "strongroom" && command.do === "buy" && this.strongroom) {
+                    this.strongroom.tab = this.progress.strongroom.tabs.length - 1;
+                }
 
                 if (command.type === "discard" && result.item) {
                     this.hud.offer(`Thrown away: ${thingsOf(result.item)}.`, "Undo", () => this.#packCommand({ type: "undiscard" }), UNDO_MS / 1000);
@@ -17044,6 +17113,9 @@ export class Game {
             case "spoils":
                 this.#progressed(event);
                 break;
+            case "strongroom":
+                this.#strongroomed(event);
+                break;
             case "request":
             case "standing":
             case "guild":
@@ -18642,6 +18714,13 @@ export class Game {
             things.push({ key: "portal", x: portal.x + portal.w / 2 - 0.5, z: portal.y + portal.h / 2, reach: PAD_REACH.portal, kind: "portal", portal, height: 2.9 });
         }
 
+        // (The stash's chest, by the guild's hearth: core/strongroom.js)
+        const chest = strongroomOn(map);
+
+        if (chest) {
+            things.push({ key: "strongroom", x: chest.x + chest.w / 2, z: chest.y + chest.h / 2, reach: PAD_REACH.thing, kind: "strongroom", strongroom: chest, height: 1 });
+        }
+
         if (table) {
             things.push({ key: "table", x: table.x + table.w / 2, z: table.y + table.h / 2, reach: PAD_REACH.thing, kind: "table", table, height: 1.1 });
         }
@@ -18937,16 +19016,18 @@ export class Game {
         const shrine = enemy || lectern || sign ? null : this.#shrineAt(clientX, clientY);
         const door = enemy || lectern || sign || shrine ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId, FAR.nearFar) ?? null;
         const portal = enemy || door || lectern || sign || shrine ? null : this.#portalAt(clientX, clientY);
-        const table = enemy || door || portal || lectern || sign || shrine ? null : this.#warTableAt(clientX, clientY);
-        const ground = enemy || door || portal || table || lectern || sign || shrine || !this.tapToMove ? null : this.view.pickGround(clientX, clientY);
+        // (The stash's chest, by the guild's hearth: core/strongroom.js)
+        const strongroom = enemy || door || portal || lectern || sign || shrine ? null : this.#strongroomAt(clientX, clientY);
+        const table = enemy || door || portal || strongroom || lectern || sign || shrine ? null : this.#warTableAt(clientX, clientY);
+        const ground = enemy || door || portal || strongroom || table || lectern || sign || shrine || !this.tapToMove ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
         // (Only the ground there, and Tap/Click to Move off: nothing done, not even a talk ended)
-        if (!enemy && !door && !portal && !table && !lectern && !sign && !shrine && !this.tapToMove) {
+        if (!enemy && !door && !portal && !strongroom && !table && !lectern && !sign && !shrine && !this.tapToMove) {
             return;
         }
 
-        this.#order({ enemy, door, portal, table, lectern, sign, shrine, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, strongroom, table, lectern, sign, shrine, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -19214,7 +19295,7 @@ export class Game {
             return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
-        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY) || this.#obstacleAt(clientX, clientY)) {
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY) || this.#obstacleAt(clientX, clientY) || this.#strongroomAt(clientX, clientY)) {
             return "hand";
         }
 
@@ -19238,6 +19319,21 @@ export class Game {
         const box = new THREE.Box3(new THREE.Vector3(ox + portal.x - 1, 0, oz + portal.y), new THREE.Vector3(ox + portal.x + portal.w, 2.9, oz + portal.y + portal.h));
 
         return this.view.rayAt(clientX, clientY).intersectsBox(box) ? portal : null;
+    }
+
+    // The stash's chest in the guild's hall the player's in (core/strongroom.js), if that's what
+    // was tapped: the chest, drawn larger than its squares' metre (interiors3d.js STRONG_CHEST)
+    #strongroomAt(clientX, clientY) {
+        const chest = strongroomOn(this.world.maps?.[this.mapId]);
+
+        if (!chest) {
+            return null;
+        }
+
+        const [ox, oz] = this.originOf(this.mapId);
+        const box = new THREE.Box3(new THREE.Vector3(ox + chest.x - 0.1, 0, oz + chest.y), new THREE.Vector3(ox + chest.x + chest.w, 1.05, oz + chest.y + chest.h));
+
+        return this.view.rayAt(clientX, clientY).intersectsBox(box) ? chest : null;
     }
 
     // The war table of the keep's great hall the player's in (core/wartable.js), if that's what
@@ -19623,6 +19719,81 @@ export class Game {
         this.onWorldMap({ travel: { branches, gold: this.progress.gold, rank: GUILD_RANKS[rank].title, off: fareOff(rank), choose: (id) => this.travel(id) } });
 
         return { ok: true, branches };
+    }
+
+    // Walking up to the stash's chest (it was tapped): there and stopped, the stash opens; told
+    // to do anything else, gone through a door, or stopped short, it's forgotten
+    #keepToStrongroom() {
+        if (!this.toStrongroom) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const chest = strongroomOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || me.map !== this.toStrongroom || !chest) {
+            this.toStrongroom = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        this.toStrongroom = null;
+
+        if (atStrongroom(chest, me.x, me.y)) {
+            this.openStrongroom();
+        }
+    }
+
+    // The stash open, and the player gone from beside its chest (walked off, carried off, through
+    // a door) or fallen: it's shut, and the pack with it
+    #keepAtStrongroom() {
+        if (!this.strongroom) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const chest = strongroomOn(this.world.maps?.[this.strongroom.map]);
+
+        if (!this.pack?.open || !me || me.dead || me.map !== this.strongroom.map || !atStrongroom(chest, me.x, me.y)) {
+            this.closePack();
+        }
+    }
+
+    /**
+     * Open the stash at the chest by the guild's hearth the player stands at (core/strongroom.js):
+     * the pack and the stash side by side (app/pack.js), the tab shown last; whatever's tapped
+     * sent across. Returns { ok }, or why not ({ ok: false, reason }: not at the chest, or trading
+     * with another player: said).
+     */
+    openStrongroom() {
+        const me = this.battle.actor(this.me);
+        const chest = strongroomOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || this.world.interiors?.of(this.mapId)?.kind !== "guild" || !chest || !atStrongroom(chest, me.x, me.y)) {
+            return { ok: false, reason: "strongroom" };
+        }
+
+        if (this.#tradeNow()) {
+            this.hud.message("Finish your trade first.", 2.5);
+            this.sound?.play("denied");
+
+            return { ok: false, reason: "trading" };
+        }
+
+        this.closeJournal();
+        this.closeSpellbook();
+        this.closeParty();
+        this.closeReader();
+        this.#stopShopping();
+        this.strongroom = { map: this.mapId, tab: Math.min(this.strongroom?.tab ?? this.strongroomTab ?? 0, this.progress.strongroom.tabs.length - 1) };
+        this.#showPack();
+        this.sound?.play("chestOpen");
+
+        return { ok: true };
     }
 
     /**
@@ -20954,7 +21125,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, portal = null, table = null, lectern = null, sign = null, shrine = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, strongroom = null, table = null, lectern = null, sign = null, shrine = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -21020,6 +21191,24 @@ export class Game {
 
             this.#command({ type: "move", to: square, run });
             this.toPortal = player.map;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
+
+            return;
+        }
+
+        // The stash's chest: up to it, and the stash opens (#keepToStrongroom)
+        if (strongroom) {
+            const [ox, oz] = this.originOf(player.map);
+            const square = beforeStrongroom(strongroom);
+
+            if (atStrongroom(strongroom, player.x, player.y) && !player.path.length) {
+                this.openStrongroom();
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toStrongroom = player.map;
             this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
 
             return;
@@ -21137,6 +21326,7 @@ export class Game {
         }
 
         this.toPortal = null;
+        this.toStrongroom = null;
         this.toTable = null;
         this.toLectern = null;
         this.toSign = null;

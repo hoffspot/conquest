@@ -2701,6 +2701,12 @@ function guild(map) {
         portal(solid, w, m(piece.y + piece.h / 2));
     }
 
+    // And on the hearth's other side, against the wall, the great chest each hero's stash is
+    // opened at (core/strongroom.js)
+    for (const piece of at("strongroom")) {
+        strongChest(solid, kit, map, piece);
+    }
+
     // Barrels either side of the door
     for (const barrel of at("barrels")) {
         barrelAt(solid, kit, barrel.x + barrel.w / 2, barrel.y + 0.5);
@@ -2737,6 +2743,66 @@ const GUILD_WALLS = Object.freeze([
     { role: "shield", x: 12.45, z: 16, turn: Math.PI, y: 1.1, most: [0.6, 1.2] },
     { role: "map", x: 17.6, z: 16, turn: Math.PI, y: 1.05, most: [2.4, 1.3] },
 ]);
+
+// How the stash's chest stands (metres): as long as `long` along the wall, a kit's as tall and
+// as deep as its own proportions have it (the halls kit's chest, 1 m long as the pack made it,
+// drawn a fifth bigger, so it's more than a chest anywhere else), its back `off` the wall; the
+// game's own `tall` and `deep`, its lid's dome rising `dome` over its body
+export const STRONG_CHEST = Object.freeze({ long: 1.2, off: 0.04, tall: 0.92, deep: 0.8, dome: 0.22 });
+
+// The stash's chest (a guild's `strongroom` piece: core/strongroom.js), its back to the wall
+// beside it and its middle the middle of its squares: the halls kit's chest, STRONG_CHEST long
+// (its own fit, not kitBox's, which keeps a chest no bigger than the game's own); or the game's
+// own, drawn meanwhile and without the licensed models: a great chest of dark planks bound with
+// iron, its lid domed, iron at its corners and a hasp and lock on its front
+function strongChest(solid, props, map, box) {
+    const piece = kitted("chest", box.x + box.y);
+    const art = artOf(solid, piece);
+    const turn = awayFromWall(map, box.x, box.y);
+    const fit = piece ? piece.size.map((metres) => (metres * STRONG_CHEST.long) / piece.size[0]) : [STRONG_CHEST.long, STRONG_CHEST.tall, STRONG_CHEST.deep];
+    // (Which way its front faces, out into the room, and which way the wall runs: [x, z] each)
+    const out = [Math.round(Math.sin(turn)), Math.round(Math.cos(turn))];
+    const side = [Math.abs(out[1]), Math.abs(out[0])];
+    // (Its middle: the middle of its squares along the wall, its back STRONG_CHEST.off from it)
+    const [cx, cz] = [box.x + box.w / 2, box.y + box.h / 2];
+    const back = STRONG_CHEST.off + fit[2] / 2 - (out[0] ? box.w : box.h) / 2;
+    const [mx, mz] = [cx + out[0] * back, cz + out[1] * back];
+    // (A box of it from `u0` to `u1` along the wall and `v0` to `v1` from its back to its front,
+    // metres from its middle, `y0` to `y1` up)
+    const part = (u0, u1, v0, v1, y0, y1, stuff) => {
+        const [x0, z0, x1, z1] = [mx + u0 * side[0] + v0 * out[0], mz + u0 * side[1] + v0 * out[1], mx + u1 * side[0] + v1 * out[0], mz + u1 * side[1] + v1 * out[1]];
+
+        art.box(m(Math.min(x0, x1)), m(y0), m(Math.min(z0, z1)), m(Math.max(x0, x1)), m(y1), m(Math.max(z0, z1)), material(stuff));
+    };
+    const [half, deep] = [STRONG_CHEST.long / 2, STRONG_CHEST.deep / 2];
+    const body = STRONG_CHEST.tall - STRONG_CHEST.dome;
+    const steps = [0.1, 0.25, 0.42];
+    const step = STRONG_CHEST.dome / steps.length;
+
+    // Its body, the lid's rim, and the lid domed over it in steps
+    part(-half, half, -deep, deep, 0, body, "planks-dark");
+    part(-half - 0.02, half + 0.02, -deep - 0.02, deep + 0.02, body - 0.04, body + 0.04, "timber");
+    steps.forEach((inset, k) => part(-half, half, -deep + inset, deep - inset, body + k * step, body + (k + 1) * step, "planks-dark"));
+
+    // Iron bands round it and over its lid, iron at its foot's corners, the hasp and its lock
+    for (const u of [-half + 0.12, 0, half - 0.12]) {
+        part(u - 0.035, u + 0.035, -deep - 0.015, deep + 0.015, 0, body + 0.02, "iron");
+        steps.forEach((inset, k) => part(u - 0.035, u + 0.035, -deep + inset - 0.012, deep - inset + 0.012, body + k * step, body + (k + 1) * step + 0.012, "iron"));
+    }
+
+    for (const u of [-half, half]) {
+        for (const v of [-deep, deep]) {
+            part(u - 0.06, u + 0.06, v - 0.06, v + 0.06, 0, 0.12, "iron");
+        }
+    }
+
+    part(-0.07, 0.07, deep, deep + 0.03, body - 0.2, body + 0.06, "iron");
+    part(-0.09, 0.09, deep + 0.02, deep + 0.06, body - 0.26, body - 0.1, "brass");
+
+    if (piece) {
+        props.push(kitAt(piece, mx, mz, fit, turn));
+    }
+}
 
 // A barrel standing at (x, z) (metres): a kit's, as tall and as round as the game's own; or the
 // game's own, its staves and two iron hoops

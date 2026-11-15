@@ -56,11 +56,13 @@ export const PLAN_KEY = Object.freeze({
     p: { kind: "pew", blocks: true },
     f: { kind: "basin", blocks: true },
     // An adventurers' guild's: the quest board on the wall, shelves of ledgers and scrolls
-    // behind the counter, and the portal to the other branches (an arch on the wall, its veil
-    // shimmering: core/portals.js)
+    // behind the counter, the portal to the other branches (an arch on the wall, its veil
+    // shimmering: core/portals.js), and the great chest by the hearth that opens on the hero's
+    // own stash (core/strongroom.js)
     q: { kind: "board", blocks: true, joins: true },
     e: { kind: "shelves", blocks: true, joins: true },
     U: { kind: "portal", blocks: true, joins: true },
+    "+": { kind: "strongroom", blocks: true, joins: true },
     // A keep's: the thrones (each square a seat), the pillars holding up the roof, a carpet laid
     // from the door to the thrones, and the war table, its map of the war spread over it (core/
     // wartable.js)

@@ -228,7 +228,7 @@ function heroOf(given, left) {
 }
 
 // What a hero carries and has learnt, without what this version of the game hasn't got: things
-// (in the pack and worn), spells (one renamed, by its new name), skills and schools of magic
+// (in the pack, worn and in the stash), spells (one renamed, by its new name), skills and schools of magic
 function progressOf(progress, left) {
     const things = new Map();
     const gone = (item) => things.set(item.id, (things.get(item.id) ?? 0) + (Number.isInteger(item.count) && item.count > 0 ? item.count : 1));
@@ -248,6 +248,10 @@ function progressOf(progress, left) {
 
     if (isObject(progress.gear)) {
         progress.gear = Object.fromEntries(Object.entries(progress.gear).map(([slot, piece]) => [slot, piece && known(piece) ? piece : null]));
+    }
+
+    if (isObject(progress.strongroom) && Array.isArray(progress.strongroom.tabs)) {
+        progress.strongroom = { ...progress.strongroom, tabs: progress.strongroom.tabs.map((tab) => (Array.isArray(tab) ? tab.map((item) => (item && known(item) ? item : null)) : tab)) };
     }
 
     if (things.size) {

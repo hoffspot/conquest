@@ -132,7 +132,7 @@ import { WARY } from "./wary.js";
  * Bumped whenever what's said changes: a game of another version can't join. (Not for what's
  * added and opted into: contribution.md, section 3.)
  */
-export const NET_VERSION = 228;
+export const NET_VERSION = 229;
 
 /**
  * The ways a world can be played with those who join it (its netcode): `lockstep`, each game
@@ -208,11 +208,12 @@ const HOLE_TEXT = JSON.stringify(HOLE);
 
 /**
  * What the host takes from one who's joined: nothing longer than `most` characters (a character
- * coming in is the longest thing said, and the world server's broker holds one it relays to the
- * same), and commands no faster than `commands` a second, `burst` at once (a stick turning sends
+ * coming in is the longest thing said, and the world server's broker and play socket hold one
+ * they relay to the same: a hero with six tabs of their stash and their pack full of the longest
+ * pieces there are says about 82 KB coming in, test/strongroom.test.js), and commands no faster than `commands` a second, `burst` at once (a stick turning sends
  * 16 a second; each command done is sent on to everyone). More is let go of unanswered.
  */
-export const HEARD = Object.freeze({ most: 64 * 1024, commands: 30, burst: 60 });
+export const HEARD = Object.freeze({ most: 256 * 1024, commands: 30, burst: 60 });
 
 /** The most players in a world (its host too). */
 export const MOST_PLAYERS = 8;

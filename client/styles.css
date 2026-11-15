@@ -5009,6 +5009,15 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     visibility: hidden;
 }
 
+/* (The stash open: the party's column and the minimap, which it's as wide as and as near the top
+   of the screen as, out of its way) */
+#hud:has(> .pack.stashing:not([hidden])) #party,
+#hud:has(> .pack.stashing:not([hidden])) #minimap,
+#hud:has(> .pack.stashing:not([hidden])) #minimapfold,
+#hud:has(> .pack.stashing:not([hidden])) #compass {
+    visibility: hidden;
+}
+
 /* (A panel open as wide as a narrow screen, the party's column, which would cover its left edge,
    out of its way) */
 @media (max-width: 640px) {
@@ -5275,6 +5284,175 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .pack-sort {
     margin-left: auto;
+}
+
+/* The stash (core/progress.js STRONGROOM), open at its chest in a guild, and what's carried
+   beside it, their places the same size: the stash eight across, a page of the pack five. Its
+   tabs along its top, those still to buy dashed, a padlock and their price on them; Sort and Stow
+   alike beside them; a tab still to buy asked about in the panel itself, over its places */
+.pack.stashing {
+    width: min(1040px, calc(100% - var(--safe-left) - var(--safe-right) - 24px));
+}
+
+.pack-main.stash-main {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 5fr);
+}
+
+.stash-main .stashed {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.stash-main .carried {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.stash-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.stash-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-width: 0;
+}
+
+.stash-tab {
+    min-width: 34px;
+    height: 30px;
+    padding: 0 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 8px;
+    border: 1px solid var(--field-border);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.stash-tab[aria-selected="true"] {
+    background: var(--field);
+    color: var(--gold-bright);
+    border-color: var(--panel-border);
+}
+
+.stash-tab.locked {
+    border-style: dashed;
+    color: var(--faint);
+}
+
+.stash-tab.target {
+    border-color: var(--gold-bright);
+}
+
+.stash-price {
+    font-size: 11px;
+    color: var(--gold);
+}
+
+.stash-tools {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.stash-tools .pack-sort {
+    margin-left: 0;
+}
+
+.stash-ask {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--gold);
+    background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid));
+}
+
+.stash-ask-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--gold-bright);
+}
+
+.stash-ask-text,
+.stash-ask-why {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.stash-ask-why {
+    color: var(--bad, #d06a5a);
+}
+
+/* On a short screen (a phone on its side): the panel nearly the screen's height, the stash four
+   rows of ten, no headings over the two */
+@media (max-height: 500px) {
+    .pack.stashing {
+        top: calc(var(--safe-top) + 6px);
+        max-height: calc(100% - var(--safe-top) - var(--safe-bottom) - 12px);
+    }
+
+    .pack.stashing .pack-header {
+        padding-top: 6px;
+        padding-bottom: 4px;
+    }
+
+    .pack-main.stash-main {
+        grid-template-columns: minmax(0, 10fr) minmax(0, 5fr);
+    }
+
+    .stash-main .stashed {
+        grid-template-columns: repeat(10, minmax(0, 1fr));
+    }
+
+    .stash-main .pack-heading {
+        display: none;
+    }
+
+    .stash-main .stash-section {
+        padding-top: 8px;
+    }
+}
+
+/* On a narrow screen held upright (a phone): the stash over the pack, both eight across, the
+   tabs still to buy narrower, all six in a row */
+@media (max-width: 720px) and (orientation: portrait) {
+    .pack-main.stash-main {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .stash-main .carried {
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+    }
+
+    .stash-tabs {
+        gap: 4px;
+    }
+
+    .stash-tab.locked {
+        padding: 0 4px;
+        gap: 2px;
+    }
+
+    .stash-tab.locked svg {
+        width: 11px;
+        height: 11px;
+    }
+
+    .stash-price {
+        font-size: 10px;
+    }
 }
 
 /* A thing tapped: its name in its make's colour, what it is, what it does, and against what's worn */

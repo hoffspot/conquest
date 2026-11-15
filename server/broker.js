@@ -59,7 +59,8 @@ export const BROKER_PROTOCOL = "pellagos.broker.1";
 
 /**
  * Its limits: the longest message (bytes: a world's snapshot, relayed to one who's joined, is the
- * biggest; anything else may be `small`), how much may wait to go to one slow to take it, listings
+ * biggest; anything else may be `small`, a character coming in the longest of those, as a host
+ * takes it: core/netplay.js HEARD), how much may wait to go to one slow to take it, listings
  * per address and in all, how long one lasts once its host's link has dropped (`expire`; `reloading`,
  * once its link's been closed without withdrawing it, its page closing or reloading: long enough
  * for a page started again to load its world and take it back), how many signals a
@@ -69,7 +70,7 @@ export const BROKER_PROTOCOL = "pellagos.broker.1";
  */
 export const BROKER_LIMITS = Object.freeze({
     message: 4 * 1024 * 1024,
-    small: 64 * 1024,
+    small: 256 * 1024,
     backlog: 8 * 1024 * 1024,
     perAddress: 3,
     listings: 100,
