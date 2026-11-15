@@ -517,6 +517,39 @@ export const junkable = (thing) => Boolean(ITEMS[thing?.id]) && !bound(thing);
 export const stacksWith = (a, b) => alike(a, b) && isJunk(a) === isJunk(b);
 
 /**
+ * Where a thing goes in a row (the pack, a tab of the stash) with no place asked for: on a stack
+ * it stacks with (stacksWith), else in the first empty place; and in a row with neither, on a
+ * stack of things alike marked otherwise, the two then not junk (joined): a full pack still
+ * takes what's found, as it did before there was junk, and nothing's ever sold that the player
+ * didn't mark. -1 if there's nowhere.
+ */
+function placeFor(row, thing) {
+    const onto = row.findIndex((stack) => stacksWith(stack, thing));
+
+    if (onto >= 0) {
+        return onto;
+    }
+
+    const empty = row.indexOf(null);
+
+    return empty >= 0 ? empty : row.findIndex((stack) => alike(stack, thing));
+}
+
+// What's in a place once `count` of a thing come onto it (placeFor): the thing, marked as it is,
+// in an empty place or on a stack marked the same; on one marked otherwise, the two not junk
+function joined(stack, thing, count) {
+    if (!stack || isJunk(stack) === isJunk(thing)) {
+        return { ...thing, count: (stack?.count ?? 0) + count };
+    }
+
+    const plain = { ...thing, count: stack.count + count };
+
+    delete plain.junk;
+
+    return plain;
+}
+
+/**
  * What selling all the junk carried to a shop (SHOPS: its id) comes to: each stack in the pack
  * marked as junk that the shop buys (`buys`), each for what it fetches sold on its own (priceOf,
  * `selling`, with the haggling given: a creature's part for all it's worth) times how many; and
@@ -719,14 +752,13 @@ function moveAcross(from, at, into, to, full) {
             return null;
         }
 
-        const onto = into.findIndex((each) => stacksWith(each, moving));
-        const place = onto >= 0 ? onto : into.indexOf(null);
+        const place = placeFor(into, moving);
 
         if (place < 0) {
             return full;
         }
 
-        into[place] = { ...moving, count: (into[place]?.count ?? 0) + moving.count };
+        into[place] = joined(into[place], moving, moving.count);
         from[at] = null;
 
         return null;
@@ -1269,7 +1301,8 @@ export class Progress {
      * Put something in the pack (`count` of it): on the first stack of things alike, or else in
      * the first empty slot. Whether there was room. What comes in isn't junk, so it never goes on
      * a stack that is (stacksWith); but for something of the player's own coming back as it was
-     * (`junk`: thrown away and taken back, core/host.js #undiscard).
+     * (`junk`: thrown away and taken back, core/host.js #undiscard). In a pack with nowhere else,
+     * it goes on a stack alike that's marked otherwise, the two not junk (placeFor).
      */
     stow(item, count = 1, { junk = false } = {}) {
         if (!ITEMS[item?.id] || !isCount(count)) {
@@ -1278,14 +1311,13 @@ export class Progress {
 
         const made = thingOf(item);
         const thing = junk && junkable(made) ? { ...made, junk: true } : made;
-        const onto = this.pack.findIndex((stack) => stacksWith(stack, thing));
-        const slot = onto >= 0 ? onto : this.pack.indexOf(null);
+        const slot = placeFor(this.pack, thing);
 
         if (slot < 0) {
             return false;
         }
 
-        this.pack[slot] = { ...thing, count: (this.pack[slot]?.count ?? 0) + count };
+        this.pack[slot] = joined(this.pack[slot], thing, count);
 
         return true;
     }

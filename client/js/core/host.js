@@ -426,7 +426,7 @@ export const READY = Object.freeze({ askMs: 30000, markedMs: 10000, countdowns: 
 
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
-const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
+const SEEN = new Set(["enter", "buy", "sell", "sellJunk", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
 
 // The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
 const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));

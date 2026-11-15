@@ -6131,7 +6131,10 @@ any shop (the owner asked for it at every shop, 14 and 15 November 2026).
   up, bought, found, Stow alike, dragged onto each other, a pack kept loose read in): so what
   comes into the pack is never made junk by landing on a junk stack, and no mark's ever lost by
   a junk stack landing on one that isn't. That was chosen over a stack taking either's mark,
-  which would sell what wasn't marked or keep what was. A stack split keeps its mark on both
+  which would sell what wasn't marked or keep what was. Only where there's no other room (a
+  full pack, or a full tab of the stash) does a thing go on a stack alike marked otherwise, and
+  then the two aren't junk (`placeFor`): what's found is never lost for a mark, and nothing's
+  ever sold that wasn't marked. A stack split keeps its mark on both
   halves; a thing moved into the stash or out of it keeps it; thrown away and taken back, it's
   junk again. What leaves the hero leaves its mark behind (`take`, `thingOf`): sold, dropped
   (picked up again, it isn't junk), traded or given to another player, given for a contract,

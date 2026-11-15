@@ -166,7 +166,7 @@ function card(thing, { named = true, count = 1, compare = "Put on instead of wha
 
     // (Marked as junk by the player: core/progress.js isJunk)
     if (thing.junk) {
-        box.append(element("p", "pack-junk-note", "Marked as junk: Sell all junk sells it at any shop that buys it."));
+        box.append(element("p", "pack-junk-note", "Marked as junk: Sell all junk sells it from your pack at any shop that buys it."));
     }
 
     if (worth && info?.price) {

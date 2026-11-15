@@ -22,7 +22,7 @@ import { HOST_PLAYER, Host, REFUSALS, SHOPKEEPERS, SNAPSHOT_VERSION } from "../c
 import { horseFrom } from "../client/js/core/mounts.js";
 import { Hosting, Joining, NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
-import { isJunk, junkable, junkSale, priceOf, Progress, RANKS, stacksWith, thingOf } from "../client/js/core/progress.js";
+import { isJunk, junkable, junkSale, PACK_SIZE, priceOf, Progress, RANKS, stacksWith, thingOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { makeUnique } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -199,6 +199,27 @@ describe("junk and stacking (progress.js stacksWith)", () => {
         assert.equal(progress.markJunk(0, true), null);
         assert.equal(progress.move(0, 1), null);
         assert.deepEqual(laid(progress.pack), [[1, "potion", 6, true], [2, "meal", 1, false]]);
+    });
+
+    it("in a pack with no other room, puts what comes on a stack of its kind marked otherwise, the two then not junk: nothing found's lost for a mark, and nothing's sold that wasn't marked", () => {
+        const progress = new Progress({ pack: [junk("potion", 2)] });
+
+        for (let slot = 1; slot < PACK_SIZE; slot++) {
+            progress.pack[slot] = stack("meal");
+        }
+
+        // (Picked up, bought, found: on the junk draughts, which are junk no longer)
+        assert.equal(progress.stow({ id: "potion" }), true);
+        assert.deepEqual(progress.pack[0], stack("potion", 3));
+
+        // (Taken out of the stash, junk, onto the unmarked meals: not junk either)
+        progress.strongroom.tabs[0][0] = junk("meal", 2);
+        assert.equal(progress.withdraw(0, 0), null);
+        assert.deepEqual(progress.pack[1], stack("meal", 3));
+        assert.equal(progress.strongroom.tabs[0][0], null);
+
+        // (Nothing alike, and no room: as ever)
+        assert.equal(progress.stow({ id: "ale" }), false);
     });
 
     it("keeps the mark on both halves of a stack split, and on a stack put in order: junk after everything else", () => {
@@ -407,6 +428,16 @@ describe("selling all the junk carried (host.js #sellJunk)", () => {
         }
 
         assert.equal(JSON.stringify(player.progress.toJSON()), was);
+    });
+
+    it("ends the seller's Invisibility, as selling one thing does: it's trade (docs/MAGIC.md)", () => {
+        const guild = atTheGuild({ pack: [junk("ale", 2)], gold: 7 });
+        const { host, me } = guild;
+
+        host.battle.buff(me.id, "invisibility", { ms: 60000 });
+        assert.ok(host.battle.buffOf(me, "invisibility"));
+        assert.equal(guild.sell(asked(guild)).ok, true);
+        assert.equal(host.battle.buffOf(me, "invisibility"), null);
     });
 });
 

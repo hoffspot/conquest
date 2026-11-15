@@ -113,7 +113,7 @@ test("things marked as junk in the pack: by their cards and by J, a tag on their
     // Its card says so, and offers Not junk; Escape puts it away (the game played, as keys are
     // heard)
     await slot(0).click();
-    await expect(about.locator(".pack-junk-note")).toHaveText("Marked as junk: Sell all junk sells it at any shop that buys it.");
+    await expect(about.locator(".pack-junk-note")).toHaveText("Marked as junk: Sell all junk sells it from your pack at any shop that buys it.");
     await expect(about.getByRole("button", { name: "Not junk: Healing draught" })).toBeVisible();
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("Escape");
