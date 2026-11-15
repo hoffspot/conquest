@@ -110,8 +110,8 @@ two tiers above it, up to their most.
 | Ironbark treant | 80 | territorial | 1 | 6–9 | the orcs' wilds only |
 | Ghostwood treant | 80 | territorial | 1 | 8–10 | darkwood, marsh, only by night; and the ancient temples |
 | Sylvan ancient | 80 | territorial | 1 | 8–10 | the elves' wilds only, perilous |
-| Gloomweaver | 54 | aggressive | 1 | 8–10 | the dark elves' wilds only, perilous; and the ants' nests |
-| Moon moth | 26 | aggressive | 1 | 8–10 | elfwood, meadow, only by night, perilous |
+| Gloomweaver | 80 | aggressive | 1 | 8–10 | the dark elves' wilds only, perilous; and the ants' nests |
+| Moon moth | 70 | aggressive | 1 | 8–10 | elfwood, meadow, only by night, perilous |
 
 A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander,
 death worm and knucker spit (venom, venom, lava, fire, acid, venom), a spitting cobra spits venom

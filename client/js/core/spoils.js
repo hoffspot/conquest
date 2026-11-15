@@ -348,7 +348,7 @@ export const SPOILS = Object.freeze({
     mythrilGolem: { items: [{ id: "mythrilIngot", chance: 0.6, count: [1, 2] }, { id: "sapphire", chance: 0.15 }] },
     adamantiteGolem: { items: [{ id: "adamantiteIngot", chance: 0.55, count: [1, 2] }, { id: "diamond", chance: 0.12 }] },
     orichalcumColossus: { items: [{ id: "orichalcumIngot", chance: 0.6, count: [1, 2] }, { id: "starRuby", chance: 0.15 }] },
-    gildedScarab: { items: [{ id: "goldIngot", chance: 0.35 }, { id: "carapace", chance: 0.4 }] },
+    gildedScarab: { items: [{ id: "goldIngot", chance: 0.12 }, { id: "carapace", chance: 0.4 }] },
     ironbarkTreant: { items: [{ id: "ironwood", chance: 0.5, count: [1, 2] }] },
     ghostwoodTreant: { items: [{ id: "ghostwood", chance: 0.5 }, { id: "ectoplasm", chance: 0.35 }] },
     sylvanAncient: { items: [{ id: "sylvanwood", chance: 0.6, count: [1, 2] }, { id: "ancientSap", chance: 0.3 }] },

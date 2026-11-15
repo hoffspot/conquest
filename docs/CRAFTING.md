@@ -637,7 +637,7 @@ purchased models to be added in the future."
 | `mythrilGolem` | Mythril golem | Stone golem (`stoneGolem`), its `frost` skin, `#8ac8f0`, ×0.8 | `beast-mythril-golem` | 6 to 9 | mountain, snow, tundra; dungeons: caves | Mythril ingot 60% ×1–2, Sapphire 15% |
 | `adamantiteGolem` | Adamantite golem | Stone golem (`stoneGolem`), its `moss` skin, `#2e5a48`, ×1 | `beast-adamantite-golem` | 8 to 10 | volcanic, badlands, mountain; dungeons: caves | Adamantite ingot 55% ×1–2, Diamond 12% |
 | `orichalcumColossus` | Orichalcum colossus | Stone golem (`stoneGolem`), its `ember` skin, `#e07a30`, ×1.6 | `beast-orichalcum-colossus` | 10 to 10, perilous | volcanic; dungeons: hell (the River of Fire) | Orichalcum ingot 60% ×1–2, Star ruby 15% |
-| `gildedScarab` | Gilded scarab | Giant cockroach (`giantCockroach`), `#e8b830`, ×1.4 | `beast-gilded-scarab` | 3 to 7 | the cat folk's lands' wilds | Gold ingot 35%, Carapace plate 40% |
+| `gildedScarab` | Gilded scarab | Giant cockroach (`giantCockroach`), `#e8b830`, ×1.4 | `beast-gilded-scarab` | 3 to 7 | the cat folk's lands' wilds | Gold ingot 12%, Carapace plate 40% |
 | `ironbarkTreant` | Ironbark treant | Blighted treant (`treant`), `#4a4a4e`, ×1.1 | `beast-ironbark-treant` | 6 to 9 | the orcs' lands' wilds | Ironwood 50% ×1–2 |
 | `ghostwoodTreant` | Ghostwood treant | Blighted treant (`treant`), `#c8dce8`, ×1.15 | `beast-ghostwood-treant` | 8 to 10, night only | darkwood, marsh; dungeons: ancient | Ghostwood 50%, Ectoplasm 35% |
 | `sylvanAncient` | Sylvan ancient | Blighted treant (`treant`), `#c8d8b0`, ×1.6 | `beast-sylvan-ancient` | 8 to 10, perilous | the elves' lands' wilds | Sylvanwood 60% ×1–2, Ancient's sap 30% |
@@ -672,8 +672,10 @@ What was decided where the table didn't say:
 - **The gloomweaver doesn't lurk** (the black widow's `lurk`): it's met in the open, with no roof
   to hang from, and a creature's ways are the same wherever it's met.
 - **Hit points** are the borrowed creature's at the first tier, as the table's "fights as" has it,
-  so a moon moth is a dungeon wasp's 26 (82 at the eighth tier, 115 at the tenth): the weakest of
-  the perilous by far, for the legendary cloth. Raising it is the owner's call (*Choices*).
+  but for the two perilous foes whose kind is small: the gloomweaver has 80 (a black widow's 54)
+  and the moon moth 70 (a dungeon wasp's 26, which would have been 82 at the eighth tier, the
+  weakest of the perilous by far for the legendary cloth). With them they stand with the frost
+  troll (75), the wight lord (70) and the sylvan ancient (80).
 - **Their colour on a borrowed model** (beasts/model.js `TINT`, the entry's `tint`): the model's
   pictures' light and shade kept, gentler (the square root of how light each point is), in the
   tint's colour, 85% of the way from its own, in its own copy of each material; a colour multiplied
@@ -868,12 +870,12 @@ server has a field of that name already.
 - **The new beasts**: nine, golems, treants, a spider, a scarab, a moth, borrowing models there
   are; the moon moth a perilous foe for the legendary cloth, met at the eighth tier, not the
   tenth, as no elfwood or meadow is further out than that (and the sylvan ancient so too: *New
-  beasts*). Each has the hit points of the creature it borrows, so the moon moth's are a dungeon
-  wasp's (82 at the eighth tier), far fewer than any other perilous foe's: more of its own (a
-  `hp` of its own in creatures.js) would make the legendary cloth harder won. And a gilded scarab
-  goes in a giant cockroach's packs (two at the third tier, four by the seventh), so a fight with
-  them leaves 0.7 gold ingots on average at the third tier and about 2 at the seventh (30 to 90
-  gold's worth), more than anything else met there: packs of one or two would halve it.
+  beasts*). Each has the hit points of the creature it borrows but the gloomweaver (80) and the
+  moon moth (70), given as many as the other perilous foes met in the wilds, so the very rare and
+  legendary cloth are hard won. A gilded scarab goes in a giant cockroach's packs (two at the
+  third tier, four by the seventh) and leaves a gold ingot one time in eight (12%), so a fight
+  with them leaves about a quarter of an ingot at the third tier and two thirds of one at the
+  seventh.
 - **Holy fire harms only the unholy**, at twice the others' range; shadow harms all but them.
 - **Every creature's part is an ingredient** but what's eaten, so none is only for selling now.
 - **Names in capitals**, as the owner wrote "Adamantite Demon Sword", where the game's own

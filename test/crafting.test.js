@@ -245,7 +245,7 @@ describe("where the ingredients come from (crafting.js sourcesOf)", () => {
         // (A theme's packs: a hell's, each of its realms')
         const packs = (theme) => THEMES[theme].packs.flatMap(({ creatures }) => creatures);
 
-        for (const [id, { name, like, tiers, people = null, biomes = [], night, perilous = false, themes, items }] of Object.entries(NEW_BEASTS)) {
+        for (const [id, { name, like, hp, tiers, people = null, biomes = [], night, perilous = false, themes, items }] of Object.entries(NEW_BEASTS)) {
             const creature = CREATURES[id];
             const lent = CREATURES[like];
 
@@ -257,9 +257,10 @@ describe("where the ingredients come from (crafting.js sourcesOf)", () => {
             assert.deepEqual(Object.keys(THEMES).filter((theme) => packs(theme).includes(id)).sort(), [...themes].sort(), `${id} only in ${themes}`);
 
             // (Fighting as the creature it's like: its weapon, its temper, its hit points at the
-            // first tier, its armour and its ways; never a world's boss, and the perilous met alone
-            // out in their lands' wilds all the same)
-            for (const key of ["weapon", "hp", "speed", "chase", "temper", "guard", "armor", "steady", "blood", "sight", "wards", "keep", "bomb", "moves", "stance", "rally", "call"]) {
+            // first tier unless it's given its own, its armour and its ways; never a world's boss,
+            // and the perilous met alone out in their lands' wilds all the same)
+            assert.equal(creature.hp, hp ?? lent.hp, `${id}'s hit points`);
+            for (const key of ["weapon", "speed", "chase", "temper", "guard", "armor", "steady", "blood", "sight", "wards", "keep", "bomb", "moves", "stance", "rally", "call"]) {
                 assert.deepEqual(creature[key], lent[key], `${id}'s ${key}, as ${like}'s`);
             }
 

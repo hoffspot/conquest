@@ -730,8 +730,8 @@ export const CREATURES = Object.freeze({
     ironbarkTreant: { name: "Ironbark treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [6, 9], biomes: null, people: "orc", blood: "sap", armor: 0.15, steady: true },
     ghostwoodTreant: { name: "Ghostwood treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [8, 10], biomes: ["darkwood", "marsh"], blood: "sap", armor: 0.15, night: "only", darkSight: true, steady: true },
     sylvanAncient: { name: "Sylvan ancient", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [8, 10], biomes: null, people: "elf", blood: "sap", armor: 0.15, perilous: true, abroad: true, steady: true },
-    gloomweaver: { name: "Gloomweaver", hp: 54, weapon: "blackWidow", speed: 1, chase: 2.6, temper: "aggressive", roam: 4, leash: 18, pack: [1, 1], tiers: [8, 10], biomes: null, people: "darkElf", blood: "ichor", armor: 0.1, perilous: true, abroad: true, darkSight: true },
-    moonMoth: { name: "Moon moth", hp: 26, weapon: "dungeonWasp", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [8, 10], biomes: ["elfwood", "meadow"], blood: "ichor", perilous: true, abroad: true, night: "only", darkSight: true },
+    gloomweaver: { name: "Gloomweaver", hp: 80, weapon: "blackWidow", speed: 1, chase: 2.6, temper: "aggressive", roam: 4, leash: 18, pack: [1, 1], tiers: [8, 10], biomes: null, people: "darkElf", blood: "ichor", armor: 0.1, perilous: true, abroad: true, darkSight: true },
+    moonMoth: { name: "Moon moth", hp: 70, weapon: "dungeonWasp", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [8, 10], biomes: ["elfwood", "meadow"], blood: "ichor", perilous: true, abroad: true, night: "only", darkSight: true },
 });
 
 /**
