@@ -45,10 +45,26 @@
 // at once, asked first in the panel itself with what it comes to ("Sell 12 things for 340 gold?":
 // Sell, or Not now); what it won't buy is said, still junk, for a shop that will.
 //
+// Crafting (docs/CRAFTING.md: core/crafting.js, app/craftinfo.js): at a crafter's (core/recipes.js
+// CRAFTERS), a third tab, Craft, beside Buy and Sell: everything it makes, by piece under where it
+// goes, each piece's main materials in their makes' colours, what the pack's short of for each
+// greyed and said (never hidden). One chosen shows the piece's three slots, each one's choices from
+// what's carried (never the stash's: the main material, a second, an essence if the player likes),
+// the chosen ingredient's card a tap away; and the piece shown before it's made: its make, its
+// name, each power and the range it'll come out in, a legendary weapon's effect, the fee and what
+// its ingredients are worth; Craft makes it at once (refused, why's said in the panel), and the
+// piece made is shown. On the Sell tab there, a piece the crafter breaks down has Break down in its
+// row, saying first what comes back; and Break down all junk sits under Sell all junk, asked once
+// in the panel with what comes back. Escape (a controller's Circle) goes back from a piece to the
+// list; L1 and R1 turn Buy, Sell and Craft; a main material held (right-clicked, or a controller's
+// Square) shows its card.
+//
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
 import { alike, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
+import { listed } from "./bestiary.js";
+import { yieldsSaid } from "./craftinfo.js";
 import { MAKES, rarityOf } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { HOLD_MS } from "./press.js";
@@ -90,6 +106,9 @@ const thousands = (gold) => String(gold).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // How many things, in words: "one thing", "12 things"
 const thingsSaid = (count) => (count === 1 ? "one thing" : `${count} things`);
+
+// How fine a crafter works (core/recipes.js CRAFTERS `best`), in words: "up to masterwork"
+const UP_TO = Object.freeze({ common: "the common", fine: "fine", masterwork: "masterwork", rare: "the rare", veryRare: "the very rare", legendary: "the legendary" });
 
 // What stands for each slot when nothing's in it, faintly
 const PLACEHOLDERS = Object.freeze({ head: "nasalHelm", amulet: "amulet", cloak: "travelCloak", chest: "mail", bracers: "bracers", gloves: "gloves", belt: "belt", legs: "trousers", boots: "leatherBoots", ring1: "ring", ring2: "ring", mainHand: "sword", offHand: "roundShield" });
@@ -259,6 +278,16 @@ export class PackPanel {
         // (On a shop's Sell tab: Sell all junk asked about ({ why: why it couldn't be sold, if it
         // was refused }), or null)
         this.junkAsk = null;
+        // (At a crafter's: the piece chosen on the Craft tab ({ base, using: an ingredient's id for
+        // each slot, or null }), or null for the list; the piece just made ({ item, info }); why the
+        // last Craft was refused; breaking down asked about, on the Sell tab ({ index, count } for
+        // a stack, or { junk: true }, and `why` it was refused); and the tab to open on, asked for
+        // by the game (openOn))
+        this.recipe = null;
+        this.made = null;
+        this.craftWhy = null;
+        this.salvageAsk = null;
+        this.wanted = null;
         // (A thing marked as junk, or not, by a key or a controller: its slot or row given the
         // focus back once it's shown again, { index })
         this.refocus = null;
@@ -285,7 +314,10 @@ export class PackPanel {
          * At the stash, its commands too (core/host.js "strongroom": `then` hears what came of
          * one, { ok, words }: why not, said), and a tab of it turned to (`onTab`, from 0). A thing
          * marked as junk, or not ("markJunk"), and all the junk sold ("sellJunk", with what the
-         * player was shown: its `price` and `count`; `then` as the stash's).
+         * player was shown: its `price` and `count`; `then` as the stash's). At a crafter's,
+         * a piece made ("craft", { base, using, fee }: what was shown), gear broken down ("salvage",
+         * { index, count }) and all the junk ("salvageJunk", { count }: as shown), `then` as the
+         * stash's (a piece made, the result's `item`).
          */
         this.onCommand = () => {};
         this.onWheel = () => {};
@@ -297,6 +329,14 @@ export class PackPanel {
 
     get open() {
         return !this.panel.hidden;
+    }
+
+    /**
+     * The tab to open a shop's trade on, the next time it's shown ("buy", "sell", or at a
+     * crafter's "craft": the game's openCrafting, a keeper's "What can you make?").
+     */
+    openOn(mode) {
+        this.wanted = mode;
     }
 
     /** Whether the paperdoll's showing (the game draws the player in `dollView` while it is). */
@@ -330,10 +370,32 @@ export class PackPanel {
     show(view) {
         const { gold, pack, shop, trade = null, strongroom = null } = view;
 
-        // (Trading with a shopkeeper anew: buying first, nothing open)
-        if (shop && this.view?.shop?.name !== shop.name) {
-            this.trading = "buy";
+        // (Trading with a shopkeeper anew: buying first, or the tab asked for (openOn), nothing
+        // open; at a crafter's, the list of what it makes)
+        if (shop && (this.wanted || this.view?.shop?.name !== shop.name)) {
+            this.trading = this.wanted === "sell" || (this.wanted === "craft" && shop.craft) ? this.wanted : "buy";
             this.peeking = null;
+            this.recipe = null;
+            this.made = null;
+            this.craftWhy = null;
+            this.salvageAsk = null;
+        }
+
+        this.wanted = null;
+
+        // (No longer at a crafter's: nothing of its own open)
+        if (!shop?.craft) {
+            this.recipe = null;
+            this.made = null;
+
+            if (this.trading === "craft") {
+                this.trading = "buy";
+            }
+        }
+
+        // (Breaking down asked about: no longer, with nothing there now, or nothing it breaks down)
+        if (this.salvageAsk && (this.salvageAsk.junk ? !shop?.salvage?.count : !pack[this.salvageAsk.index]?.salvage)) {
+            this.salvageAsk = null;
         }
 
         // (Opened anew: from the top)
@@ -397,15 +459,26 @@ export class PackPanel {
         this.buying = null;
         this.junkAsk = null;
         this.refocus = null;
+        this.recipe = null;
+        this.made = null;
+        this.craftWhy = null;
+        this.salvageAsk = null;
         this.about.hidden = true;
     }
 
     /**
      * Put away what's open to see what it is (the card, or a row's; at the stash, a tab asked
-     * about; Sell all junk asked about): whether anything was.
+     * about; Sell all junk or breaking down asked about); or, with none, back from a piece chosen
+     * at a crafter's to all it makes: whether anything was.
      */
     unpeek() {
-        const open = !this.about.hidden || this.peeking !== null || this.buying !== null || this.junkAsk !== null;
+        const open = !this.about.hidden || this.peeking !== null || this.buying !== null || this.junkAsk !== null || this.salvageAsk !== null;
+
+        if (!open && this.recipe) {
+            this.#chooseRecipe(null);
+
+            return true;
+        }
 
         if (this.buying !== null) {
             this.#askToBuy(null);
@@ -413,6 +486,10 @@ export class PackPanel {
 
         if (this.junkAsk !== null) {
             this.#askJunk(false);
+        }
+
+        if (this.salvageAsk !== null) {
+            this.#askSalvage(null);
         }
 
         if (!this.about.hidden) {
@@ -514,12 +591,16 @@ export class PackPanel {
         const trading = Boolean(this.view.shop || this.view.trade || this.view.strongroom);
 
         this.modes.hidden = !this.view.shop;
+        this.modes.setAttribute("aria-label", this.view.shop?.craft ? "Buy, sell or craft" : "Buy or sell");
         this.modes.replaceChildren(
-            ...(this.view.shop ? [["buy", "Buy"], ["sell", "Sell"]] : []).map(([id, label]) => {
+            ...(this.view.shop ? [["buy", "Buy"], ["sell", "Sell"], ...(this.view.shop.craft ? [["craft", "Craft"]] : [])] : []).map(([id, label]) => {
                 const mode = button(label, () => {
                     if (this.trading !== id) {
                         this.onPage();
                         this.peeking = null;
+                        this.junkAsk = null;
+                        this.salvageAsk = null;
+                        this.selected = null;
                     }
 
                     this.trading = id;
@@ -586,11 +667,24 @@ export class PackPanel {
             return;
         }
 
-        // Trading with a shopkeeper: their wares under their kinds to buy, or what's carried to sell
+        // Trading with a shopkeeper: their wares under their kinds to buy, what's carried to sell,
+        // or (a crafter) what they make; what was in focus given it back, drawn again (a choice
+        // made at a crafter's, a piece made)
         if (shop) {
-            this.body.replaceChildren(...(this.trading === "sell" ? this.#selling() : this.#buying()));
+            const focus = this.panel.contains(document.activeElement) ? (document.activeElement.dataset?.focus ?? null) : null;
+
+            this.body.replaceChildren(...(this.trading === "sell" ? this.#selling() : this.trading === "craft" ? this.#crafting() : this.#buying()));
             this.#dolled(false);
-            this.about.hidden = true;
+
+            if (this.selected?.ingredient) {
+                this.#describe();
+            } else {
+                this.about.hidden = true;
+            }
+
+            if (focus && !this.panel.contains(document.activeElement)) {
+                this.#focusOn(focus);
+            }
 
             return;
         }
@@ -708,9 +802,26 @@ export class PackPanel {
                     label: `${stack.label}${stack.count > 1 ? ` ×${stack.count}` : ""}`,
                     className: `${stack.wanted ? "" : "unwanted"}${stack.junk ? " junk" : ""}`.trim(),
                     peek: `carried:${index}:${stack.id}:${stack.quality ?? "common"}`,
-                    about: () => card(stack, { named: false }),
-                    // (Beneath what it is, as a card's buttons are: Mark as junk, or Not junk)
-                    actions: stack.junkable ? () => [button(stack.junk ? "Not junk" : "Mark as junk", () => this.#do("junk", index), { label: `${stack.junk ? "Not junk" : "Mark as junk"}: ${stack.label}` })] : null,
+                    // (At a crafter's, a piece it breaks down: what comes back, said first)
+                    about: () => {
+                        const box = card(stack, { named: false });
+
+                        if (stack.salvage) {
+                            box.append(element("p", "pack-worth craft-salvage-note", `Broken down here: ${stack.salvage.words} back${stack.count > 1 ? " for each" : ""}.`));
+                        }
+
+                        return box;
+                    },
+                    // (Beneath what it is, as a card's buttons are: Mark as junk, or Not junk; at a
+                    // crafter's, Break down, and breaking it down asked about)
+                    actions:
+                        stack.junkable || stack.salvage
+                            ? () => [
+                                  ...(stack.junkable ? [button(stack.junk ? "Not junk" : "Mark as junk", () => this.#do("junk", index), { label: `${stack.junk ? "Not junk" : "Mark as junk"}: ${stack.label}` })] : []),
+                                  ...(stack.salvage ? [this.#focusable(button("Break down", () => this.#askSalvage({ index }), { label: `Break down ${stack.label}: ${stack.salvage.words} back${stack.count > 1 ? " for each" : ""}`, className: "pack-button craft-salvage" }), `salvage:${index}`)] : []),
+                                  ...(this.salvageAsk && !this.salvageAsk.junk && this.salvageAsk.index === index ? [this.#salvageAsked()] : []),
+                              ]
+                            : null,
                     after: [
                         element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? "Bound to you" : "Not bought here"),
                         button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? `${stack.label} is bound to you` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
@@ -743,7 +854,7 @@ export class PackPanel {
     // question with its total; and what's marked as junk that this shop won't buy, said, still
     // junk for a shop that will
     #junkSale() {
-        const { junk, name } = this.view.shop;
+        const { junk, name, salvage = null } = this.view.shop;
         const bar = element("div", "junk-bar");
         const said = junk.count ? `Junk: ${thingsSaid(junk.count)}, ${junk.price} gold here.` : junk.marked ? `${name} buys none of your junk.` : "Nothing marked as junk: mark things as junk in their cards, and sell them all here at once.";
 
@@ -758,6 +869,22 @@ export class PackPanel {
             parts.push(this.#junkAsked());
         }
 
+        // (At a crafter's: Break down all junk, what it comes to here, and asked about)
+        if (salvage) {
+            const broken = element("div", "junk-bar salvage-bar");
+            const told = salvage.count ? `Broken down here: ${thingsSaid(salvage.count)}, for ${salvage.words}.` : junk.marked ? `${name} breaks down none of your junk.` : "Nothing marked as junk to break down.";
+
+            broken.append(
+                button("Break down all junk", () => this.#askSalvage({ junk: true }), { label: salvage.count ? `Break down all junk: ${thingsSaid(salvage.count)} for ${salvage.words}` : "Break down all junk: nothing marked as junk that they break down", disabled: !salvage.count, className: "pack-button junk-salvage" }),
+                element("p", "junk-said", told),
+            );
+            parts.push(broken);
+
+            if (this.salvageAsk?.junk) {
+                parts.push(this.#salvageJunkAsked());
+            }
+        }
+
         if (junk.left) {
             parts.push(element("p", "pack-hint junk-left", `Still junk, as ${name} won't buy ${junk.left === 1 ? "it" : "them"}: ${junk.kept.join(", ")}. The adventurers' guild buys everything.`));
         }
@@ -768,6 +895,11 @@ export class PackPanel {
     // Sell all junk asked about in the panel (or no longer: false), its Sell in focus
     #askJunk(on) {
         this.junkAsk = on ? { why: null } : null;
+
+        if (on) {
+            this.salvageAsk = null;
+        }
+
         this.#render();
 
         if (this.junkAsk) {
@@ -894,6 +1026,405 @@ export class PackPanel {
             box.append(...doing);
             row.append(box);
         }
+    }
+
+    // --- Breaking down (at a crafter's: docs/CRAFTING.md *Salvage*) ---
+
+    // Breaking down asked about in the panel: a stack carried (`index`: how many of it, asked
+    // first of a stack of more than one), or all the junk (`junk`); or no longer (null). Its
+    // Break down in focus
+    async #askSalvage(what) {
+        if (!what) {
+            this.salvageAsk = null;
+            this.#render();
+
+            return;
+        }
+
+        if (what.junk) {
+            this.salvageAsk = { junk: true, why: null };
+        } else {
+            const stack = this.view.pack[what.index];
+            const count = stack?.count > 1 ? await this.#howMany({ title: `Break down ${stack.label}`, verb: "Break down", most: stack.count, value: 1 }) : 1;
+
+            if (!count || !this.view.pack[what.index]?.salvage) {
+                return;
+            }
+
+            this.salvageAsk = { index: what.index, count, why: null };
+        }
+
+        this.junkAsk = null;
+        this.#render();
+        this.body.querySelector(".salvage-ask .primary")?.focus();
+    }
+
+    // A stack carried asked about breaking down: so many of it, what comes back (app/craftinfo.js
+    // salvageInfo: each piece's, times how many), that it's gone for good, why it couldn't be done
+    // if it was refused, and whether to (Break down, or Not now)
+    #salvageAsked() {
+        const { index, count, why } = this.salvageAsk;
+        const stack = this.view.pack[index];
+        const yields = stack.salvage.yields.map((each) => ({ id: each.id, count: each.count * count }));
+
+        return this.#salvageBox({ title: `Break down ${count > 1 ? `${count} of ${stack.label}` : stack.label}?`, text: `You'd get back ${yieldsSaid(yields)}. Broken down, it's gone for good.`, why, label: `Break down ${count > 1 ? `${count} of ${stack.label}` : stack.label} for ${yieldsSaid(yields)}` });
+    }
+
+    // All the junk asked about breaking down: how many things, what comes back (core/crafting.js
+    // junkSalvage, as the host breaks it down), what's left for a crafter that will, and whether to
+    #salvageJunkAsked() {
+        const { count, words, left } = this.view.shop.salvage;
+
+        return this.#salvageBox({
+            title: `Break down ${thingsSaid(count)}?`,
+            text: `You'd get back ${words}. ${left ? `What they won't break down (${thingsSaid(left)}) stays marked as junk. ` : ""}Broken down, it's gone for good.`,
+            why: this.salvageAsk.why,
+            label: `Break down ${thingsSaid(count)} for ${words}`,
+        });
+    }
+
+    // Breaking down asked about, in the panel, as the stash's tabs and Sell all junk are
+    #salvageBox({ title, text, why, label }) {
+        const box = element("div", "stash-ask salvage-ask");
+        const buttons = element("div", "pack-ask-buttons");
+
+        box.setAttribute("role", "group");
+        box.setAttribute("aria-label", "Break down");
+        box.append(element("p", "stash-ask-title", title), element("p", "stash-ask-text", text));
+
+        if (why) {
+            box.append(element("p", "stash-ask-why", why));
+        }
+
+        buttons.append(button("Not now", () => this.#askSalvage(null)), button("Break down", () => this.#salvage(), { label, className: "pack-button primary" }));
+        box.append(buttons);
+
+        return box;
+    }
+
+    // What was asked about broken down (a stack, so many of it; or all the junk, as many pieces as
+    // the player was shown: the host refuses it if that's changed), or why not said in the panel
+    #salvage() {
+        const asked = this.salvageAsk;
+
+        if (!asked) {
+            return;
+        }
+
+        const command = asked.junk ? { type: "salvageJunk", count: this.view.shop.salvage.count } : { type: "salvage", index: asked.index, count: asked.count };
+
+        this.onCommand(command, (result) => {
+            if (result?.ok) {
+                this.salvageAsk = null;
+            } else if (this.salvageAsk) {
+                this.salvageAsk = { ...this.salvageAsk, why: result?.words ?? null };
+            }
+        });
+    }
+
+    // --- Crafting (at a crafter's: docs/CRAFTING.md) ---
+
+    // The Craft tab: everything the crafter makes, by piece under where it goes, each piece's main
+    // materials (app/craftinfo.js craftList), those the pack's short of greyed and said; or, a
+    // piece chosen, that piece (#recipe)
+    #crafting() {
+        if (this.recipe) {
+            return this.#recipe();
+        }
+
+        const { craft, name } = this.view.shop;
+        const intro = element("p", "pack-hint craft-intro", `${name} makes all of this, up to ${UP_TO[craft.best] ?? craft.best}${craft.capital ? ", as every crafter in a capital does" : ""}. Choose what to have made, and of what: what you haven't all it takes for is greyed. Hold a material, or right-click it, to see what it is.`);
+
+        return [
+            intro,
+            ...craft.list.map(({ heading, pieces }) => {
+                const list = element("ul", "pack-list craft-list");
+
+                list.append(...pieces.map((piece) => this.#craftPiece(piece)));
+
+                return this.#section(heading, list);
+            }),
+        ];
+    }
+
+    // A piece the crafter makes: its picture, its name, what it takes, and its main materials, each
+    // in its make's colour, greyed if the pack's short of what it takes (and said: its title, and
+    // to a screen reader); one tapped, that piece of it chosen (#chooseRecipe)
+    #craftPiece({ base, label, noun, takes, mains }) {
+        const row = element("li", "pack-row craft-piece");
+        const picture = element("span", "pack-icon");
+        const body = element("div", "craft-piece-body");
+        const choices = element("div", "craft-mains");
+
+        picture.innerHTML = icon({ id: base }, 28);
+        row.dataset.base = base;
+        choices.setAttribute("role", "group");
+        choices.setAttribute("aria-label", `${label}: of what`);
+        choices.append(
+            ...mains.map(({ main, make, label: material, word, lacking, can }) => {
+                const said = can ? "you have all it takes" : `you haven't ${listed(lacking.map(({ text }) => text))}`;
+                const chip = this.#focusable(button(word, () => this.#chooseRecipe({ base, main }), { label: `${word} ${noun}: ${said}`, className: `craft-main rarity-${make}${can ? "" : " lacking"}` }), `main:${base}:${main}`);
+
+                chip.dataset.main = main;
+                chip.dataset.card = `main:${base}:${main}`;
+                chip.title = `${material}: ${said}`;
+                this.#holdable(chip, main);
+
+                return chip;
+            }),
+        );
+        body.append(element("span", "pack-label", label), element("span", "craft-takes", takes), choices);
+        row.append(picture, body);
+
+        return row;
+    }
+
+    // A piece chosen at a crafter's ({ base, main }: of that main material), its slots filled first
+    // from what's carried (app/craftinfo.js usingFirst), its Craft in focus (or, short of what it
+    // takes, the way back); or none (null): back to all it makes, the main material it was of in
+    // focus again
+    #chooseRecipe(choice) {
+        const was = this.recipe;
+
+        this.onPage();
+        this.recipe = choice ? { base: choice.base, using: this.view.shop.craft.using(choice.base, choice.main) } : null;
+        this.made = null;
+        this.craftWhy = null;
+        this.selected = null;
+        this.peeking = null;
+        this.about.hidden = true;
+        this.#render();
+
+        if (this.recipe) {
+            this.body.scrollTop = 0;
+            this.#focusOn(this.body.querySelector(".craft-make:not(:disabled)") ? "craft" : "back");
+        } else if (was) {
+            this.#focusOn(`main:${was.base}:${was.using[0]}`, { scroll: true });
+        }
+    }
+
+    // A piece chosen: the way back, the piece just made (if one was), its three slots, and what it
+    // would be, made of what's chosen (#shown)
+    #recipe() {
+        const { craft, name } = this.view.shop;
+        const { base, using } = this.recipe;
+        const back = this.#focusable(button("All they make", () => this.#chooseRecipe(null), { label: `Back to all ${name} makes`, className: "pack-button craft-back" }), "back");
+
+        return [back, ...(this.made ? [this.#madeBox()] : []), ...craft.slots(base, using).map((slot) => this.#slotSection(slot)), this.#shownBox(craft.preview(base, using))];
+    }
+
+    // One of a piece's slots: what it takes, its choices from what's carried (each in its make's
+    // colour, how many carried, greyed if too few; a main material finer than is worked here, not
+    // to be had; the essence, None too), the one chosen pressed; and the chosen one's card, a tap
+    // away beneath them (a row, as the Sell tab's are)
+    #slotSection({ slot, kind, optional, heading, takes, chosen, choices }) {
+        const { craft } = this.view.shop;
+        const picks = element("div", "craft-picks");
+        const pick = (id, text, { make = "common", have = null, need = 1, enough = true, worked = true } = {}) => {
+            const said = id === null ? "None" : !worked ? `${text}: finer work than is done here` : `${text}: ${have} carried${enough ? "" : `, ${need} wanted`}`;
+            const chip = this.#focusable(button("", () => this.#pick(slot, id), { label: said, className: `craft-pick rarity-${make}${enough ? "" : " lacking"}`, disabled: !worked }), `pick:${slot}:${id ?? "none"}`);
+
+            chip.setAttribute("aria-pressed", String(chosen === id));
+            chip.title = said;
+
+            if (id) {
+                chip.innerHTML = icon(id, 22);
+                chip.dataset.card = `pick:${slot}:${id}`;
+                this.#holdable(chip, id);
+            }
+
+            chip.append(element("span", "craft-pick-label", text));
+
+            if (have !== null) {
+                chip.append(element("span", "craft-pick-have", worked ? `${have}/${need}` : "master's"));
+            }
+
+            return chip;
+        };
+
+        picks.setAttribute("role", "group");
+        picks.setAttribute("aria-label", heading);
+
+        if (optional) {
+            picks.append(pick(null, "None"));
+        }
+
+        picks.append(...choices.map(({ id, label, make, have, need, enough, worked }) => pick(id, label, { make, have, need, enough, worked })));
+
+        const section = element("section", "pack-section craft-slot");
+
+        section.dataset.slot = String(slot);
+        section.append(element("h3", "pack-heading", heading), element("p", "craft-takes", takes), picks);
+
+        if (!choices.length) {
+            section.append(element("p", "pack-hint craft-none", optional ? "You carry no creature's part to put in it." : `You carry no ${kind}.`));
+        }
+
+        // (The chosen one's card, tapped open)
+        if (chosen) {
+            const list = element("ul", "pack-list craft-chosen");
+            const choice = choices.find(({ id }) => id === chosen);
+            const info = craft.card(chosen);
+
+            list.append(
+                this.#row({
+                    thing: { id: chosen },
+                    label: `What ${info.label.toLowerCase()} is`,
+                    peek: `slot:${slot}:${chosen}`,
+                    about: () => card({ id: chosen, label: info.label, info }, { named: false, worth: true }),
+                    after: [element("span", "pack-price", `${choice?.have ?? 0} carried`)],
+                }),
+            );
+            section.append(list);
+        }
+
+        return section;
+    }
+
+    // Something chosen for a slot of the piece (an ingredient's id, or null: no essence)
+    #pick(slot, id) {
+        if (!this.recipe) {
+            return;
+        }
+
+        const using = [...this.recipe.using];
+
+        using[slot] = id;
+        this.recipe = { ...this.recipe, using };
+        this.craftWhy = null;
+        this.peeking = null;
+        this.onPage();
+        this.#render();
+    }
+
+    // What the piece would be, made of what's chosen (core/crafting.js previewOf, as the host makes
+    // it: app/craftinfo.js previewInfo): its card (its name in its make's colour, its level, its
+    // blows, each power and the range it'll come out in, a legendary weapon's effect); the fee and
+    // what they have; what its ingredients are worth; what the pack's short of; why the last Craft
+    // was refused; and Craft (greyed while the pack's short of it). Or, a slot still to fill, what
+    // it wants
+    #shownBox(shown) {
+        const box = element("section", "pack-section craft-shown");
+
+        box.append(element("h3", "pack-heading", "What it'll be"));
+
+        if (shown.reason) {
+            box.append(element("p", "pack-hint craft-unfit", shown.words));
+
+            return box;
+        }
+
+        const { base, using } = this.recipe;
+        const preview = card({ id: base, quality: shown.make, label: shown.name, info: shown.info }, { compare: null });
+        const sums = element("div", "craft-sums");
+        const make = this.#focusable(button(`Craft for ${shown.fee} gold`, () => this.#craft(base, using, shown.fee), { label: `Craft ${shown.name} for ${shown.fee} gold`, disabled: shown.lacking.length > 0, className: "pack-button primary craft-make" }), "craft");
+
+        preview.classList.add("craft-preview");
+        sums.append(element("p", `craft-fee${shown.fee > this.view.gold ? " short" : ""}`, `Fee: ${shown.fee} gold (you have ${this.view.gold})`), element("p", "craft-worth", `What goes into it is worth ${shown.worth} gold`));
+        box.append(preview, sums);
+
+        if (shown.lacking.length) {
+            box.append(element("p", "craft-lacking", `You haven't ${listed(shown.lacking.map(({ text }) => text))}.`));
+        }
+
+        if (this.craftWhy) {
+            box.append(element("p", "stash-ask-why craft-why", this.craftWhy));
+        }
+
+        box.append(make);
+
+        return box;
+    }
+
+    // The piece just made, as it came out (its powers rolled): its card, what putting it on would
+    // change
+    #madeBox() {
+        const { item } = this.made;
+        const info = this.view.shop.craft.made(item);
+        const box = element("section", "pack-section craft-made");
+
+        box.setAttribute("role", "status");
+        box.append(element("h3", "pack-heading", "Made, and in your pack"), card({ ...item, label: info.label, info }));
+
+        return box;
+    }
+
+    // The piece shown made (what was shown: the host refuses it if its fee's changed since), and
+    // shown as it came out; or why not said in the panel
+    #craft(base, using, fee) {
+        this.craftWhy = null;
+        this.onCommand({ type: "craft", base, using: [...using], fee }, (result) => {
+            if (result?.ok) {
+                this.made = { item: result.item };
+                this.craftWhy = null;
+            } else {
+                this.made = null;
+                this.craftWhy = result?.words ?? null;
+            }
+        });
+    }
+
+    // An ingredient shown (a main material in the list, a choice of a slot) held, right-clicked or
+    // a controller's Square on it (a context menu asked for: app/padplay.js): its card beside it
+    // (#describe), the tap a hold ends in not choosing it
+    #holdable(element, id) {
+        let timer = null;
+        const show = () => this.#ingredientCard(id, element.dataset.card);
+        const stop = () => clearTimeout(timer);
+
+        element.addEventListener("pointerdown", (event) => {
+            stop();
+
+            if (event.button === 0) {
+                timer = setTimeout(() => {
+                    element.dataset.held = String(performance.now());
+                    show();
+                }, HOLD_MS);
+            }
+        });
+
+        for (const type of ["pointerup", "pointerleave", "pointercancel"]) {
+            element.addEventListener(type, stop);
+        }
+
+        element.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            stop();
+            show();
+        });
+        element.addEventListener(
+            "click",
+            (event) => {
+                const held = Number(element.dataset.held ?? -Infinity);
+
+                delete element.dataset.held;
+
+                if (performance.now() - held < 1500) {
+                    event.stopImmediatePropagation();
+                    event.preventDefault();
+                }
+            },
+            { capture: true },
+        );
+    }
+
+    // An ingredient's card, beside what it's shown on (`key`: its data-card), as a thing's in the
+    // pack is (#describe)
+    #ingredientCard(id, key) {
+        this.selected = { ingredient: id, key };
+        this.#describe();
+    }
+
+    // Something shown that can have the focus given back to it once it's drawn again (`key`)
+    #focusable(element, key) {
+        element.dataset.focus = key;
+
+        return element;
+    }
+
+    // The focus given to what's shown with a key (#focusable), scrolled into view if asked
+    #focusOn(key, { scroll = false } = {}) {
+        [...this.body.querySelectorAll("[data-focus]")].find((each) => each.dataset.focus === key)?.focus({ preventScroll: !scroll, focusVisible: true });
     }
 
     // --- The paperdoll ---
@@ -1257,6 +1788,28 @@ export class PackPanel {
     // what can be done with it, the card put away as one's used (none, it isn't showing: on
     // another page, none's tapped, or it was chosen for its wheel)
     #describe() {
+        // (An ingredient at a crafter's, held: its card, app/craftinfo.js ingredientInfo)
+        if (this.selected?.ingredient) {
+            const info = this.#selectedElement() ? this.view.shop?.craft?.card(this.selected.ingredient) : null;
+
+            if (!info) {
+                this.about.hidden = true;
+
+                return;
+            }
+
+            const inner = element("div", "pack-about-body");
+
+            inner.append(card({ id: this.selected.ingredient, label: info.label, info }, { worth: true }));
+            this.about.className = `pack-about rarity-${info.rarity}`;
+            this.about.replaceChildren(inner, button("", () => this.#select(null), { label: "Put it away", className: "pack-about-close" }));
+            this.about.lastChild.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+            this.about.hidden = false;
+            this.#placeAbout();
+
+            return;
+        }
+
         const worn = this.selected?.slot ? this.view.gear.find(({ slot }) => slot === this.selected.slot) : null;
         const stashed = this.selected?.place !== undefined && this.selected.tab === this.view.strongroom?.tab ? this.view.strongroom.slots[this.selected.place] : null;
         const stack = this.selected?.index !== undefined ? this.view.pack[this.selected.index] : stashed;
@@ -1305,7 +1858,11 @@ export class PackPanel {
 
     // What's tapped, as it's shown: its slot of the pack (on the page showing), or of the paperdoll
     #selectedElement() {
-        const { index, slot, place } = this.selected ?? {};
+        const { index, slot, place, ingredient, key } = this.selected ?? {};
+
+        if (ingredient) {
+            return [...this.body.querySelectorAll("[data-card]")].find((each) => each.dataset.card === key) ?? null;
+        }
 
         return index !== undefined ? this.body.querySelector(`.pack-cell[data-index="${index}"]`) : place !== undefined ? this.body.querySelector(`.stash-cell[data-place="${place}"]`) : slot ? this.body.querySelector(`.doll-slot[data-slot="${slot}"]`) : null;
     }

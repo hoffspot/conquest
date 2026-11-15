@@ -12,6 +12,7 @@ import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
 import { BLOW_EFFECTS, chargeOf, EFFECTS, effectAt, gradeWords, WARD_CHARGE } from "../core/legendary.js";
+import { FAMILIES, INGREDIENTS, ON_BLOW } from "../core/materials.js";
 import { mightOf } from "../core/might.js";
 import { BOOSTS, gradeOf, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { UNIQUES } from "../core/rare.js";
@@ -72,13 +73,65 @@ const MAKER_WORDS = Object.freeze({ human: "the humans'", elf: "the elves'", dar
  */
 export const rarityOf = (thing) => (thing?.unique && UNIQUES[thing.unique] ? "unique" : gradeOf(thing));
 
-// A bonus as shown: "+12% melee damage", "+5 hit points"; armour: "takes 4% off each blow"
-function worded(stat, value) {
+/** A bonus as shown: "+12% melee damage", "+5 hit points"; armour: "takes 4% off each blow". */
+export function worded(stat, value) {
     const { label, share, less } = STATS[stat];
     const amount = share ? `${Math.round(value * 100)}%` : `${Math.round(value)}`;
 
     // (What's less the better shown less: a charm's "−8% fire's harm")
     return stat === "armor" ? `Armour: takes ${amount} more off each blow` : `${value < 0 !== Boolean(less) ? "−" : "+"}${amount.replace("-", "")} ${label.toLowerCase()}`;
+}
+
+// What each of the new blows a crafted weapon strikes does besides its harm, as its card says
+// (core/materials.js ON_BLOW; core/battle.js #onBlow)
+const BLOW_WORDS = Object.freeze({
+    fireBlow: "as fire, setting the foe struck burning as often",
+    frostBlow: "as frost, slowing the foe struck twice as often",
+    stormBlow: "as lightning",
+    venomBlow: "as venom, poisoning the foe struck twice as often",
+    acidBlow: "as acid, eating through its armour",
+    holyBlow: "as holy fire, on the restless dead and demons alone",
+    shadowBlow: "as shadow, on all but the restless dead and demons, withering the foe struck as often",
+});
+
+/**
+ * One of the new blows a crafted weapon strikes (core/materials.js ON_BLOW), on its card: "+12% of
+ * each blow's harm again as fire, setting the foe struck burning as often".
+ */
+export function blowWorded(stat, value) {
+    return `+${Math.round(value * 100)}% of each blow's harm again ${BLOW_WORDS[stat]}`;
+}
+
+/**
+ * A power a piece made at a crafter's could come out with (core/crafting.js powersOf: anywhere in
+ * its range, [least, most], rounded as it's shown), in words: "+5–12% melee damage", "−3–7% fire's
+ * harm", "+4–9 hit points"; one of the new blows (core/materials.js ON_BLOW), "+8–18% fire on each
+ * blow", or (`full`, for the piece shown before it's made) what it does besides, as its card says it
+ * once it's made (blowWorded): "+8–18% of each blow's harm again as fire, setting...".
+ */
+export function rangeWorded(stat, [least, most], { full = false } = {}) {
+    if (!ON_BLOW[stat]) {
+        const share = STATS[stat].share;
+        const same = share ? Math.round(least * 100) === Math.round(most * 100) : Math.round(least) === Math.round(most);
+
+        return same ? worded(stat, least) : spanned(stat, least, most);
+    }
+
+    const [from, to] = [Math.round(least * 100), Math.round(most * 100)];
+    const amount = from === to ? `${from}%` : `${from}–${to}%`;
+
+    return full ? `+${amount} of each blow's harm again ${BLOW_WORDS[stat]}` : `+${amount} ${ON_BLOW[stat].label.toLowerCase()}`;
+}
+
+/**
+ * What an ingredient's for, briefly, as the bestiary says it beside what a creature leaves
+ * (docs/CRAFTING.md *The bestiary*): its power in a weapon (core/materials.js FAMILIES `arms`),
+ * "Fire on each blow, in a weapon"; or null for anything that's no ingredient (what's eaten).
+ */
+export function usedFor(id) {
+    const family = Object.hasOwn(INGREDIENTS, id ?? "") ? FAMILIES[INGREDIENTS[id].family] : null;
+
+    return family ? `${STATS[family.arms].label}, in a weapon` : null;
 }
 
 /**
@@ -182,8 +235,8 @@ export function kindOf(id) {
     return def.slot === "ring" ? "Ring" : (GEAR_SLOTS.find(({ takes }) => takes === def.slot)?.label ?? def.slot);
 }
 
-// A weapon's blows, in words: damage (as well made and as high a level as it is) and reach
-function blowsOf(id, power) {
+/** A weapon's blows, in words: damage (as well made, `power`, and as high a level as it is) and reach. */
+export function blowsOf(id, power) {
     return (WEAPONS[id]?.attacks ?? []).map(({ damage: [least, most], reach, kind }) => `${kind === "ranged" ? `Shoots from ${reach} m` : "Up close"}: ${Math.round(least * power)}–${Math.round(most * power)} damage`);
 }
 
@@ -306,9 +359,10 @@ export function describe(item, progress, { index = null, label = item.id, haggle
         lines.push({ text: stat === "armor" ? `Armour: takes ${Math.round(value * 100)}% off each blow` : worded(stat, value), tone: "base" });
     }
 
+    // (What's rolled on it, or it's made with: a crafted weapon's fire and the rest, what each does)
     for (const [stat, value] of Object.entries(item.bonuses ?? {})) {
         if (STATS[stat]) {
-            lines.push({ text: worded(stat, value), tone: "bonus" });
+            lines.push({ text: ON_BLOW[stat] ? blowWorded(stat, value) : worded(stat, value), tone: "bonus" });
         }
     }
 
@@ -337,14 +391,17 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     return { label, rarity: unique ? "unique" : quality, kind: kindOf(item.id), lines, rolls, compare, price: unique ? 0 : priceOf(item, { haggle, selling: true }) };
 }
 
-// A wand's or grimoire's spell power, as it's rolled when it's bought (core/progress.js
-// rollBoost): from the least to the most there is, and under what most are
-function boostsWorded() {
+/**
+ * A wand's or grimoire's spell power, as it's rolled when it's bought, or (`as`: "made") made at a
+ * crafter's (core/progress.js rollBoost): from the least to the most there is, and under what most
+ * are.
+ */
+export function boostsWorded(as = "bought") {
     const total = BOOSTS.reduce((sum, { weight }) => sum + weight, 0);
     let sum = 0;
     const most = BOOSTS.find(({ weight }) => (sum += weight) > total / 2).band[1];
 
-    return `+${Math.round(BOOSTS[0].band[0] * 100)}–${Math.round(BOOSTS.at(-1).band[1] * 100)}% spell power, rolled as it's bought (most under +${Math.round(most * 100)}%)`;
+    return `+${Math.round(BOOSTS[0].band[0] * 100)}–${Math.round(BOOSTS.at(-1).band[1] * 100)}% spell power, rolled as it's ${as} (most under +${Math.round(most * 100)}%)`;
 }
 
 /**
@@ -464,6 +521,7 @@ export function totals(progress, { hp = 50, stamina = 50, might = mightOf(progre
     const bonus = progress.bonuses();
     const shield = progress.guard(bonus);
     const pct = (value) => `${Math.round(value * 100)}%`;
+    const blows = Object.keys(ON_BLOW).filter((stat) => bonus[stat] > 0);
     const rows = [
         { label: "Armour", value: `${pct(bonus.armor)} off each blow` },
         { label: "Dodge", value: `${pct(bonus.dodge)} of blows and shots` },
@@ -478,6 +536,8 @@ export function totals(progress, { hp = 50, stamina = 50, might = mightOf(progre
         { label: "Blow speed", value: `+${pct(bonus.haste)}` },
         { label: "Life from blows", value: pct(bonus.leech) },
         { label: "Bleeding blows", value: `${pct(bonus.bleed)} of blows` },
+        // (A crafted weapon's fire, frost and the rest, those there are: core/materials.js ON_BLOW)
+        ...(blows.length ? [{ label: "On each blow", value: blows.map((stat) => `+${pct(bonus[stat])} ${ON_BLOW[stat].label.replace(/ on each blow$/, "").toLowerCase()}`).join(", ") }] : []),
         { label: "Haggling", value: pct(bonus.haggle) },
         { label: "Persuasion", value: pct(bonus.persuade) },
         { label: "Might", value: `${might} of 100`, about: "How mighty you are: your gear, skills, spells and charms (not your followers, nor anything that passes). What you find is made for it." },

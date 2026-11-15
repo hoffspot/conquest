@@ -733,12 +733,21 @@ export function paintBothFaces(solid, corners, picture) {
     solid.face([...corners].reverse(), picture, [[1, 1], [0, 1], [0, 0], [1, 0]]);
 }
 
-/** A material showing a sign's picture (lit like the rest of the town). */
-export function signMaterial(texture, name) {
+/**
+ * A material showing a sign's picture (lit like the rest of the town); one that casts no shadow
+ * (`shadow` false: a name board's, flat in its frame, whose shadow the frame casts) not drawn
+ * again for the sun's shadows (town3d.js joined).
+ */
+export function signMaterial(texture, name, { shadow = true } = {}) {
     const result = new THREE.MeshLambertMaterial({ map: texture });
 
     result.name = name;
     result.shadowSide = THREE.DoubleSide;
+
+    if (!shadow) {
+        result.userData.shadow = false;
+    }
+
     // (Each sign's own: let go with what it's on. Its picture is kept for the next)
     result.userData.own = true;
 

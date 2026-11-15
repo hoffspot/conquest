@@ -1047,6 +1047,34 @@ test("the Stone Golem as the game draws it: a stone-grey brute till its model's 
     expect(flown.at(-1)).toBe(null);
 });
 
+test("the crafters' quarry as the game draws it: each from the model of the creature it's like, in its own skin, as big as it's drawn, in its own colour; a treant's kind its stand-in", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+
+    // (Each kind, the skin it wears and how tall it's drawn: the Stone Golem's 1.85 m made, the
+    // giant cockroach's 1.07, the black widow's 0.37, the dungeon wasp's 1.34, as much bigger as
+    // each is drawn: beasts/model.js quarryModel)
+    for (const [kind, skin, tall] of [
+        ["mythrilGolem", "frost", 3.19],
+        ["adamantiteGolem", "moss", 3.99],
+        ["orichalcumColossus", "ember", 6.38],
+        ["gildedScarab", "", 1.29],
+        ["gloomweaver", "", 0.68],
+        ["moonMoth", "", 4.79],
+    ]) {
+        await openViewer(page, `/model-viewer.html?creature=${kind}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.current())).toMatchObject({ id: kind, humanoid: false, model: true, skin });
+        expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(tall, 1);
+
+        // (Its every material its own copy, tinted: beasts/model.js TINT)
+        expect(await page.evaluate(() => [...new Set([window.lab.avatar().plan.materials.body, ...window.lab.avatar().plan.materials.others].map((material) => material.customProgramCacheKey()))])).toEqual(["beast-tinted"]);
+    }
+
+    // (The treants' kind has no model: each its stand-in, a treant built in code in its colours)
+    await openViewer(page, "/model-viewer.html?creature=sylvanAncient");
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ id: "sylvanAncient", model: false, attacks: ["slam", "sweep"], specials: ["roots"] });
+});
+
 test("the Orc King as the game draws him: a crowned orc till his model's read, then the King, his blows each their own clip, his combo, his flurry and its kick, his leap and his spin, his battlecry; his champions in his brown and red skins", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=orcKing");

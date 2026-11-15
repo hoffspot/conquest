@@ -7,6 +7,7 @@
 import { LIVERIES } from "../characters/liveries.js";
 import { GEAR } from "../core/gear.js";
 import { BREWS, CHARMS, SCROLLS } from "../core/goods.js";
+import { MATERIALS } from "../core/materials.js";
 import { ELEMENT_TOMES, SPELLS, TOMES, tomeOf } from "../core/spells.js";
 import { PARTS } from "../core/spoils.js";
 import { SPELL_DEFS, SPELL_ICONS } from "./spellicons.js";
@@ -776,6 +777,20 @@ const PART_PICTURES = {
         <path d="M-16,6 L-10,-6 L16,-6 L10,6 Z" fill="${tone(c, 0.3)}" stroke="#1a1c20" stroke-width="1.2"/>
         <path d="M-16,6 L10,6 L10,13 L-16,13 Z" fill="${c}" stroke="#1a1c20" stroke-width="1.2"/>
         <path d="M10,6 L16,-6 L16,1 L10,13 Z" fill="${tone(c, -0.35)}" stroke="#1a1c20" stroke-width="1.2"/>`,
+    // (A cut gem, its table and facets, a glint on its crown: the crafters' gems, core/materials.js)
+    gem: (c) => `
+        <path d="M-16,-5 L-8,-15 L8,-15 L16,-5 L0,17 Z" fill="${c}" stroke="${tone(c, -0.6)}" stroke-width="1.3" stroke-linejoin="round"/>
+        <path d="M-16,-5 L16,-5 M-8,-15 L-4,-5 L0,17 L4,-5 L8,-15 M-16,-5 L-6,4 M16,-5 L6,4" fill="none" stroke="${tone(c, -0.3)}" stroke-width="0.9" stroke-linejoin="round"/>
+        <path d="M-8,-15 L8,-15 L4,-5 L-4,-5 Z" fill="${tone(c, 0.4)}" opacity="0.7"/>
+        <path d="M-6,-12 L-2,-8" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/>`,
+    // (A bolt of cloth, rolled, its end towards us and a length of it let out below: the crafters'
+    // linen, wool and silk, core/materials.js)
+    bolt: (c) => `
+        <path d="M-17,9 L9,9 L17,17 L-9,17 Z" fill="${tone(c, -0.12)}" stroke="${tone(c, -0.55)}" stroke-width="1.1" stroke-linejoin="round"/>
+        <path d="M-15,-13 L9,-13 L9,9 L-15,9 Z" fill="${c}" stroke="${tone(c, -0.55)}" stroke-width="1.3"/>
+        <path d="M-9,-13 L-9,9 M-3,-13 L-3,9 M3,-13 L3,9" stroke="${tone(c, -0.2)}" stroke-width="0.9" opacity="0.7"/>
+        <ellipse cx="9" cy="-2" rx="6" ry="11" fill="${tone(c, 0.25)}" stroke="${tone(c, -0.55)}" stroke-width="1.2"/>
+        <path d="M9,-8 C12,-8 13,-2 11,2 C9,5 6,2 7,-1 C8,-3 10,-2 9,0" fill="none" stroke="${tone(c, -0.35)}" stroke-width="1"/>`,
 };
 
 /** A creature's part's picture (spoils.js PARTS: `icon`, `tint`). */
@@ -1040,8 +1055,10 @@ export const ITEM_ICONS = Object.freeze({
     // (Gear: each piece of a people's uniform in the humans' colours, unless it says whose)
     ...GEAR_ICONS,
     ...Object.fromEntries(Object.keys(GEAR).filter((id) => GEAR[id].uniform).map((id) => [id, uniformIcon(id)])),
-    // (The creatures' parts, each in its colour; gold; the spells' tomes)
+    // (The creatures' parts, each in its colour, and the crafters' metals, woods, cloths, leathers
+    // and gems drawn the same way; gold; the spells' tomes)
     ...Object.fromEntries(Object.entries(PARTS).map(([id, part]) => [id, partIcon(part)])),
+    ...Object.fromEntries(Object.entries(MATERIALS).map(([id, material]) => [id, partIcon(material)])),
     ...Object.fromEntries([...TOMES, ...ELEMENT_TOMES].map((spell) => [tomeOf(spell), tomeIcon(spell)])),
     // (The alchemist's brews and oils, the scriptorium's scrolls and the charms: core/goods.js)
     ...Object.fromEntries(Object.entries(BREWS).map(([id, brew]) => [id, brew.oil ? oilJar(brew.colour, brew.use.boon.oil.kind) : flask(brew.colour)])),

@@ -225,7 +225,10 @@ export const DEMON_FLARE = Object.freeze({
  * off each, as a player's charms keep it: battle.js `charmed`, half at most). One too vast for any
  * of that fights its own way (`colossus`: COLOSSUS, battle.js #colossus). One a world's boss
  * (`worldBoss`), met once, has its bar across the top of the screen as the colossal do (game.js).
- * One that sees further than most has its own `sight` (squares: battle.js SIGHT, else).
+ * One that sees further than most has its own `sight` (squares: battle.js SIGHT, else). One of
+ * the mightiest (`perilous`) is met only where its lair or its place is, unless it's met out in
+ * the wilds of its lands all the same (`abroad`: the frost trolls of the high snows, and the
+ * crafters' quarry that's perilous, docs/CRAFTING.md *New beasts*).
  *
  * Moves of its own, for a mightier foe to be fought with its own ways (battle.js, the building
  * blocks a rare card's foe is made of: core/rare.js):
@@ -368,7 +371,7 @@ export const CREATURES = Object.freeze({
     ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true , steady: true },
     wraith: { name: "Wraith", hp: 46, weapon: "wraith", speed: 1.2, chase: 2.6, temper: "aggressive", roam: 6, leash: 18, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "none", armor: 0.2, night: "only", darkSight: true , steady: true },
     wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true, darkSight: true , steady: true },
-    frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true , steady: true },
+    frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true, abroad: true , steady: true },
     // (A hell's flayed, its sacrifices and its priests, skinned and given back their lives below:
     // only there, in its first two levels (core/dungeons/themes.js hell), each drawn from a model of
     // its own. In the Breach, flaylings in swarms, quick, their claws leaving wounds that bleed;
@@ -705,6 +708,30 @@ export const CREATURES = Object.freeze({
     antClutch: { name: "Egg clutch", hp: 40, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "ichor", armor: 0.1, darkSight: true, steady: true, object: true },
     eggSac: { name: "Egg sac", hp: 34, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "ichor", armor: 0.05, darkSight: true, steady: true, object: true },
     soulJar: { name: "Soul jar", hp: 44, weapon: "slime", speed: 0.1, chase: 0.1, temper: "aggressive", roam: 0, leash: 1, pack: [1, 1], tiers: [1, 10], biomes: [], blood: "none", armor: 0.2, darkSight: true, steady: true, object: true },
+    // (The crafters' quarry (docs/CRAFTING.md *New beasts*; materials.js NEW_BEASTS), so that every
+    // rarer ingredient has something to come off: each one the creature it's like, drawn from its
+    // model or its stand-in in its own colour and size (beasts/model.js, beasts/looks.js), fighting
+    // as it does (its weapon, its ways, its hit points at the first tier), but met at tiers and in
+    // lands of its own, and none of them a world's boss. The golems, the Stone Golem's kind: a
+    // mythril golem in the high, cold lands, an adamantite golem in the burning and broken ones, and
+    // the orichalcum colossus, perilous, in the burning lands far out alone. A gilded scarab, a
+    // giant cockroach gone gold, in the cat folk's wilds. The treants, the blighted treant's kind:
+    // an ironbark treant in the orcs' wilds, a ghostwood treant walking the dark woods and marshes
+    // by night, and the sylvan ancient, perilous, in the elves' wilds. The gloomweaver, a black
+    // widow grown great and violet-black, perilous, in the dark elves' wilds, in the open (no roof
+    // to lurk under there), and in the ants' nests. And the moon moth, perilous, out only by night
+    // over the elves' woods and the meadows, a dungeon wasp's kind as big as a horse. The perilous
+    // are met alone, out in the wilds of their lands all the same (`abroad`). The sylvan ancient's
+    // and the moon moth's lands never come to the tenth tier, so they're met from the eighth)
+    mythrilGolem: { name: "Mythril golem", hp: 130, weapon: "stoneGolem", speed: 1, chase: 2.3, temper: "aggressive", roam: 18, leash: 60, pack: [1, 1], tiers: [6, 9], biomes: ["mountain", "snow", "tundra"], blood: "stone", armor: 0.35, darkSight: true, sight: 26, steady: true, wards: { earth: 0.5 } },
+    adamantiteGolem: { name: "Adamantite golem", hp: 130, weapon: "stoneGolem", speed: 1, chase: 2.3, temper: "aggressive", roam: 18, leash: 60, pack: [1, 1], tiers: [8, 10], biomes: ["volcanic", "badlands", "mountain"], blood: "stone", armor: 0.35, darkSight: true, sight: 26, steady: true, wards: { earth: 0.5 } },
+    orichalcumColossus: { name: "Orichalcum colossus", hp: 130, weapon: "stoneGolem", speed: 1, chase: 2.3, temper: "aggressive", roam: 18, leash: 60, pack: [1, 1], tiers: [10, 10], biomes: ["volcanic"], blood: "stone", armor: 0.35, perilous: true, abroad: true, darkSight: true, sight: 26, steady: true, wards: { earth: 0.5 } },
+    gildedScarab: { name: "Gilded scarab", hp: 22, weapon: "giantCockroach", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 10, leash: 18, pack: [2, 4], tiers: [3, 7], biomes: null, people: "cat", blood: "ichor", armor: 0.1, darkSight: true },
+    ironbarkTreant: { name: "Ironbark treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [6, 9], biomes: null, people: "orc", blood: "sap", armor: 0.15, steady: true },
+    ghostwoodTreant: { name: "Ghostwood treant", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [8, 10], biomes: ["darkwood", "marsh"], blood: "sap", armor: 0.15, night: "only", darkSight: true, steady: true },
+    sylvanAncient: { name: "Sylvan ancient", hp: 80, weapon: "treant", speed: 0.7, chase: 1.4, temper: "territorial", guard: 5, roam: 4, leash: 12, pack: [1, 1], tiers: [8, 10], biomes: null, people: "elf", blood: "sap", armor: 0.15, perilous: true, abroad: true, steady: true },
+    gloomweaver: { name: "Gloomweaver", hp: 80, weapon: "blackWidow", speed: 1, chase: 2.6, temper: "aggressive", roam: 4, leash: 18, pack: [1, 1], tiers: [8, 10], biomes: null, people: "darkElf", blood: "ichor", armor: 0.1, perilous: true, abroad: true, darkSight: true },
+    moonMoth: { name: "Moon moth", hp: 70, weapon: "dungeonWasp", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [8, 10], biomes: ["elfwood", "meadow"], blood: "ichor", perilous: true, abroad: true, night: "only", darkSight: true },
 });
 
 /**
@@ -804,7 +831,8 @@ export function livesOn(id, { biome, race }) {
 /**
  * What creatures could be met at a place in the world: those that live on its land (landAt's
  * { biome, race }) and are found at its tier (none of the perilous places' masters, who only
- * come from there, save the frost trolls of the high snows). The uniques of the people whose lands
+ * come from there, save those met out in their lands' wilds, `abroad`: the frost trolls of the
+ * high snows, the orichalcum colossus...). The uniques of the people whose lands
  * they are come twice as often. By day (`dark` false) none of the night's own; after dark, the
  * night's creatures more often (NIGHT_WEIGHT).
  */
@@ -815,8 +843,9 @@ export function candidatesAt(land, tier, dark = false) {
 }
 
 // The creatures that live on a land (landAt's { biome, race }), whatever its tier: none of the
-// perilous places' masters but the frost trolls, and by day none of the night's own ([id, creature])
-const livingOn = (land, dark) => Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && (!creature.perilous || id === "frostTroll") && (dark || outByDay(id)));
+// perilous places' masters but those met abroad (the frost trolls...), and by day none of the
+// night's own ([id, creature])
+const livingOn = (land, dark) => Object.entries(CREATURES).filter(([id, creature]) => livesOn(id, land) && (!creature.perilous || creature.abroad) && (dark || outByDay(id)));
 
 // How often a creature's met among others (candidatesAt): a people's own uniques twice as often,
 // and after dark the night's creatures more often (NIGHT_WEIGHT)

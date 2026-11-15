@@ -3771,6 +3771,20 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .damage.ail-burn { color: #ffa040; }
 .damage.ail-bleed { color: #ff5a4a; }
 
+/* A crafted weapon's fire, frost and the rest after the blow it rode on (core/materials.js
+   ON_BLOW: app/game.js BLOW_LOOKS): smaller than the blow's, the colour of its element */
+.damage.blow {
+    font-size: 15px;
+}
+
+.damage.blow-fire { color: #ff9a3a; }
+.damage.blow-frost { color: #9ad8ff; }
+.damage.blow-storm { color: #e6ecff; text-shadow: 0 0 6px rgba(154, 184, 255, 0.9); }
+.damage.blow-venom { color: #9af05a; }
+.damage.blow-acid { color: #d8e040; }
+.damage.blow-holy { color: #ffe9a0; text-shadow: 0 0 6px rgba(255, 210, 122, 0.85); }
+.damage.blow-shadow { color: #b890f0; }
+
 /* The action wheel: eight see-through slices round whoever was held on, S turning it over */
 .wheel {
     position: absolute;
@@ -5290,6 +5304,188 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin: 0 2px 8px;
 }
 
+/* At a crafter's (docs/CRAFTING.md): Break down all junk under Sell all junk, and breaking down
+   asked about in the panel, as Sell all junk is */
+.salvage-bar {
+    padding-top: 6px;
+    border-top: 1px solid var(--field-border);
+}
+
+.pack-peeked-actions .salvage-ask {
+    margin: 8px 0 2px;
+}
+
+.craft-salvage-note {
+    color: var(--gold-bright);
+}
+
+/* The Craft tab: each piece the crafter makes, what it takes, and its main materials, each in its
+   make's colour, greyed and struck through where the pack's short of what it takes */
+.craft-intro {
+    margin: 10px 2px 2px;
+}
+
+.craft-piece {
+    align-items: flex-start;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.craft-piece .pack-icon {
+    margin-top: 2px;
+}
+
+.craft-piece-body {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+}
+
+.craft-takes {
+    margin: 0;
+    font-size: 12.5px;
+    color: var(--muted);
+}
+
+.craft-mains,
+.craft-picks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.craft-main,
+.craft-pick {
+    min-height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--rarity, var(--ink)) 60%, transparent);
+    background: color-mix(in srgb, var(--rarity, var(--ink)) 12%, transparent);
+    color: var(--rarity, var(--ink));
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+.craft-main:hover:not(:disabled),
+.craft-pick:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--rarity, var(--ink)) 24%, transparent);
+}
+
+.craft-main.lacking,
+.craft-pick.lacking {
+    opacity: 0.45;
+    border-style: dashed;
+}
+
+.craft-main.lacking {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+.craft-pick {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 6px;
+}
+
+.craft-pick[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--rarity, var(--gold)) 30%, transparent);
+    border-color: var(--rarity, var(--gold-bright));
+    box-shadow: 0 0 0 1px var(--rarity, var(--gold-bright));
+}
+
+.craft-pick:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.craft-pick svg {
+    flex: none;
+}
+
+.craft-pick-have {
+    font-size: 12px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.craft-back {
+    margin: 10px 0 2px;
+}
+
+.craft-slot .pack-heading {
+    margin-bottom: 2px;
+}
+
+.craft-slot .craft-takes {
+    margin-bottom: 6px;
+}
+
+.craft-chosen {
+    margin-top: 6px;
+}
+
+.craft-shown .craft-preview {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rarity, var(--gold)) 55%, var(--field-border));
+    background: color-mix(in srgb, var(--rarity, var(--gold)) 7%, var(--field));
+}
+
+.craft-sums {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 16px;
+    margin: 8px 2px;
+}
+
+.craft-fee,
+.craft-worth {
+    margin: 0;
+    font-size: 14px;
+}
+
+.craft-fee {
+    color: var(--gold);
+}
+
+.craft-fee.short {
+    color: var(--bad, #d06a5a);
+}
+
+.craft-worth {
+    color: var(--muted);
+}
+
+.craft-lacking {
+    margin: 0 2px 8px;
+    font-size: 14px;
+    color: var(--bad, #d06a5a);
+}
+
+.craft-why {
+    margin: 0 2px 8px;
+}
+
+.craft-make {
+    width: 100%;
+    min-height: 42px;
+    margin-bottom: 6px;
+}
+
+.craft-made .pack-card {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--rarity, var(--gold));
+    background: color-mix(in srgb, var(--rarity, var(--gold)) 10%, var(--field));
+    animation: peek-in 0.2s ease-out;
+}
+
 /* A row opened on the Sell tab: what can be done with it (Mark as junk) under what it is */
 .pack-peeked-actions {
     flex-basis: 100%;
@@ -6379,6 +6575,32 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .bestiary-section.shut .bestiary-line {
     font-style: italic;
     color: var(--muted);
+}
+
+/* What a creature leaves (docs/CRAFTING.md *The bestiary*): each thing in its make's colour, a
+   tap away from its card beneath it, and what it's for, briefly */
+.bestiary-part-name {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--rarity, var(--ink));
+    text-decoration: underline dotted color-mix(in srgb, currentColor 55%, transparent);
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+.bestiary-part-use {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.bestiary-card {
+    margin: 4px 0 8px 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, var(--rarity, var(--gold)) 50%, var(--field-border));
+    background: var(--field);
 }
 
 /* The last messages told across the screen (the HUD's banner), the newest first */

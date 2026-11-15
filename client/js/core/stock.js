@@ -1,7 +1,8 @@
-// What the specialist shops and the master shops have in today (docs/WAR.md *Shops*): each day a
-// new assortment of the things they deal in, so many of each, and a daily special, the rarest and
-// dearest thing they'll have; worked out from the world's seed, the shop and the day, so that
-// everyone who plays together sees the same (core/host.js keeps what's been sold of it).
+// What the specialist shops, the crafters' and the master shops have in today (docs/WAR.md
+// *Shops*): each day a new assortment of the things they deal in, so many of each, a daily
+// special, the rarest and dearest thing they'll have, and a crafter's materials (docs/CRAFTING.md);
+// worked out from the world's seed, the shop and the day, so that everyone who plays together sees
+// the same (core/host.js keeps what's been sold of it).
 //
 // And how a thing's made as it's bought (what's rolled on gear, a wand's boost), and what a shop
 // asks for it.
@@ -15,6 +16,12 @@ import { createRandom } from "./random.js";
 
 /** How much more a shop's daily special costs than the same thing on its shelves. */
 export const SPECIAL_MARKUP = 1.25;
+
+/**
+ * How many of each material a crafter with a daily stock has in each day (progress.js SHOPS
+ * `materials`: [least, most]), for everyone who plays together: plenty, a few pieces' worth.
+ */
+export const MATERIAL_COUNT = Object.freeze([10, 20]);
 
 /**
  * Which shop's stock someone keeps (`id`: theirs, as host.js has them): the building they keep it
@@ -102,9 +109,10 @@ function choicesOf(items, grades) {
  * What a shop with a daily stock (progress.js SHOPS `daily`) has in on a day (`day`: core/
  * daytime.js dayOf) of a world (`seed`), the shop being the one kept at `key` (stockKey) by
  * `people`: { wares: [{ id, quality, count, people? }] (each so many), special: the thing it is,
- * made (madeOf: what's rolled on it already), or null on a day it has none }; or null, for a shop
- * without one. The same for
- * the same world, shop and day; another assortment the next.
+ * made (madeOf: what's rolled on it already), or null on a day it has none, materials: [{ id,
+ * quality, count }] (a crafter's, SHOPS `materials`: each of them every day, MATERIAL_COUNT of
+ * it; none for any other) }; or null, for a shop without one. The same for the same world, shop
+ * and day; another assortment the next.
  */
 export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human" } = {}) {
     const daily = SHOPS[shop]?.daily;
@@ -143,7 +151,11 @@ export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human"
     const pick = specials.length && today ? random.pickWeighted(specials, ({ id, weight }) => weight * (ITEMS[id]?.price ?? 1)) : null;
     const special = pick && madeOf({ id: pick.id, quality: pick.quality, people: ITEMS[pick.id]?.uniform ? maker : null }, random, { maker });
 
-    return { wares, special };
+    // Its materials, a crafter's: every one it sells, so many of each (counted last, so its
+    // shelves and its special are as they'd be without them)
+    const materials = (SHOPS[shop].materials ?? []).map((id) => ({ id, quality: "common", count: random.int(...MATERIAL_COUNT) }));
+
+    return { wares, special, materials };
 }
 
 /**

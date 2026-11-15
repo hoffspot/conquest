@@ -320,6 +320,15 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   over in the same way, last, from the house nearest the market whose door opens onto a street
   (on dry land if one can be; failing that, over a lagoon with its doorstep on a walk), so
   nothing else moves for them. They can be entered.
+- **Its crafters** (docs/CRAFTING.md *Which settlements keep which*: `craftersOf`, by its kind and
+  its seed, from a random of their own): a village one of a bowyer's, a leatherworker's and a
+  tailor's; a town two of them; a city two and a jeweller's; a capital all four
+  (`CRAFTER_SHOPS`), so a capital keeps every kind of shop there is but the masters'. Each is
+  made over as the specialists' are, from the house nearest the market whose door opens onto a
+  street, after everything else (the stable too), so every building stands where it did before
+  there were any: a world laid out before keeps every building it had, a few of its houses made
+  shops. None in a place of `CRAFTER_SPARE` (3) houses or fewer, so none is left with fewer than
+  three (a lizard folk's village of two houses), and never laid out again for one. They can be entered.
 - **Trees** dotted about the open ground left.
 
 **Each people's own** (`layoutTown({ ..., people })`, `PEOPLE_TOWNS`): the same builder, laid
@@ -577,7 +586,7 @@ are kept.
   bunks two high along the walls, the hearth, the mess table and its benches, and strongboxes by
   the door. No folk: its garrison is the host's, of whoever holds the town (`barracksPosts`: its
   captain behind the desk, its guardsmen at their posts; docs/WAR.md M16).
-- **A shop** (`shopRooms`, `SHOP_INSIDES`: a specialist's or a master's) is one room 18 by 12
+- **A shop** (`shopRooms`, `SHOP_INSIDES`: a specialist's, a crafter's or a master's) is one room 18 by 12
   metres, floorboarded, its door in the middle of the south wall between two windows, the counter
   across it under its cloth with its keeper behind it, a rug up from the door (all but the
   alchemist's), torches on the side walls and either side of the door (beside it, never over
@@ -606,7 +615,23 @@ are kept.
     on the counter; candle stands;
   - the Master Swordsmith's and the Master Armorer's as a swordsmith's and an armorer's, under
     velvet and gold: banners either side of the counter; the great swords on a master's tables and
-    in its racks (a zweihänder, a knight's sword, claymores), a visored barbute on its counter.
+    in its racks (a zweihänder, a knight's sword, claymores), a visored barbute on its counter;
+  - a bowyer's (docs/CRAFTING.md *The crafters*): bows hung strung from pegs on boards along the
+    back wall and down the sides, their bellies out, staves leant below; shelves of quivers and
+    sheaves of shafts; two tables under green wool, two bows laid unstrung on each, staves in the
+    rough, a quiver, a hatchet and a basket of fletchings; shaving benches with a saw and a
+    mallet; casks of shafts; a basket and a candlestick on the counter;
+  - a leatherworker's: hides stretched on their frames and laced to them along the back wall and
+    down the sides; shelves of leathers folded, belts coiled and boots; two cutting tables, a
+    sheepskin, a board, a mallet, gloves, a belt and a strap on each; a jerkin on a stand; benches
+    with a knife and a pot of dye; a tub of tan; a board and a basket on the counter;
+  - a tailor's: shelves of bolts of cloth of every colour all round; two dummies wearing gowns or
+    cloaks; two cutting tables, a bolt unrolled across each, cloth folded in piles, shears,
+    baskets of thread and buttons and a candleholder; candle stands to sew by; a basket, a
+    candlestick and a dish of pins on the counter;
+  - a jeweller's: shelves of caskets, cups and plate; two cases of rings and stones on velvet, a
+    lid of glass propped open behind them, cups and a little ewer on each; benches with a
+    candleholder and a bowl of stones; candle stands; a cup and a candleholder on the counter.
 
   The humans' shops are furnished from a prop kit, Wind Ways' shop furniture (a licensed model,
   `world/propkits.js`; docs/LICENSED_MODELS.md *Prop kits*): the counter its panelled counters end
@@ -615,13 +640,16 @@ are kept.
   without the licensed models, each is drawn as the game's own.
 
   Its keeper (`shopFolkOf`) serves from behind the counter and goes to the shelves or racks on the
-  back wall now and then; dressed as a smith (the swordsmith and the armorer), an arcanist (the
-  scribe, the Emporium's proprietor), an herbalist (the alchemist) or a quartermaster (the
-  masters). The shop's known by its keeper's family name ("Ashdown's Blades", "Ashdown's
-  Harness", "Rowe's Apothecary") or its own ("the Occult Scriptorium", "the Master Swordsmith's",
+  back wall now and then; dressed as a smith (the swordsmith, the armorer and the leatherworker),
+  an apprentice in a leather apron (the bowyer), an innkeeper in good plain cloth (the tailor and
+  the jeweller), an arcanist (the scribe, the Emporium's proprietor), an herbalist (the alchemist)
+  or a quartermaster (the masters). The shop's known by its keeper's family name ("Ashdown's
+  Blades", "Ashdown's Harness", "Rowe's Apothecary", "Rowe's Bows", "Rowe's Leathers", "Rowe's
+  Tailoring", "Rowe's Jewels") or its own ("the Occult Scriptorium", "the Master Swordsmith's",
   "the Mystic Emporium"). They sell what their shop sells (core/progress.js SHOPS, docs/WAR.md
   *Shops*), and talk (core/dialogue.js): of their trade, and of today's special by name and price
-  (`{special}`, `{specialPrice}`), or that it's gone.
+  (`{special}`, `{specialPrice}`), or that it's gone; and a crafter's (every one but the
+  alchemist's) are asked "What can you make?" (`commissionOf`: docs/CRAFTING.md *The crafters*).
 - **A town hall** (`hallRooms`) is a chamber 18 by 14 metres: shelves of the town's rolls along
   the north wall and the reeve's long desk before them, the council table with its benches, the
   notices on the west wall, a hearth on the east, strongboxes, and petitioners' benches by the
@@ -912,9 +940,9 @@ later, in another hand, a guild scout's note.
 ### The bestiary (core/bestiary.js, app/bestiary.js)
 
 A page in the journal for each kind of creature the player has met, filling in as they find out
-more of it, as a hunter's research does in Monster Hunter. Every creature has a page (all 97 in
+more of it, as a hunter's research does in Monster Hunter. Every creature has a page (all 136 in
 core/creatures.js `CREATURES`): the wilds', each people's own, the camps' and lairs', the ants'
-nests', the hells' and the Rift's.
+nests', the hells', the Rift's and the crafters' quarry (docs/CRAFTING.md *New beasts*).
 
 - **Research** (core/bestiary.js `Bestiary`, `RESEARCH`): each kind earns points, and its page goes
   up a level as they add up:
@@ -931,7 +959,7 @@ nests', the hells' and the Rift's.
   | Sighted | 1 | **What it is** (core/lore/bestiary.js `BESTIARY_LORE`): a few lines, and where it's met |
   | Known | 4 | **Its ways**: how it sets on whoever comes, how many go together (and who guards a lair's master), when it's out, the camps and lairs it keeps to, the sign of it on its trail, how far out it's met |
   | Studied | 8 | **How it fights**: its hit points at its least and most level, the share of every blow it turns, the harm it keeps off, what it can't be done (thrown), and each of its attacks (its harm, its reach, what it leaves) |
-  | Mastered | 14 | **What it leaves**: each thing it may drop and how often; and the player's edge on it |
+  | Mastered | 14 | **What it leaves**: each thing it may drop and how often, in its make's colour, with what it's for (*Crafting*); and the player's edge on it |
 
   Slain unseen (in the dark, from afar), one counts as seen too. Seen once is enough: the sight
   of it earns nothing more.
@@ -945,7 +973,7 @@ nests', the hells' and the Rift's.
   bestiary: Wolf. (J for your journal.)" and a quill heard writing; "Your bestiary: Wolf, known
   now."; "Wolf: mastered. You know where to strike it now, 10% harder. The adventurers' guild
   pays you 24 gold for your notes, and 3 merit on your card." with the cue for a rank and coins.
-- **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 97
+- **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 136
   kinds have been met, then each met, by where (the wilds, each people's wilds, lairs and
   strongholds, the ants' nests, the hells), the best known first, its level beside it as four
   pips (gold-edged once it's mastered). Each opens its page: its portrait, its name, its level
@@ -953,6 +981,12 @@ nests', the hells' and the Rift's.
   found out, what's still to find shut ("At Studied: watch for it, read the signs it leaves, and
   slay it to learn more."). Every word of it is the game's own: the creature's table, its
   weapon's, what it leaves (spoils.js), and its lines in core/lore/bestiary.js.
+- **What it leaves, for crafting** (docs/CRAFTING.md *The bestiary*): every part a creature leaves
+  but what's eaten is an ingredient, so each is named in its make's colour (progress.js `gradeOf`:
+  an ingredient's make, as gear's is), with what it's for, briefly, its power in a weapon ("Often:
+  Demon's horn. Fire on each blow, in a weapon."). Its name tapped opens its card beneath it, as
+  it's shown in the pack (*Crafting*: what it is, what it's for, where it comes from); tapped
+  again, it's put away.
 - **Its portrait** (app/game.js `portraitOf`, `PORTRAIT`): one of its kind as the game draws it
   (beasts/beast.js `dressCreature`: from its own model, waited for up to 8 s and else its
   stand-in; people-shaped ones holding what they fight with), standing at rest, alone, high above
@@ -2674,7 +2708,10 @@ itself, 2.25 times the pixels and four times the shadow map. The game aims at 60
 size each way on Low, a quarter of the pixels: view.js QUALITY `signs`, kits/signs.js
 `signDetail`. At every level a sign's painted so only while it's within 40 metres of the player
 (chunks3d.js `DETAIL_NEAR`, where a chunk's buildings change detail), and a quarter of its full
-size each way further off, from when it's built: *Signs painted as they're seen*, below.)
+size each way further off, from when it's built: *Signs painted as they're seen*, below. A name
+board's picture casts no shadow of its own, its frame casting the board's (kits/signs.js
+`signMaterial` `shadow`), so each is drawn once a frame, not twice: a village's crafter's shop, its
+board and sign more, kept the village in the building lab under its 120 draw calls.)
 
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks | Signs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -4341,7 +4378,13 @@ facing south; each is turned about its middle to face the way the layout says:
     trade's look grander: the Master Swordsmith's three storeys, close studded, finials on its
     gables; the Master Armorer's three storeys, a gable over its door rising through its hipped
     roof where there's room; the Mystic Emporium's violet, three jettied storeys, leaded glass, a
-    gable over its door or a dormer, violet and gold. Its door is the kit's (1.05 m by 2.06 m
+    gable over its door or a dormer, violet and gold. The crafters' (docs/CRAFTING.md): the
+    bowyer's yew-orange plaster over a stone ground floor under shingles, jettied a little, braced
+    timbers, olive and buff stripes; the leatherworker's umber under a red half-hipped roof,
+    square panels, brown and tan; the tailor's madder rose, three jettied storeys under a slate
+    gable to the street with a finial, leaded glass, rose and white; the jeweller's lapis blue
+    over stone, a slate hipped roof with dormers, close studded, leaded glass, lapis and gold. Its
+    door is the kit's (1.05 m by 2.06 m
     over the plinth: core/insides.js `SHOP_DOORS`, and the glow round it), in the middle of a 2 m
     module in the middle of its front, its leaf where the game has its door (1.8 m in), up a
     step; its front laid out symmetrically about it (`centredRun`): a shop window either side
@@ -4358,25 +4401,29 @@ facing south; each is turned about its middle to face the way the layout says:
     own below, in its look's walls, roof and storeys, with the kit's door. Each people's shops
     have looks of their own: any other people's are its own kit's (below) till theirs are set out
     in `SHOP_LOOKS` and built (world/kithouses3d.js `SHOP_KITS`).
-  - **The shops** (art/kits/shopfront.js; the specialists' and the masters', the game's own): the
+  - **The shops** (art/kits/shopfront.js; the specialists', the crafters' and the masters', the game's own): the
     house it was, in its look's walls, roof and storeys (kitshop.js; a people's with none, its
     street's look, a cottage's made timber, its eaves clear of the name), its door in the
     middle of its front up a step, its name on a board just over it, however many storeys it has
-    ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master Swordsmith", "Master
-    Armorer", "Mystic Emporium"; landmarks.js `OVER_DOOR`: its foot 2.72 m up from the floor,
+    ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Bowyer", "Leatherworker",
+    "Tailor", "Jeweller", "Master Swordsmith", "Master Armorer", "Mystic Emporium"; landmarks.js
+    `OVER_DOOR`: its foot 2.72 m up from the floor,
     its frame 30 cm clear of the door's top and above the windows and their awnings, its ground
     floor 3.8 m tall at least on two storeys to have room for it). So whoever walks up to it, the
     camera tilted forward behind them (15 degrees down), sees it whole before them from 4 m off
     and further (along the floor above, as it was, it was never in view walking up to it; at the
     camera's usual 35 degrees down, it's above the view close up). Its sign hangs past the
     board's end, above the awnings (inside a master's banners): a sword, a great helm, an open
-    book and quill, a flask, crossed blades under a crown, a helm, and a glowing orb (new
-    emblems: emblems.js). A striped awning over each window
+    book and quill, a flask, a longbow and arrow, a stretched hide, a tailor's shears, a ring
+    with its stone, crossed blades under a crown, a helm, and a glowing orb (new emblems:
+    emblems.js). A striped awning over each window
     (a master's has banners in velvet and gold instead), and what it sells set out either side of
     the door (`dressShop`): a rack of blades and a whetstone; a harness on its stand and a board
     of shields; a lectern with a book open on it and tomes stacked by a skull; a shelf of bottles
-    and herbs hung to dry; the Emporium's orb glowing on a marble pillar between lanterns of
-    violet and green glass. Each people builds its own (`shop` in each kit), as its barracks: the elves a round hall of marble
+    and herbs hung to dry; a rack of bows and a straw butt with arrows in it; a hide on its frame
+    and hides piled on a trestle by a pair of boots; bolts of cloth in a rack and a dummy in a
+    cloak; a jeweller's case under a propped lid of glass and its scales; the Emporium's orb
+    glowing on a marble pillar between lanterns of violet and green glass. Each people builds its own (`shop` in each kit), as its barracks: the elves a round hall of marble
     under one petal roof, its name on a board standing by the way in; the dark elves a thorn
     house; the cat folk a mud-brick town house; the lizard folk a plastered house on its platform
     under a band of glyphs; the orcs a longhouse, its name hung under its porch and its sign
@@ -6151,6 +6198,8 @@ any shop (the owner asked for it at every shop, 14 and 15 November 2026).
   ("Still junk, as <the keeper> won't buy them: 2 wolf pelts, a healing draught. The adventurers'
   guild buys everything."), and said again once it's sold ("You sell your junk: 3 things for 3
   gold. 3 things they won't buy are still marked as junk..."), the coins heard (`coins`).
+- **Break down all junk**, under it at a crafter's (*Crafting*): all the junk that crafter breaks
+  down, asked once with what comes back, the rest still junk for a crafter that will.
 - **The host's.** `{ type: "markJunk", index, junk }` (true or false) and `{ type: "sellJunk",
   to, price, count }`: the shopkeeper near (`#shopkeeper`, refused `far`), alive (`dead`), the
   total and the count the player was shown (`junkSale`, which the pack's question is worked out
@@ -6166,6 +6215,70 @@ any shop (the owner asked for it at every shop, 14 and 15 November 2026).
   stack kept only where it's set, and absent (all that's kept before it) it means what it always
   did, not junk, so there's nothing for a step to fill in; an older game reading a newer save
   drops the marks and nothing else.
+
+### Crafting (core/crafting.js, recipes.js, materials.js; core/host.js #craft, #salvage, #salvageJunk; app/pack.js, app/craftinfo.js)
+
+Every piece of gear can be made at a crafter's, of what the wild leaves and what the crafters
+sell: docs/CRAFTING.md has the whole of it (the ingredients, the recipes, the powers, the
+crafters, the prices). What the player sees:
+
+- **The Craft tab.** At every crafter's (core/recipes.js `CRAFTERS`: a blacksmith, a swordsmith,
+  an armorer, an occult scriptorium, the three masters, and the four new crafters as they come),
+  the trading panel has a third tab beside Buy and Sell. It lists everything the crafter makes
+  (`recipesAt`; in a capital, every crafter to the legendary, by the same rule the host makes it
+  by: crafting.js `inCapital`), each piece under where it goes (Weapons, The other hand, Head,
+  Body, Forearms and hands, Waist, Legs and feet, Back, Jewellery: app/craftinfo.js `craftList`),
+  with what it takes ("A metal, a leather, and an essence if you like") and each main material it's
+  made in, the commonest first, in its make's colour. What the pack's short of is greyed, struck
+  through and said ("Gold Sword: you haven't Gold ingot (0 of 1)"), never hidden: the owner's
+  choice, as Monster Hunter greys what can't be made yet.
+- **A piece chosen** shows its three slots (`slotsOf`): its main material, its second and an
+  essence, each slot's choices what the pack carries of its kind (never the stash's), each in its
+  make's colour with how many are carried of how many it takes, and None for the essence. It's
+  filled first with the commonest second carried that keeps the piece as fine as its main material
+  can make it, and no essence (`usingFirst`). A main material finer than the crafter works is shown
+  but not to be had ("master's"). Under each slot, the chosen ingredient's card, a tap away.
+- **What it'll be**, before it's made (`previewInfo`, of core/crafting.js `previewOf`: what the host
+  makes it by): its name in its make's colour ("Steel Demon Sword", "One-handed weapon · Fine"),
+  its level (the player's might's), its blows, a legendary weapon's effect, a wand's spell power
+  and a shield's block (each rolled as it's made), its own armour and bonus, and each power its
+  ingredients bring with the range it'll come out in and which of them brings it ("+8–18% of each
+  blow's harm again as fire, setting the foe struck burning as often (Demon's horn)"); then the
+  fee and the gold they have, what its ingredients are worth, and what the pack's short of.
+- **Craft** makes it at once (the host's `craft`, with the fee shown: refused if it's changed),
+  the piece in the pack, its powers rolled in the ranges shown, shown in the panel as it came out
+  ("Made, and in your pack"), and said: "Made for you: Steel Demon Sword, for 45 gold. It's in
+  your pack.", the anvil rung and the work quenched (`anvil`, `hiss`). Refused (short of the gold,
+  the ingredients gone meanwhile...), why's said in the panel under it, as the stash's refusals
+  are, the coins dropped (`buyDenied`).
+- **Breaking down**, on the Sell tab at a crafter's: a piece it breaks down (`salvagesAt`: what it
+  makes, no finer than it works, never what's bound) says in its card what it gives back
+  ("Broken down here: a steel ingot back."), and **Break down** asks in the panel first ("Break
+  down Fine sword? You'd get back a steel ingot. Broken down, it's gone for good.": Break down, or
+  Not now; of a stack, how many first). **Break down all junk**, under Sell all junk, does all the
+  junk that crafter breaks down at once, asked once with what comes back and what stays junk.
+  Said ("You break down your junk, 3 things: back come 4 iron ingots."), a hammer's crush heard
+  (`crush`).
+- **An ingredient's card** (`ingredientInfo`), tapped in the pack, held (or right-clicked) at a
+  crafter's or opened under a slot, or tapped in the bestiary: its name in its make's colour, what
+  kind of ingredient it is ("Ingredient: a leather · Fine"), what it is, its power in a weapon, a
+  wand or grimoire, and worn, as strong as it comes on a piece of the player's level, what it goes
+  into (the pieces it's the main material or the second of; an essence, anything), and where it
+  comes from: the crafters that sell it, the creatures that leave it (by name once they're in the
+  bestiary, "Left by something in the woods..." till then), and broken-down gear; a creature's
+  part, what the guild pays.
+- **The keys and a controller**, as at the stash: Enter (Cross) chooses a material and crafts, its
+  Craft in focus once a piece is chosen; Escape (Circle) puts away what's open, then goes back
+  from a piece to the list, then shuts the panel; L1 and R1 turn Buy, Sell and Craft; Square on a
+  material shows its card. On a phone, upright or on its side, it all fits the panel, scrolled.
+- **Opened on its Craft tab** by a crafter's keeper's "What can you make?" once the talk's over
+  (core/dialogue.js `commissionOf`), or by the game's `openCrafting(keeper)`.
+- **The new blows seen**: a crafted weapon's fire, frost and the rest after the blow they ride on
+  (`ON_BLOW`) show a little of their element where it landed (the burn's flames and embers, frost,
+  a legendary weapon's sparks, venom's bubbles, acid, a blessing's gold, a curse's shadows:
+  app/game.js `BLOW_LOOKS`), and their number in their element's colour, smaller than the blow's;
+  no flinch or wound of their own. Each grows the skill the blow it rides on grows: a bow's shot's,
+  Marksman; any other's, Blade (host.js `#learn`).
 
 ### Sound (audio/)
 

@@ -15,7 +15,7 @@
         <link rel="manifest" href="manifest.webmanifest">
         <link rel="icon" href="images/icons/icon-192.png" type="image/png">
         <link rel="apple-touch-icon" href="images/icons/apple-touch-icon.png">
-        <link rel="stylesheet" href="styles.css?h=a9571e4a84">
+        <link rel="stylesheet" href="styles.css?h=7e062d813d">
         <!-- The import map must come before any module script, and before any module's preloaded (Safari 16 and 17 ignore a map that comes after one). Three.js draws the world (vendored: see scripts/vendor-three.js): "three" and "three/addons/" are written here by hand; the rest (every module at its address with the hash of its bytes, so the page asks only for its own release's files: generated/game_delivery_plan.md) is written by npm run build:manifest, as are the style sheet's address above (by its hash too, and named in the map so the page's release lists it), the modules preloaded after the map (those main.js imports itself, so they're all asked for at once, not a level of imports at a time) and main.js's address below. -->
         <script type="importmap">
             {
@@ -32,10 +32,10 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=677b449a07",
+                    "./js/app/assets.js": "./js/app/assets.js?h=54034df891",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
-                    "./js/app/bestiary.js": "./js/app/bestiary.js?h=68cee9ac13",
+                    "./js/app/bestiary.js": "./js/app/bestiary.js?h=3f8049c082",
                     "./js/app/budget.js": "./js/app/budget.js?h=c4120529d7",
                     "./js/app/building.js": "./js/app/building.js?h=99d08e6837",
                     "./js/app/camera.js": "./js/app/camera.js?h=c96d110528",
@@ -44,6 +44,7 @@
                     "./js/app/charge.js": "./js/app/charge.js?h=193e705eb1",
                     "./js/app/choices.js": "./js/app/choices.js?h=4b77ccf428",
                     "./js/app/clocks.js": "./js/app/clocks.js?h=a8e80104a4",
+                    "./js/app/craftinfo.js": "./js/app/craftinfo.js?h=e4e686580b",
                     "./js/app/crash-reports.js": "./js/app/crash-reports.js?h=54b2e6e4ad",
                     "./js/app/creator.js": "./js/app/creator.js?h=20636e4251",
                     "./js/app/crest.js": "./js/app/crest.js?h=032fda00b4",
@@ -56,9 +57,9 @@
                     "./js/app/forecast.js": "./js/app/forecast.js?h=43b94ad719",
                     "./js/app/frames.js": "./js/app/frames.js?h=623012b1ec",
                     "./js/app/fullscreen.js": "./js/app/fullscreen.js?h=34493b7fd9",
-                    "./js/app/game.js": "./js/app/game.js?h=ee59eda42a",
+                    "./js/app/game.js": "./js/app/game.js?h=ee59ed6a47",
                     "./js/app/gamepad.js": "./js/app/gamepad.js?h=c86c402b16",
-                    "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=6a4eb5f90d",
+                    "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=ed47b458d6",
                     "./js/app/governor.js": "./js/app/governor.js?h=3ad846f3f9",
                     "./js/app/graphicsnotes.js": "./js/app/graphicsnotes.js?h=176c9a2e15",
                     "./js/app/handhelds.js": "./js/app/handhelds.js?h=938b5e6992",
@@ -66,18 +67,18 @@
                     "./js/app/heroes.js": "./js/app/heroes.js?h=8044f6c022",
                     "./js/app/homescreen.js": "./js/app/homescreen.js?h=8245ee2219",
                     "./js/app/hud.js": "./js/app/hud.js?h=073af1e9f1",
-                    "./js/app/icons.js": "./js/app/icons.js?h=b4768c7d7b",
-                    "./js/app/journal.js": "./js/app/journal.js?h=71472931a2",
+                    "./js/app/icons.js": "./js/app/icons.js?h=13d5005cf0",
+                    "./js/app/journal.js": "./js/app/journal.js?h=39d7efdc5b",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/keys.js": "./js/app/keys.js?h=315fab9ef7",
                     "./js/app/loader.js": "./js/app/loader.js?h=37d37bbdf1",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=c5f6a7d78c",
-                    "./js/app/mapicons.js": "./js/app/mapicons.js?h=ac95fa1015",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=b990c373be",
+                    "./js/app/mapicons.js": "./js/app/mapicons.js?h=70ac2aa422",
                     "./js/app/memoryguard.js": "./js/app/memoryguard.js?h=927481090c",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=74b29b46c7",
                     "./js/app/multiplayer.js": "./js/app/multiplayer.js?h=41f9f53ecd",
                     "./js/app/pacing.js": "./js/app/pacing.js?h=a056ae14c6",
-                    "./js/app/pack.js": "./js/app/pack.js?h=82c299e7e6",
+                    "./js/app/pack.js": "./js/app/pack.js?h=f3ecb61405",
                     "./js/app/padkeys.js": "./js/app/padkeys.js?h=23bfc976e9",
                     "./js/app/padplay.js": "./js/app/padplay.js?h=2616d18d72",
                     "./js/app/partypanel.js": "./js/app/partypanel.js?h=48342f3305",
@@ -129,7 +130,7 @@
                     "./js/audio/samples.js": "./js/audio/samples.js?h=0f5dfeac58",
                     "./js/audio/score.js": "./js/audio/score.js?h=819d4ed644",
                     "./js/audio/scores.js": "./js/audio/scores.js?h=f7ac06d0b5",
-                    "./js/audio/sound.js": "./js/audio/sound.js?h=a2cafef301",
+                    "./js/audio/sound.js": "./js/audio/sound.js?h=2ec559e1cd",
                     "./js/audio/synth.js": "./js/audio/synth.js?h=4891d2cd49",
                     "./js/audio/tavern.js": "./js/audio/tavern.js?h=9845d30431",
                     "./js/audio/worker.js": "./js/audio/worker.js?h=72fe04e052",
@@ -145,8 +146,8 @@
                     "./js/beasts/cloth.js": "./js/beasts/cloth.js?h=cb56f6e2a7",
                     "./js/beasts/flyers.js": "./js/beasts/flyers.js?h=e078f59e77",
                     "./js/beasts/herd.js": "./js/beasts/herd.js?h=29bb8c0f9e",
-                    "./js/beasts/looks.js": "./js/beasts/looks.js?h=5b5435eb70",
-                    "./js/beasts/model.js": "./js/beasts/model.js?h=88e7470c26",
+                    "./js/beasts/looks.js": "./js/beasts/looks.js?h=74e3341d6a",
+                    "./js/beasts/model.js": "./js/beasts/model.js?h=6d59672af3",
                     "./js/beasts/quadruped.js": "./js/beasts/quadruped.js?h=100100a893",
                     "./js/beasts/sculpt.js": "./js/beasts/sculpt.js?h=91982f8125",
                     "./js/beasts/serpent.js": "./js/beasts/serpent.js?h=7f7b7568fc",
@@ -201,42 +202,43 @@
                     "./js/core/ambush.js": "./js/core/ambush.js?h=d983c74f5a",
                     "./js/core/aqueducts.js": "./js/core/aqueducts.js?h=6e70aed948",
                     "./js/core/arches.js": "./js/core/arches.js?h=c074d59168",
-                    "./js/core/battle.js": "./js/core/battle.js?h=631bf74500",
+                    "./js/core/battle.js": "./js/core/battle.js?h=a2b545bcae",
                     "./js/core/bestiary.js": "./js/core/bestiary.js?h=20dfa4c8ea",
                     "./js/core/burnt.js": "./js/core/burnt.js?h=a94738f753",
                     "./js/core/caches.js": "./js/core/caches.js?h=4ec406d34c",
-                    "./js/core/creatures.js": "./js/core/creatures.js?h=939b47207d",
+                    "./js/core/crafting.js": "./js/core/crafting.js?h=d5474327f6",
+                    "./js/core/creatures.js": "./js/core/creatures.js?h=bec6a1cea4",
                     "./js/core/crying.js": "./js/core/crying.js?h=834d1efe9b",
                     "./js/core/cultword.js": "./js/core/cultword.js?h=be56ad53c8",
                     "./js/core/daytime.js": "./js/core/daytime.js?h=6c6b6e7859",
                     "./js/core/dens.js": "./js/core/dens.js?h=76cbd46e07",
-                    "./js/core/dialogue.js": "./js/core/dialogue.js?h=86f271f704",
-                    "./js/core/director.js": "./js/core/director.js?h=8eb3f0f054",
+                    "./js/core/dialogue.js": "./js/core/dialogue.js?h=625e9b436f",
+                    "./js/core/director.js": "./js/core/director.js?h=5a1dc349e1",
                     "./js/core/dungeons/air.js": "./js/core/dungeons/air.js?h=c16efe3a4e",
-                    "./js/core/dungeons/build.js": "./js/core/dungeons/build.js?h=18db2563ce",
+                    "./js/core/dungeons/build.js": "./js/core/dungeons/build.js?h=9a7d8251ad",
                     "./js/core/dungeons/graph.js": "./js/core/dungeons/graph.js?h=a4e799d7e8",
                     "./js/core/dungeons/grid.js": "./js/core/dungeons/grid.js?h=1dc18a6876",
                     "./js/core/dungeons/layouts.js": "./js/core/dungeons/layouts.js?h=8f1767aa26",
                     "./js/core/dungeons/place.js": "./js/core/dungeons/place.js?h=4e5d4a61b8",
                     "./js/core/dungeons/play.js": "./js/core/dungeons/play.js?h=9d59431a72",
                     "./js/core/dungeons/seeds.js": "./js/core/dungeons/seeds.js?h=660258f39e",
-                    "./js/core/dungeons/themes.js": "./js/core/dungeons/themes.js?h=64c2618ecd",
+                    "./js/core/dungeons/themes.js": "./js/core/dungeons/themes.js?h=a1232a4ef3",
                     "./js/core/emotes.js": "./js/core/emotes.js?h=640d29dcd1",
-                    "./js/core/engagement.js": "./js/core/engagement.js?h=dfc942357a",
+                    "./js/core/engagement.js": "./js/core/engagement.js?h=26e9a873f7",
                     "./js/core/exact.js": "./js/core/exact.js?h=acb08af9ec",
                     "./js/core/explored.js": "./js/core/explored.js?h=f889126dc2",
                     "./js/core/fields.js": "./js/core/fields.js?h=0e98bf51ec",
                     "./js/core/fights.js": "./js/core/fights.js?h=44c400c286",
                     "./js/core/followers.js": "./js/core/followers.js?h=cf546acc99",
                     "./js/core/formation.js": "./js/core/formation.js?h=74ea6ea444",
-                    "./js/core/gear.js": "./js/core/gear.js?h=3c807fc4c3",
+                    "./js/core/gear.js": "./js/core/gear.js?h=b050bcac58",
                     "./js/core/goods.js": "./js/core/goods.js?h=51f5692a70",
                     "./js/core/grid.js": "./js/core/grid.js?h=04891a8840",
                     "./js/core/guid.js": "./js/core/guid.js?h=2ddfcb272c",
                     "./js/core/hellrift.js": "./js/core/hellrift.js?h=39cd1f4f73",
-                    "./js/core/host.js": "./js/core/host.js?h=919f0ba783",
+                    "./js/core/host.js": "./js/core/host.js?h=ba5f572c2d",
                     "./js/core/hurry.js": "./js/core/hurry.js?h=3563c756d4",
-                    "./js/core/insides.js": "./js/core/insides.js?h=f670fd958d",
+                    "./js/core/insides.js": "./js/core/insides.js?h=84211394c6",
                     "./js/core/interiors.js": "./js/core/interiors.js?h=4f10d36337",
                     "./js/core/invasions.js": "./js/core/invasions.js?h=cefe318543",
                     "./js/core/journey.js": "./js/core/journey.js?h=5aebf9d099",
@@ -245,11 +247,12 @@
                     "./js/core/legendary.js": "./js/core/legendary.js?h=2490be9e30",
                     "./js/core/light.js": "./js/core/light.js?h=e62cb4840a",
                     "./js/core/lonetrees.js": "./js/core/lonetrees.js?h=5923dfe87c",
-                    "./js/core/lore/bestiary.js": "./js/core/lore/bestiary.js?h=1c760160ba",
+                    "./js/core/lore/bestiary.js": "./js/core/lore/bestiary.js?h=eb9be77976",
                     "./js/core/lore/gods.js": "./js/core/lore/gods.js?h=f56a9730af",
                     "./js/core/lore/taverns.js": "./js/core/lore/taverns.js?h=4bb660c617",
                     "./js/core/markers.js": "./js/core/markers.js?h=5a43fde611",
-                    "./js/core/might.js": "./js/core/might.js?h=9822178b35",
+                    "./js/core/materials.js": "./js/core/materials.js?h=c8e8d8fb19",
+                    "./js/core/might.js": "./js/core/might.js?h=d7b783536d",
                     "./js/core/missions.js": "./js/core/missions.js?h=9cfd0bb356",
                     "./js/core/motion.js": "./js/core/motion.js?h=8d9ef62c30",
                     "./js/core/mounts.js": "./js/core/mounts.js?h=1f3cdc31bd",
@@ -262,16 +265,17 @@
                     "./js/core/navigation/tiles.js": "./js/core/navigation/tiles.js?h=f3d4f32ede",
                     "./js/core/navigation/walk.js": "./js/core/navigation/walk.js?h=53daf90e1d",
                     "./js/core/near.js": "./js/core/near.js?h=e7fe07145e",
-                    "./js/core/netplay.js": "./js/core/netplay.js?h=56736239de",
+                    "./js/core/netplay.js": "./js/core/netplay.js?h=0484212d8d",
                     "./js/core/noise.js": "./js/core/noise.js?h=bcaaa4faa1",
                     "./js/core/overworld.js": "./js/core/overworld.js?h=269ae1b5f0",
                     "./js/core/places.js": "./js/core/places.js?h=53b20200d6",
                     "./js/core/portals.js": "./js/core/portals.js?h=e05e814777",
                     "./js/core/prismatic.js": "./js/core/prismatic.js?h=6f6e67827f",
                     "./js/core/probe.js": "./js/core/probe.js?h=49f475fc98",
-                    "./js/core/progress.js": "./js/core/progress.js?h=d4b9dce6ac",
+                    "./js/core/progress.js": "./js/core/progress.js?h=1ac30cf2f6",
                     "./js/core/random.js": "./js/core/random.js?h=916ec0468e",
                     "./js/core/rare.js": "./js/core/rare.js?h=8efa957302",
+                    "./js/core/recipes.js": "./js/core/recipes.js?h=8de4a0546e",
                     "./js/core/remote.js": "./js/core/remote.js?h=ddc0e5eb0b",
                     "./js/core/rings.js": "./js/core/rings.js?h=21b8abe487",
                     "./js/core/roles.js": "./js/core/roles.js?h=b2ef8feb4a",
@@ -285,11 +289,11 @@
                     "./js/core/setpieces/citadel.js": "./js/core/setpieces/citadel.js?h=30892fedc4",
                     "./js/core/setpieces/neutral.js": "./js/core/setpieces/neutral.js?h=9def59e1f5",
                     "./js/core/setpieces/outlines.js": "./js/core/setpieces/outlines.js?h=906c7e88bc",
-                    "./js/core/setpieces/pieces.js": "./js/core/setpieces/pieces.js?h=e3e1b309fa",
+                    "./js/core/setpieces/pieces.js": "./js/core/setpieces/pieces.js?h=ae4af3d5f0",
                     "./js/core/setpieces/plan.js": "./js/core/setpieces/plan.js?h=a83536751d",
                     "./js/core/setpieces/scenes.js": "./js/core/setpieces/scenes.js?h=d062067c90",
                     "./js/core/setpieces/standing.js": "./js/core/setpieces/standing.js?h=1ac5ca845d",
-                    "./js/core/setpieces/town.js": "./js/core/setpieces/town.js?h=a6baf157d0",
+                    "./js/core/setpieces/town.js": "./js/core/setpieces/town.js?h=4050c645c0",
                     "./js/core/setpieces/works.js": "./js/core/setpieces/works.js?h=c12cc846f3",
                     "./js/core/settlements.js": "./js/core/settlements.js?h=3875509d1d",
                     "./js/core/shrines.js": "./js/core/shrines.js?h=bde1c2b65a",
@@ -298,11 +302,11 @@
                     "./js/core/sites.js": "./js/core/sites.js?h=ac09b63811",
                     "./js/core/smartcast.js": "./js/core/smartcast.js?h=13b9918c66",
                     "./js/core/spells.js": "./js/core/spells.js?h=f2ba78a368",
-                    "./js/core/spoils.js": "./js/core/spoils.js?h=97d31245ba",
+                    "./js/core/spoils.js": "./js/core/spoils.js?h=099edf622a",
                     "./js/core/standing.js": "./js/core/standing.js?h=3f8f492034",
                     "./js/core/steps.js": "./js/core/steps.js?h=ea932948d4",
-                    "./js/core/stock.js": "./js/core/stock.js?h=51b3ca5068",
-                    "./js/core/strength.js": "./js/core/strength.js?h=c93a034e60",
+                    "./js/core/stock.js": "./js/core/stock.js?h=a1499547b3",
+                    "./js/core/strength.js": "./js/core/strength.js?h=fa79419c50",
                     "./js/core/strongroom.js": "./js/core/strongroom.js?h=81fe2e6a77",
                     "./js/core/terrain/curve.js": "./js/core/terrain/curve.js?h=30bcf52cea",
                     "./js/core/terrain/flats.js": "./js/core/terrain/flats.js?h=55c9fe4704",
@@ -340,7 +344,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=5f257e9df8",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=aea4ce4f29",
-                    "./js/main.js": "./js/main.js?h=99bbf16e1a",
+                    "./js/main.js": "./js/main.js?h=42b50c665b",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=5086c15ffa",
                     "./js/world/art/engine/corners.js": "./js/world/art/engine/corners.js?h=cdfc8fe165",
@@ -348,7 +352,7 @@
                     "./js/world/art/engine/materials.js": "./js/world/art/engine/materials.js?h=bc133fe211",
                     "./js/world/art/engine/models.js": "./js/world/art/engine/models.js?h=8e3e3fdee3",
                     "./js/world/art/engine/paint-worker.js": "./js/world/art/engine/paint-worker.js?h=2b3f5646f5",
-                    "./js/world/art/engine/painters.js": "./js/world/art/engine/painters.js?h=5ff6f805cd",
+                    "./js/world/art/engine/painters.js": "./js/world/art/engine/painters.js?h=d96013473a",
                     "./js/world/art/engine/solid.js": "./js/world/art/engine/solid.js?h=081338cd88",
                     "./js/world/art/kits/aqueducts.js": "./js/world/art/kits/aqueducts.js?h=e7e2303f77",
                     "./js/world/art/kits/arches.js": "./js/world/art/kits/arches.js?h=1d3e660f90",
@@ -360,7 +364,7 @@
                     "./js/world/art/kits/citadel.js": "./js/world/art/kits/citadel.js?h=601a5d2ff4",
                     "./js/world/art/kits/cliffs.js": "./js/world/art/kits/cliffs.js?h=78c9883bd6",
                     "./js/world/art/kits/decay.js": "./js/world/art/kits/decay.js?h=55bb5a4b07",
-                    "./js/world/art/kits/emblems.js": "./js/world/art/kits/emblems.js?h=f833864797",
+                    "./js/world/art/kits/emblems.js": "./js/world/art/kits/emblems.js?h=0b8fbe7d03",
                     "./js/world/art/kits/fords.js": "./js/world/art/kits/fords.js?h=ed0a602810",
                     "./js/world/art/kits/forts.js": "./js/world/art/kits/forts.js?h=609bc05120",
                     "./js/world/art/kits/framing.js": "./js/world/art/kits/framing.js?h=31147d86dd",
@@ -368,15 +372,15 @@
                     "./js/world/art/kits/house.js": "./js/world/art/kits/house.js?h=29e7dabb36",
                     "./js/world/art/kits/ivy.js": "./js/world/art/kits/ivy.js?h=68c30a1108",
                     "./js/world/art/kits/kithouse.js": "./js/world/art/kits/kithouse.js?h=facbab4b6a",
-                    "./js/world/art/kits/kitshop.js": "./js/world/art/kits/kitshop.js?h=a74cac878e",
-                    "./js/world/art/kits/landmarks.js": "./js/world/art/kits/landmarks.js?h=03fe8f9766",
+                    "./js/world/art/kits/kitshop.js": "./js/world/art/kits/kitshop.js?h=c67c47f84e",
+                    "./js/world/art/kits/landmarks.js": "./js/world/art/kits/landmarks.js?h=93eb4e6f42",
                     "./js/world/art/kits/leftovers.js": "./js/world/art/kits/leftovers.js?h=c2ac933a91",
                     "./js/world/art/kits/neutral.js": "./js/world/art/kits/neutral.js?h=aae59bfb57",
                     "./js/world/art/kits/props.js": "./js/world/art/kits/props.js?h=a7ed3f6d5e",
                     "./js/world/art/kits/rocks.js": "./js/world/art/kits/rocks.js?h=54b3e4828a",
                     "./js/world/art/kits/roofs.js": "./js/world/art/kits/roofs.js?h=0727a03d56",
-                    "./js/world/art/kits/shopfront.js": "./js/world/art/kits/shopfront.js?h=43742e9b81",
-                    "./js/world/art/kits/signs.js": "./js/world/art/kits/signs.js?h=d485ab3be1",
+                    "./js/world/art/kits/shopfront.js": "./js/world/art/kits/shopfront.js?h=cbab5efcd1",
+                    "./js/world/art/kits/signs.js": "./js/world/art/kits/signs.js?h=1041c8b09e",
                     "./js/world/art/kits/steps.js": "./js/world/art/kits/steps.js?h=df3bd0c7ee",
                     "./js/world/art/kits/torches.js": "./js/world/art/kits/torches.js?h=51c3721e59",
                     "./js/world/art/kits/town.js": "./js/world/art/kits/town.js?h=364533888d",
@@ -407,7 +411,7 @@
                     "./js/world/carried.js": "./js/world/carried.js?h=0d900dbb4d",
                     "./js/world/caverns.js": "./js/world/caverns.js?h=b443dd54fe",
                     "./js/world/chunks3d.js": "./js/world/chunks3d.js?h=63ff2e8f69",
-                    "./js/world/cloth.js": "./js/world/cloth.js?h=52bd21ad08",
+                    "./js/world/cloth.js": "./js/world/cloth.js?h=ef317f9209",
                     "./js/world/contacts.js": "./js/world/contacts.js?h=95e4fe025e",
                     "./js/world/crowd.js": "./js/world/crowd.js?h=0124d50e45",
                     "./js/world/daytime.js": "./js/world/daytime.js?h=8f3fa195a5",
@@ -447,7 +451,7 @@
                     "./js/world/grassmap.js": "./js/world/grassmap.js?h=638da6f67d",
                     "./js/world/ground.js": "./js/world/ground.js?h=60472be3cb",
                     "./js/world/hellrift3d.js": "./js/world/hellrift3d.js?h=99e8fc9da6",
-                    "./js/world/interiors3d.js": "./js/world/interiors3d.js?h=17eb7a3921",
+                    "./js/world/interiors3d.js": "./js/world/interiors3d.js?h=7d916e029d",
                     "./js/world/keepkit.js": "./js/world/keepkit.js?h=07361a785f",
                     "./js/world/kithouses3d.js": "./js/world/kithouses3d.js?h=43b468a212",
                     "./js/world/landmark3d.js": "./js/world/landmark3d.js?h=65fb5f49ea",
@@ -489,7 +493,7 @@
                     "./js/world/terrain-worker.js": "./js/world/terrain-worker.js?h=e49e4b7423",
                     "./js/world/terrains.js": "./js/world/terrains.js?h=100246e517",
                     "./js/world/town3d.js": "./js/world/town3d.js?h=7995ba0af7",
-                    "./js/world/tracks3d.js": "./js/world/tracks3d.js?h=ddc4e53fc6",
+                    "./js/world/tracks3d.js": "./js/world/tracks3d.js?h=7a73286bc0",
                     "./js/world/treasure3d.js": "./js/world/treasure3d.js?h=211774903e",
                     "./js/world/trickles.js": "./js/world/trickles.js?h=a6b891b721",
                     "./js/world/vault3d.js": "./js/world/vault3d.js?h=efeb06255f",
@@ -500,7 +504,7 @@
                     "./js/world/wind.js": "./js/world/wind.js?h=48d9358cdc",
                     "./js/world/windowpools.js": "./js/world/windowpools.js?h=58c487d41f",
                     "./js/world/wounds.js": "./js/world/wounds.js?h=b7356b2c2f",
-                    "./styles.css": "./styles.css?h=a9571e4a84",
+                    "./styles.css": "./styles.css?h=7e062d813d",
                     "./vendor/meshoptimizer-1.3.0/meshopt_simplifier.min.js": "./vendor/meshoptimizer-1.3.0/meshopt_simplifier.min.js?h=0edf7c5d6b",
                     "./vendor/recast-navigation-0.44.0/core.min.mjs": "./vendor/recast-navigation-0.44.0/core.min.mjs?h=33eb65a037",
                     "./vendor/recast-navigation-0.44.0/recast-navigation.wasm.js": "./vendor/recast-navigation-0.44.0/recast-navigation.wasm.js?h=991e05aec0",
@@ -520,7 +524,7 @@
                 }
             }
         </script>
-        <link rel="modulepreload" href="js/app/assets.js?h=677b449a07">
+        <link rel="modulepreload" href="js/app/assets.js?h=54034df891">
         <link rel="modulepreload" href="js/app/backdrop.js?h=c9aa55b56c">
         <link rel="modulepreload" href="js/app/crest.js?h=032fda00b4">
         <link rel="modulepreload" href="js/app/catalog.js?h=e7d7150a22">
@@ -531,7 +535,7 @@
         <link rel="modulepreload" href="js/app/graphicsnotes.js?h=176c9a2e15">
         <link rel="modulepreload" href="js/app/homescreen.js?h=8245ee2219">
         <link rel="modulepreload" href="js/app/loader.js?h=37d37bbdf1">
-        <link rel="modulepreload" href="js/app/manifest.js?h=c5f6a7d78c">
+        <link rel="modulepreload" href="js/app/manifest.js?h=b990c373be">
         <link rel="modulepreload" href="js/app/multiplayer.js?h=41f9f53ecd">
         <link rel="modulepreload" href="js/app/pointer.js?h=a4c31cdac5">
         <link rel="modulepreload" href="js/app/rejoin.js?h=01b5ba37d3">
@@ -553,29 +557,31 @@
         <link rel="modulepreload" href="js/app/pacing.js?h=a056ae14c6">
         <link rel="modulepreload" href="js/core/guid.js?h=2ddfcb272c">
         <link rel="modulepreload" href="js/core/spells.js?h=f2ba78a368">
-        <link rel="modulepreload" href="js/app/journal.js?h=71472931a2">
+        <link rel="modulepreload" href="js/app/journal.js?h=39d7efdc5b">
         <link rel="modulepreload" href="js/core/wire.js?h=8ad2adaaf6">
         <link rel="modulepreload" href="js/app/press.js?h=1c72a211da">
         <link rel="modulepreload" href="js/app/padkeys.js?h=23bfc976e9">
         <link rel="modulepreload" href="js/core/daytime.js?h=6c6b6e7859">
-        <link rel="modulepreload" href="js/core/director.js?h=8eb3f0f054">
+        <link rel="modulepreload" href="js/core/director.js?h=5a1dc349e1">
         <link rel="modulepreload" href="js/core/exact.js?h=acb08af9ec">
-        <link rel="modulepreload" href="js/core/gear.js?h=3c807fc4c3">
+        <link rel="modulepreload" href="js/core/gear.js?h=b050bcac58">
         <link rel="modulepreload" href="js/core/legendary.js?h=2490be9e30">
         <link rel="modulepreload" href="js/core/random.js?h=916ec0468e">
         <link rel="modulepreload" href="js/app/frames.js?h=623012b1ec">
         <link rel="modulepreload" href="js/core/caches.js?h=4ec406d34c">
-        <link rel="modulepreload" href="js/core/creatures.js?h=939b47207d">
+        <link rel="modulepreload" href="js/core/creatures.js?h=bec6a1cea4">
         <link rel="modulepreload" href="js/core/places.js?h=53b20200d6">
-        <link rel="modulepreload" href="js/core/progress.js?h=d4b9dce6ac">
+        <link rel="modulepreload" href="js/core/progress.js?h=1ac30cf2f6">
         <link rel="modulepreload" href="js/core/treasure.js?h=101ecc81e2">
+        <link rel="modulepreload" href="js/core/materials.js?h=c8e8d8fb19">
         <link rel="modulepreload" href="js/core/war/peoples.js?h=ea5dbe09ff">
         <link rel="modulepreload" href="js/core/goods.js?h=51f5692a70">
-        <link rel="modulepreload" href="js/core/spoils.js?h=97d31245ba">
+        <link rel="modulepreload" href="js/core/spoils.js?h=099edf622a">
         <link rel="modulepreload" href="js/core/worldplan/plan.js?h=4c268e9427">
         <link rel="modulepreload" href="js/core/near.js?h=e7fe07145e">
         <link rel="modulepreload" href="js/core/afflictions.js?h=8d6965bc3b">
         <link rel="modulepreload" href="js/core/bestiary.js?h=20dfa4c8ea">
+        <link rel="modulepreload" href="js/core/recipes.js?h=8de4a0546e">
         <link rel="modulepreload" href="js/core/mounts.js?h=1f3cdc31bd">
         <link rel="modulepreload" href="js/core/journey.js?h=5aebf9d099">
         <link rel="modulepreload" href="js/core/worldplan/races.js?h=0a706bb24d">
@@ -584,8 +590,8 @@
         <link rel="modulepreload" href="js/core/terrain/waters.js?h=822dbcdb87">
         <link rel="modulepreload" href="js/core/terrain/height.js?h=cad9220743">
         <link rel="modulepreload" href="js/core/worldplan/queue.js?h=9cdef56d5f">
-        <link rel="modulepreload" href="js/core/dungeons/themes.js?h=64c2618ecd">
-        <link rel="modulepreload" href="js/core/setpieces/pieces.js?h=e3e1b309fa">
+        <link rel="modulepreload" href="js/core/dungeons/themes.js?h=a1232a4ef3">
+        <link rel="modulepreload" href="js/core/setpieces/pieces.js?h=ae4af3d5f0">
         <link rel="modulepreload" href="js/core/terrain/curve.js?h=30bcf52cea">
         <link rel="modulepreload" href="js/core/terrain/scenes.js?h=b72fe4b35c">
         <link rel="modulepreload" href="js/core/terrain/simplex.js?h=80c32ba391">
@@ -628,7 +634,7 @@
                 }
             }
         </script>
-        <script type="module" src="js/main.js?h=99bbf16e1a"></script>
+        <script type="module" src="js/main.js?h=42b50c665b"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->

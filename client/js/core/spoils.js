@@ -160,6 +160,26 @@ export const PARTS = Object.freeze({
     riftGland: { label: "Rift-fire gland", worth: 75, icon: "gland", tint: "#5aff90" },
     golemStone: { label: "Runed golem stone", worth: 90, icon: "shard", tint: "#8a857a" },
     blightCrystal: { label: "Blighted crystal shard", worth: 260, icon: "shard", tint: "#8a4ad0" },
+    // (The rarer stuff the crafters work, docs/CRAFTING.md (core/materials.js INGREDIENTS): a black
+    // widow's silk, the orcs' black steel, and the gold the Goblin King, a bandit chief and a drake
+    // keep, and a gilded scarab's made of; and what the crafters' quarry is made of and keeps in it,
+    // the golems, the treants, the gloomweaver and the moon moth: creatures.js, materials.js
+    // NEW_BEASTS)
+    widowSilk: { label: "Black widow silk", worth: 22, icon: "silk", tint: "#2a2430" },
+    blackSteelIngot: { label: "Black steel ingot", worth: 40, icon: "ingot", tint: "#2a2c30" },
+    goldIngot: { label: "Gold ingot", worth: 45, icon: "ingot", tint: "#e8b830" },
+    mythrilIngot: { label: "Mythril ingot", worth: 80, icon: "ingot", tint: "#8ac8f0" },
+    adamantiteIngot: { label: "Adamantite ingot", worth: 160, icon: "ingot", tint: "#2e5a48" },
+    orichalcumIngot: { label: "Orichalcum ingot", worth: 340, icon: "ingot", tint: "#e07a30" },
+    ironwood: { label: "Ironwood", worth: 70, icon: "wood", tint: "#4a4a4e" },
+    ghostwood: { label: "Ghostwood", worth: 150, icon: "wood", tint: "#c8dce8" },
+    sylvanwood: { label: "Sylvanwood", worth: 330, icon: "wood", tint: "#c8d8b0" },
+    gloomsilk: { label: "Gloomsilk", worth: 150, icon: "silk", tint: "#3a2a5a" },
+    moonsilk: { label: "Moonsilk", worth: 320, icon: "silk", tint: "#e8f0ff" },
+    sapphire: { label: "Sapphire", worth: 80, icon: "gem", tint: "#2a5ad8" },
+    diamond: { label: "Diamond", worth: 170, icon: "gem", tint: "#eef6ff" },
+    starRuby: { label: "Star ruby", worth: 360, icon: "gem", tint: "#d81a3a" },
+    ancientSap: { label: "Ancient's sap", worth: 300, icon: "gel", tint: "#e8a830" },
 });
 
 /**
@@ -177,7 +197,7 @@ export const SPOILS = Object.freeze({
     boar: { items: [{ id: "boarTusk", chance: 0.4 }, { id: "boarHide", chance: 0.3 }, { id: "boarMeat", chance: 0.5 }] },
     snake: { items: [{ id: "snakeSkin", chance: 0.35 }, { id: "venomSac", chance: 0.3 }] },
     bandit: { gold: [3, 12], items: [{ id: "potion", chance: 0.2 }, { id: "sword", chance: 0.04 }] },
-    banditChief: { gold: [15, 40], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }] },
+    banditChief: { gold: [15, 40], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }, { id: "goldIngot", chance: 0.15 }] },
     bear: { items: [{ id: "bearPelt", chance: 0.35 }, { id: "bearClaw", chance: 0.45 }, { id: "bearMeat", chance: 0.4 }] },
     puma: { items: [{ id: "pumaPelt", chance: 0.35 }, { id: "pumaClaw", chance: 0.45 }] },
     direWolf: { items: [{ id: "direPelt", chance: 0.35 }, { id: "direFang", chance: 0.45 }] },
@@ -186,16 +206,16 @@ export const SPOILS = Object.freeze({
     werewolf: { gold: [4, 14], items: [{ id: "werewolfPelt", chance: 0.45 }, { id: "werewolfClaw", chance: 0.55, count: [1, 2] }] },
     goblin: { gold: [2, 9], items: [{ id: "goblinEar", chance: 0.5 }, { id: "potion", chance: 0.1 }, { id: "goblinBomb", chance: 0.15 }] },
     goblinBomber: { gold: [2, 9], items: [{ id: "goblinBomb", chance: 0.75, count: [1, 3] }, { id: "goblinEar", chance: 0.5 }] },
-    goblinKing: { gold: [10, 30], items: [{ id: "goblinBomb", chance: 0.9, count: [3, 5] }, { id: "tomeExplosion", chance: 0.05 }, { id: "goblinEar", chance: 0.9 }] },
+    goblinKing: { gold: [10, 30], items: [{ id: "goblinBomb", chance: 0.9, count: [3, 5] }, { id: "tomeExplosion", chance: 0.05 }, { id: "goblinEar", chance: 0.9 }, { id: "goldIngot", chance: 0.3 }] },
     // (The orcs on a dungeon's throne: what they've taken from those they lord it over)
-    orcWarlord: { gold: [25, 60], items: [{ id: "potion", chance: 0.6 }, { id: "goblinBomb", chance: 0.5, count: [1, 3] }, { id: "goblinEar", chance: 0.4 }] },
-    orcReaver: { gold: [20, 50], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }] },
+    orcWarlord: { gold: [25, 60], items: [{ id: "potion", chance: 0.6 }, { id: "goblinBomb", chance: 0.5, count: [1, 3] }, { id: "goblinEar", chance: 0.4 }, { id: "blackSteelIngot", chance: 0.3 }] },
+    orcReaver: { gold: [20, 50], items: [{ id: "potion", chance: 0.6 }, { id: "sword", chance: 0.15 }, { id: "blackSteelIngot", chance: 0.25 }] },
     // (The Orc King and his champions: the plunder of the border villages; his raiders, what they
     // carried off from the last one)
-    orcKing: { gold: [90, 180], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "sword", chance: 0.3 }] },
-    orcIronjaw: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }] },
-    orcBloodtusk: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }] },
-    orcRaider: { gold: [5, 16], items: [{ id: "potion", chance: 0.12 }] },
+    orcKing: { gold: [90, 180], items: [{ id: "potion", chance: 0.95, count: [1, 2] }, { id: "sword", chance: 0.3 }, { id: "blackSteelIngot", chance: 0.8, count: [1, 2] }] },
+    orcIronjaw: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }, { id: "blackSteelIngot", chance: 0.4 }] },
+    orcBloodtusk: { gold: [30, 70], items: [{ id: "potion", chance: 0.6 }, { id: "blackSteelIngot", chance: 0.4 }] },
+    orcRaider: { gold: [5, 16], items: [{ id: "potion", chance: 0.12 }, { id: "blackSteelIngot", chance: 0.08 }] },
     // (The Order of the Bell: what's in their purses, the little bells they wear, and what they
     // carry, a sword of the Order's own make, core/gear.js DESIGNS; the Black Choir's and their
     // Prior's more of each)
@@ -241,7 +261,7 @@ export const SPOILS = Object.freeze({
     dungeonScorpion: { items: [{ id: "scorpionSting", chance: 0.6 }, { id: "carapace", chance: 0.5, count: [1, 2] }] },
     giantCockroach: { items: [{ id: "carapace", chance: 0.3 }] },
     dungeonWasp: { items: [{ id: "waspStinger", chance: 0.45 }, { id: "waspWing", chance: 0.5, count: [1, 2] }] },
-    blackWidow: { items: [{ id: "spiderSilk", chance: 0.7, count: [1, 3] }, { id: "widowGland", chance: 0.5 }] },
+    blackWidow: { items: [{ id: "spiderSilk", chance: 0.7, count: [1, 3] }, { id: "widowGland", chance: 0.5 }, { id: "widowSilk", chance: 0.4 }] },
     // (What's left in the Ant Monster's nest of those it's eaten, besides its mandibles and jelly)
     antMonster: { gold: [10, 30], items: [{ id: "queenMandible", chance: 0.8 }, { id: "royalJelly", chance: 0.6, count: [1, 2] }, { id: "acidGland", chance: 0.7, count: [1, 2] }] },
     basilisk: { items: [{ id: "basiliskEye", chance: 0.3 }, { id: "crownScale", chance: 0.4 }] },
@@ -268,7 +288,7 @@ export const SPOILS = Object.freeze({
     deathWorm: { items: [{ id: "wormHide", chance: 0.35 }, { id: "acidSac", chance: 0.35 }] },
     vultureFlock: { items: [{ id: "vultureFeather", chance: 0.5, count: [1, 2] }, { id: "vultureTalon", chance: 0.3 }] },
     chimera: { items: [{ id: "chimeraMane", chance: 0.4 }, { id: "chimeraHorn", chance: 0.35 }, { id: "fireGland", chance: 0.3 }] },
-    dragon: { gold: [30, 80], items: [{ id: "dragonScale", chance: 0.9, count: [2, 4] }, { id: "dragonFang", chance: 0.5 }, { id: "dragonHeart", chance: 0.3 }] },
+    dragon: { gold: [30, 80], items: [{ id: "dragonScale", chance: 0.9, count: [2, 4] }, { id: "dragonFang", chance: 0.5 }, { id: "dragonHeart", chance: 0.3 }, { id: "goldIngot", chance: 0.6, count: [1, 2] }] },
     dreadthorn: { gold: [120, 240], items: [{ id: "dreadthornScale", chance: 0.95, count: [3, 5] }, { id: "dreadthornHorn", chance: 0.6 }, { id: "dreadthornHeart", chance: 0.5 }] },
     ghost: { items: [{ id: "spectralVeil", chance: 0.4 }, { id: "ectoplasm", chance: 0.35 }] },
     wraith: { items: [{ id: "wraithShroud", chance: 0.4 }, { id: "soulShard", chance: 0.3 }] },
@@ -321,6 +341,19 @@ export const SPOILS = Object.freeze({
     antClutch: { items: [{ id: "royalJelly", chance: 0.3 }] },
     eggSac: { items: [{ id: "spiderSilk", chance: 0.6, count: [1, 2] }] },
     soulJar: { items: [{ id: "soulShard", chance: 0.3 }] },
+    // (The crafters' quarry (docs/CRAFTING.md *New beasts*): the metal each golem's made of and the
+    // stone grown in its chest; the gold a gilded scarab's shell is, and its plates; each treant's
+    // wood, a ghostwood treant's ectoplasm and an ancient's sap; a gloomweaver's silk and its venom
+    // gland; a moon moth's silk and the dust off its wings)
+    mythrilGolem: { items: [{ id: "mythrilIngot", chance: 0.6, count: [1, 2] }, { id: "sapphire", chance: 0.15 }] },
+    adamantiteGolem: { items: [{ id: "adamantiteIngot", chance: 0.55, count: [1, 2] }, { id: "diamond", chance: 0.12 }] },
+    orichalcumColossus: { items: [{ id: "orichalcumIngot", chance: 0.6, count: [1, 2] }, { id: "starRuby", chance: 0.15 }] },
+    gildedScarab: { items: [{ id: "goldIngot", chance: 0.12 }, { id: "carapace", chance: 0.4 }] },
+    ironbarkTreant: { items: [{ id: "ironwood", chance: 0.5, count: [1, 2] }] },
+    ghostwoodTreant: { items: [{ id: "ghostwood", chance: 0.5 }, { id: "ectoplasm", chance: 0.35 }] },
+    sylvanAncient: { items: [{ id: "sylvanwood", chance: 0.6, count: [1, 2] }, { id: "ancientSap", chance: 0.3 }] },
+    gloomweaver: { items: [{ id: "gloomsilk", chance: 0.6, count: [1, 2] }, { id: "widowGland", chance: 0.5 }] },
+    moonMoth: { items: [{ id: "moonsilk", chance: 0.5 }, { id: "pixieDust", chance: 0.5, count: [1, 2] }] },
 });
 
 /**

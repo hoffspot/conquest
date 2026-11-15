@@ -2,8 +2,10 @@
 // badge, rimmed in the colour of what the building is, with its sign in it: a foaming tankard
 // for a tavern, an anvil for a smithy, a temple's columns under its pediment for a temple,
 // crossed swords behind a shield for an adventurers' guild, crossed keys for a town hall, a
-// crown for a keep, and a crested helm for a barracks. And the places worth finding out in the
-// world (core/places.js; the terrain plan's M7.5): a castle, a manor, an abbey, a windmill, a
+// crown for a keep, and a crested helm for a barracks; the shops' (a swordsmith's sword, an
+// armorer's breastplate...; the crafters' a bow, a stretched hide, shears and a ring). And the
+// places worth finding out in the world (core/places.js; the terrain plan's M7.5): a castle, a
+// manor, an abbey, a windmill, a
 // watchtower, a people's hall, a holy spring, a great rock, a totem, ruins, a ruined castle, a
 // cave, the dragon's lair, the Tower of Sar Mordal (a broken tower, the rift's green tear by it), a shrine, standing stones, a graveyard and a camp, each rimmed in the
 // colour of who holds it (PLACE_RIMS); a dungeon's way in (an arch over steps going down, grey
@@ -156,6 +158,52 @@ const LOOKS = {
             ["M0,-7.5 a6.4,6.4 0 1 1 -0.01,0 z", "#b48cff", "#2a1440", 1.1],
             ["M-2.4,-3.6 a2.2,2.2 0 1 1 -0.01,0 z", "#f4eaff", null, 0],
             ["M7.6,-9 l0.8,2 l2,0.8 l-2,0.8 l-0.8,2 l-0.8,-2 l-2,-0.8 l2,-0.8 z", "#f4e6a8", null, 0],
+        ],
+    },
+    // The crafters' shops (docs/CRAFTING.md *The crafters*)
+    bowyer: {
+        rim: "#c08a48",
+        parts: [
+            // A bow, strung, an arrow nocked across it, fletched red
+            ["M-4,-10 C5,-7 5,7 -4,10", null, "#2a1a0e", 3.4],
+            ["M-4,-10 C5,-7 5,7 -4,10", null, "#c08a48", 1.9],
+            ["M-4,-10 L-4,10", null, "#efe6d0", 0.8],
+            ["M-9,0 H8", null, "#3a2a1a", 1.3],
+            ["M7.5,-2.2 L11,0 L7.5,2.2 z", "#aeb6bf", "#1e2328", 0.6],
+            ["M-8,0 l-2.2,-2.4 M-8,0 l-2.2,2.4 M-6.4,0 l-2.2,-2.4 M-6.4,0 l-2.2,2.4", null, "#d0413a", 1],
+        ],
+    },
+    leatherworker: {
+        rim: "#a0683a",
+        parts: [
+            // A hide stretched out, stitched down its middle, an awl by it
+            ["M-7,-9 c2.4,1 4.6,1 7,0 c2.4,1 4.6,1 7,0 c-1,3 0,5 2,6 c-2,2 -2,5 0,7 c-2,1 -3,3 -2,5 c-2.4,-1 -4.6,-1 -7,0 c-2.4,-1 -4.6,-1 -7,0 c1,-2 0,-4 -2,-5 c2,-2 2,-5 0,-7 c2,-1 3,-3 2,-6 z", "#b07a44", "#2a1a0e", 1],
+            ["M0,-6.5 v14", null, "#5a3418", 0.9],
+            ["M-1.6,-5 h3.2 M-1.6,-1.5 h3.2 M-1.6,2 h3.2 M-1.6,5.5 h3.2", null, "#efe4c4", 0.8],
+            ["M5,10.5 l5,-5", null, "#c9d1d9", 1.2],
+            ["M8.5,7 l3,-3 l1.4,1.4 l-3,3 z", "#6b4520", "#2a1a0e", 0.7],
+        ],
+    },
+    tailor: {
+        rim: "#c84a6a",
+        parts: [
+            // A pair of shears, open, their bows red
+            ["M-6.5,6 L6.5,-9.5 M6.5,6 L-6.5,-9.5", null, "#1e2328", 3],
+            ["M-6.5,6 L6.5,-9.5 M6.5,6 L-6.5,-9.5", null, "#dfe4ea", 1.6],
+            ["M-6.5,5.6 a2.8,2.8 0 1 0 0.01,0 z M6.5,5.6 a2.8,2.8 0 1 0 0.01,0 z", null, "#2a1a0e", 2.8],
+            ["M-6.5,5.6 a2.8,2.8 0 1 0 0.01,0 z M6.5,5.6 a2.8,2.8 0 1 0 0.01,0 z", null, "#c84a6a", 1.5],
+            ["M0,-1.6 a1,1 0 1 1 -0.01,0 z", "#c9a13b", "#2a1a0e", 0.5],
+        ],
+    },
+    jeweller: {
+        rim: "#7ac8e8",
+        parts: [
+            // A gold ring, a cut stone set in it, catching the light
+            ["M0,-2.5 a6.2,6.2 0 1 1 -0.01,0 z", null, "#2a1a0e", 3.6],
+            ["M0,-2.5 a6.2,6.2 0 1 1 -0.01,0 z", null, "#e2b54a", 2],
+            ["M-4,-6 l2,-3.2 h4 l2,3.2 l-4,4.2 z", "#8ad0f0", "#1e2a3a", 0.9],
+            ["M-4,-6 h8 M-2,-9.2 l2,7.4 l2,-7.4", null, "#e8f6ff", 0.5],
+            ["M7.6,-9.5 l0.8,2 l2,0.8 l-2,0.8 l-0.8,2 l-0.8,-2 l-2,-0.8 l2,-0.8 z", "#f4e6a8", null, 0],
         ],
     },
     // The places worth finding
@@ -893,6 +941,10 @@ export const ICON_NAMES = Object.freeze({
     masterSwordsmith: "Master Swordsmith",
     masterArmorer: "Master Armorer",
     emporium: "Mystic Emporium",
+    bowyer: "Bowyer",
+    leatherworker: "Leatherworker",
+    tailor: "Tailor",
+    jeweller: "Jeweller",
     castle: "Castle",
     manor: "Manor",
     abbey: "Abbey",

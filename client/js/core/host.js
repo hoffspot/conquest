@@ -65,6 +65,8 @@ import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atStrongroom, strongroomOn } from "./strongroom.js";
+import { CRAFT_REFUSALS, craftItem, inCapital, junkSalvage, previewOf, salvageOf, salvagesAt, takesFrom } from "./crafting.js";
+import { ON_BLOW } from "./materials.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils, SPOILS } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
@@ -425,8 +427,9 @@ export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
 export const READY = Object.freeze({ askMs: 30000, markedMs: 10000, countdowns: Object.freeze([3, 5, 10]) });
 
 // What a player does that has to do with the world round them (and so ends their Invisibility:
-// casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
-const SEEN = new Set(["enter", "buy", "sell", "sellJunk", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
+// casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't. (A
+// crafter's work, made or broken down, is trade with them, as buying and selling are)
+const SEEN = new Set(["enter", "buy", "sell", "sellJunk", "craft", "salvage", "salvageJunk", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
 
 // The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
 const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));
@@ -1232,6 +1235,8 @@ export const REFUSALS = Object.freeze({
     junkNone: "Nothing you carry is marked as junk.",
     junkUnwanted: "They buy none of the junk you carry: the adventurers' guild buys everything.",
     junkChanged: "Your junk changed as you sold it: look again.",
+    // (Crafting: core/crafting.js CRAFT_REFUSALS; #craft, #salvage, #salvageJunk)
+    ...CRAFT_REFUSALS,
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -2263,6 +2268,13 @@ export class Host {
      *    `price` gold (progress.js junkSale; #sellJunk);
      *  - { type: "markJunk", index, junk }: mark the stack at `index` in their pack as junk (true),
      *    or not (false: progress.js markJunk);
+     *  - { type: "craft", from, base, using, fee }: have a crafter near them (an id) make a piece
+     *    (`base`, a recipes.js RECIPES id) of what they carry (`using`: an ingredient's id for each
+     *    of its slots in order, null for the essence left out), for the fee they were shown
+     *    (core/crafting.js previewOf; #craft); { type: "salvage", from, index, count }: have one
+     *    break down `count` of the stack at `index` in their pack (#salvage); { type:
+     *    "salvageJunk", from, count }: have one break down all the junk they carry it breaks down,
+     *    as many pieces as they were shown (crafting.js junkSalvage; #salvageJunk);
      *  - { type: "equip", index, to }, { type: "unequip", slot, to }: put on (or take up) gear from
      *    their pack (in a slot, `to`: a ring's hand), or take it off (into a slot of the pack,
      *    `to`); { type: "sort" }: put the pack in order; { type: "use", index }: use something in their pack (or
@@ -2500,6 +2512,12 @@ export class Host {
                 // (The player's own mark: no event, the pack shown again as the answer comes, as
                 // for things moved about)
                 return this.#packed(player.progress.markJunk(command.index, command.junk));
+            case "craft":
+                return this.#craft(player, actor, command);
+            case "salvage":
+                return this.#salvage(player, actor, command);
+            case "salvageJunk":
+                return this.#salvageJunk(player, actor, command);
             case "equip":
                 return this.#gear(player, player.progress.equip(command.index, command.to ?? null));
             case "unequip":
@@ -3916,6 +3934,18 @@ export class Host {
         }
     }
 
+    // Whether a hit (not a spell's) was a shot, for the skill it grows: one that flew (its
+    // projectile); or, a crafted weapon's fire, frost and the rest after the blow it rides on
+    // (core/materials.js ON_BLOW: no projectile of its own, the shot having landed already), the
+    // striker's weapon one that shoots (a bow)
+    #shot(event) {
+        if (event.projectile !== null) {
+            return true;
+        }
+
+        return Object.hasOwn(ON_BLOW, event.attack ?? "") && Boolean(WEAPONS[event.weapon]?.attacks.some(({ kind }) => kind === "ranged"));
+    }
+
     // What happened in the battle, for the players' skills: blows landed (up close, from afar)
     // and taken, heals, stuns, running out of breath; and what's on those they fell
     #learn(event) {
@@ -3989,9 +4019,11 @@ export class Host {
 
         switch (event.type) {
             case "hit":
-                // (A spell's: its school grows by it landing, below)
+                // (A spell's: its school grows by it landing, below. A crafted weapon's fire, frost
+                // and the rest, a hit of its own after the blow it rides on (core/materials.js
+                // ON_BLOW), grow what that blow does: a bow's shot's, Marksman; any other's, Blade)
                 if (!event.spell) {
-                    this.#gain(by, event.projectile === null ? "blade" : "marksman", event.damage);
+                    this.#gain(by, this.#shot(event) ? "marksman" : "blade", event.damage);
                 }
 
                 this.#gain(own, "endurance", event.damage);
@@ -4974,6 +5006,9 @@ export class Host {
         actor.haste = fighter.haste;
         actor.leech = fighter.leech;
         actor.bleed = fighter.bleed;
+        // (A crafted weapon's fire, frost and the rest on every blow: core/materials.js ON_BLOW,
+        // battle.js #onBlow; none, nothing kept)
+        actor.blows = fighter.blows ?? undefined;
 
         if (JSON.stringify(actor.legendary ?? null) !== JSON.stringify(fighter.legendary)) {
             actor.legendary = fighter.legendary;
@@ -5166,8 +5201,8 @@ export class Host {
     /**
      * What a shop with a daily stock (progress.js SHOPS `daily`) kept by one of the folk (`keeper`:
      * their id) has in today, as it is now: { key (its stockKey), day, wares: [{ id, quality,
-     * count, left, people? }], special (the thing it is, made), specialLeft (whether it's still
-     * to be had) }; or null, for anyone else.
+     * count, left, people? }] (its shelves, then a crafter's materials), special (the thing it is,
+     * made), specialLeft (whether it's still to be had) }; or null, for anyone else.
      */
     stockOf(keeper) {
         const folk = this.folk.get(keeper);
@@ -5179,7 +5214,8 @@ export class Host {
 
         const key = stockKey(keeper);
         const day = dayOf(elapsedOf(this.war));
-        const { wares: daily, special } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const { wares: shelved, special, materials } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const daily = [...shelved, ...materials];
         const kept = this.stocks.get(key);
         const today = kept?.day === day ? kept : { sold: {}, special: false };
         // (And what a thread's put on its shelves: core/rare.js CHANGES `stock`)
@@ -5349,6 +5385,231 @@ export class Host {
         this.#event("junkSold", { id: player.id, items: sale.sold.map(({ stack }) => ({ id: stack.id, quality: stack.quality, count: stack.count })), count: sale.count, price: sale.price, to: trading.keeper.id, left: sale.left });
 
         return { ok: true, count: sale.count, price: sale.price, left: sale.left };
+    }
+
+    // Whether one of the folk keeping a shop keeps it in a capital (their building's settlement:
+    // the start's, or the place it's in; never a site's, a castle's or one out in the world), where
+    // every crafter works to the legendary (core/recipes.js CAPITAL_BEST, the owner's ruling): the
+    // one rule the pack shows it by too (core/crafting.js inCapital)
+    #inCapital(keeper) {
+        return inCapital(this.world, keeper.map, (id) => this.#placeOf(id));
+    }
+
+    // The crafter a player's dealing with (an id), near them and alive (#shopkeeper): { keeper,
+    // shop, people, capital (whether they're in a capital: #inCapital) }, or null. One whose shop
+    // crafts nothing is a crafter of nothing (core/crafting.js: "uncrafted", "unsalvaged")
+    #crafter(actor, id) {
+        const trading = this.#shopkeeper(actor, id);
+
+        return trading && { ...trading, capital: this.#inCapital(trading.keeper) };
+    }
+
+    // A piece made at a crafter's near them, alive (docs/CRAFTING.md *Multiplayer*): of what they
+    // carry (`using`: an ingredient's id for each of the recipe's slots, null for the essence left
+    // out), if the crafter makes it and works its main material (core/crafting.js craftRefusal; in a
+    // capital, to the legendary), for the fee they were shown (previewOf: their might's level, their
+    // haggling), refused if it's come to anything else. The ingredients taken from the pack (never
+    // the stash), a junk stack of one before one that isn't (takesFrom); the piece made with the
+    // world's dice, of their might's level and the crafter's people (craftItem), and put in the
+    // pack; the fee paid, and the Trade skill grown by it as by buying. All of it or nothing: the
+    // pack and the gold as they were, should any of it fail. Told ("crafted": the piece, the fee,
+    // the crafter, what it took)
+    #craft(player, actor, { from, base, using, fee }) {
+        const { progress } = player;
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        const crafter = this.#crafter(actor, from);
+
+        if (!crafter) {
+            return refuse("far");
+        }
+
+        if (typeof base !== "string" || !Array.isArray(using) || !using.every((id) => id === null || typeof id === "string") || !whole(fee)) {
+            return refuse("command");
+        }
+
+        const might = this.mightFor(player.id);
+        const shown = previewOf(crafter.shop, base, using, { level: might, haggle: progress.bonuses().haggle, capital: crafter.capital });
+
+        if (shown.reason) {
+            return refuse(shown.reason);
+        }
+
+        const taking = takesFrom(progress.pack, base, using);
+
+        if (!taking) {
+            return refuse("lacking");
+        }
+
+        if (fee !== shown.fee) {
+            return refuse("craftChanged");
+        }
+
+        if (fee > progress.gold) {
+            return refuse("gold");
+        }
+
+        const before = { gold: progress.gold, pack: progress.pack.map((stack) => stack && { ...stack }) };
+        let made;
+        let stowed;
+
+        try {
+            const taken = taking.every(({ index, count }) => progress.take(index, count));
+
+            made = taken ? thingOf(craftItem(base, using, this.random, { level: might, people: crafter.people })) : null;
+            stowed = Boolean(made) && progress.stow(made);
+        } catch (error) {
+            Object.assign(progress, before);
+            throw error;
+        }
+
+        if (!made) {
+            Object.assign(progress, before);
+
+            return refuse("lacking");
+        }
+
+        if (!stowed) {
+            Object.assign(progress, before);
+
+            return refuse("full");
+        }
+
+        progress.gold -= fee;
+        this.#gain(player, "trade", fee * XP.trade);
+        this.#event("crafted", { id: player.id, item: made, fee, from: crafter.keeper.id, used: shown.needs });
+
+        return { ok: true, item: made, fee };
+    }
+
+    // Gear broken down at a crafter's near them, alive (docs/CRAFTING.md *Salvage*): `count` of the
+    // stack at `index` in the pack (never the stash's), if it isn't bound to its hero and the
+    // crafter breaks it down (core/crafting.js salvagesAt: what it makes, no finer than it works; in
+    // a capital, to the legendary), each piece giving back what salvageOf says, into the pack. No
+    // fee. What's left of a stack marked as junk still junk; what comes back not. All of it or
+    // nothing: the pack as it was, should there be no room. Told ("brokenDown": what went, what
+    // came back, the crafter)
+    #salvage(player, actor, { from, index, count }) {
+        const { progress } = player;
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        const crafter = this.#crafter(actor, from);
+
+        if (!crafter) {
+            return refuse("far");
+        }
+
+        if (!whole(count)) {
+            return refuse("command");
+        }
+
+        const stack = Number.isInteger(index) && index >= 0 && index < progress.pack.length ? progress.pack[index] : null;
+
+        if (!stack) {
+            return refuse("item");
+        }
+
+        if (count < 1 || count > stack.count) {
+            return refuse("count");
+        }
+
+        if (bound(stack)) {
+            return refuse("bound");
+        }
+
+        if (!salvagesAt(crafter.shop, stack, { capital: crafter.capital })) {
+            return refuse("unsalvaged");
+        }
+
+        const yields = salvageOf(stack).map((each) => ({ id: each.id, count: each.count * count }));
+        const why = this.#brokenDown(progress, [{ index, count }], yields);
+
+        if (why) {
+            return refuse(why);
+        }
+
+        this.#event("brokenDown", { id: player.id, items: [{ id: stack.id, quality: stack.quality, count }], yields, from: crafter.keeper.id });
+
+        return { ok: true, count, yields };
+    }
+
+    // All the junk carried (what the player's marked: progress.js isJunk) broken down at a crafter's
+    // near them, alive, as it was shown them (core/crafting.js junkSalvage): every stack of gear
+    // marked as junk it breaks down, whole, each piece giving back what salvageOf says; what it
+    // won't left in the pack, still junk, for one that will. Never the stash's. Asked with what the
+    // player was shown (`count` pieces), and refused if it's come to anything else. All of it or
+    // nothing, as selling all the junk is (#sellJunk). Told ("brokenDown", `junk`)
+    #salvageJunk(player, actor, { from, count }) {
+        const { progress } = player;
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        const crafter = this.#crafter(actor, from);
+
+        if (!crafter) {
+            return refuse("far");
+        }
+
+        if (!whole(count)) {
+            return refuse("command");
+        }
+
+        if (!progress.pack.some(isJunk)) {
+            return refuse("junkNone");
+        }
+
+        const salvage = junkSalvage(progress.pack, crafter.shop, { capital: crafter.capital });
+
+        if (!salvage.salvaged.length) {
+            return refuse("salvageNone");
+        }
+
+        if (count !== salvage.count) {
+            return refuse("salvageChanged");
+        }
+
+        const why = this.#brokenDown(
+            progress,
+            salvage.salvaged.map(({ index, stack }) => ({ index, count: stack.count })),
+            salvage.yields,
+        );
+
+        if (why) {
+            return refuse(why);
+        }
+
+        this.#event("brokenDown", { id: player.id, items: salvage.salvaged.map(({ stack }) => ({ id: stack.id, quality: stack.quality, count: stack.count })), yields: salvage.yields, from: crafter.keeper.id, junk: true });
+
+        return { ok: true, count: salvage.count, yields: salvage.yields, left: salvage.left };
+    }
+
+    // Gear taken out of a pack to be broken down (`taking`: [{ index, count }]) and what it gives
+    // back put in (`yields`: [{ id, count }]): the reason it can't be ("count", "full"), the pack as
+    // it was; or null, done
+    #brokenDown(progress, taking, yields) {
+        const before = progress.pack.map((stack) => stack && { ...stack });
+        let why;
+
+        try {
+            why = !taking.every(({ index, count }) => progress.take(index, count)) ? "count" : !yields.every(({ id, count }) => progress.stow({ id }, count)) ? "full" : null;
+        } catch (error) {
+            progress.pack = before;
+            throw error;
+        }
+
+        if (why) {
+            progress.pack = before;
+        }
+
+        return why;
     }
 
     // Things in the pack moved or split (the reason they couldn't be: progress.js move, split)

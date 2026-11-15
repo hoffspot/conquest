@@ -88,6 +88,7 @@ import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./sp
 import { Variety } from "./variety.js";
 import { armsOf, blowEvery, chooseAttack, distanceBetween, KNIFE, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
+import { ON_BLOW, UNHOLY } from "./materials.js";
 import { BAIT, eats, MOODS, MORALE, moodFor, NERVE, twoDice, WARY } from "./wary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
 import { carried, carries, holds, MOUNT, nextPhase, out, phaseLength } from "./mounts.js";
@@ -360,6 +361,13 @@ const chainOf = (prism) => ({ element: prism?.element ?? null, step: prism?.step
 // How each legendary weapon's effect strikes (its reaction: what's seen and heard of the blow), and
 // how much of its harm those near the foe it was let loose on take (core/legendary.js)
 const UNLEASHED = Object.freeze({ frostbind: "arcane", cinderburst: "fire", earthsunder: "crush", stormlash: "arcane", ruinblast: "crush", toll: "crush", near: 0.6 });
+
+// How each of the new blows a crafted weapon strikes is seen and heard landing (core/materials.js
+// ON_BLOW: its reaction, by its element, as that element's others land: fire's flames; the rest,
+// water's frost and rot, air's lightning, earth's acid and magic's bolts, arcane light)
+const BLOW_REACTIONS = Object.freeze({ fire: "fire", water: "arcane", air: "arcane", earth: "arcane", magic: "arcane" });
+// Those holy fire harms and shadow doesn't (core/materials.js UNHOLY: creatures.js ids)
+const UNHOLY_KINDS = new Set(UNHOLY);
 
 const magicOf = (attack, spell) => Boolean(spell) || attack.kind === "effect" || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
 
@@ -809,7 +817,7 @@ const TALK_SEARCH = 800;
  * field battle's characters are all one shape, test/battle-rules.test.js a battle of every sort).
  */
 const OPTIONAL = Object.freeze([
-    "abilityReadyAt", "abilityTimes", "backOffAt", "backing", "bleed", "bombAt", "burntAt", "callAt",
+    "abilityReadyAt", "abilityTimes", "backOffAt", "backing", "bleed", "blows", "bombAt", "burntAt", "callAt",
     "charge", "coverUntil", "cries", "cryReadyAt", "darkSight", "distracted", "eating", "endurance",
     "enmityWeight", "enrageAt", "enraged", "facingTo", "fallBackUntil", "fallsAt", "faster",
     "fightSince", "fought", "guardAt", "guarding", "guise", "haste", "hatchAt", "hidden", "holdFire",
@@ -9693,8 +9701,10 @@ export class Battle {
         const blow = attack.kind === "ranged" ? "ranged" : "melee";
         const boosted = given === null && attacker?.empowered?.blow === blow ? attacker.empowered : null;
         const empowered = boosted?.factor ?? 1;
-        // (A crushing blow, a mace's, going partly through armour: weapons.js `crushing`)
-        const base = given ?? Math.max(1, Math.round(rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered * (1 - (target.armor ?? 0) * (1 - (attack.crushing ?? 0)))));
+        // (A crushing blow, a mace's, going partly through armour: weapons.js `crushing`. What it
+        // came to before armour, for acid on it: #onBlow)
+        const rolled = given ?? rollDamage(attack, this.random) * (attacker?.power?.[blow] ?? 1) * empowered;
+        const base = given ?? Math.max(1, Math.round(rolled * (1 - (target.armor ?? 0) * (1 - (attack.crushing ?? 0)))));
         const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
         const element = spell ? null : elementOf(attack);
         const warded = this.#warded(target, { school, element });
@@ -9862,6 +9872,13 @@ export class Battle {
             this.#die(target, attacker);
         }
 
+        // A crafted weapon's fire, frost and the rest on a blow that did harm (core/materials.js
+        // ON_BLOW: #onBlow), each a hit of its own after it; acid's of the blow's harm before
+        // armour, as wards, a boss's shield and a shield's block had it
+        if (weaponBlow && attacker.blows && damage > 0) {
+            this.#onBlow(attacker, target, { damage, bare: (sure ? rolled : rolled * factor) * (1 - blocked), blow });
+        }
+
         // A unique's own on every blow up close (core/legendary.js `always`): its cleave, carried on
         // through every other foe before whoever struck it (Kingsplitter's: #cleave); or its
         // witchfire, the foe struck set alight and the fire leaping on (Greenbrand's: #witchfire)
@@ -9887,6 +9904,52 @@ export class Battle {
         }
 
         return damage;
+    }
+
+    // The new blows a crafted weapon strikes (core/materials.js ON_BLOW: the striker's `blows`, {
+    // fireBlow: share, ... }, host.js #outfit), on a weapon's blow that did `damage` (its harm
+    // before armour, `bare`, for acid's), struck with its `blow` ("melee", "ranged"): each, in
+    // turn, on a foe still standing, holy fire only on the unholy (UNHOLY) and shadow on all but
+    // them, so much of that harm again, through the foe's wards against its element (its kind's,
+    // a player's charms and gear: charmed; a Ward spell: WARD), at least 1. A hit of its own, after
+    // the blow's: told (its `attack` the bonus), its harm taken and its enmity counted, the foe
+    // falling of it if it's the last, a boss that regrows burnt by fire's; never dodged, covered,
+    // caught on a shield or leeched, and staggering no one. Then what it leaves, the foe still
+    // standing, as often as its `chance` times its share, as strong as the striker's power for
+    // the blow
+    #onBlow(attacker, target, { damage, bare, blow }) {
+        const unholy = UNHOLY_KINDS.has(target.wild?.creature);
+
+        for (const stat in attacker.blows) {
+            const share = attacker.blows[stat];
+            const def = Object.hasOwn(ON_BLOW, stat) ? ON_BLOW[stat] : null;
+
+            if (!def || !(share > 0) || target.dead || (def.only && !unholy) || (def.not && unholy)) {
+                continue;
+            }
+
+            const { element } = def;
+            const harm = Math.max(1, Math.round(share * (def.bare ? bare : damage) * charmed(target, null, element) * (this.#warded(target, { element }) ? WARD : 1)));
+
+            target.hp = Math.max(0, target.hp - harm);
+
+            // (A boss that regrows its hurts, burnt by fire's: #boss `regrow`)
+            if (target.wild?.fight && element === "fire") {
+                target.burntAt = this.time;
+            }
+
+            this.#emit("hit", { id: target.id, by: attacker.id, weapon: attacker.weapon ?? null, attack: stat, reaction: BLOW_REACTIONS[element], damage: harm, hp: target.hp, maxHp: target.maxHp, projectile: null, spell: null });
+            this.#enmity(target, attacker, harm);
+
+            if (target.hp === 0) {
+                this.#die(target, attacker);
+                continue;
+            }
+
+            if (def.afflict && this.random.chance(def.chance * share)) {
+                this.afflict(target.id, def.afflict, { by: attacker.id, power: attacker.power?.[blow] ?? 1, look: def.look ?? null });
+            }
+        }
     }
 
     // One of the wild's or a soldier's enmity for someone set on it (ENMITY) the more by `amount`

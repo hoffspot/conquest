@@ -618,7 +618,7 @@ describe("junk on a joined player's copy of the world (NET_VERSION 230)", () => 
             }
         };
 
-        assert.equal(NET_VERSION, 230);
+        assert.equal(NET_VERSION, 231, "230 junk's, 231 crafting's (docs/CRAFTING.md)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 3, pack: [junk("potion", 3), stack("meal", 2), junk("ale", 4), { ...stack("ale"), junk: "x".repeat(20) }] } });
         deliver();

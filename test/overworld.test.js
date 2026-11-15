@@ -9,8 +9,8 @@ import { buildWorld, CHUNK, CHUNKS, FLORA, KEEP, MAKING, Overworld, WET, WORLD_S
 import { navigatorOf, releaseNavigation } from "../client/js/core/navigation.js";
 import { Settlements, squareOf, waysOut } from "../client/js/core/settlements.js";
 import { siteSize, Sites } from "../client/js/core/sites.js";
-import { ENTERED, GROUND, HOME_TREES, PLOT, SHOP_LANDMARKS, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
-import { layoutTown, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
+import { CRAFTER_SHOPS, ENTERED, GROUND, HOME_TREES, PLOT, SHOP_LANDMARKS, TREE_KINDS } from "../client/js/core/setpieces/pieces.js";
+import { craftersOf, layoutTown, SETTLEMENT_KINDS, YARD_FENCE } from "../client/js/core/setpieces/town.js";
 import { BIOMES, CELL, CELLS } from "../client/js/core/worldplan/plan.js";
 import { cpuMs, quickEnough } from "./helpers.js";
 
@@ -692,7 +692,7 @@ describe("the settlements out in the world (settlements.js)", () => {
         assert.ok(far.length > overworld.settlements.places.length / 2);
     });
 
-    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern (a town hall only in a town or city, a keep in a capital, the specialists' shops only in a town or more, a master's where it's kept)", () => {
+    it("have a tavern, a church, a smithy and a guild in every village, and each a tavern (a town hall only in a town or city, a keep in a capital, the specialists' shops only in a town or more, a master's where it's kept, a village's crafter by its seed)", () => {
         const names = settlement.town.pieces.filter(({ kind }) => kind === "landmark").map(({ name }) => name);
 
         for (const name of ENTERED.filter((each) => each !== "hall" && each !== "keep" && !SHOP_LANDMARKS.includes(each))) {
@@ -700,7 +700,8 @@ describe("the settlements out in the world (settlements.js)", () => {
         }
 
         assert.ok(!names.includes("hall") && !names.includes("keep"));
-        assert.deepEqual(names.filter((name) => SHOP_LANDMARKS.includes(name)), village.master ? [village.master] : []);
+        assert.deepEqual(names.filter((name) => SHOP_LANDMARKS.includes(name) && !CRAFTER_SHOPS.includes(name)), village.master ? [village.master] : []);
+        assert.deepEqual(names.filter((name) => CRAFTER_SHOPS.includes(name)), craftersOf("village", settlement.town.seed));
     });
 
     it("are set into the world as they were laid out, their pieces each in one chunk", () => {

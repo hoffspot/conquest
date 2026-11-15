@@ -22,6 +22,7 @@
 
 import { pow } from "./exact.js";
 import { BLOW_EFFECTS, effectFor, EFFECTS } from "./legendary.js";
+import { ON_BLOW } from "./materials.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /**
@@ -218,6 +219,9 @@ export const STATS = Object.freeze({
     wardAir: { label: "Air's harm", share: true, less: true },
     wardEarth: { label: "Earth's harm", share: true, less: true },
     wardMagic: { label: "Spells' harm", share: true, less: true },
+    // (A crafted weapon's blows: so much of each blow's harm again, of an element, landing with it,
+    // core/materials.js ON_BLOW, as its label says; battle.js lets them loose)
+    ...Object.fromEntries(Object.entries(ON_BLOW).map(([stat, { label }]) => [stat, { label, share: true }])),
 });
 
 // Which pieces can have which bonuses (by slot, or a weapon by how it fights)

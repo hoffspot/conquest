@@ -204,6 +204,10 @@ import { Forecast } from "./forecast.js";
 import { clockTurn, DUE, followsNow, nextSlot, PUT_OFF } from "./clocks.js";
 import { FIGHT_LINGERS, foeNear, guardDue, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
+import { craftList, ingredientInfo, KIND_WORDS, previewInfo, salvageInfo, slotsOf, usingFirst, yieldsSaid } from "./craftinfo.js";
+import { inCapital, junkSalvage, lackingIn, previewOf } from "../core/crafting.js";
+import { CAPITAL_BEST, CRAFTERS, RECIPES } from "../core/recipes.js";
+import { INGREDIENTS } from "../core/materials.js";
 import { TalkPanel } from "./talk.js";
 import { HOLD_MS, TAP_SLOP } from "./press.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
@@ -871,6 +875,12 @@ export function aboutOf({ id, quality, bonuses, level = 1 }) {
         return `${use.heal ? `Heals ${use.heal} hit points.` : "Fills your stamina."}${worth}`;
     }
 
+    // (An ingredient, a creature's part or a crafter's material: what it is, core/materials.js
+    // INGREDIENTS; its card says what it's for and where it's from, app/craftinfo.js)
+    if (INGREDIENTS[id]) {
+        return `${INGREDIENTS[id].about}${worth}`;
+    }
+
     if (part) {
         return worth.trim();
     }
@@ -908,6 +918,20 @@ const AILING = Object.freeze({
     bleed: { bursts: ["drip"], every: 0.22, at: [0.4, 0.65], round: 0.17, tint: null, hurt: "blood" },
     slow: { bursts: [], every: 0.3, at: [0.05, 0.4], round: 0.2, tint: null, hurt: null },
     fear: { bursts: ["shadows"], every: 0.3, at: [0.7, 1], round: 0.25, tint: [0.03, 0.03, 0.06], hurt: null },
+});
+
+// A crafted weapon's fire, frost and the rest landing after the blow they ride on (core/materials.js
+// ON_BLOW: battle.js #onBlow, a hit of its own), as each is seen: a little of its element where the
+// blow landed, the bursts of what each leaves behind or of a legendary weapon's glints (effects.js
+// BURSTS: a few dozen sparks at the most), and its number in its colour (styles.css .damage.blow-*)
+const BLOW_LOOKS = Object.freeze({
+    fireBlow: Object.freeze({ bursts: ["flames", "embers", "embers"], number: "fire" }),
+    frostBlow: Object.freeze({ bursts: ["frost", "frost", "legendFrost", "legendFrost"], number: "frost" }),
+    stormBlow: Object.freeze({ bursts: ["legendStorm", "legendStorm", "legendStorm"], number: "storm" }),
+    venomBlow: Object.freeze({ bursts: ["venomBubbles", "venomBubbles", "venomDrip"], number: "venom" }),
+    acidBlow: Object.freeze({ bursts: ["ichor"], number: "acid" }),
+    holyBlow: Object.freeze({ bursts: ["blessing"], number: "holy" }),
+    shadowBlow: Object.freeze({ bursts: ["wither", "shadows"], number: "shadow" }),
 });
 
 // Slowed, as it was done: webbed, rooted, chilled (each drawn, and each its own icon and words)
@@ -1243,7 +1267,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold", "crafted", "brokenDown"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1532,7 +1556,10 @@ export class Game {
         this.markers = markersOf(markers);
         this.onMarkers = onMarkers;
 
-        /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
+        /**
+         * Trading with a shopkeeper (from their talk, or a crafter's crafting): { shop, keeper (their
+         * id), name, people }, or null.
+         */
         this.shopping = null;
         this.shopWanted = null;
 
@@ -10072,11 +10099,12 @@ export class Game {
                 });
 
                 // (Their wares, once the talk's over: their own shop, or their part's, as the host
-                // has it)
+                // has it; or, asked what a crafter can make (`commission`, core/dialogue.js
+                // commissionOf), the same opened on its Craft tab)
                 const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? out?.shop ?? SHOPKEEPERS[npc.role];
 
-                if (effect.shop && keeps) {
-                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
+                if ((effect.shop || effect.commission) && keeps) {
+                    this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name, ...(effect.commission ? { tab: "craft" } : {}) };
                 }
             },
         });
@@ -11857,6 +11885,20 @@ export class Game {
 
             this.hud.message(`You sell your junk: ${event.count === 1 ? "one thing" : `${event.count} things`} for ${event.price} gold.${left}`, left ? 4 : 2.5);
             this.sound?.play("coins");
+        } else if (event.type === "crafted") {
+            // (A piece made at a crafter's, at once: core/host.js #craft. The anvil rung, and the
+            // work quenched, as a smith at their forge is heard)
+            this.hud.message(`Made for you: ${itemLabel(event.item)}, for ${event.fee} gold. It's in your pack.`, 3);
+            this.sound?.play("anvil");
+            this.sound?.play("hiss", { delay: 0.55 });
+        } else if (event.type === "brokenDown") {
+            // (Gear broken down at a crafter's, one stack or all the junk: core/host.js #salvage,
+            // #salvageJunk; what comes back heard knocked out of it)
+            const pieces = event.items.reduce((sum, { count }) => sum + count, 0);
+            const went = event.junk ? `your junk, ${pieces === 1 ? "one thing" : `${pieces} things`}` : event.items.map(thingsOf).join(", ");
+
+            this.hud.message(`You break down ${went}: back ${event.yields.length === 1 && event.yields[0].count === 1 ? "comes" : "come"} ${yieldsSaid(event.yields)}.`, 3);
+            this.sound?.play("crush");
         } else if (event.type === "used" && event.on) {
             // (Given to one of their own: core/host.js #handOver)
             this.hud.message(`You give ${this.battle.actor(event.on)?.name ?? "them"} ${itemLabel(event.item).toLowerCase()}.`, 1.6);
@@ -13746,7 +13788,7 @@ export class Game {
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: [...(this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })), ...this.#riftLetters().map(({ id, letter }) => ({ id, title: letter.title, found: letter.found }))],
-            bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind) },
+            bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind), cardOf: (id) => (INGREDIENTS[id] ? this.#ingredientCard(id) : null) },
             messages: this.messages,
         });
     }
@@ -14201,12 +14243,74 @@ export class Game {
         }
     }
 
-    // Trade with a shopkeeper: the pack open, their wares in it
-    #openShop({ shop, keeper, name }) {
+    // Trade with a shopkeeper: the pack open, their wares in it; or, a crafter, on the tab asked
+    // for (`tab`: "craft", what they make, from openCrafting)
+    #openShop({ shop, keeper, name, tab = "buy" }) {
         this.closeJournal();
         this.strongroom = null;
         this.shopping = { shop, keeper, name, people: this.host.folk.get(keeper)?.people ?? "human" };
+        this.pack.openOn(tab);
         this.#showPack();
+    }
+
+    /**
+     * What a crafter makes (core/recipes.js CRAFTERS: a smith, a specialist, a master, and those to
+     * come), shown: the Pack opened on its Craft tab at the crafter `keeper` (one of the folk's
+     * ids), as trading with them opens on Buy. A keeper's "What can you make?" (core/dialogue.js
+     * keeperTree, docs/CRAFTING.md stage 4) opens it once the talk's over: its effect sets
+     * `shopWanted` with `tab: "craft"`, as a shop's sets it with none (#endTalk). Called with no talk
+     * going, they stop for it as they do talking (the host's "talk"). Whether they keep a crafter's
+     * shop and it opened.
+     */
+    openCrafting(keeper) {
+        const actor = this.battle.actor(keeper);
+        const shop = actor && (this.host.folk.get(keeper)?.shop ?? SHOPKEEPERS[actor.role]);
+
+        if (!shop || !Object.hasOwn(CRAFTERS, shop) || actor.dead) {
+            return false;
+        }
+
+        const wanted = { shop, keeper, name: actor.name, tab: "craft" };
+
+        if (this.talking?.id === keeper) {
+            this.shopWanted = wanted;
+            this.#endTalk();
+
+            return true;
+        }
+
+        this.#command({ type: "talk", with: keeper });
+        this.#openShop(wanted);
+
+        return true;
+    }
+
+    // An ingredient's card (app/craftinfo.js ingredientInfo: tapped in the pack, at a crafter's, in
+    // the bestiary): its power as strong as it would come on a piece the player made now (their
+    // might's level), the creatures that leave it by name once they're in the bestiary (Sighted)
+    #ingredientCard(id) {
+        const known = (kind) => (this.progress.bestiary.levelOf(kind) ?? 0) > 0;
+
+        return ingredientInfo(id, { known, level: this.host.mightFor(this.me), haggle: this.progress.bonuses().haggle });
+    }
+
+    // A piece as a crafter would make it of what's chosen, shown before it's made (core/crafting.js
+    // previewOf, as the host makes it: #craft, at the player's might's level, with their haggling,
+    // a capital's crafter to the legendary): why it can't be, in words; or the piece's card
+    // (app/craftinfo.js previewInfo), its fee and what its ingredients are worth, and what the pack's
+    // short of (never the stash: lackingIn)
+    #craftShown(shop, base, using, { capital, might, haggle }) {
+        const shown = previewOf(shop, base, using, { level: might, haggle, capital });
+
+        if (shown.reason) {
+            const empty = RECIPES[base]?.slots.find((slot, k) => !slot.optional && !using[k]);
+
+            return { reason: shown.reason, words: shown.reason === "unfit" && empty ? `Choose ${KIND_WORDS[empty.kind].one} to go into it.` : (REFUSALS[shown.reason] ?? "That can't be made here.") };
+        }
+
+        const lacking = lackingIn(this.progress.pack, base, using).map(({ id, need, have }) => ({ id, need, have, text: `${itemLabel({ id })} (${have} of ${need})` }));
+
+        return { ...shown, info: previewInfo(shown, base), lacking };
     }
 
     // Done trading with a shopkeeper: they're let go, back about their business (they were kept
@@ -14225,6 +14329,10 @@ export class Game {
     #showPack() {
         const progress = this.progress;
         const { haggle } = progress.bonuses();
+        // (At a crafter's: which, and whether in a capital, where it works to the legendary as the
+        // host has it: core/crafting.js inCapital, the one rule)
+        const crafter = this.shopping && Object.hasOwn(CRAFTERS, this.shopping.shop) ? this.shopping.shop : null;
+        const capital = Boolean(crafter) && inCapital(this.host.world, this.battle.actor(this.shopping.keeper)?.map ?? null);
         const skills = Object.entries(TREES).map(([tree, { name, grows, abilities }]) => {
             const rank = progress.rank(tree);
             const { xp, from, to } = progress.toNext(tree);
@@ -14250,7 +14358,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), junkable: junkable(stack), info: def.slot || def.charm ? describe(stack, progress, stashed ? { label, haggle, outside: true } : { index, label, haggle }) : null, giveTo: bound(stack) || stashed ? [] : this.#wearers(stack) };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), junkable: junkable(stack), info: def.slot || def.charm ? describe(stack, progress, stashed ? { label, haggle, outside: true } : { index, label, haggle }) : INGREDIENTS[stack.id] ? this.#ingredientCard(stack.id) : null, giveTo: bound(stack) || stashed ? [] : this.#wearers(stack), salvage: crafter && !stashed ? salvageInfo(stack, crafter, { capital, count: 1 }) : null };
         };
         const pack = progress.pack.map((stack, index) => entry(stack, index));
         // (The stash, open at its chest: each tab bought and how full it is, those still to buy,
@@ -14304,8 +14412,30 @@ export class Game {
                 : null,
             unwanted: this.shopping.shop === "guild" ? null : "They buy only their own line: the adventurers' guild buys everything.",
             junk: { marked: progress.pack.filter(isJunk).length, count: sale.count, price: sale.price, left: sale.left, kept: sale.kept.map(({ stack }) => thingsOf(stack)) },
-            preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot || ITEMS[item.id]?.charm ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
+            preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot || ITEMS[item.id]?.charm ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : INGREDIENTS[item.id] ? this.#ingredientCard(item.id) : null }),
+            craft: null,
+            salvage: null,
         };
+
+        // (A crafter's: everything it makes, by piece, what the pack's short of for each; a piece's
+        // slots, each one's choices from what's carried; the piece shown before it's made, as the
+        // host makes it; an ingredient's card; the piece made; and what breaking all the junk down
+        // here comes to (core/crafting.js junkSalvage, as the host breaks it down): app/craftinfo.js)
+        if (shop && crafter) {
+            const salvage = junkSalvage(progress.pack, crafter, { capital });
+
+            shop.craft = {
+                best: capital ? CAPITAL_BEST : CRAFTERS[crafter].best,
+                capital,
+                list: craftList(crafter, progress.pack, { capital }),
+                using: (base, main) => usingFirst(progress.pack, base, main),
+                slots: (base, using) => slotsOf(progress.pack, crafter, base, using, { capital }),
+                preview: (base, using) => this.#craftShown(crafter, base, using, { capital, might, haggle }),
+                card: (id) => this.#ingredientCard(id),
+                made: (item) => describe(item, progress, { label: itemLabel(item), haggle, outside: true }),
+            };
+            shop.salvage = { count: salvage.count, words: yieldsSaid(salvage.yields), left: salvage.left };
+        }
 
         const trade = this.#tradeNow();
         const other = trade && (trade.from === this.me ? trade.to : trade.from);
@@ -14340,7 +14470,7 @@ export class Game {
     }
 
     #packCommand(asked, then = null) {
-        const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" || asked.type === "sellJunk" ? { ...asked, to: this.shopping?.keeper } : asked;
+        const command = asked.type === "buy" || asked.type === "craft" || asked.type === "salvage" || asked.type === "salvageJunk" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" || asked.type === "sellJunk" ? { ...asked, to: this.shopping?.keeper } : asked;
         const worn = asked.type === "equip" || asked.type === "outfit" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
 
         return this.#command(command, (result) => {
@@ -17119,6 +17249,8 @@ export class Game {
             case "bought":
             case "sold":
             case "junkSold":
+            case "crafted":
+            case "brokenDown":
             case "used":
             case "discarded":
             case "dropped":
@@ -17402,6 +17534,36 @@ export class Game {
 
         if (event.by && (event.by === this.me || event.id === this.me)) {
             this.fought.set(event.by === this.me ? event.id : event.by, this.clock);
+        }
+
+        // (A crafted weapon's fire, frost and the rest, after the blow it rode on: its element's
+        // look and sound where the blow landed, its number in its colour; no flinch, no wound or
+        // blood of its own, the blow having had them: BLOW_LOOKS)
+        const blown = Object.hasOwn(BLOW_LOOKS, event.attack ?? "") ? BLOW_LOOKS[event.attack] : null;
+
+        if (blown) {
+            const struck = this.avatars.get(event.id);
+            const actor = battle.actor(event.id);
+
+            if (struck) {
+                const at = struck.point(0.7);
+
+                this.sound?.hit(event.reaction, struck.object.position, null);
+
+                for (const burst of blown.bursts) {
+                    effects.burst(burst, at, null);
+                }
+            }
+
+            hud.damage(this.#screenAbove(event.id), event.damage, { toPlayer: event.id === this.me, kind: `blow blow-${blown.number}` });
+
+            if (actor) {
+                hud.setHealth(event.id, actor.hp, actor.maxHp);
+            }
+
+            this.flash.set(event.id, 0.25);
+
+            return;
         }
 
         // (On horseback: the horse struck, not its rider: world/mounts3d.js)

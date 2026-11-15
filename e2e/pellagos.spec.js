@@ -2838,7 +2838,8 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
     await page.locator("#snagbutton").click();
     await expect(page.locator("#menusnag")).toBeVisible();
     await expect(page.locator("#snaggrades input")).toHaveCount(6);
-    await expect(page.locator("#snagkinds input")).toHaveCount(9);
+    // (Gold and each kind of thing a shop shows: progress.js WARE_KINDS, a crafter's materials among them)
+    await expect(page.locator("#snagkinds input")).toHaveCount(10);
     await expect(page.locator("#snaggrades .rarity-legendary")).toHaveText("Legendary");
 
     for (const box of await page.locator("#snaggrades input:not([value=legendary]), #snagkinds input:not([value=weapon])").all()) {
@@ -8903,7 +8904,7 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await expect(journal).toBeVisible();
     await journal.getByRole("button", { name: "Bestiary" }).click();
     // (Every kind there is: what's set out in a boss's arena to be broken among them, creatures.js `object`)
-    await expect(journal).toContainText("1 of 127 kinds of creature met");
+    await expect(journal).toContainText("1 of 136 kinds of creature met");
     await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
 
     // Its page: what it is, open; the rest shut, and how to open them
@@ -10210,7 +10211,7 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
     });
 
     expect(inside).toMatchObject({ map: "home:swordsmith-1/shop", folk: ["Swordsmith"], talking: true, shop: "swordsmith", specialLeft: true });
-    expect(inside.wares).toBeGreaterThanOrEqual(7);
+    expect(inside.wares).toBeGreaterThanOrEqual(7 + 8);
 
     // Asked, they tell of today's special and its price, and show it
     const talk = page.locator(".talk");
@@ -10237,9 +10238,15 @@ test("the swordsmith's in the start town: its keeper behind the counter tells of
     await expect(special.locator(".pack-left")).toHaveCount(0);
 
     const racked = pack.locator(".pack-list.wares:not(.special) .pack-row");
+    // (Its gear 1 to 3 of each; last, under their own heading, the materials a swordsmith makes
+    // things of, 10 to 20 of each: docs/CRAFTING.md *The shops*)
+    const materials = pack.locator(".pack-section", { has: page.locator(".pack-heading", { hasText: "Materials for crafting" }) }).locator(".pack-row");
+    const lefts = await racked.locator(".pack-left").allTextContents();
 
     await expect(racked).toHaveCount(inside.wares);
-    expect(await racked.locator(".pack-left").allTextContents()).toEqual(Array(inside.wares).fill(expect.stringMatching(/^[123] left$/)));
+    await expect(materials).toHaveCount(8);
+    expect(lefts.slice(0, inside.wares - 8)).toEqual(Array(inside.wares - 8).fill(expect.stringMatching(/^[123] left$/)));
+    expect(lefts.slice(inside.wares - 8)).toEqual(Array(8).fill(expect.stringMatching(/^(1\d|20) left$/)));
 
     // One bought off the racks: one fewer of it, its price paid
     const first = racked.first();
@@ -10773,7 +10780,7 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     expect(map.drawn.names).toContain(map.town);
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
     // (Its key folded away at first to its "Key" button in the corner, the map seen whole; tapped,
-    // open above it, within the screen: each kind of building gone into, a barracks' and the seven
+    // open above it, within the screen: each kind of building gone into, a barracks' and the eleven
     // shops among them; the fog; the circles of what's been heard tell of, and a hell's cult's; a
     // camp or lair tracked home; a hell rift, known or not; and the pin. Tapped again, folded away)
     const key = page.getByRole("button", { name: "Key", exact: true });
@@ -10785,8 +10792,9 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await key.click();
     await expect(key).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#worldmapkey")).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(23);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(27);
     await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "Leatherworker" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "A hell rift: close it before it seals itself" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "A hell rift, somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Your markers (up to 10): tap one to share it or take it away" })).toBeVisible();

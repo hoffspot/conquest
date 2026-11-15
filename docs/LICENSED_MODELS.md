@@ -243,6 +243,17 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
    `test/scramble.test.js` checks every model so marked is scrambled, and no other;
    `test/licensed.test.js`, that git ignores it.
 
+### A model of its own for one of the crafters' quarry
+
+The nine creatures put in the wilds for crafting (docs/CRAFTING.md *New beasts*: the mythril golem,
+the gilded scarab, the moon moth...) are drawn from other kinds' models, recoloured, till models
+of their own are bought; each has its own id and a catalog key waiting for it (core/materials.js
+`NEW_BEASTS` `model`: `beast-mythril-golem`...). One bought for one of them comes in as above under
+that key (its skins, if any, under `<key>-skins`), then its `MODELS` entry is written in
+`client/js/beasts/model.js` `OWN_MODELS`, by the creature's id: from then on it's drawn from its own
+(`quarryModel`), and nothing in the rules changes. The steps in full: docs/CRAFTING.md *Its own
+model, later*.
+
 ## Remaking a licensed model
 
 A remade model (new clips, say) goes into the private repository **under a new name**
@@ -402,8 +413,8 @@ in one: below), and something more rustic is to come for them.
   plaster, the dark inside and the soffits cast the house's). Its lower detail in the world, its
   windows only near. The humans' insides' floorboards are laid with its wood floor.
 - **The shops** (`client/js/world/art/kits/kitshop.js`, pure; drawn by kithouses3d.js
-  `kitShopObject`): the humans' specialists' and masters' shops, in every settlement of theirs
-  (a village's master's too), are built of the kit as a house is, each in a look of its own the
+  `kitShopObject`): the humans' specialists', crafters' and masters' shops, in every settlement
+  of theirs (a village's master's and crafter's too), are built of the kit as a house is, each in a look of its own the
   same on every lot (`SHOP_LOOKS`: walls and awning stripes no house has, fill, roof, storeys,
   jetties, timbers' figure, chimney, finial), their front laid out about the kit's door in the
   middle (`centredRun`), its leaf where the game has the shop's door (core/insides.js
