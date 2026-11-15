@@ -5230,6 +5230,73 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     font-style: italic;
 }
 
+/* Junk (core/progress.js isJunk): a tin tag in a slot's top left corner, the thing in it dimmed;
+   the same tag after its name on a shop's Sell tab, and its card saying so */
+.pack-junk {
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    color: #b9c0c4;
+    pointer-events: none;
+}
+
+.pack-cell .pack-junk {
+    position: absolute;
+    left: 3px;
+    top: 3px;
+    filter: drop-shadow(0 0 2px #000);
+}
+
+.pack-cell .pack-junk svg,
+.pack-row .pack-junk svg {
+    width: 100%;
+    height: 100%;
+}
+
+.pack-cell.junk > svg {
+    opacity: 0.55;
+    filter: grayscale(0.7);
+}
+
+.pack-row .pack-junk {
+    flex: none;
+}
+
+.pack-junk-note {
+    margin: 0;
+    font-size: 12px;
+    color: #c9cfd2;
+}
+
+/* Sell all junk, over a shop's Sell tab: its button and what it comes to; asked about, the
+   question as the stash's tabs are asked about (.stash-ask); what's left for elsewhere, said */
+.junk-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.junk-said {
+    flex: 1 1 180px;
+    margin: 0;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.junk-left {
+    margin: 0 2px 8px;
+}
+
+/* A row opened on the Sell tab: what can be done with it (Mark as junk) under what it is */
+.pack-peeked-actions {
+    flex-basis: 100%;
+    margin: 0 0 4px;
+    padding: 0 6px 2px 38px;
+}
+
 /* The tabs (Gear, Skills), the pack's pages and putting it in order */
 .pack-tabs {
     display: flex;

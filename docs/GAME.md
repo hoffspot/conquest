@@ -6106,6 +6106,64 @@ chest, in every town of every people and every world they go into, opens the sam
   `loadProgress`), and a character kept before there were stashes has the first two tabs, empty.
   A world server keeps it with each hero it keeps, and a character's file carries it.
 
+### Junk (core/progress.js isJunk, junkSale; core/host.js #sellJunk; app/pack.js)
+
+As in Diablo IV, a hero's player can mark what they carry as junk, and sell all of it at once at
+any shop (the owner asked for it at every shop, 14 and 15 November 2026).
+
+- **What can be.** Anything that sells somewhere (`junkable`: the adventurers' guild buys
+  everything), so not what's bound to the hero (a unique, a horse's whistle: refused, `bound`).
+  Only the player ever marks anything, and only what's in their pack: nothing's junk by itself,
+  and nothing they didn't mark is ever sold.
+- **Marking it.** In a thing's card (tapped in the pack; a thing carried held or right-clicked
+  at the stash; a row opened on a shop's Sell tab), **Mark as junk**, or **Not junk** once it is
+  (a thing in the stash keeps its mark there, and is marked or unmarked once it's carried again);
+  on its wheel,
+  SW; with J (`junk`, a key of the Pack's own: app/keys.js `pack`, before the world's, so J opens
+  the Journal anywhere else), the thing the pointer's over, or else the one in focus or chosen;
+  with a controller, △ on the thing in focus (its prompt "△ Junk"). The softest tick (`tap`) as
+  it's marked. A junk thing has a small tin tag in its slot's top left corner, its picture
+  dimmed, in the pack and the stash, the same tag after its name on the Sell tab, and its card
+  says "Marked as junk". **Sort** puts it after everything else, in the same order among itself
+  (the stash's tabs too).
+- **The mark is the player's own.** A stack is junk or not as a whole (`junk: true` on it), and a
+  junk stack and one that isn't, of the same thing, never stack together (`stacksWith`: taken
+  up, bought, found, Stow alike, dragged onto each other, a pack kept loose read in): so what
+  comes into the pack is never made junk by landing on a junk stack, and no mark's ever lost by
+  a junk stack landing on one that isn't. That was chosen over a stack taking either's mark,
+  which would sell what wasn't marked or keep what was. A stack split keeps its mark on both
+  halves; a thing moved into the stash or out of it keeps it; thrown away and taken back, it's
+  junk again. What leaves the hero leaves its mark behind (`take`, `thingOf`): sold, dropped
+  (picked up again, it isn't junk), traded or given to another player, given for a contract,
+  used, given to a follower to wear, and put on (worn gear is never junk; what comes off comes
+  into the pack unmarked). What's left of a stack is still junk.
+- **Sell all junk**, on every shop's Sell tab, over what's carried: a button, and what the junk
+  comes to there ("Junk: 12 things, 340 gold here."; "<the keeper> buys none of your junk.";
+  with none marked, how to mark it). Pressed, it's asked in the panel itself, as a tab of the
+  stash is: "Sell 12 things for 340 gold?", what they won't buy staying junk, that there's no
+  buying it back, and **Sell** or **Not now**. Each stack sells for what selling it alone would
+  fetch there (`priceOf`, with the haggling: a creature's part for all it's worth), times how
+  many; all of it together, and the Trade skill grows by all of it as by selling it. Never what's
+  in the stash. What that shop won't buy (`buys`: its own line) stays junk, said under the bar
+  ("Still junk, as <the keeper> won't buy them: 2 wolf pelts, a healing draught. The adventurers'
+  guild buys everything."), and said again once it's sold ("You sell your junk: 3 things for 3
+  gold. 3 things they won't buy are still marked as junk..."), the coins heard (`coins`).
+- **The host's.** `{ type: "markJunk", index, junk }` (true or false) and `{ type: "sellJunk",
+  to, price, count }`: the shopkeeper near (`#shopkeeper`, refused `far`), alive (`dead`), the
+  total and the count the player was shown (`junkSale`, which the pack's question is worked out
+  by too), refused if they've come to anything else meanwhile (`junkChanged`), so nothing's sold
+  that wasn't in the question; nothing marked (`junkNone`); nothing marked that shop buys
+  (`junkUnwanted`). All of it or nothing: the pack and the gold as they were if any of it fails.
+  Told (`junkSold`: what went, for how much, how many are left junk). It changed lockstep's
+  commands, and the checksum counts the marks, so `NET_VERSION` went to 230. No switch: it's a
+  game feature, as the stash was, not the replication programme's (contribution.md, section 3).
+- **Kept** with what's carried, wherever that is: in a snapshot, on a device (app/save.js), in a
+  character's file, by a world server with the hero, and brought by one who joins (only `true`
+  is a mark). `SNAPSHOT_VERSION` and `SAVE_VERSION` stayed as they were: the mark is a field of a
+  stack kept only where it's set, and absent (all that's kept before it) it means what it always
+  did, not junk, so there's nothing for a step to fill in; an older game reading a newer save
+  drops the marks and nothing else.
+
 ### Sound (audio/)
 
 The effects and the town's sounds are made in code as the game starts, the footsteps and the
@@ -6949,8 +7007,9 @@ the left stick goes from button to button by where they sit on the screen (gamep
 `nearestThatWay`: the nearest that way, sideways distance counting twice), within the window in
 front alone; ✕ presses (a switch flips, a choice turns to the next, a field's typed in), ○ goes
 back as Escape does (a dialog's own `cancel` told first, so the menu goes back a page), L1 and R1
-turn its tabs (a book's pages), ← → move a slider or turn a choice, the right stick scrolls, and □
-does what a long press does (an item's wheel in the Pack). On the world map, the left stick moves
+turn its tabs (a book's pages), ← → move a slider or turn a choice, the right stick scrolls, □
+does what a long press does (an item's wheel in the Pack), and in the Pack △ marks the thing in
+focus as junk, or not (*Junk*; its prompt "△ Junk"). On the world map, the left stick moves
 over it and the right stick zooms it (`WorldMap` `pan`), the D-pad still going between its buttons. The button in focus is ringed in gold
 and the window's prompts stand at the foot of the screen ("✕ Choose ○ Back L1 R1 Tabs"), raised
 over the window as a popover. With **Swap ✕ and ○** on (Game options), they're the other way round
@@ -6993,11 +7052,14 @@ your own wheel and T held theirs, the keys that move aiming it as a stick does; 
 number pad's) the Action Bar's slots, \` swapping its bars; I the Pack, J the Journal, B the
 Spellbook, P the Party panel, Enter the party's chat, M the world map, O held the ring of panels
 (the keys that move pick from it); Escape the menu, or back out of what's open (a wheel, a talk, a
-panel, the Pack's look at something); 1 to 9 a talk's lines, and ← and → a book's pages. A key's
+panel, the Pack's look at something); 1 to 9 a talk's lines, and ← and → a book's pages; with the
+Pack open, J marks the thing pointed at (or chosen) as junk, or not (*Junk*: the Pack's own keys,
+before the world's, so J opens the Journal everywhere else). A key's
 kept by where it sits (`KeyboardEvent.code`), so they're in the same places on any layout, and
 shown as the keyboard in hand prints them where the browser says (`navigator.keyboard`). One key
-does only one action where the player is (in the world, talking, or reading: a talk's lines share
-the digits with the Action Bar, a book's arrows with walking). Shift held to walk doesn't stop a
+does only one action where the player is (in the world, talking, reading, or in the Pack: a
+talk's lines share the digits with the Action Bar, a book's arrows with walking, the Pack's J with
+the Journal). Shift held to walk doesn't stop a
 key doing its own (Shift+I still opens the Pack, unless Shift+I's set to something).
 
 **The mouse's other buttons** (the middle, the right, back and forward; the left's the game's tap,

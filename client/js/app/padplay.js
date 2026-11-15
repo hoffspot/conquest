@@ -17,7 +17,8 @@
 //  - A window (a dialog, a panel over the world, the title or the character maker): the D-pad or
 //    left stick goes from button to button by where they are on the screen (nearestThatWay),
 //    Cross presses (or types: app/padkeys.js), Circle goes back as Escape does, L1 and R1 turn its
-//    tabs, the right stick scrolls, and Square does what a long press does (an item's wheel).
+//    tabs, the right stick scrolls, and Square does what a long press does (an item's wheel). In
+//    the Pack, Triangle marks the thing in focus as junk, or not (as J does: Game padJunk).
 //    With Cross and Circle swapped (Game options), they're the other way round everywhere.
 //
 // The moment the controller's used, the page says so (body[data-pad="on"]): the button in focus
@@ -753,6 +754,8 @@ export class PadPlay {
             }
         } else if (reading.pressed.has("square") && focused) {
             this.#more(focused);
+        } else if (reading.pressed.has("triangle") && focused) {
+            this.how.game()?.padJunk?.(focused);
         } else if (reading.pressed.has("options") && (scope.id === "menu" || document.body.dataset.screen === "hud")) {
             this.#back(scope);
         } else if (reading.pressed.has("create") && scope.id === "worldmap") {
@@ -802,6 +805,11 @@ export class PadPlay {
 
         if (this.how.game()?.reader?.open) {
             parts.push(`${symbolOf("l1", kind)} ${symbolOf("r1", kind)} Pages`);
+        }
+
+        // (In the Pack, on something that can be marked as junk)
+        if (this.how.game()?.padJunk?.(focused, { ask: true })) {
+            parts.push(`${symbolOf("triangle", kind)} Junk`);
         }
 
         const words = parts.join("   ");

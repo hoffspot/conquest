@@ -532,6 +532,15 @@ export const ICONS = Object.freeze({
         <circle r="16" fill="#6e1812" stroke="#e05a4a" stroke-width="2.2"/>
         <path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="#ffe4de" stroke-width="3.4" stroke-linecap="round"/>`,
 
+    // A tin tag tied on by its string, a coin stamped on it: marked as junk (or not), to be sold
+    // with the rest (app/pack.js)
+    junk: `
+        <path d="M-10,-1 C-14,-7 -17,-12 -20,-18" fill="none" stroke="#d8c8a0" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M-19,1 L-9,-11 L18,-11 L18,13 L-9,13 Z" fill="#9aa0a4" stroke="#2f3336" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="-8" cy="1" r="2.8" fill="#1d1a16" stroke="#2f3336" stroke-width="1"/>
+        <circle cx="6" cy="1" r="6.5" fill="#d9ab3a" stroke="#6b4a0c" stroke-width="1.2"/>
+        <circle cx="6" cy="1" r="3.8" fill="none" stroke="#8a6a1c" stroke-width="1"/>`,
+
     // A little action wheel, a slice lit: put on one
     onWheel: `
         <circle r="18" fill="#2a2016" stroke="#ecc882" stroke-width="1.6"/>

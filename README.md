@@ -459,6 +459,14 @@ on an action wheel, split the stack (choosing how many), sell it when trading, t
 elsewhere to move it; drag gear onto yourself to wear it. What's dropped lies on the ground for a
 while, a bundle with its icon over it, for you or anyone playing with you to tap and pick up.
 
+**Junk.** Mark anything you'd sell as junk: **Mark as junk** in its card (or on its wheel), J over
+it on a computer, or △ on a controller with it in focus. A small tin tag shows on it, in the pack,
+the stash and a shop's Sell tab, and Sort puts it last. On any shop's Sell tab, **Sell all junk**
+sells all of it that shop buys at once, once you've said yes to the total ("Sell 12 things for 340
+gold?"); what it won't buy stays junk, and it says so (the adventurers' guild buys everything).
+Only what you mark is ever junk: what you pick up or buy never is, and a piece you put on, sell,
+drop or give away loses its mark.
+
 **Sound**, in three kinds, each with its own volume:
 
 - **Effects**: swords, staffs, hammers and fists swish; bows twang and spells crackle and chime;
@@ -818,9 +826,10 @@ client/                 The game (static files served to the browser)
     talk.js             The talk: who's talking, what they say, and the replies to choose from
     pack.js             The pack: the player live on a paperdoll, a slot for each part of them;
                         two pages of stacks (dragged, held, split, dropped, thrown away,
-                        sorted; tapped, a card beside it says what it is); the skills; a
-                        shop's wares (tapped, a row opens to say what it is). gearinfo.js says
-                        what gear does, and what's rolled on a shop's as it's bought
+                        sorted, marked as junk; tapped, a card beside it says what it is); the
+                        skills; a shop's wares (tapped, a row opens to say what it is), and its
+                        Sell tab's Sell all junk. gearinfo.js says what gear does, and what's
+                        rolled on a shop's as it's bought
     journal.js          The journal: the player's rank, their war missions, their requests,
                         their people, their company; the bestiary (bestiary.js: a page for
                         each creature met, as far as it's been found out); and the last ten

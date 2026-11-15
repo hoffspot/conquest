@@ -1,6 +1,7 @@
 // Growing stronger (docs/WAR.md M3): skills that grow by being used, each along a tree of its own
-// ranks; gear, bought and found, of better and worse make; gold; a pack to carry it all in, and a
-// stash to keep what isn't carried, at the chest in any adventurers' guild (STRONGROOM).
+// ranks; gear, bought and found, of better and worse make; gold; a pack to carry it all in (what
+// in it the player's marked as junk sold all at once at a shop: junkSale), and a stash to keep
+// what isn't carried, at the chest in any adventurers' guild (STRONGROOM).
 // And from all of it, a player's might, which brings the war on (war/war.js setMight).
 //
 // A skill grows by what it's used for: landing blows up close (blade), from afar (marksman),
@@ -499,6 +500,53 @@ export const bound = (thing) => Boolean(thing?.unique || thing?.horse);
 export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && (a.horse?.id ?? null) === (b.horse?.id ?? null) && sameGear(a, b);
 
 /**
+ * Whether a stack's marked as junk (docs/GAME.md *Junk*): the player's own mark on something they
+ * carry (or keep in their stash), for it to go with the rest at a shop that buys it (Sell all
+ * junk: junkSale). Only ever marked by the player; only `true` is a mark.
+ */
+export const isJunk = (stack) => stack?.junk === true;
+
+/** Whether a thing can be marked as junk: anything that sells somewhere (the guild buys everything), so not one bound to its hero. */
+export const junkable = (thing) => Boolean(ITEMS[thing?.id]) && !bound(thing);
+
+/**
+ * Whether two stacks go together as one (put onto each other, stowed, stacked as they're kept):
+ * alike, and both junk or neither. So nothing becomes junk by being put on a junk stack, and no
+ * mark's lost by a junk stack being put on one that isn't: only the player's marking changes it.
+ */
+export const stacksWith = (a, b) => alike(a, b) && isJunk(a) === isJunk(b);
+
+/**
+ * What selling all the junk carried to a shop (SHOPS: its id) comes to: each stack in the pack
+ * marked as junk that the shop buys (`buys`), each for what it fetches sold on its own (priceOf,
+ * `selling`, with the haggling given: a creature's part for all it's worth) times how many; and
+ * those it won't buy, still junk for a shop that will. Never the stash's. The host sells by it
+ * (core/host.js #sellJunk), and the pack asks first with its total (app/pack.js), so the two are
+ * the same. { sold: [{ index, stack, price }], count (things sold), price (gold for all of them),
+ * kept: [{ index, stack }], left (things kept) }
+ */
+export function junkSale(pack, shop, { haggle = 0 } = {}) {
+    const sold = [];
+    const kept = [];
+
+    pack.forEach((stack, index) => {
+        if (!isJunk(stack) || bound(stack)) {
+            return;
+        }
+
+        if (buys(shop, stack.id)) {
+            sold.push({ index, stack, price: priceOf(stack, { haggle, selling: true }) * stack.count });
+        } else {
+            kept.push({ index, stack });
+        }
+    });
+
+    const things = (list) => list.reduce((sum, { stack }) => sum + stack.count, 0);
+
+    return { sold, count: things(sold), price: sold.reduce((sum, { price }) => sum + price, 0), kept, left: things(kept) };
+}
+
+/**
  * A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
  * level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
  * legendary weapon) its effect, (a unique) which it is and (a graded one) its grade, (a mace) its
@@ -585,9 +633,10 @@ const isPlace = (place) => Number.isInteger(place) && place >= 0 && place < STRO
 const matches = (stack, id, quality, boost) => stack?.id === id && (quality === null || stack.quality === quality) && (boost === null || (stack.boost ?? null) === boost);
 const isCount = (count) => Number.isInteger(count) && count > 0;
 
-// A pack as kept: its slots, each a stack ({ id, quality, count }) or null, in their places; and
-// one kept before things stacked (a list of things, one each), each put in, those alike together.
-// (A tab of the stash as kept the same, `size` places of it: STRONGROOM)
+// A pack as kept: its slots, each a stack ({ id, quality, count, and `junk` if it's marked so:
+// isJunk }) or null, in their places; and one kept before things stacked (a list of things, one
+// each), each put in, those alike together. (A tab of the stash as kept the same, `size` places
+// of it: STRONGROOM)
 function packOf(kept, size = PACK_SIZE) {
     const pack = Array(size).fill(null);
     const loose = [];
@@ -597,7 +646,8 @@ function packOf(kept, size = PACK_SIZE) {
             return;
         }
 
-        const stack = { ...thingOf(item), count: isCount(item.count) ? item.count : 1 };
+        const thing = thingOf(item);
+        const stack = { ...thing, count: isCount(item.count) ? item.count : 1, ...(isJunk(item) && junkable(thing) ? { junk: true } : {}) };
 
         if (isCount(item.count) && Number.isInteger(slot) && slot >= 0 && slot < size && !pack[slot]) {
             pack[slot] = stack;
@@ -607,7 +657,7 @@ function packOf(kept, size = PACK_SIZE) {
     });
 
     for (const stack of loose) {
-        const into = pack.findIndex((each) => alike(each, stack));
+        const into = pack.findIndex((each) => stacksWith(each, stack));
         const slot = into >= 0 ? into : pack.indexOf(null);
 
         if (slot >= 0) {
@@ -633,14 +683,15 @@ function strongroomOf(kept) {
 
 // Stacks put in order (a pack's, or a tab of the stash's, `size` places): gear first (by where
 // it's worn, the best made first), then things to use, then tomes, then creatures' parts; things
-// alike put together. Its places, the rest empty
+// alike put together; and what's marked as junk after all the rest, in the same order (isJunk).
+// Its places, the rest empty
 function inOrder(stacks, size) {
     const order = (stack) => {
         const def = ITEMS[stack.id];
         const group = def.slot ? 0 : def.use && !def.tome && !def.part ? 1 : def.tome ? 2 : 3;
         const slot = def.slot ? GEAR_SLOTS.findIndex(({ takes }) => takes === def.slot) : 0;
 
-        return [group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
+        return [isJunk(stack) ? 1 : 0, group, slot, -Object.keys(QUALITIES).indexOf(stack.quality ?? "common"), def.label];
     };
     const sorted = packOf(stacks.filter(Boolean), size).filter(Boolean);
 
@@ -657,7 +708,8 @@ function inOrder(stacks, size) {
 // another's: to the place `to`, onto things alike there, into it if it's empty, or swapped with
 // what's there; with no `to`, onto the first stack of things alike in the other row, or else into
 // its first empty place (`full`, the reason, if there's none). Nothing changed unless it's done.
-// The reason it can't be, or null
+// (Alike, and junk or not as it is: stacksWith. Its mark goes with it.) The reason it can't be,
+// or null
 function moveAcross(from, at, into, to, full) {
     const moving = from[at];
 
@@ -667,7 +719,7 @@ function moveAcross(from, at, into, to, full) {
             return null;
         }
 
-        const onto = into.findIndex((each) => alike(each, moving));
+        const onto = into.findIndex((each) => stacksWith(each, moving));
         const place = onto >= 0 ? onto : into.indexOf(null);
 
         if (place < 0) {
@@ -686,7 +738,7 @@ function moveAcross(from, at, into, to, full) {
 
     const there = into[to];
 
-    if (alike(moving, there)) {
+    if (stacksWith(moving, there)) {
         into[to] = { ...there, count: there.count + moving.count };
         from[at] = null;
     } else {
@@ -907,7 +959,10 @@ export class Progress {
         this.spellXp = Object.fromEntries(Object.entries(spellXp ?? {}).filter(([id, xp]) => SPELLS[id]?.grows && Number(xp) > 0).map(([id, xp]) => [id, Number(xp)]));
         this.gold = Math.max(0, Math.floor(Number(gold) || 0));
 
-        /** The pack's slots: each a stack of things alike ({ id, quality, count, and a wand's boost }), or null. */
+        /**
+         * The pack's slots: each a stack of things alike ({ id, quality, count, and a wand's
+         * boost; `junk`, marked as junk: markJunk }), or null.
+         */
         this.pack = packOf(pack);
 
         /**
@@ -1212,15 +1267,18 @@ export class Progress {
 
     /**
      * Put something in the pack (`count` of it): on the first stack of things alike, or else in
-     * the first empty slot. Whether there was room.
+     * the first empty slot. Whether there was room. What comes in isn't junk, so it never goes on
+     * a stack that is (stacksWith); but for something of the player's own coming back as it was
+     * (`junk`: thrown away and taken back, core/host.js #undiscard).
      */
-    stow(item, count = 1) {
+    stow(item, count = 1, { junk = false } = {}) {
         if (!ITEMS[item?.id] || !isCount(count)) {
             return false;
         }
 
-        const thing = thingOf(item);
-        const onto = this.pack.findIndex((stack) => alike(stack, thing));
+        const made = thingOf(item);
+        const thing = junk && junkable(made) ? { ...made, junk: true } : made;
+        const onto = this.pack.findIndex((stack) => stacksWith(stack, thing));
         const slot = onto >= 0 ? onto : this.pack.indexOf(null);
 
         if (slot < 0) {
@@ -1303,7 +1361,9 @@ export class Progress {
 
     /**
      * Take `count` things off the stack in a slot (the whole stack, with no count): what was
-     * taken ({ id, quality, count }), or null if there aren't so many.
+     * taken ({ id, quality, count }), or null if there aren't so many. What's taken is as a thing
+     * is kept (thingOf), without a junk mark: whatever leaves the hero (sold, dropped, given,
+     * traded, used, worn) is junk no longer; what's left of the stack is as it was.
      */
     take(slot, count = this.pack[slot]?.count) {
         const stack = isSlot(slot) ? this.pack[slot] : null;
@@ -1319,7 +1379,8 @@ export class Progress {
 
     /**
      * Move the stack in a slot to another: into an empty one, onto a stack of things alike (put
-     * together), or swapped with what's there. Returns the reason it can't be, or null.
+     * together; junk only with junk: stacksWith), or swapped with what's there. Returns the reason
+     * it can't be, or null.
      */
     move(from, to) {
         if (!isSlot(from) || !isSlot(to) || !this.pack[from]) {
@@ -1332,7 +1393,7 @@ export class Progress {
 
         const [moving, there] = [this.pack[from], this.pack[to]];
 
-        if (alike(moving, there)) {
+        if (stacksWith(moving, there)) {
             this.pack[to] = { ...there, count: there.count + moving.count };
             this.pack[from] = null;
         } else {
@@ -1345,7 +1406,7 @@ export class Progress {
 
     /**
      * Split `count` things off the stack in a slot, into another (`to`, which must be empty; or
-     * the first empty one). Returns the reason it can't be, or null.
+     * the first empty one), both still junk if it was. Returns the reason it can't be, or null.
      */
     split(slot, count, to = this.pack.indexOf(null)) {
         const stack = isSlot(slot) ? this.pack[slot] : null;
@@ -1367,7 +1428,9 @@ export class Progress {
     /**
      * Put on (or take up) one of the pieces of gear in a slot of the pack, in its slot (a ring, on
      * the hand asked for: `to`, ring1 or ring2; else a bare one, else the first): what it replaces
-     * goes into the pack, where it was if it can. Returns the reason it can't be, or null:
+     * goes into the pack, where it was if it can. What's worn is never junk: one marked so is
+     * worn without its mark, and what comes off comes into the pack unmarked. Returns the reason
+     * it can't be, or null:
      * "item" (nothing to wear there), "slot" (it doesn't go there), "twoHanded" (the weapon takes
      * both hands), "bow" (a bow's other hand takes only a quiver), "quiver" (a quiver only with a
      * bow), "unarmed" (spiked boots off with nothing else to fight with), "full".
@@ -1407,7 +1470,7 @@ export class Progress {
         const item = this.take(index, 1);
         const off = [this.gear[slot], offToo ? this.gear.offHand : null].filter(Boolean);
 
-        if (!off.every((piece, k) => (k === 0 && !this.pack[index] && !this.pack.some((each) => alike(each, piece)) ? Boolean((this.pack[index] = { ...thingOf(piece), count: 1 })) : this.stow(piece)))) {
+        if (!off.every((piece, k) => (k === 0 && !this.pack[index] && !this.pack.some((each) => stacksWith(each, piece)) ? Boolean((this.pack[index] = { ...thingOf(piece), count: 1 })) : this.stow(piece)))) {
             this.pack = before;
 
             return "full";
@@ -1439,7 +1502,8 @@ export class Progress {
             return "unarmed";
         }
 
-        if (to !== null && (!isSlot(to) || (this.pack[to] && !alike(this.pack[to], piece)))) {
+        // (Into a slot empty, or holding things alike that aren't junk: what comes off isn't)
+        if (to !== null && (!isSlot(to) || (this.pack[to] && !stacksWith(this.pack[to], piece)))) {
             return isSlot(to) ? "full" : "item";
         }
 
@@ -1506,10 +1570,45 @@ export class Progress {
 
     /**
      * Put the pack in order: gear first (by where it's worn, the best made first), then things to
-     * use, then tomes, then creatures' parts; things alike put together.
+     * use, then tomes, then creatures' parts; things alike put together; what's marked as junk
+     * last of all.
      */
     sort() {
         this.pack = inOrder(this.pack, PACK_SIZE);
+
+        return null;
+    }
+
+    /**
+     * Mark the stack in a slot of the pack as junk (`junk` true), or not (false): the player's
+     * own choice, and nothing else ever marks anything; what's marked goes with the rest at a
+     * shop that buys it (Sell all junk: junkSale). Returns the reason it can't be, or null: "item"
+     * (nothing there), "command" (`junk` neither true nor false), "bound" (a unique or a horse's
+     * whistle: no shop buys one). Marked here, in the pack: a thing in the stash keeps the mark
+     * it went in with.
+     */
+    markJunk(index, junk) {
+        const stack = isSlot(index) ? this.pack[index] : null;
+
+        if (!stack) {
+            return "item";
+        }
+
+        if (junk !== true && junk !== false) {
+            return "command";
+        }
+
+        if (junk && !junkable(stack)) {
+            return "bound";
+        }
+
+        const marked = { ...stack, junk: true };
+
+        if (!junk) {
+            delete marked.junk;
+        }
+
+        this.pack[index] = marked;
 
         return null;
     }
@@ -1590,8 +1689,9 @@ export class Progress {
 
     /**
      * Everything in the pack that stacks with what a tab of the stash holds already (alike: the
-     * same kind, as well made, rolled the same) put onto it there. Returns the reason it can't be,
-     * or null: "strongroomLocked", "strongroomUnalike" (nothing carried stacks with anything in it).
+     * same kind, as well made, rolled the same; and junk with junk alone, stacksWith) put onto it
+     * there. Returns the reason it can't be, or null: "strongroomLocked", "strongroomUnalike"
+     * (nothing carried stacks with anything in it).
      */
     stowAlike(tab) {
         if (!this.#tabOpen(tab)) {
@@ -1602,7 +1702,7 @@ export class Progress {
         let moved = 0;
 
         this.pack.forEach((stack, index) => {
-            const onto = stack ? into.findIndex((each) => alike(each, stack)) : -1;
+            const onto = stack ? into.findIndex((each) => stacksWith(each, stack)) : -1;
 
             if (onto >= 0) {
                 into[onto] = { ...into[onto], count: into[onto].count + stack.count };
