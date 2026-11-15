@@ -398,6 +398,31 @@ describe("a battle fought (core/engagement.js stepEngagement)", () => {
         assert.equal(centre.brokeAt, null);
         assert.ok(told.some(({ change, side, part }) => change === "rally" && side === "b" && part === "centre"));
     });
+
+    it("leaves a body gone whose formation broke and ran, newcomers in it or not: they'd seek no foe (battle.js #patrol), so its side stays beaten", () => {
+        const { battle, engagement, step } = drawnUp({ size: 20 });
+
+        engagement.phase = "melee";
+        step(500);
+
+        for (const actor of battle.actors.filter(({ side }) => side === 1)) {
+            actor.dead = true;
+        }
+
+        assert.deepEqual(step(1000), [1]);
+
+        const centre = engagement.sides[1].bodies.find(({ part }) => part === "centre");
+
+        battle.formation(centre.formation, { broken: true });
+
+        for (const n of [0, 1]) {
+            battle.actors.push({ id: `1/newcomer-${n}`, x: 0, y: 60, dead: false, target: null, power: { melee: 1 }, formation: { id: centre.formation, slot: [n, 0], role: "front" }, side: 1 });
+        }
+
+        assert.deepEqual(step(1500), [1]);
+        assert.equal(centre.alive, 2);
+        assert.equal(centre.state, "gone");
+    });
 });
 
 describe("holding the line (core/engagement.js FIELD charge, holdOf)", () => {

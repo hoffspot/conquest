@@ -78,11 +78,29 @@ function heldOf(pack) {
     return held;
 }
 
-/** Some of a thing, in words: "an iron ingot", "3 iron ingots". */
+// What's had by the piece, not counted ("oak wood", "moonsilk", "tanned leather", "quartz"): so
+// many pieces of it
+const UNCOUNTED = /(wood|silk|leather|hair|fur|mahogany|grave-iron|quartz|jasper|dust|ectoplasm|jelly|blood|sap)$/;
+
+// A word for more than one of it: "ingot" ingots, "ruby" rubies, "tooth" teeth; one that's already
+// more than one ("rings") as it is
+const more = (word) => (word.endsWith("tooth") ? `${word.slice(0, -5)}teeth` : /[^aeiou]y$/.test(word) ? `${word.slice(0, -1)}ies` : /(s|x|z|ch|sh)$/.test(word) ? word : `${word}s`);
+
+/** Some of a thing, in words: "an iron ingot", "3 iron ingots", "2 bolts of linen", "2 pieces of oak wood". */
 export function thingsSaid({ id, count = 1 }) {
     const name = itemLabel({ id }).toLowerCase();
 
-    return count > 1 ? `${count} ${name.endsWith("s") ? name : `${name}s`}` : `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
+    if (count <= 1) {
+        return `${/^[aeiou]/.test(name) ? "an" : "a"} ${name}`;
+    }
+
+    const [head, of] = name.split(/(?= of )/);
+
+    if (of) {
+        return `${count} ${more(head)}${of}`;
+    }
+
+    return UNCOUNTED.test(name) ? `${count} pieces of ${name}` : `${count} ${more(name)}`;
 }
 
 // So many of a kind of ingredient, in words: "a metal", "2 of a metal"

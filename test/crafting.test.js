@@ -17,7 +17,7 @@ import { GEAR, levelOf, STATS, UNIFORM_PEOPLES } from "../client/js/core/gear.js
 import { REFUSALS } from "../client/js/core/host.js";
 import { BLOW_EFFECTS } from "../client/js/core/legendary.js";
 import { BLOW_CAP, FAMILIES, INGREDIENT_KINDS, INGREDIENTS, MAKE_STRENGTH, MATERIALS, NEW_BEASTS, ON_BLOW, RANGES, UNHOLY } from "../client/js/core/materials.js";
-import { buys, ITEMS, priceOf, QUALITIES, SHOPS, thingOf } from "../client/js/core/progress.js";
+import { buys, HAGGLE_CAP, ITEMS, priceOf, QUALITIES, SHOPS, thingOf } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CRAFT_FEE, CRAFTER_TOWNS, CRAFTERS, RECIPES, SALVAGE } from "../client/js/core/recipes.js";
 import { PARTS, SPOILS } from "../client/js/core/spoils.js";
@@ -584,19 +584,56 @@ describe("gear broken down (crafting.js salvageOf, junkSalvage)", () => {
             }
         }
 
+        // (At the hundredth level nearly every piece is worth it all, its make and one for each
+        // two; these few are worth less than that sells for, and give back less: the next test)
+        const capped = [];
+
         for (const base of Object.keys(GEAR)) {
             for (const make of MAKES) {
-                const [{ id, count }] = salvageOf({ id: base, quality: make });
+                const [{ id, count }] = salvageOf({ id: base, quality: make, level: 100 });
 
                 assert.equal(INGREDIENTS[id].kind, RECIPES[base].slots[0].kind);
-                assert.equal(INGREDIENTS[id].make, make);
-                assert.equal(count, Math.ceil(RECIPES[base].slots[0].count / 2));
+
+                if (INGREDIENTS[id].make !== make || count !== Math.ceil(RECIPES[base].slots[0].count / 2)) {
+                    capped.push(`${make} ${base}`);
+                }
             }
         }
+
+        assert.deepEqual(capped, ["legendary gambeson", "legendary belt", "veryRare trousers", "legendary trousers", "legendary travelCloak"]);
 
         assert.deepEqual(salvageOf({ id: "plate", quality: "legendary" }), [{ id: "orichalcumIngot", count: 2 }]);
         assert.deepEqual(salvageOf({ id: "potion" }), []);
         assert.deepEqual(salvageOf(null), []);
+    });
+
+    it("never gives back more than the piece sells for: fewer, then the make below, so nothing bought and broken down sells for more than it cost", () => {
+        const sold = (yields, haggle = 0) => yields.reduce((sum, { id, count }) => sum + priceOf({ id }, { selling: true, haggle }) * count, 0);
+
+        for (const base of Object.keys(GEAR)) {
+            for (const make of MAKES) {
+                for (const level of [1, 10, 30, 50, 70, 100]) {
+                    const item = { id: base, quality: make, level };
+                    const yields = salvageOf(item);
+                    const [{ id, count }] = yields;
+                    const said = `${make} ${base}, level ${level}`;
+
+                    assert.equal(INGREDIENTS[id].kind, RECIPES[base].slots[0].kind, said);
+                    assert.ok(MAKES.indexOf(INGREDIENTS[id].make) <= MAKES.indexOf(make), said);
+                    assert.ok(count >= 1 && count <= Math.ceil(RECIPES[base].slots[0].count / 2), said);
+                    assert.ok(sold(yields) <= priceOf(item, { selling: true }) || (INGREDIENTS[id].make === "common" && count === 1), said);
+
+                    // (Bought at the most haggling there is, and what comes back sold so too)
+                    assert.ok(sold(yields, HAGGLE_CAP) <= priceOf(item, { haggle: HAGGLE_CAP }), said);
+                }
+            }
+        }
+
+        // (A legendary gambeson of the first level sells for 300: two moonsilk would be 640, one
+        // 320; two gloomsilk are 300. Of the sixtieth, it's worth one moonsilk)
+        assert.equal(priceOf({ id: "gambeson", quality: "legendary", level: 1 }, { selling: true }), 300);
+        assert.deepEqual(salvageOf({ id: "gambeson", quality: "legendary", level: 1 }), [{ id: "gloomsilk", count: 2 }]);
+        assert.deepEqual(salvageOf({ id: "gambeson", quality: "legendary", level: 60 }), [{ id: "moonsilk", count: 1 }]);
     });
 
     it("is done at a crafter that makes the piece, no finer than it works, never what's bound to its hero", () => {

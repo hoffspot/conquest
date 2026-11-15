@@ -707,9 +707,10 @@ How they're placed (setpieces/town.js `craftersOf`, stage 4):
   were. **A world laid out before keeps every building it had**, each where it stood: only a few
   of its houses near the market are shops now (`test/shops.test.js` lays places out with and
   without them, `crafters: []`, and finds nothing else changed).
-- **A place too small**: none where it would leave the place `CRAFTER_SPARE` houses (3) or fewer,
-  along its streets and behind them (some lizard folk's and dark elves' villages of two or three
-  houses), and the place is never laid out again for one: it does without. Every village, town
+- **A place too small**: none in a place of `CRAFTER_SPARE` houses (3) or fewer, along its
+  streets and behind them, so none is left with fewer than three (some lizard folk's and dark
+  elves' villages of two or three houses), and the place is never laid out again for one: it does
+  without. Every village, town
   and city of the humans', and every capital of every people's, has room.
 
 ## Salvage
@@ -719,6 +720,17 @@ and its make, and one more for each two more of it its recipe takes (plate, thre
 back). Any gear, made or found. A crafter breaks down what it makes, no finer than it works, never
 what's bound to its hero (`salvagesAt`). No fee. Nothing else comes back (not its essence, not its
 second).
+
+**Never worth more than the piece.** What comes back never sells for more than the piece itself
+would (progress.js `priceOf`; haggling counts the same on both, so it cancels). Where it would,
+fewer come back, then the make below, as many again, till it doesn't. Otherwise a piece bought
+could be broken down into parts the guild pays for in full, for more than it cost: a castle
+quartermaster sells legendary gambesons without end, 488 gold at the first level with the most
+haggling, and two moonsilk sell for 864. Now that gambeson gives back two gloomsilk (300, what it
+sells for). The higher a piece's level, the more it's worth: at the hundredth every piece gives
+back the whole but five, a legendary gambeson (one moonsilk, not two), belt, trousers and
+travelling cloak, and very rare trousers, whose parts are worth more than such light gear sells
+for (`test/crafting.test.js` names them).
 
 | Kind | common | fine | masterwork | rare | very rare | legendary |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1045,7 +1057,10 @@ server has a field of that name already.
 - **What's sold**: common and fine only; masterwork and finer only off creatures or back from
   broken-down gear.
 - **Salvage**: free; one ingredient of the piece's main kind and make (two for the biggest), even
-  of the legendary (a legendary sword gives an orichalcum ingot); any gear, made or found.
+  of the legendary (a legendary sword gives an orichalcum ingot); any gear, made or found; never
+  worth more than the piece sells for (*Salvage*: else bought gear broken down made gold without
+  end). Light legendary pieces of a low level give back less: a crafted piece could be marked
+  and give back its whole always, but that's a field on every piece, kept and sent.
 - **Strength**: a legendary ingredient 2.5 times a common one's power, and the blows each up to
   0.4 of a blow's harm, all gear together.
 - **The new beasts**: nine, golems, treants, a spider, a scarab, a moth, borrowing models there

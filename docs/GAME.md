@@ -327,8 +327,8 @@ a hamlet's middle is a green. Its houses have one storey, or two now and then.
   made over as the specialists' are, from the house nearest the market whose door opens onto a
   street, after everything else (the stable too), so every building stands where it did before
   there were any: a world laid out before keeps every building it had, a few of its houses made
-  shops. None where it would leave the place `CRAFTER_SPARE` (3) houses or fewer (a lizard
-  folk's village of two houses), and never laid out again for one. They can be entered.
+  shops. None in a place of `CRAFTER_SPARE` (3) houses or fewer, so none is left with fewer than
+  three (a lizard folk's village of two houses), and never laid out again for one. They can be entered.
 - **Trees** dotted about the open ground left.
 
 **Each people's own** (`layoutTown({ ..., people })`, `PEOPLE_TOWNS`): the same builder, laid

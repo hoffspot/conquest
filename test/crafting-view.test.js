@@ -17,7 +17,7 @@ import { CREATURES } from "../client/js/core/creatures.js";
 import { GEAR, STATS } from "../client/js/core/gear.js";
 import { FAMILIES, INGREDIENTS } from "../client/js/core/materials.js";
 import { gradeOf, itemLabel, ITEMS } from "../client/js/core/progress.js";
-import { CRAFTERS, RECIPES } from "../client/js/core/recipes.js";
+import { CRAFTERS, RECIPES, SALVAGE } from "../client/js/core/recipes.js";
 import { SPOILS } from "../client/js/core/spoils.js";
 
 const stack = (id, count = 1, more = {}) => ({ id, quality: "common", count, ...more });
@@ -211,6 +211,18 @@ describe("what breaking down gives back, in words (app/craftinfo.js salvageInfo)
         assert.equal(salvageInfo(stack("sword", 1, { unique: "greenbrand" }), "smith"), null, "(what's bound)");
         assert.equal(yieldsSaid([{ id: "ironIngot", count: 2 }, { id: "steelIngot", count: 1 }]), "2 iron ingots and a steel ingot");
         assert.equal(thingsSaid({ id: "amethyst" }), "an amethyst");
+    });
+
+    it("says more than one of everything broken down gives back as it's said: bolts of linen, pieces of oak wood, star rubies", () => {
+        assert.deepEqual(
+            Object.values(SALVAGE.cloth).map((id) => thingsSaid({ id, count: 2 })),
+            ["2 bolts of linen", "2 bolts of silk", "2 pieces of black widow silk", "2 wraith's shrouds", "2 pieces of gloomsilk", "2 pieces of moonsilk"],
+        );
+        assert.deepEqual(Object.values(SALVAGE.wood).map((id) => thingsSaid({ id, count: 3 })), ["3 pieces of oak wood", "3 pieces of ash wood", "3 pieces of blighted heartwood", "3 pieces of ironwood", "3 pieces of ghostwood", "3 pieces of sylvanwood"]);
+        assert.deepEqual(Object.values(SALVAGE.gem).map((id) => thingsSaid({ id, count: 2 })), ["2 pieces of quartz", "2 amethysts", "2 basilisk's eyes", "2 sapphires", "2 diamonds", "2 star rubies"]);
+        assert.deepEqual(Object.values(SALVAGE.leather).map((id) => thingsSaid({ id, count: 2 })), ["2 pieces of tanned leather", "2 pieces of hardened leather", "2 troll hides", "2 wyvern scales", "2 drake scales", "2 dreadthorn scales"]);
+        assert.equal(thingsSaid({ id: "ogreTooth", count: 2 }), "2 ogre teeth");
+        assert.equal(thingsSaid({ id: "bloodflyWing", count: 2 }), "2 bloodfly wings");
     });
 });
 

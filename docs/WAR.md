@@ -2785,9 +2785,9 @@ from where it came out; the town's to 80% of its own, coming out from where its 
 joins the weakest of its side's line's bodies still standing, its ranks opening for them: given
 places behind its hindmost rank as it stood before they came, five abreast, so that a wave of 22
 stands five ranks deep. With none of its line standing, they're put into its centre's, and a body
-that was gone (none left in it) with someone in it again rallies and comes on again
-(core/engagement.js), so the side isn't beaten with them still standing: a band that fights to the
-last does. (Till
+that was gone (none left in it) with someone in it again rallies and comes on again, unless its
+formation broke and ran, its soldiers seeking no foe (core/engagement.js), so the side isn't
+beaten with them still standing: a band that fights to the last does. (Till
 `NET_VERSION` 178 each newcomer was put a rank behind the one before, a wave strung out one to a
 rank: in a bandits' invasion of 360, the first wave of 95 was given places as far as 552 m back,
 and over two minutes its soldiers set off on 159 paths longer than 80 m, then turned back as the

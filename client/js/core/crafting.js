@@ -21,7 +21,7 @@
 
 import { DESIGNS, GEAR, levelFactor, levelOf, rollBlock, STATS, UNIFORM_PEOPLES } from "./gear.js";
 import { FAMILIES, INGREDIENTS, MAKE_STRENGTH, ON_BLOW, RANGES } from "./materials.js";
-import { bound, isJunk, ITEMS, QUALITIES, rollBoost } from "./progress.js";
+import { bound, isJunk, ITEMS, priceOf, QUALITIES, rollBoost } from "./progress.js";
 import { CAPITAL_BEST, CRAFT_FEE, CRAFTERS, RECIPES, SALVAGE } from "./recipes.js";
 import { SPOILS } from "./spoils.js";
 
@@ -382,7 +382,14 @@ export function recipesAt(shop, { capital = false } = {}) {
     );
 }
 
-/** What a piece of gear broken down gives back (recipes.js SALVAGE): [{ id, count }], by its main material's kind and its make; none for anything else. */
+/**
+ * What a piece of gear broken down gives back (recipes.js SALVAGE): [{ id, count }], by its main
+ * material's kind and its make, one for each two of it its recipe takes; none for anything else.
+ * Never worth more than the piece sells for (progress.js priceOf, haggling the same on both), so
+ * that nothing bought and broken down sells for more than it cost: fewer of it, then the make
+ * below, as many again, till it isn't (a legendary gambeson of the first level, sold for 300, gives
+ * back two gloomsilk, not two moonsilk worth 640).
+ */
 export function salvageOf(item) {
     const recipe = item && Object.hasOwn(RECIPES, item.id) ? RECIPES[item.id] : null;
 
@@ -391,8 +398,17 @@ export function salvageOf(item) {
     }
 
     const [{ kind, count }] = recipe.slots;
+    const most = Math.ceil(count / 2);
+    const worth = priceOf(item, { selling: true });
+    const makes = Object.keys(QUALITIES);
+    let make = makes.indexOf(QUALITIES[item.quality] ? item.quality : "common");
+    let many = most;
 
-    return [{ id: SALVAGE[kind][QUALITIES[item.quality] ? item.quality : "common"], count: Math.ceil(count / 2) }];
+    while ((make > 0 || many > 1) && priceOf({ id: SALVAGE[kind][makes[make]] }, { selling: true }) * many > worth) {
+        [make, many] = many > 1 ? [make, many - 1] : [make - 1, most];
+    }
+
+    return [{ id: SALVAGE[kind][makes[make]], count: many }];
 }
 
 /**
