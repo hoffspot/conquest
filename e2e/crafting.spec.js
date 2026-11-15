@@ -66,10 +66,11 @@ async function intoTheSmithy(page) {
     await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor("player").map)).not.toBe("town");
 }
 
-// Up to the smith, talked to as a tap does, and the choice to see their wares chosen: the pack open
-// on Buy. Played on by hand till the talk's begun. The smith's id
-async function atTheSmith(page) {
-    const keeper = await page.evaluate(() => {
+// Up to the smith, talked to as a tap does, and a choice chosen (`choice`, its words: to see their
+// wares, the pack open on Buy; "What can you make?", on Craft). Played on by hand till the talk's
+// begun. The smith's id
+async function atTheSmith(page, choice = "for sale") {
+    const keeper = await page.evaluate((choice) => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
         const smith = game.battle.actors.find((actor) => actor.role === "smith" && actor.map === player.map);
@@ -84,11 +85,11 @@ async function atTheSmith(page) {
 
         const { conversation } = game.talking;
 
-        game.talk.onChoose(conversation.choices.findIndex(({ text }) => /for sale/i.test(text)));
+        game.talk.onChoose(conversation.choices.findIndex(({ text }) => text.toLowerCase().includes(choice)));
         game.advance(0.05, { render: false });
 
         return smith.id;
-    });
+    }, choice);
 
     await expect(page.locator(".pack .pack-title")).toContainText("Trading with");
 
@@ -192,16 +193,15 @@ test("the Craft tab at the smith's: all it makes by piece, what's missing marked
     await expect(pack.locator(".craft-why")).toHaveText(REFUSALS.gold);
     expect(await carried(page)).toEqual([[0, "steelIngot", 2, false], [1, "hardenedLeather", 1, false], [2, "tannedLeather", 2, false], [3, "demonHorn", 1, false], [4, "ironIngot", 3, false]]);
 
-    // With it (opened again on its Craft tab, as a keeper's "What can you make?" will: openCrafting)
-    await page.evaluate((keeper) => {
+    // With it: the smith asked "What can you make?", the pack opened on its Craft tab
+    await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.progress.gold = 1000;
         game.hud.setGold(1000);
         game.closePack();
-
-        return game.openCrafting(keeper);
-    }, keeper);
+    });
+    expect(await atTheSmith(page, "what can you make")).toBe(keeper);
     await expect(modes.getByRole("tab", { name: "Craft" })).toHaveAttribute("aria-selected", "true");
     await sword.locator('.craft-main[data-main="steelIngot"]').click();
     await slot(2).getByRole("button", { name: "Demon's horn: 1 carried" }).click();
