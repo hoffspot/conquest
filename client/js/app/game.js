@@ -78,7 +78,7 @@ import { dress, HELD_LOOKS, UNIQUE_LOOKS } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, gearLook, levelOf, offHandFree } from "../core/gear.js";
 import { EFFECTS } from "../core/legendary.js";
 import { fightLook, mightTier } from "../core/might.js";
-import { ABILITIES, bound, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, STRONGROOM, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { ABILITIES, bound, buys, isJunk, itemLabel, ITEMS, junkable, junkSale, priceOf, Progress, shopOrder, STRONGROOM, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
 import { atLevel, shopPrice, wareAt } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
@@ -1243,7 +1243,7 @@ function riftCry(crier, rift) {
 // at its fullest
 const RIFT_SKY = 0.6;
 
-export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom"]);
+export const HOST_EVENTS = new Set(["open", "close", "peopled", "vacated", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "standard", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "messenger", "mission", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules", "order", "horse", "horseFell", "whistle", "hellRift", "brimstone", "strongroom", "junkSold"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -11850,6 +11850,13 @@ export class Game {
             this.sound?.play("drop");
         } else if (event.type === "bought" || event.type === "sold") {
             this.sound?.play("coins");
+        } else if (event.type === "junkSold") {
+            // (All the junk a shop buys sold at once: core/host.js #sellJunk; what it won't buy
+            // still junk, for a shop that will)
+            const left = event.left ? ` ${event.left === 1 ? "One thing they won't buy is" : `${event.left} things they won't buy are`} still marked as junk: the adventurers' guild buys everything.` : "";
+
+            this.hud.message(`You sell your junk: ${event.count === 1 ? "one thing" : `${event.count} things`} for ${event.price} gold.${left}`, left ? 4 : 2.5);
+            this.sound?.play("coins");
         } else if (event.type === "used" && event.on) {
             // (Given to one of their own: core/host.js #handOver)
             this.hud.message(`You give ${this.battle.actor(event.on)?.name ?? "them"} ${itemLabel(event.item).toLowerCase()}.`, 1.6);
@@ -14243,7 +14250,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), info: def.slot || def.charm ? describe(stack, progress, stashed ? { label, haggle, outside: true } : { index, label, haggle }) : null, giveTo: bound(stack) || stashed ? [] : this.#wearers(stack) };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : def.whistle ? "Blow" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !bound(stack) && (!this.shopping || buys(this.shopping.shop, stack.id)), bound: bound(stack), junkable: junkable(stack), info: def.slot || def.charm ? describe(stack, progress, stashed ? { label, haggle, outside: true } : { index, label, haggle }) : null, giveTo: bound(stack) || stashed ? [] : this.#wearers(stack) };
         };
         const pack = progress.pack.map((stack, index) => entry(stack, index));
         // (The stash, open at its chest: each tab bought and how full it is, those still to buy,
@@ -14271,6 +14278,9 @@ export class Game {
         // (Made for their might as they're bought: core/host.js #buy)
         const level = levelOf(might);
         const special = stock?.special ? atLevel(stock.special, level) : null;
+        // (Sell all junk: what it comes to here, as the host sells it, and what of it they won't
+        // buy: progress.js junkSale)
+        const sale = this.shopping && junkSale(progress.pack, this.shopping.shop, { haggle });
         const shop = this.shopping && {
             name: this.shopping.name,
             wares: (stock ? stock.wares : [...wares(this.shopping.shop, this.shopping.people, { tier: mightTier(might) }), ...this.host.threadWaresOf(this.shopping.keeper)])
@@ -14293,6 +14303,7 @@ export class Game {
                   }
                 : null,
             unwanted: this.shopping.shop === "guild" ? null : "They buy only their own line: the adventurers' guild buys everything.",
+            junk: { marked: progress.pack.filter(isJunk).length, count: sale.count, price: sale.price, left: sale.left, kept: sale.kept.map(({ stack }) => thingsOf(stack)) },
             preview: (item) => ({ about: aboutOf(item), info: ITEMS[item.id]?.slot || ITEMS[item.id]?.charm ? describe(item, progress, { label: itemLabel(item), haggle, ware: true }) : null }),
         };
 
@@ -14329,7 +14340,7 @@ export class Game {
     }
 
     #packCommand(asked, then = null) {
-        const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" ? { ...asked, to: this.shopping?.keeper } : asked;
+        const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" || asked.type === "sellJunk" ? { ...asked, to: this.shopping?.keeper } : asked;
         const worn = asked.type === "equip" || asked.type === "outfit" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
 
         return this.#command(command, (result) => {
@@ -14341,7 +14352,8 @@ export class Game {
                 this.hud.message(REFUSALS[result.reason] ?? CAST_FAILURES[result.reason] ?? "Can't do that.", 1.6);
                 this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
             } else {
-                const handled = worn ? wearSound(worn) : command.type === "undiscard" ? "pickup" : null;
+                // (Marked as junk, or not: the softest tick)
+                const handled = worn ? wearSound(worn) : command.type === "undiscard" ? "pickup" : command.type === "markJunk" ? "tap" : null;
 
                 if (handled) {
                     this.sound?.play(handled);
@@ -17106,6 +17118,7 @@ export class Game {
             case "loot":
             case "bought":
             case "sold":
+            case "junkSold":
             case "used":
             case "discarded":
             case "dropped":
@@ -18298,9 +18311,10 @@ export class Game {
     // --- Keys and the mouse's other buttons (app/keys.js: as the player's set them) ---
 
     // Where the player is, for which keys do what: talking, reading a book (the world's keys
-    // still working), or in the world
+    // still working), or in the world; with the Pack open, its own keys first (J marks a thing as
+    // junk there: app/keys.js "pack")
     #keyScopes() {
-        return this.talk?.open ? ["talk"] : this.reader?.open ? ["reading", "world"] : ["world"];
+        return [...(this.pack?.open ? ["pack"] : []), ...(this.talk?.open ? ["talk"] : this.reader?.open ? ["reading", "world"] : ["world"])];
     }
 
     /** The action a key pressed (as app/keys.js keyOf keeps it) asks for where the player is, or null. */
@@ -18394,6 +18408,15 @@ export class Game {
             event.preventDefault();
             event.stopPropagation();
         };
+
+        // (In the Pack: what's pointed at, or else chosen, marked as junk or not: app/pack.js)
+        if (id === "junk") {
+            if (this.pack?.junkKey()) {
+                taken();
+            }
+
+            return;
+        }
 
         if (this.talk?.open) {
             if (/^say[1-9]$/.test(id)) {
@@ -18545,6 +18568,15 @@ export class Game {
      */
     get padPanel() {
         return [this.reader, this.fate, this.pack, this.talk, this.journal, this.spellbook, this.partyPanel].find((panel) => panel?.open)?.panel ?? null;
+    }
+
+    /**
+     * △ pressed in the Pack (app/padplay.js): the thing in focus there (a slot of the pack, or
+     * what's carried on a shop's Sell tab) marked as junk, or not, as J does with the keys
+     * (app/pack.js). Whether it was one; `ask`, only whether it would be (its prompt).
+     */
+    padJunk(focused, { ask = false } = {}) {
+        return Boolean(this.pack?.open && (ask ? this.pack.canJunk(focused) : this.pack.junkAt(focused)));
     }
 
     /**

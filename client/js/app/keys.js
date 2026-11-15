@@ -12,12 +12,16 @@
 // button; the left button's the game's own tap, and the wheel zooms, so neither's set here).
 //
 // Every action has two: its main key and a spare. One key does only one action where the player is
-// (in the world, talking, or reading a book: SCOPES); set on another, the action that had it lets
-// it go (setKey: `taken`, to say so). The menu's key goes for every scope (Escape, as it comes: it
-// also closes a panel, stops a talk and puts a wheel away).
+// (in the world, talking, reading a book, or with the Pack open: SCOPES); set on another, the
+// action that had it lets it go (setKey: `taken`, to say so). The menu's key goes for every scope
+// (Escape, as it comes: it also closes a panel, stops a talk and puts a wheel away).
 
-/** Where an action's done: in the world, talking, reading a book, or anywhere ("any"). */
-export const SCOPES = Object.freeze(["world", "talk", "reading", "any"]);
+/**
+ * Where an action's done: in the world, talking, reading a book, with the Pack open (its keys
+ * before the world's: J marks a thing as junk there, and opens the Journal anywhere else), or
+ * anywhere ("any").
+ */
+export const SCOPES = Object.freeze(["world", "talk", "reading", "pack", "any"]);
 
 /** The page's groups of actions, in order, and what each is called. */
 export const GROUPS = Object.freeze([
@@ -66,6 +70,7 @@ export const KEY_ACTIONS = Object.freeze([
     action("party", "The Party panel", "panels", ["KeyP"]),
     action("chat", "The party's chat", "panels", ["Enter"]),
     action("readyCheck", "A ready check of your party (its leader)", "panels", ["KeyY"]),
+    action("junk", "Mark as junk, or not (in the Pack: what's pointed at or chosen)", "panels", ["KeyJ"], { scope: "pack" }),
     action("map", "The world map", "panels", ["KeyM"]),
     action("panels", "The ring of panels (held)", "panels", ["KeyO"]),
     action("menu", "The menu, or back out of what's open", "panels", ["Escape"], { scope: "any" }),
@@ -201,7 +206,7 @@ export function keysChanged(keys) {
 
 /**
  * What each key does where the player is (`scopes`: those they're in, the first first: reading a
- * book, its keys before the world's): { key: action id }.
+ * book, or the Pack open, its keys before the world's): { key: action id }.
  */
 export function keyMap(keys, scopes = ["world"]) {
     const map = new Map();

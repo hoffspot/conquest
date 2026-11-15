@@ -37,6 +37,14 @@
 // shown in its card. Sort puts the tab shown in order, and Stow alike puts into it everything
 // carried that stacks with what it holds already.
 //
+// Junk (core/progress.js isJunk; docs/GAME.md *Junk*): anything carried that sells somewhere can
+// be marked as junk, or not, in its card (Mark as junk, Not junk), on its wheel (SW), with J (what
+// the pointer's over, or else what's chosen) or a controller's Triangle (what's in focus). What's
+// marked shows a tag on its slot (in the pack and the stash) and on its row on a shop's Sell tab,
+// and its card says so. On every shop's Sell tab, Sell all junk sells all the junk that shop buys
+// at once, asked first in the panel itself with what it comes to ("Sell 12 things for 340 gold?":
+// Sell, or Not now); what it won't buy is said, still junk, for a shop that will.
+//
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
@@ -63,7 +71,7 @@ const ABOUT_GAP = 12;
 const ABOUT_SIDE = 220;
 
 // Where each thing that can be done with something goes on its wheel
-const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", drop: "w", toss: "nw" };
+const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", junk: "sw", drop: "w", toss: "nw" };
 
 // Where each slot is round the paperdoll: down its left, down its right, and along its foot
 const DOLL = Object.freeze({ left: ["head", "chest", "bracers", "legs", "mainHand"], right: ["amulet", "cloak", "gloves", "belt", "offHand"], foot: ["ring1", "boots", "ring2"] });
@@ -74,8 +82,14 @@ const SHORT = Object.freeze({ mainHand: "Weapon" });
 // A padlock, on a tab of the stash still to buy
 const LOCK = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="5" y="11" width="14" height="10" rx="2" fill="currentColor"/></svg>';
 
+// A tag tied on, on a thing marked as junk (its slot's corner, its row on the Sell tab)
+const JUNK_TAG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12 L8.5 5 H22 V19 H8.5 Z" fill="currentColor" stroke="#1d1a16" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.5" cy="12" r="2" fill="#1d1a16"/></svg>';
+
 // Gold as it's shown at the stash: 10,000 (the same in every browser, whatever its language)
 const thousands = (gold) => String(gold).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+// How many things, in words: "one thing", "12 things"
+const thingsSaid = (count) => (count === 1 ? "one thing" : `${count} things`);
 
 // What stands for each slot when nothing's in it, faintly
 const PLACEHOLDERS = Object.freeze({ head: "nasalHelm", amulet: "amulet", cloak: "travelCloak", chest: "mail", bracers: "bracers", gloves: "gloves", belt: "belt", legs: "trousers", boots: "leatherBoots", ring1: "ring", ring2: "ring", mainHand: "sword", offHand: "roundShield" });
@@ -148,6 +162,11 @@ function card(thing, { named = true, count = 1, compare = "Put on instead of wha
 
         changes.append(element("li", "pack-compare-title", compare), ...info.compare.map(({ text, tone }) => element("li", `tone-${tone}`, text)));
         box.append(changes);
+    }
+
+    // (Marked as junk by the player: core/progress.js isJunk)
+    if (thing.junk) {
+        box.append(element("p", "pack-junk-note", "Marked as junk: Sell all junk sells it from your pack at any shop that buys it."));
     }
 
     if (worth && info?.price) {
@@ -237,6 +256,12 @@ export class PackPanel {
         // (At the stash: the tab still to buy asked about ({ tab, why: why it couldn't be bought,
         // if it was refused }), or null)
         this.buying = null;
+        // (On a shop's Sell tab: Sell all junk asked about ({ why: why it couldn't be sold, if it
+        // was refused }), or null)
+        this.junkAsk = null;
+        // (A thing marked as junk, or not, by a key or a controller: its slot or row given the
+        // focus back once it's shown again, { index })
+        this.refocus = null;
         this.selected = null;
         this.peeking = null;
         this.peeks = new WeakMap();
@@ -258,7 +283,9 @@ export class PackPanel {
          * player, offer, agree and cancel), a thing to put on an action wheel (its id), the
          * paperdoll turned (by an angle, radians), and to close; and a page turned (to hear it).
          * At the stash, its commands too (core/host.js "strongroom": `then` hears what came of
-         * one, { ok, words }: why not, said), and a tab of it turned to (`onTab`, from 0).
+         * one, { ok, words }: why not, said), and a tab of it turned to (`onTab`, from 0). A thing
+         * marked as junk, or not ("markJunk"), and all the junk sold ("sellJunk", with what the
+         * player was shown: its `price` and `count`; `then` as the stash's).
          */
         this.onCommand = () => {};
         this.onWheel = () => {};
@@ -284,12 +311,15 @@ export class PackPanel {
      * off hand behind a two-handed weapon; `only`: what alone it takes), totals (gearinfo.js
      * totals), pack: [a slot each: null, or { id, quality, count, label, about, use ("Drink",
      * "Eat", "Read", "Apply"), aimed (a spell's scroll: read at someone), equip ("Wear", "Wield"), takes (the slot a piece goes in), price (each, sold),
-     * wanted (whether the shop being traded with buys it), info }], shop: null or { name, wares:
+     * wanted (whether the shop being traded with buys it), junk (marked as junk), junkable (whether it
+     * can be: it sells somewhere), info }], shop: null or { name, wares:
      * [{ item, label, price, affordable, kind (what it's shown under), left (how many today, of
      * a shop with a daily stock) }] (in the order shown), special (its daily special, or null: {
      * item (as it is, rolls and all), label, price, affordable, left (whether it's still to be
      * had), about, info }),
-     * unwanted (what it won't buy, said, or null) }, trade: null or (trading
+     * unwanted (what it won't buy, said, or null), junk: { marked (stacks marked as junk), count
+     * and price (what of it they buy, and for how much in all: core/progress.js junkSale), left
+     * (how many things they won't buy), kept (those, in words) } }, trade: null or (trading
      * with another player) { name, mine, theirs (what each offers: { gold, items: [{ id, quality,
      * count, label }] }), agreed: { mine, theirs }, rev (which offers these are: the host's count of
      * them, said back in agreeing, so an offer changed meanwhile isn't agreed to unseen) } },
@@ -336,6 +366,11 @@ export class PackPanel {
             this.buying = null;
         }
 
+        // (Sell all junk asked about: no longer, with the shop shut or nothing left it buys)
+        if (this.junkAsk && !shop?.junk?.count) {
+            this.junkAsk = null;
+        }
+
         if (this.selected?.slot && !view.gear.find(({ slot }) => slot === this.selected.slot)?.item) {
             this.selected = null;
         }
@@ -348,6 +383,7 @@ export class PackPanel {
         }
 
         this.#render();
+        this.#focusAgain();
     }
 
     hide() {
@@ -359,15 +395,24 @@ export class PackPanel {
         this.selected = null;
         this.peeking = null;
         this.buying = null;
+        this.junkAsk = null;
+        this.refocus = null;
         this.about.hidden = true;
     }
 
-    /** Put away what's open to see what it is (the card, or a row's; at the stash, a tab asked about): whether anything was. */
+    /**
+     * Put away what's open to see what it is (the card, or a row's; at the stash, a tab asked
+     * about; Sell all junk asked about): whether anything was.
+     */
     unpeek() {
-        const open = !this.about.hidden || this.peeking !== null || this.buying !== null;
+        const open = !this.about.hidden || this.peeking !== null || this.buying !== null || this.junkAsk !== null;
 
         if (this.buying !== null) {
             this.#askToBuy(null);
+        }
+
+        if (this.junkAsk !== null) {
+            this.#askJunk(false);
         }
 
         if (!this.about.hidden) {
@@ -379,6 +424,72 @@ export class PackPanel {
         }
 
         return open;
+    }
+
+    /**
+     * J (app/keys.js "junk"): the thing in the pack the pointer's over (a slot, or its row on a
+     * shop's Sell tab), or else the one in focus, or else the one chosen, marked as junk, or not.
+     * Whether there was one.
+     */
+    junkKey() {
+        const pointed = this.panel.querySelector(".pack-cell:hover, .selling .pack-row:hover");
+        const focused = this.panel.contains(document.activeElement) ? document.activeElement : null;
+        const chosen = this.selected?.index !== undefined ? this.body.querySelector(`.pack-cell[data-index="${this.selected.index}"]`) : null;
+
+        const target = [pointed, focused, chosen].find((each) => this.canJunk(each));
+
+        return target ? this.junkAt(target) : false;
+    }
+
+    /**
+     * A thing in the pack (`element`: its slot, or anything in its row on a shop's Sell tab; not
+     * the stash's) marked as junk, or not: J, and a controller's Triangle (app/padplay.js). Whether
+     * it was one. In focus (a controller's, the keys'), it's given the focus back once it's shown
+     * again.
+     */
+    junkAt(element) {
+        const index = this.#carriedAt(element);
+
+        if (index === null || !this.view.pack[index].junkable) {
+            return false;
+        }
+
+        const at = element.closest(".pack-cell, .pack-row");
+
+        this.refocus = at.contains(document.activeElement) ? { index, row: at.classList.contains("pack-row") } : null;
+        this.#do("junk", index);
+
+        return true;
+    }
+
+    /** Whether something (as junkAt has it) is a thing carried that can be marked as junk, or not. */
+    canJunk(element) {
+        const index = this.#carriedAt(element);
+
+        return index !== null && Boolean(this.view.pack[index].junkable);
+    }
+
+    // What's carried an element is (its slot of the pack, or in its row on a shop's Sell tab: not
+    // a place in the stash), its slot; or null
+    #carriedAt(element) {
+        const at = this.open && element?.closest?.(".pack-cell:not(.stash-cell), .selling .pack-row");
+        const index = at && this.panel.contains(at) ? Number(at.dataset.index) : NaN;
+
+        return Number.isInteger(index) && this.view?.pack[index] ? index : null;
+    }
+
+    // A thing marked as junk by a key or a controller, shown again: the focus back on its slot (or
+    // its row), as it was before the pack was drawn again
+    #focusAgain() {
+        const again = this.refocus;
+
+        this.refocus = null;
+
+        if (again) {
+            const at = again.row ? this.body.querySelector(`.selling .pack-row[data-index="${again.index}"] .pack-peek`) : this.body.querySelector(`.pack-cell[data-index="${again.index}"]:not(.stash-cell)`);
+
+            at?.focus({ preventScroll: true, focusVisible: true });
+        }
     }
 
     // The paperdoll showing (or not): the panel clear round it, and what's under the panel (the
@@ -583,7 +694,8 @@ export class PackPanel {
     }
 
     // What the player carries, each with what it fetches (each, of a stack) and a button to sell
-    // it (asked how many, of a stack); what the shop won't buy greyed, and why
+    // it (asked how many, of a stack); what the shop won't buy greyed, and why. Over it all, Sell
+    // all junk; what's marked as junk tagged, its card with Mark as junk or Not junk
     #selling() {
         const { pack, shop } = this.view;
         const carried = pack.map((stack, index) => stack && { stack, index }).filter(Boolean);
@@ -594,9 +706,11 @@ export class PackPanel {
                 const row = this.#row({
                     thing: stack,
                     label: `${stack.label}${stack.count > 1 ? ` ×${stack.count}` : ""}`,
-                    className: stack.wanted ? "" : "unwanted",
+                    className: `${stack.wanted ? "" : "unwanted"}${stack.junk ? " junk" : ""}`.trim(),
                     peek: `carried:${index}:${stack.id}:${stack.quality ?? "common"}`,
                     about: () => card(stack, { named: false }),
+                    // (Beneath what it is, as a card's buttons are: Mark as junk, or Not junk)
+                    actions: stack.junkable ? () => [button(stack.junk ? "Not junk" : "Mark as junk", () => this.#do("junk", index), { label: `${stack.junk ? "Not junk" : "Mark as junk"}: ${stack.label}` })] : null,
                     after: [
                         element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? "Bound to you" : "Not bought here"),
                         button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? `${stack.label} is bound to you` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
@@ -604,6 +718,7 @@ export class PackPanel {
                 });
 
                 row.dataset.item = stack.id;
+                row.dataset.index = String(index);
 
                 return row;
             }),
@@ -621,14 +736,88 @@ export class PackPanel {
             notes.push(element("p", "pack-hint", "To sell what you're wearing, take it off first."));
         }
 
-        return [this.#section("Your pack", ...(carried.length ? [list] : []), ...notes)];
+        return [this.#section("Your pack", ...this.#junkSale(), ...(carried.length ? [list] : []), ...notes)];
     }
 
-    // A row of a list: a thing's picture and name, and whatever goes along it (`after`: its price,
-    // a button). Tapped anywhere but a button, what it is opens beneath it (`about`: made as it's
-    // opened), one row at a time (`peek`: which, kept as the list's shown again); tapped again,
-    // it closes.
-    #row({ thing, label, className = "", peek, about, after = [] }) {
+    // Sell all junk (every shop's Sell tab): its button, what it comes to here; asked about, the
+    // question with its total; and what's marked as junk that this shop won't buy, said, still
+    // junk for a shop that will
+    #junkSale() {
+        const { junk, name } = this.view.shop;
+        const bar = element("div", "junk-bar");
+        const said = junk.count ? `Junk: ${thingsSaid(junk.count)}, ${junk.price} gold here.` : junk.marked ? `${name} buys none of your junk.` : "Nothing marked as junk: mark things as junk in their cards, and sell them all here at once.";
+
+        bar.append(
+            button("Sell all junk", () => this.#askJunk(true), { label: junk.count ? `Sell all junk: ${thingsSaid(junk.count)} for ${junk.price} gold` : "Sell all junk: nothing marked as junk that they buy", disabled: !junk.count, className: "pack-button junk-sell" }),
+            element("p", "junk-said", said),
+        );
+
+        const parts = [bar];
+
+        if (this.junkAsk) {
+            parts.push(this.#junkAsked());
+        }
+
+        if (junk.left) {
+            parts.push(element("p", "pack-hint junk-left", `Still junk, as ${name} won't buy ${junk.left === 1 ? "it" : "them"}: ${junk.kept.join(", ")}. The adventurers' guild buys everything.`));
+        }
+
+        return parts;
+    }
+
+    // Sell all junk asked about in the panel (or no longer: false), its Sell in focus
+    #askJunk(on) {
+        this.junkAsk = on ? { why: null } : null;
+        this.#render();
+
+        if (this.junkAsk) {
+            this.body.querySelector(".junk-ask .primary")?.focus();
+        }
+    }
+
+    // Sell all junk asked about: how many things for how much (what the host will pay: core/
+    // progress.js junkSale), what's left for elsewhere, that there's no buying it back, why it
+    // couldn't be done if it was refused, and whether to (Sell, or Not now)
+    #junkAsked() {
+        const { junk } = this.view.shop;
+        const box = element("div", "stash-ask junk-ask");
+        const buttons = element("div", "pack-ask-buttons");
+
+        box.setAttribute("role", "group");
+        box.setAttribute("aria-label", "Sell all junk");
+        box.append(
+            element("p", "stash-ask-title", `Sell ${thingsSaid(junk.count)} for ${junk.price} gold?`),
+            element("p", "stash-ask-text", `${junk.left ? `What they won't buy (${thingsSaid(junk.left)}) stays marked as junk. ` : ""}Sold, it can't be bought back.`),
+        );
+
+        if (this.junkAsk.why) {
+            box.append(element("p", "stash-ask-why", this.junkAsk.why));
+        }
+
+        buttons.append(button("Not now", () => this.#askJunk(false)), button("Sell", () => this.#sellJunk(junk), { label: `Sell ${thingsSaid(junk.count)} for ${junk.price} gold`, className: "pack-button primary" }));
+        box.append(buttons);
+
+        return box;
+    }
+
+    // All the junk sold, as it was asked about (its count and price: the host refuses it if it's
+    // come to anything else), or why not said in the panel
+    #sellJunk({ count, price }) {
+        this.onCommand({ type: "sellJunk", count, price }, (result) => {
+            if (result?.ok) {
+                this.junkAsk = null;
+            } else if (this.junkAsk) {
+                this.junkAsk = { why: result?.words ?? null };
+            }
+        });
+    }
+
+    // A row of a list: a thing's picture and name (and, marked as junk, its tag), and whatever
+    // goes along it (`after`: its price, a button). Tapped anywhere but a button, what it is opens
+    // beneath it (`about`: made as it's opened), and under that what can be done with it (`actions`:
+    // its buttons, made as it's opened, if it has any), one row at a time (`peek`: which, kept as
+    // the list's shown again); tapped again, it closes.
+    #row({ thing, label, className = "", peek, about, actions = null, after = [] }) {
         const row = element("li", `pack-row peekable rarity-${rarityOf(thing)}${className ? ` ${className}` : ""}`);
         const open = element("button", "pack-peek");
         const picture = element("span", "pack-icon");
@@ -637,8 +826,13 @@ export class PackPanel {
         open.type = "button";
         open.setAttribute("aria-expanded", "false");
         open.append(picture, element("span", "pack-label", label));
+
+        if (thing.junk) {
+            open.append(this.#junkTag());
+            open.setAttribute("aria-label", `${label}, marked as junk`);
+        }
         row.dataset.peek = peek;
-        this.peeks.set(row, about);
+        this.peeks.set(row, { about, actions });
         row.append(open, ...after);
         row.addEventListener("click", (event) => {
             if (!event.target.closest?.(".pack-button")) {
@@ -662,6 +856,7 @@ export class PackPanel {
             row.classList.remove("peeking");
             row.querySelector(".pack-peek")?.setAttribute("aria-expanded", "false");
             row.querySelector(".pack-peeked")?.remove();
+            row.querySelector(".pack-peeked-actions")?.remove();
         }
 
         const row = [...this.body.querySelectorAll(".pack-row.peekable")].find((each) => each.dataset.peek === peek);
@@ -681,14 +876,24 @@ export class PackPanel {
         }
     }
 
-    // A row opened: what it is beneath it
+    // A row opened: what it is beneath it, and what can be done with it under that
+    // (Mark as junk)
     #opened(row) {
+        const { about, actions } = this.peeks.get(row);
         const peeked = element("div", "pack-peeked");
+        const doing = actions?.() ?? [];
 
-        peeked.append(this.peeks.get(row)());
+        peeked.append(about());
         row.classList.add("peeking");
         row.querySelector(".pack-peek")?.setAttribute("aria-expanded", "true");
         row.append(peeked);
+
+        if (doing.length) {
+            const box = element("div", "pack-actions pack-peeked-actions");
+
+            box.append(...doing);
+            row.append(box);
+        }
     }
 
     // --- The paperdoll ---
@@ -822,23 +1027,37 @@ export class PackPanel {
     }
 
     // A slot of the pack (or, `stashed`, a place in the tab of the stash shown): its stack's icon,
-    // how many, and how well made
+    // how many, and how well made; marked as junk, its tag in its corner
     #cell(stack, index, { stashed = false } = {}) {
-        const cell = element("button", `pack-cell${stashed ? " stash-cell" : ""}${stack ? ` made-${stack.quality} rarity-${rarityOf(stack)}` : " empty"}`);
+        const cell = element("button", `pack-cell${stashed ? " stash-cell" : ""}${stack ? ` made-${stack.quality} rarity-${rarityOf(stack)}` : " empty"}${stack?.junk ? " junk" : ""}`);
 
         cell.type = "button";
         cell.dataset[stashed ? "place" : "index"] = String(index);
         cell.setAttribute("role", "option");
         cell.setAttribute("aria-selected", String(stashed ? this.selected?.place === index : this.selected?.index === index));
-        cell.setAttribute("aria-label", stack ? `${stack.label}${stack.count > 1 ? `, ${stack.count}` : ""}` : "Empty");
+        cell.setAttribute("aria-label", stack ? `${stack.label}${stack.count > 1 ? `, ${stack.count}` : ""}${stack.junk ? ", marked as junk" : ""}` : "Empty");
 
         if (stack) {
             cell.dataset.item = stack.id;
             cell.innerHTML = `${icon(stack)}${stack.count > 1 ? `<span class="pack-count">${stack.count}</span>` : ""}`;
             cell.classList.toggle("offered", Boolean(this.#offeredOf(stack)));
+
+            if (stack.junk) {
+                cell.append(this.#junkTag());
+            }
         }
 
         return cell;
+    }
+
+    // The tag on what's marked as junk
+    #junkTag() {
+        const tag = element("span", "pack-junk");
+
+        tag.title = "Junk";
+        tag.innerHTML = JUNK_TAG;
+
+        return tag;
     }
 
     // --- The stash ---
@@ -1200,6 +1419,12 @@ export class PackPanel {
             actions.push({ key: "sell", label: `Sell (${stack.price} gold${stack.count > 1 ? " each" : ""})` });
         }
 
+        // (Marked as junk, to go with the rest at a shop that buys it; or not: core/progress.js
+        // markJunk)
+        if (stack.junkable) {
+            actions.push({ key: "junk", label: stack.junk ? "Not junk" : "Mark as junk" });
+        }
+
         actions.push({ key: "drop", label: "Drop" }, { key: "discard", label: "Throw away" });
 
         return actions;
@@ -1215,6 +1440,8 @@ export class PackPanel {
 
         if (key === "use") {
             this.onCommand(stack.equip ? { type: "equip", index } : { type: "use", index });
+        } else if (key === "junk") {
+            this.onCommand({ type: "markJunk", index, junk: !stack.junk });
         } else if (key.startsWith("give:")) {
             this.onCommand({ type: "outfit", follower: key.slice("give:".length), index });
         } else if (key === "toss") {
@@ -1642,7 +1869,7 @@ export class PackPanel {
 
         for (const { key, label } of this.#actionsFor(stack)) {
             slots[PLACES[key]] = key;
-            looks[key] = { label: key === "sell" ? "Sell" : key === "offer" ? "Offer" : label, icon: key === "use" ? iconOf(stack) : ICONS[key] };
+            looks[key] = { label: key === "sell" ? "Sell" : key === "offer" ? "Offer" : key === "junk" ? (stack.junk ? "Not junk" : "Junk") : label, icon: key === "use" ? iconOf(stack) : ICONS[key] };
         }
 
         // (Held, its middle right under where the finger went down, which the way it's flicked is

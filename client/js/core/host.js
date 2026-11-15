@@ -36,7 +36,7 @@ import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.j
 import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
 import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
 import { horseFrom, horseHealth, out as horseOut, STABLE } from "./mounts.js";
-import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, STRONGROOM, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, bound, buys, gradeOf, isJunk, ITEMS, junkSale, priceOf, Progress, QUALITIES, rollLoot, SHOPS, stacksWith, STRONGROOM, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareAt, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
@@ -426,7 +426,7 @@ export const READY = Object.freeze({ askMs: 30000, markedMs: 10000, countdowns: 
 
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
-const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
+const SEEN = new Set(["enter", "buy", "sell", "sellJunk", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
 
 // The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
 const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));
@@ -1228,6 +1228,10 @@ export const REFUSALS = Object.freeze({
     strongroomOwned: "That tab of your stash is yours already.",
     strongroomOrder: "The stash's tabs are bought in order: buy the one before it first.",
     strongroomUnalike: "Nothing you carry stacks with anything in this tab.",
+    // (Junk: progress.js isJunk, junkSale; #sellJunk)
+    junkNone: "Nothing you carry is marked as junk.",
+    junkUnwanted: "They buy none of the junk you carry: the adventurers' guild buys everything.",
+    junkChanged: "Your junk changed as you sold it: look again.",
 });
 
 // What can't be done while knocked off one's feet (battle.js: a knockdown)
@@ -2254,7 +2258,11 @@ export class Host {
      *    whoever they're talking to (paid for in gold, if it has a price);
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
      *    (an id); { type: "sell", index, to, count }: sell things (one, with no count) from the
-     *    stack at `index` in their pack to one;
+     *    stack at `index` in their pack to one; { type: "sellJunk", to, price, count }: sell to
+     *    one all they carry marked as junk that they buy, as they were shown it: `count` things for
+     *    `price` gold (progress.js junkSale; #sellJunk);
+     *  - { type: "markJunk", index, junk }: mark the stack at `index` in their pack as junk (true),
+     *    or not (false: progress.js markJunk);
      *  - { type: "equip", index, to }, { type: "unequip", slot, to }: put on (or take up) gear from
      *    their pack (in a slot, `to`: a ring's hand), or take it off (into a slot of the pack,
      *    `to`); { type: "sort" }: put the pack in order; { type: "use", index }: use something in their pack (or
@@ -2486,6 +2494,12 @@ export class Host {
                 return this.#buy(player, actor, command);
             case "sell":
                 return this.#sell(player, actor, command);
+            case "sellJunk":
+                return this.#sellJunk(player, actor, command);
+            case "markJunk":
+                // (The player's own mark: no event, the pack shown again as the answer comes, as
+                // for things moved about)
+                return this.#packed(player.progress.markJunk(command.index, command.junk));
             case "equip":
                 return this.#gear(player, player.progress.equip(command.index, command.to ?? null));
             case "unequip":
@@ -3799,7 +3813,7 @@ export class Host {
      * A number that tells two copies of a world apart (docs/WAR.md M11: whether one that's
      * joined has gone astray from its host's): the battle's time, and everyone in it, where they
      * are, how they are and whom they're on; the war's turn and clock; what's on the ground, and
-     * in each pack.
+     * in each pack and stash (and what there's marked as junk).
      */
     checksum() {
         count("checksums");
@@ -3845,8 +3859,13 @@ export class Host {
         for (const player of this.players.values()) {
             mix(player.progress.gold);
 
+            // (And what's marked as junk: a copy whose marks went astray would sell otherwise)
             for (const stack of player.progress.pack) {
                 mix(stack?.count ?? 0);
+
+                if (isJunk(stack)) {
+                    mix(-1);
+                }
             }
 
             // (Their stash, as their pack: a copy's gone astray shows before anything's taken out)
@@ -3855,6 +3874,10 @@ export class Host {
 
                 for (const stack of tab) {
                     mix(stack?.count ?? 0);
+
+                    if (isJunk(stack)) {
+                        mix(-1);
+                    }
                 }
             }
         }
@@ -5265,6 +5288,69 @@ export class Host {
         return OK;
     }
 
+    // All the junk carried (what the player's marked: progress.js isJunk) sold together to a
+    // shopkeeper near them, alive: each stack the shop buys (`buys`), each for what #sell would
+    // pay for it (progress.js junkSale: priceOf, selling, a creature's part for all it's worth,
+    // times how many), and the Trade skill grown by all of it as by selling it; what the shop
+    // won't buy left in the pack, still junk, for a shop that will (the guild buys everything).
+    // Never the stash's. Asked with what the player was shown (`price` in all, `count` things),
+    // and refused if it's come to anything else, so nothing's sold that they didn't see. All of
+    // it or nothing: the pack and the gold as they were, should any of it fail. Told ("junkSold":
+    // what went, for how much, and how many are left marked)
+    #sellJunk(player, actor, { to, price, count }) {
+        const { progress } = player;
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        const trading = this.#shopkeeper(actor, to);
+
+        if (!trading) {
+            return refuse("far");
+        }
+
+        if (!whole(price) || !whole(count)) {
+            return refuse("command");
+        }
+
+        if (!progress.pack.some(isJunk)) {
+            return refuse("junkNone");
+        }
+
+        const sale = junkSale(progress.pack, trading.shop, { haggle: progress.bonuses().haggle });
+
+        if (!sale.sold.length) {
+            return refuse("junkUnwanted");
+        }
+
+        if (price !== sale.price || count !== sale.count) {
+            return refuse("junkChanged");
+        }
+
+        const before = { gold: progress.gold, pack: progress.pack.map((stack) => stack && { ...stack }) };
+        let taken;
+
+        try {
+            taken = sale.sold.every(({ index, stack }) => progress.take(index, stack.count));
+        } catch (error) {
+            Object.assign(progress, before);
+            throw error;
+        }
+
+        if (!taken) {
+            Object.assign(progress, before);
+
+            return refuse("count");
+        }
+
+        progress.gold += sale.price;
+        this.#gain(player, "trade", sale.price * XP.trade);
+        this.#event("junkSold", { id: player.id, items: sale.sold.map(({ stack }) => ({ id: stack.id, quality: stack.quality, count: stack.count })), count: sale.count, price: sale.price, to: trading.keeper.id, left: sale.left });
+
+        return { ok: true, count: sale.count, price: sale.price, left: sale.left };
+    }
+
     // Things in the pack moved or split (the reason they couldn't be: progress.js move, split)
     #packed(why) {
         return why ? refuse(why) : OK;
@@ -5344,31 +5430,35 @@ export class Host {
     #discard(player, index) {
         // (A unique too: thrown away, it's gone for good, its character never given it again,
         // core/rare.js UNIQUES; the player's asked first, app/pack.js)
+        const junk = isJunk(player.progress.pack[index]);
         const item = player.progress.take(index);
 
         if (!item) {
             return refuse("item");
         }
 
-        player.discarded = { item, index, until: this.battle.time + UNDO_MS };
+        // (Its junk mark kept with it, for it to come back as it was: #undiscard)
+        player.discarded = { item, index, until: this.battle.time + UNDO_MS, ...(junk ? { junk: true } : {}) };
         this.#event("discarded", { id: player.id, item });
 
         return { ok: true, item };
     }
 
-    // What was just thrown away, taken back: where it was, if that's free (or has things alike),
-    // or wherever there's room
+    // What was just thrown away, taken back as it was (junk, if it was marked so): where it was,
+    // if that's free (or has things alike, as junk as it), or wherever there's room
     #undiscard(player) {
         const kept = player.discarded;
         const pack = player.progress.pack;
+        const junk = kept?.junk === true;
+        const back = kept && (junk ? { ...kept.item, junk: true } : kept.item);
 
         if (!kept || kept.until < this.battle.time) {
             return refuse("undo");
         }
 
-        if (!pack[kept.index] || alike(pack[kept.index], kept.item)) {
-            pack[kept.index] = { ...kept.item, count: kept.item.count + (pack[kept.index]?.count ?? 0) };
-        } else if (!player.progress.stow(kept.item, kept.item.count)) {
+        if (!pack[kept.index] || stacksWith(pack[kept.index], back)) {
+            pack[kept.index] = { ...back, count: kept.item.count + (pack[kept.index]?.count ?? 0) };
+        } else if (!player.progress.stow(kept.item, kept.item.count, { junk })) {
             return refuse("full");
         }
 

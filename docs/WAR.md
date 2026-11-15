@@ -704,8 +704,9 @@ both hands.
 at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carried in games saved then are read as gold.)
 - **Stacks.** Each slot holds a stack of things alike (the same kind, as well made), as many as
   there are: a stack of seven draughts takes one slot, and a fine sword and a common one two. What
-  comes into the pack goes onto the first stack alike, or else into the first empty slot
-  (`Progress.stow`). Packs kept before things stacked are read in, those alike put together.
+  comes into the pack goes onto the first stack alike that isn't marked as junk, or else into
+  the first empty slot (`Progress.stow`; docs/GAME.md *Junk*). Packs kept before things stacked
+  are read in, those alike put together.
 - **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
   sale?" (`SHOPS`):
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
@@ -871,7 +872,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     drawn with its icon (a uniform's piece in its people's colours) and how many, edged by its
     make (blue fine, gold masterwork, violet rare, rose very rare, orange legendary). "Sort" puts the pack in order: gear
     first (by where it's worn, the best made first), then things to use, tomes, and creatures'
-    parts; things alike put together (`sort`).
+    parts; things alike put together; what's marked as junk last of all (`sort`). What's junk
+    has a tin tag in its slot's corner (docs/GAME.md *Junk*).
   - **Tapped**, a thing says what it is (`app/gearinfo.js`: its name in the colour of its make,
     what it does and what was rolled on it, its set; a piece in the pack compared with what's
     worn there, each change in green or red; what a thing that isn't gear does), in a card
@@ -886,8 +888,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     with it round it, like the action wheel: N to drink, eat, read or apply it; NE to put it on an action
     wheel (the first empty slice of the player's own; a spell scroll's, an enemy's for a spell
     cast on one); E to split the stack (asked how many); SE
-    to sell it (trading: asked how many, of a stack); S to throw it away; W to drop it (asked how
-    many). Held, a flick chooses, the wheel's middle right under where the finger went down;
+    to sell it (trading: asked how many, of a stack); S to throw it away; SW to mark it as junk,
+    or not (anything that sells somewhere: GAME.md *Junk*, as its card's **Mark as junk** does);
+    W to drop it (asked how many). Held, a flick chooses, the wheel's middle right under where the finger went down;
     right-clicked, a click, the wheel over the thing and kept on the screen.
   - **Dragged** onto another slot, a stack moves there: onto a stack alike, the two are put
     together; onto something else, they swap (`arrange`). A piece dragged onto the paperdoll
@@ -912,7 +915,10 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     left, Buy or Cancel (pack.js `#buy`, `#sure`; the user: "have a confirmation dialog when
     buying something from a shop"). Sell lists what's carried, each with what it fetches (each, of a stack) and a button
     to sell it (asked how many, of a stack); what that shop won't buy (`buys`: tomes and the
-    spoils of the wild, but at the guild) is greyed, saying so, and why. **With another
+    spoils of the wild, but at the guild) is greyed, saying so, and why. Over it, **Sell all
+    junk**: everything carried that's marked as junk and that shop buys, sold at once once the
+    player's said yes to the total in the panel (docs/GAME.md *Junk*), what it won't buy said
+    and still junk. **With another
     player**, face to face (docs/WILDS.md), it shows what
     each offers: tapped or held, a stack is offered (SE on its wheel); gold's offered, and it's
     agreed to or called off, below.
@@ -4453,6 +4459,8 @@ a people is a little different, from a seed of their own:
 | `{ type: "effect", effect }` | Something done by talking, to whoever they're talking to: an official's work asked for or taken on (`work`), what's done told of (`report`), the armoury's gift (`armoury`), counsel (`counsel`). |
 | `{ type: "buy", item, from }` | Buy something from a shopkeeper near them. |
 | `{ type: "sell", index, to }` | Sell something from their pack. |
+| `{ type: "sellJunk", to, price, count }` | Sell all they carry marked as junk that a shopkeeper near them buys, as the player was shown it: `count` things for `price` gold (docs/GAME.md *Junk*). |
+| `{ type: "markJunk", index, junk }` | Mark a stack in their pack as junk (true), or not (false). |
 | `{ type: "equip", index, to }` | Wear or wield something from their pack (in a slot, `to`: which ring). |
 | `{ type: "unequip", slot, to }` | Take off what's in a slot (core/gear.js GEAR_SLOTS), into the pack (a slot of it, `to`). |
 | `{ type: "arrange", from, to }` | Move a stack in their pack (onto things alike, put together; else swapped). |

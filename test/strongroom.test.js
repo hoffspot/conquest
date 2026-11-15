@@ -565,7 +565,7 @@ describe("the stash at a guild's chest (host.js #strongroom)", () => {
             }
         };
 
-        assert.equal(NET_VERSION, 229);
+        assert.equal(NET_VERSION, 230, "229 the stash's, 230 junk's (core/progress.js isJunk)");
         joining.onWelcome = ({ seed, race, snapshot }) => joining.attach(Host.restore(buildWorld({ seed, race }), snapshot));
         joining.hello({ hero: { ...HERO, name: "Bryn", race: "human" }, progress: { gold: 10500, pack: [stack("potion", 3), stack("meal", 2)] } });
         deliver();
