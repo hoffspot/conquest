@@ -160,6 +160,24 @@ export const PARTS = Object.freeze({
     riftGland: { label: "Rift-fire gland", worth: 75, icon: "gland", tint: "#5aff90" },
     golemStone: { label: "Runed golem stone", worth: 90, icon: "shard", tint: "#8a857a" },
     blightCrystal: { label: "Blighted crystal shard", worth: 260, icon: "shard", tint: "#8a4ad0" },
+    // (The rarer stuff the crafters work, docs/CRAFTING.md (core/materials.js INGREDIENTS): a black
+    // widow's silk, the orcs' black steel and gold; and what the creatures to come for it are made
+    // of and keep in them, materials.js NEW_BEASTS. Nothing leaves any of them yet)
+    widowSilk: { label: "Black widow silk", worth: 22, icon: "silk", tint: "#2a2430" },
+    blackSteelIngot: { label: "Black steel ingot", worth: 40, icon: "ingot", tint: "#2a2c30" },
+    goldIngot: { label: "Gold ingot", worth: 45, icon: "ingot", tint: "#e8b830" },
+    mythrilIngot: { label: "Mythril ingot", worth: 80, icon: "ingot", tint: "#8ac8f0" },
+    adamantiteIngot: { label: "Adamantite ingot", worth: 160, icon: "ingot", tint: "#2e5a48" },
+    orichalcumIngot: { label: "Orichalcum ingot", worth: 340, icon: "ingot", tint: "#e07a30" },
+    ironwood: { label: "Ironwood", worth: 70, icon: "wood", tint: "#4a4a4e" },
+    ghostwood: { label: "Ghostwood", worth: 150, icon: "wood", tint: "#c8dce8" },
+    sylvanwood: { label: "Sylvanwood", worth: 330, icon: "wood", tint: "#c8d8b0" },
+    gloomsilk: { label: "Gloomsilk", worth: 150, icon: "silk", tint: "#3a2a5a" },
+    moonsilk: { label: "Moonsilk", worth: 320, icon: "silk", tint: "#e8f0ff" },
+    sapphire: { label: "Sapphire", worth: 80, icon: "gem", tint: "#2a5ad8" },
+    diamond: { label: "Diamond", worth: 170, icon: "gem", tint: "#eef6ff" },
+    starRuby: { label: "Star ruby", worth: 360, icon: "gem", tint: "#d81a3a" },
+    ancientSap: { label: "Ancient's sap", worth: 300, icon: "gel", tint: "#e8a830" },
 });
 
 /**

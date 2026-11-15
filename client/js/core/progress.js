@@ -26,6 +26,7 @@ import { BREWS, CHARM_ROLLS, charmPower, CHARMS, charmStats, SCROLLS, STARTING_S
 import { blockMost, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearName, levelFactor, levelOf, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
+import { MATERIALS } from "./materials.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -207,6 +208,9 @@ export const ITEMS = Object.freeze({
     // The wild's creatures' parts (spoils.js): what the adventurers' guild pays for each; some to
     // eat or drink
     ...Object.fromEntries(Object.entries(PARTS).map(([id, { label, worth, use, icon }]) => [id, { label, price: worth, part: true, ...(use ? { use } : {}), ...(icon === "meat" ? { food: true } : {}) }])),
+    // The crafters' commoner metals, woods, cloths, leathers and gems (materials.js MATERIALS,
+    // docs/CRAFTING.md), what they're sold for; the rarer are creatures' parts, above
+    ...Object.fromEntries(Object.entries(MATERIALS).map(([id, { label, price }]) => [id, { label, price, material: true }])),
 });
 
 // The arms a smith keeps, from a sword to a quiver (not a wand or a grimoire: the arcane's)

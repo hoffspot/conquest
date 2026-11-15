@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=677b449a07",
+                    "./js/app/assets.js": "./js/app/assets.js?h=e777a4a6f8",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=68cee9ac13",
@@ -66,12 +66,12 @@
                     "./js/app/heroes.js": "./js/app/heroes.js?h=8044f6c022",
                     "./js/app/homescreen.js": "./js/app/homescreen.js?h=8245ee2219",
                     "./js/app/hud.js": "./js/app/hud.js?h=073af1e9f1",
-                    "./js/app/icons.js": "./js/app/icons.js?h=b4768c7d7b",
+                    "./js/app/icons.js": "./js/app/icons.js?h=13d5005cf0",
                     "./js/app/journal.js": "./js/app/journal.js?h=71472931a2",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/keys.js": "./js/app/keys.js?h=315fab9ef7",
                     "./js/app/loader.js": "./js/app/loader.js?h=37d37bbdf1",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=c5f6a7d78c",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=5691816ba8",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=ac95fa1015",
                     "./js/app/memoryguard.js": "./js/app/memoryguard.js?h=927481090c",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=74b29b46c7",
@@ -249,6 +249,7 @@
                     "./js/core/lore/gods.js": "./js/core/lore/gods.js?h=f56a9730af",
                     "./js/core/lore/taverns.js": "./js/core/lore/taverns.js?h=4bb660c617",
                     "./js/core/markers.js": "./js/core/markers.js?h=5a43fde611",
+                    "./js/core/materials.js": "./js/core/materials.js?h=3aaa704d42",
                     "./js/core/might.js": "./js/core/might.js?h=9822178b35",
                     "./js/core/missions.js": "./js/core/missions.js?h=9cfd0bb356",
                     "./js/core/motion.js": "./js/core/motion.js?h=8d9ef62c30",
@@ -269,7 +270,7 @@
                     "./js/core/portals.js": "./js/core/portals.js?h=e05e814777",
                     "./js/core/prismatic.js": "./js/core/prismatic.js?h=6f6e67827f",
                     "./js/core/probe.js": "./js/core/probe.js?h=49f475fc98",
-                    "./js/core/progress.js": "./js/core/progress.js?h=d4b9dce6ac",
+                    "./js/core/progress.js": "./js/core/progress.js?h=f3e9830fcc",
                     "./js/core/random.js": "./js/core/random.js?h=916ec0468e",
                     "./js/core/rare.js": "./js/core/rare.js?h=8efa957302",
                     "./js/core/remote.js": "./js/core/remote.js?h=ddc0e5eb0b",
@@ -298,7 +299,7 @@
                     "./js/core/sites.js": "./js/core/sites.js?h=ac09b63811",
                     "./js/core/smartcast.js": "./js/core/smartcast.js?h=13b9918c66",
                     "./js/core/spells.js": "./js/core/spells.js?h=f2ba78a368",
-                    "./js/core/spoils.js": "./js/core/spoils.js?h=97d31245ba",
+                    "./js/core/spoils.js": "./js/core/spoils.js?h=a4ae948f44",
                     "./js/core/standing.js": "./js/core/standing.js?h=3f8f492034",
                     "./js/core/steps.js": "./js/core/steps.js?h=ea932948d4",
                     "./js/core/stock.js": "./js/core/stock.js?h=51b3ca5068",
@@ -520,7 +521,7 @@
                 }
             }
         </script>
-        <link rel="modulepreload" href="js/app/assets.js?h=677b449a07">
+        <link rel="modulepreload" href="js/app/assets.js?h=e777a4a6f8">
         <link rel="modulepreload" href="js/app/backdrop.js?h=c9aa55b56c">
         <link rel="modulepreload" href="js/app/crest.js?h=032fda00b4">
         <link rel="modulepreload" href="js/app/catalog.js?h=e7d7150a22">
@@ -531,7 +532,7 @@
         <link rel="modulepreload" href="js/app/graphicsnotes.js?h=176c9a2e15">
         <link rel="modulepreload" href="js/app/homescreen.js?h=8245ee2219">
         <link rel="modulepreload" href="js/app/loader.js?h=37d37bbdf1">
-        <link rel="modulepreload" href="js/app/manifest.js?h=c5f6a7d78c">
+        <link rel="modulepreload" href="js/app/manifest.js?h=5691816ba8">
         <link rel="modulepreload" href="js/app/multiplayer.js?h=41f9f53ecd">
         <link rel="modulepreload" href="js/app/pointer.js?h=a4c31cdac5">
         <link rel="modulepreload" href="js/app/rejoin.js?h=01b5ba37d3">
@@ -567,15 +568,16 @@
         <link rel="modulepreload" href="js/core/caches.js?h=4ec406d34c">
         <link rel="modulepreload" href="js/core/creatures.js?h=939b47207d">
         <link rel="modulepreload" href="js/core/places.js?h=53b20200d6">
-        <link rel="modulepreload" href="js/core/progress.js?h=d4b9dce6ac">
+        <link rel="modulepreload" href="js/core/progress.js?h=f3e9830fcc">
         <link rel="modulepreload" href="js/core/treasure.js?h=101ecc81e2">
         <link rel="modulepreload" href="js/core/war/peoples.js?h=ea5dbe09ff">
         <link rel="modulepreload" href="js/core/goods.js?h=51f5692a70">
-        <link rel="modulepreload" href="js/core/spoils.js?h=97d31245ba">
+        <link rel="modulepreload" href="js/core/spoils.js?h=a4ae948f44">
         <link rel="modulepreload" href="js/core/worldplan/plan.js?h=4c268e9427">
         <link rel="modulepreload" href="js/core/near.js?h=e7fe07145e">
         <link rel="modulepreload" href="js/core/afflictions.js?h=8d6965bc3b">
         <link rel="modulepreload" href="js/core/bestiary.js?h=20dfa4c8ea">
+        <link rel="modulepreload" href="js/core/materials.js?h=3aaa704d42">
         <link rel="modulepreload" href="js/core/mounts.js?h=1f3cdc31bd">
         <link rel="modulepreload" href="js/core/journey.js?h=5aebf9d099">
         <link rel="modulepreload" href="js/core/worldplan/races.js?h=0a706bb24d">
